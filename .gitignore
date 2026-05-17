@@ -33,6 +33,13 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# scripts: cache directory recreated by sync scripts on demand
+scripts/.scrape-cache/
+
+# misc local artifacts
+*.log
+.tsbuildinfo
+
 # vercel
 .vercel
 

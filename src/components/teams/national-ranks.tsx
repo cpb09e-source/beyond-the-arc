@@ -1,0 +1,71 @@
+import type { RankedStat } from "@/lib/static-data";
+
+/**
+ * Hero-level "barbell" of a team's national ranks for the season.
+ * Two side-by-side columns: top-5 strengths on the left, bottom-5 weaknesses
+ * on the right. Each entry's left chip is colored by percentile so the
+ * visual tone of each column tells the story before you read a label.
+ */
+export function NationalRanks({
+  top, bottom, total,
+}: {
+  top: RankedStat[];
+  bottom: RankedStat[];
+  total: number;
+}) {
+  if (top.length === 0 && bottom.length === 0) return null;
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-[1fr_1px_1fr] bg-card border border-hairline rounded-lg overflow-hidden">
+      <Column kicker="Where they rank best" items={top} total={total} />
+      <div className="hidden md:block bg-hairline" />
+      <Column kicker="Where they rank worst" items={bottom} total={total} />
+    </div>
+  );
+}
+
+function Column({ kicker, items, total }: { kicker: string; items: RankedStat[]; total: number }) {
+  return (
+    <div className="p-5 lg:p-6">
+      <div className="flex items-baseline justify-between mb-4">
+        <span className="text-xs uppercase tracking-widest text-coral font-medium">{kicker}</span>
+        <span className="text-[0.65rem] text-ink-muted tabular">of {total} D-I teams</span>
+      </div>
+      <ul className="divide-y divide-hairline/60">
+        {items.map((s) => (
+          <li key={s.key} className="flex items-center gap-4 py-2.5">
+            <RankBadge rank={s.rank} total={s.total} />
+            <span className="flex-1 min-w-0 text-ink-soft text-sm">{s.label}</span>
+            <span className="flex-none font-medium text-ink tabular text-sm">{formatStat(s.value, s.format)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function RankBadge({ rank, total }: { rank: number; total: number }) {
+  // Position as percentile (1 = best). 0 = top, 1 = bottom.
+  const pos = total > 1 ? (rank - 1) / (total - 1) : 0;
+  // 0 → green, 1 → red. Use HSL hue 120 → 0.
+  const hue = (1 - pos) * 120;
+  const color = `hsl(${hue}, 38%, 30%)`;
+  const bg = `hsl(${hue}, 38%, 92%)`;
+  return (
+    <span
+      className="flex-none inline-flex items-center justify-center font-display text-xl md:text-2xl tabular leading-none px-2.5 py-1.5 rounded w-[4.5rem]"
+      style={{ color, background: bg }}
+      aria-label={`Rank ${rank} of ${total}`}
+    >
+      #{rank}
+    </span>
+  );
+}
+
+function formatStat(v: number, format: RankedStat["format"]): string {
+  switch (format) {
+    case "num1":    return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    case "num2":    return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    case "pct1":    return (v * 100).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%";
+    case "intDiff": return v > 0 ? `+${v}` : String(v);
+  }
+}

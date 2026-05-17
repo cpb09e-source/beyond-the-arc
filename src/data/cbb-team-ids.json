@@ -1,0 +1,3296 @@
+{
+  "abilene christian": {
+    "bart_name": "Abilene Christian",
+    "id": 103260,
+    "market": "Abilene Christian",
+    "mascot": "Wildcats",
+    "color1": "#c5c3cd",
+    "color2": "#4f2886",
+    "conf": "WAC"
+  },
+  "air force": {
+    "bart_name": "Air Force",
+    "id": 103265,
+    "market": "Air Force",
+    "mascot": "Falcons",
+    "color1": "#2c3c9c",
+    "color2": "#303c9c",
+    "conf": "Mountain West"
+  },
+  "akron": {
+    "bart_name": "Akron",
+    "id": 103266,
+    "market": "Akron",
+    "mascot": "Zips",
+    "color1": "#bdb389",
+    "color2": "#1c223a",
+    "conf": "MAC"
+  },
+  "alabama": {
+    "bart_name": "Alabama",
+    "id": 103268,
+    "market": "Alabama",
+    "mascot": "Crimson Tide",
+    "color1": "#a42138",
+    "color2": "#c9c3c4",
+    "conf": "SEC"
+  },
+  "alabama a m": {
+    "bart_name": "Alabama A&M",
+    "id": 103269,
+    "market": "Alabama A&M",
+    "mascot": "Bulldogs",
+    "color1": "#5c1414",
+    "color2": "#601414",
+    "conf": "SWAC"
+  },
+  "alabama st": {
+    "bart_name": "Alabama St.",
+    "id": 103270,
+    "market": "Alabama St.",
+    "mascot": "Hornets",
+    "color1": "#c7c7ca",
+    "color2": "#3c3435",
+    "conf": "SWAC"
+  },
+  "albany": {
+    "bart_name": "Albany",
+    "id": 103273,
+    "market": "UAlbany",
+    "mascot": "Great Danes",
+    "color1": "#eaab0f",
+    "color2": "#432262",
+    "conf": "America East"
+  },
+  "alcorn st": {
+    "bart_name": "Alcorn St.",
+    "id": 103278,
+    "market": "Alcorn",
+    "mascot": "Braves",
+    "color1": "#5a357a",
+    "color2": "#ebc116",
+    "conf": "SWAC"
+  },
+  "american": {
+    "bart_name": "American",
+    "id": 103285,
+    "market": "American",
+    "mascot": "Eagles",
+    "color1": "#c31831",
+    "color2": "#293e8c",
+    "conf": "Patriot"
+  },
+  "appalachian st": {
+    "bart_name": "Appalachian St.",
+    "id": 103293,
+    "market": "App State",
+    "mascot": "Mountaineers",
+    "color1": "#2c2619",
+    "color2": "#f5c714",
+    "conf": "Sun Belt"
+  },
+  "arizona": {
+    "bart_name": "Arizona",
+    "id": 103296,
+    "market": "Arizona",
+    "mascot": "Wildcats",
+    "color1": "#c8394f",
+    "color2": "#202f56",
+    "conf": "Big 12"
+  },
+  "arizona st": {
+    "bart_name": "Arizona St.",
+    "id": 103297,
+    "market": "Arizona St.",
+    "mascot": "Sun Devils",
+    "color1": "#8d0d3b",
+    "color2": "#fac124",
+    "conf": "Big 12"
+  },
+  "arkansas": {
+    "bart_name": "Arkansas",
+    "id": 103301,
+    "market": "Arkansas",
+    "mascot": "Razorbacks",
+    "color1": "#c20d3a",
+    "color2": "#2d1c24",
+    "conf": "SEC"
+  },
+  "arkansas pine bluff": {
+    "bart_name": "Arkansas Pine Bluff",
+    "id": 103300,
+    "market": "Ark.-Pine Bluff",
+    "mascot": "Golden Lions",
+    "color1": "#100d05",
+    "color2": "#e3ad13",
+    "conf": "SWAC"
+  },
+  "arkansas st": {
+    "bart_name": "Arkansas St.",
+    "id": 103302,
+    "market": "Arkansas St.",
+    "mascot": "Red Wolves",
+    "color1": "#d01c2c",
+    "color2": "#2a1e25",
+    "conf": "Sun Belt"
+  },
+  "army": {
+    "bart_name": "Army",
+    "id": 103305,
+    "market": "Army West Point",
+    "mascot": "Black Knights",
+    "color1": "#d2b27b",
+    "color2": "#1e1d1d",
+    "conf": "Patriot"
+  },
+  "auburn": {
+    "bart_name": "Auburn",
+    "id": 103308,
+    "market": "Auburn",
+    "mascot": "Tigers",
+    "color1": "#ef521c",
+    "color2": "#0c2c53",
+    "conf": "SEC"
+  },
+  "austin peay": {
+    "bart_name": "Austin Peay",
+    "id": 103315,
+    "market": "Austin Peay",
+    "mascot": "Governors",
+    "color1": "#b57885",
+    "color2": "#0a0909",
+    "conf": "ASUN"
+  },
+  "ball st": {
+    "bart_name": "Ball St.",
+    "id": 103325,
+    "market": "Ball St.",
+    "mascot": "Cardinals",
+    "color1": "#2e242b",
+    "color2": "#c41f37",
+    "conf": "MAC"
+  },
+  "baylor": {
+    "bart_name": "Baylor",
+    "id": 103331,
+    "market": "Baylor",
+    "mascot": "Bears",
+    "color1": "#f5b83b",
+    "color2": "#1d3c2c",
+    "conf": "Big 12"
+  },
+  "bellarmine": {
+    "bart_name": "Bellarmine",
+    "id": 103334,
+    "market": "Bellarmine",
+    "mascot": "Knights",
+    "color1": "#b8b8b8",
+    "color2": "#282127",
+    "conf": "ASUN"
+  },
+  "belmont": {
+    "bart_name": "Belmont",
+    "id": 103335,
+    "market": "Belmont",
+    "mascot": "Bruins",
+    "color1": "#11306e",
+    "color2": "#cda3b3",
+    "conf": "MVC"
+  },
+  "binghamton": {
+    "bart_name": "Binghamton",
+    "id": 103351,
+    "market": "Binghamton",
+    "mascot": "Bearcats",
+    "color1": "#07402d",
+    "color2": "#bab4b5",
+    "conf": "America East"
+  },
+  "boise st": {
+    "bart_name": "Boise St.",
+    "id": 103362,
+    "market": "Boise St.",
+    "mascot": "Broncos",
+    "color1": "#ee6c3b",
+    "color2": "#1e5cab",
+    "conf": "Mountain West"
+  },
+  "boston college": {
+    "bart_name": "Boston College",
+    "id": 103363,
+    "market": "Boston College",
+    "mascot": "Eagles",
+    "color1": "#601925",
+    "color2": "#947c3c",
+    "conf": "ACC"
+  },
+  "boston university": {
+    "bart_name": "Boston University",
+    "id": 103364,
+    "market": "Boston U.",
+    "mascot": "Terriers",
+    "color1": "#ba1827",
+    "color2": "#d4d4d4",
+    "conf": "Patriot"
+  },
+  "bowling green": {
+    "bart_name": "Bowling Green",
+    "id": 103367,
+    "market": "Bowling Green",
+    "mascot": "Falcons",
+    "color1": "#461e06",
+    "color2": "#f06434",
+    "conf": "MAC"
+  },
+  "bradley": {
+    "bart_name": "Bradley",
+    "id": 103369,
+    "market": "Bradley",
+    "mascot": "Braves",
+    "color1": "#a41e25",
+    "color2": "#eacdcf",
+    "conf": "MVC"
+  },
+  "bryant": {
+    "bart_name": "Bryant",
+    "id": 103379,
+    "market": "Bryant",
+    "mascot": "Bulldogs",
+    "color1": "#665949",
+    "color2": "#e6e4df",
+    "conf": "America East"
+  },
+  "bucknell": {
+    "bart_name": "Bucknell",
+    "id": 103382,
+    "market": "Bucknell",
+    "mascot": "Bison",
+    "color1": "#284e85",
+    "color2": "#df6435",
+    "conf": "Patriot"
+  },
+  "buffalo": {
+    "bart_name": "Buffalo",
+    "id": 103384,
+    "market": "Buffalo",
+    "mascot": "Bulls",
+    "color1": "#1c6cbc",
+    "color2": "#146cbc",
+    "conf": "MAC"
+  },
+  "butler": {
+    "bart_name": "Butler",
+    "id": 103386,
+    "market": "Butler",
+    "mascot": "Bulldogs",
+    "color1": "#cecccf",
+    "color2": "#242539",
+    "conf": "Big East"
+  },
+  "byu": {
+    "bart_name": "BYU",
+    "id": 103320,
+    "market": "BYU",
+    "mascot": "Cougars",
+    "color1": "#0d345c",
+    "color2": "#c7d0db",
+    "conf": "Big 12"
+  },
+  "cal baptist": {
+    "bart_name": "Cal Baptist",
+    "id": 103407,
+    "market": "California Baptist",
+    "mascot": "Lancers",
+    "color1": "#9b6b1c",
+    "color2": "#1c2c4c",
+    "conf": "WAC"
+  },
+  "cal poly": {
+    "bart_name": "Cal Poly",
+    "id": 103395,
+    "market": "Cal Poly",
+    "mascot": "Mustangs",
+    "color1": "#e4d6aa",
+    "color2": "#2e2f2e",
+    "conf": "Big West"
+  },
+  "cal st bakersfield": {
+    "bart_name": "Cal St. Bakersfield",
+    "id": 103389,
+    "market": "CSU Bakersfield",
+    "mascot": "Roadrunners",
+    "color1": "#2360ac",
+    "color2": "#f2ce0b",
+    "conf": "Big West"
+  },
+  "cal st fullerton": {
+    "bart_name": "Cal St. Fullerton",
+    "id": 103399,
+    "market": "Cal St. Fullerton",
+    "mascot": "Titans",
+    "color1": "#1c3453",
+    "color2": "#f37314",
+    "conf": "Big West"
+  },
+  "cal st northridge": {
+    "bart_name": "Cal St. Northridge",
+    "id": 103390,
+    "market": "CSUN",
+    "mascot": "Matadors",
+    "color1": "#d01c2c",
+    "color2": "#281e25",
+    "conf": "Big West"
+  },
+  "california": {
+    "bart_name": "California",
+    "id": 103405,
+    "market": "California",
+    "mascot": "Golden Bears",
+    "color1": "#14243c",
+    "color2": "#18243c",
+    "conf": "ACC"
+  },
+  "campbell": {
+    "bart_name": "Campbell",
+    "id": 103411,
+    "market": "Campbell",
+    "mascot": "Fighting Camels",
+    "color1": "#ea6b1f",
+    "color2": "#1b110b",
+    "conf": "CAA"
+  },
+  "canisius": {
+    "bart_name": "Canisius",
+    "id": 103412,
+    "market": "Canisius",
+    "mascot": "Golden Griffins",
+    "color1": "#273b4a",
+    "color2": "#e8aa10",
+    "conf": "MAAC"
+  },
+  "central arkansas": {
+    "bart_name": "Central Arkansas",
+    "id": 103431,
+    "market": "Central Ark.",
+    "mascot": "Bears",
+    "color1": "#36264c",
+    "color2": "#9ea4a5",
+    "conf": "ASUN"
+  },
+  "central connecticut": {
+    "bart_name": "Central Connecticut",
+    "id": 103434,
+    "market": "Central Conn. St.",
+    "mascot": "Blue Devils",
+    "color1": "#1f4f9d",
+    "color2": "#d2d3d5",
+    "conf": "NEC"
+  },
+  "central michigan": {
+    "bart_name": "Central Michigan",
+    "id": 103435,
+    "market": "Central Mich.",
+    "mascot": "Chippewas",
+    "color1": "#4c041c",
+    "color2": "#fbc31c",
+    "conf": "MAC"
+  },
+  "charleston": {
+    "bart_name": "Charleston",
+    "id": 103478,
+    "market": "Col. of Charleston",
+    "mascot": "Cougars",
+    "color1": "#8d1817",
+    "color2": "#f3f2f2",
+    "conf": "CAA"
+  },
+  "charleston southern": {
+    "bart_name": "Charleston Southern",
+    "id": 103446,
+    "market": "Charleston So.",
+    "mascot": "Buccaneers",
+    "color1": "#24447c",
+    "color2": "#28447c",
+    "conf": "Big South"
+  },
+  "charlotte": {
+    "bart_name": "Charlotte",
+    "id": 103447,
+    "market": "Charlotte",
+    "mascot": "49ers",
+    "color1": "#9c8a51",
+    "color2": "#195a39",
+    "conf": "American"
+  },
+  "chattanooga": {
+    "bart_name": "Chattanooga",
+    "id": 103449,
+    "market": "Chattanooga",
+    "mascot": "Mocs",
+    "color1": "#ecac0c",
+    "color2": "#24447c",
+    "conf": "SoCon"
+  },
+  "chicago st": {
+    "bart_name": "Chicago St.",
+    "id": 103454,
+    "market": "Chicago St.",
+    "mascot": "Cougars",
+    "color1": "#194624",
+    "color2": "#c0c0c0",
+    "conf": "NEC"
+  },
+  "cincinnati": {
+    "bart_name": "Cincinnati",
+    "id": 103460,
+    "market": "Cincinnati",
+    "mascot": "Bearcats",
+    "color1": "#d41c2c",
+    "color2": "#1c0c0c",
+    "conf": "Big 12"
+  },
+  "clemson": {
+    "bart_name": "Clemson",
+    "id": 103470,
+    "market": "Clemson",
+    "mascot": "Tigers",
+    "color1": "#f4541c",
+    "color2": "#f8541c",
+    "conf": "ACC"
+  },
+  "cleveland st": {
+    "bart_name": "Cleveland St.",
+    "id": 103471,
+    "market": "Cleveland St.",
+    "mascot": "Vikings",
+    "color1": "#c3aa8b",
+    "color2": "#232221",
+    "conf": "Horizon"
+  },
+  "coastal carolina": {
+    "bart_name": "Coastal Carolina",
+    "id": 103473,
+    "market": "Coastal Carolina",
+    "mascot": "Chanticleers",
+    "color1": "#103436",
+    "color2": "#a37556",
+    "conf": "Sun Belt"
+  },
+  "colgate": {
+    "bart_name": "Colgate",
+    "id": 103481,
+    "market": "Colgate",
+    "mascot": "Raiders",
+    "color1": "#74242c",
+    "color2": "#78242c",
+    "conf": "Patriot"
+  },
+  "colorado": {
+    "bart_name": "Colorado",
+    "id": 103484,
+    "market": "Colorado",
+    "mascot": "Buffaloes",
+    "color1": "#d2c282",
+    "color2": "#271f1e",
+    "conf": "Big 12"
+  },
+  "colorado st": {
+    "bart_name": "Colorado St.",
+    "id": 103487,
+    "market": "Colorado St.",
+    "mascot": "Rams",
+    "color1": "#124828",
+    "color2": "#c9ca82",
+    "conf": "Mountain West"
+  },
+  "connecticut": {
+    "bart_name": "Connecticut",
+    "id": 104361,
+    "market": "UConn",
+    "mascot": "Huskies",
+    "color1": "#102f57",
+    "color2": "#d0cad3",
+    "conf": "Big East"
+  },
+  "coppin st": {
+    "bart_name": "Coppin St.",
+    "id": 103504,
+    "market": "Coppin St.",
+    "mascot": "Eagles",
+    "color1": "#143954",
+    "color2": "#e8bc23",
+    "conf": "MEAC"
+  },
+  "creighton": {
+    "bart_name": "Creighton",
+    "id": 103510,
+    "market": "Creighton",
+    "mascot": "Bluejays",
+    "color1": "#cac5c7",
+    "color2": "#1a2b5a",
+    "conf": "Big East"
+  },
+  "davidson": {
+    "bart_name": "Davidson",
+    "id": 103522,
+    "market": "Davidson",
+    "mascot": "Wildcats",
+    "color1": "#2b242a",
+    "color2": "#e11a38",
+    "conf": "Atlantic 10"
+  },
+  "dayton": {
+    "bart_name": "Dayton",
+    "id": 103524,
+    "market": "Dayton",
+    "mascot": "Flyers",
+    "color1": "#dc1c34",
+    "color2": "#e01c34",
+    "conf": "Atlantic 10"
+  },
+  "delaware": {
+    "bart_name": "Delaware",
+    "id": 103530,
+    "market": "Delaware",
+    "mascot": "Blue Hens",
+    "color1": "#f0da42",
+    "color2": "#086694",
+    "conf": "CUSA"
+  },
+  "delaware st": {
+    "bart_name": "Delaware St.",
+    "id": 103531,
+    "market": "Delaware St.",
+    "mascot": "Hornets",
+    "color1": "#67b2d9",
+    "color2": "#342b32",
+    "conf": "MEAC"
+  },
+  "denver": {
+    "bart_name": "Denver",
+    "id": 103535,
+    "market": "Denver",
+    "mascot": "Pioneers",
+    "color1": "#95132e",
+    "color2": "#988355",
+    "conf": "Summit League"
+  },
+  "depaul": {
+    "bart_name": "DePaul",
+    "id": 103525,
+    "market": "DePaul",
+    "mascot": "Blue Demons",
+    "color1": "#da4757",
+    "color2": "#0a0a0e",
+    "conf": "Big East"
+  },
+  "detroit mercy": {
+    "bart_name": "Detroit Mercy",
+    "id": 103536,
+    "market": "Detroit Mercy",
+    "mascot": "Titans",
+    "color1": "#e4dcda",
+    "color2": "#62295c",
+    "conf": "Horizon"
+  },
+  "drake": {
+    "bart_name": "Drake",
+    "id": 103544,
+    "market": "Drake",
+    "mascot": "Bulldogs",
+    "color1": "#0a589e",
+    "color2": "#bcc6c9",
+    "conf": "MVC"
+  },
+  "drexel": {
+    "bart_name": "Drexel",
+    "id": 103546,
+    "market": "Drexel",
+    "mascot": "Dragons",
+    "color1": "#17366b",
+    "color2": "#f2cd3e",
+    "conf": "CAA"
+  },
+  "duke": {
+    "bart_name": "Duke",
+    "id": 103549,
+    "market": "Duke",
+    "mascot": "Blue Devils",
+    "color1": "#1c4c9c",
+    "color2": "#204c9c",
+    "conf": "ACC"
+  },
+  "duquesne": {
+    "bart_name": "Duquesne",
+    "id": 103550,
+    "market": "Duquesne",
+    "mascot": "Dukes",
+    "color1": "#0c2c5c",
+    "color2": "#0c2c54",
+    "conf": "Atlantic 10"
+  },
+  "east carolina": {
+    "bart_name": "East Carolina",
+    "id": 103553,
+    "market": "East Carolina",
+    "mascot": "Pirates",
+    "color1": "#221917",
+    "color2": "#552e8c",
+    "conf": "American"
+  },
+  "east tennessee st": {
+    "bart_name": "East Tennessee St.",
+    "id": 103551,
+    "market": "ETSU",
+    "mascot": "Buccaneers",
+    "color1": "#f9ca24",
+    "color2": "#0e1633",
+    "conf": "SoCon"
+  },
+  "eastern illinois": {
+    "bart_name": "Eastern Illinois",
+    "id": 103561,
+    "market": "Eastern Ill.",
+    "mascot": "Panthers",
+    "color1": "#b5b7b9",
+    "color2": "#0b3ba2",
+    "conf": "OVC"
+  },
+  "eastern kentucky": {
+    "bart_name": "Eastern Kentucky",
+    "id": 103562,
+    "market": "Eastern Ky.",
+    "mascot": "Colonels",
+    "color1": "#840434",
+    "color2": "#880434",
+    "conf": "ASUN"
+  },
+  "eastern michigan": {
+    "bart_name": "Eastern Michigan",
+    "id": 103563,
+    "market": "Eastern Mich.",
+    "mascot": "Eagles",
+    "color1": "#1c6434",
+    "color2": "#246434",
+    "conf": "MAC"
+  },
+  "eastern washington": {
+    "bart_name": "Eastern Washington",
+    "id": 103567,
+    "market": "Eastern Wash.",
+    "mascot": "Eagles",
+    "color1": "#2b242a",
+    "color2": "#c4152d",
+    "conf": "Big Sky"
+  },
+  "elon": {
+    "bart_name": "Elon",
+    "id": 103577,
+    "market": "Elon",
+    "mascot": "Phoenix",
+    "color1": "#b19043",
+    "color2": "#6c0c24",
+    "conf": "CAA"
+  },
+  "evansville": {
+    "bart_name": "Evansville",
+    "id": 103591,
+    "market": "Evansville",
+    "mascot": "Purple Aces",
+    "color1": "#431362",
+    "color2": "#ec900d",
+    "conf": "MVC"
+  },
+  "fairfield": {
+    "bart_name": "Fairfield",
+    "id": 103595,
+    "market": "Fairfield",
+    "mascot": "Stags",
+    "color1": "#251c24",
+    "color2": "#e31434",
+    "conf": "MAAC"
+  },
+  "fairleigh dickinson": {
+    "bart_name": "Fairleigh Dickinson",
+    "id": 103596,
+    "market": "FDU",
+    "mascot": "Knights",
+    "color1": "#14549c",
+    "color2": "#b11c41",
+    "conf": "NEC"
+  },
+  "fiu": {
+    "bart_name": "FIU",
+    "id": 103594,
+    "market": "FIU",
+    "mascot": "Panthers",
+    "color1": "#c99a24",
+    "color2": "#153159",
+    "conf": "CUSA"
+  },
+  "florida": {
+    "bart_name": "Florida",
+    "id": 103614,
+    "market": "Florida",
+    "mascot": "Gators",
+    "color1": "#FA4616",
+    "color2": "#0021A5",
+    "conf": "SEC"
+  },
+  "florida a m": {
+    "bart_name": "Florida A&M",
+    "id": 103615,
+    "market": "Florida A&M",
+    "mascot": "Rattlers",
+    "color1": "#26231d",
+    "color2": "#dc871e",
+    "conf": "SWAC"
+  },
+  "florida atlantic": {
+    "bart_name": "Florida Atlantic",
+    "id": 103609,
+    "market": "Fla. Atlantic",
+    "mascot": "Owls",
+    "color1": "#213f67",
+    "color2": "#c1aab5",
+    "conf": "American"
+  },
+  "florida gulf coast": {
+    "bart_name": "Florida Gulf Coast",
+    "id": 103593,
+    "market": "FGCU",
+    "mascot": "Eagles",
+    "color1": "#256a7b",
+    "color2": "#cdc2a5",
+    "conf": "ASUN"
+  },
+  "florida st": {
+    "bart_name": "Florida St.",
+    "id": 103616,
+    "market": "Florida St.",
+    "mascot": "Seminoles",
+    "color1": "#3c2229",
+    "color2": "#ccb888",
+    "conf": "ACC"
+  },
+  "fordham": {
+    "bart_name": "Fordham",
+    "id": 103619,
+    "market": "Fordham",
+    "mascot": "Rams",
+    "color1": "#cfcecf",
+    "color2": "#551f35",
+    "conf": "Atlantic 10"
+  },
+  "fresno st": {
+    "bart_name": "Fresno St.",
+    "id": 103631,
+    "market": "Fresno St.",
+    "mascot": "Bulldogs",
+    "color1": "#295b97",
+    "color2": "#e74b77",
+    "conf": "Mountain West"
+  },
+  "furman": {
+    "bart_name": "Furman",
+    "id": 103633,
+    "market": "Furman",
+    "mascot": "Paladins",
+    "color1": "#552e85",
+    "color2": "#dbd2e6",
+    "conf": "SoCon"
+  },
+  "gardner webb": {
+    "bart_name": "Gardner Webb",
+    "id": 103638,
+    "market": "Gardner-Webb",
+    "mascot": "Runnin' Bulldogs",
+    "color1": "#402930",
+    "color2": "#cdcdcd",
+    "conf": "Big South"
+  },
+  "george mason": {
+    "bart_name": "George Mason",
+    "id": 103641,
+    "market": "George Mason",
+    "mascot": "Patriots",
+    "color1": "#0f5338",
+    "color2": "#f6bb16",
+    "conf": "Atlantic 10"
+  },
+  "george washington": {
+    "bart_name": "George Washington",
+    "id": 103642,
+    "market": "George Washington",
+    "mascot": "Revolutionaries",
+    "color1": "#15325f",
+    "color2": "#ddcf95",
+    "conf": "Atlantic 10"
+  },
+  "georgetown": {
+    "bart_name": "Georgetown",
+    "id": 103643,
+    "market": "Georgetown",
+    "mascot": "Hoyas",
+    "color1": "#c8b9aa",
+    "color2": "#0c2454",
+    "conf": "Big East"
+  },
+  "georgia": {
+    "bart_name": "Georgia",
+    "id": 103644,
+    "market": "Georgia",
+    "mascot": "Bulldogs",
+    "color1": "#251d25",
+    "color2": "#e4d5d4",
+    "conf": "SEC"
+  },
+  "georgia southern": {
+    "bart_name": "Georgia Southern",
+    "id": 103634,
+    "market": "Ga. Southern",
+    "mascot": "Eagles",
+    "color1": "#374d6c",
+    "color2": "#a3b3c3",
+    "conf": "Sun Belt"
+  },
+  "georgia st": {
+    "bart_name": "Georgia St.",
+    "id": 103646,
+    "market": "Georgia St.",
+    "mascot": "Panthers",
+    "color1": "#254594",
+    "color2": "#c9d1e4",
+    "conf": "Sun Belt"
+  },
+  "georgia tech": {
+    "bart_name": "Georgia Tech",
+    "id": 103647,
+    "market": "Georgia Tech",
+    "mascot": "Yellow Jackets",
+    "color1": "#0e2d4c",
+    "color2": "#aaa254",
+    "conf": "ACC"
+  },
+  "gonzaga": {
+    "bart_name": "Gonzaga",
+    "id": 103652,
+    "market": "Gonzaga",
+    "mascot": "Bulldogs",
+    "color1": "#babac5",
+    "color2": "#22305f",
+    "conf": "WCC"
+  },
+  "grambling st": {
+    "bart_name": "Grambling St.",
+    "id": 103658,
+    "market": "Grambling",
+    "mascot": "Tigers",
+    "color1": "#d7a01b",
+    "color2": "#040404",
+    "conf": "SWAC"
+  },
+  "grand canyon": {
+    "bart_name": "Grand Canyon",
+    "id": 103659,
+    "market": "Grand Canyon",
+    "mascot": "Lopes",
+    "color1": "#5c2c94",
+    "color2": "#602c94",
+    "conf": "Mountain West"
+  },
+  "green bay": {
+    "bart_name": "Green Bay",
+    "id": 103661,
+    "market": "Green Bay",
+    "mascot": "Phoenix",
+    "color1": "#14342c",
+    "color2": "#0c5443",
+    "conf": "Horizon"
+  },
+  "hampton": {
+    "bart_name": "Hampton",
+    "id": 103674,
+    "market": "Hampton",
+    "mascot": "Pirates",
+    "color1": "#1e5ead",
+    "color2": "#cadaec",
+    "conf": "CAA"
+  },
+  "hawaii": {
+    "bart_name": "Hawaii",
+    "id": 103685,
+    "market": "Hawaii",
+    "mascot": "Rainbow Warriors",
+    "color1": "#c3c4c3",
+    "color2": "#234031",
+    "conf": "Big West"
+  },
+  "high point": {
+    "bart_name": "High Point",
+    "id": 103691,
+    "market": "High Point",
+    "mascot": "Panthers",
+    "color1": "#3b3388",
+    "color2": "#cfcee3",
+    "conf": "Big South"
+  },
+  "hofstra": {
+    "bart_name": "Hofstra",
+    "id": 103697,
+    "market": "Hofstra",
+    "mascot": "Pride",
+    "color1": "#3258a2",
+    "color2": "#efc01e",
+    "conf": "CAA"
+  },
+  "holy cross": {
+    "bart_name": "Holy Cross",
+    "id": 103698,
+    "market": "Holy Cross",
+    "mascot": "Crusaders",
+    "color1": "#652e93",
+    "color2": "#d9cae4",
+    "conf": "Patriot"
+  },
+  "houston": {
+    "bart_name": "Houston",
+    "id": 103704,
+    "market": "Houston",
+    "mascot": "Cougars",
+    "color1": "#e41535",
+    "color2": "#f8c7d0",
+    "conf": "Big 12"
+  },
+  "houston christian": {
+    "bart_name": "Houston Christian",
+    "id": 103705,
+    "market": "Houston Christian",
+    "mascot": "Huskies",
+    "color1": "#e86a3b",
+    "color2": "#224d99",
+    "conf": "Southland"
+  },
+  "howard": {
+    "bart_name": "Howard",
+    "id": 103706,
+    "market": "Howard",
+    "mascot": "Bison",
+    "color1": "#123147",
+    "color2": "#c7d0d5",
+    "conf": "MEAC"
+  },
+  "idaho": {
+    "bart_name": "Idaho",
+    "id": 103716,
+    "market": "Idaho",
+    "mascot": "Vandals",
+    "color1": "#b9945f",
+    "color2": "#261f26",
+    "conf": "Big Sky"
+  },
+  "idaho st": {
+    "bart_name": "Idaho St.",
+    "id": 103717,
+    "market": "Idaho St.",
+    "mascot": "Bengals",
+    "color1": "#281f26",
+    "color2": "#ed7925",
+    "conf": "Big Sky"
+  },
+  "illinois": {
+    "bart_name": "Illinois",
+    "id": 103720,
+    "market": "Illinois",
+    "mascot": "Fighting Illini",
+    "color1": "#e33b34",
+    "color2": "#1f2c43",
+    "conf": "Big Ten"
+  },
+  "illinois chicago": {
+    "bart_name": "Illinois Chicago",
+    "id": 104362,
+    "market": "UIC",
+    "mascot": "Flames",
+    "color1": "#ad2635",
+    "color2": "#16263e",
+    "conf": "MVC"
+  },
+  "illinois st": {
+    "bart_name": "Illinois St.",
+    "id": 103722,
+    "market": "Illinois St.",
+    "mascot": "Redbirds",
+    "color1": "#2e1f25",
+    "color2": "#f8ef04",
+    "conf": "MVC"
+  },
+  "incarnate word": {
+    "bart_name": "Incarnate Word",
+    "id": 103724,
+    "market": "UIW",
+    "mascot": "Cardinals",
+    "color1": "#d02433",
+    "color2": "#271c24",
+    "conf": "Southland"
+  },
+  "indiana": {
+    "bart_name": "Indiana",
+    "id": 103730,
+    "market": "Indiana",
+    "mascot": "Hoosiers",
+    "color1": "#ac0c34",
+    "color2": "#a40c34",
+    "conf": "Big Ten"
+  },
+  "indiana st": {
+    "bart_name": "Indiana St.",
+    "id": 103732,
+    "market": "Indiana St.",
+    "mascot": "Sycamores",
+    "color1": "#c9cbc5",
+    "color2": "#21477e",
+    "conf": "MVC"
+  },
+  "iona": {
+    "bart_name": "Iona",
+    "id": 103733,
+    "market": "Iona",
+    "mascot": "Gaels",
+    "color1": "#722b3e",
+    "color2": "#e4d5d3",
+    "conf": "MAAC"
+  },
+  "iowa": {
+    "bart_name": "Iowa",
+    "id": 103734,
+    "market": "Iowa",
+    "mascot": "Hawkeyes",
+    "color1": "#040404",
+    "color2": "#080404",
+    "conf": "Big Ten"
+  },
+  "iowa st": {
+    "bart_name": "Iowa St.",
+    "id": 103735,
+    "market": "Iowa St.",
+    "mascot": "Cyclones",
+    "color1": "#961a30",
+    "color2": "#facc31",
+    "conf": "Big 12"
+  },
+  "iu indy": {
+    "bart_name": "IU Indy",
+    "id": 103715,
+    "market": "IU Indy",
+    "mascot": "Jaguars",
+    "color1": "#cc9b59",
+    "color2": "#091825",
+    "conf": "Horizon"
+  },
+  "jackson st": {
+    "bart_name": "Jackson St.",
+    "id": 103742,
+    "market": "Jackson St.",
+    "mascot": "Tigers",
+    "color1": "#15253d",
+    "color2": "#c1c4ca",
+    "conf": "SWAC"
+  },
+  "jacksonville": {
+    "bart_name": "Jacksonville",
+    "id": 103743,
+    "market": "Jacksonville",
+    "mascot": "Dolphins",
+    "color1": "#0c443c",
+    "color2": "#b6af79",
+    "conf": "ASUN"
+  },
+  "jacksonville st": {
+    "bart_name": "Jacksonville St.",
+    "id": 103744,
+    "market": "Jacksonville St.",
+    "mascot": "Gamecocks",
+    "color1": "#312328",
+    "color2": "#ca3540",
+    "conf": "CUSA"
+  },
+  "james madison": {
+    "bart_name": "James Madison",
+    "id": 103745,
+    "market": "James Madison",
+    "mascot": "Dukes",
+    "color1": "#aaa157",
+    "color2": "#382864",
+    "conf": "Sun Belt"
+  },
+  "kansas": {
+    "bart_name": "Kansas",
+    "id": 103757,
+    "market": "Kansas",
+    "mascot": "Jayhawks",
+    "color1": "#f09716",
+    "color2": "#2769b7",
+    "conf": "Big 12"
+  },
+  "kansas st": {
+    "bart_name": "Kansas St.",
+    "id": 103758,
+    "market": "Kansas St.",
+    "mascot": "Wildcats",
+    "color1": "#3c246c",
+    "color2": "#40246c",
+    "conf": "Big 12"
+  },
+  "kennesaw st": {
+    "bart_name": "Kennesaw St.",
+    "id": 103762,
+    "market": "Kennesaw St.",
+    "mascot": "Owls",
+    "color1": "#f6b00c",
+    "color2": "#b1b1a9",
+    "conf": "CUSA"
+  },
+  "kent st": {
+    "bart_name": "Kent St.",
+    "id": 103763,
+    "market": "Kent St.",
+    "mascot": "Golden Flashes",
+    "color1": "#2b3d5e",
+    "color2": "#e9a721",
+    "conf": "MAC"
+  },
+  "kentucky": {
+    "bart_name": "Kentucky",
+    "id": 103765,
+    "market": "Kentucky",
+    "mascot": "Wildcats",
+    "color1": "#2b54ac",
+    "color2": "#c6d2ea",
+    "conf": "SEC"
+  },
+  "la salle": {
+    "bart_name": "La Salle",
+    "id": 103782,
+    "market": "La Salle",
+    "mascot": "Explorers",
+    "color1": "#154972",
+    "color2": "#ecc20b",
+    "conf": "Atlantic 10"
+  },
+  "lafayette": {
+    "bart_name": "Lafayette",
+    "id": 103786,
+    "market": "Lafayette",
+    "mascot": "Leopards",
+    "color1": "#5c2d33",
+    "color2": "#c3b8a5",
+    "conf": "Patriot"
+  },
+  "lamar": {
+    "bart_name": "Lamar",
+    "id": 103791,
+    "market": "Lamar University",
+    "mascot": "Cardinals",
+    "color1": "#e11433",
+    "color2": "#eab155",
+    "conf": "Southland"
+  },
+  "lehigh": {
+    "bart_name": "Lehigh",
+    "id": 103805,
+    "market": "Lehigh",
+    "mascot": "Mountain Hawks",
+    "color1": "#683107",
+    "color2": "#cba46c",
+    "conf": "Patriot"
+  },
+  "liberty": {
+    "bart_name": "Liberty",
+    "id": 103811,
+    "market": "Liberty",
+    "mascot": "Flames",
+    "color1": "#21284e",
+    "color2": "#941c1d",
+    "conf": "CUSA"
+  },
+  "lipscomb": {
+    "bart_name": "Lipscomb",
+    "id": 103821,
+    "market": "Lipscomb",
+    "mascot": "Bisons",
+    "color1": "#fab20c",
+    "color2": "#25154b",
+    "conf": "ASUN"
+  },
+  "little rock": {
+    "bart_name": "Little Rock",
+    "id": 103822,
+    "market": "Little Rock",
+    "mascot": "Trojans",
+    "color1": "#6c1c34",
+    "color2": "#701c34",
+    "conf": "OVC"
+  },
+  "liu": {
+    "bart_name": "LIU",
+    "id": 103777,
+    "market": "LIU",
+    "mascot": "Sharks",
+    "color1": "#70aed4",
+    "color2": "#f2c441",
+    "conf": "NEC"
+  },
+  "long beach st": {
+    "bart_name": "Long Beach St.",
+    "id": 103825,
+    "market": "Long Beach St.",
+    "mascot": "Beach",
+    "color1": "#f4be1c",
+    "color2": "#241c23",
+    "conf": "Big West"
+  },
+  "longwood": {
+    "bart_name": "Longwood",
+    "id": 103826,
+    "market": "Longwood",
+    "mascot": "Lancers",
+    "color1": "#212f45",
+    "color2": "#9e9f9f",
+    "conf": "Big South"
+  },
+  "louisiana": {
+    "bart_name": "Louisiana",
+    "id": 103828,
+    "market": "Louisiana",
+    "mascot": "Ragin' Cajuns",
+    "color1": "#bd2331",
+    "color2": "#f5cdd1",
+    "conf": "Sun Belt"
+  },
+  "louisiana monroe": {
+    "bart_name": "Louisiana Monroe",
+    "id": 103784,
+    "market": "ULM",
+    "mascot": "Warhawks",
+    "color1": "#3a1a25",
+    "color2": "#ab7b34",
+    "conf": "Sun Belt"
+  },
+  "louisiana tech": {
+    "bart_name": "Louisiana Tech",
+    "id": 103830,
+    "market": "Louisiana Tech",
+    "mascot": "Bulldogs",
+    "color1": "#e53b42",
+    "color2": "#044c9c",
+    "conf": "CUSA"
+  },
+  "louisville": {
+    "bart_name": "Louisville",
+    "id": 103831,
+    "market": "Louisville",
+    "mascot": "Cardinals",
+    "color1": "#e92423",
+    "color2": "#261d24",
+    "conf": "ACC"
+  },
+  "loyola chicago": {
+    "bart_name": "Loyola Chicago",
+    "id": 103833,
+    "market": "Loyola Chicago",
+    "mascot": "Ramblers",
+    "color1": "#44241d",
+    "color2": "#f0b249",
+    "conf": "Atlantic 10"
+  },
+  "loyola marymount": {
+    "bart_name": "Loyola Marymount",
+    "id": 103835,
+    "market": "LMU (CA)",
+    "mascot": "Lions",
+    "color1": "#ad0f2f",
+    "color2": "#1980bd",
+    "conf": "WCC"
+  },
+  "loyola md": {
+    "bart_name": "Loyola MD",
+    "id": 103834,
+    "market": "Loyola Maryland",
+    "mascot": "Greyhounds",
+    "color1": "#0a402e",
+    "color2": "#c7c8c1",
+    "conf": "Patriot"
+  },
+  "lsu": {
+    "bart_name": "LSU",
+    "id": 103779,
+    "market": "LSU",
+    "mascot": "Fighting Tigers",
+    "color1": "#442c7c",
+    "color2": "#3c2c7c",
+    "conf": "SEC"
+  },
+  "maine": {
+    "bart_name": "Maine",
+    "id": 103850,
+    "market": "Maine",
+    "mascot": "Black Bears",
+    "color1": "#4b4244",
+    "color2": "#8dc0df",
+    "conf": "America East"
+  },
+  "manhattan": {
+    "bart_name": "Manhattan",
+    "id": 103855,
+    "market": "Manhattan",
+    "mascot": "Jaspers",
+    "color1": "#046c3c",
+    "color2": "#c1dbcf",
+    "conf": "MAAC"
+  },
+  "marist": {
+    "bart_name": "Marist",
+    "id": 103862,
+    "market": "Marist",
+    "mascot": "Red Foxes",
+    "color1": "#131112",
+    "color2": "#de1c38",
+    "conf": "MAAC"
+  },
+  "marquette": {
+    "bart_name": "Marquette",
+    "id": 103863,
+    "market": "Marquette",
+    "mascot": "Golden Eagles",
+    "color1": "#223053",
+    "color2": "#f6c01f",
+    "conf": "Big East"
+  },
+  "marshall": {
+    "bart_name": "Marshall",
+    "id": 103865,
+    "market": "Marshall",
+    "mascot": "Thundering Herd",
+    "color1": "#0dac4d",
+    "color2": "#262026",
+    "conf": "Sun Belt"
+  },
+  "maryland": {
+    "bart_name": "Maryland",
+    "id": 103871,
+    "market": "Maryland",
+    "mascot": "Terrapins",
+    "color1": "#e31833",
+    "color2": "#f4c81b",
+    "conf": "Big Ten"
+  },
+  "massachusetts": {
+    "bart_name": "Massachusetts",
+    "id": 103876,
+    "market": "Massachusetts",
+    "mascot": "Minutemen",
+    "color1": "#66242f",
+    "color2": "#c1b9bf",
+    "conf": "MAC"
+  },
+  "mcneese st": {
+    "bart_name": "McNeese St.",
+    "id": 103882,
+    "market": "McNeese",
+    "mascot": "Cowboys",
+    "color1": "#1f4f9d",
+    "color2": "#fcd405",
+    "conf": "Southland"
+  },
+  "memphis": {
+    "bart_name": "Memphis",
+    "id": 103891,
+    "market": "Memphis",
+    "mascot": "Tigers",
+    "color1": "#274b8d",
+    "color2": "#dbab77",
+    "conf": "American"
+  },
+  "mercer": {
+    "bart_name": "Mercer",
+    "id": 103892,
+    "market": "Mercer",
+    "mascot": "Bears",
+    "color1": "#ef6426",
+    "color2": "#30292f",
+    "conf": "SoCon"
+  },
+  "merrimack": {
+    "bart_name": "Merrimack",
+    "id": 103896,
+    "market": "Merrimack",
+    "mascot": "Warriors",
+    "color1": "#eabf55",
+    "color2": "#173c62",
+    "conf": "MAAC"
+  },
+  "miami fl": {
+    "bart_name": "Miami FL",
+    "id": 103899,
+    "market": "Miami (FL)",
+    "mascot": "Hurricanes",
+    "color1": "#f35d1e",
+    "color2": "#044c34",
+    "conf": "ACC"
+  },
+  "miami oh": {
+    "bart_name": "Miami OH",
+    "id": 103900,
+    "market": "Miami (OH)",
+    "mascot": "RedHawks",
+    "color1": "#2c1d25",
+    "color2": "#e31434",
+    "conf": "MAC"
+  },
+  "michigan": {
+    "bart_name": "Michigan",
+    "id": 103902,
+    "market": "Michigan",
+    "mascot": "Wolverines",
+    "color1": "#fcd414",
+    "color2": "#FAFAFA",
+    "conf": "Big Ten"
+  },
+  "michigan st": {
+    "bart_name": "Michigan St.",
+    "id": 103903,
+    "market": "Michigan St.",
+    "mascot": "Spartans",
+    "color1": "#144434",
+    "color2": "#14442c",
+    "conf": "Big Ten"
+  },
+  "middle tennessee": {
+    "bart_name": "Middle Tennessee",
+    "id": 103908,
+    "market": "Middle Tenn.",
+    "mascot": "Blue Raiders",
+    "color1": "#2f6dbb",
+    "color2": "#261f26",
+    "conf": "CUSA"
+  },
+  "milwaukee": {
+    "bart_name": "Milwaukee",
+    "id": 103917,
+    "market": "Milwaukee",
+    "mascot": "Panthers",
+    "color1": "#322c31",
+    "color2": "#b1b0b0",
+    "conf": "Horizon"
+  },
+  "minnesota": {
+    "bart_name": "Minnesota",
+    "id": 103921,
+    "market": "Minnesota",
+    "mascot": "Golden Gophers",
+    "color1": "#f4ab2c",
+    "color2": "#841d33",
+    "conf": "Big Ten"
+  },
+  "mississippi": {
+    "bart_name": "Mississippi",
+    "id": 104051,
+    "market": "Ole Miss",
+    "mascot": "Rebels",
+    "color1": "#1e3a78",
+    "color2": "#e31434",
+    "conf": "SEC"
+  },
+  "mississippi st": {
+    "bart_name": "Mississippi St.",
+    "id": 103926,
+    "market": "Mississippi St.",
+    "mascot": "Bulldogs",
+    "color1": "#d2d0d0",
+    "color2": "#762028",
+    "conf": "SEC"
+  },
+  "mississippi valley st": {
+    "bart_name": "Mississippi Valley St.",
+    "id": 103927,
+    "market": "Mississippi Val.",
+    "mascot": "Delta Devils",
+    "color1": "#253f28",
+    "color2": "#e7282e",
+    "conf": "SWAC"
+  },
+  "missouri": {
+    "bart_name": "Missouri",
+    "id": 103928,
+    "market": "Missouri",
+    "mascot": "Tigers",
+    "color1": "#edaf2d",
+    "color2": "#29271e",
+    "conf": "SEC"
+  },
+  "missouri st": {
+    "bart_name": "Missouri St.",
+    "id": 103930,
+    "market": "Missouri St.",
+    "mascot": "Bears",
+    "color1": "#692027",
+    "color2": "#ddcdce",
+    "conf": "CUSA"
+  },
+  "monmouth": {
+    "bart_name": "Monmouth",
+    "id": 103937,
+    "market": "Monmouth",
+    "mascot": "Hawks",
+    "color1": "#1c2b46",
+    "color2": "#a4abb2",
+    "conf": "CAA"
+  },
+  "montana": {
+    "bart_name": "Montana",
+    "id": 103940,
+    "market": "Montana",
+    "mascot": "Grizzlies",
+    "color1": "#6c042c",
+    "color2": "#6c0424",
+    "conf": "Big Sky"
+  },
+  "montana st": {
+    "bart_name": "Montana St.",
+    "id": 103941,
+    "market": "Montana St.",
+    "mascot": "Bobcats",
+    "color1": "#202f55",
+    "color2": "#b78a4d",
+    "conf": "Big Sky"
+  },
+  "morehead st": {
+    "bart_name": "Morehead St.",
+    "id": 103947,
+    "market": "Morehead St.",
+    "mascot": "Eagles",
+    "color1": "#f3d12e",
+    "color2": "#1a1a1b",
+    "conf": "OVC"
+  },
+  "morgan st": {
+    "bart_name": "Morgan St.",
+    "id": 103949,
+    "market": "Morgan St.",
+    "mascot": "Bears",
+    "color1": "#eb9b52",
+    "color2": "#312a31",
+    "conf": "MEAC"
+  },
+  "mount st mary s": {
+    "bart_name": "Mount St. Mary's",
+    "id": 103958,
+    "market": "Mount St. Mary's",
+    "mascot": "Mountaineers",
+    "color1": "#bab08d",
+    "color2": "#2a374d",
+    "conf": "MAAC"
+  },
+  "murray st": {
+    "bart_name": "Murray St.",
+    "id": 103960,
+    "market": "Murray St.",
+    "mascot": "Racers",
+    "color1": "#17263b",
+    "color2": "#f5bf1e",
+    "conf": "MVC"
+  },
+  "n c state": {
+    "bart_name": "N.C. State",
+    "id": 103966,
+    "market": "NC State",
+    "mascot": "Wolfpack",
+    "color1": "#2b2229",
+    "color2": "#d0cacb",
+    "conf": "ACC"
+  },
+  "navy": {
+    "bart_name": "Navy",
+    "id": 103972,
+    "market": "Navy",
+    "mascot": "Midshipmen",
+    "color1": "#b3a36b",
+    "color2": "#1a294e",
+    "conf": "Patriot"
+  },
+  "nebraska": {
+    "bart_name": "Nebraska",
+    "id": 103977,
+    "market": "Nebraska",
+    "mascot": "Huskers",
+    "color1": "#dc1c34",
+    "color2": "#f6c5cc",
+    "conf": "Big Ten"
+  },
+  "nebraska omaha": {
+    "bart_name": "Nebraska Omaha",
+    "id": 104053,
+    "market": "Omaha",
+    "mascot": "Mavericks",
+    "color1": "#261f26",
+    "color2": "#d3c8ca",
+    "conf": "Summit League"
+  },
+  "nevada": {
+    "bart_name": "Nevada",
+    "id": 103979,
+    "market": "Nevada",
+    "mascot": "Wolf Pack",
+    "color1": "#1c2444",
+    "color2": "#142444",
+    "conf": "Mountain West"
+  },
+  "new hampshire": {
+    "bart_name": "New Hampshire",
+    "id": 103981,
+    "market": "New Hampshire",
+    "mascot": "Wildcats",
+    "color1": "#bfc1c3",
+    "color2": "#0d2d62",
+    "conf": "America East"
+  },
+  "new mexico": {
+    "bart_name": "New Mexico",
+    "id": 103984,
+    "market": "New Mexico",
+    "mascot": "Lobos",
+    "color1": "#d31b49",
+    "color2": "#cccbcb",
+    "conf": "Mountain West"
+  },
+  "new mexico st": {
+    "bart_name": "New Mexico St.",
+    "id": 103985,
+    "market": "New Mexico St.",
+    "mascot": "Aggies",
+    "color1": "#30262c",
+    "color2": "#c1c0c1",
+    "conf": "CUSA"
+  },
+  "new orleans": {
+    "bart_name": "New Orleans",
+    "id": 103986,
+    "market": "New Orleans",
+    "mascot": "Privateers",
+    "color1": "#a4acad",
+    "color2": "#0f3758",
+    "conf": "Southland"
+  },
+  "niagara": {
+    "bart_name": "Niagara",
+    "id": 103991,
+    "market": "Niagara",
+    "mascot": "Purple Eagles",
+    "color1": "#2d232f",
+    "color2": "#d1cad8",
+    "conf": "MAAC"
+  },
+  "nicholls st": {
+    "bart_name": "Nicholls St.",
+    "id": 103992,
+    "market": "Nicholls",
+    "mascot": "Colonels",
+    "color1": "#101010",
+    "color2": "#bbb9ba",
+    "conf": "Southland"
+  },
+  "njit": {
+    "bart_name": "NJIT",
+    "id": 103967,
+    "market": "NJIT",
+    "mascot": "Highlanders",
+    "color1": "#d78888",
+    "color2": "#1b3065",
+    "conf": "America East"
+  },
+  "norfolk st": {
+    "bart_name": "Norfolk St.",
+    "id": 103994,
+    "market": "Norfolk St.",
+    "mascot": "Spartans",
+    "color1": "#afcdad",
+    "color2": "#13765c",
+    "conf": "MEAC"
+  },
+  "north alabama": {
+    "bart_name": "North Alabama",
+    "id": 103995,
+    "market": "North Ala.",
+    "mascot": "Lions",
+    "color1": "#ecad11",
+    "color2": "#4b2a7b",
+    "conf": "ASUN"
+  },
+  "north carolina": {
+    "bart_name": "North Carolina",
+    "id": 103996,
+    "market": "North Carolina",
+    "mascot": "Tar Heels",
+    "color1": "#83abda",
+    "color2": "#1e2e47",
+    "conf": "ACC"
+  },
+  "north carolina a t": {
+    "bart_name": "North Carolina A&T",
+    "id": 103962,
+    "market": "N.C. A&T",
+    "mascot": "Aggies",
+    "color1": "#184681",
+    "color2": "#f7b217",
+    "conf": "CAA"
+  },
+  "north carolina central": {
+    "bart_name": "North Carolina Central",
+    "id": 103963,
+    "market": "N.C. Central",
+    "mascot": "Eagles",
+    "color1": "#b4b3b3",
+    "color2": "#32232b",
+    "conf": "MEAC"
+  },
+  "north dakota": {
+    "bart_name": "North Dakota",
+    "id": 103999,
+    "market": "North Dakota",
+    "mascot": "Fighting Hawks",
+    "color1": "#2da45c",
+    "color2": "#221b21",
+    "conf": "Summit League"
+  },
+  "north dakota st": {
+    "bart_name": "North Dakota St.",
+    "id": 104000,
+    "market": "North Dakota St.",
+    "mascot": "Bison",
+    "color1": "#edb81e",
+    "color2": "#0c5033",
+    "conf": "Summit League"
+  },
+  "north florida": {
+    "bart_name": "North Florida",
+    "id": 104001,
+    "market": "North Florida",
+    "mascot": "Ospreys",
+    "color1": "#122241",
+    "color2": "#bababa",
+    "conf": "ASUN"
+  },
+  "north texas": {
+    "bart_name": "North Texas",
+    "id": 104005,
+    "market": "North Texas",
+    "mascot": "Mean Green",
+    "color1": "#232024",
+    "color2": "#1c8344",
+    "conf": "American"
+  },
+  "northeastern": {
+    "bart_name": "Northeastern",
+    "id": 104006,
+    "market": "Northeastern",
+    "mascot": "Huskies",
+    "color1": "#070707",
+    "color2": "#c7c7c7",
+    "conf": "CAA"
+  },
+  "northern arizona": {
+    "bart_name": "Northern Arizona",
+    "id": 104008,
+    "market": "Northern Ariz.",
+    "mascot": "Lumberjacks",
+    "color1": "#f4ac23",
+    "color2": "#fbd304",
+    "conf": "Big Sky"
+  },
+  "northern colorado": {
+    "bart_name": "Northern Colorado",
+    "id": 104009,
+    "market": "Northern Colo.",
+    "mascot": "Bears",
+    "color1": "#f9b428",
+    "color2": "#112f53",
+    "conf": "Big Sky"
+  },
+  "northern illinois": {
+    "bart_name": "Northern Illinois",
+    "id": 104010,
+    "market": "NIU",
+    "mascot": "Huskies",
+    "color1": "#b3b0b7",
+    "color2": "#292028",
+    "conf": "MAC"
+  },
+  "northern iowa": {
+    "bart_name": "Northern Iowa",
+    "id": 104374,
+    "market": "UNI",
+    "mascot": "Panthers",
+    "color1": "#fbbb0c",
+    "color2": "#512878",
+    "conf": "MVC"
+  },
+  "northern kentucky": {
+    "bart_name": "Northern Kentucky",
+    "id": 104011,
+    "market": "Northern Ky.",
+    "mascot": "Norse",
+    "color1": "#2d2529",
+    "color2": "#edc454",
+    "conf": "Horizon"
+  },
+  "northwestern": {
+    "bart_name": "Northwestern",
+    "id": 104019,
+    "market": "Northwestern",
+    "mascot": "Wildcats",
+    "color1": "#442c94",
+    "color2": "#cbc6e0",
+    "conf": "Big Ten"
+  },
+  "northwestern st": {
+    "bart_name": "Northwestern St.",
+    "id": 104022,
+    "market": "Northwestern St.",
+    "mascot": "Demons",
+    "color1": "#4c3395",
+    "color2": "#f07320",
+    "conf": "Southland"
+  },
+  "notre dame": {
+    "bart_name": "Notre Dame",
+    "id": 104026,
+    "market": "Notre Dame",
+    "mascot": "Fighting Irish",
+    "color1": "#1c2c54",
+    "color2": "#202c54",
+    "conf": "ACC"
+  },
+  "oakland": {
+    "bart_name": "Oakland",
+    "id": 104032,
+    "market": "Oakland",
+    "mascot": "Golden Grizzlies",
+    "color1": "#2d2528",
+    "color2": "#947c3c",
+    "conf": "Horizon"
+  },
+  "ohio": {
+    "bart_name": "Ohio",
+    "id": 104037,
+    "market": "Ohio",
+    "mascot": "Bobcats",
+    "color1": "#105444",
+    "color2": "#d5bd91",
+    "conf": "MAC"
+  },
+  "ohio st": {
+    "bart_name": "Ohio St.",
+    "id": 104041,
+    "market": "Ohio St.",
+    "mascot": "Buckeyes",
+    "color1": "#bcbcc1",
+    "color2": "#292229",
+    "conf": "Big Ten"
+  },
+  "oklahoma": {
+    "bart_name": "Oklahoma",
+    "id": 104047,
+    "market": "Oklahoma",
+    "mascot": "Sooners",
+    "color1": "#ac0c34",
+    "color2": "#ac0c2c",
+    "conf": "SEC"
+  },
+  "oklahoma st": {
+    "bart_name": "Oklahoma St.",
+    "id": 104048,
+    "market": "Oklahoma St.",
+    "mascot": "Cowboys",
+    "color1": "#261d23",
+    "color2": "#f08328",
+    "conf": "Big 12"
+  },
+  "old dominion": {
+    "bart_name": "Old Dominion",
+    "id": 104049,
+    "market": "Old Dominion",
+    "mascot": "Monarchs",
+    "color1": "#104776",
+    "color2": "#91949c",
+    "conf": "Sun Belt"
+  },
+  "oral roberts": {
+    "bart_name": "Oral Roberts",
+    "id": 104054,
+    "market": "Oral Roberts",
+    "mascot": "Golden Eagles",
+    "color1": "#aa9b48",
+    "color2": "#17263c",
+    "conf": "Summit League"
+  },
+  "oregon": {
+    "bart_name": "Oregon",
+    "id": 104055,
+    "market": "Oregon",
+    "mascot": "Ducks",
+    "color1": "#0c743c",
+    "color2": "#10743c",
+    "conf": "Big Ten"
+  },
+  "oregon st": {
+    "bart_name": "Oregon St.",
+    "id": 104056,
+    "market": "Oregon St.",
+    "mascot": "Beavers",
+    "color1": "#170d0c",
+    "color2": "#d83b23",
+    "conf": "WCC"
+  },
+  "pacific": {
+    "bart_name": "Pacific",
+    "id": 104067,
+    "market": "Pacific",
+    "mascot": "Tigers",
+    "color1": "#e66b26",
+    "color2": "#070605",
+    "conf": "WCC"
+  },
+  "penn st": {
+    "bart_name": "Penn St.",
+    "id": 104078,
+    "market": "Penn St.",
+    "mascot": "Nittany Lions",
+    "color1": "#0e2d5d",
+    "color2": "#d7dce4",
+    "conf": "Big Ten"
+  },
+  "pepperdine": {
+    "bart_name": "Pepperdine",
+    "id": 104090,
+    "market": "Pepperdine",
+    "mascot": "Waves",
+    "color1": "#ef6b1d",
+    "color2": "#1c3473",
+    "conf": "WCC"
+  },
+  "pittsburgh": {
+    "bart_name": "Pittsburgh",
+    "id": 104099,
+    "market": "Pittsburgh",
+    "mascot": "Panthers",
+    "color1": "#f1b521",
+    "color2": "#043493",
+    "conf": "ACC"
+  },
+  "portland": {
+    "bart_name": "Portland",
+    "id": 104104,
+    "market": "Portland",
+    "mascot": "Pilots",
+    "color1": "#2c2454",
+    "color2": "#302454",
+    "conf": "WCC"
+  },
+  "portland st": {
+    "bart_name": "Portland St.",
+    "id": 104106,
+    "market": "Portland St.",
+    "mascot": "Vikings",
+    "color1": "#1e4535",
+    "color2": "#c7cfcc",
+    "conf": "Big Sky"
+  },
+  "prairie view a m": {
+    "bart_name": "Prairie View A&M",
+    "id": 104108,
+    "market": "Prairie View",
+    "mascot": "Panthers",
+    "color1": "#161412",
+    "color2": "#dec36b",
+    "conf": "SWAC"
+  },
+  "presbyterian": {
+    "bart_name": "Presbyterian",
+    "id": 104109,
+    "market": "Presbyterian",
+    "mascot": "Blue Hose",
+    "color1": "#ab6884",
+    "color2": "#0a5eab",
+    "conf": "Big South"
+  },
+  "providence": {
+    "bart_name": "Providence",
+    "id": 104112,
+    "market": "Providence",
+    "mascot": "Friars",
+    "color1": "#b8b8b8",
+    "color2": "#070707",
+    "conf": "Big East"
+  },
+  "purdue": {
+    "bart_name": "Purdue",
+    "id": 103257,
+    "market": "Purdue",
+    "mascot": "Boilermakers",
+    "color1": "#20201f",
+    "color2": "#c8b487",
+    "conf": "Big Ten"
+  },
+  "purdue fort wayne": {
+    "bart_name": "Purdue Fort Wayne",
+    "id": 104115,
+    "market": "Purdue Fort Wayne",
+    "mascot": "Mastodons",
+    "color1": "#d0c196",
+    "color2": "#383744",
+    "conf": "Horizon"
+  },
+  "quinnipiac": {
+    "bart_name": "Quinnipiac",
+    "id": 104120,
+    "market": "Quinnipiac",
+    "mascot": "Bobcats",
+    "color1": "#1c222d",
+    "color2": "#eea934",
+    "conf": "MAAC"
+  },
+  "radford": {
+    "bart_name": "Radford",
+    "id": 104122,
+    "market": "Radford",
+    "mascot": "Highlanders",
+    "color1": "#d4d2d2",
+    "color2": "#c42129",
+    "conf": "Big South"
+  },
+  "rhode island": {
+    "bart_name": "Rhode Island",
+    "id": 104132,
+    "market": "Rhode Island",
+    "mascot": "Rams",
+    "color1": "#1c2b43",
+    "color2": "#73b3e3",
+    "conf": "Atlantic 10"
+  },
+  "rice": {
+    "bart_name": "Rice",
+    "id": 104135,
+    "market": "Rice",
+    "mascot": "Owls",
+    "color1": "#143c7c",
+    "color2": "#183c7c",
+    "conf": "American"
+  },
+  "richmond": {
+    "bart_name": "Richmond",
+    "id": 104136,
+    "market": "Richmond",
+    "mascot": "Spiders",
+    "color1": "#d41344",
+    "color2": "#f4c7d1",
+    "conf": "Atlantic 10"
+  },
+  "rider": {
+    "bart_name": "Rider",
+    "id": 104137,
+    "market": "Rider",
+    "mascot": "Broncs",
+    "color1": "#6a2739",
+    "color2": "#beb9ba",
+    "conf": "MAAC"
+  },
+  "robert morris": {
+    "bart_name": "Robert Morris",
+    "id": 104142,
+    "market": "Robert Morris",
+    "mascot": "Colonials",
+    "color1": "#06254c",
+    "color2": "#b0b1aa",
+    "conf": "Horizon"
+  },
+  "rutgers": {
+    "bart_name": "Rutgers",
+    "id": 104155,
+    "market": "Rutgers",
+    "mascot": "Scarlet Knights",
+    "color1": "#e31434",
+    "color2": "#2b1c23",
+    "conf": "Big Ten"
+  },
+  "sacramento st": {
+    "bart_name": "Sacramento St.",
+    "id": 104174,
+    "market": "Sacramento St.",
+    "mascot": "Hornets",
+    "color1": "#064d36",
+    "color2": "#beb485",
+    "conf": "Big Sky"
+  },
+  "sacred heart": {
+    "bart_name": "Sacred Heart",
+    "id": 104175,
+    "market": "Sacred Heart",
+    "mascot": "Pioneers",
+    "color1": "#cd1241",
+    "color2": "#d1bdc2",
+    "conf": "MAAC"
+  },
+  "saint francis": {
+    "bart_name": "Saint Francis",
+    "id": 104179,
+    "market": "Saint Francis",
+    "mascot": "The Red Flash",
+    "color1": "#b6b1b1",
+    "color2": "#b82229",
+    "conf": "NEC"
+  },
+  "saint joseph s": {
+    "bart_name": "Saint Joseph's",
+    "id": 104181,
+    "market": "Saint Joseph's",
+    "mascot": "Hawks",
+    "color1": "#2e1f27",
+    "color2": "#a42038",
+    "conf": "Atlantic 10"
+  },
+  "saint louis": {
+    "bart_name": "Saint Louis",
+    "id": 104183,
+    "market": "Saint Louis",
+    "mascot": "Billikens",
+    "color1": "#cbc6c8",
+    "color2": "#274e95",
+    "conf": "Atlantic 10"
+  },
+  "saint mary s": {
+    "bart_name": "Saint Mary's",
+    "id": 104185,
+    "market": "Saint Mary's (CA)",
+    "mascot": "Gaels",
+    "color1": "#d2a2a5",
+    "color2": "#123960",
+    "conf": "WCC"
+  },
+  "saint peter s": {
+    "bart_name": "Saint Peter's",
+    "id": 104188,
+    "market": "Saint Peter's",
+    "mascot": "Peacocks",
+    "color1": "#3d7fbe",
+    "color2": "#2d382f",
+    "conf": "MAAC"
+  },
+  "sam houston st": {
+    "bart_name": "Sam Houston St.",
+    "id": 104195,
+    "market": "Sam Houston",
+    "mascot": "Bearkats",
+    "color1": "#dc542c",
+    "color2": "#e4542c",
+    "conf": "CUSA"
+  },
+  "samford": {
+    "bart_name": "Samford",
+    "id": 104196,
+    "market": "Samford",
+    "mascot": "Bulldogs",
+    "color1": "#202947",
+    "color2": "#cbd2d3",
+    "conf": "SoCon"
+  },
+  "san diego": {
+    "bart_name": "San Diego",
+    "id": 104197,
+    "market": "San Diego",
+    "mascot": "Toreros",
+    "color1": "#0e2858",
+    "color2": "#4d9bdb",
+    "conf": "WCC"
+  },
+  "san diego st": {
+    "bart_name": "San Diego St.",
+    "id": 104199,
+    "market": "San Diego St.",
+    "mascot": "Aztecs",
+    "color1": "#c42636",
+    "color2": "#271f27",
+    "conf": "Mountain West"
+  },
+  "san francisco": {
+    "bart_name": "San Francisco",
+    "id": 104201,
+    "market": "San Francisco",
+    "mascot": "Dons",
+    "color1": "#fcb41c",
+    "color2": "#144c34",
+    "conf": "WCC"
+  },
+  "san jose st": {
+    "bart_name": "San Jose St.",
+    "id": 104202,
+    "market": "San Jose St.",
+    "mascot": "Spartans",
+    "color1": "#2864b2",
+    "color2": "#fabc16",
+    "conf": "Mountain West"
+  },
+  "santa clara": {
+    "bart_name": "Santa Clara",
+    "id": 104203,
+    "market": "Santa Clara",
+    "mascot": "Broncos",
+    "color1": "#741c34",
+    "color2": "#781c34",
+    "conf": "WCC"
+  },
+  "seattle": {
+    "bart_name": "Seattle",
+    "id": 104209,
+    "market": "Seattle U",
+    "mascot": "Redhawks",
+    "color1": "#1f1818",
+    "color2": "#c42f46",
+    "conf": "WCC"
+  },
+  "seton hall": {
+    "bart_name": "Seton Hall",
+    "id": 104210,
+    "market": "Seton Hall",
+    "mascot": "Pirates",
+    "color1": "#b7b9c0",
+    "color2": "#1c5cac",
+    "conf": "Big East"
+  },
+  "siena": {
+    "bart_name": "Siena",
+    "id": 104219,
+    "market": "Siena",
+    "mascot": "Saints",
+    "color1": "#423a29",
+    "color2": "#dcba78",
+    "conf": "MAAC"
+  },
+  "siu edwardsville": {
+    "bart_name": "SIU Edwardsville",
+    "id": 104160,
+    "market": "SIUE",
+    "mascot": "Cougars",
+    "color1": "#cbac80",
+    "color2": "#2c2326",
+    "conf": "OVC"
+  },
+  "smu": {
+    "bart_name": "SMU",
+    "id": 104161,
+    "market": "SMU",
+    "mascot": "Mustangs",
+    "color1": "#e41434",
+    "color2": "#e81434",
+    "conf": "ACC"
+  },
+  "south alabama": {
+    "bart_name": "South Alabama",
+    "id": 104228,
+    "market": "South Alabama",
+    "mascot": "Jaguars",
+    "color1": "#1d4280",
+    "color2": "#ccd4e2",
+    "conf": "Sun Belt"
+  },
+  "south carolina": {
+    "bart_name": "South Carolina",
+    "id": 104229,
+    "market": "South Carolina",
+    "mascot": "Gamecocks",
+    "color1": "#2f1e20",
+    "color2": "#941534",
+    "conf": "SEC"
+  },
+  "south carolina st": {
+    "bart_name": "South Carolina St.",
+    "id": 104230,
+    "market": "South Carolina St.",
+    "mascot": "Bulldogs",
+    "color1": "#80142b",
+    "color2": "#bcc0ce",
+    "conf": "MEAC"
+  },
+  "south dakota": {
+    "bart_name": "South Dakota",
+    "id": 104231,
+    "market": "South Dakota",
+    "mascot": "Coyotes",
+    "color1": "#170f0f",
+    "color2": "#a92128",
+    "conf": "Summit League"
+  },
+  "south dakota st": {
+    "bart_name": "South Dakota St.",
+    "id": 104233,
+    "market": "South Dakota St.",
+    "mascot": "Jackrabbits",
+    "color1": "#eccb0a",
+    "color2": "#315da9",
+    "conf": "Summit League"
+  },
+  "south florida": {
+    "bart_name": "South Florida",
+    "id": 104234,
+    "market": "South Fla.",
+    "mascot": "Bulls",
+    "color1": "#156445",
+    "color2": "#cbc487",
+    "conf": "American"
+  },
+  "southeast missouri st": {
+    "bart_name": "Southeast Missouri St.",
+    "id": 104235,
+    "market": "Southeast Mo. St.",
+    "mascot": "Redhawks",
+    "color1": "#d03d51",
+    "color2": "#271f20",
+    "conf": "OVC"
+  },
+  "southeastern louisiana": {
+    "bart_name": "Southeastern Louisiana",
+    "id": 104237,
+    "market": "Southeastern La.",
+    "mascot": "Lions",
+    "color1": "#184237",
+    "color2": "#e1b323",
+    "conf": "Southland"
+  },
+  "southern": {
+    "bart_name": "Southern",
+    "id": 104248,
+    "market": "Southern U.",
+    "mascot": "Jaguars",
+    "color1": "#65ace3",
+    "color2": "#f7ca33",
+    "conf": "SWAC"
+  },
+  "southern illinois": {
+    "bart_name": "Southern Illinois",
+    "id": 104242,
+    "market": "Southern Ill.",
+    "mascot": "Salukis",
+    "color1": "#762940",
+    "color2": "#deccd2",
+    "conf": "MVC"
+  },
+  "southern miss": {
+    "bart_name": "Southern Miss",
+    "id": 104245,
+    "market": "Southern Miss.",
+    "mascot": "Golden Eagles",
+    "color1": "#271f1d",
+    "color2": "#f9ba15",
+    "conf": "Sun Belt"
+  },
+  "southern utah": {
+    "bart_name": "Southern Utah",
+    "id": 104249,
+    "market": "Southern Utah",
+    "mascot": "Thunderbirds",
+    "color1": "#2d2229",
+    "color2": "#c92424",
+    "conf": "WAC"
+  },
+  "st bonaventure": {
+    "bart_name": "St. Bonaventure",
+    "id": 104263,
+    "market": "St. Bonaventure",
+    "mascot": "Bonnies",
+    "color1": "#d0c2b1",
+    "color2": "#6e3f2f",
+    "conf": "Atlantic 10"
+  },
+  "st francis ny": {
+    "bart_name": "St. Francis NY",
+    "id": 104268,
+    "market": "St. Francis Brooklyn",
+    "mascot": "Terriers",
+    "color1": "#2360ad",
+    "color2": "#e01536",
+    "conf": "NEC"
+  },
+  "st john s": {
+    "bart_name": "St. John's",
+    "id": 104270,
+    "market": "St. John's (NY)",
+    "mascot": "Red Storm",
+    "color1": "#d31443",
+    "color2": "#241c23",
+    "conf": "Big East"
+  },
+  "stanford": {
+    "bart_name": "Stanford",
+    "id": 104290,
+    "market": "Stanford",
+    "mascot": "Cardinal",
+    "color1": "#8d1d1e",
+    "color2": "#e2c6c7",
+    "conf": "ACC"
+  },
+  "stephen f austin": {
+    "bart_name": "Stephen F. Austin",
+    "id": 104159,
+    "market": "SFA",
+    "mascot": "Lumberjacks",
+    "color1": "#bab9bb",
+    "color2": "#443069",
+    "conf": "Southland"
+  },
+  "stetson": {
+    "bart_name": "Stetson",
+    "id": 104293,
+    "market": "Stetson",
+    "mascot": "Hatters",
+    "color1": "#1e563d",
+    "color2": "#cad8d0",
+    "conf": "ASUN"
+  },
+  "stony brook": {
+    "bart_name": "Stony Brook",
+    "id": 104298,
+    "market": "Stony Brook",
+    "mascot": "Seawolves",
+    "color1": "#482433",
+    "color2": "#b1b2b2",
+    "conf": "CAA"
+  },
+  "syracuse": {
+    "bart_name": "Syracuse",
+    "id": 104303,
+    "market": "Syracuse",
+    "mascot": "Orange",
+    "color1": "#f36b24",
+    "color2": "#0f2c5a",
+    "conf": "ACC"
+  },
+  "tarleton st": {
+    "bart_name": "Tarleton St.",
+    "id": 104309,
+    "market": "Tarleton St.",
+    "mascot": "Texans",
+    "color1": "#5f3086",
+    "color2": "#d7cde0",
+    "conf": "WAC"
+  },
+  "tcu": {
+    "bart_name": "TCU",
+    "id": 104306,
+    "market": "TCU",
+    "mascot": "Horned Frogs",
+    "color1": "#3c3464",
+    "color2": "#403464",
+    "conf": "Big 12"
+  },
+  "temple": {
+    "bart_name": "Temple",
+    "id": 104311,
+    "market": "Temple",
+    "mascot": "Owls",
+    "color1": "#b40c34",
+    "color2": "#f7e6e9",
+    "conf": "American"
+  },
+  "tennessee": {
+    "bart_name": "Tennessee",
+    "id": 104312,
+    "market": "Tennessee",
+    "mascot": "Volunteers",
+    "color1": "#f47414",
+    "color2": "#f87414",
+    "conf": "SEC"
+  },
+  "tennessee martin": {
+    "bart_name": "Tennessee Martin",
+    "id": 104379,
+    "market": "UT Martin",
+    "mascot": "Skyhawks",
+    "color1": "#102e54",
+    "color2": "#d7a26b",
+    "conf": "OVC"
+  },
+  "tennessee st": {
+    "bart_name": "Tennessee St.",
+    "id": 104313,
+    "market": "Tennessee St.",
+    "mascot": "Tigers",
+    "color1": "#424176",
+    "color2": "#dad7d7",
+    "conf": "OVC"
+  },
+  "tennessee tech": {
+    "bart_name": "Tennessee Tech",
+    "id": 104314,
+    "market": "Tennessee Tech",
+    "mascot": "Golden Eagles",
+    "color1": "#593a98",
+    "color2": "#f7d709",
+    "conf": "OVC"
+  },
+  "texas": {
+    "bart_name": "Texas",
+    "id": 104319,
+    "market": "Texas",
+    "mascot": "Longhorns",
+    "color1": "#e45c14",
+    "color2": "#e85c14",
+    "conf": "SEC"
+  },
+  "texas a m": {
+    "bart_name": "Texas A&M",
+    "id": 104320,
+    "market": "Texas A&M",
+    "mascot": "Aggies",
+    "color1": "#b6b1b3",
+    "color2": "#570928",
+    "conf": "SEC"
+  },
+  "texas a m corpus chris": {
+    "bart_name": "Texas A&M Corpus Chris",
+    "id": 103258,
+    "market": "A&M-Corpus Christi",
+    "mascot": "Islanders",
+    "color1": "#177dc2",
+    "color2": "#055f51",
+    "conf": "Southland"
+  },
+  "texas southern": {
+    "bart_name": "Texas Southern",
+    "id": 104322,
+    "market": "Texas Southern",
+    "mascot": "Tigers",
+    "color1": "#bdb9bb",
+    "color2": "#870d3b",
+    "conf": "SWAC"
+  },
+  "texas st": {
+    "bart_name": "Texas St.",
+    "id": 104323,
+    "market": "Texas St.",
+    "mascot": "Bobcats",
+    "color1": "#541c23",
+    "color2": "#b29143",
+    "conf": "Sun Belt"
+  },
+  "texas tech": {
+    "bart_name": "Texas Tech",
+    "id": 104324,
+    "market": "Texas Tech",
+    "mascot": "Red Raiders",
+    "color1": "#d74a55",
+    "color2": "#291f26",
+    "conf": "Big 12"
+  },
+  "the citadel": {
+    "bart_name": "The Citadel",
+    "id": 104327,
+    "market": "The Citadel",
+    "mascot": "Bulldogs",
+    "color1": "#16263e",
+    "color2": "#548ccb",
+    "conf": "SoCon"
+  },
+  "toledo": {
+    "bart_name": "Toledo",
+    "id": 104334,
+    "market": "Toledo",
+    "mascot": "Rockets",
+    "color1": "#244572",
+    "color2": "#f9da05",
+    "conf": "MAC"
+  },
+  "towson": {
+    "bart_name": "Towson",
+    "id": 104335,
+    "market": "Towson",
+    "mascot": "Tigers",
+    "color1": "#2e272c",
+    "color2": "#c1c0bf",
+    "conf": "CAA"
+  },
+  "troy": {
+    "bart_name": "Troy",
+    "id": 104343,
+    "market": "Troy",
+    "mascot": "Trojans",
+    "color1": "#bdb8b9",
+    "color2": "#862037",
+    "conf": "Sun Belt"
+  },
+  "tulane": {
+    "bart_name": "Tulane",
+    "id": 104346,
+    "market": "Tulane",
+    "mascot": "Green Wave",
+    "color1": "#1c4637",
+    "color2": "#cfcece",
+    "conf": "American"
+  },
+  "tulsa": {
+    "bart_name": "Tulsa",
+    "id": 104347,
+    "market": "Tulsa",
+    "mascot": "Golden Hurricane",
+    "color1": "#2f3d62",
+    "color2": "#d1d6e0",
+    "conf": "American"
+  },
+  "uab": {
+    "bart_name": "UAB",
+    "id": 104351,
+    "market": "UAB",
+    "mascot": "Blazers",
+    "color1": "#202e2e",
+    "color2": "#dd5d43",
+    "conf": "American"
+  },
+  "uc davis": {
+    "bart_name": "UC Davis",
+    "id": 104352,
+    "market": "UC Davis",
+    "mascot": "Aggies",
+    "color1": "#14243c",
+    "color2": "#18243c",
+    "conf": "Big West"
+  },
+  "uc irvine": {
+    "bart_name": "UC Irvine",
+    "id": 104353,
+    "market": "UC Irvine",
+    "mascot": "Anteaters",
+    "color1": "#16253b",
+    "color2": "#f6bf1c",
+    "conf": "Big West"
+  },
+  "uc riverside": {
+    "bart_name": "UC Riverside",
+    "id": 104354,
+    "market": "UC Riverside",
+    "mascot": "Highlanders",
+    "color1": "#ca8514",
+    "color2": "#163e74",
+    "conf": "Big West"
+  },
+  "uc san diego": {
+    "bart_name": "UC San Diego",
+    "id": 104355,
+    "market": "UC San Diego",
+    "mascot": "Tritons",
+    "color1": "#f3c711",
+    "color2": "#1d2c43",
+    "conf": "Big West"
+  },
+  "uc santa barbara": {
+    "bart_name": "UC Santa Barbara",
+    "id": 104356,
+    "market": "UC Santa Barbara",
+    "mascot": "Gauchos",
+    "color1": "#1f1c52",
+    "color2": "#d0bd8e",
+    "conf": "Big West"
+  },
+  "ucf": {
+    "bart_name": "UCF",
+    "id": 104359,
+    "market": "UCF",
+    "mascot": "Knights",
+    "color1": "#aaa157",
+    "color2": "#150e0d",
+    "conf": "Big 12"
+  },
+  "ucla": {
+    "bart_name": "UCLA",
+    "id": 104360,
+    "market": "UCLA",
+    "mascot": "Bruins",
+    "color1": "#2c6c9c",
+    "color2": "#306c9c",
+    "conf": "Big Ten"
+  },
+  "umass lowell": {
+    "bart_name": "UMass Lowell",
+    "id": 104369,
+    "market": "UMass Lowell",
+    "mascot": "River Hawks",
+    "color1": "#cf3446",
+    "color2": "#2763b0",
+    "conf": "America East"
+  },
+  "umbc": {
+    "bart_name": "UMBC",
+    "id": 104364,
+    "market": "UMBC",
+    "mascot": "Retrievers",
+    "color1": "#bd951f",
+    "color2": "#1f1e1c",
+    "conf": "America East"
+  },
+  "umkc": {
+    "bart_name": "UMKC",
+    "id": 104366,
+    "market": "Kansas City",
+    "mascot": "Roos",
+    "color1": "#0f5590",
+    "color2": "#eec50a",
+    "conf": "Summit League"
+  },
+  "unc asheville": {
+    "bart_name": "UNC Asheville",
+    "id": 104370,
+    "market": "UNC Asheville",
+    "mascot": "Bulldogs",
+    "color1": "#3d4b6a",
+    "color2": "#cbc8ca",
+    "conf": "Big South"
+  },
+  "unc greensboro": {
+    "bart_name": "UNC Greensboro",
+    "id": 104371,
+    "market": "UNC Greensboro",
+    "mascot": "Spartans",
+    "color1": "#dbac4e",
+    "color2": "#1c2b4e",
+    "conf": "SoCon"
+  },
+  "unc wilmington": {
+    "bart_name": "UNC Wilmington",
+    "id": 104373,
+    "market": "UNCW",
+    "mascot": "Seahawks",
+    "color1": "#204557",
+    "color2": "#f4d506",
+    "conf": "CAA"
+  },
+  "unlv": {
+    "bart_name": "UNLV",
+    "id": 104375,
+    "market": "UNLV",
+    "mascot": "Rebels",
+    "color1": "#241b23",
+    "color2": "#e11433",
+    "conf": "Mountain West"
+  },
+  "usc": {
+    "bart_name": "USC",
+    "id": 104240,
+    "market": "Southern California",
+    "mascot": "Trojans",
+    "color1": "#fac01c",
+    "color2": "#a41c33",
+    "conf": "Big Ten"
+  },
+  "usc upstate": {
+    "bart_name": "USC Upstate",
+    "id": 104376,
+    "market": "USC Upstate",
+    "mascot": "Spartans",
+    "color1": "#105034",
+    "color2": "#c3c2c2",
+    "conf": "Big South"
+  },
+  "ut arlington": {
+    "bart_name": "UT Arlington",
+    "id": 104378,
+    "market": "UT Arlington",
+    "mascot": "Mavericks",
+    "color1": "#f37326",
+    "color2": "#3367b4",
+    "conf": "WAC"
+  },
+  "ut rio grande valley": {
+    "bart_name": "UT Rio Grande Valley",
+    "id": 104381,
+    "market": "UTRGV",
+    "mascot": "Vaqueros",
+    "color1": "#0f3254",
+    "color2": "#f68b24",
+    "conf": "Southland"
+  },
+  "utah": {
+    "bart_name": "Utah",
+    "id": 104389,
+    "market": "Utah",
+    "mascot": "Utes",
+    "color1": "#ca0f3e",
+    "color2": "#261e25",
+    "conf": "Big 12"
+  },
+  "utah st": {
+    "bart_name": "Utah St.",
+    "id": 104390,
+    "market": "Utah St.",
+    "mascot": "Aggies",
+    "color1": "#ada093",
+    "color2": "#162535",
+    "conf": "Mountain West"
+  },
+  "utah tech": {
+    "bart_name": "Utah Tech",
+    "id": 103539,
+    "market": "Utah Tech",
+    "mascot": "Trailblazers",
+    "color1": "#292a3f",
+    "color2": "#c0464d",
+    "conf": "WAC"
+  },
+  "utah valley": {
+    "bart_name": "Utah Valley",
+    "id": 104391,
+    "market": "Utah Valley",
+    "mascot": "Wolverines",
+    "color1": "#295f38",
+    "color2": "#ccd8d0",
+    "conf": "WAC"
+  },
+  "utep": {
+    "bart_name": "UTEP",
+    "id": 104380,
+    "market": "UTEP",
+    "mascot": "Miners",
+    "color1": "#d49783",
+    "color2": "#122856",
+    "conf": "CUSA"
+  },
+  "utsa": {
+    "bart_name": "UTSA",
+    "id": 104382,
+    "market": "UTSA",
+    "mascot": "Roadrunners",
+    "color1": "#0d2c54",
+    "color2": "#e87238",
+    "conf": "American"
+  },
+  "valparaiso": {
+    "bart_name": "Valparaiso",
+    "id": 104398,
+    "market": "Valparaiso",
+    "mascot": "Beacons",
+    "color1": "#e5d9c2",
+    "color2": "#7c4815",
+    "conf": "MVC"
+  },
+  "vanderbilt": {
+    "bart_name": "Vanderbilt",
+    "id": 104399,
+    "market": "Vanderbilt",
+    "mascot": "Commodores",
+    "color1": "#e1d194",
+    "color2": "#261e25",
+    "conf": "SEC"
+  },
+  "vcu": {
+    "bart_name": "VCU",
+    "id": 104393,
+    "market": "VCU",
+    "mascot": "Rams",
+    "color1": "#2c2327",
+    "color2": "#f3a30c",
+    "conf": "Atlantic 10"
+  },
+  "vermont": {
+    "bart_name": "Vermont",
+    "id": 104401,
+    "market": "Vermont",
+    "mascot": "Catamounts",
+    "color1": "#394c2e",
+    "color2": "#e8b852",
+    "conf": "America East"
+  },
+  "villanova": {
+    "bart_name": "Villanova",
+    "id": 104403,
+    "market": "Villanova",
+    "mascot": "Wildcats",
+    "color1": "#163e7d",
+    "color2": "#53bbeb",
+    "conf": "Big East"
+  },
+  "virginia": {
+    "bart_name": "Virginia",
+    "id": 104405,
+    "market": "Virginia",
+    "mascot": "Cavaliers",
+    "color1": "#dd572c",
+    "color2": "#24345a",
+    "conf": "ACC"
+  },
+  "virginia tech": {
+    "bart_name": "Virginia Tech",
+    "id": 104407,
+    "market": "Virginia Tech",
+    "mascot": "Hokies",
+    "color1": "#65253d",
+    "color2": "#e7c7c7",
+    "conf": "ACC"
+  },
+  "vmi": {
+    "bart_name": "VMI",
+    "id": 104394,
+    "market": "VMI",
+    "mascot": "Keydets",
+    "color1": "#fbd214",
+    "color2": "#dc1e24",
+    "conf": "SoCon"
+  },
+  "wagner": {
+    "bart_name": "Wagner",
+    "id": 104412,
+    "market": "Wagner",
+    "mascot": "Seahawks",
+    "color1": "#bbbfc0",
+    "color2": "#0c5142",
+    "conf": "NEC"
+  },
+  "wake forest": {
+    "bart_name": "Wake Forest",
+    "id": 104413,
+    "market": "Wake Forest",
+    "mascot": "Demon Deacons",
+    "color1": "#040404",
+    "color2": "#0c0404",
+    "conf": "ACC"
+  },
+  "washington": {
+    "bart_name": "Washington",
+    "id": 104424,
+    "market": "Washington",
+    "mascot": "Huskies",
+    "color1": "#e1c99b",
+    "color2": "#34046c",
+    "conf": "Big Ten"
+  },
+  "washington st": {
+    "bart_name": "Washington St.",
+    "id": 104427,
+    "market": "Washington St.",
+    "mascot": "Cougars",
+    "color1": "#ac0c34",
+    "color2": "#ac0c2c",
+    "conf": "WCC"
+  },
+  "weber st": {
+    "bart_name": "Weber St.",
+    "id": 104434,
+    "market": "Weber St.",
+    "mascot": "Wildcats",
+    "color1": "#5c5262",
+    "color2": "#d6d6d6",
+    "conf": "Big Sky"
+  },
+  "west virginia": {
+    "bart_name": "West Virginia",
+    "id": 104448,
+    "market": "West Virginia",
+    "mascot": "Mountaineers",
+    "color1": "#ecac0c",
+    "color2": "#f0ac0c",
+    "conf": "Big 12"
+  },
+  "western carolina": {
+    "bart_name": "Western Carolina",
+    "id": 104450,
+    "market": "Western Caro.",
+    "mascot": "Catamounts",
+    "color1": "#c3a475",
+    "color2": "#673793",
+    "conf": "SoCon"
+  },
+  "western illinois": {
+    "bart_name": "Western Illinois",
+    "id": 104452,
+    "market": "Western Ill.",
+    "mascot": "Leathernecks",
+    "color1": "#f1d11e",
+    "color2": "#572f89",
+    "conf": "OVC"
+  },
+  "western kentucky": {
+    "bart_name": "Western Kentucky",
+    "id": 104453,
+    "market": "Western Ky.",
+    "mascot": "Hilltoppers",
+    "color1": "#df253c",
+    "color2": "#2e2229",
+    "conf": "CUSA"
+  },
+  "western michigan": {
+    "bart_name": "Western Michigan",
+    "id": 104454,
+    "market": "Western Mich.",
+    "mascot": "Broncos",
+    "color1": "#aaa67c",
+    "color2": "#482d27",
+    "conf": "MAC"
+  },
+  "wichita st": {
+    "bart_name": "Wichita St.",
+    "id": 104471,
+    "market": "Wichita St.",
+    "mascot": "Shockers",
+    "color1": "#2d2528",
+    "color2": "#f5ce09",
+    "conf": "American"
+  },
+  "william mary": {
+    "bart_name": "William & Mary",
+    "id": 104476,
+    "market": "William & Mary",
+    "mascot": "Tribe",
+    "color1": "#154c3b",
+    "color2": "#e9aa2c",
+    "conf": "CAA"
+  },
+  "winthrop": {
+    "bart_name": "Winthrop",
+    "id": 104488,
+    "market": "Winthrop",
+    "mascot": "Eagles",
+    "color1": "#ad0f33",
+    "color2": "#fbb31c",
+    "conf": "Big South"
+  },
+  "wisconsin": {
+    "bart_name": "Wisconsin",
+    "id": 104500,
+    "market": "Wisconsin",
+    "mascot": "Badgers",
+    "color1": "#931c1c",
+    "color2": "#261c22",
+    "conf": "Big Ten"
+  },
+  "wofford": {
+    "bart_name": "Wofford",
+    "id": 104503,
+    "market": "Wofford",
+    "mascot": "Terriers",
+    "color1": "#070606",
+    "color2": "#987f65",
+    "conf": "SoCon"
+  },
+  "wright st": {
+    "bart_name": "Wright St.",
+    "id": 104506,
+    "market": "Wright St.",
+    "mascot": "Raiders",
+    "color1": "#e6ce89",
+    "color2": "#2c2d2a",
+    "conf": "Horizon"
+  },
+  "wyoming": {
+    "bart_name": "Wyoming",
+    "id": 104508,
+    "market": "Wyoming",
+    "mascot": "Cowboys",
+    "color1": "#502f1c",
+    "color2": "#f2b514",
+    "conf": "Mountain West"
+  },
+  "xavier": {
+    "bart_name": "Xavier",
+    "id": 104509,
+    "market": "Xavier",
+    "mascot": "Musketeers",
+    "color1": "#a9aaab",
+    "color2": "#15253c",
+    "conf": "Big East"
+  },
+  "youngstown st": {
+    "bart_name": "Youngstown St.",
+    "id": 104515,
+    "market": "Youngstown St.",
+    "mascot": "Penguins",
+    "color1": "#e21736",
+    "color2": "#160e0e",
+    "conf": "Horizon"
+  },
+  "bethune cookman": {
+    "bart_name": "Bethune Cookman",
+    "id": 103350,
+    "market": "Bethune-Cookman",
+    "mascot": "Wildcats",
+    "color1": "#6d1d3d",
+    "color2": "#f4aa1e",
+    "conf": "SWAC"
+  },
+  "brown": {
+    "bart_name": "Brown",
+    "id": 103378,
+    "market": "Brown",
+    "mascot": "Bears",
+    "color1": "#521f18",
+    "color2": "#ccc5c4",
+    "conf": "Ivy League"
+  },
+  "columbia": {
+    "bart_name": "Columbia",
+    "id": 103489,
+    "market": "Columbia",
+    "mascot": "Lions",
+    "color1": "#8dc4eb",
+    "color2": "#164786",
+    "conf": "Ivy League"
+  },
+  "cornell": {
+    "bart_name": "Cornell",
+    "id": 103506,
+    "market": "Cornell",
+    "mascot": "Big Red",
+    "color1": "#ae3a23",
+    "color2": "#281e23",
+    "conf": "Ivy League"
+  },
+  "dartmouth": {
+    "bart_name": "Dartmouth",
+    "id": 103520,
+    "market": "Dartmouth",
+    "mascot": "Big Green",
+    "color1": "#053c1e",
+    "color2": "#cdcdcd",
+    "conf": "Ivy League"
+  },
+  "harvard": {
+    "bart_name": "Harvard",
+    "id": 103682,
+    "market": "Harvard",
+    "mascot": "Crimson",
+    "color1": "#c2142c",
+    "color2": "#2e2027",
+    "conf": "Ivy League"
+  },
+  "maryland eastern shore": {
+    "bart_name": "Maryland Eastern Shore",
+    "id": 104365,
+    "market": "UMES",
+    "mascot": "Hawks",
+    "color1": "#2c1c25",
+    "color2": "#940c2c",
+    "conf": "MEAC"
+  },
+  "penn": {
+    "bart_name": "Penn",
+    "id": 104074,
+    "market": "Penn",
+    "mascot": "Quakers",
+    "color1": "#202f57",
+    "color2": "#ae6b6f",
+    "conf": "Ivy League"
+  },
+  "princeton": {
+    "bart_name": "Princeton",
+    "id": 104110,
+    "market": "Princeton",
+    "mascot": "Tigers",
+    "color1": "#f1741f",
+    "color2": "#281f24",
+    "conf": "Ivy League"
+  },
+  "st thomas": {
+    "bart_name": "St. Thomas",
+    "id": 104288,
+    "market": "St. Thomas (MN)",
+    "mascot": "Tommies",
+    "color1": "#462685",
+    "color2": "#cdc6de",
+    "conf": "Summit League"
+  },
+  "yale": {
+    "bart_name": "Yale",
+    "id": 104510,
+    "market": "Yale",
+    "mascot": "Bulldogs",
+    "color1": "#151d2d",
+    "color2": "#cdcfd2",
+    "conf": "Ivy League"
+  },
+  "east texas a m": {
+    "bart_name": "East Texas A&M",
+    "id": 104316,
+    "market": "East Texas A&M",
+    "mascot": "Lions",
+    "color1": "#eaa314",
+    "color2": "#1d2c53",
+    "conf": "Southland"
+  },
+  "lindenwood": {
+    "bart_name": "Lindenwood",
+    "id": 103819,
+    "market": "Lindenwood",
+    "mascot": "Lions",
+    "color1": "#b2a36c",
+    "color2": "#13110c",
+    "conf": "OVC"
+  },
+  "queens": {
+    "bart_name": "Queens",
+    "id": 104117,
+    "market": "Queens (NC)",
+    "mascot": "Royals",
+    "color1": "#243464",
+    "color2": "#283464",
+    "conf": "ASUN"
+  },
+  "southern indiana": {
+    "bart_name": "Southern Indiana",
+    "id": 104243,
+    "market": "Southern Ind.",
+    "mascot": "Screaming Eagles",
+    "color1": "#c3bbbe",
+    "color2": "#123057",
+    "conf": "OVC"
+  },
+  "stonehill": {
+    "bart_name": "Stonehill",
+    "id": 104297,
+    "market": "Stonehill",
+    "mascot": "Skyhawks",
+    "color1": "#312c55",
+    "color2": "#c8c3c9",
+    "conf": "NEC"
+  },
+  "le moyne": {
+    "bart_name": "Le Moyne",
+    "id": 103799,
+    "market": "Le Moyne",
+    "mascot": "Dolphins",
+    "color1": "#1c442c",
+    "color2": "#20442c",
+    "conf": "NEC"
+  },
+  "mercyhurst": {
+    "bart_name": "Mercyhurst",
+    "id": 103895,
+    "market": "Mercyhurst",
+    "mascot": "Lakers",
+    "color1": "#1e3d4d",
+    "color2": "#cacfd4",
+    "conf": "NEC"
+  },
+  "west georgia": {
+    "bart_name": "West Georgia",
+    "id": 104444,
+    "market": "West Ga.",
+    "mascot": "Wolves",
+    "color1": "#d27985",
+    "color2": "#225fac",
+    "conf": "ASUN"
+  },
+  "new haven": {
+    "bart_name": "New Haven",
+    "id": 103982,
+    "market": "New Haven",
+    "mascot": "Chargers",
+    "color1": "#0e3374",
+    "color2": "#e9c150",
+    "conf": "NEC"
+  }
+}

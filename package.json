@@ -6,12 +6,37 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync:bart": "tsx scripts/sync-bart.mts",
+    "sync:cbb-teams": "tsx scripts/sync-cbb-teams.mts",
+    "sync:cbb-game-logs": "tsx scripts/sync-cbb-game-logs.mts",
+    "sync:cbb-player-game-stats": "tsx scripts/sync-cbb-player-game-stats.mts",
+    "sync:cbb-player-on-off": "tsx scripts/sync-cbb-player-on-off.mts",
+    "fetch:photos": "node scripts/fetch-player-images.mjs",
+    "export:data": "tsx scripts/export-static-data.mts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.105.4",
+    "@tanstack/react-table": "^8.21.3",
+    "@types/d3-hexbin": "^0.2.5",
+    "@visx/axis": "^3.12.0",
+    "@visx/group": "^3.12.0",
+    "@visx/responsive": "^3.12.0",
+    "@visx/scale": "^3.12.0",
+    "@visx/shape": "^3.12.0",
+    "@visx/tooltip": "^3.12.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "csv-parse": "^6.2.1",
+    "d3-hexbin": "^0.2.2",
+    "dotenv": "^17.4.2",
+    "lucide-react": "^1.16.0",
+    "motion": "^12.38.0",
     "next": "16.2.6",
+    "radix-ui": "^1.4.3",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -20,7 +45,9 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4",
+    "tsx": "^4.22.0",
     "typescript": "^5"
   }
 }

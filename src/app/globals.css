@@ -1,26 +1,133 @@
 @import "tailwindcss";
 
+/* ------------------------------------------------------------------
+ * Beyond the Arc — editorial sports magazine theme
+ * Palette: warm paper background, deep navy ink, basketball-coral accent
+ * ----------------------------------------------------------------- */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand palette */
+  --paper: #faf7f2;          /* warm off-white background */
+  --paper-deep: #f1ece2;     /* one shade deeper for cards/dividers */
+  --ink: #1a2238;            /* deep navy display ink */
+  --ink-soft: #3a425c;       /* navy at 70% — body copy */
+  --ink-muted: #6b7280;      /* neutral grey — secondary text */
+  --hairline: #e7e2d5;       /* paper-toned divider */
+  --coral: #c8553d;          /* basketball-leather accent */
+  --coral-soft: #e08a76;     /* hover/secondary accent */
+  --court: #d4a574;          /* hardwood accent (subtle dividers) */
+  --good: #4a7c59;           /* chart positive — forest green */
+  --bad: #b94c4c;            /* chart negative — muted red */
+
+  /* shadcn aliases — map to brand */
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: #ffffff;
+  --card-foreground: var(--ink);
+  --popover: #ffffff;
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--paper);
+  --secondary: var(--paper-deep);
+  --secondary-foreground: var(--ink);
+  --muted: var(--paper-deep);
+  --muted-foreground: var(--ink-muted);
+  --accent: var(--coral);
+  --accent-foreground: #ffffff;
+  --destructive: var(--bad);
+  --destructive-foreground: #ffffff;
+  --border: var(--hairline);
+  --input: var(--hairline);
+  --ring: var(--coral);
+
+  --radius: 0.5rem;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Brand-tagged tokens — use these in components when you want intent */
+  --color-paper: var(--paper);
+  --color-paper-deep: var(--paper-deep);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-muted: var(--ink-muted);
+  --color-coral: var(--coral);
+  --color-coral-soft: var(--coral-soft);
+  --color-court: var(--court);
+  --color-good: var(--good);
+  --color-bad: var(--bad);
+  --color-hairline: var(--hairline);
+
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--border);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Display headlines — serif, editorial weight */
+.font-display {
+  font-family: var(--font-display), Georgia, "Times New Roman", serif;
+  font-feature-settings: "ss01", "ss02", "ss03";
+  letter-spacing: -0.02em;
+}
+
+/* Tabular numerals on stats */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Court-line divider — for section breaks */
+.court-divider {
+  height: 1px;
+  background: repeating-linear-gradient(
+    to right,
+    var(--court) 0,
+    var(--court) 8px,
+    transparent 8px,
+    transparent 16px
+  );
+  opacity: 0.45;
+}
+
+/* Magazine pull-quote stat */
+.lede-stat {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(3rem, 8vw, 6rem);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  color: var(--ink);
 }

@@ -1,0 +1,40 @@
+# Netlify build config for Beyond the Arc.
+#
+# The data pipeline (`npm run sync:* + npm run export:data`) runs LOCALLY
+# against Supabase + CBB Analytics and writes pre-built JSON into public/data.
+# Those files are committed to the repo, so Netlify only needs to run the
+# framework build to turn React + JSON into HTML.
+
+[build]
+  command   = "npm run build"
+  publish   = "out"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # Skip Next telemetry to keep build logs clean
+  NEXT_TELEMETRY_DISABLED = "1"
+
+# Long-term cache the immutable Next.js asset bundles. The hashed filenames
+# already bust the cache on any change.
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Photos + team logos are big and rarely change — give them a year of edge cache.
+[[headers]]
+  for = "/images/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# JSON data files change on each export — let edges revalidate.
+[[headers]]
+  for = "/data/*.json"
+  [headers.values]
+    Cache-Control = "public, max-age=600, stale-while-revalidate=86400"
+
+# Per-player + per-team JSONs (sharded under /data/...) follow the same rule.
+[[headers]]
+  for = "/data/*/*.json"
+  [headers.values]
+    Cache-Control = "public, max-age=600, stale-while-revalidate=86400"
