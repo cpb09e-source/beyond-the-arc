@@ -60,6 +60,7 @@ export function PortalClient({
   const [confTo, setConfTo] = useState("All");
   const [limit, setLimit] = useState<number>(100);
   const [query, setQuery] = useState("");
+  const [schoolQuery, setSchoolQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("bta_portg");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [openClass, setOpenClass] = useState<TransferClassRow | null>(null);
@@ -72,6 +73,7 @@ export function PortalClient({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const sq = schoolQuery.trim().toLowerCase();
     return entries.filter((e) => {
       // Display baseline: hide bench-level production. Players need to have
       // GP ≥ 10, MPG ≥ 12, AND PPG ≥ 4 to be worth showing in the portal table.
@@ -90,9 +92,14 @@ export function PortalClient({
         if (confTo !== "Uncommitted" && e.conf_to !== confTo) return false;
       }
       if (q && !e.name.toLowerCase().includes(q)) return false;
+      if (sq) {
+        const from = e.team_from?.toLowerCase() ?? "";
+        const to = e.team_to?.toLowerCase() ?? "";
+        if (!from.includes(sq) && !to.includes(sq)) return false;
+      }
       return true;
     });
-  }, [entries, status, confTo, query]);
+  }, [entries, status, confTo, query, schoolQuery]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -137,7 +144,7 @@ export function PortalClient({
     else { setSortBy(k); setSortDir(defaultDir); }
   }
   function reset() {
-    setStatus("All"); setConfTo("All"); setQuery(""); setLimit(100);
+    setStatus("All"); setConfTo("All"); setQuery(""); setSchoolQuery(""); setLimit(100);
   }
 
   return (
@@ -163,17 +170,31 @@ export function PortalClient({
               {confsTo.map((c) => <option key={c} value={c}>{c}</option>)}
             </Select>
           </Field>
-          <div className="relative flex-1 min-w-[14rem] max-w-xs">
+          <div className="relative flex-1 min-w-[12rem] max-w-xs">
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search players…"
+              placeholder="Search for a player"
               aria-label="Search players by name"
               className="h-9 w-full pl-3 pr-8 rounded border border-hairline bg-white text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40"
             />
             {query && (
-              <button onClick={() => setQuery("")} aria-label="Clear search"
+              <button onClick={() => setQuery("")} aria-label="Clear player search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-sm">×</button>
+            )}
+          </div>
+          <div className="relative flex-1 min-w-[12rem] max-w-xs">
+            <input
+              type="search"
+              value={schoolQuery}
+              onChange={(e) => setSchoolQuery(e.target.value)}
+              placeholder="Search for a school"
+              aria-label="Search by school (from or to)"
+              className="h-9 w-full pl-3 pr-8 rounded border border-hairline bg-white text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40"
+            />
+            {schoolQuery && (
+              <button onClick={() => setSchoolQuery("")} aria-label="Clear school search"
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-sm">×</button>
             )}
           </div>

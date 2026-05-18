@@ -57,7 +57,7 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
   const cached = yearMetricsCache.get(year);
   if (cached) return cached;
 
-  type Mid = { id: number; pir: number | null; porpag: number | null; net_onoff: number | null; eligible: boolean };
+  type Mid = { id: number; pir: number | null; porpag: number | null; conference: string | null; eligible: boolean };
   const mids: Mid[] = players.map((p) => {
     const row = p.player_bart_stats?.raw_row ?? null;
     const games = p.player_bart_stats?.games ?? null;
@@ -70,22 +70,21 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
     const missedFg = pctFromIdx(row, 52);
     const missedFt = pctFromIdx(row, 44);
     const porpag = pctFromIdx(row, 28);
-    const netOnOff = (p as unknown as { net_onoff?: number | null }).net_onoff ?? null;
+    const team = Array.isArray(p.teams) ? p.teams[0] : p.teams;
+    const conference = team?.conference ?? null;
     const eligible = !((games ?? 0) < 8 && (mins ?? 0) < 10 && (pts ?? 0) < 3);
     const pir = (pts !== null && reb !== null && ast !== null && stl !== null && blk !== null)
       ? pts + reb + ast + stl + blk - (missedFg ?? 0) - (missedFt ?? 0)
       : null;
-    return { id: p.id, pir, porpag, net_onoff: netOnOff, eligible };
+    return { id: p.id, pir, porpag, conference, eligible };
   });
 
   const pirVals: number[] = [];
   const porVals: number[] = [];
-  const netVals: number[] = [];
   for (const m of mids) {
     if (!m.eligible) continue;
     if (typeof m.pir === "number") pirVals.push(m.pir);
     if (typeof m.porpag === "number") porVals.push(m.porpag);
-    if (typeof m.net_onoff === "number") netVals.push(m.net_onoff);
   }
   const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
   const sd = (a: number[], mu: number) => Math.sqrt(a.reduce((s, v) => s + (v - mu) ** 2, 0) / a.length);
@@ -93,8 +92,6 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
   const pSd = pirVals.length ? sd(pirVals, pMu) : 0;
   const oMu = porVals.length ? mean(porVals) : 0;
   const oSd = porVals.length ? sd(porVals, oMu) : 0;
-  const nMu = netVals.length ? mean(netVals) : 0;
-  const nSd = netVals.length ? sd(netVals, nMu) : 0;
 
   const out = new Map<number, { pir: number | null; bta_portg: number | null }>();
   for (const m of mids) {
@@ -103,14 +100,19 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
       const zs: number[] = [];
       if (typeof m.pir === "number" && pSd > 0) zs.push((m.pir - pMu) / pSd);
       if (typeof m.porpag === "number" && oSd > 0) zs.push((m.porpag - oMu) / oSd);
-      if (typeof m.net_onoff === "number" && nSd > 0) zs.push((m.net_onoff - nMu) / nSd);
-      if (zs.length > 0) bta = (zs.reduce((s, v) => s + v, 0) / zs.length) * 20;
+      if (zs.length > 0) {
+        const raw = (zs.reduce((s, v) => s + v, 0) / zs.length) * 20;
+        const isPower = m.conference != null && POWER_CONFS.has(m.conference);
+        bta = isPower ? raw : raw * 0.85;
+      }
     }
     out.set(m.id, { pir: m.pir, bta_portg: bta });
   }
   yearMetricsCache.set(year, out);
   return out;
 }
+
+const POWER_CONFS = new Set(["ACC", "B10", "B12", "SEC"]);
 
 export function buildRoster(players: StaticPlayerRow[], teamId: number, year: number): RosterEntry[] {
   const metrics = computeYearMetrics(players, year);

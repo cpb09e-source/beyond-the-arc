@@ -86,8 +86,7 @@ export type PlayerSummary = {
   ts_pct: number | null;        // PTS / (2 * (FGA + 0.44 * FTA))
   pir: number | null;           // EuroLeague PIR per game (minus TOV; see note)
   porpag: number | null;        // Bart Torvik Points Over Replacement Player per Adj Game
-  net_onoff: number | null;     // CBB on/off net-rating impact (per 100 poss)
-  bta_ind_ortg: number | null;  // composite avg(z(PIR), z(PORPAG), z(net_onoff)) * 20
+  bta_ind_ortg: number | null;  // avg(z(PIR), z(PORPAG)) * 20, with 12% non-power-conf penalty
   fg3_made: number | null;
   fg3_att: number | null;
 };

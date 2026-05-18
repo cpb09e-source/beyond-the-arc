@@ -19,6 +19,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { config as loadEnv } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import {
+  POWER_CONFS,
+  computeCohortStats,
+  productionFor as productionForShared,
+  type PlayerSeason,
+} from "./lib/bta-prtg.mts";
 
 loadEnv({ path: ".env.local" });
 
@@ -47,6 +53,7 @@ const YEARS = [
   2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020,
   2021, 2022, 2023, 2024, 2025, 2026,
 ];
+
 
 function slug(name: string): string {
   return name
@@ -258,34 +265,9 @@ async function main() {
   }
   console.log(`   ${teamSlugCount} per-team JSON files written (with four-factor record)`);
 
-  // Load per-season on-off impact for every (year, bart_player_id). Injected
-  // into each player row below so the UI can compute BTA PRTG as a 3-term
-  // composite (PIR + PORPAG + net on-off impact).
-  console.log("\n🎚 Loading on-off impact…");
-  const onOffByYearAndBart = new Map<string, number>();
-  {
-    let from = 0;
-    while (true) {
-      const { data, error } = await sb
-        .from("player_on_off_stats")
-        .select("year, bart_player_id, net_onoff")
-        .not("bart_player_id", "is", null)
-        .range(from, from + 999);
-      if (error) throw new Error(`player_on_off_stats: ${error.message}`);
-      if (!data || data.length === 0) break;
-      for (const r of data as { year: number; bart_player_id: number; net_onoff: number | null }[]) {
-        if (r.bart_player_id === null || typeof r.net_onoff !== "number") continue;
-        onOffByYearAndBart.set(`${r.year}|${r.bart_player_id}`, r.net_onoff);
-      }
-      if (data.length < 1000) break;
-      from += 1000;
-    }
-  }
-  console.log(`   ${onOffByYearAndBart.size.toLocaleString()} on-off entries loaded`);
-
   console.log("\n👥 Exporting players (per year)…");
   let totalPlayers = 0;
-  const playersByBartId = new Map<number, Array<{ year: number; team_name: string; team_conference: string | null; class: string | null; raw_row: unknown; games: number | null; notes: string | null; projection: number | null; net_onoff: number | null }>>();
+  const playersByBartId = new Map<number, Array<{ year: number; team_name: string; team_conference: string | null; class: string | null; raw_row: unknown; games: number | null; notes: string | null; projection: number | null }>>();
   for (const year of YEARS) {
     const players = await fetchAllPlayers(year) as Array<{
       bart_player_id: number | null;
@@ -293,7 +275,6 @@ async function main() {
       class: string | null;
       teams: { id?: number; name?: string; conference?: string | null } | { id?: number; name?: string; conference?: string | null }[];
       player_bart_stats: { raw_row?: unknown; games?: number | null; notes?: string | null; projection?: number | null } | Array<{ raw_row?: unknown; games?: number | null; notes?: string | null; projection?: number | null }>;
-      net_onoff?: number | null;
     }>;
     // Apply team-name overrides on the joined teams (the row's team display name).
     for (const p of players) {
@@ -301,15 +282,6 @@ async function main() {
         for (const tt of p.teams) if (tt?.name) tt.name = overrideTeamName(tt.name);
       } else if (p.teams?.name) {
         p.teams.name = overrideTeamName(p.teams.name);
-      }
-    }
-    // Inject net_onoff onto each row before serializing — the players-by-year
-    // JSON is what the players-page client + team-page roster read directly.
-    for (const p of players) {
-      if (p.bart_player_id !== null) {
-        p.net_onoff = onOffByYearAndBart.get(`${year}|${p.bart_player_id}`) ?? null;
-      } else {
-        p.net_onoff = null;
       }
     }
     console.log(`   ${year}: ${players.length}`);
@@ -331,67 +303,14 @@ async function main() {
         games: stats?.games ?? null,
         notes: stats?.notes ?? null,
         projection: stats?.projection ?? null,
-        net_onoff: p.net_onoff ?? null,
       });
     }
   }
   console.log(`   total: ${totalPlayers} player-season rows`);
 
-  // Pre-compute per-year cohort stats (PIR + PORPAG + net on-off impact
-  // mean/sd) over the eligible D-I pool so the portal export can attach a
-  // real BTA PRTG to each transfer (matches what shows on individual player pages).
-  type CohortStats = { pirMean: number; pirSd: number; porMean: number; porSd: number; netMean: number; netSd: number };
-  const yearCohortStats = new Map<number, CohortStats>();
-  function rowNum(row: unknown, fromStart: boolean, idx: number): number | null {
-    if (!Array.isArray(row) || row.length <= idx) return null;
-    const v = fromStart ? row[idx] : row[row.length - 1 - idx];
-    if (typeof v === "number" && Number.isFinite(v)) return v;
-    if (typeof v === "string") { const n = Number(v); return Number.isFinite(n) ? n : null; }
-    return null;
-  }
-  function pirOfRow(row: unknown): number | null {
-    const pts = rowNum(row, false, 3);
-    const reb = rowNum(row, false, 7);
-    const ast = rowNum(row, false, 6);
-    const stl = rowNum(row, false, 5);
-    const blk = rowNum(row, false, 4);
-    if (pts === null || reb === null || ast === null || stl === null || blk === null) return null;
-    const missedFg = rowNum(row, true, 52) ?? 0;
-    const missedFt = rowNum(row, true, 44) ?? 0;
-    return pts + reb + ast + stl + blk - missedFg - missedFt;
-  }
-  function porpagOfRow(row: unknown): number | null { return rowNum(row, true, 28); }
-  function mpgOfRow(row: unknown): number | null { return rowNum(row, true, 54); }
-  const cohortBags = new Map<number, { pir: number[]; por: number[]; net: number[] }>();
-  for (const [, seasons] of playersByBartId.entries()) {
-    for (const s of seasons) {
-      const row = s.raw_row;
-      const games = s.games;
-      const mpg = mpgOfRow(row);
-      const ppg = rowNum(row, false, 3);
-      const eligible = !((games ?? 0) < 8 && (mpg ?? 0) < 10 && (ppg ?? 0) < 3);
-      if (!eligible) continue;
-      let bag = cohortBags.get(s.year);
-      if (!bag) { bag = { pir: [], por: [], net: [] }; cohortBags.set(s.year, bag); }
-      const pir = pirOfRow(row);
-      const por = porpagOfRow(row);
-      if (pir !== null) bag.pir.push(pir);
-      if (por !== null) bag.por.push(por);
-      if (typeof s.net_onoff === "number") bag.net.push(s.net_onoff);
-    }
-  }
-  // Replace each bag with finalized {mean, sd}
-  for (const [year, bag] of cohortBags.entries()) {
-    const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
-    const sd = (a: number[], mu: number) => Math.sqrt(a.reduce((s, v) => s + (v - mu) ** 2, 0) / a.length);
-    const pMu = bag.pir.length ? mean(bag.pir) : 0;
-    const pSd = bag.pir.length ? sd(bag.pir, pMu) : 0;
-    const oMu = bag.por.length ? mean(bag.por) : 0;
-    const oSd = bag.por.length ? sd(bag.por, oMu) : 0;
-    const nMu = bag.net.length ? mean(bag.net) : 0;
-    const nSd = bag.net.length ? sd(bag.net, nMu) : 0;
-    yearCohortStats.set(year, { pirMean: pMu, pirSd: pSd, porMean: oMu, porSd: oSd, netMean: nMu, netSd: nSd });
-  }
+  // Per-year cohort PIR/PORPAG mean+sd over the eligible D-I pool — used by
+  // productionFor() to z-score and average. Formula lives in scripts/lib/bta-prtg.mts.
+  const yearCohortStats = computeCohortStats(playersByBartId as Map<number, PlayerSeason[]>);
 
   console.log("\n🧑 Per-player JSON files…");
   let playerFileCount = 0;
@@ -520,59 +439,10 @@ async function main() {
     }
     console.log(`   cbba→bart map: ${bartByCbba.size.toLocaleString()} entries`);
 
-    // For each bart_player_id, the most-recent player-season (already accumulated
-    // in playersByBartId above — sorted newest-first). Pull per-game tells from raw_row.
-    function num(v: unknown): number | null {
-      if (typeof v === "number" && Number.isFinite(v)) return v;
-      if (typeof v === "string") { const n = Number(v); return Number.isFinite(n) ? n : null; }
-      return null;
-    }
-    function fromEnd(row: Array<string | number | null> | null | undefined, off: number) {
-      if (!row || row.length <= off) return null;
-      return num(row[row.length - 1 - off]);
-    }
-    function fromStart(row: Array<string | number | null> | null | undefined, idx: number) {
-      if (!row || row.length <= idx) return null;
-      return num(row[idx]);
-    }
-    function productionFor(bartId: number) {
-      const seasons = playersByBartId.get(bartId);
-      if (!seasons || seasons.length === 0) return null;
-      const latest = seasons[0]!; // newest year first
-      const row = (latest.raw_row as Array<string | number | null> | null) ?? null;
-      const games = latest.games;
-      const pts = fromEnd(row, 3);
-      const reb = fromEnd(row, 7);
-      const ast = fromEnd(row, 6);
-      const stl = fromEnd(row, 5);
-      const blk = fromEnd(row, 4);
-      const missedFg = fromStart(row, 52);
-      const missedFt = fromStart(row, 44);
-      const mins = fromStart(row, 54);
-      const pir = (pts !== null && reb !== null && ast !== null && stl !== null && blk !== null)
-        ? pts + reb + ast + stl + blk - (missedFg ?? 0) - (missedFt ?? 0)
-        : null;
-      const porpag = fromStart(row, 28);
-      const netOnOff = latest.net_onoff ?? null;
-      const stats = yearCohortStats.get(latest.year);
-      let bta_portg: number | null = null;
-      if (stats) {
-        const zs: number[] = [];
-        if (typeof pir === "number" && stats.pirSd > 0) zs.push((pir - stats.pirMean) / stats.pirSd);
-        if (typeof porpag === "number" && stats.porSd > 0) zs.push((porpag - stats.porMean) / stats.porSd);
-        if (typeof netOnOff === "number" && stats.netSd > 0) zs.push((netOnOff - stats.netMean) / stats.netSd);
-        if (zs.length > 0) bta_portg = (zs.reduce((s, v) => s + v, 0) / zs.length) * 20;
-      }
-      return {
-        last_year: latest.year,
-        last_team: latest.team_name,
-        last_conf: latest.team_conference,
-        gp: games, mpg: mins, ppg: pts, rpg: reb, apg: ast, spg: stl, bpg: blk,
-        pir,
-        bta_portg,
-        net_onoff: netOnOff,
-      };
-    }
+    // productionFor + cohort math live in scripts/lib/bta-prtg.mts so both the
+    // full export and the fast portal-only export apply the same formula.
+    const productionFor = (bartId: number) =>
+      productionForShared(bartId, playersByBartId as Map<number, PlayerSeason[]>, yearCohortStats);
     function eligPretty(e: string | undefined): string {
       if (!e) return "—";
       return e.replace(/^COLLEGE_/, "").replace(/_/g, " ").toLowerCase()
@@ -678,12 +548,21 @@ async function main() {
       return b;
     }
     for (const e of enriched) {
-      // "Committed" move = has a destination team. CBB's `status` field uses
-      // "Transferred" (committed elsewhere) / "Active" (in portal, undecided)
-      // / "Withdrew" (returned to original team) — but a non-null team_to is
-      // the only fully reliable signal that they landed somewhere new.
-      if (!e.team_from || !e.team_to) continue;
+      // CBB's `status` field uses "Transferred" (committed elsewhere) / "Active"
+      // (in portal, undecided) / "Withdrew" (returned to original team). For
+      // transfer-class scoring:
+      //   - Transferred → counts as OUT for old school AND IN for new school
+      //   - Active (uncommitted) → counts as OUT only (school has lost them
+      //     from the roster as of now; they're sitting in the portal)
+      //   - Withdrew → skip (they came back, no net movement)
+      if (!e.team_from) continue;
       if (typeof e.bta_portg !== "number") continue;
+      // Skip 0/1-star moves: they shouldn't move the needle on a school's
+      // transfer-class ranking (think walk-ons, end-of-bench depth pieces).
+      if (e.stars < 2) continue;
+      const isCommitted = e.team_to !== null;
+      const isActive = e.status === "Active";
+      if (!isCommitted && !isActive) continue; // Withdrew or unknown — skip
       const player: TCPlayer = {
         cbba_player_id: e.cbba_player_id,
         bart_player_id: e.bart_player_id,
@@ -693,12 +572,14 @@ async function main() {
         counter_team: null,
         counter_conf: null,
       };
-      // IN to e.team_to (counterpart = where they came from)
-      const inBucket = getBucket(e.team_to);
-      inBucket.in_players.push({ ...player, counter_team: e.team_from, counter_conf: e.conf_from });
-      // OUT from e.team_from (counterpart = where they went)
+      // OUT from e.team_from. Counterpart = destination (or null if still in portal).
       const outBucket = getBucket(e.team_from);
       outBucket.out_players.push({ ...player, counter_team: e.team_to, counter_conf: e.conf_to });
+      // IN to e.team_to only if they've committed somewhere.
+      if (isCommitted) {
+        const inBucket = getBucket(e.team_to!);
+        inBucket.in_players.push({ ...player, counter_team: e.team_from, counter_conf: e.conf_from });
+      }
     }
     const allRows: TransferClassRow[] = [];
     for (const b of perSchool.values()) {
@@ -717,7 +598,6 @@ async function main() {
         out_players: b.out_players,
       });
     }
-    const POWER_CONFS = new Set(["ACC", "B10", "B12", "SEC"]);
     const top_overall = [...allRows].sort((a, c) => c.net - a.net).slice(0, 10);
     const worst_power = allRows
       .filter((r) => r.conference && POWER_CONFS.has(r.conference))

@@ -8,12 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "sync:bart": "tsx scripts/sync-bart.mts",
-    "sync:cbb-teams": "tsx scripts/sync-cbb-teams.mts",
-    "sync:cbb-game-logs": "tsx scripts/sync-cbb-game-logs.mts",
-    "sync:cbb-player-game-stats": "tsx scripts/sync-cbb-player-game-stats.mts",
-    "sync:cbb-player-on-off": "tsx scripts/sync-cbb-player-on-off.mts",
     "fetch:photos": "node scripts/fetch-player-images.mjs",
-    "export:data": "tsx scripts/export-static-data.mts"
+    "export:data": "tsx scripts/export-static-data.mts",
+    "export:portal": "tsx scripts/export-portal-only.mts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",

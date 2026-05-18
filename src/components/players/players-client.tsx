@@ -42,7 +42,6 @@ type RawPlayer = {
     notes: string | null;
     projection: number | null;
   } | Array<{ raw_row: Array<string | number | null> | null; games: number | null; notes: string | null; projection: number | null }>;
-  net_onoff?: number | null;   // attached at export time from player_on_off_stats
 };
 
 function asNum(v: unknown): number | null {
@@ -124,17 +123,17 @@ function transformPlayer(raw: RawPlayer): PlayerSummary {
     ts_pct,
     pir,
     porpag: asNum(fromStart(row, PLAYER_COLS.porpag)),
-    net_onoff: raw.net_onoff ?? null,
     bta_ind_ortg: null,   // attached per cohort below
     fg3_made,
     fg3_att,
   };
 }
 
-// BTA PRTG = mean of z-scored (PIR, PORPAG, net on-off impact) × 20,
-// computed within a season cohort so it ranks players against their actual
-// peers. The on-off term is dropped for players who lack it (older seasons,
-// walk-ons with no minutes). Attached in place — mutates `bta_ind_ortg`.
+// BTA PRTG = mean of z-scored (PIR, PORPAG) × 20, computed within a season
+// cohort so it ranks players against their actual peers. Non-power-conference
+// players get a 15% strength-of-schedule penalty applied to the final score.
+// Attached in place — mutates `bta_ind_ortg`.
+const POWER_CONFS = new Set(["ACC", "B10", "B12", "SEC"]);
 function attachBtaIndOrtg(players: PlayerSummary[]): void {
   function moments(vals: number[]) {
     if (vals.length === 0) return { mean: 0, sd: 0 };
@@ -144,18 +143,17 @@ function attachBtaIndOrtg(players: PlayerSummary[]): void {
   }
   const pirVals = players.map((p) => p.pir).filter((v): v is number => typeof v === "number");
   const porVals = players.map((p) => p.porpag).filter((v): v is number => typeof v === "number");
-  const netVals = players.map((p) => p.net_onoff).filter((v): v is number => typeof v === "number");
   const pirM = moments(pirVals);
   const porM = moments(porVals);
-  const netM = moments(netVals);
   for (const p of players) {
     const zParts: number[] = [];
     if (typeof p.pir === "number" && pirM.sd > 0) zParts.push((p.pir - pirM.mean) / pirM.sd);
     if (typeof p.porpag === "number" && porM.sd > 0) zParts.push((p.porpag - porM.mean) / porM.sd);
-    if (typeof p.net_onoff === "number" && netM.sd > 0) zParts.push((p.net_onoff - netM.mean) / netM.sd);
     if (zParts.length === 0) { p.bta_ind_ortg = null; continue; }
     const avg = zParts.reduce((a, b) => a + b, 0) / zParts.length;
-    p.bta_ind_ortg = avg * 20;
+    const raw = avg * 20;
+    const isPower = p.team_conference != null && POWER_CONFS.has(p.team_conference);
+    p.bta_ind_ortg = isPower ? raw : raw * 0.85;
   }
 }
 
@@ -402,7 +400,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           </table>
         </div>
         <p className="px-4 lg:px-5 py-3 text-[0.65rem] text-ink-muted border-t border-hairline">
-          BTA PRTG is a per-season z-composite of PIR (EuroLeague Performance Index Rating, per game minus turnovers), Bart Torvik&apos;s PORPAG (Points Over Replacement Per Adjusted Game), and CBB Analytics&apos; on/off net rating impact (folds offense AND defense), scaled &times; 20. Missing terms are skipped so partial-data players still get scored. Players with fewer than 8 games, 10 MPG, or 3 PPG are hidden.
+          BTA PRTG is a per-season z-composite of PIR (EuroLeague Performance Index Rating, per game minus turnovers) and Bart Torvik&apos;s PORPAG (Points Over Replacement Per Adjusted Game), scaled &times; 20. Non-power-conference players (outside ACC, Big Ten, Big 12, SEC) receive a 15% strength-of-schedule discount. Missing terms are skipped so partial-data players still get scored. Players with fewer than 8 games, 10 MPG, or 3 PPG are hidden.
         </p>
       </div>
     </>

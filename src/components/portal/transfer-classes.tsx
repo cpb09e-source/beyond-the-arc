@@ -192,11 +192,13 @@ function PlayerList({
                 )}
                 <div className="flex items-center gap-2 mt-0.5">
                   <MiniStars stars={p.stars} />
-                  {p.counter_team && (
+                  {p.counter_team ? (
                     <span className="text-[0.65rem] text-ink-muted truncate">
                       {kicker === "Incoming" ? "from" : "to"} {p.counter_team}{p.counter_conf ? ` (${p.counter_conf})` : ""}
                     </span>
-                  )}
+                  ) : kicker === "Outgoing" ? (
+                    <span className="text-[0.65rem] text-coral/80 truncate">in portal</span>
+                  ) : null}
                 </div>
               </div>
               <span className={`font-medium tabular text-sm ${(p.bta_portg ?? 0) >= 0 ? "text-ink" : "text-rose-700"}`}>
