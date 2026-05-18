@@ -9,6 +9,8 @@
     "lint": "eslint",
     "sync:bart": "tsx scripts/sync-bart.mts",
     "fetch:photos": "node scripts/fetch-player-images.mjs",
+    "snapshot:coaches": "node scripts/snapshot-coaches.mjs",
+    "snapshot:coach-history": "node scripts/snapshot-historical-coaches.mjs",
     "export:data": "tsx scripts/export-static-data.mts",
     "export:portal": "tsx scripts/export-portal-only.mts"
   },

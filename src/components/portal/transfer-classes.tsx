@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Star } from "lucide-react";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
+import { confDisplay } from "@/lib/conf-display";
 
 export type TCPlayer = {
   cbba_player_id: number;
@@ -74,7 +75,7 @@ export function TransferClassesPanel({
                 <span className="flex-1 min-w-0">
                   <span className="font-medium text-ink text-sm truncate block">{r.school}</span>
                   <span className="text-[0.6rem] text-ink-muted">
-                    {r.conference ?? "—"} · {r.in_count}↓ {r.out_count}↑
+                    {confDisplay(r.conference)} · {r.in_count}↓ {r.out_count}↑
                   </span>
                 </span>
                 <span className={`font-display text-base tabular tabular-nums ${r.net >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
@@ -127,7 +128,7 @@ export function TransferClassModal({ row, onClose }: { row: TransferClassRow; on
             <div>
               <div className="font-display text-2xl text-ink leading-tight group-hover:text-coral transition-colors">{row.school}</div>
               <div className="text-xs text-ink-muted">
-                {row.conference ?? "—"} · transfer class
+                {confDisplay(row.conference)} · transfer class
               </div>
             </div>
           </Link>

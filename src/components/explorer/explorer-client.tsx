@@ -13,6 +13,7 @@ import { SortControls } from "@/components/explorer/sort-controls";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { TeamLogo } from "@/components/team-logo";
 import { TourneyBadge } from "@/components/tourney-badge";
+import { confDisplay } from "@/lib/conf-display";
 
 function fmtNum(x: number | null, digits = 1): string {
   if (x === null || x === undefined) return "—";
@@ -93,9 +94,38 @@ export function ExplorerClient({
   const { rows, count } = useMemo(() => processTeams(allTeams, spec), [allTeams, spec]);
   const multiYear = spec.years.length > 1;
 
+  // Conference rankings — locked to the most-recent season available, regardless
+  // of the explorer's current year selection. Drops the worst 2 teams in each
+  // conference before averaging BTA RTG (filters out cellar dwellers so the
+  // ranking reflects the conference's competitive core).
+  const latestYear = useMemo(() => Math.max(...allTeams.map((t) => t.year)), [allTeams]);
+  const conferenceRankings = useMemo(() => {
+    // limit: -1 disables the explorer's default top-50 cap. Without this, we'd
+    // only see teams that crack the national top-50 BTA RTG, hiding most of
+    // each mid-major conference and inflating the averages.
+    const scopedSpec = { ...parseSpec({}), years: [latestYear], limit: -1 };
+    const { rows: scoped } = processTeams(allTeams, scopedSpec);
+    const byConf = new Map<string, number[]>();
+    for (const r of scoped) {
+      if (!r.team_conference || r.bta_rtg === null) continue;
+      const arr = byConf.get(r.team_conference) ?? [];
+      arr.push(r.bta_rtg);
+      byConf.set(r.team_conference, arr);
+    }
+    return Array.from(byConf.entries())
+      .map(([conference, values]) => {
+        const sorted = [...values].sort((a, b) => b - a);
+        const kept = sorted.slice(0, Math.max(0, sorted.length - 2));
+        const avg = kept.length > 0 ? kept.reduce((s, v) => s + v, 0) / kept.length : null;
+        return { conference, avg_bta_rtg: avg, teams: values.length, contributing: kept.length };
+      })
+      .filter((r): r is { conference: string; avg_bta_rtg: number; teams: number; contributing: number } => r.avg_bta_rtg !== null)
+      .sort((a, b) => b.avg_bta_rtg - a.avg_bta_rtg);
+  }, [allTeams, latestYear]);
+
   return (
     <>
-      <FilterBar conferences={conferences} />
+      <FilterBar conferences={conferences} conferenceRankings={conferenceRankings} years={[latestYear]} />
 
       <div className="bg-card border border-hairline rounded-lg overflow-hidden mt-6">
         <div className="flex flex-wrap items-end justify-between gap-4 px-4 lg:px-5 py-3 border-b border-hairline">
@@ -126,9 +156,9 @@ export function ExplorerClient({
                 {multiYear && <Th className="w-16">Season</Th>}
                 <Th className="w-20">Record</Th>
                 <SortableTh statKey="bta_rtg"   label="BTA RTG"  title="Weighted z-score composite ×40" defaultDir="desc" />
+                <SortableTh statKey="bta_net"   label="Adj Net"  title="Adj ORtg − Adj DRtg. Points per 100 possessions vs an average D-I opponent" defaultDir="desc" />
                 <SortableTh statKey="bta_ortg"  label="Adj ORtg" title="Average of Bart adj ORtg and CBB adj ORtg" defaultDir="desc" />
                 <SortableTh statKey="bta_drtg"  label="Adj DRtg" title="Average of Bart adj DRtg and CBB adj DRtg (lower = better)" defaultDir="asc" />
-                <SortableTh statKey="adjt"      label="Tempo"    title="Adjusted possessions / 40 min" defaultDir="desc" />
                 <SortableThCbb statKey="cbb_ts"      label="TS%"      title="CBB true shooting %" />
                 <SortableThCbb statKey="cbb_efg"     label="eFG%"     title="CBB effective FG%" />
                 <SortableThCbb statKey="cbb_fg3"     label="3P%"      title="CBB 3-point %" />
@@ -158,15 +188,15 @@ export function ExplorerClient({
                         <TourneyBadge teamName={r.team_name} year={r.team_year} />
                       </Link>
                     </Td>
-                    <Td className="text-ink-muted">{r.team_conference ?? "—"}</Td>
+                    <Td className="text-ink-muted">{confDisplay(r.team_conference)}</Td>
                     {multiYear && <Td className="text-ink-muted tabular">{seasonLabel(r.team_year)}</Td>}
                     <Td className="tabular text-ink-muted">{r.record ?? "—"}</Td>
                     <Td className={`text-right tabular ${btaColor(r.bta_rtg)}`}>
                       <ValueWithPct value={r.bta_rtg} pct={r.pct.bta_rtg ?? null} format="num1" />
                     </Td>
+                    <Td className="text-right tabular"><ValueWithPct value={r.bta_net}  pct={r.pct.bta_net ?? null}  format="num1" /></Td>
                     <Td className="text-right tabular"><ValueWithPct value={r.bta_ortg} pct={r.pct.bta_ortg ?? null} format="num1" /></Td>
                     <Td className="text-right tabular"><ValueWithPct value={r.bta_drtg} pct={r.pct.bta_drtg ?? null} format="num1" /></Td>
-                    <Td className="text-right tabular"><ValueWithPct value={r.adjt}    pct={r.pct.adjt ?? null}    format="num1" /></Td>
                     <CbbTd><ValueWithPct value={r.cbb_ts}      pct={r.pct.cbb_ts ?? null}      format="pct1" /></CbbTd>
                     <CbbTd><ValueWithPct value={r.cbb_efg}     pct={r.pct.cbb_efg ?? null}     format="pct1" /></CbbTd>
                     <CbbTd><ValueWithPct value={r.cbb_fg3}     pct={r.pct.cbb_fg3 ?? null}     format="pct1" /></CbbTd>

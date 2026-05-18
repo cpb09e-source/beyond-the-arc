@@ -8,14 +8,22 @@ import { PlayerPhoto } from "@/components/player-photo";
 // Compact-keyed entries from /data/search-index.json (kept short to shrink the
 // wire payload — see scripts/build-search-index.mjs for the writer).
 type TeamEntry = { t: "t"; n: string; s: string; c: string | null };
+type CoachEntry = { t: "c"; n: string; s: string; tm: string; a: 0 | 1 };
 type PlayerEntry = { t: "p"; n: string; b: number; tm: string; y: number };
-type Entry = TeamEntry | PlayerEntry;
+type Entry = TeamEntry | CoachEntry | PlayerEntry;
 
 function urlFor(e: Entry): string {
-  return e.t === "t" ? `/teams/${e.s}/` : `/players/${e.b}/`;
+  if (e.t === "t") return `/teams/${e.s}/`;
+  if (e.t === "c") return `/coaches/${e.s}/`;
+  return `/players/${e.b}/`;
 }
 function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
+}
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return (parts[0]![0] + parts[parts.length - 1]![0]).toUpperCase();
 }
 
 /**
@@ -71,22 +79,24 @@ export function SearchDialog() {
       .catch((e) => setLoadErr(e.message));
   }, [open, index, loadErr]);
 
-  const { teams, players } = useMemo(() => {
-    if (!index) return { teams: [] as TeamEntry[], players: [] as PlayerEntry[] };
+  const { teams, coaches, players } = useMemo(() => {
+    if (!index) return { teams: [] as TeamEntry[], coaches: [] as CoachEntry[], players: [] as PlayerEntry[] };
     const q = query.trim().toLowerCase();
-    if (!q) return { teams: [], players: [] };
+    if (!q) return { teams: [], coaches: [], players: [] };
     const teams: TeamEntry[] = [];
+    const coaches: CoachEntry[] = [];
     const players: PlayerEntry[] = [];
     for (const e of index) {
       if (!e.n.toLowerCase().includes(q)) continue;
-      if (e.t === "t" && teams.length < 8) teams.push(e);
+      if (e.t === "t" && teams.length < 6) teams.push(e);
+      else if (e.t === "c" && coaches.length < 8) coaches.push(e);
       else if (e.t === "p" && players.length < 12) players.push(e);
-      if (teams.length >= 8 && players.length >= 12) break;
+      if (teams.length >= 6 && coaches.length >= 8 && players.length >= 12) break;
     }
-    return { teams, players };
+    return { teams, coaches, players };
   }, [index, query]);
 
-  const flat: Entry[] = useMemo(() => [...teams, ...players], [teams, players]);
+  const flat: Entry[] = useMemo(() => [...teams, ...coaches, ...players], [teams, coaches, players]);
 
   // Clamp active index when results shrink.
   useEffect(() => {
@@ -117,9 +127,9 @@ export function SearchDialog() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Open search"
-        className="hidden md:inline-flex items-center gap-2 text-xs uppercase tracking-widest text-coral hover:text-coral-soft font-medium"
+        className="hidden md:inline-flex items-center gap-2 text-xs uppercase tracking-widest text-coral hover:text-coral-soft hover:border-coral/40 font-medium border border-hairline rounded px-3 py-1.5 transition-colors"
       >
-        <kbd className="hidden lg:inline-flex items-center gap-1 text-[0.65rem] text-ink-muted px-2 py-1 border border-hairline rounded font-mono normal-case">
+        <kbd className="hidden lg:inline-flex items-center gap-1 text-[0.65rem] text-ink-muted font-mono normal-case">
           <span>⌘</span><span>K</span>
         </kbd>
         Search
@@ -144,7 +154,7 @@ export function SearchDialog() {
                 value={query}
                 onChange={(e) => { setQuery(e.target.value); setActiveIdx(0); }}
                 onKeyDown={onKeyDown}
-                placeholder="Search teams and players…"
+                placeholder="Search teams, coaches, and players…"
                 className="w-full h-14 px-5 text-base bg-transparent text-ink placeholder:text-ink-muted focus:outline-none"
               />
             </div>
@@ -158,7 +168,7 @@ export function SearchDialog() {
                 <div className="px-5 py-10 text-center text-ink-muted text-sm">Loading…</div>
               ) : !query.trim() ? (
                 <div className="px-5 py-10 text-center text-ink-muted text-sm">
-                  Type to search 368 teams and 27,132 players.
+                  Type to search teams, coaches, and players.
                 </div>
               ) : flat.length === 0 ? (
                 <div className="px-5 py-10 text-center text-ink-muted text-sm">No matches for &ldquo;{query}&rdquo;</div>
@@ -174,6 +184,25 @@ export function SearchDialog() {
                         <TeamLogo name={e.n} size={20} />
                         <span className="text-ink font-medium">{e.n}</span>
                         {e.c && <span className="text-ink-muted text-xs ml-auto">{e.c}</span>}
+                      </Row>
+                    );
+                  })}
+
+                  {coaches.length > 0 && (
+                    <GroupLabel>Coaches</GroupLabel>
+                  )}
+                  {coaches.map((e) => {
+                    const isActive = flat[activeIdx] === e;
+                    return (
+                      <Row key={`c-${e.s}`} active={isActive} onClick={() => pick(e)}>
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-paper-deep text-[0.55rem] uppercase tracking-widest font-medium text-ink-muted">
+                          {initials(e.n)}
+                        </span>
+                        <span className="text-ink font-medium">{e.n}</span>
+                        <span className="text-ink-muted text-xs ml-auto tabular flex items-center gap-1.5">
+                          {e.a === 1 && <span className="inline-block w-1.5 h-1.5 rounded-full bg-coral" aria-label="Active" />}
+                          {e.tm}
+                        </span>
                       </Row>
                     );
                   })}

@@ -8,7 +8,11 @@ type PortalFile = {
   competition_id: number;
   generated_at: string;
   entries: PortalEntry[];
-  transfer_classes?: { top_overall: TransferClassRow[]; worst_power: TransferClassRow[] };
+  transfer_classes?: {
+    top_overall: TransferClassRow[];
+    worst_power: TransferClassRow[];
+    by_school?: Record<string, TransferClassRow>;
+  };
 };
 
 async function loadPortal(): Promise<PortalFile | null> {
@@ -43,7 +47,7 @@ export default async function PortalPage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-[97rem] px-6 lg:px-10 py-8 lg:py-10">
+      <section className="mx-auto max-w-[97rem] px-6 lg:px-10 pt-8 lg:pt-10 pb-4">
         {data === null ? (
           <div className="bg-card border border-hairline rounded-lg p-10 text-center text-ink-muted">
             <p>Portal data isn&apos;t exported yet.</p>
@@ -60,14 +64,6 @@ export default async function PortalPage() {
             />
           </Suspense>
         )}
-      </section>
-
-      <section className="mx-auto max-w-[97rem] px-6 lg:px-10 mb-20">
-        <p className="text-sm text-ink-muted max-w-2xl leading-relaxed">
-          Source: <span className="text-ink">cbbanalytics.com</span> transfer-portal feed.
-          Production stats join via Bart Torvik per-season aggregates for the
-          player&apos;s most recent year (when a Bart match exists).
-        </p>
       </section>
     </>
   );

@@ -14,6 +14,7 @@ import {
   type PlayerListSpec,
   type PlayerSummary,
 } from "@/lib/players";
+import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier } from "@/lib/conf-tiers";
 
 function fmtNum(x: number | null, digits = 1): string {
   if (x === null || x === undefined) return "—";
@@ -129,11 +130,12 @@ function transformPlayer(raw: RawPlayer): PlayerSummary {
   };
 }
 
-// BTA PRTG = mean of z-scored (PIR, PORPAG) × 20, computed within a season
-// cohort so it ranks players against their actual peers. Non-power-conference
-// players get a 15% strength-of-schedule penalty applied to the final score.
-// Attached in place — mutates `bta_ind_ortg`.
-const POWER_CONFS = new Set(["ACC", "B10", "B12", "SEC"]);
+// BTA PRTG = avg(0.69 × z(PIR), z(PORPAG)) × 20 × confMultiplier × topTeamMultiplier,
+// computed within a season cohort so it ranks players against their actual
+// peers. PIR is weighted at 69% to dampen raw PIR's bias toward high-usage
+// scorers. Conference multiplier ranges from +19 % (Tier 1) to −23 % (Tier 5);
+// players on a top-32 D-I team for 2025-26 get an additional +8 %. See
+// src/lib/conf-tiers.ts. Attached in place — mutates `bta_ind_ortg`.
 function attachBtaIndOrtg(players: PlayerSummary[]): void {
   function moments(vals: number[]) {
     if (vals.length === 0) return { mean: 0, sd: 0 };
@@ -147,13 +149,16 @@ function attachBtaIndOrtg(players: PlayerSummary[]): void {
   const porM = moments(porVals);
   for (const p of players) {
     const zParts: number[] = [];
-    if (typeof p.pir === "number" && pirM.sd > 0) zParts.push((p.pir - pirM.mean) / pirM.sd);
+    if (typeof p.pir === "number" && pirM.sd > 0) zParts.push(((p.pir - pirM.mean) / pirM.sd) * 0.69);
     if (typeof p.porpag === "number" && porM.sd > 0) zParts.push((p.porpag - porM.mean) / porM.sd);
     if (zParts.length === 0) { p.bta_ind_ortg = null; continue; }
     const avg = zParts.reduce((a, b) => a + b, 0) / zParts.length;
-    const raw = avg * 20;
-    const isPower = p.team_conference != null && POWER_CONFS.has(p.team_conference);
-    p.bta_ind_ortg = isPower ? raw : raw * 0.85;
+    p.bta_ind_ortg =
+      avg * 20
+      * confMultiplier(p.team_conference)
+      * topTeamMultiplier(p.team_name)
+      * top5Tier1Multiplier(p.team_name)
+      * top3InConfMultiplier(p.team_name);
   }
 }
 
@@ -400,7 +405,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           </table>
         </div>
         <p className="px-4 lg:px-5 py-3 text-[0.65rem] text-ink-muted border-t border-hairline">
-          BTA PRTG is a per-season z-composite of PIR (EuroLeague Performance Index Rating, per game minus turnovers) and Bart Torvik&apos;s PORPAG (Points Over Replacement Per Adjusted Game), scaled &times; 20. Non-power-conference players (outside ACC, Big Ten, Big 12, SEC) receive a 15% strength-of-schedule discount. Missing terms are skipped so partial-data players still get scored. Players with fewer than 8 games, 10 MPG, or 3 PPG are hidden.
+          BTA PRTG is a per-season z-composite of PIR (EuroLeague Performance Index Rating, per game minus turnovers, weighted 69% to dampen high-usage scorer bias) and Bart Torvik&apos;s PORPAG (Points Over Replacement Per Adjusted Game), scaled &times; 20. A conference multiplier then adjusts the score for strength of schedule: top-tier conferences (SEC, Big 12, Big Ten, ACC, Big East) get a +19% boost, with progressively larger reductions for weaker leagues. Players on a top-32 D-I team for 2025-26 receive an additional +8% bump, and players on a top-5 record team within a Tier 1 conference receive an extra +6% on top of that. Missing terms are skipped so partial-data players still get scored. Players with fewer than 8 games, 10 MPG, or 3 PPG are hidden.
         </p>
       </div>
     </>

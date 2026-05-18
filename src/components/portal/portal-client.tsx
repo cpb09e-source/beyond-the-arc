@@ -54,11 +54,16 @@ export function PortalClient({
 }: {
   entries: PortalEntry[];
   generatedAt: string;
-  transferClasses?: { top_overall: TransferClassRow[]; worst_power: TransferClassRow[] };
+  transferClasses?: {
+    top_overall: TransferClassRow[];
+    worst_power: TransferClassRow[];
+    by_school?: Record<string, TransferClassRow>;
+  };
 }) {
   const [status, setStatus] = useState("All");
   const [confTo, setConfTo] = useState("All");
-  const [limit, setLimit] = useState<number>(100);
+  const [pageSize, setPageSize] = useState<number>(50);
+  const [page, setPage] = useState<number>(1);
   const [query, setQuery] = useState("");
   const [schoolQuery, setSchoolQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("bta_portg");
@@ -144,8 +149,16 @@ export function PortalClient({
     else { setSortBy(k); setSortDir(defaultDir); }
   }
   function reset() {
-    setStatus("All"); setConfTo("All"); setQuery(""); setSchoolQuery(""); setLimit(100);
+    setStatus("All"); setConfTo("All"); setQuery(""); setSchoolQuery(""); setPageSize(50); setPage(1);
   }
+
+  // Derive paging from current state. Clamp page so a stale value (after a
+  // filter shrinks the result) doesn't render an empty body.
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const firstShown = sorted.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const lastShown = Math.min(safePage * pageSize, sorted.length);
 
   return (
     <div className="space-y-6">
@@ -153,20 +166,12 @@ export function PortalClient({
       <div className="bg-card border border-hairline rounded-lg p-4 lg:p-5">
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Status">
-            <Select value={status} onChange={setStatus}>
+            <Select value={status} onChange={(v) => { setStatus(v); setPage(1); }}>
               {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
             </Select>
           </Field>
-          <Field label="Show">
-            <Select value={String(limit)} onChange={(v) => setLimit(v === "all" ? Number.MAX_SAFE_INTEGER : Number(v))}>
-              <option value="100">100</option>
-              <option value="250">250</option>
-              <option value="500">500</option>
-              <option value="all">All</option>
-            </Select>
-          </Field>
           <Field label="Destination">
-            <Select value={confTo} onChange={setConfTo} className="min-w-40">
+            <Select value={confTo} onChange={(v) => { setConfTo(v); setPage(1); }} className="min-w-40">
               {confsTo.map((c) => <option key={c} value={c}>{c}</option>)}
             </Select>
           </Field>
@@ -174,13 +179,13 @@ export function PortalClient({
             <input
               type="search"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => { setQuery(e.target.value); setPage(1); }}
               placeholder="Search for a player"
               aria-label="Search players by name"
               className="h-9 w-full pl-3 pr-8 rounded border border-hairline bg-white text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40"
             />
             {query && (
-              <button onClick={() => setQuery("")} aria-label="Clear player search"
+              <button onClick={() => { setQuery(""); setPage(1); }} aria-label="Clear player search"
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-sm">×</button>
             )}
           </div>
@@ -188,13 +193,13 @@ export function PortalClient({
             <input
               type="search"
               value={schoolQuery}
-              onChange={(e) => setSchoolQuery(e.target.value)}
+              onChange={(e) => { setSchoolQuery(e.target.value); setPage(1); }}
               placeholder="Search for a school"
               aria-label="Search by school (from or to)"
               className="h-9 w-full pl-3 pr-8 rounded border border-hairline bg-white text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40"
             />
             {schoolQuery && (
-              <button onClick={() => setSchoolQuery("")} aria-label="Clear school search"
+              <button onClick={() => { setSchoolQuery(""); setPage(1); }} aria-label="Clear school search"
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-sm">×</button>
             )}
           </div>
@@ -225,11 +230,22 @@ export function PortalClient({
 
         {/* Entries table */}
         <div className="bg-card border border-hairline rounded-lg overflow-hidden min-w-0">
-          <div className="flex items-baseline justify-between px-4 lg:px-5 py-3 border-b border-hairline">
+          <div className="flex items-end justify-between gap-4 px-4 lg:px-5 py-3 border-b border-hairline">
             <div className="flex items-baseline gap-3">
               <span className="font-display text-xl text-ink tabular">{sorted.length.toLocaleString()}</span>
               <span className="text-sm text-ink-muted">{sorted.length === 1 ? "transfer" : "transfers"}</span>
             </div>
+            <label className="flex items-center gap-2 text-xs uppercase tracking-widest text-ink-muted font-medium">
+              <span>Show</span>
+              <Select
+                value={String(pageSize)}
+                onChange={(v) => { setPageSize(Number(v)); setPage(1); }}
+              >
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="250">250</option>
+              </Select>
+            </label>
           </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -251,12 +267,12 @@ export function PortalClient({
               </tr>
             </thead>
             <tbody>
-              {sorted.length === 0 ? (
+              {pageRows.length === 0 ? (
                 <tr><td colSpan={13} className="px-4 py-12 text-center text-ink-muted">No transfers match these filters.</td></tr>
               ) : (
-                sorted.slice(0, limit).map((e, i) => (
+                pageRows.map((e, i) => (
                   <tr key={e.cbba_player_id + "-" + (e.date_entered ?? "")} className="border-b border-hairline/60 hover:bg-paper-deep/50 transition-colors">
-                    <Td className="text-center text-ink-muted tabular">{i + 1}</Td>
+                    <Td className="text-center text-ink-muted tabular">{(safePage - 1) * pageSize + i + 1}</Td>
                     <Td className="text-center">
                       <PlayerPhoto bartPlayerId={e.bart_player_id} name={e.name} size={38} />
                     </Td>
@@ -269,19 +285,11 @@ export function PortalClient({
                     </Td>
                     <Td className="pl-1"><StarRow stars={e.stars} /></Td>
                     <Td>
-                      {e.team_from ? (
-                        <span className="inline-flex items-center" title={e.team_from}>
-                          <TeamLogo name={e.team_from} size={28} />
-                        </span>
-                      ) : (
-                        <span className="text-ink-muted">—</span>
-                      )}
+                      <SchoolLogoCell school={e.team_from} bySchool={transferClasses?.by_school} onOpen={setOpenClass} />
                     </Td>
                     <Td>
                       {e.team_to ? (
-                        <span className="inline-flex items-center" title={e.team_to}>
-                          <TeamLogo name={e.team_to} size={28} />
-                        </span>
+                        <SchoolLogoCell school={e.team_to} bySchool={transferClasses?.by_school} onOpen={setOpenClass} />
                       ) : (
                         <span className={cn("text-xs uppercase tracking-wide", e.status === "Withdrew" ? "text-ink-muted" : "text-coral font-medium")}>
                           {e.status === "Withdrew" ? "Withdrew" : "Uncommitted"}
@@ -300,10 +308,15 @@ export function PortalClient({
               )}
             </tbody>
           </table>
-          {sorted.length > limit && (
-            <p className="px-4 py-3 text-xs text-ink-muted border-t border-hairline">
-              Showing first {limit.toLocaleString()} of {sorted.length.toLocaleString()}. Pick a larger &ldquo;Show&rdquo; value or narrow the filters to see more.
-            </p>
+          {sorted.length > 0 && (
+            <Pagination
+              firstShown={firstShown}
+              lastShown={lastShown}
+              total={sorted.length}
+              page={safePage}
+              totalPages={totalPages}
+              onPage={setPage}
+            />
           )}
           </div>
         </div>
@@ -364,6 +377,120 @@ function StarRow({ stars }: { stars: 0 | 1 | 2 | 3 | 4 | 5 }) {
   );
 }
 
+// Renders a school logo in the From/To columns. Clicking opens the same
+// transfer-class modal used by the top/worst sidebars (when the school has
+// aggregated portal data). Falls back to a plain logo otherwise.
+function SchoolLogoCell({
+  school, bySchool, onOpen,
+}: {
+  school: string | null;
+  bySchool: Record<string, TransferClassRow> | undefined;
+  onOpen: (r: TransferClassRow) => void;
+}) {
+  if (!school) return <span className="text-ink-muted">—</span>;
+  const row = bySchool?.[school];
+  if (!row) {
+    return (
+      <span className="inline-flex items-center" title={school}>
+        <TeamLogo name={school} size={28} />
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => onOpen(row)}
+      title={`${school} — transfer class`}
+      className="inline-flex items-center rounded hover:bg-paper-deep/60 transition-colors p-0.5 -m-0.5 cursor-pointer"
+    >
+      <TeamLogo name={school} size={28} />
+    </button>
+  );
+}
+
+// Footer pagination strip: page summary + ‹ Prev | numbered buttons (with
+// ellipsis for long runs) | Next ›. Numbered buttons show first, last, current,
+// and 2 on either side of current; gaps render as a "…" placeholder.
+function Pagination({
+  firstShown, lastShown, total, page, totalPages, onPage,
+}: {
+  firstShown: number;
+  lastShown: number;
+  total: number;
+  page: number;
+  totalPages: number;
+  onPage: (p: number) => void;
+}) {
+  const items = paginationItems(page, totalPages);
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3 border-t border-hairline text-xs text-ink-muted">
+      <span>
+        Showing <span className="text-ink tabular">{firstShown.toLocaleString()}</span>–
+        <span className="text-ink tabular">{lastShown.toLocaleString()}</span> of{" "}
+        <span className="text-ink tabular">{total.toLocaleString()}</span>
+      </span>
+      {totalPages > 1 && (
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onPage(Math.max(1, page - 1))}
+            disabled={page <= 1}
+            className="px-2 py-1 rounded hover:bg-paper-deep/60 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+            aria-label="Previous page"
+          >
+            ‹ Prev
+          </button>
+          {items.map((it, i) =>
+            it === "…" ? (
+              <span key={`gap-${i}`} className="px-2 text-ink-muted">…</span>
+            ) : (
+              <button
+                key={it}
+                type="button"
+                onClick={() => onPage(it)}
+                aria-current={it === page ? "page" : undefined}
+                className={cn(
+                  "min-w-8 px-2 py-1 rounded tabular transition-colors",
+                  it === page
+                    ? "bg-coral text-white font-medium"
+                    : "hover:bg-paper-deep/60",
+                )}
+              >
+                {it}
+              </button>
+            ),
+          )}
+          <button
+            type="button"
+            onClick={() => onPage(Math.min(totalPages, page + 1))}
+            disabled={page >= totalPages}
+            className="px-2 py-1 rounded hover:bg-paper-deep/60 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+            aria-label="Next page"
+          >
+            Next ›
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Returns the page buttons to render. Always includes 1 and totalPages; shows
+// current ± 2; inserts "…" placeholders where there's a gap.
+function paginationItems(page: number, totalPages: number): Array<number | "…"> {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+  const want = new Set<number>([1, totalPages, page, page - 1, page + 1, page - 2, page + 2]);
+  const visible = [...want].filter((n) => n >= 1 && n <= totalPages).sort((a, b) => a - b);
+  const out: Array<number | "…"> = [];
+  let prev = 0;
+  for (const n of visible) {
+    if (n - prev > 1) out.push("…");
+    out.push(n);
+    prev = n;
+  }
+  return out;
+}
+
 function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <th className={`px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium ${className}`}>{children}</th>;
 }
@@ -376,7 +503,7 @@ function ThSort({
   label: string; active: boolean; dir: "asc" | "desc"; onClick: () => void; align?: "left" | "right"; className?: string;
 }) {
   return (
-    <th className={`px-3 py-2 text-xs uppercase tracking-widest font-medium select-none cursor-pointer hover:bg-paper-deep/60 transition-colors ${align === "right" ? "text-right" : ""} ${active ? "text-ink" : "text-ink-muted"} ${className}`}>
+    <th className={`px-3 py-2 text-xs uppercase tracking-widest font-medium whitespace-nowrap select-none cursor-pointer hover:bg-paper-deep/60 transition-colors ${align === "right" ? "text-right" : ""} ${active ? "text-ink" : "text-ink-muted"} ${className}`}>
       <button type="button" onClick={onClick} className={`inline-flex items-center gap-1 ${align === "right" ? "justify-end w-full" : ""}`}>
         <span>{label}</span>
         {active && <span className="text-coral text-[0.65rem] leading-none">{dir === "asc" ? "↑" : "↓"}</span>}

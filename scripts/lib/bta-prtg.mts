@@ -9,9 +9,31 @@
  *   - src/components/teams/team-page-view.tsx   :: computeYearMetrics
  * if you change the formula. (Those compute live in the browser / at SSG time
  * from on-disk JSON and don't share code with these scripts.)
+ *
+ * Conference tier multipliers live in src/lib/conf-tiers.ts and are imported
+ * by all three sites.
  */
 
-export const POWER_CONFS = new Set(["ACC", "B10", "B12", "SEC"]);
+export { POWER_CONFS } from "../../src/lib/conf-tiers.ts";
+import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier } from "../../src/lib/conf-tiers.ts";
+
+/**
+ * Fixed BTA PRTG cutoffs for portal star tiers. Replaces the old percentile
+ * buckets — cleaner because a transfer's tier no longer drifts as other
+ * transfers enter or leave the portal.
+ *   5★ ≥ 50.0
+ *   4★ 23.5 – 49.9
+ *   3★ 14.6 – 23.4
+ *   2★ 7.2 – 14.5
+ *   1★ everything else (still subject to GP/MPG/PPG baseline before scoring)
+ */
+export function starsForPrtg(bta: number): 1 | 2 | 3 | 4 | 5 {
+  if (bta >= 50.0) return 5;
+  if (bta >= 23.5) return 4;
+  if (bta >= 14.6) return 3;
+  if (bta >= 7.2) return 2;
+  return 1;
+}
 
 export type PlayerSeason = {
   year: number;
@@ -112,8 +134,15 @@ export function computeCohortStats(
 
 /**
  * Look up a Bart player's most-recent season and compute production stats +
- * BTA PRTG (z(PIR) + z(PORPAG) averaged × 20, with a ×0.85 penalty for
- * non-power-conference players).
+ * BTA PRTG. Formula:
+ *   avg(0.69 × z(PIR), z(PORPAG))
+ *     × 20
+ *     × confMultiplier(conf)         // +19 % Tier 1 → −23 % Tier 5
+ *     × topTeamMultiplier(team)      // +8 % if top-32 D-I team for 2025-26
+ *     × top5Tier1Multiplier(team)    // +6 % if top-5 in a Tier 1 conference
+ *     × top3InConfMultiplier(team)   // +6 % if top-3 in any conference by record
+ * PIR is weighted at 69 % (31 % reduction) because raw PIR over-rewards
+ * high-usage scorers. See src/lib/conf-tiers.ts for the constants.
  */
 export function productionFor(
   bartId: number,
@@ -140,12 +169,16 @@ export function productionFor(
   let bta_portg: number | null = null;
   if (stats) {
     const zs: number[] = [];
-    if (typeof pir === "number" && stats.pirSd > 0) zs.push((pir - stats.pirMean) / stats.pirSd);
+    if (typeof pir === "number" && stats.pirSd > 0) zs.push(((pir - stats.pirMean) / stats.pirSd) * 0.69);
     if (typeof porpag === "number" && stats.porSd > 0) zs.push((porpag - stats.porMean) / stats.porSd);
     if (zs.length > 0) {
       const raw = (zs.reduce((s, v) => s + v, 0) / zs.length) * 20;
-      const isPower = latest.team_conference != null && POWER_CONFS.has(latest.team_conference);
-      bta_portg = isPower ? raw : raw * 0.85;
+      bta_portg =
+        raw
+        * confMultiplier(latest.team_conference)
+        * topTeamMultiplier(latest.team_name)
+        * top5Tier1Multiplier(latest.team_name)
+        * top3InConfMultiplier(latest.team_name);
     }
   }
   return {

@@ -39,6 +39,53 @@ function normalize(s: string): string {
     .replace(/\s+/g, " ");
 }
 
+// Sports Reference uses display names that diverge from Bart's. When the
+// primary lookup misses, we try these explicit aliases before giving up.
+// (Bart-name on the right resolves via the normal TEAMS map.)
+const SR_NAME_ALIASES: Record<string, string> = {
+  "unc": "north carolina",
+  "virginia commonwealth": "virginia commonwealth", // CBB entry may key as VCU only
+  "vcu": "vcu",
+  "byu": "byu",
+  "brigham young": "byu",
+  "ucla": "ucla",
+  "usc": "usc",
+  "smu": "smu",
+  "lsu": "lsu",
+  "ucf": "ucf",
+  "siu edwardsville": "siu edwardsville",
+  "ut martin": "tennessee martin",
+  "umkc": "kansas city",
+  "ualbany": "albany",
+  "miami fl": "miami fl",
+  "miami florida": "miami fl",
+  "miami oh": "miami oh",
+  "miami ohio": "miami oh",
+};
+
+function lookup(name: string): CbbEntry | null {
+  const k = normalize(name);
+  if (TEAMS[k]) return TEAMS[k]!;
+  if (TEAMS_BY_MARKET[k]) return TEAMS_BY_MARKET[k]!;
+  // Try SR alias
+  const alias = SR_NAME_ALIASES[k];
+  if (alias && TEAMS[alias]) return TEAMS[alias]!;
+  // " State" → " st" swap (SR writes "Oklahoma State", Bart writes "Oklahoma St.")
+  const stateToSt = k.replace(/\bstate\b/g, "st");
+  if (stateToSt !== k) {
+    if (TEAMS[stateToSt]) return TEAMS[stateToSt]!;
+    if (TEAMS_BY_MARKET[stateToSt]) return TEAMS_BY_MARKET[stateToSt]!;
+  }
+  // Drop common suffix words ("Wildcats", "Tigers", etc.) — SR sometimes
+  // includes the mascot in displayed names that came from URLs.
+  const noSuffix = k.replace(/\b(wildcats|tigers|bulldogs|huskies|hurricanes|cowboys|raiders|spartans|gators|tar heels|cougars|bears|aggies|red raiders|sun devils|seminoles|jayhawks|wolverines|lions|cyclones|cavaliers|panthers|fighting irish|heels|tide|crimson|jaguars|knights|colonels|musketeers|cardinals)\b/g, "").trim().replace(/\s+/g, " ");
+  if (noSuffix !== k && noSuffix.length > 0) {
+    if (TEAMS[noSuffix]) return TEAMS[noSuffix]!;
+    if (TEAMS_BY_MARKET[noSuffix]) return TEAMS_BY_MARKET[noSuffix]!;
+  }
+  return null;
+}
+
 function initials(name: string): string {
   // "North Carolina State" → "NC", "Duke" → "D", "St. Mary's" → "SM"
   const parts = name
@@ -71,8 +118,7 @@ export function TeamLogo({
   size?: number;
   className?: string;
 }) {
-  const key = normalize(name);
-  const entry = TEAMS[key] ?? TEAMS_BY_MARKET[key];
+  const entry = lookup(name);
   const [errored, setErrored] = useState(false);
 
   // No CBB match → monogram fallback in ink

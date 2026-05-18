@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { Select } from "@/components/select";
+import { confDisplay } from "@/lib/conf-display";
 import {
   DEFAULT_PLAYER_SPEC,
   parsePlayerSpec,
@@ -83,7 +84,7 @@ export function PlayerFilterBar({ conferences }: { conferences: string[] }) {
         <Field label="Conference">
           <Select value={spec.conference ?? ""} onChange={(v) => update({ ...spec, conference: v || null })}>
             <option value="">All conferences</option>
-            {conferences.map((c) => <option key={c} value={c}>{c}</option>)}
+            {conferences.map((c) => <option key={c} value={c}>{confDisplay(c)}</option>)}
           </Select>
         </Field>
         <Field label="Class">

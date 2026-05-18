@@ -63,9 +63,43 @@ const playerEntries = [...latestByBart.values()]
   .map((p) => ({ t: "p", n: p.name, b: p.bartId, tm: p.team, y: p.year }))
   .sort((a, b) => a.n.localeCompare(b.n));
 
-const all = [...teamEntries, ...playerEntries];
+// ---- COACHES (one entry per unique coach name; use latest team + active flag) ----
+// Read both data sources: SR historical (coach-history.json) and ESPN snapshot
+// (team-coaches.json). Build a name → { latest team, latest year, is_active }
+// map keyed by coach name (collisions of distinct same-named coaches are
+// surfaced as a single entry showing the most-recent team — the same trade-off
+// we make in /coaches index).
+const SRC = path.resolve("src/data");
+let history = {};
+let espn = {};
+try { history = JSON.parse(fs.readFileSync(path.join(SRC, "coach-history.json"), "utf8")); } catch {}
+try { espn = JSON.parse(fs.readFileSync(path.join(SRC, "team-coaches.json"), "utf8")); } catch {}
+const LATEST_YEAR = 2026;
+const coachLatest = new Map(); // name → { team, year }
+for (const [team, byYear] of Object.entries(history)) {
+  for (const [yearStr, s] of Object.entries(byYear)) {
+    const year = parseInt(yearStr, 10);
+    const cur = coachLatest.get(s.name);
+    if (!cur || year > cur.year) coachLatest.set(s.name, { team, year });
+  }
+}
+for (const [team, c] of Object.entries(espn)) {
+  const cur = coachLatest.get(c.name);
+  if (!cur || LATEST_YEAR > cur.year) coachLatest.set(c.name, { team, year: LATEST_YEAR });
+}
+const coachEntries = [...coachLatest.entries()]
+  .map(([name, info]) => ({
+    t: "c",
+    n: name,
+    s: slug(name),
+    tm: info.team,
+    a: info.year === LATEST_YEAR ? 1 : 0, // active flag
+  }))
+  .sort((a, b) => a.n.localeCompare(b.n));
+
+const all = [...teamEntries, ...coachEntries, ...playerEntries];
 fs.writeFileSync(OUT, JSON.stringify(all));
 const sizeKb = (fs.statSync(OUT).size / 1024).toFixed(0);
 console.log(`Wrote ${OUT}`);
-console.log(`  ${teamEntries.length.toLocaleString()} teams + ${playerEntries.length.toLocaleString()} players = ${all.length.toLocaleString()} entries`);
+console.log(`  ${teamEntries.length.toLocaleString()} teams + ${coachEntries.length.toLocaleString()} coaches + ${playerEntries.length.toLocaleString()} players = ${all.length.toLocaleString()} entries`);
 console.log(`  file size: ${sizeKb} KB`);

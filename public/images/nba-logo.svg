@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 198 432" aria-label="NBA logo">
+  <!-- Left navy panel with rounded outer edge -->
+  <path d="M28,0 Q0,0 0,28 V404 Q0,432 28,432 H99 V0 Z" fill="#17408b"/>
+  <!-- Right red panel with rounded outer edge -->
+  <path d="M99,0 V432 H170 Q198,432 198,404 V28 Q198,0 170,0 Z" fill="#c9082a"/>
+
+  <!-- Jerry West dribbling silhouette in white. Faithful-enough approximation
+       of the iconic NBA mark — basketball player in stride, dribbling on
+       the player's right hand, left arm trailing. -->
+  <!-- Basketball (top right, above the raised arm) -->
+  <circle cx="155" cy="71" r="14" fill="#fff"/>
+
+  <!-- Head -->
+  <circle cx="115" cy="60" r="13" fill="#fff"/>
+
+  <!-- Torso + raised arm holding ball -->
+  <path d="M101,80
+           Q97,93 100,108
+           L98,135
+           L93,175
+           L92,225
+           L96,265
+           L102,300
+           L110,260
+           L112,210
+           L113,160
+           L116,135
+           L120,118
+           L127,108
+           L138,98
+           L150,87
+           L145,76
+           L132,82
+           L122,86
+           L114,80 Z" fill="#fff"/>
+
+  <!-- Right leg (forward stride) -->
+  <path d="M103,300
+           L92,345
+           L80,395
+           L88,410
+           L99,395
+           L108,355
+           L114,315 Z" fill="#fff"/>
+
+  <!-- Left leg (back stride) -->
+  <path d="M114,295
+           L122,335
+           L132,375
+           L140,400
+           L150,395
+           L143,365
+           L135,330
+           L128,300 Z" fill="#fff"/>
+
+  <!-- Left arm trailing back -->
+  <path d="M98,108
+           L82,135
+           L72,168
+           L77,175
+           L88,150
+           L100,128 Z" fill="#fff"/>
+</svg>

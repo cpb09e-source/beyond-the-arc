@@ -1,0 +1,2120 @@
+{
+  "Saint Mary's": {
+    "name": "Randy Bennett",
+    "first_name": "Randy",
+    "last_name": "Bennett",
+    "espn_id": "71389"
+  },
+  "Kentucky": {
+    "name": "Mark Pope",
+    "first_name": "Mark",
+    "last_name": "Pope",
+    "espn_id": "71506"
+  },
+  "Cincinnati": {
+    "name": "Jerrod Calhoun",
+    "first_name": "Jerrod",
+    "last_name": "Calhoun",
+    "espn_id": "5962"
+  },
+  "Santa Clara": {
+    "name": "Herb Sendek",
+    "first_name": "Herb",
+    "last_name": "Sendek",
+    "espn_id": "71508"
+  },
+  "Indiana": {
+    "name": "Darian DeVries",
+    "first_name": "Darian",
+    "last_name": "DeVries",
+    "espn_id": "4325372"
+  },
+  "Miami FL": {
+    "name": "Jai Lucas",
+    "first_name": "Jai",
+    "last_name": "Lucas",
+    "espn_id": "36382"
+  },
+  "Villanova": {
+    "name": "Kevin Willard",
+    "first_name": "Kevin",
+    "last_name": "Willard",
+    "espn_id": "71469"
+  },
+  "Clemson": {
+    "name": "Brad Brownell",
+    "first_name": "Brad",
+    "last_name": "Brownell",
+    "espn_id": "71273"
+  },
+  "Oklahoma": {
+    "name": "Porter Moser",
+    "first_name": "Porter",
+    "last_name": "Moser",
+    "espn_id": "69179"
+  },
+  "Texas": {
+    "name": "Sean Miller",
+    "first_name": "Sean",
+    "last_name": "Miller",
+    "espn_id": "71372"
+  },
+  "Texas A&M": {
+    "name": "Bucky McMillan",
+    "first_name": "Bucky",
+    "last_name": "McMillan",
+    "espn_id": "11778"
+  },
+  "Auburn": {
+    "name": "Steven Pearl",
+    "first_name": "Steven",
+    "last_name": "Pearl",
+    "espn_id": "32116"
+  },
+  "Saint Louis": {
+    "name": "Josh Schertz",
+    "first_name": "Josh",
+    "last_name": "Schertz",
+    "espn_id": "4888763"
+  },
+  "Georgia": {
+    "name": "Mike White",
+    "first_name": "Mike",
+    "last_name": "White",
+    "espn_id": "2557411"
+  },
+  "San Diego St.": {
+    "name": "Brian Dutcher",
+    "first_name": "Brian",
+    "last_name": "Dutcher",
+    "espn_id": "4207405"
+  },
+  "Baylor": {
+    "name": "Scott Drew",
+    "first_name": "Scott",
+    "last_name": "Drew",
+    "espn_id": "71459"
+  },
+  "Missouri": {
+    "name": "Dennis Gates",
+    "first_name": "Dennis",
+    "last_name": "Gates",
+    "espn_id": "2694"
+  },
+  "VCU": {
+    "name": "Phil Martelli Jr.",
+    "first_name": "Phil",
+    "last_name": "Martelli Jr.",
+    "espn_id": "4270"
+  },
+  "TCU": {
+    "name": "Jamie Dixon",
+    "first_name": "Jamie",
+    "last_name": "Dixon",
+    "espn_id": "71283"
+  },
+  "SMU": {
+    "name": "Andy Enfield",
+    "first_name": "Andy",
+    "last_name": "Enfield",
+    "espn_id": "71353"
+  },
+  "South Florida": {
+    "name": "Chris Mack",
+    "first_name": "Chris",
+    "last_name": "Mack",
+    "espn_id": "2494443"
+  },
+  "New Mexico": {
+    "name": "Eric Olen",
+    "first_name": "Eric",
+    "last_name": "Olen",
+    "espn_id": "4697153"
+  },
+  "Florida St.": {
+    "name": "Luke Loucks",
+    "first_name": "Luke",
+    "last_name": "Loucks",
+    "espn_id": "40973"
+  },
+  "Washington": {
+    "name": "Danny Sprinkle",
+    "first_name": "Danny",
+    "last_name": "Sprinkle",
+    "espn_id": "4587475"
+  },
+  "Boise St.": {
+    "name": "Leon Rice",
+    "first_name": "Leon",
+    "last_name": "Rice",
+    "espn_id": "2501413"
+  },
+  "Grand Canyon": {
+    "name": "Bryce Drew",
+    "first_name": "Bryce",
+    "last_name": "Drew",
+    "espn_id": "71346"
+  },
+  "Seton Hall": {
+    "name": "Shaheen Holloway",
+    "first_name": "Shaheen",
+    "last_name": "Holloway",
+    "espn_id": "4328838"
+  },
+  "West Virginia": {
+    "name": "Ross Hodge",
+    "first_name": "Ross",
+    "last_name": "Hodge",
+    "espn_id": "13439"
+  },
+  "Virginia Tech": {
+    "name": "Mike Young",
+    "first_name": "Mike",
+    "last_name": "Young",
+    "espn_id": "71300"
+  },
+  "UCF": {
+    "name": "Johnny Dawkins",
+    "first_name": "Johnny",
+    "last_name": "Dawkins",
+    "espn_id": "71370"
+  },
+  "Tulsa": {
+    "name": "Eric Konkol",
+    "first_name": "Eric",
+    "last_name": "Konkol",
+    "espn_id": "3896722"
+  },
+  "Minnesota": {
+    "name": "Niko Medved",
+    "first_name": "Niko",
+    "last_name": "Medved",
+    "espn_id": "3126891"
+  },
+  "Northwestern": {
+    "name": "Chris Collins",
+    "first_name": "Chris",
+    "last_name": "Collins",
+    "espn_id": "3025924"
+  },
+  "Mississippi": {
+    "name": "Chris Beard",
+    "first_name": "Chris",
+    "last_name": "Beard",
+    "espn_id": "2959531"
+  },
+  "Stanford": {
+    "name": "Kyle Smith",
+    "first_name": "Kyle",
+    "last_name": "Smith",
+    "espn_id": "2502040"
+  },
+  "Butler": {
+    "name": "Ronald Nored",
+    "first_name": "Ronald",
+    "last_name": "Nored",
+    "espn_id": "42250"
+  },
+  "McNeese St.": {
+    "name": "Bill Armstrong",
+    "first_name": "Bill",
+    "last_name": "Armstrong",
+    "espn_id": "5276738"
+  },
+  "LSU": {
+    "name": "Will Wade",
+    "first_name": "Will",
+    "last_name": "Wade",
+    "espn_id": "3032666"
+  },
+  "USC": {
+    "name": "Eric Musselman",
+    "first_name": "Eric",
+    "last_name": "Musselman",
+    "espn_id": "3662519"
+  },
+  "Dayton": {
+    "name": "Anthony Grant",
+    "first_name": "Anthony",
+    "last_name": "Grant",
+    "espn_id": "71264"
+  },
+  "Akron": {
+    "name": "John Groce",
+    "first_name": "John",
+    "last_name": "Groce",
+    "espn_id": "71309"
+  },
+  "California": {
+    "name": "Mark Madsen",
+    "first_name": "Mark",
+    "last_name": "Madsen",
+    "espn_id": "71541"
+  },
+  "Wake Forest": {
+    "name": "Steve Forbes",
+    "first_name": "Steve",
+    "last_name": "Forbes",
+    "espn_id": "3723947"
+  },
+  "Marquette": {
+    "name": "Shaka Smart",
+    "first_name": "Shaka",
+    "last_name": "Smart",
+    "espn_id": "2335305"
+  },
+  "Georgetown": {
+    "name": "Ed Cooley",
+    "first_name": "Ed",
+    "last_name": "Cooley",
+    "espn_id": "71266"
+  },
+  "Northern Iowa": {
+    "name": "Kyle Green",
+    "first_name": "Kyle",
+    "last_name": "Green",
+    "espn_id": "5344626"
+  },
+  "Colorado": {
+    "name": "Tad Boyle",
+    "first_name": "Tad",
+    "last_name": "Boyle",
+    "espn_id": "71446"
+  },
+  "BYU": {
+    "name": "Kevin Young",
+    "first_name": "Kevin",
+    "last_name": "Young",
+    "espn_id": "4040388"
+  },
+  "Canisius": {
+    "name": "Jim Christian",
+    "first_name": "Jim",
+    "last_name": "Christian",
+    "espn_id": "71407"
+  },
+  "Michigan": {
+    "name": "Dusty May",
+    "first_name": "Dusty",
+    "last_name": "May",
+    "espn_id": "4391222"
+  },
+  "Arizona": {
+    "name": "Tommy Lloyd",
+    "first_name": "Tommy",
+    "last_name": "Lloyd",
+    "espn_id": "4811732"
+  },
+  "Duke": {
+    "name": "Jon Scheyer",
+    "first_name": "Jon",
+    "last_name": "Scheyer",
+    "espn_id": "31709"
+  },
+  "Florida": {
+    "name": "Todd Golden",
+    "first_name": "Todd",
+    "last_name": "Golden",
+    "espn_id": "16144"
+  },
+  "Houston": {
+    "name": "Kelvin Sampson",
+    "first_name": "Kelvin",
+    "last_name": "Sampson",
+    "espn_id": "2613476"
+  },
+  "Illinois": {
+    "name": "Brad Underwood",
+    "first_name": "Brad",
+    "last_name": "Underwood",
+    "espn_id": "3126816"
+  },
+  "Iowa St.": {
+    "name": "T.J. Otzelberger",
+    "first_name": "T.J.",
+    "last_name": "Otzelberger",
+    "espn_id": "4001708"
+  },
+  "Purdue": {
+    "name": "Matt Painter",
+    "first_name": "Matt",
+    "last_name": "Painter",
+    "espn_id": "71278"
+  },
+  "Connecticut": {
+    "name": "Dan Hurley",
+    "first_name": "Dan",
+    "last_name": "Hurley",
+    "espn_id": "2501715"
+  },
+  "St. John's": {
+    "name": "Rick Pitino",
+    "first_name": "Rick",
+    "last_name": "Pitino",
+    "espn_id": "2028628"
+  },
+  "Michigan St.": {
+    "name": "Tom Izzo",
+    "first_name": "Tom",
+    "last_name": "Izzo",
+    "espn_id": "71287"
+  },
+  "Tennessee": {
+    "name": "Rick Barnes",
+    "first_name": "Rick",
+    "last_name": "Barnes",
+    "espn_id": "71343"
+  },
+  "Alabama": {
+    "name": "Nate Oats",
+    "first_name": "Nate",
+    "last_name": "Oats",
+    "espn_id": "3840005"
+  },
+  "Vanderbilt": {
+    "name": "Mark Byington",
+    "first_name": "Mark",
+    "last_name": "Byington",
+    "espn_id": "3026224"
+  },
+  "Gonzaga": {
+    "name": "Mark Few",
+    "first_name": "Mark",
+    "last_name": "Few",
+    "espn_id": "71427"
+  },
+  "Texas Tech": {
+    "name": "Grant McCasland",
+    "first_name": "Grant",
+    "last_name": "McCasland",
+    "espn_id": "3984235"
+  },
+  "Nebraska": {
+    "name": "Fred Hoiberg",
+    "first_name": "Fred",
+    "last_name": "Hoiberg",
+    "espn_id": "71442"
+  },
+  "Virginia": {
+    "name": "Ryan Odom",
+    "first_name": "Ryan",
+    "last_name": "Odom",
+    "espn_id": "4057646"
+  },
+  "Louisville": {
+    "name": "Pat Kelsey",
+    "first_name": "Pat",
+    "last_name": "Kelsey",
+    "espn_id": "2966966"
+  },
+  "Arkansas": {
+    "name": "John Calipari",
+    "first_name": "John",
+    "last_name": "Calipari",
+    "espn_id": "71288"
+  },
+  "Kansas": {
+    "name": "Bill Self",
+    "first_name": "Bill",
+    "last_name": "Self",
+    "espn_id": "71332"
+  },
+  "Wisconsin": {
+    "name": "Greg Gard",
+    "first_name": "Greg",
+    "last_name": "Gard",
+    "espn_id": "3957072"
+  },
+  "Iowa": {
+    "name": "Ben McCollum",
+    "first_name": "Ben",
+    "last_name": "McCollum",
+    "espn_id": "5210127"
+  },
+  "Ohio St.": {
+    "name": "Jake Diebler",
+    "first_name": "Jake",
+    "last_name": "Diebler",
+    "espn_id": "28308"
+  },
+  "UCLA": {
+    "name": "Mick Cronin",
+    "first_name": "Mick",
+    "last_name": "Cronin",
+    "espn_id": "71341"
+  },
+  "North Carolina": {
+    "name": "Michael Malone",
+    "first_name": "Michael",
+    "last_name": "Malone",
+    "espn_id": "2613461"
+  },
+  "Wichita St.": {
+    "name": "Paul Mills",
+    "first_name": "Paul",
+    "last_name": "Mills",
+    "espn_id": "4229620"
+  },
+  "Nevada": {
+    "name": "Steve Alford",
+    "first_name": "Steve",
+    "last_name": "Alford",
+    "espn_id": "71393"
+  },
+  "Belmont": {
+    "name": "Evan Bradds",
+    "first_name": "Evan",
+    "last_name": "Bradds",
+    "espn_id": "66866"
+  },
+  "George Washington": {
+    "name": "Chris Caputo",
+    "first_name": "Chris",
+    "last_name": "Caputo",
+    "espn_id": "5078545"
+  },
+  "Syracuse": {
+    "name": "Gerry McNamara",
+    "first_name": "Gerry",
+    "last_name": "McNamara",
+    "espn_id": "11233"
+  },
+  "Oklahoma St.": {
+    "name": "Steve Lutz",
+    "first_name": "Steve",
+    "last_name": "Lutz",
+    "espn_id": "4895811"
+  },
+  "Creighton": {
+    "name": "Alan Huss",
+    "first_name": "Alan",
+    "last_name": "Huss",
+    "espn_id": "5147564"
+  },
+  "High Point": {
+    "name": "Flynn Clayman",
+    "first_name": "Flynn",
+    "last_name": "Clayman",
+    "espn_id": "38237"
+  },
+  "Miami OH": {
+    "name": "Travis Steele",
+    "first_name": "Travis",
+    "last_name": "Steele",
+    "espn_id": "4326047"
+  },
+  "Stephen F. Austin": {
+    "name": "Matt Braeuer",
+    "first_name": "Matt",
+    "last_name": "Braeuer",
+    "espn_id": "22371"
+  },
+  "Hofstra": {
+    "name": "Speedy Claxton",
+    "first_name": "Speedy",
+    "last_name": "Claxton",
+    "espn_id": "71577"
+  },
+  "Colorado St.": {
+    "name": "Ali Farokhmanesh",
+    "first_name": "Ali",
+    "last_name": "Farokhmanesh",
+    "espn_id": "41681"
+  },
+  "Oregon": {
+    "name": "Dana Altman",
+    "first_name": "Dana",
+    "last_name": "Altman",
+    "espn_id": "71349"
+  },
+  "Yale": {
+    "name": "James Jones",
+    "first_name": "James",
+    "last_name": "Jones",
+    "espn_id": "71420"
+  },
+  "Utah Valley": {
+    "name": "Todd Phillips",
+    "first_name": "Todd",
+    "last_name": "Phillips",
+    "espn_id": "5147576"
+  },
+  "Xavier": {
+    "name": "Richard Pitino",
+    "first_name": "Richard",
+    "last_name": "Pitino",
+    "espn_id": "2955963"
+  },
+  "Saint Joseph's": {
+    "name": "Steve Donahue",
+    "first_name": "Steve",
+    "last_name": "Donahue",
+    "espn_id": "71265"
+  },
+  "Wyoming": {
+    "name": "Sundance Wicks",
+    "first_name": "Sundance",
+    "last_name": "Wicks",
+    "espn_id": "5147566"
+  },
+  "DePaul": {
+    "name": "Chris Holtmann",
+    "first_name": "Chris",
+    "last_name": "Holtmann",
+    "espn_id": "2501902"
+  },
+  "South Carolina": {
+    "name": "Lamont Paris",
+    "first_name": "Lamont",
+    "last_name": "Paris",
+    "espn_id": "4204183"
+  },
+  "Illinois St.": {
+    "name": "Ryan Pedon",
+    "first_name": "Ryan",
+    "last_name": "Pedon",
+    "espn_id": "5148299"
+  },
+  "Mississippi St.": {
+    "name": "Chris Jans",
+    "first_name": "Chris",
+    "last_name": "Jans",
+    "espn_id": "3096261"
+  },
+  "Kansas St.": {
+    "name": "Casey Alexander",
+    "first_name": "Casey",
+    "last_name": "Alexander",
+    "espn_id": "2557983"
+  },
+  "Notre Dame": {
+    "name": "Micah Shrewsberry",
+    "first_name": "Micah",
+    "last_name": "Shrewsberry",
+    "espn_id": "3056355"
+  },
+  "Davidson": {
+    "name": "Matt McKillop",
+    "first_name": "Matt",
+    "last_name": "McKillop",
+    "espn_id": "14179"
+  },
+  "Pittsburgh": {
+    "name": "Jeff Capel",
+    "first_name": "Jeff",
+    "last_name": "Capel",
+    "espn_id": "71571"
+  },
+  "Cal Baptist": {
+    "name": "Rick Croy",
+    "first_name": "Rick",
+    "last_name": "Croy",
+    "espn_id": "4391259"
+  },
+  "UNLV": {
+    "name": "Josh Pastner",
+    "first_name": "Josh",
+    "last_name": "Pastner",
+    "espn_id": "2335443"
+  },
+  "Seattle": {
+    "name": "Chris Victor",
+    "first_name": "Chris",
+    "last_name": "Victor",
+    "espn_id": "9332"
+  },
+  "Maryland": {
+    "name": "Buzz Williams",
+    "first_name": "Buzz",
+    "last_name": "Williams",
+    "espn_id": "71336"
+  },
+  "Sam Houston St.": {
+    "name": "Chris Mudge",
+    "first_name": "Chris",
+    "last_name": "Mudge",
+    "espn_id": "5147565"
+  },
+  "Pacific": {
+    "name": "Dave Smart",
+    "first_name": "Dave",
+    "last_name": "Smart",
+    "espn_id": "5216715"
+  },
+  "Illinois Chicago": {
+    "name": "Robert Ehsan",
+    "first_name": "Robert",
+    "last_name": "Ehsan",
+    "espn_id": "8775"
+  },
+  "St. Thomas": {
+    "name": "Johnny Tauer",
+    "first_name": "Johnny",
+    "last_name": "Tauer",
+    "espn_id": "4888760"
+  },
+  "UC Irvine": {
+    "name": "Russell Turner",
+    "first_name": "Russell",
+    "last_name": "Turner",
+    "espn_id": "71377"
+  },
+  "Utah": {
+    "name": "Alex Jensen",
+    "first_name": "Alex",
+    "last_name": "Jensen",
+    "espn_id": "2053154"
+  },
+  "Liberty": {
+    "name": "Ritchie McKay",
+    "first_name": "Ritchie",
+    "last_name": "McKay",
+    "espn_id": "71504"
+  },
+  "Rutgers": {
+    "name": "Steve Pikiell",
+    "first_name": "Steve",
+    "last_name": "Pikiell",
+    "espn_id": "71331"
+  },
+  "George Mason": {
+    "name": "Tony Skinn",
+    "first_name": "Tony",
+    "last_name": "Skinn",
+    "espn_id": "5147563"
+  },
+  "North Dakota St.": {
+    "name": "David Richman",
+    "first_name": "David",
+    "last_name": "Richman",
+    "espn_id": "3126893"
+  },
+  "Hawaii": {
+    "name": "Eran Ganot",
+    "first_name": "Eran",
+    "last_name": "Ganot",
+    "espn_id": "2049490"
+  },
+  "Duquesne": {
+    "name": "Dru Joyce III",
+    "first_name": "Dru",
+    "last_name": "Joyce III",
+    "espn_id": "15192"
+  },
+  "Wright St.": {
+    "name": "Clint Sargent",
+    "first_name": "Clint",
+    "last_name": "Sargent",
+    "espn_id": "37003"
+  },
+  "Florida Atlantic": {
+    "name": "John Jakus",
+    "first_name": "John",
+    "last_name": "Jakus",
+    "espn_id": "5208404"
+  },
+  "UC San Diego": {
+    "name": "Clint Allard",
+    "first_name": "Clint",
+    "last_name": "Allard",
+    "espn_id": "24027"
+  },
+  "UNC Wilmington": {
+    "name": "Takayo Siddle",
+    "first_name": "Takayo",
+    "last_name": "Siddle",
+    "espn_id": "27961"
+  },
+  "Toledo": {
+    "name": "Tod Kowalczyk",
+    "first_name": "Tod",
+    "last_name": "Kowalczyk",
+    "espn_id": "71425"
+  },
+  "San Francisco": {
+    "name": "Chris Gerlusfen",
+    "first_name": "Chris",
+    "last_name": "Gerlusfen",
+    "espn_id": "5078309"
+  },
+  "Southern Illinois": {
+    "name": "Scott Nagy",
+    "first_name": "Scott",
+    "last_name": "Nagy",
+    "espn_id": "71556"
+  },
+  "Memphis": {
+    "name": "Anfernee Hardaway",
+    "first_name": "Anfernee",
+    "last_name": "Hardaway",
+    "espn_id": "71530"
+  },
+  "Fresno St.": {
+    "name": "Vance Walberg",
+    "first_name": "Vance",
+    "last_name": "Walberg",
+    "espn_id": "71495"
+  },
+  "Montana St.": {
+    "name": "Matt Logie",
+    "first_name": "Matt",
+    "last_name": "Logie",
+    "espn_id": "2638"
+  },
+  "UAB": {
+    "name": "Andy Kennedy",
+    "first_name": "Andy",
+    "last_name": "Kennedy",
+    "espn_id": "71345"
+  },
+  "Washington St.": {
+    "name": "David Riley",
+    "first_name": "David",
+    "last_name": "Riley",
+    "espn_id": "4784540"
+  },
+  "LIU": {
+    "name": "Rod Strickland",
+    "first_name": "Rod",
+    "last_name": "Strickland",
+    "espn_id": "71587"
+  },
+  "UC Santa Barbara": {
+    "name": "Joe Pasternack",
+    "first_name": "Joe",
+    "last_name": "Pasternack",
+    "espn_id": "71465"
+  },
+  "Murray St.": {
+    "name": "Ryan Miller",
+    "first_name": "Ryan",
+    "last_name": "Miller",
+    "espn_id": "5277112"
+  },
+  "North Texas": {
+    "name": "Daniyal Robinson",
+    "first_name": "Daniyal",
+    "last_name": "Robinson",
+    "espn_id": "5078572"
+  },
+  "Kennesaw St.": {
+    "name": "Antoine Pettway",
+    "first_name": "Antoine",
+    "last_name": "Pettway",
+    "espn_id": "2814"
+  },
+  "Bradley": {
+    "name": "Brian Wardle",
+    "first_name": "Brian",
+    "last_name": "Wardle",
+    "espn_id": "2073017"
+  },
+  "Northern Colorado": {
+    "name": "Steve Smiley",
+    "first_name": "Steve",
+    "last_name": "Smiley",
+    "espn_id": "4682635"
+  },
+  "Penn St.": {
+    "name": "Mike Rhoades",
+    "first_name": "Mike",
+    "last_name": "Rhoades",
+    "espn_id": "3096606"
+  },
+  "Temple": {
+    "name": "Adam Fisher",
+    "first_name": "Adam",
+    "last_name": "Fisher",
+    "espn_id": "5139027"
+  },
+  "Boston College": {
+    "name": "Luke Murray",
+    "first_name": "Luke",
+    "last_name": "Murray",
+    "espn_id": "5344116"
+  },
+  "Central Arkansas": {
+    "name": "John Shulman",
+    "first_name": "John",
+    "last_name": "Shulman",
+    "espn_id": "71781"
+  },
+  "Idaho": {
+    "name": "Alex Pribble",
+    "first_name": "Alex",
+    "last_name": "Pribble",
+    "espn_id": "18837"
+  },
+  "Robert Morris": {
+    "name": "Andrew Toole",
+    "first_name": "Andrew",
+    "last_name": "Toole",
+    "espn_id": "6019"
+  },
+  "Penn": {
+    "name": "Fran McCaffery",
+    "first_name": "Fran",
+    "last_name": "McCaffery",
+    "espn_id": "71364"
+  },
+  "Arkansas St.": {
+    "name": "Ryan Pannone",
+    "first_name": "Ryan",
+    "last_name": "Pannone",
+    "espn_id": "4599028"
+  },
+  "St. Bonaventure": {
+    "name": "Mike MacDonald",
+    "first_name": "Mike",
+    "last_name": "MacDonald",
+    "espn_id": "71815"
+  },
+  "Navy": {
+    "name": "John Perry",
+    "first_name": "John",
+    "last_name": "Perry",
+    "espn_id": "5276095"
+  },
+  "Rhode Island": {
+    "name": "Archie Miller",
+    "first_name": "Archie",
+    "last_name": "Miller",
+    "espn_id": "179"
+  },
+  "Middle Tennessee": {
+    "name": "Nick McDevitt",
+    "first_name": "Nick",
+    "last_name": "McDevitt",
+    "espn_id": "3029460"
+  },
+  "Bowling Green": {
+    "name": "Todd Simon",
+    "first_name": "Todd",
+    "last_name": "Simon",
+    "espn_id": "3960392"
+  },
+  "Cornell": {
+    "name": "Jon Jaques",
+    "first_name": "Jon",
+    "last_name": "Jaques",
+    "espn_id": "32493"
+  },
+  "Loyola Marymount": {
+    "name": "Stan Johnson",
+    "first_name": "Stan",
+    "last_name": "Johnson",
+    "espn_id": "1860"
+  },
+  "William & Mary": {
+    "name": "Brian Earl",
+    "first_name": "Brian",
+    "last_name": "Earl",
+    "espn_id": "4003681"
+  },
+  "Austin Peay": {
+    "name": "Corey Gipson",
+    "first_name": "Corey",
+    "last_name": "Gipson",
+    "espn_id": "11958"
+  },
+  "Eastern Washington": {
+    "name": "Dan Monson",
+    "first_name": "Dan",
+    "last_name": "Monson",
+    "espn_id": "71457"
+  },
+  "Harvard": {
+    "name": "Tommy Amaker",
+    "first_name": "Tommy",
+    "last_name": "Amaker",
+    "espn_id": "71448"
+  },
+  "Western Kentucky": {
+    "name": "Hank Plona",
+    "first_name": "Hank",
+    "last_name": "Plona",
+    "espn_id": "5208980"
+  },
+  "Richmond": {
+    "name": "Chris Mooney",
+    "first_name": "Chris",
+    "last_name": "Mooney",
+    "espn_id": "71299"
+  },
+  "Siena": {
+    "name": "Nevada Smith",
+    "first_name": "Nevada",
+    "last_name": "Smith",
+    "espn_id": "5344658"
+  },
+  "Merrimack": {
+    "name": "Joe Gallo",
+    "first_name": "Joe",
+    "last_name": "Gallo",
+    "espn_id": "4586682"
+  },
+  "Valparaiso": {
+    "name": "Roger Powell Jr.",
+    "first_name": "Roger",
+    "last_name": "Powell Jr.",
+    "espn_id": "5148300"
+  },
+  "Monmouth": {
+    "name": "King Rice",
+    "first_name": "King",
+    "last_name": "Rice",
+    "espn_id": "2556912"
+  },
+  "Oregon St.": {
+    "name": "Wayne Tinkle",
+    "first_name": "Wayne",
+    "last_name": "Tinkle",
+    "espn_id": "71462"
+  },
+  "Georgia Tech": {
+    "name": "Scott Cross",
+    "first_name": "Scott",
+    "last_name": "Cross",
+    "espn_id": "71380"
+  },
+  "Kent St.": {
+    "name": "Rob Senderoff",
+    "first_name": "Rob",
+    "last_name": "Senderoff",
+    "espn_id": "2557325"
+  },
+  "Winthrop": {
+    "name": "Mark Prosser",
+    "first_name": "Mark",
+    "last_name": "Prosser",
+    "espn_id": "4325176"
+  },
+  "Portland St.": {
+    "name": "Jase Coburn",
+    "first_name": "Jase",
+    "last_name": "Coburn",
+    "espn_id": "4812489"
+  },
+  "UC Davis": {
+    "name": "Jim Les",
+    "first_name": "Jim",
+    "last_name": "Les",
+    "espn_id": "71386"
+  },
+  "Charlotte": {
+    "name": "Wes Miller",
+    "first_name": "Wes",
+    "last_name": "Miller",
+    "espn_id": "2999724"
+  },
+  "FIU": {
+    "name": "Jeremy Ballard",
+    "first_name": "Jeremy",
+    "last_name": "Ballard",
+    "espn_id": "2574"
+  },
+  "Towson": {
+    "name": "Pat Skerry",
+    "first_name": "Pat",
+    "last_name": "Skerry",
+    "espn_id": "2557103"
+  },
+  "Massachusetts": {
+    "name": "Frank Martin",
+    "first_name": "Frank",
+    "last_name": "Martin",
+    "espn_id": "71401"
+  },
+  "Montana": {
+    "name": "Travis DeCuire",
+    "first_name": "Travis",
+    "last_name": "DeCuire",
+    "espn_id": "3110003"
+  },
+  "Cal St. Northridge": {
+    "name": "Andy Newman",
+    "first_name": "Andy",
+    "last_name": "Newman",
+    "espn_id": "3020337"
+  },
+  "Fordham": {
+    "name": "Mike Magpayo",
+    "first_name": "Mike",
+    "last_name": "Magpayo",
+    "espn_id": "4706481"
+  },
+  "Howard": {
+    "name": "Kenneth Blakeney",
+    "first_name": "Kenneth",
+    "last_name": "Blakeney",
+    "espn_id": "4587731"
+  },
+  "Northern Kentucky": {
+    "name": "Darrin Horn",
+    "first_name": "Darrin",
+    "last_name": "Horn",
+    "espn_id": "71548"
+  },
+  "Furman": {
+    "name": "Bob Richey",
+    "first_name": "Bob",
+    "last_name": "Richey",
+    "espn_id": "8214"
+  },
+  "Oakland": {
+    "name": "Greg Kampe",
+    "first_name": "Greg",
+    "last_name": "Kampe",
+    "espn_id": "71355"
+  },
+  "Green Bay": {
+    "name": "Doug Gottlieb",
+    "first_name": "Doug",
+    "last_name": "Gottlieb",
+    "espn_id": "5212601"
+  },
+  "Texas A&M Corpus Chris": {
+    "name": "Jim Shaw",
+    "first_name": "Jim",
+    "last_name": "Shaw",
+    "espn_id": "13196"
+  },
+  "Detroit Mercy": {
+    "name": "Mark Montgomery",
+    "first_name": "Mark",
+    "last_name": "Montgomery",
+    "espn_id": "2556499"
+  },
+  "Louisiana Tech": {
+    "name": "Talvin Hester",
+    "first_name": "Talvin",
+    "last_name": "Hester",
+    "espn_id": "5078240"
+  },
+  "South Alabama": {
+    "name": "Richie Riley",
+    "first_name": "Richie",
+    "last_name": "Riley",
+    "espn_id": "6256"
+  },
+  "UMBC": {
+    "name": "Jim Ferry",
+    "first_name": "Jim",
+    "last_name": "Ferry",
+    "espn_id": "71408"
+  },
+  "Youngstown St.": {
+    "name": "Ethan Faulkner",
+    "first_name": "Ethan",
+    "last_name": "Faulkner",
+    "espn_id": "62648"
+  },
+  "Appalachian St.": {
+    "name": "Dustin Kerns",
+    "first_name": "Dustin",
+    "last_name": "Kerns",
+    "espn_id": "4226950"
+  },
+  "New Mexico St.": {
+    "name": "Jason Hooten",
+    "first_name": "Jason",
+    "last_name": "Hooten",
+    "espn_id": "2501612"
+  },
+  "UT Arlington": {
+    "name": "K.T. Turner",
+    "first_name": "K.T.",
+    "last_name": "Turner",
+    "espn_id": "5136165"
+  },
+  "Campbell": {
+    "name": "Jimmie Williams",
+    "first_name": "Jimmie",
+    "last_name": "Williams",
+    "espn_id": "5345273"
+  },
+  "Utah Tech": {
+    "name": "Jon Judkins",
+    "first_name": "Jon",
+    "last_name": "Judkins",
+    "espn_id": "4699198"
+  },
+  "New Orleans": {
+    "name": "Stacy Hollowell",
+    "first_name": "Stacy",
+    "last_name": "Hollowell",
+    "espn_id": "5210587"
+  },
+  "Missouri St.": {
+    "name": "Cuonzo Martin",
+    "first_name": "Cuonzo",
+    "last_name": "Martin",
+    "espn_id": "71467"
+  },
+  "Columbia": {
+    "name": "Kevin Hovde",
+    "first_name": "Kevin",
+    "last_name": "Hovde",
+    "espn_id": "31989"
+  },
+  "Tulane": {
+    "name": "Ron Hunter",
+    "first_name": "Ron",
+    "last_name": "Hunter",
+    "espn_id": "71402"
+  },
+  "Marist": {
+    "name": "John Dunne",
+    "first_name": "John",
+    "last_name": "Dunne",
+    "espn_id": "71399"
+  },
+  "Drexel": {
+    "name": "Zach Spiker",
+    "first_name": "Zach",
+    "last_name": "Spiker",
+    "espn_id": "2488258"
+  },
+  "Jacksonville St.": {
+    "name": "Ray Harper",
+    "first_name": "Ray",
+    "last_name": "Harper",
+    "espn_id": "2614961"
+  },
+  "Portland": {
+    "name": "Shantay Legans",
+    "first_name": "Shantay",
+    "last_name": "Legans",
+    "espn_id": "2693"
+  },
+  "Cal St. Fullerton": {
+    "name": "Dedrique Taylor",
+    "first_name": "Dedrique",
+    "last_name": "Taylor",
+    "espn_id": "3026395"
+  },
+  "Mercer": {
+    "name": "Ryan Ridder",
+    "first_name": "Ryan",
+    "last_name": "Ridder",
+    "espn_id": "4202957"
+  },
+  "James Madison": {
+    "name": "Preston Spradlin",
+    "first_name": "Preston",
+    "last_name": "Spradlin",
+    "espn_id": "4195517"
+  },
+  "Weber St.": {
+    "name": "Eric Duft",
+    "first_name": "Eric",
+    "last_name": "Duft",
+    "espn_id": "5147849"
+  },
+  "Indiana St.": {
+    "name": "Matthew Graves",
+    "first_name": "Matthew",
+    "last_name": "Graves",
+    "espn_id": "3025710"
+  },
+  "Rice": {
+    "name": "Rob Lanier",
+    "first_name": "Rob",
+    "last_name": "Lanier",
+    "espn_id": "4586684"
+  },
+  "San Jose St.": {
+    "name": "Tim Miles",
+    "first_name": "Tim",
+    "last_name": "Miles",
+    "espn_id": "71359"
+  },
+  "La Salle": {
+    "name": "Darris Nichols",
+    "first_name": "Darris",
+    "last_name": "Nichols",
+    "espn_id": "22195"
+  },
+  "Quinnipiac": {
+    "name": "Tom Pecora",
+    "first_name": "Tom",
+    "last_name": "Pecora",
+    "espn_id": "71340"
+  },
+  "Marshall": {
+    "name": "Cornelius Jackson",
+    "first_name": "Cornelius",
+    "last_name": "Jackson",
+    "espn_id": "5208157"
+  },
+  "Tennessee St.": {
+    "name": "Nolan Smith",
+    "first_name": "Nolan",
+    "last_name": "Smith",
+    "espn_id": "36157"
+  },
+  "Drake": {
+    "name": "Eric Henderson",
+    "first_name": "Eric",
+    "last_name": "Henderson",
+    "espn_id": "4420313"
+  },
+  "Western Carolina": {
+    "name": "Tim Craft",
+    "first_name": "Tim",
+    "last_name": "Craft",
+    "espn_id": "3055895"
+  },
+  "Southern Miss": {
+    "name": "Jay Ladner",
+    "first_name": "Jay",
+    "last_name": "Ladner",
+    "espn_id": "3099062"
+  },
+  "Buffalo": {
+    "name": "George Halcovage III",
+    "first_name": "George",
+    "last_name": "Halcovage III",
+    "espn_id": "5147567"
+  },
+  "Cal Poly": {
+    "name": "Mike DeGeorge",
+    "first_name": "Mike",
+    "last_name": "DeGeorge",
+    "espn_id": "5215295"
+  },
+  "San Diego": {
+    "name": "Steve Lavin",
+    "first_name": "Steve",
+    "last_name": "Lavin",
+    "espn_id": "2501533"
+  },
+  "Bethune Cookman": {
+    "name": "Reggie Theus",
+    "first_name": "Reggie",
+    "last_name": "Theus",
+    "espn_id": "71371"
+  },
+  "South Dakota St.": {
+    "name": "Bryan Petersen",
+    "first_name": "Bryan",
+    "last_name": "Petersen",
+    "espn_id": "36267"
+  },
+  "Ohio": {
+    "name": "Jeff Boals",
+    "first_name": "Jeff",
+    "last_name": "Boals",
+    "espn_id": "4026699"
+  },
+  "Tarleton St.": {
+    "name": "Eric Haut",
+    "first_name": "Eric",
+    "last_name": "Haut",
+    "espn_id": "1673"
+  },
+  "Stony Brook": {
+    "name": "Geno Ford",
+    "first_name": "Geno",
+    "last_name": "Ford",
+    "espn_id": "71350"
+  },
+  "Texas St.": {
+    "name": "Terrence Johnson",
+    "first_name": "Terrence",
+    "last_name": "Johnson",
+    "espn_id": "4694103"
+  },
+  "Georgia Southern": {
+    "name": "Charlie Henry",
+    "first_name": "Charlie",
+    "last_name": "Henry",
+    "espn_id": "5147575"
+  },
+  "Samford": {
+    "name": "Lennie Acuff",
+    "first_name": "Lennie",
+    "last_name": "Acuff",
+    "espn_id": "4586683"
+  },
+  "Coastal Carolina": {
+    "name": "Justin Gray",
+    "first_name": "Justin",
+    "last_name": "Gray",
+    "espn_id": "11796"
+  },
+  "Lipscomb": {
+    "name": "Kevin Carroll",
+    "first_name": "Kevin",
+    "last_name": "Carroll",
+    "espn_id": "5291152"
+  },
+  "Florida Gulf Coast": {
+    "name": "Pat Chambers",
+    "first_name": "Pat",
+    "last_name": "Chambers",
+    "espn_id": "2494418"
+  },
+  "Saint Peter's": {
+    "name": "Bashir Mason",
+    "first_name": "Bashir",
+    "last_name": "Mason",
+    "espn_id": "15921"
+  },
+  "Old Dominion": {
+    "name": "Mike Jones",
+    "first_name": "Mike",
+    "last_name": "Jones",
+    "espn_id": "5216714"
+  },
+  "Iona": {
+    "name": "Dan Geriot",
+    "first_name": "Dan",
+    "last_name": "Geriot",
+    "espn_id": "31990"
+  },
+  "Denver": {
+    "name": "Tim Bergstraser",
+    "first_name": "Tim",
+    "last_name": "Bergstraser",
+    "espn_id": "5278706"
+  },
+  "Eastern Michigan": {
+    "name": "Billy Donlon",
+    "first_name": "Billy",
+    "last_name": "Donlon",
+    "espn_id": "2501772"
+  },
+  "Radford": {
+    "name": "Zach Chu",
+    "first_name": "Zach",
+    "last_name": "Chu",
+    "espn_id": "56434"
+  },
+  "Boston University": {
+    "name": "Joe Jones",
+    "first_name": "Joe",
+    "last_name": "Jones",
+    "espn_id": "71440"
+  },
+  "Charleston Southern": {
+    "name": "Saah Nimley",
+    "first_name": "Saah",
+    "last_name": "Nimley",
+    "espn_id": "57442"
+  },
+  "American": {
+    "name": "Duane Simpkins",
+    "first_name": "Duane",
+    "last_name": "Simpkins",
+    "espn_id": "5147570"
+  },
+  "Fairfield": {
+    "name": "Chris Casey",
+    "first_name": "Chris",
+    "last_name": "Casey",
+    "espn_id": "3055974"
+  },
+  "Colgate": {
+    "name": "Matt Langel",
+    "first_name": "Matt",
+    "last_name": "Langel",
+    "espn_id": "2558153"
+  },
+  "Nebraska Omaha": {
+    "name": "Chris Crutchfield",
+    "first_name": "Chris",
+    "last_name": "Crutchfield",
+    "espn_id": "4987668"
+  },
+  "Central Michigan": {
+    "name": "Andy Bronkema",
+    "first_name": "Andy",
+    "last_name": "Bronkema",
+    "espn_id": "5291858"
+  },
+  "Nicholls St.": {
+    "name": "Tevon Saddler",
+    "first_name": "Tevon",
+    "last_name": "Saddler",
+    "espn_id": "67270"
+  },
+  "Southern": {
+    "name": "Kevin Johnson",
+    "first_name": "Kevin",
+    "last_name": "Johnson",
+    "espn_id": "71592"
+  },
+  "Vermont": {
+    "name": "John Becker",
+    "first_name": "John",
+    "last_name": "Becker",
+    "espn_id": "2558630"
+  },
+  "Southeast Missouri St.": {
+    "name": "Brad Korn",
+    "first_name": "Brad",
+    "last_name": "Korn",
+    "espn_id": "2230"
+  },
+  "Long Beach St.": {
+    "name": "Chris Acker",
+    "first_name": "Chris",
+    "last_name": "Acker",
+    "espn_id": "16442"
+  },
+  "UNC Asheville": {
+    "name": "Mike Morrell",
+    "first_name": "Mike",
+    "last_name": "Morrell",
+    "espn_id": "12640"
+  },
+  "Princeton": {
+    "name": "Mitch Henderson",
+    "first_name": "Mitch",
+    "last_name": "Henderson",
+    "espn_id": "2557982"
+  },
+  "East Carolina": {
+    "name": "Michael Schwartz",
+    "first_name": "Michael",
+    "last_name": "Schwartz",
+    "espn_id": "4987005"
+  },
+  "Lamar": {
+    "name": "Alvin Brooks",
+    "first_name": "Alvin",
+    "last_name": "Brooks",
+    "espn_id": "4888762"
+  },
+  "UC Riverside": {
+    "name": "Gus Argenal",
+    "first_name": "Gus",
+    "last_name": "Argenal",
+    "espn_id": "21813"
+  },
+  "Elon": {
+    "name": "Billy Taylor",
+    "first_name": "Billy",
+    "last_name": "Taylor",
+    "espn_id": "71404"
+  },
+  "Abilene Christian": {
+    "name": "Brette Tanner",
+    "first_name": "Brette",
+    "last_name": "Tanner",
+    "espn_id": "4888761"
+  },
+  "Pepperdine": {
+    "name": "Ed Schilling",
+    "first_name": "Ed",
+    "last_name": "Schilling",
+    "espn_id": "5216716"
+  },
+  "SIU Edwardsville": {
+    "name": "Brian Barone",
+    "first_name": "Brian",
+    "last_name": "Barone",
+    "espn_id": "4587726"
+  },
+  "Purdue Fort Wayne": {
+    "name": "Jon Coffman",
+    "first_name": "Jon",
+    "last_name": "Coffman",
+    "espn_id": "3126892"
+  },
+  "Tennessee Martin": {
+    "name": "Jeremy Shulman",
+    "first_name": "Jeremy",
+    "last_name": "Shulman",
+    "espn_id": "5208382"
+  },
+  "Idaho St.": {
+    "name": "Ryan Looney",
+    "first_name": "Ryan",
+    "last_name": "Looney",
+    "espn_id": "4587474"
+  },
+  "Wofford": {
+    "name": "Drew Gibson",
+    "first_name": "Drew",
+    "last_name": "Gibson",
+    "espn_id": "22594"
+  },
+  "Longwood": {
+    "name": "Ronnie Thomas",
+    "first_name": "Ronnie",
+    "last_name": "Thomas",
+    "espn_id": "58562"
+  },
+  "Milwaukee": {
+    "name": "Bart Lundy",
+    "first_name": "Bart",
+    "last_name": "Lundy",
+    "espn_id": "71585"
+  },
+  "Mount St. Mary's": {
+    "name": "Donny Lind",
+    "first_name": "Donny",
+    "last_name": "Lind",
+    "espn_id": "5215506"
+  },
+  "UTEP": {
+    "name": "Joe Golding",
+    "first_name": "Joe",
+    "last_name": "Golding",
+    "espn_id": "3126769"
+  },
+  "Incarnate Word": {
+    "name": "Shane Heirman",
+    "first_name": "Shane",
+    "last_name": "Heirman",
+    "espn_id": "41613"
+  },
+  "Southern Utah": {
+    "name": "Rob Jeter",
+    "first_name": "Rob",
+    "last_name": "Jeter",
+    "espn_id": "71324"
+  },
+  "Dartmouth": {
+    "name": "Dave McLaughlin",
+    "first_name": "Dave",
+    "last_name": "McLaughlin",
+    "espn_id": "4008658"
+  },
+  "Loyola Chicago": {
+    "name": "Drew Valentine",
+    "first_name": "Drew",
+    "last_name": "Valentine",
+    "espn_id": "46648"
+  },
+  "North Dakota": {
+    "name": "Paul Sather",
+    "first_name": "Paul",
+    "last_name": "Sather",
+    "espn_id": "4425679"
+  },
+  "Delaware": {
+    "name": "Martin Ingelsby",
+    "first_name": "Martin",
+    "last_name": "Ingelsby",
+    "espn_id": "4057649"
+  },
+  "Sacramento St.": {
+    "name": "Mike Bibby",
+    "first_name": "Mike",
+    "last_name": "Bibby",
+    "espn_id": "71647"
+  },
+  "Ball St.": {
+    "name": "Chris Capko",
+    "first_name": "Chris",
+    "last_name": "Capko",
+    "espn_id": "11279"
+  },
+  "South Dakota": {
+    "name": "Eric Peterson",
+    "first_name": "Eric",
+    "last_name": "Peterson",
+    "espn_id": "5078057"
+  },
+  "Prairie View A&M": {
+    "name": "Byron Smith",
+    "first_name": "Byron",
+    "last_name": "Smith",
+    "espn_id": "3961895"
+  },
+  "Presbyterian": {
+    "name": "Quinton Ferrell",
+    "first_name": "Quinton",
+    "last_name": "Ferrell",
+    "espn_id": "33910"
+  },
+  "Western Michigan": {
+    "name": "Kahil Fennell",
+    "first_name": "Kahil",
+    "last_name": "Fennell",
+    "espn_id": "18213"
+  },
+  "UNC Greensboro": {
+    "name": "Mike Jones",
+    "first_name": "Mike",
+    "last_name": "Jones",
+    "espn_id": "2560805"
+  },
+  "Mercyhurst": {
+    "name": "Gary Manchel",
+    "first_name": "Gary",
+    "last_name": "Manchel",
+    "espn_id": "5219775"
+  },
+  "Jacksonville": {
+    "name": "Jordan Mincy",
+    "first_name": "Jordan",
+    "last_name": "Mincy",
+    "espn_id": "27662"
+  },
+  "Brown": {
+    "name": "Mike Martin",
+    "first_name": "Mike",
+    "last_name": "Martin",
+    "espn_id": "1423"
+  },
+  "Louisiana": {
+    "name": "Quannas White",
+    "first_name": "Quannas",
+    "last_name": "White",
+    "espn_id": "5018"
+  },
+  "Lehigh": {
+    "name": "Brett Reed",
+    "first_name": "Brett",
+    "last_name": "Reed",
+    "espn_id": "71308"
+  },
+  "Sacred Heart": {
+    "name": "Anthony Latina",
+    "first_name": "Anthony",
+    "last_name": "Latina",
+    "espn_id": "3125805"
+  },
+  "West Georgia": {
+    "name": "Dave Moore",
+    "first_name": "Dave",
+    "last_name": "Moore",
+    "espn_id": "5215029"
+  },
+  "Morehead St.": {
+    "name": "Jonathan Mattox",
+    "first_name": "Jonathan",
+    "last_name": "Mattox",
+    "espn_id": "32976"
+  },
+  "Arkansas Pine Bluff": {
+    "name": "Solomon Bozeman",
+    "first_name": "Solomon",
+    "last_name": "Bozeman",
+    "espn_id": "31700"
+  },
+  "Florida A&M": {
+    "name": "Charlie Ward",
+    "first_name": "Charlie",
+    "last_name": "Ward",
+    "espn_id": "71913"
+  },
+  "Northeastern": {
+    "name": "Bill Coen",
+    "first_name": "Bill",
+    "last_name": "Coen",
+    "espn_id": "71441"
+  },
+  "IU Indy": {
+    "name": "Ben Howlett",
+    "first_name": "Ben",
+    "last_name": "Howlett",
+    "espn_id": "5291853"
+  },
+  "East Texas A&M": {
+    "name": "Jaret von Rosenberg",
+    "first_name": "Jaret",
+    "last_name": "von Rosenberg",
+    "espn_id": "32552"
+  },
+  "Southeastern Louisiana": {
+    "name": "David Kiefer",
+    "first_name": "David",
+    "last_name": "Kiefer",
+    "espn_id": "4586685"
+  },
+  "Bellarmine": {
+    "name": "Doug Davenport",
+    "first_name": "Doug",
+    "last_name": "Davenport",
+    "espn_id": "34167"
+  },
+  "USC Upstate": {
+    "name": "Marty Richter",
+    "first_name": "Marty",
+    "last_name": "Richter",
+    "espn_id": "5216724"
+  },
+  "Grambling St.": {
+    "name": "Patrick Crarey II",
+    "first_name": "Patrick",
+    "last_name": "Crarey II",
+    "espn_id": "5215339"
+  },
+  "Eastern Kentucky": {
+    "name": "A.W. Hamilton",
+    "first_name": "A.W.",
+    "last_name": "Hamilton",
+    "espn_id": "209"
+  },
+  "Oral Roberts": {
+    "name": "Kory Barnett",
+    "first_name": "Kory",
+    "last_name": "Barnett",
+    "espn_id": "41555"
+  },
+  "Houston Christian": {
+    "name": "Craig Doty",
+    "first_name": "Craig",
+    "last_name": "Doty",
+    "espn_id": "5213044"
+  },
+  "Hampton": {
+    "name": "Ivan Thomas",
+    "first_name": "Ivan",
+    "last_name": "Thomas",
+    "espn_id": "5215430"
+  },
+  "Stetson": {
+    "name": "Donnie Jones",
+    "first_name": "Donnie",
+    "last_name": "Jones",
+    "espn_id": "71281"
+  },
+  "Alabama St.": {
+    "name": "Tony Madlock",
+    "first_name": "Tony",
+    "last_name": "Madlock",
+    "espn_id": "4298741"
+  },
+  "Chattanooga": {
+    "name": "Dan Earl",
+    "first_name": "Dan",
+    "last_name": "Earl",
+    "espn_id": "2029109"
+  },
+  "Northwestern St.": {
+    "name": "Rick Cabrera",
+    "first_name": "Rick",
+    "last_name": "Cabrera",
+    "espn_id": "5147572"
+  },
+  "Evansville": {
+    "name": "David Ragland",
+    "first_name": "David",
+    "last_name": "Ragland",
+    "espn_id": "5078543"
+  },
+  "Alabama A&M": {
+    "name": "Donte' Jackson",
+    "first_name": "Donte'",
+    "last_name": "Jackson",
+    "espn_id": "4229621"
+  },
+  "Texas Southern": {
+    "name": "Johnny Jones",
+    "first_name": "Johnny",
+    "last_name": "Jones",
+    "espn_id": "71458"
+  },
+  "Central Connecticut": {
+    "name": "Patrick Sellers",
+    "first_name": "Patrick",
+    "last_name": "Sellers",
+    "espn_id": "3025288"
+  },
+  "North Carolina A&T": {
+    "name": "Monte Ross",
+    "first_name": "Monte",
+    "last_name": "Ross",
+    "espn_id": "71298"
+  },
+  "Wagner": {
+    "name": "Donald Copeland",
+    "first_name": "Donald",
+    "last_name": "Copeland",
+    "espn_id": "11235"
+  },
+  "Le Moyne": {
+    "name": "Nate Champion",
+    "first_name": "Nate",
+    "last_name": "Champion",
+    "espn_id": "5147568"
+  },
+  "Cleveland St.": {
+    "name": "Rob Summers",
+    "first_name": "Rob",
+    "last_name": "Summers",
+    "espn_id": "5291852"
+  },
+  "Georgia St.": {
+    "name": "Jonas Hayes",
+    "first_name": "Jonas",
+    "last_name": "Hayes",
+    "espn_id": "5533"
+  },
+  "UMass Lowell": {
+    "name": "Pat Duquette",
+    "first_name": "Pat",
+    "last_name": "Duquette",
+    "espn_id": "3055965"
+  },
+  "Albany": {
+    "name": "Dwayne Killings",
+    "first_name": "Dwayne",
+    "last_name": "Killings",
+    "espn_id": "4868"
+  },
+  "Northern Arizona": {
+    "name": "Shane Burcar",
+    "first_name": "Shane",
+    "last_name": "Burcar",
+    "espn_id": "4425826"
+  },
+  "Lafayette": {
+    "name": "Mike McGarvey",
+    "first_name": "Mike",
+    "last_name": "McGarvey",
+    "espn_id": "13325"
+  },
+  "Tennessee Tech": {
+    "name": "Tobin Anderson",
+    "first_name": "Tobin",
+    "last_name": "Anderson",
+    "espn_id": "5078544"
+  },
+  "Bucknell": {
+    "name": "John Griffin III",
+    "first_name": "John",
+    "last_name": "Griffin III",
+    "espn_id": "22821"
+  },
+  "NJIT": {
+    "name": "Grant Billmeier",
+    "first_name": "Grant",
+    "last_name": "Billmeier",
+    "espn_id": "15393"
+  },
+  "Loyola MD": {
+    "name": "Josh Loeffler",
+    "first_name": "Josh",
+    "last_name": "Loeffler",
+    "espn_id": "2049498"
+  },
+  "North Florida": {
+    "name": "Bobby Kennen",
+    "first_name": "Bobby",
+    "last_name": "Kennen",
+    "espn_id": "5287465"
+  },
+  "New Haven": {
+    "name": "Ted Hotaling",
+    "first_name": "Ted",
+    "last_name": "Hotaling",
+    "espn_id": "5310548"
+  },
+  "Cal St. Bakersfield": {
+    "name": "Todd Lee",
+    "first_name": "Todd",
+    "last_name": "Lee",
+    "espn_id": "4327024"
+  },
+  "Norfolk St.": {
+    "name": "Robert Jones",
+    "first_name": "Robert",
+    "last_name": "Jones",
+    "espn_id": "3125496"
+  },
+  "Eastern Illinois": {
+    "name": "Marty Simmons",
+    "first_name": "Marty",
+    "last_name": "Simmons",
+    "espn_id": "71460"
+  },
+  "Manhattan": {
+    "name": "John Gallagher",
+    "first_name": "John",
+    "last_name": "Gallagher",
+    "espn_id": "2532854"
+  },
+  "Niagara": {
+    "name": "Greg Paulus",
+    "first_name": "Greg",
+    "last_name": "Paulus",
+    "espn_id": "27023"
+  },
+  "Jackson St.": {
+    "name": "Mo Williams",
+    "first_name": "Mo",
+    "last_name": "Williams",
+    "espn_id": "5163"
+  },
+  "Holy Cross": {
+    "name": "Dave Paulsen",
+    "first_name": "Dave",
+    "last_name": "Paulsen",
+    "espn_id": "5945"
+  },
+  "UTSA": {
+    "name": "Austin Claunch",
+    "first_name": "Austin",
+    "last_name": "Claunch",
+    "espn_id": "43626"
+  },
+  "Stonehill": {
+    "name": "Chris Kraus",
+    "first_name": "Chris",
+    "last_name": "Kraus",
+    "espn_id": "5078024"
+  },
+  "North Alabama": {
+    "name": "Tony Pujol",
+    "first_name": "Tony",
+    "last_name": "Pujol",
+    "espn_id": "4390698"
+  },
+  "Chicago St.": {
+    "name": "Landon Bussie",
+    "first_name": "Landon",
+    "last_name": "Bussie",
+    "espn_id": "2332424"
+  },
+  "Fairleigh Dickinson": {
+    "name": "Jack Castleberry",
+    "first_name": "Jack",
+    "last_name": "Castleberry",
+    "espn_id": "17005"
+  },
+  "Army": {
+    "name": "Kevin Kuwik",
+    "first_name": "Kevin",
+    "last_name": "Kuwik",
+    "espn_id": "5147571"
+  },
+  "Air Force": {
+    "name": "Joe Crispin",
+    "first_name": "Joe",
+    "last_name": "Crispin",
+    "espn_id": "2022298"
+  },
+  "Alcorn St.": {
+    "name": "Jake Morton",
+    "first_name": "Jake",
+    "last_name": "Morton",
+    "espn_id": "5293522"
+  },
+  "Northern Illinois": {
+    "name": "Rashon Burno",
+    "first_name": "Rashon",
+    "last_name": "Burno",
+    "espn_id": "1290"
+  },
+  "The Citadel": {
+    "name": "Ed Conroy",
+    "first_name": "Ed",
+    "last_name": "Conroy",
+    "espn_id": "71363"
+  },
+  "Louisiana Monroe": {
+    "name": "Phil Cunningham",
+    "first_name": "Phil",
+    "last_name": "Cunningham",
+    "espn_id": "3025839"
+  },
+  "Maine": {
+    "name": "Chris Markwood",
+    "first_name": "Chris",
+    "last_name": "Markwood",
+    "espn_id": "417"
+  },
+  "New Hampshire": {
+    "name": "Nathan Davis",
+    "first_name": "Nathan",
+    "last_name": "Davis",
+    "espn_id": "3901382"
+  },
+  "Saint Francis": {
+    "name": "Luke McConnell",
+    "first_name": "Luke",
+    "last_name": "McConnell",
+    "espn_id": "5292016"
+  },
+  "North Carolina Central": {
+    "name": "LeVelle Moton",
+    "first_name": "LeVelle",
+    "last_name": "Moton",
+    "espn_id": "2494427"
+  },
+  "South Carolina St.": {
+    "name": "Erik Martin",
+    "first_name": "Erik",
+    "last_name": "Martin",
+    "espn_id": "5080987"
+  },
+  "Morgan St.": {
+    "name": "Kevin Broadus",
+    "first_name": "Kevin",
+    "last_name": "Broadus",
+    "espn_id": "4031314"
+  },
+  "Bryant": {
+    "name": "Jamion Christian",
+    "first_name": "Jamion",
+    "last_name": "Christian",
+    "espn_id": "2317"
+  },
+  "Maryland Eastern Shore": {
+    "name": "Cleo Hill Jr.",
+    "first_name": "Cleo",
+    "last_name": "Hill Jr.",
+    "espn_id": "5215493"
+  },
+  "Rider": {
+    "name": "Kevin Baggett",
+    "first_name": "Kevin",
+    "last_name": "Baggett",
+    "espn_id": "2967211"
+  },
+  "Binghamton": {
+    "name": "Levell Sanders",
+    "first_name": "Levell",
+    "last_name": "Sanders",
+    "espn_id": "4896493"
+  },
+  "VMI": {
+    "name": "Andrew Wilson",
+    "first_name": "Andrew",
+    "last_name": "Wilson",
+    "espn_id": "5027540"
+  },
+  "UMKC": {
+    "name": "Mark Turgeon",
+    "first_name": "Mark",
+    "last_name": "Turgeon",
+    "espn_id": "71267"
+  },
+  "Gardner Webb": {
+    "name": "Jeremy Luther",
+    "first_name": "Jeremy",
+    "last_name": "Luther",
+    "espn_id": "5213043"
+  },
+  "Delaware St.": {
+    "name": "Stan Waterman",
+    "first_name": "Stan",
+    "last_name": "Waterman",
+    "espn_id": "4896596"
+  },
+  "Coppin St.": {
+    "name": "Larry Stewart",
+    "first_name": "Larry",
+    "last_name": "Stewart",
+    "espn_id": "5143936"
+  },
+  "Mississippi Valley St.": {
+    "name": "George Ivory",
+    "first_name": "George",
+    "last_name": "Ivory",
+    "espn_id": "71453"
+  },
+  "Western Illinois": {
+    "name": "Chad Boudreau",
+    "first_name": "Chad",
+    "last_name": "Boudreau",
+    "espn_id": "5147580"
+  }
+}

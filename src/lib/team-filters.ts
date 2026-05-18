@@ -30,6 +30,7 @@ export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   // ── Overall ──────────────────────────────────────────────
   { key: "rank",       source: "trank",   dbColumn: "rank",    label: "BTA RTG",     desc: "Bart's overall ranking (we surface BTA RTG score elsewhere; this is the per-season rank position)", format: "rank", group: "overall", hideInFilter: true },
   { key: "bta_rtg",    source: "derived", dbColumn: "",        label: "BTA RTG",     desc: "Weighted z-score composite (Bart adj ORtg/DRtg + CBB adj ORtg/DRtg + SoS), scaled ×40. ~0 = average D-I team, +75 = elite, +100 = generational.", format: "num1", group: "overall" },
+  { key: "bta_net",    source: "derived", dbColumn: "",        label: "Adj Net Rtg", desc: "Adj ORtg − Adj DRtg. Point differential per 100 possessions vs an average D-I opponent on a neutral floor.",                                                                                                              format: "num1", group: "overall" },
   { key: "bta_ortg",   source: "derived", dbColumn: "",        label: "Adj ORtg",    desc: "Average of Bart adj ORtg and CBB adj ORtg",                                                                                                                                                                                       format: "num1", group: "overall" },
   { key: "bta_drtg",   source: "derived", dbColumn: "",        label: "Adj DRtg",    desc: "Average of Bart adj DRtg and CBB adj DRtg",                                                                                                                                                                                       format: "num1", group: "overall" },
   { key: "adjt",       source: "trank",   dbColumn: "adjt",    label: "Adj Tempo",   desc: "Adjusted possessions / 40 min",                                                                                                                                                                                                   format: "num1", group: "overall" },
@@ -291,6 +292,7 @@ export type TeamRow = {
   // derived
   bta_ortg: number | null;
   bta_drtg: number | null;
+  bta_net: number | null;        // bta_ortg − bta_drtg
   bta_rtg: number | null;        // weighted z-score composite ×10
   efg_diff: number | null;
   tov_diff: number | null;
@@ -339,26 +341,12 @@ export type RawTeamSeason = {
 };
 
 export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { rows: TeamRow[]; count: number } {
-  // Pre-filter by year + conference (cheap, server-side equivalents)
+  // Year is the only pre-filter applied before BTA RTG is computed — we want
+  // every team-season to keep the SAME BTA RTG regardless of which conference
+  // or stat filters are active. So z-score within the full year cohort, then
+  // apply conf + stat filters as display-only filters below.
   const yearSet = new Set(spec.years);
-  let cohort = rawAll.filter((r) => yearSet.has(r.year));
-  if (spec.conf) cohort = cohort.filter((r) => r.conference === spec.conf);
-
-  // Pre-filter on raw DB columns (everything except derived columns)
-  for (const f of spec.filters) {
-    const col = COLUMN_BY_KEY.get(f.stat);
-    if (!col || col.source === "derived") continue;
-    cohort = cohort.filter((r) => {
-      const t = Array.isArray(r.team_trank_stats) ? null : r.team_trank_stats as Record<string, number | null>;
-      const c = Array.isArray(r.team_cbba_stats) ? null : r.team_cbba_stats as Record<string, number | null> | null;
-      const v = col.source === "trank" ? t?.[col.dbColumn] ?? null : c?.[col.dbColumn] ?? null;
-      if (v === null) return false;
-      if (f.op === "gt") return v > f.value;
-      if (f.op === "gte") return v >= f.value;
-      if (f.op === "lt") return v < f.value;
-      return v <= f.value;
-    });
-  }
+  const cohort = rawAll.filter((r) => yearSet.has(r.year));
 
   // Shape rows + average-based derived columns
   const allRows: TeamRow[] = cohort.map((r) => {
@@ -433,6 +421,7 @@ export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { r
       potov_diff: cbb?.potov_diff ?? null,
       bta_ortg,
       bta_drtg,
+      bta_net: (bta_ortg !== null && bta_drtg !== null) ? bta_ortg - bta_drtg : null,
       bta_rtg: null,
       efg_diff: diff(cbb?.efg_pct ?? null, cbb?.efg_pct_def ?? null),
       tov_diff: diff(cbb?.tov_pct_def ?? null, cbb?.tov_pct ?? null),
@@ -443,22 +432,45 @@ export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { r
     };
   });
 
-  attachBtaRtg(allRows);
-  attachPercentiles(allRows);
+  // Bucket by year and z-score within EACH year cohort separately, so a team-
+  // season's BTA RTG is locked to its own season (Gonzaga 2026 is always 71.3,
+  // whether the user is viewing just 2026 or 2014-2026 together).
+  {
+    const rowsByYear = new Map<number, TeamRow[]>();
+    for (const r of allRows) {
+      const arr = rowsByYear.get(r.team_year) ?? [];
+      arr.push(r);
+      rowsByYear.set(r.team_year, arr);
+    }
+    for (const yearRows of rowsByYear.values()) attachBtaRtg(yearRows);
+  }
 
-  let filtered = allRows;
+  // Display filters (conf + raw stats + derived stats). All applied AFTER
+  // attachBtaRtg so the rating doesn't shift when the user narrows the view.
+  function passes(r: TeamRow, f: StatFilter): boolean {
+    const key = f.stat as keyof TeamRow;
+    const v = r[key] as number | null;
+    if (v === null) return false;
+    if (f.op === "gt") return v > f.value;
+    if (f.op === "gte") return v >= f.value;
+    if (f.op === "lt") return v < f.value;
+    return v <= f.value;
+  }
+  let displaySet = allRows;
+  if (spec.conf) displaySet = displaySet.filter((r) => r.team_conference === spec.conf);
+  for (const f of spec.filters) {
+    const col = COLUMN_BY_KEY.get(f.stat);
+    if (!col || col.source === "derived") continue;
+    displaySet = displaySet.filter((r) => passes(r, f));
+  }
+
+  attachPercentiles(displaySet); // percentile within the visible cohort (matches prior UX)
+
+  let filtered = displaySet;
   for (const f of spec.filters) {
     const col = COLUMN_BY_KEY.get(f.stat);
     if (!col || col.source !== "derived") continue;
-    const key = f.stat as keyof TeamRow;
-    filtered = filtered.filter((r) => {
-      const v = r[key] as number | null;
-      if (v === null) return false;
-      if (f.op === "gt") return v > f.value;
-      if (f.op === "gte") return v >= f.value;
-      if (f.op === "lt") return v < f.value;
-      return v <= f.value;
-    });
+    filtered = filtered.filter((r) => passes(r, f));
   }
 
   const sortCol = COLUMN_BY_KEY.get(spec.sortBy);
@@ -501,6 +513,7 @@ function diff(a: number | null | undefined, b: number | null | undefined): numbe
 // Opp eFG%) get green chips at low values.
 const PERCENTILE_STATS: Array<{ key: keyof TeamRow; higherBetter: boolean }> = [
   { key: "bta_rtg",     higherBetter: true },
+  { key: "bta_net",     higherBetter: true },
   { key: "bta_ortg",    higherBetter: true },
   { key: "bta_drtg",    higherBetter: false },
   { key: "adjt",        higherBetter: true },

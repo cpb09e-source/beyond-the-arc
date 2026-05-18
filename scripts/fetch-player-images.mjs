@@ -50,6 +50,13 @@ function norm(s) {
     .trim()
     .replace(/\s+/g, " ");
 }
+// Tighter variant: collapses all whitespace away. Catches ESPN "P.J. Haggerty"
+// (→ "p j haggerty") vs Bart "PJ Haggerty" (→ "pj haggerty") and similar
+// dotted-initial mismatches. Used as a fallback after exact-norm match fails
+// so we don't introduce ambiguity collisions on common names.
+function normTight(s) {
+  return norm(s).replace(/\s+/g, "");
+}
 
 // Bart team-name → ESPN team-name aliases pulled from src/data/cbb-team-ids.json
 // (those are CBB names, but ESPN uses similar conventions). For most teams the
@@ -67,8 +74,9 @@ const TEAM_ALIASES = {
   "ole miss":          "ole miss rebels",
   "mississippi":       "ole miss rebels",
   "central michigan":  "central michigan chippewas",
-  "uconn":             "connecticut huskies",
-  "connecticut":       "connecticut huskies",
+  "uconn":             "uconn huskies",       // ESPN displayName is "UConn Huskies" — `connecticut` fell through to Central Connecticut
+  "connecticut":       "uconn huskies",
+  "southern california": "usc trojans",         // Bart raw name pre-override → pin to USC
   "usc":               "usc trojans",
   "ucla":              "ucla bruins",
   "uic":               "uic flames",
@@ -98,6 +106,20 @@ const TEAM_ALIASES = {
   "saint thomas":      "st thomas minnesota tommies",
   "utah tech":         "utah tech trailblazers",
   "canisius":          "canisius golden griffins",
+
+  // Round 2 misses — punctuation + abbreviation collisions.
+  "n c state":         "nc state wolfpack",       // Bart "N.C. State" → "n c state"
+  "mississippi valley st":  "mississippi valley state delta devils",
+  "lindenwood":        "lindenwood lions",         // pin to avoid Lindenwood-Belleville etc.
+  "usc upstate":       "south carolina upstate spartans",
+  "southern indiana":  "southern indiana screaming eagles",
+};
+
+// Per-player name aliases for cases where ESPN's displayName has a suffix
+// (Jr., Sr., III) that Bart strips. Key = normalized ESPN name, value =
+// normalized Bart name (must match `norm(bartPlayer.name)` exactly).
+const PLAYER_ALIASES = {
+  "mj collins jr": "mj collins",
 };
 
 // ---------- ESPN ----------
@@ -235,11 +257,15 @@ async function main() {
   }
   console.log(`   ${bartPlayers.length} Bart players this season`);
 
-  // Index bart players by (team_id + normalized name)
+  // Index bart players by (team_id + normalized name). Index BOTH `norm` and
+  // `normTight` keys so dotted-initial ESPN names ("P.J. Haggerty") can find
+  // their Bart counterpart ("PJ Haggerty"). normTight collisions are extremely
+  // rare for last-name disambiguation within a single roster.
   const bartByTeamPlayer = new Map();
   for (const p of bartPlayers) {
     if (!p.bart_player_id) continue;
     bartByTeamPlayer.set(`${p.team_id}|${norm(p.name)}`, p);
+    bartByTeamPlayer.set(`${p.team_id}|${normTight(p.name)}`, p);
   }
 
   // Existing photo map (so re-runs accumulate)
@@ -269,8 +295,13 @@ async function main() {
 
     for (const a of athletes) {
       if (!a.headshot?.href) continue;
-      const key = `${bartTeamId}|${norm(a.displayName)}`;
-      const bart = bartByTeamPlayer.get(key);
+      // Try exact-norm match first, then fall back to tight-norm to catch
+      // "P.J. Haggerty" / "PJ Haggerty" style mismatches. Then check the
+      // PLAYER_ALIASES map for explicit overrides like "mj collins jr".
+      const espnNorm = norm(a.displayName);
+      const bart = bartByTeamPlayer.get(`${bartTeamId}|${espnNorm}`)
+        ?? bartByTeamPlayer.get(`${bartTeamId}|${normTight(a.displayName)}`)
+        ?? (PLAYER_ALIASES[espnNorm] && bartByTeamPlayer.get(`${bartTeamId}|${PLAYER_ALIASES[espnNorm]}`));
       if (!bart) {
         nameMisses++;
         continue;

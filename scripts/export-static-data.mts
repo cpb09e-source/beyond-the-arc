@@ -23,6 +23,7 @@ import {
   POWER_CONFS,
   computeCohortStats,
   productionFor as productionForShared,
+  starsForPrtg,
   type PlayerSeason,
 } from "./lib/bta-prtg.mts";
 
@@ -38,17 +39,10 @@ const sb = createClient(URL, SR, { auth: { persistSession: false } });
 
 const OUT = path.resolve("public/data");
 
-// Display-name overrides. We KEEP Bart's canonical name in the DB (and in
-// cbb-team-ids.json keys) so sync scripts continue to match, but rewrite the
-// name as it goes into every JSON file the site reads. Side effect: the URL
-// slug derives from the override (so /teams/usc/ instead of /teams/southern-california/).
-const TEAM_NAME_OVERRIDES: Record<string, string> = {
-  "Southern California": "USC",
-};
-function overrideTeamName<T extends string | null | undefined>(n: T): T {
-  if (typeof n !== "string") return n;
-  return (TEAM_NAME_OVERRIDES[n] ?? n) as T;
-}
+// Team-name overrides live in src/lib/team-overrides.ts so both the full
+// export and the fast portal-only export apply the same rewrites (CBB and
+// Bart sometimes use different names for the same school).
+import { overrideTeamName } from "../src/lib/team-overrides.ts";
 const YEARS = [
   2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020,
   2021, 2022, 2023, 2024, 2025, 2026,
@@ -255,15 +249,37 @@ async function main() {
   for (const t of teams as Array<typeof teams[number] & { four_factor_record?: FFRecord | null }>) {
     t.four_factor_record = fourFactorByTeamYear.get(`${t.id}|${t.year}`) ?? null;
   }
+  // Load the coach snapshot (one-shot file committed to repo by
+  // `npm run snapshot:coaches`). Keys are Bart raw names → apply overrideTeamName
+  // so they line up with the team display names used everywhere else.
+  type CoachEntry = { name: string; first_name: string; last_name: string; espn_id: string | null };
+  let coachByTeam = new Map<string, CoachEntry>();
+  try {
+    const raw = JSON.parse(await fs.readFile(path.resolve("src/data/team-coaches.json"), "utf8")) as Record<string, CoachEntry>;
+    for (const [bartName, info] of Object.entries(raw)) coachByTeam.set(overrideTeamName(bartName), info);
+    console.log(`   ${coachByTeam.size} coaches loaded from team-coaches.json`);
+  } catch {
+    console.log("   no team-coaches.json found — coach field stays null. Run `npm run snapshot:coaches` to populate.");
+  }
+
   await fs.writeFile(path.join(OUT, "teams-all.json"), JSON.stringify(teams));
+  const LATEST_YEAR = YEARS[YEARS.length - 1];
   let teamSlugCount = 0;
   for (const [name, rows] of byName.entries()) {
     rows.sort((a, b) => b.year - a.year);
+    // Attach current-season coach. Older seasons left null until we have
+    // historical coach data (Sports Reference snapshot, separate phase).
+    const coach = coachByTeam.get(name);
+    if (coach) {
+      for (const r of rows as Array<typeof rows[number] & { coach?: string | null }>) {
+        if (r.year === LATEST_YEAR) r.coach = coach.name;
+      }
+    }
     const s = slug(name);
     await fs.writeFile(path.join(OUT, "team", `${s}.json`), JSON.stringify({ name, seasons: rows }));
     teamSlugCount++;
   }
-  console.log(`   ${teamSlugCount} per-team JSON files written (with four-factor record)`);
+  console.log(`   ${teamSlugCount} per-team JSON files written (with four-factor record + ${coachByTeam.size > 0 ? "coach" : "no coach"})`);
 
   console.log("\n👥 Exporting players (per year)…");
   let totalPlayers = 0;
@@ -463,9 +479,9 @@ async function main() {
         division_to: p.divisionIdTo ?? null,
         date_entered: p.createdWhen ?? null,
         date_updated: p.updatedWhen ?? null,
-        team_from: p.teamMarketFrom ?? null,
+        team_from: overrideTeamName(p.teamMarketFrom ?? null),
         conf_from: p.conferenceShortNameFrom ?? null,
-        team_to: p.teamMarketTo ?? null,
+        team_to: overrideTeamName(p.teamMarketTo ?? null),
         conf_to: p.conferenceShortNameTo ?? null,
         ...(prod ?? {
           last_year: null, last_team: null, last_conf: null,
@@ -476,22 +492,16 @@ async function main() {
       };
     });
 
-    // Star buckets: percentile-rank BTA PORTG within the portal pool that
-    // passes the display baseline (GP ≥ 10, MPG ≥ 12, PPG ≥ 4) AND has a
-    // computed bta_portg. 5★ = top 20%, 4★ = next 20%, etc.
+    // Star buckets: fixed BTA PRTG cutoffs (see starsForPrtg in lib/bta-prtg.mts).
+    // Eligibility baseline (GP ≥ 10, MPG ≥ 12, PPG ≥ 4) still applies — players
+    // below the baseline stay at 0 stars even if their PRTG would qualify.
     const eligibleForStars = enriched.filter(
       (e) => typeof e.bta_portg === "number"
         && (e.gp ?? 0) >= 10
         && (e.mpg ?? 0) >= 12
         && (e.ppg ?? 0) >= 4
     );
-    eligibleForStars.sort((a, b) => (b.bta_portg as number) - (a.bta_portg as number));
-    const n = eligibleForStars.length;
-    eligibleForStars.forEach((e, i) => {
-      const pct = i / Math.max(1, n - 1); // 0 = best, 1 = worst
-      const stars = pct < 0.2 ? 5 : pct < 0.4 ? 4 : pct < 0.6 ? 3 : pct < 0.8 ? 2 : 1;
-      e.stars = stars as 1 | 2 | 3 | 4 | 5;
-    });
+    for (const e of eligibleForStars) e.stars = starsForPrtg(e.bta_portg as number);
 
     // Transfer-class rankings. Score each school by Net BTA PORTG:
     //   (sum of BTA PORTG of players who committed TO the school)
@@ -581,17 +591,31 @@ async function main() {
         inBucket.in_players.push({ ...player, counter_team: e.team_from, counter_conf: e.conf_from });
       }
     }
+    // Flat star bonuses applied symmetrically: +8 per 5★ and +5 per 4★. So a
+    // school that signs a 5★ gets +8 added to net; a school that LOSES a 5★
+    // gets -8 from net. Keeps the model balanced — sign-ups can't compensate
+    // for symmetric losses without doing the work to retain.
+    function classBonus(players: TCPlayer[]): number {
+      let bonus = 0;
+      for (const p of players) {
+        if (p.stars === 5) bonus += 8;
+        else if (p.stars === 4) bonus += 5;
+      }
+      return bonus;
+    }
     const allRows: TransferClassRow[] = [];
     for (const b of perSchool.values()) {
       const sumIn = b.in_players.reduce((s, p) => s + (p.bta_portg ?? 0), 0);
       const sumOut = b.out_players.reduce((s, p) => s + (p.bta_portg ?? 0), 0);
+      const inBonus = classBonus(b.in_players);
+      const outBonus = classBonus(b.out_players);
       // Sort each list by BTA PORTG desc for popup display.
       b.in_players.sort((a, c) => (c.bta_portg ?? 0) - (a.bta_portg ?? 0));
       b.out_players.sort((a, c) => (c.bta_portg ?? 0) - (a.bta_portg ?? 0));
       allRows.push({
         school: b.school,
         conference: b.conference,
-        net: sumIn - sumOut,
+        net: (sumIn + inBonus) - (sumOut + outBonus),
         in_count: b.in_players.length,
         out_count: b.out_players.length,
         in_players: b.in_players,
@@ -603,12 +627,16 @@ async function main() {
       .filter((r) => r.conference && POWER_CONFS.has(r.conference))
       .sort((a, c) => a.net - c.net)
       .slice(0, 10);
+    // Keyed lookup so the portal table can open the same transfer-class modal
+    // for any school logo (not just the 20 in top/worst sidebars).
+    const by_school: Record<string, TransferClassRow> = {};
+    for (const r of allRows) by_school[r.school] = r;
 
     await fs.writeFile(path.join(OUT, "portal.json"), JSON.stringify({
       competition_id: CURRENT_COMP_ID,
       generated_at: new Date().toISOString(),
       entries: enriched,
-      transfer_classes: { top_overall, worst_power },
+      transfer_classes: { top_overall, worst_power, by_school },
     }));
     const matched = enriched.filter((e) => e.bart_player_id !== null).length;
     console.log(`   ${enriched.length.toLocaleString()} portal entries · ${matched.toLocaleString()} matched to Bart · ${eligibleForStars.length.toLocaleString()} pass baseline · ${allRows.length} schools ranked`);
@@ -658,9 +686,42 @@ async function main() {
     .filter((p) => p.name)
     .map((p) => ({ t: "p" as const, n: p.name, b: p.bartId, tm: p.team, y: p.year }))
     .sort((a, b) => a.n.localeCompare(b.n));
-  const searchAll = [...searchTeams, ...searchPlayers];
+
+  // Coaches: one entry per unique name. Reads coach-history.json (historical
+  // SR scrape) + team-coaches.json (ESPN current snapshot) — both already loaded
+  // earlier in this script but we re-read here to avoid scope plumbing.
+  type CoachLatest = { team: string; year: number };
+  const coachLatest = new Map<string, CoachLatest>();
+  try {
+    const history = JSON.parse(await fs.readFile(path.resolve("src/data/coach-history.json"), "utf8")) as Record<string, Record<string, { name: string }>>;
+    for (const [team, byYear] of Object.entries(history)) {
+      for (const [yearStr, s] of Object.entries(byYear)) {
+        const year = parseInt(yearStr, 10);
+        const cur = coachLatest.get(s.name);
+        if (!cur || year > cur.year) coachLatest.set(s.name, { team: overrideTeamName(team), year });
+      }
+    }
+  } catch {}
+  try {
+    const espn = JSON.parse(await fs.readFile(path.resolve("src/data/team-coaches.json"), "utf8")) as Record<string, { name: string }>;
+    for (const [team, c] of Object.entries(espn)) {
+      const cur = coachLatest.get(c.name);
+      if (!cur || LATEST_YEAR > cur.year) coachLatest.set(c.name, { team: overrideTeamName(team), year: LATEST_YEAR });
+    }
+  } catch {}
+  const searchCoaches = [...coachLatest.entries()]
+    .map(([name, info]) => ({
+      t: "c" as const,
+      n: name,
+      s: slug(name),
+      tm: info.team,
+      a: info.year === LATEST_YEAR ? 1 : 0,
+    }))
+    .sort((a, b) => a.n.localeCompare(b.n));
+
+  const searchAll = [...searchTeams, ...searchCoaches, ...searchPlayers];
   await fs.writeFile(path.join(OUT, "search-index.json"), JSON.stringify(searchAll));
-  console.log(`   ${searchTeams.length} teams + ${searchPlayers.length.toLocaleString()} players → search-index.json`);
+  console.log(`   ${searchTeams.length} teams + ${searchCoaches.length} coaches + ${searchPlayers.length.toLocaleString()} players → search-index.json`);
 
   console.log("\n📜 SSG manifest…");
   const teamSlugs = [...byName.keys()].map((n) => slug(n));

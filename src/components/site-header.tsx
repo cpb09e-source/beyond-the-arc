@@ -4,6 +4,7 @@ import { SearchDialog } from "@/components/search/search-dialog";
 const NAV = [
   { href: "/", label: "Explorer" },
   { href: "/players", label: "Players" },
+  { href: "/coaches", label: "Coaches" },
   { href: "/calc", label: "Win Calc" },
   { href: "/portal", label: "Portal" },
 ];

@@ -4,6 +4,8 @@ import { TourneyBadge } from "@/components/tourney-badge";
 import { SeasonSwitcher } from "@/components/teams/season-switcher";
 import { NationalRanks } from "@/components/teams/national-ranks";
 import type { StaticPlayerRow, StaticTeamSeasonRow } from "@/lib/static-data";
+import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier } from "@/lib/conf-tiers";
+import { confDisplay } from "@/lib/conf-display";
 
 function fmtNum(x: number | null, digits = 1): string {
   if (x === null || x === undefined) return "—";
@@ -15,6 +17,14 @@ function fmtPct(x: number | null, digits = 1): string {
 }
 function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
+}
+function coachSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 function fromEnd(row: Array<string | number | null> | null, offset: number): number | null {
   if (!row || row.length <= offset) return null;
@@ -57,7 +67,7 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
   const cached = yearMetricsCache.get(year);
   if (cached) return cached;
 
-  type Mid = { id: number; pir: number | null; porpag: number | null; conference: string | null; eligible: boolean };
+  type Mid = { id: number; pir: number | null; porpag: number | null; conference: string | null; team_name: string | null; eligible: boolean };
   const mids: Mid[] = players.map((p) => {
     const row = p.player_bart_stats?.raw_row ?? null;
     const games = p.player_bart_stats?.games ?? null;
@@ -72,11 +82,12 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
     const porpag = pctFromIdx(row, 28);
     const team = Array.isArray(p.teams) ? p.teams[0] : p.teams;
     const conference = team?.conference ?? null;
+    const team_name = team?.name ?? null;
     const eligible = !((games ?? 0) < 8 && (mins ?? 0) < 10 && (pts ?? 0) < 3);
     const pir = (pts !== null && reb !== null && ast !== null && stl !== null && blk !== null)
       ? pts + reb + ast + stl + blk - (missedFg ?? 0) - (missedFt ?? 0)
       : null;
-    return { id: p.id, pir, porpag, conference, eligible };
+    return { id: p.id, pir, porpag, conference, team_name, eligible };
   });
 
   const pirVals: number[] = [];
@@ -98,12 +109,16 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
     let bta: number | null = null;
     if (m.eligible) {
       const zs: number[] = [];
-      if (typeof m.pir === "number" && pSd > 0) zs.push((m.pir - pMu) / pSd);
+      if (typeof m.pir === "number" && pSd > 0) zs.push(((m.pir - pMu) / pSd) * 0.69);
       if (typeof m.porpag === "number" && oSd > 0) zs.push((m.porpag - oMu) / oSd);
       if (zs.length > 0) {
         const raw = (zs.reduce((s, v) => s + v, 0) / zs.length) * 20;
-        const isPower = m.conference != null && POWER_CONFS.has(m.conference);
-        bta = isPower ? raw : raw * 0.85;
+        bta =
+          raw
+          * confMultiplier(m.conference)
+          * topTeamMultiplier(m.team_name)
+          * top5Tier1Multiplier(m.team_name)
+          * top3InConfMultiplier(m.team_name);
       }
     }
     out.set(m.id, { pir: m.pir, bta_portg: bta });
@@ -112,7 +127,6 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
   return out;
 }
 
-const POWER_CONFS = new Set(["ACC", "B10", "B12", "SEC"]);
 
 export function buildRoster(players: StaticPlayerRow[], teamId: number, year: number): RosterEntry[] {
   const metrics = computeYearMetrics(players, year);
@@ -182,7 +196,7 @@ export function TeamPageView({
               <div className="flex items-center justify-between gap-4 mb-3">
                 <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
                   <span className="h-px w-8 bg-coral" />
-                  <span>{current.conference ?? "—"} · {seasonLabel(current.year)}</span>
+                  <span>{confDisplay(current.conference)} · {seasonLabel(current.year)}</span>
                 </div>
                 <SeasonSwitcher
                   slug={slug}
@@ -213,7 +227,13 @@ export function TeamPageView({
                 )}
                 {current.coach && (
                   <span className="text-sm text-ink-muted">
-                    Coach: <span className="text-ink">{current.coach}</span>
+                    Coach:{" "}
+                    <Link
+                      href={`/coaches/${coachSlug(current.coach)}/`}
+                      className="text-ink hover:text-coral transition-colors"
+                    >
+                      {current.coach}
+                    </Link>
                   </span>
                 )}
               </div>
@@ -305,7 +325,7 @@ export function TeamPageView({
                         <TourneyBadge teamName={s.name} year={s.year} />
                       </Link>
                     </Td>
-                    <Td className="text-ink-muted">{s.conference ?? "—"}</Td>
+                    <Td className="text-ink-muted">{confDisplay(s.conference)}</Td>
                     <Td className="tabular text-ink-muted">{t?.record ?? "—"}</Td>
                     <Td align="right" className="tabular text-coral">{s.bta_rank !== null ? `#${s.bta_rank}` : "—"}</Td>
                     <Td align="right" className="tabular">{fmtNum(t?.adjoe ?? null, 1)}</Td>

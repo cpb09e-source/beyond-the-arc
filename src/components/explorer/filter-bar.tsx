@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import {
   FILTER_COLUMNS,
   GROUP_LABEL,
@@ -16,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { SearchableSelect, type SearchableOption } from "./searchable-select";
 import { MultiYearSelect } from "./multi-year-select";
 import { Select } from "@/components/select";
+import { confDisplay } from "@/lib/conf-display";
 
 const OPS: { value: Comparator; label: string }[] = [
   { value: "gt", label: ">" },
@@ -40,7 +42,17 @@ const DEFAULT_DRAFT: Pick<TeamFilterSpec, "years" | "conf" | "filters"> = {
   filters: [],
 };
 
-export function FilterBar({ conferences }: { conferences: string[] }) {
+export type ConferenceRanking = { conference: string; avg_bta_rtg: number; teams: number; contributing: number };
+
+export function FilterBar({
+  conferences,
+  conferenceRankings = [],
+  years = [],
+}: {
+  conferences: string[];
+  conferenceRankings?: ConferenceRanking[];
+  years?: number[];
+}) {
   const router = useRouter();
   const search = useSearchParams();
   const [pending, startTransition] = useTransition();
@@ -59,6 +71,7 @@ export function FilterBar({ conferences }: { conferences: string[] }) {
     conf: urlSpec.conf,
     filters: urlSpec.filters,
   });
+  const [showRankings, setShowRankings] = useState(false);
 
   // Re-sync draft when the URL changes from outside (browser nav, sort click
   // doesn't affect these fields but the dep is safe). Cheap because state
@@ -112,17 +125,36 @@ export function FilterBar({ conferences }: { conferences: string[] }) {
         </Field>
 
         <Field label="Conference">
-          <Select
-            value={draft.conf ?? ""}
-            onChange={(v) => patch({ conf: v || null })}
-          >
-            <option value="">All conferences</option>
-            {conferences.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </Select>
+          <div className="flex items-center gap-3">
+            <Select
+              value={draft.conf ?? ""}
+              onChange={(v) => patch({ conf: v || null })}
+            >
+              <option value="">All conferences</option>
+              {conferences.map((c) => (
+                <option key={c} value={c}>{confDisplay(c)}</option>
+              ))}
+            </Select>
+            {conferenceRankings.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowRankings(true)}
+                className="text-xs text-coral hover:underline whitespace-nowrap"
+              >
+                View Conference Rankings →
+              </button>
+            )}
+          </div>
         </Field>
       </div>
+
+      {showRankings && (
+        <ConferenceRankingsModal
+          rankings={conferenceRankings}
+          years={years}
+          onClose={() => setShowRankings(false)}
+        />
+      )}
 
       {/* Stat filter rows */}
       <div className="p-4 lg:p-5 space-y-2">
@@ -233,4 +265,86 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </label>
   );
+}
+
+function seasonLabel(y: number): string {
+  return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
+}
+
+function ConferenceRankingsModal({
+  rankings, years, onClose,
+}: {
+  rankings: ConferenceRanking[];
+  years: number[];
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
+  // SSR safety: only mount the portal after the client picks it up.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  if (!mounted) return null;
+
+  const body = (
+    <div
+      role="dialog"
+      aria-modal
+      aria-label="Conference rankings"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 p-4 pt-[6vh]"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card border border-hairline rounded-lg w-full max-w-xl max-h-[88vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-hairline">
+          <div>
+            <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Conference rankings</div>
+            <div className="font-display text-2xl text-ink leading-tight">Beyond the Arc Rating by Conference</div>
+            <div className="text-xs text-ink-muted mt-1">
+              {years[0] ? `${seasonLabel(years[0])} season` : ""} · worst 2 teams dropped per conference
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="text-ink-muted hover:text-coral text-xl leading-none px-2"
+          >
+            ×
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-1">
+          {rankings.length === 0 ? (
+            <p className="p-6 text-sm text-ink-muted text-center">No conferences to rank.</p>
+          ) : (
+            <ul className="divide-y divide-hairline/60">
+              {rankings.map((r, i) => (
+                <li key={r.conference} className="flex items-center gap-3 px-5 py-3 hover:bg-paper-deep/40 transition-colors">
+                  <span className="font-display text-base text-ink-muted tabular w-6 text-center">{i + 1}</span>
+                  <span className="flex-1 min-w-0">
+                    <span className="font-medium text-ink text-sm">{confDisplay(r.conference)}</span>
+                  </span>
+                  <span className={`font-display text-lg tabular ${r.avg_bta_rtg >= 0 ? "text-coral" : "text-ink-muted"}`}>
+                    {r.avg_bta_rtg > 0 ? "+" : ""}{r.avg_bta_rtg.toFixed(1)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+  return createPortal(body, document.body);
 }
