@@ -167,11 +167,11 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
               <tr className="border-b border-hairline text-left">
                 <Th className="w-10 text-center">#</Th>
                 <ThSort label="Coach" active={sortBy==="name"} dir={sortDir} onClick={() => toggle("name","asc")} align="left" />
-                <Th className="w-9">{""}</Th>
+                <Th className="w-9 hidden sm:table-cell">{""}</Th>
                 <ThSort label="Current team" active={sortBy==="team"} dir={sortDir} onClick={() => toggle("team","asc")} align="left" />
-                <ThSort label="Conf" active={sortBy==="conference"} dir={sortDir} onClick={() => toggle("conference","asc")} align="left" />
-                <ThSort label="Seasons" active={sortBy==="seasons"} dir={sortDir} onClick={() => toggle("seasons","desc")} />
-                <ThSort label="Record" active={sortBy==="career_wins"} dir={sortDir} onClick={() => toggle("career_wins","desc")} />
+                <ThSort label="Conf" active={sortBy==="conference"} dir={sortDir} onClick={() => toggle("conference","asc")} align="left" className="hidden sm:table-cell" />
+                <ThSort label="Seasons" active={sortBy==="seasons"} dir={sortDir} onClick={() => toggle("seasons","desc")} className="hidden sm:table-cell" />
+                <ThSort label="Record" active={sortBy==="career_wins"} dir={sortDir} onClick={() => toggle("career_wins","desc")} className="hidden sm:table-cell" />
                 <ThSort label="Win" active={sortBy==="career_winpct"} dir={sortDir} onClick={() => toggle("career_winpct","desc")} />
               </tr>
             </thead>
@@ -189,7 +189,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                         {r.name}
                       </Link>
                     </Td>
-                    <Td className="text-center">
+                    <Td className="text-center hidden sm:table-cell">
                       {r.current_team && (
                         <span className="inline-flex items-center" title={r.current_team}>
                           <TeamLogo name={r.current_team} size={28} />
@@ -203,11 +203,11 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                         </Link>
                       ) : <span className="text-ink-muted">—</span>}
                     </Td>
-                    <Td className="text-ink-soft">
+                    <Td className="text-ink-soft hidden sm:table-cell">
                       {r.current_conference ? confDisplay(r.current_conference) : <span className="text-ink-muted">—</span>}
                     </Td>
-                    <Td className="text-right tabular text-ink-soft">{r.seasons_count}</Td>
-                    <Td className="text-right tabular text-ink">{fmtRecord(r.career_wins, r.career_losses)}</Td>
+                    <Td className="text-right tabular text-ink-soft hidden sm:table-cell">{r.seasons_count}</Td>
+                    <Td className="text-right tabular text-ink hidden sm:table-cell">{fmtRecord(r.career_wins, r.career_losses)}</Td>
                     <Td className="text-right tabular font-medium text-ink">{fmtPct(r.career_win_pct)}</Td>
                   </tr>
                 ))
@@ -296,10 +296,10 @@ function paginationItems(page: number, totalPages: number): Array<number | "…"
 }
 
 function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <th className={`px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium ${className}`}>{children}</th>;
+  return <th className={`px-2 sm:px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium ${className}`}>{children}</th>;
 }
 function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-3 py-2.5 ${className}`}>{children}</td>;
+  return <td className={`px-2 sm:px-3 py-2.5 ${className}`}>{children}</td>;
 }
 function ThSort({
   label, active, dir, onClick, align = "right", className = "",
@@ -308,7 +308,7 @@ function ThSort({
 }) {
   return (
     <th className={cn(
-      "px-3 py-2 text-xs uppercase tracking-widest font-medium whitespace-nowrap select-none cursor-pointer hover:bg-paper-deep/60 transition-colors",
+      "px-2 sm:px-3 py-2 text-xs uppercase tracking-widest font-medium whitespace-nowrap select-none cursor-pointer hover:bg-paper-deep/60 transition-colors",
       align === "right" && "text-right",
       active ? "text-ink" : "text-ink-muted",
       className,
