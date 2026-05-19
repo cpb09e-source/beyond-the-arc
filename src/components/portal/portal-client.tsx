@@ -163,7 +163,7 @@ export function PortalClient({
   return (
     <div className="space-y-6">
       {/* Filter bar */}
-      <div className="bg-card border border-hairline rounded-lg p-4 lg:p-5">
+      <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-4 lg:p-5">
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Status">
             <Select value={status} onChange={(v) => { setStatus(v); setPage(1); }}>

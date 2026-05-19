@@ -30,20 +30,11 @@ export default async function PortalPage() {
   return (
     <>
       <section className="border-b border-hairline">
-        <div className="mx-auto max-w-[97rem] px-6 lg:px-10 pt-12 pb-10">
-          <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium mb-4">
+        <div className="mx-auto max-w-[97rem] px-6 lg:px-10 pt-12 pb-6">
+          <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
             <span className="h-px w-8 bg-coral" />
             <span>The transfer portal</span>
           </div>
-          <h1 className="font-display text-4xl md:text-5xl lg:text-6xl leading-[1] tracking-tight text-ink mb-3">
-            Who&apos;s moving where,
-            <span className="italic text-coral"> by the numbers.</span>
-          </h1>
-          <p className="text-base md:text-lg text-ink-soft max-w-2xl">
-            Every D-I transfer-portal entry for the current cycle, joined with
-            the player&apos;s most recent season production so you can see
-            who&apos;s actually moving the needle.
-          </p>
         </div>
       </section>
 

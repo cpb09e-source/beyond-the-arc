@@ -13,11 +13,6 @@ export default function CalcPage() {
             If these things happen,
             <span className="italic text-coral"> how often do they win?</span>
           </h1>
-          <p className="text-base md:text-lg text-ink-soft max-w-2xl">
-            Set a few conditions — TOV Diff &gt; 1, 3PM Diff &gt; 1, FB Pts Diff &gt; 1.
-            Hit Calculate. We&apos;ll show you the win rate and the full record across
-            every D-I game in the season where those conditions were true.
-          </p>
         </div>
       </section>
 

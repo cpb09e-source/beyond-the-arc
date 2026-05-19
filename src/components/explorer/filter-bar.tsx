@@ -114,7 +114,7 @@ export function FilterBar({
   const dirty = !sameDraft(draft, { years: urlSpec.years, conf: urlSpec.conf, filters: urlSpec.filters });
 
   return (
-    <div className={cn("bg-card border border-hairline rounded-lg", pending && "opacity-70")}>
+    <div className={cn("bg-paper-deep/25 border border-hairline rounded-xl shadow-sm", pending && "opacity-70")}>
       {/* Top row — primary scope */}
       <div className="flex flex-wrap items-end gap-3 p-4 lg:p-5 border-b border-hairline">
         <Field label="Seasons">

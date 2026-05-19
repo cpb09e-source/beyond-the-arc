@@ -199,7 +199,7 @@ export function CalcClient() {
   return (
     <div className="space-y-6">
       {/* Year + filters */}
-      <div className="bg-card border border-hairline rounded-lg">
+      <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm">
         <div className="flex flex-wrap items-end gap-3 p-4 lg:p-5 border-b border-hairline">
           <Field label="Seasons">
             <MultiYearSelect years={years} onChange={setYears} />
@@ -304,7 +304,7 @@ export function CalcClient() {
 
       {/* Results */}
       {submitted && results && (
-        <div className="bg-card border border-hairline rounded-lg overflow-hidden">
+        <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-hidden">
           <div className="p-6 lg:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-hairline">
             <div>
               <div className="text-xs uppercase tracking-widest text-ink-muted font-medium mb-2">Chance of winning</div>
@@ -399,7 +399,7 @@ export function CalcClient() {
       )}
 
       {!submitted && games.length === 0 && !loading && (
-        <div className="bg-card border border-hairline rounded-lg p-10 text-center text-ink-muted">
+        <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-10 text-center text-ink-muted">
           <p>Game-log data isn&apos;t exported yet for the selected season(s).</p>
           <p className="mt-2 text-xs">
             Run migrations 003 + 004, <code className="bg-paper-deep px-1 rounded">npm run sync:cbb-game-logs</code>,

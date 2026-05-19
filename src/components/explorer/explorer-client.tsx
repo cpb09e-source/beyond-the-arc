@@ -127,8 +127,8 @@ export function ExplorerClient({
     <>
       <FilterBar conferences={conferences} conferenceRankings={conferenceRankings} years={[latestYear]} />
 
-      <div className="bg-card border border-hairline rounded-lg overflow-hidden mt-6">
-        <div className="flex flex-wrap items-end justify-between gap-4 px-4 lg:px-5 py-3 border-b border-hairline">
+      <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-hidden mt-6">
+        <div className="flex flex-wrap items-end justify-between gap-4 px-4 lg:px-5 py-3 border-b border-hairline bg-paper-deep/70">
           <div className="flex items-baseline gap-3 pb-1">
             <span className="font-display text-xl text-ink tabular">
               {rows.length}
@@ -176,7 +176,7 @@ export function ExplorerClient({
                 rows.map((r, i) => (
                   <tr
                     key={`${r.team_id}-${r.team_year}`}
-                    className="border-b border-hairline/60 hover:bg-paper-deep/50 transition-colors"
+                    className={`transition-colors hover:bg-[var(--accent-tint,rgba(237,90,79,0.08))] ${i % 2 === 0 ? "bg-paper/70" : "bg-transparent"}`}
                   >
                     <Td className="text-center text-ink-muted tabular">
                       {i + 1}

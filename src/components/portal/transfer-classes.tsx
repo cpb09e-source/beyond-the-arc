@@ -55,7 +55,7 @@ export function TransferClassesPanel({
   className?: string;
 }) {
   return (
-    <div className={`bg-card border border-hairline rounded-lg p-4 ${className}`}>
+    <div className={`bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-4 ${className}`}>
       <div className="flex items-baseline justify-between mb-3">
         <h3 className="font-display text-lg text-ink">{title}</h3>
       </div>

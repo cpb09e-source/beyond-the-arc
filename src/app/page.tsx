@@ -15,25 +15,16 @@ export default async function HomePage() {
   return (
     <>
       <section className="border-b border-hairline">
-        <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-12 pb-10">
-          <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium mb-4">
+        <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-12 pb-6">
+          <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
             <span className="h-px w-8 bg-coral" />
             <span>The team explorer</span>
           </div>
-          <h1 className="font-display text-4xl md:text-5xl lg:text-6xl leading-[1] tracking-tight text-ink mb-3">
-            Build a query.
-            <span className="italic text-coral"> Find an answer.</span>
-          </h1>
-          <p className="text-base md:text-lg text-ink-soft max-w-2xl">
-            Every D-I men&apos;s team stats since the 2012-13 season. Pick a
-            season or any combination of seasons, narrow by conference, stack
-            as many filters as you want - interactions are instant.
-          </p>
         </div>
       </section>
 
       <section className="mx-auto max-w-7xl px-6 lg:px-10 py-8">
-        <Suspense fallback={<div className="bg-card border border-hairline rounded-lg p-10 text-center text-ink-muted">Loading explorer…</div>}>
+        <Suspense fallback={<div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-10 text-center text-ink-muted">Loading explorer…</div>}>
           <ExplorerClient allTeams={allTeams} confsByYear={confsByYear} />
         </Suspense>
       </section>

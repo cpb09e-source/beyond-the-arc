@@ -12,25 +12,16 @@ export default async function PlayersOverviewPage() {
   return (
     <>
       <section className="border-b border-hairline">
-        <div className="mx-auto max-w-[97rem] px-6 lg:px-10 pt-12 pb-10">
-          <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium mb-4">
+        <div className="mx-auto max-w-[97rem] px-6 lg:px-10 pt-12 pb-6">
+          <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
             <span className="h-px w-8 bg-coral" />
             <span>The player explorer</span>
           </div>
-          <h1 className="font-display text-4xl md:text-5xl lg:text-6xl leading-[1] tracking-tight text-ink mb-3">
-            Every player,
-            <span className="italic text-coral"> indexed.</span>
-          </h1>
-          <p className="text-base md:text-lg text-ink-soft max-w-2xl">
-            ~5,000 D-I players per season, sourced from Bart Torvik. Filter by
-            class, conference, or workload; sort by any per-game stat or
-            shooting split. Switching seasons fetches the year on demand.
-          </p>
         </div>
       </section>
 
       <section className="mx-auto max-w-[97rem] px-6 lg:px-10 py-8 lg:py-10">
-        <Suspense fallback={<div className="bg-card border border-hairline rounded-lg p-10 text-center text-ink-muted">Loading players…</div>}>
+        <Suspense fallback={<div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-10 text-center text-ink-muted">Loading players…</div>}>
           <PlayersClient confsByYear={confsByYear} />
         </Suspense>
       </section>
