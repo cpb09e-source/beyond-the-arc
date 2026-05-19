@@ -1,23 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
 import { Select } from "@/components/select";
-import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
-import type { SearchableOption } from "@/components/explorer/searchable-select";
 import { cn } from "@/lib/utils";
 import { confDisplay } from "@/lib/conf-display";
-import { POWER_CONFS } from "@/lib/conf-tiers";
 import type { CoachRow } from "@/app/coaches/page";
 
-type SortKey = "name" | "team" | "conference" | "active" | "career_wins" | "career_winpct" | "seasons" | "schools" | "composite";
+type SortKey = "name" | "team" | "conference" | "active" | "career_wins" | "career_winpct" | "seasons" | "schools";
 type StatusFilter = "All" | "Active" | "Inactive";
-type TierFilter = "All" | "Power" | "Mid Major";
 
 const STATUS_OPTIONS: StatusFilter[] = ["All", "Active", "Inactive"];
-const TIER_OPTIONS: TierFilter[] = ["All", "Power", "Mid Major"];
 
 function teamSlug(name: string): string {
   return name
@@ -40,115 +34,30 @@ function fmtRecord(w: number, l: number): string {
 }
 
 export function CoachesClient({ rows }: { rows: CoachRow[] }) {
-  // Filter state is mirrored to the URL so pressing back from a coach
-  // profile restores the prior filter view. Initial state hydrates from
-  // ?q=&conf=&team=&tier=&status=&size=&page=&sort= params; subsequent
-  // changes router.replace() back into the URL.
-  const router = useRouter();
-  const pathname = usePathname();
-  const search = useSearchParams();
-
-  const [query, setQuery] = useState(() => search.get("q") ?? "");
-  const [confFilter, setConfFilter] = useState<string[]>(() => {
-    const s = search.get("conf");
-    return s ? s.split(",").filter(Boolean) : [];
-  });
-  const [teamFilter, setTeamFilter] = useState<string[]>(() => {
-    const s = search.get("team");
-    return s ? s.split(",").filter(Boolean) : [];
-  });
-  const [tier, setTier] = useState<TierFilter>(() => {
-    const v = search.get("tier") as TierFilter | null;
-    return v && (v === "All" || v === "Power" || v === "Mid Major") ? v : "All";
-  });
-  const [status, setStatus] = useState<StatusFilter>(() => {
-    const v = search.get("status") as StatusFilter | null;
-    return v && (v === "All" || v === "Active" || v === "Inactive") ? v : "All";
-  });
-  const [pageSize, setPageSize] = useState<number>(() => {
-    const n = Number(search.get("size"));
-    return Number.isFinite(n) && (n === 50 || n === 100 || n === 250) ? n : 100;
-  });
-  const [page, setPage] = useState<number>(() => {
-    const n = Number(search.get("page"));
-    return Number.isFinite(n) && n > 0 ? n : 1;
-  });
-  const [sortBy, setSortBy] = useState<SortKey>(() => {
-    const s = search.get("sort");
-    if (!s) return "composite";
-    const [key] = s.split("-");
-    return (key as SortKey) ?? "composite";
-  });
-  const [sortDir, setSortDir] = useState<"asc" | "desc">(() => {
-    const s = search.get("sort");
-    if (!s) return "desc";
-    const parts = s.split("-");
-    const dir = parts[parts.length - 1];
-    return dir === "asc" ? "asc" : "desc";
-  });
-
-  // Sync filter state → URL on every change. router.replace keeps the
-  // browser history clean (no entry per keystroke); navigation away to a
-  // coach profile is the only history entry, so pressing back restores
-  // the previously filtered view naturally.
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (query) params.set("q", query);
-    if (confFilter.length) params.set("conf", confFilter.join(","));
-    if (teamFilter.length) params.set("team", teamFilter.join(","));
-    if (tier !== "All") params.set("tier", tier);
-    if (status !== "All") params.set("status", status);
-    if (pageSize !== 100) params.set("size", String(pageSize));
-    if (page > 1) params.set("page", String(page));
-    if (sortBy !== "composite" || sortDir !== "desc") {
-      params.set("sort", `${sortBy}-${sortDir}`);
-    }
-    const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [query, confFilter, teamFilter, tier, status, pageSize, page, sortBy, sortDir, pathname, router]);
+  const [query, setQuery] = useState("");
+  const [confFilter, setConfFilter] = useState<string>("All");
+  const [status, setStatus] = useState<StatusFilter>("All");
+  const [pageSize, setPageSize] = useState<number>(100);
+  const [page, setPage] = useState<number>(1);
+  const [sortBy, setSortBy] = useState<SortKey>("active");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const confs = useMemo(() => {
     const s = new Set<string>();
     for (const r of rows) if (r.current_conference) s.add(r.current_conference);
-    return Array.from(s).sort();
-  }, [rows]);
-  const confOptions = useMemo<SearchableOption[]>(
-    () => confs.map((c) => ({ value: c, label: confDisplay(c) })),
-    [confs],
-  );
-  // Team picker options — every distinct team any coach has been at in our
-  // window. Searchable in the dropdown.
-  const teamOptions = useMemo<SearchableOption[]>(() => {
-    const s = new Set<string>();
-    for (const r of rows) for (const t of r.all_teams ?? []) s.add(t);
-    return Array.from(s).sort().map((t) => ({ value: t, label: t }));
+    return ["All", ...Array.from(s).sort()];
   }, [rows]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const confSet = confFilter.length === 0 ? null : new Set(confFilter);
-    const teamSet = teamFilter.length === 0 ? null : new Set(teamFilter);
     return rows.filter((r) => {
       if (status === "Active" && !r.is_active) return false;
       if (status === "Inactive" && r.is_active) return false;
-      // Match against any team the coach has been at in our window, not
-       // just their current team. So picking "Abilene Christian" shows every
-       // coach who's coached there since 2013.
-      if (teamSet) {
-        let hit = false;
-        for (const t of r.all_teams ?? []) if (teamSet.has(t)) { hit = true; break; }
-        if (!hit) return false;
-      }
-      if (confSet && (!r.current_conference || !confSet.has(r.current_conference))) return false;
-      if (tier !== "All") {
-        const isPower = r.current_conference ? POWER_CONFS.has(r.current_conference) : false;
-        if (tier === "Power" && !isPower) return false;
-        if (tier === "Mid Major" && isPower) return false;
-      }
+      if (confFilter !== "All" && r.current_conference !== confFilter) return false;
       if (q && !r.name.toLowerCase().includes(q) && !(r.current_team ?? "").toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [rows, query, confFilter, teamFilter, tier, status]);
+  }, [rows, query, confFilter, status]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -162,7 +71,6 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
         case "career_winpct":  return r.career_win_pct;
         case "seasons":        return r.seasons_count;
         case "schools":        return r.schools_count;
-        case "composite":      return r.composite_score ?? null;
       }
     }
     return [...filtered].sort((a, b) => {
@@ -188,7 +96,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
     if (sortBy === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortBy(k); setSortDir(defaultDir); }
   }
-  function reset() { setQuery(""); setConfFilter([]); setTeamFilter([]); setTier("All"); setStatus("All"); setPage(1); setPageSize(100); }
+  function reset() { setQuery(""); setConfFilter("All"); setStatus("All"); setPage(1); setPageSize(100); }
 
   const activeCount = rows.filter((r) => r.is_active).length;
 
@@ -204,64 +112,23 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
             </Select>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">Team</span>
-            <SearchableMultiSelect
-              value={teamFilter}
-              options={teamOptions}
-              onChange={(v) => { setTeamFilter(v); setPage(1); }}
-              placeholder="Type to filter…"
-              emptyLabel="All teams"
-              ariaLabel="Teams"
-            />
-          </label>
-          <label className="flex flex-col gap-1">
             <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">Conference</span>
-            <SearchableMultiSelect
-              value={confFilter}
-              options={confOptions}
-              onChange={(v) => { setConfFilter(v); setPage(1); }}
-              placeholder="Type to filter…"
-              emptyLabel="All conferences"
-              ariaLabel="Conferences"
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">Tier</span>
-            <Select value={tier} onChange={(v) => { setTier(v as TierFilter); setPage(1); }}>
-              {TIER_OPTIONS.map((t) => (
-                <option key={t} value={t}>
-                  {t === "Power" ? "Power Conferences" : t === "Mid Major" ? "Mid Majors" : t}
-                </option>
-              ))}
+            <Select value={confFilter} onChange={(v) => { setConfFilter(v); setPage(1); }}>
+              {confs.map((c) => <option key={c} value={c}>{c === "All" ? c : confDisplay(c)}</option>)}
             </Select>
           </label>
           <div className="relative flex-1 min-w-[14rem] max-w-md">
-            {/* Search-glass icon on the left — pure SVG so we don't pull in a
-                lucide import just for one input. */}
-            <svg
-              aria-hidden
-              viewBox="0 0 24 24"
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx={11} cy={11} r={7} />
-              <line x1={20} y1={20} x2={16.65} y2={16.65} />
-            </svg>
             <input
               type="search"
               value={query}
               onChange={(e) => { setQuery(e.target.value); setPage(1); }}
               placeholder="Search coach or team"
               aria-label="Search coach or team"
-              className="h-10 w-full pl-9 pr-9 rounded-md border border-ink/15 bg-white text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+              className="h-9 w-full pl-3 pr-8 rounded border border-hairline bg-white text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40"
             />
             {query && (
               <button onClick={() => { setQuery(""); setPage(1); }} aria-label="Clear search"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-base leading-none w-5 h-5 inline-flex items-center justify-center rounded hover:bg-paper-deep">×</button>
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-sm">×</button>
             )}
           </div>
           <button type="button" onClick={reset}
@@ -271,26 +138,19 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
         </div>
       </div>
 
-      {/* Table — headline ledger treatment matches /coaches/<slug> and team pages. */}
-      <div className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5">
-        {/* Top accent rule. */}
-        <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
-        <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-3 flex-wrap">
-          <div>
-            <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
-              Head coaches
-            </h2>
-            <div className="mt-2 text-sm text-ink-muted">
-              <span className="font-display text-xl text-ink tabular leading-none">{sorted.length.toLocaleString()}</span>
-              {sorted.length !== rows.length && (
-                <span className="text-ink-muted"> of {rows.length.toLocaleString()}</span>
-              )}{" "}
+      {/* Table */}
+      <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-hidden">
+        <div className="flex items-end justify-between gap-4 px-4 lg:px-5 py-3 border-b border-hairline bg-paper-deep/70">
+          <div className="flex items-baseline gap-3">
+            <span className="font-display text-xl text-ink tabular">
+              {sorted.length.toLocaleString()}
+              {sorted.length !== rows.length && <span className="text-ink-muted"> of {rows.length.toLocaleString()}</span>}
+            </span>
+            <span className="text-sm text-ink-muted">
               {sorted.length === 1 ? "coach" : "coaches"}
               {status !== "All" && <> · {status.toLowerCase()}</>}
-              {confFilter.length > 0 && (
-                <> · {confFilter.map((c) => confDisplay(c)).join(", ")}</>
-              )}
-            </div>
+              {confFilter !== "All" && <> · {confFilter}</>}
+            </span>
           </div>
           <label className="flex items-center gap-2 text-xs uppercase tracking-widest text-ink-muted font-medium">
             <span>Show</span>
@@ -313,12 +173,11 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                 <ThSort label="Seasons" active={sortBy==="seasons"} dir={sortDir} onClick={() => toggle("seasons","desc")} className="hidden sm:table-cell" />
                 <ThSort label="Record" active={sortBy==="career_wins"} dir={sortDir} onClick={() => toggle("career_wins","desc")} className="hidden sm:table-cell" />
                 <ThSort label="Win" active={sortBy==="career_winpct"} dir={sortDir} onClick={() => toggle("career_winpct","desc")} />
-                <ThSort label="Composite" active={sortBy==="composite"} dir={sortDir} onClick={() => toggle("composite","desc")} />
               </tr>
             </thead>
             <tbody>
               {pageRows.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-12 text-center text-ink-muted">No coaches match these filters.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-ink-muted">No coaches match these filters.</td></tr>
               ) : (
                 pageRows.map((r, i) => (
                   <tr key={`${r.slug}-${i}`} className={cn("transition-colors hover:bg-coral/5", i % 2 === 0 ? "bg-paper/70" : "bg-transparent")}>
@@ -350,9 +209,6 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                     <Td className="text-right tabular text-ink-soft hidden sm:table-cell">{r.seasons_count}</Td>
                     <Td className="text-right tabular text-ink hidden sm:table-cell">{fmtRecord(r.career_wins, r.career_losses)}</Td>
                     <Td className="text-right tabular font-medium text-ink">{fmtPct(r.career_win_pct)}</Td>
-                    <Td className="text-right tabular font-medium text-ink">
-                      {r.composite_score != null ? r.composite_score.toFixed(1) : <span className="text-ink-muted/50">—</span>}
-                    </Td>
                   </tr>
                 ))
               )}

@@ -4,49 +4,19 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { TourneyBadge } from "@/components/tourney-badge";
-import { SeedChip } from "@/components/coaches/seed-chip";
 import type { StaticTeamSeasonRow, ConfRecord } from "@/lib/static-data";
 import { confDisplay } from "@/lib/conf-display";
 import { cn } from "@/lib/utils";
 
-type SortKey = "year" | "conference" | "wins" | "conf_wins" | "coach" | "bta_rank" | "adjoe" | "adjde" | "tourney";
-
-// Pretty-print the normalized tourney-round code from ConfRecord. Codes come
-// from normalizeRound() in static-data: Champion / Runner-Up / F4 / E8 /
-// S16 / R32 / R64 / First Four (or any other-as-is string).
-function roundLabel(round: string | null): string {
-  if (!round) return "";
-  switch (round) {
-    case "Champion":    return "National Champion";
-    case "Runner-Up":   return "Title runner-up";
-    case "F4":          return "Final Four";
-    case "E8":          return "Elite Eight";
-    case "S16":         return "Sweet 16";
-    case "R32":         return "Second Round";
-    case "R64":         return "First Round";
-    case "First Four":  return "First Four";
-    default:            return round;
-  }
-}
-// Sort rank — deeper round = higher number. Lets the column sort by
-// tournament success descending.
-function roundDepth(round: string | null): number {
-  switch (round) {
-    case "Champion":    return 8;
-    case "Runner-Up":   return 7;
-    case "F4":          return 6;
-    case "E8":          return 5;
-    case "S16":         return 4;
-    case "R32":         return 3;
-    case "R64":         return 2;
-    case "First Four":  return 1;
-    default:            return 0;
-  }
-}
+type SortKey = "year" | "conference" | "wins" | "conf_wins" | "coach" | "bta_rank" | "adjoe" | "adjde" | "ts_pct" | "efg_pct";
 
 function fmtNum(x: number | null | undefined, digits = 1): string {
   if (x === null || x === undefined) return "—";
   return x.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+function fmtPct(x: number | null | undefined, digits = 1): string {
+  if (x === null || x === undefined) return "—";
+  return (x * 100).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits }) + "%";
 }
 function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
@@ -75,6 +45,7 @@ export function SortableSeasonsTable({
     const dir = sortDir === "asc" ? 1 : -1;
     const key = (s: StaticTeamSeasonRow): number | string | null => {
       const t = s.team_trank_stats;
+      const c = s.team_cbba_stats;
       const cr = confRecords.get(s.year);
       switch (sortBy) {
         case "year":       return s.year;
@@ -85,7 +56,8 @@ export function SortableSeasonsTable({
         case "bta_rank":   return s.bta_rank ?? Number.POSITIVE_INFINITY;
         case "adjoe":      return t?.adjoe ?? null;
         case "adjde":      return t?.adjde ?? null;
-        case "tourney":    return roundDepth(cr?.tourneyRound ?? null);
+        case "ts_pct":     return c?.ts_pct ?? null;
+        case "efg_pct":    return c?.efg_pct ?? null;
       }
     };
     return [...seasons].sort((a, b) => {
@@ -109,20 +81,22 @@ export function SortableSeasonsTable({
         <table className="w-full text-sm">
           <thead className="bg-paper-deep/70 text-left">
             <tr>
-              <ThSort label="Season"     active={sortBy==="year"} dir={sortDir} onClick={() => toggle("year","desc")} align="left" />
-              <ThSort label="Conf"       active={sortBy==="conference"} dir={sortDir} onClick={() => toggle("conference","asc")} align="left" />
-              <ThSort label="Record"     active={sortBy==="wins"} dir={sortDir} onClick={() => toggle("wins","desc")} align="left" />
-              <ThSort label="Conf Rec"   active={sortBy==="conf_wins"} dir={sortDir} onClick={() => toggle("conf_wins","desc")} align="left" />
-              <ThSort label="Tournament" active={sortBy==="tourney"} dir={sortDir} onClick={() => toggle("tourney","desc")} align="left" />
-              <ThSort label="Coach"      active={sortBy==="coach"} dir={sortDir} onClick={() => toggle("coach","asc")} align="left" />
-              <ThSort label="BTA Rank"   active={sortBy==="bta_rank"} dir={sortDir} onClick={() => toggle("bta_rank","asc")} />
-              <ThSort label="Adj ORtg"   active={sortBy==="adjoe"} dir={sortDir} onClick={() => toggle("adjoe","desc")} />
-              <ThSort label="Adj DRtg"   active={sortBy==="adjde"} dir={sortDir} onClick={() => toggle("adjde","asc")} />
+              <ThSort label="Season"   active={sortBy==="year"} dir={sortDir} onClick={() => toggle("year","desc")} align="left" />
+              <ThSort label="Conf"     active={sortBy==="conference"} dir={sortDir} onClick={() => toggle("conference","asc")} align="left" />
+              <ThSort label="Record"   active={sortBy==="wins"} dir={sortDir} onClick={() => toggle("wins","desc")} align="left" />
+              <ThSort label="Conf Rec" active={sortBy==="conf_wins"} dir={sortDir} onClick={() => toggle("conf_wins","desc")} align="left" />
+              <ThSort label="Coach"    active={sortBy==="coach"} dir={sortDir} onClick={() => toggle("coach","asc")} align="left" />
+              <ThSort label="BTA Rank" active={sortBy==="bta_rank"} dir={sortDir} onClick={() => toggle("bta_rank","asc")} />
+              <ThSort label="Adj ORtg" active={sortBy==="adjoe"} dir={sortDir} onClick={() => toggle("adjoe","desc")} />
+              <ThSort label="Adj DRtg" active={sortBy==="adjde"} dir={sortDir} onClick={() => toggle("adjde","asc")} />
+              <ThSort label="TS%"      active={sortBy==="ts_pct"} dir={sortDir} onClick={() => toggle("ts_pct","desc")} />
+              <ThSort label="eFG%"     active={sortBy==="efg_pct"} dir={sortDir} onClick={() => toggle("efg_pct","desc")} />
             </tr>
           </thead>
           <tbody>
             {sorted.map((s, i) => {
               const t = s.team_trank_stats;
+              const c = s.team_cbba_stats;
               const cr = confRecords.get(s.year);
               const isCurrent = s.year === currentYear;
               return (
@@ -142,9 +116,6 @@ export function SortableSeasonsTable({
                     >
                       <TeamLogo name={s.name} size={20} />
                       <span className="font-medium text-ink group-hover:text-coral transition-colors">{seasonLabel(s.year)}</span>
-                      {/* NCAA tournament seed (tier-colored). Pairs naturally
-                          with the F4/Champion badge that follows when present. */}
-                      {cr?.tourneySeed != null && <SeedChip seed={cr.tourneySeed} size="sm" />}
                       <TourneyBadge teamName={s.name} year={s.year} />
                     </Link>
                   </Td>
@@ -152,15 +123,6 @@ export function SortableSeasonsTable({
                   <Td className="tabular font-semibold text-ink">{t?.record ?? "—"}</Td>
                   <Td className="tabular text-ink-soft">
                     {cr && cr.wins !== null && cr.losses !== null ? `${cr.wins}-${cr.losses}` : "—"}
-                  </Td>
-                  <Td className="text-ink-soft">
-                    {cr?.tourneyRound ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded bg-coral/10 text-coral text-[0.7rem] font-medium tabular whitespace-nowrap">
-                        {roundLabel(cr.tourneyRound)}
-                      </span>
-                    ) : (
-                      <span className="text-ink-muted/50">—</span>
-                    )}
                   </Td>
                   <Td className="whitespace-nowrap">
                     {cr?.coachName ? (
@@ -178,6 +140,8 @@ export function SortableSeasonsTable({
                   <Td align="right" className="tabular text-coral font-medium">{s.bta_rank !== null ? `#${s.bta_rank}` : "—"}</Td>
                   <Td align="right" className="tabular">{fmtNum(t?.adjoe ?? null, 1)}</Td>
                   <Td align="right" className="tabular">{fmtNum(t?.adjde ?? null, 1)}</Td>
+                  <Td align="right" className="tabular">{fmtPct(c?.ts_pct ?? null)}</Td>
+                  <Td align="right" className="tabular">{fmtPct(c?.efg_pct ?? null)}</Td>
                 </tr>
               );
             })}

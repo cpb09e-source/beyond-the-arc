@@ -28,13 +28,13 @@ export function Select({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-label={ariaLabel}
-        className="h-10 w-full pl-3 pr-8 rounded-md border border-ink/15 bg-white text-ink text-sm appearance-none capitalize shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+        className="h-9 w-full pl-2 pr-7 rounded border border-hairline bg-white text-ink text-sm appearance-none capitalize focus:outline-none focus:ring-2 focus:ring-coral/40"
       >
         {children}
       </select>
       <span
         aria-hidden
-        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted text-[0.7rem]"
+        className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted text-xs"
       >
         ▾
       </span>

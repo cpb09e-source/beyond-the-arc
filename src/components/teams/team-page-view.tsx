@@ -6,7 +6,6 @@ import { SortableSeasonsTable } from "@/components/teams/sortable-seasons-table"
 import { SortableRosterTable } from "@/components/teams/sortable-roster-table";
 import { DistributionPanel, type DistributionRank } from "@/components/teams/distribution-panel";
 import { ScheduleTicker } from "@/components/teams/schedule-ticker";
-import { FindGameTrigger } from "@/components/teams/find-game-trigger";
 import { TourneyTimeline } from "@/components/teams/tourney-timeline";
 import { PlayerHeadshotStrip } from "@/components/teams/player-headshot-strip";
 import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog } from "@/lib/static-data";
@@ -207,7 +206,7 @@ export function TeamPageView({
   return (
     <div style={cssVars}>
       {/* Hero */}
-      <section>
+      <section className="border-b border-hairline">
         <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-10 pb-8">
           <div className="flex flex-wrap items-center gap-6 lg:gap-10">
             <TeamLogo name={current.name} size={96} className="rounded-md" />
@@ -251,34 +250,21 @@ export function TeamPageView({
                     Avg BTA Rank, last {last5Ranks.length} seasons: #{avgRank}
                   </span>
                 )}
-                {(() => {
-                  // The team-seasons export only fills `coach` for the current
-                  // year; historical seasons rely on the coach-history lookup
-                  // we already thread through via confRecords. Fall back to
-                  // that so /teams/<slug>/<year> pages show the coach too.
-                  const coachName = current.coach ?? confRecords.get(current.year)?.coachName ?? null;
-                  if (!coachName) return null;
-                  return (
-                    <span className="text-sm text-ink-muted">
-                      Coach:{" "}
-                      <Link
-                        href={`/coaches/${coachSlug(coachName)}/`}
-                        className={
-                          accentColor
-                            ? "text-[color:var(--accent)] hover:opacity-80 transition-opacity"
-                            : "text-ink hover:text-coral transition-colors"
-                        }
-                      >
-                        {coachName}
-                      </Link>
-                    </span>
-                  );
-                })()}
-                <FindGameTrigger
-                  teamId={current.id}
-                  teamName={team.name}
-                  defaultYear={current.year}
-                />
+                {current.coach && (
+                  <span className="text-sm text-ink-muted">
+                    Coach:{" "}
+                    <Link
+                      href={`/coaches/${coachSlug(current.coach)}/`}
+                      className={
+                        accentColor
+                          ? "text-[color:var(--accent)] hover:opacity-80 transition-opacity"
+                          : "text-ink hover:text-coral transition-colors"
+                      }
+                    >
+                      {current.coach}
+                    </Link>
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -361,41 +347,18 @@ export function TeamPageView({
         )}
       </section>
 
-      {/* BY SEASON — headline ledger. Mirrors the coach page's "Season by
-          season" treatment so cross-page recognition is consistent. */}
       <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-12 mb-20">
-        <div className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5">
-          {/* Top accent rule — coral bar marks this table as the headline. */}
-          <div
-            className="h-1 w-full"
-            style={{
-              backgroundImage: accentColor
-                ? `linear-gradient(to right, var(--accent), var(--accent), color-mix(in srgb, var(--accent) 60%, transparent))`
-                : "linear-gradient(to right, var(--color-coral), var(--color-coral), color-mix(in srgb, var(--color-coral) 60%, transparent))",
-            }}
-          />
-          <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-3">
-            <div>
-              <div className="text-[0.6rem] uppercase tracking-[0.18em] font-bold mb-1.5 flex items-center gap-2"
-                   style={{ color: accentColor ?? undefined }}>
-                <span className="h-px w-6" style={{ backgroundColor: accentColor ?? "var(--color-coral)" }} />
-                Full record
-              </div>
-              <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">By season</h2>
-            </div>
-            <span className="text-xs tabular text-ink-muted whitespace-nowrap">
-              <span className="font-display text-2xl text-ink tabular leading-none">{chronological.length}</span>{" "}
-              {chronological.length === 1 ? "season" : "seasons"}
-            </span>
-          </div>
-          <SortableSeasonsTable
-            seasons={chronological}
-            currentYear={current.year}
-            slug={slug}
-            confRecords={confRecords}
-            accentColor={accentColor}
-          />
+        <div className="flex items-baseline justify-between mb-6">
+          <h2 className="font-display text-3xl text-ink">By season</h2>
+          <span className="text-xs uppercase tracking-widest text-ink-muted">click headers to sort</span>
         </div>
+        <SortableSeasonsTable
+          seasons={chronological}
+          currentYear={current.year}
+          slug={slug}
+          confRecords={confRecords}
+          accentColor={accentColor}
+        />
       </section>
     </div>
   );

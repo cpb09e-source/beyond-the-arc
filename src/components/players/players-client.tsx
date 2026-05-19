@@ -300,51 +300,31 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     <>
       <PlayerFilterBar conferences={conferences} />
 
-      {/* Headline ledger — coral accent rule, ring + shadow, big display
-          title. Mirrors /coaches "Head coaches" and /teams "By season" cards
-          so the look reads consistently across the site. */}
-      <div className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 mt-8">
-        <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
-        <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-4 flex-wrap">
-          <div>
-            <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
-              Leaderboard
-            </h2>
-            <div className="mt-2 text-sm text-ink-muted">
-              <span className="font-display text-xl text-ink tabular leading-none">
-                {loading ? "—" : players.length.toLocaleString()}
-              </span>{" "}
-              {loading ? "loading…" : players.length === 1 ? "player" : "players"}
-            </div>
+      <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-hidden mt-6">
+        <div className="flex items-baseline justify-between gap-4 px-4 lg:px-5 py-3 border-b border-hairline bg-paper-deep/70">
+          <div className="flex items-baseline gap-3">
+            <span className="font-display text-xl text-ink tabular">
+              {loading ? "—" : players.length.toLocaleString()}
+            </span>
+            <span className="text-sm text-ink-muted">
+              {loading ? "loading…" : (players.length === 1 ? "player" : "players")}
+            </span>
           </div>
-          <div className="relative shrink-0">
-            <svg
-              aria-hidden
-              viewBox="0 0 24 24"
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx={11} cy={11} r={7} />
-              <line x1={20} y1={20} x2={16.65} y2={16.65} />
-            </svg>
+          <div className="relative flex-shrink-0">
             <input
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search players…"
               aria-label="Search players by name"
-              className="h-10 w-56 sm:w-72 pl-9 pr-9 rounded-md border border-ink/15 bg-white text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+              className="h-9 w-56 sm:w-64 pl-3 pr-8 rounded border border-hairline bg-white text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40"
             />
             {query && (
               <button
                 type="button"
                 onClick={() => setQuery("")}
                 aria-label="Clear search"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-base leading-none w-5 h-5 inline-flex items-center justify-center rounded hover:bg-paper-deep"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-sm"
               >
                 ×
               </button>
@@ -424,32 +404,10 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* Methodology — demoted out of the headline card so the leaderboard
-          reads clean. Lives below as a quiet caption block where curious
-          readers can find it without it dominating the page. */}
-      <details className="mt-6 group">
-        <summary className="cursor-pointer inline-flex items-center gap-2 text-xs uppercase tracking-widest text-ink-muted font-medium hover:text-ink transition-colors">
-          <span className="h-px w-6 bg-ink-muted/40 group-hover:bg-coral transition-colors" />
-          How BTA PRTG is calculated
-          <span aria-hidden className="text-[0.6rem] text-ink-muted/60 group-open:rotate-90 transition-transform">▸</span>
-        </summary>
-        <p className="mt-3 text-xs text-ink-muted leading-relaxed max-w-3xl">
-          BTA PRTG is a per-season z-composite of PIR (EuroLeague Performance
-          Index Rating, per game minus turnovers, weighted 69% to dampen
-          high-usage scorer bias) and Bart Torvik&apos;s PORPAG (Points Over
-          Replacement Per Adjusted Game), scaled &times; 20. A conference
-          multiplier adjusts for strength of schedule: top-tier conferences
-          (SEC, Big 12, Big Ten, ACC, Big East) get a +19% boost, with
-          progressively larger reductions for weaker leagues. Players on a
-          top-32 D-I team for 2025-26 receive an additional +8% bump, and
-          players on a top-5 record team within a Tier 1 conference receive
-          an extra +6% on top of that. Missing terms are skipped so
-          partial-data players still get scored. Players with fewer than 8
-          games, 10 MPG, or 3 PPG are hidden.
+        <p className="px-4 lg:px-5 py-3 text-[0.65rem] text-ink-muted border-t border-hairline">
+          BTA PRTG is a per-season z-composite of PIR (EuroLeague Performance Index Rating, per game minus turnovers, weighted 69% to dampen high-usage scorer bias) and Bart Torvik&apos;s PORPAG (Points Over Replacement Per Adjusted Game), scaled &times; 20. A conference multiplier then adjusts the score for strength of schedule: top-tier conferences (SEC, Big 12, Big Ten, ACC, Big East) get a +19% boost, with progressively larger reductions for weaker leagues. Players on a top-32 D-I team for 2025-26 receive an additional +8% bump, and players on a top-5 record team within a Tier 1 conference receive an extra +6% on top of that. Missing terms are skipped so partial-data players still get scored. Players with fewer than 8 games, 10 MPG, or 3 PPG are hidden.
         </p>
-      </details>
+      </div>
     </>
   );
 }

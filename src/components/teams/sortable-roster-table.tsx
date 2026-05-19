@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { NbaBadge } from "@/components/coaches/nba-badge";
-import { loadNbaDraftees, normNbaName, type NbaDraftee } from "@/lib/nba-draftees";
 
 type RosterEntry = {
   id: number;
@@ -85,16 +83,6 @@ export function SortableRosterTable({
     else { setSortBy(k); setSortDir(defaultDir); }
   }
 
-  // Lazy-load the NBA-players lookup so we can drop a small "NBA" pill next
-  // to any roster player who was drafted or has logged an NBA game. Module-
-  // level cache means this fetch happens once per page session.
-  const [draftees, setDraftees] = useState<Record<string, NbaDraftee>>({});
-  useEffect(() => {
-    let cancelled = false;
-    loadNbaDraftees().then((d) => { if (!cancelled) setDraftees(d); });
-    return () => { cancelled = true; };
-  }, []);
-
   return (
     <div className="border border-hairline rounded-xl shadow-sm overflow-hidden bg-paper-deep/25">
       <div className="overflow-x-auto">
@@ -114,9 +102,7 @@ export function SortableRosterTable({
             </tr>
           </thead>
           <tbody>
-            {sorted.map((p, i) => {
-              const draftee = draftees[normNbaName(p.name)];
-              return (
+            {sorted.map((p, i) => (
               <tr
                 key={p.id}
                 className={cn(
@@ -132,7 +118,6 @@ export function SortableRosterTable({
                   ) : (
                     <span className="font-medium text-ink">{p.name}</span>
                   )}
-                  {draftee && <NbaBadge year={draftee.year} pick={draftee.pick} team={draftee.team} />}
                 </Td>
                 <Td className="text-ink-muted">{p.class ?? "—"}</Td>
                 <Td className="text-ink-muted whitespace-nowrap">{p.height ?? "—"}</Td>
@@ -144,8 +129,7 @@ export function SortableRosterTable({
                 <Td align="right" className="tabular">{fmtPct(p.fg3_pct)}</Td>
                 <Td align="right" className="tabular">{fmtPct(p.ft_pct)}</Td>
               </tr>
-              );
-            })}
+            ))}
           </tbody>
         </table>
       </div>

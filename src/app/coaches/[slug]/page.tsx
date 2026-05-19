@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Trophy } from "lucide-react";
 import { TeamLogo } from "@/components/team-logo";
 import type { CoachSeason, TourneyRound } from "@/lib/coaches";
+import { SeasonHeatStrip } from "@/components/coaches/season-heat-strip";
 import { TournamentSuccess } from "@/components/coaches/tournament-success";
 import { SeasonBySeasonTable } from "@/components/coaches/season-by-season-table";
 import {
@@ -14,26 +15,7 @@ import {
   tournamentWinsRank,
   LATEST_YEAR,
 } from "@/lib/coaches";
-import { readAllTeams, readGameLogsForYear, type GameLog } from "@/lib/static-data";
-import { ScheduleTicker } from "@/components/teams/schedule-ticker";
-import { CoachSeasonPick } from "@/components/coaches/coach-season-pick";
-import { CoachFindGameTrigger } from "@/components/coaches/coach-find-game-trigger";
 import { confDisplay } from "@/lib/conf-display";
-import { getTeamColors } from "@/lib/team-colors";
-
-// Compact label per TourneyRound. R64/R32 → R1/R2 to match conventional
-// fan parlance; Champion + Runner-up both label as NC since the W/L pill on
-// the game cell already disambiguates winner vs loser of the title game.
-const SHORT_ROUND: Record<string, string> = {
-  "First Four": "FF",
-  "R64": "R1",
-  "R32": "R2",
-  "Sweet 16": "S16",
-  "Elite Eight": "E8",
-  "Final Four": "F4",
-  "Runner-up": "NC",
-  "Champion": "NC",
-};
 
 function teamSlug(name: string): string {
   return name
@@ -80,62 +62,6 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
   const gamesLookup = buildGamesByTeamYear(tournamentGames);
   const gamesForSeason = (team: string, year: number) => gamesForTeamYear(gamesLookup, team, year);
 
-  // Resolve every (team, year) the coach has been at into team-id form. Used
-  // by the year-pick dropdown (to route to /teams/<slug>/<year>/) and by the
-  // coach-scoped Find-a-Game modal (to filter games to just this coach's
-  // tenure). One sweep through readAllTeams handles both.
-  const allTeams = await readAllTeams();
-  const coachTeamYears: Array<{ team: string; teamSlug: string; year: number; teamId: number }> = [];
-  for (const s of profile.by_year) {
-    const teamRow = allTeams.find((t) => t.name === s.team && t.year === s.year);
-    if (!teamRow) continue;
-    coachTeamYears.push({
-      team: s.team,
-      teamSlug: teamRow.name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
-      year: s.year,
-      teamId: teamRow.id,
-    });
-  }
-
-  // March Madness resume — every NCAA tournament game the coach has been on
-  // the bench for, ordered chronologically. We resolve each (team, year) →
-  // team_id, then cross-reference the year's game-logs by date so the modal
-  // has the full GameLog (with cbba_game_id for the box score) rather than
-  // the slimmer TourneyGame shape.
-  let marchGames: GameLog[] = [];
-  {
-    // Newest season leftmost — the coach's most recent tournament run reads
-    // first, with their earlier appearances trailing off to the right. Within
-    // each season we keep games in chronological round order (R1 → NC) so the
-    // arc inside a single cluster still reads left-to-right naturally.
-    const seededSeasons = [...profile.by_year]
-      .filter((s) => s.seed !== null)
-      .sort((a, b) => b.year - a.year);
-    if (seededSeasons.length > 0) {
-      for (const season of seededSeasons) {
-        const tGames = gamesForSeason(season.team, season.year);
-        if (tGames.length === 0) continue;
-        const teamRow = allTeams.find(
-          (t) => t.name === season.team && t.year === season.year,
-        );
-        if (!teamRow) continue;
-        const yearGameLogs = await readGameLogsForYear(season.year);
-        for (const tg of tGames) {
-          if (!tg.date) continue;
-          const match = yearGameLogs.find(
-            (gl) => gl.team_id === teamRow.id && gl.game_date === tg.date,
-          );
-          if (match) {
-            marchGames.push({
-              ...match,
-              tournamentRound: SHORT_ROUND[tg.round] ?? tg.round,
-            });
-          }
-        }
-      }
-    }
-  }
-
   const totalGames = profile.career_wins + profile.career_losses;
   const ncaaAppearances = profile.by_year.filter((s) => s.seed !== null).length;
   const avgWinsPerSeason = profile.seasons_count > 0 ? (profile.career_wins / profile.seasons_count) : 0;
@@ -152,14 +78,6 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
   const sortedByWins = [...allProfiles].sort((a, b) => b.career_wins - a.career_wins);
   const winsRank = sortedByWins.findIndex((p) => p.slug === profile.slug) + 1;
   const winsRankTotal = sortedByWins.length;
-
-  // Composite résumé rank — where this coach stands across the full pool by
-  // the multi-component score (see computeCompositeScore in lib/coaches.ts).
-  const sortedByComposite = [...allProfiles].sort(
-    (a, b) => (b.composite_score ?? 0) - (a.composite_score ?? 0),
-  );
-  const compositeRank = sortedByComposite.findIndex((p) => p.slug === profile.slug) + 1;
-  const compositeRankTotal = sortedByComposite.length;
   const eligibleForPctRank = allProfiles.filter((p) => p.seasons_count >= 3 && p.career_win_pct !== null);
   eligibleForPctRank.sort((a, b) => (b.career_win_pct ?? 0) - (a.career_win_pct ?? 0));
   const pctRank = eligibleForPctRank.findIndex((p) => p.slug === profile.slug) + 1;
@@ -185,10 +103,8 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
   return (
     <>
       {/* HERO */}
-      <section className="border-b border-hairline relative">
-        {/* Subtle backdrop: hairline grid that fades down. Contained by
-            absolute inset-0 so it stays inside the section without needing
-            overflow-hidden (which would clip the year-picker popover). */}
+      <section className="border-b border-hairline relative overflow-hidden">
+        {/* Subtle backdrop: hairline grid that fades down. No gradient text. */}
         <div className="absolute inset-0 pointer-events-none opacity-[0.04]"
              style={{ backgroundImage: "linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
         <div className="relative mx-auto max-w-[97rem] px-6 lg:px-10 pt-12 pb-12">
@@ -198,55 +114,29 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
             <span className="text-ink-muted">/</span>
             <span className="text-ink-muted">{profile.is_active ? "Active" : "Inactive"}</span>
           </div>
-          <div className="flex flex-wrap items-end gap-4 mb-5">
-            <h1 className="font-display text-5xl md:text-6xl lg:text-7xl leading-[0.95] tracking-tight text-ink">
-              {profile.name}
-            </h1>
-            {coachTeamYears.length > 0 && (
-              <CoachSeasonPick
-                seasons={coachTeamYears.map((s) => ({ team: s.team, teamSlug: s.teamSlug, year: s.year }))}
-              />
+          <h1 className="font-display text-5xl md:text-6xl lg:text-7xl leading-[0.95] tracking-tight text-ink mb-5">
+            {profile.name}
+          </h1>
+          <div className="flex flex-wrap items-center gap-3 text-base md:text-lg">
+            {profile.is_active && profile.current_team ? (
+              <span className="inline-flex items-center gap-2 text-ink-soft">
+                Head coach at{" "}
+                <Link href={`/teams/${teamSlug(profile.current_team)}/`} className="inline-flex items-center gap-2 font-medium text-ink hover:text-coral transition-colors">
+                  <TeamLogo name={profile.current_team} size={20} />
+                  {profile.current_team}
+                </Link>
+                {profile.current_conference && <span className="text-ink-muted">· {confDisplay(profile.current_conference)}</span>}
+              </span>
+            ) : (
+              <span className="text-ink-soft">
+                Last coached at <span className="font-medium text-ink">{profile.current_team ?? "—"}</span>
+                {profile.current_year && <span className="text-ink-muted"> · {seasonLabel(profile.current_year)}</span>}
+              </span>
             )}
           </div>
-          {(() => {
-            // Find-a-Game CTA sits inline with the "Head coach at" line,
-            // colored with the coach's current team accent (Kansas blue
-            // for Self, etc.).
-            const tc = profile.current_team ? getTeamColors(profile.current_team) : null;
-            const showFindBtn = coachTeamYears.length > 0;
-            return (
-              <div className="flex flex-wrap items-center gap-3 text-base md:text-lg">
-                {profile.is_active && profile.current_team ? (
-                  <span className="inline-flex items-center gap-2 text-ink-soft">
-                    Head coach at{" "}
-                    <Link href={`/teams/${teamSlug(profile.current_team)}/`} className="inline-flex items-center gap-2 font-medium text-ink hover:text-coral transition-colors">
-                      <TeamLogo name={profile.current_team} size={20} />
-                      {profile.current_team}
-                    </Link>
-                  </span>
-                ) : (
-                  <span className="text-ink-soft">
-                    Last coached at <span className="font-medium text-ink">{profile.current_team ?? "—"}</span>
-                    {profile.current_year && <span className="text-ink-muted"> · {seasonLabel(profile.current_year)}</span>}
-                  </span>
-                )}
-                {showFindBtn && (
-                  <CoachFindGameTrigger
-                    coachName={profile.name}
-                    teamYears={coachTeamYears.map((s) => ({ teamId: s.teamId, teamName: s.team, year: s.year }))}
-                    defaultYear={profile.current_year ?? LATEST_YEAR}
-                    accentColor={tc?.primary ?? null}
-                    accentOnPrimary={tc?.onPrimary ?? null}
-                  />
-                )}
-              </div>
-            );
-          })()}
-          {conferences.length > 0 && (
-            <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium mr-1">
-                {conferences.length === 1 ? "Conference" : "Conferences"}
-              </span>
+          {conferences.length > 1 && (
+            <div className="flex flex-wrap items-center gap-2 mt-5 text-xs">
+              <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium mr-1">Conferences</span>
               {conferences.map((c) => (
                 <span key={c} className="inline-flex items-center px-2 py-0.5 rounded border border-hairline bg-paper-deep/40 text-ink-soft tabular">
                   {confDisplay(c)}
@@ -257,25 +147,15 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
         </div>
       </section>
 
-      {/* MARCH MADNESS RESUME — every NCAA tournament game on the bench (preview, gated by slug) */}
-      {marchGames.length > 0 && (
+      {/* SEASON HEAT STRIP — career signature at a glance */}
+      {profile.by_year.length >= 2 && (
         <section className="mx-auto max-w-[97rem] px-6 lg:px-10 pt-8">
-          <ScheduleTicker
-            games={marchGames}
-            teamName={profile.current_team ?? ""}
-            eyebrow="March Madness resume"
-            helpText="click + drag to scroll · click a game for the box score"
-            helpTextMobile="swipe to scroll · tap a game"
-            showSeasonLabels
-          />
+          <SeasonHeatStrip seasons={profile.by_year} />
         </section>
       )}
 
-      {/* SEASON HEAT STRIP — hidden for now (component preserved at
-          [src/components/coaches/season-heat-strip.tsx] for easy revert). */}
-
       {/* STAT TILES */}
-      <section className="mx-auto max-w-[97rem] px-6 lg:px-10 pt-8">
+      <section className={`mx-auto max-w-[97rem] px-6 lg:px-10 ${profile.by_year.length >= 2 ? "pt-5" : "pt-8"}`}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-hairline border border-hairline rounded-lg overflow-hidden">
           <StatTile
             label="Career W-L"
@@ -291,15 +171,9 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
             rank={pctRankEligible ? `${ordinal(pctRank)} of ${pctRankTotal} with 3+ seasons` : undefined}
           />
           <StatTile
-            label="Composite Rank"
-            value={compositeRank > 0 ? `#${compositeRank}` : "—"}
-            rank={compositeRank > 0 ? `of ${compositeRankTotal.toLocaleString()} coaches` : undefined}
-            sub={
-              profile.composite_score != null
-                ? `${profile.composite_score.toFixed(1)} score · ${profile.seasons_count} ${profile.seasons_count === 1 ? "season" : "seasons"}${profile.schools_count > 1 ? ` · ${profile.schools_count} programs` : ""}`
-                : `${profile.seasons_count} ${profile.seasons_count === 1 ? "season" : "seasons"}${profile.schools_count > 1 ? ` · ${profile.schools_count} programs` : ""}`
-            }
-            tone="coral"
+            label="Seasons"
+            value={String(profile.seasons_count)}
+            sub={profile.schools_count === 1 ? `at 1 program` : `across ${profile.schools_count} programs`}
           />
           <StatTile
             label="20+ win seasons"
@@ -354,24 +228,15 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
         </section>
       )}
 
-      {/* YEAR-BY-YEAR — headline ledger. Heavier chrome than the other
-          cards on the page so this anchors the page as the canonical record. */}
-      <section className="mx-auto max-w-[97rem] px-6 lg:px-10 mt-8">
-        <div className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5">
-          {/* Top accent rule — coral bar marks this table as the page's headline. */}
-          <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
-          <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-3">
+      {/* YEAR-BY-YEAR */}
+      <section className="mx-auto max-w-[97rem] px-6 lg:px-10 mt-6">
+        <div className="bg-card border border-hairline rounded-lg overflow-hidden">
+          <div className="px-5 lg:px-7 py-4 border-b border-hairline flex items-baseline justify-between gap-3">
             <div>
-              <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
-                <span className="h-px w-6 bg-coral" />
-                Full record
-              </div>
-              <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Season by season</h2>
+              <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium mb-1">Full record</div>
+              <h2 className="font-display text-2xl text-ink">Season by season</h2>
             </div>
-            <span className="text-xs tabular text-ink-muted whitespace-nowrap">
-              <span className="font-display text-2xl text-ink tabular leading-none">{profile.by_year.length}</span>{" "}
-              {profile.by_year.length === 1 ? "season" : "seasons"}
-            </span>
+            <span className="text-xs text-ink-muted">{profile.by_year.length} {profile.by_year.length === 1 ? "season" : "seasons"}</span>
           </div>
           <SeasonBySeasonTable seasons={profile.by_year} />
         </div>

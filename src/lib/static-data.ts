@@ -172,21 +172,16 @@ export async function readPlayerRanks(bartId: number): Promise<PlayerRanks | nul
 }
 
 /**
- * Set of bart_player_ids that get a profile page. This is the union of:
+ * Set of bart_player_ids that have a rank file (i.e. cleared the
+ * 18g/18mpg/5ppg + position-bucket eligibility floor). Drives two things:
  *
- *   1. Cohort-ranked players — those with a `player-ranks/<id>.json` file
- *      (cleared the 18g/18mpg/5ppg + position-bucket eligibility floor in
- *      compute-player-ranks.mts).
- *   2. Freshmen — anyone whose most-recent season carries class === "Fr".
- *      They're always clickable so a current-year freshman who hasn't yet
- *      accrued the minutes/PPG to land in a cohort still has a profile.
- *      Their "Where they rank" section just won't render (no rank file).
+ *   - generateStaticParams() in /players/[id]/page.tsx — we only emit a
+ *     profile page for ranked players, so the ~13k thin profiles aren't
+ *     pre-rendered.
+ *   - Roster / table render logic — only ranked players' names link to a
+ *     profile; unranked render as plain text.
  *
- * Drives:
- *   - generateStaticParams() in /players/[id]/page.tsx
- *   - Roster / table render logic (clickable name vs plain text).
- *
- * Module-level cache so the directory + per-year scans happen once per build.
+ * Module-level cache so the directory read happens once per build process.
  */
 // Internal helper: name-derived slug. Mirrors the `coachSlug()` used by
 // /coaches/[slug]/page.tsx's generateStaticParams, so links from the team
@@ -304,10 +299,6 @@ export type GameLog = {
   ts_pct?: number | null;
   fg3_pct?: number | null;
   ft_pct?: number | null;
-  // Optional round label, attached only when the GameLog is being rendered
-  // inside a tournament-themed ticker (e.g. March Madness resume). One of
-  // "R1" "R2" "S16" "E8" "F4" "NC" — see SHORT_ROUND in coach page.
-  tournamentRound?: string | null;
 };
 const _gameLogsCache = new Map<number, GameLog[]>();
 export async function readGameLogsForYear(year: number): Promise<GameLog[]> {
@@ -322,55 +313,23 @@ export async function readGameLogsForYear(year: number): Promise<GameLog[]> {
   }
 }
 
-// Earliest season-year we have player data for. Used by the freshman pass in
-// readRankedPlayerIds — keep in sync with the export pipeline.
-const FRESHMAN_SCAN_START_YEAR = 2013;
-
 let _rankedPlayerIdsCache: Set<number> | null = null;
 export async function readRankedPlayerIds(): Promise<Set<number>> {
   if (_rankedPlayerIdsCache) return _rankedPlayerIdsCache;
-  const ids = new Set<number>();
   try {
     const files = await fs.readdir(path.join(DATA, "player-ranks"));
+    const ids = new Set<number>();
     for (const f of files) {
       if (!f.endsWith(".json")) continue;
       const n = parseInt(f.replace(".json", ""), 10);
       if (Number.isFinite(n)) ids.add(n);
     }
-  } catch { /* no rank files yet — fall through to freshman pass */ }
-
-  // Freshman pass: walk every year's players-by-year file, track each
-  // bart_player_id's MOST RECENT (year, class). If their latest season was a
-  // freshman year, they get a profile page regardless of stat thresholds.
-  // Captures both current-year freshmen and one-and-done careers.
-  try {
-    const latestByBartId = new Map<number, { year: number; cls: string | null }>();
-    for (let year = FRESHMAN_SCAN_START_YEAR; year <= LATEST_PLAYER_YEAR; year++) {
-      let list: StaticPlayerRow[] = [];
-      try {
-        list = await readJson<StaticPlayerRow[]>(`players-by-year/${year}.json`);
-      } catch { continue; }
-      for (const p of list) {
-        const bartId = p.bart_player_id;
-        if (bartId == null || !Number.isFinite(bartId)) continue;
-        const prev = latestByBartId.get(bartId);
-        if (!prev || prev.year < year) {
-          latestByBartId.set(bartId, { year, cls: p.class ?? null });
-        }
-      }
-    }
-    for (const [bartId, latest] of latestByBartId) {
-      if (latest.cls === "Fr") ids.add(bartId);
-    }
-  } catch { /* tolerate any I/O hiccup — ranked set is still useful */ }
-
-  _rankedPlayerIdsCache = ids;
-  return ids;
+    _rankedPlayerIdsCache = ids;
+    return ids;
+  } catch {
+    return new Set();
+  }
 }
-
-// Newest season we'll scan for the freshman pass. Mirrors LATEST_YEAR in
-// coaches.ts; duplicated here to avoid a circular import.
-const LATEST_PLAYER_YEAR = 2026;
 
 /**
  * Per-player situational splits derived from the box-score data: home/away,

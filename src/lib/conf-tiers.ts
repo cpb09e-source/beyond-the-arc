@@ -1,19 +1,15 @@
 /**
  * Conference-level constants shared between the scripts and the React app.
  *
- *  - `POWER_CONFS` is the canonical "Power" tier used site-wide: /portal's
- *    "worst transfer classes (power confs only)" sidebar, the /coaches Tier
- *    filter (All / Power / Mid Major), and the coach composite-score formula.
- *    Big East is included because, in our 2013-26 window, it's a Tier-1
- *    conference by every quantitative measure (2 national titles via
- *    Villanova, top BTA RTGs).
+ *  - `POWER_CONFS` powers the "worst transfer classes (power confs only)"
+ *    sidebar on /portal.
  *  - `confMultiplier()` returns the BTA PRTG multiplier for a player's
  *    conference. Tiers are pegged to the conference rankings shown on / under
  *    "View Conference Rankings →" and frozen at the 2025-26 season — revisit
  *    after the season ends if rankings shift materially.
  */
 
-export const POWER_CONFS = new Set(["ACC", "B10", "B12", "P12", "SEC", "BE"]);
+export const POWER_CONFS = new Set(["ACC", "B10", "B12", "SEC"]);
 
 // Conference → BTA PRTG multiplier. Tier comments map to the 2025-26 rankings.
 // Right column shows the gap vs the Tier 1 (top-5) baseline of ×1.19, which is

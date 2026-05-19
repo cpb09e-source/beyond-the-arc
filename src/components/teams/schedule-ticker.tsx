@@ -25,37 +25,12 @@ function fmtDate(iso: string | null): string {
   return `${months[m - 1]} ${d}`;
 }
 
-// Compute the season-end year for a game date. Games in Nov/Dec belong to the
-// next calendar year's season (Nov 2025 → 25-26 → 2026); Jan-Apr stay in the
-// current calendar year's season (Mar 2026 → 25-26 → 2026).
-function seasonEndYearOf(date: string | null): number | null {
-  if (!date) return null;
-  const m = date.match(/^(\d{4})-(\d{2})/);
-  if (!m) return null;
-  const y = parseInt(m[1]!, 10);
-  const mon = parseInt(m[2]!, 10);
-  if (!Number.isFinite(y) || !Number.isFinite(mon)) return null;
-  return mon >= 11 ? y + 1 : y;
-}
-function seasonLabel(yearEnd: number): string {
-  return `${(yearEnd - 1).toString().slice(-2)}-${yearEnd.toString().slice(-2)}`;
-}
-
 export function ScheduleTicker({
   games,
   teamName,
-  eyebrow = "Schedule",
-  helpText = "click + drag to scroll · click a game for details",
-  helpTextMobile = "swipe to scroll · tap a game",
-  showSeasonLabels = false,
 }: {
   games: GameLog[];
   teamName: string;
-  eyebrow?: string;
-  helpText?: string;
-  helpTextMobile?: string;
-  /** Group games by season-end year, with a small year label under each cluster. */
-  showSeasonLabels?: boolean;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const dragState = useRef({ down: false, startX: 0, startScrollLeft: 0, moved: 0 });
@@ -119,28 +94,18 @@ export function ScheduleTicker({
 
   if (games.length === 0) return null;
 
-  // Group consecutive games by season-end year. We assume games arrive in
-  // chronological order — caller's responsibility.
-  const groups: { year: number; games: GameLog[] }[] = [];
-  for (const g of games) {
-    const yr = seasonEndYearOf(g.game_date) ?? 0;
-    const last = groups[groups.length - 1];
-    if (last && last.year === yr) last.games.push(g);
-    else groups.push({ year: yr, games: [g] });
-  }
-
   return (
     <>
       <div>
         <div className="flex items-baseline gap-3 mb-3">
           <span className="text-[0.65rem] uppercase tracking-widest text-coral font-bold">
-            {eyebrow}
+            Schedule
           </span>
           <span className="text-[0.6rem] text-ink-muted hidden sm:inline">
-            {helpText}
+            click + drag to scroll · click a game for details
           </span>
           <span className="text-[0.6rem] text-ink-muted sm:hidden">
-            {helpTextMobile}
+            swipe to scroll · tap a game
           </span>
         </div>
         <div
@@ -148,47 +113,21 @@ export function ScheduleTicker({
           className="overflow-x-auto select-none cursor-grab [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
           style={{ scrollSnapType: "x proximity" }}
         >
-          <div className={cn("flex items-start min-w-min", showSeasonLabels ? "gap-2" : "gap-1.5")}>
-            {showSeasonLabels
-              ? groups.map((group) => (
-                  <div
-                    key={group.year}
-                    // Subtle tinted card per year cluster so adjacent groups
-                    // read as distinct seasons at a glance. Use the existing
-                    // paper-deep tone (consistent with site's card palette).
-                    className="flex flex-col items-center gap-1.5 shrink-0 rounded-md bg-paper-deep/40 px-1.5 pt-1.5 pb-1 border border-hairline/40"
-                  >
-                    <div className="flex items-start gap-1">
-                      {group.games.map((g, i) => (
-                        <GameCell
-                          key={`${g.game_date}-${i}`}
-                          game={g}
-                          onClick={() => handleCellClick(g)}
-                        />
-                      ))}
-                    </div>
-                    <span className="text-[0.55rem] uppercase tracking-widest text-ink-muted font-medium tabular">
-                      {group.year > 0 ? seasonLabel(group.year) : ""}
-                    </span>
-                  </div>
-                ))
-              : games.map((g, i) => (
-                  <GameCell
-                    key={`${g.game_date}-${i}`}
-                    game={g}
-                    onClick={() => handleCellClick(g)}
-                  />
-                ))}
+          <div className="flex items-start gap-1.5 min-w-min">
+            {games.map((g, i) => (
+              <GameCell
+                key={`${g.game_date}-${i}`}
+                game={g}
+                onClick={() => handleCellClick(g)}
+              />
+            ))}
           </div>
         </div>
       </div>
       {openGame && (
         <ScheduleGameModal
           game={openGame}
-          // Prefer the game's own team_name so the modal sorts the box-score
-          // correctly when a single ticker spans multiple schools (e.g. a
-          // coach's career-resume ticker covering past programs).
-          teamName={openGame.team_name ?? teamName}
+          teamName={teamName}
           onClose={() => setOpenGame(null)}
         />
       )}
@@ -220,12 +159,6 @@ function GameCell({
       draggable={false}
       className="flex flex-col items-center gap-1 shrink-0 w-9 rounded p-0.5 hover:bg-[var(--accent-tint)] transition-colors cursor-pointer"
     >
-      {/* Round badge — only present on tournament-themed tickers (R1/R2/S16/E8/F4/NC). */}
-      {game.tournamentRound && (
-        <span className="text-[0.5rem] tabular text-ink-muted font-semibold uppercase tracking-wider leading-none pointer-events-none">
-          {game.tournamentRound}
-        </span>
-      )}
       <span
         className={cn(
           "inline-flex items-center justify-center text-[0.55rem] font-semibold tabular w-6 h-4 rounded-sm leading-none pointer-events-none",
