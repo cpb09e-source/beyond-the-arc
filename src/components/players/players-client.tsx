@@ -300,8 +300,8 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     <>
       <PlayerFilterBar conferences={conferences} />
 
-      <div className="bg-card border border-hairline rounded-lg overflow-hidden mt-6">
-        <div className="flex items-baseline justify-between gap-4 px-4 lg:px-5 py-3 border-b border-hairline">
+      <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-hidden mt-6">
+        <div className="flex items-baseline justify-between gap-4 px-4 lg:px-5 py-3 border-b border-hairline bg-paper-deep/70">
           <div className="flex items-baseline gap-3">
             <span className="font-display text-xl text-ink tabular">
               {loading ? "—" : players.length.toLocaleString()}
@@ -333,7 +333,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="bg-paper-deep/70">
               <tr className="border-b border-hairline text-left">
                 <Th className="w-10 text-center">#</Th>
                 <Th className="w-12">{""}</Th>
@@ -367,7 +367,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                 </tr>
               ) : (
                 players.map((p, i) => (
-                  <tr key={p.id} className="border-b border-hairline/60 hover:bg-paper-deep/50 transition-colors">
+                  <tr key={p.id} className={`transition-colors hover:bg-[var(--accent-tint,rgba(237,90,79,0.08))] ${i % 2 === 0 ? "bg-paper/70" : "bg-transparent"}`}>
                     <Td className="text-center text-ink-muted tabular">{i + 1}</Td>
                     <Td className="text-center">
                       <PlayerPhoto bartPlayerId={p.bart_player_id} name={p.name} size={28} />

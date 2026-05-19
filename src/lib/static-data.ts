@@ -172,6 +172,166 @@ export async function readPlayerRanks(bartId: number): Promise<PlayerRanks | nul
 }
 
 /**
+ * Set of bart_player_ids that have a rank file (i.e. cleared the
+ * 18g/18mpg/5ppg + position-bucket eligibility floor). Drives two things:
+ *
+ *   - generateStaticParams() in /players/[id]/page.tsx — we only emit a
+ *     profile page for ranked players, so the ~13k thin profiles aren't
+ *     pre-rendered.
+ *   - Roster / table render logic — only ranked players' names link to a
+ *     profile; unranked render as plain text.
+ *
+ * Module-level cache so the directory read happens once per build process.
+ */
+// Internal helper: name-derived slug. Mirrors the `coachSlug()` used by
+// /coaches/[slug]/page.tsx's generateStaticParams, so links from the team
+// page land on a real route (the SR slug in coach-history has "-1" suffixes
+// that the profile route doesn't honor).
+function nameToCoachSlug(name: string): string {
+  return name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+// Normalize the SR `round` field to a compact, sortable label. SR uses both
+// modern and legacy names ("Round of 32" vs "R32", "Third Round" in 2010-15
+// = R32, etc).
+function normalizeRound(raw: string | null): string | null {
+  if (!raw) return null;
+  const r = raw.toLowerCase().trim();
+  if (r.includes("champion")) return "Champion";
+  if (r.includes("runner") || r === "finals" || r === "national runner-up") return "Runner-Up";
+  if (r.includes("final four") || r === "f4" || r === "ff") return "F4";
+  if (r.includes("elite") || r === "e8") return "E8";
+  if (r.includes("sweet") || r === "s16") return "S16";
+  if (r === "r32" || r.includes("round of 32") || r === "third round" || r === "second round") return "R32";
+  if (r === "r64" || r.includes("round of 64") || r === "first round" || r === "second round")  return "R64";
+  if (r.includes("first four") || r.includes("play-in")) return "First Four";
+  if (r.includes("did not")) return null;
+  return raw;
+}
+
+/**
+ * Per-team season history pulled from src/data/coach-history.json (SR scrape),
+ * keyed by team name → year. Carries conference record + the head coach for
+ * that year. Cached module-level so the disk read happens once per build.
+ */
+export type ConfRecord = {
+  wins: number | null;
+  losses: number | null;
+  coachName: string | null;
+  coachSlug: string | null;
+  // Tournament results — both null if the team missed the dance that year.
+  // `tourneyRound` is normalized: "Champion" | "Runner-Up" | "F4" | "E8" |
+  //   "S16" | "R32" | "R64" | "First Four" | other-as-is.
+  tourneyRound: string | null;
+  tourneySeed: number | null;
+};
+let _confRecordsCache: Map<string, Map<number, ConfRecord>> | null = null;
+export async function readConfRecordsByTeam(): Promise<Map<string, Map<number, ConfRecord>>> {
+  if (_confRecordsCache) return _confRecordsCache;
+  try {
+    const historyPath = path.resolve("src/data/coach-history.json");
+    const raw = JSON.parse(await fs.readFile(historyPath, "utf8")) as Record<
+      string,
+      Record<string, {
+        name?: string | null;
+        slug?: string | null;
+        conf_wins?: number | null;
+        conf_losses?: number | null;
+        round?: string | null;
+        seed?: number | null;
+      }>
+    >;
+    const out = new Map<string, Map<number, ConfRecord>>();
+    for (const [team, years] of Object.entries(raw)) {
+      const m = new Map<number, ConfRecord>();
+      for (const [yStr, season] of Object.entries(years)) {
+        const y = parseInt(yStr, 10);
+        if (!Number.isFinite(y)) continue;
+        const hasConf = season.conf_wins != null && season.conf_losses != null;
+        const hasCoach = !!season.name;
+        if (!hasConf && !hasCoach) continue;
+        m.set(y, {
+          wins: season.conf_wins ?? null,
+          losses: season.conf_losses ?? null,
+          coachName: season.name ?? null,
+          coachSlug: season.name ? nameToCoachSlug(season.name) : null,
+          tourneyRound: normalizeRound(season.round ?? null),
+          tourneySeed: typeof season.seed === "number" ? season.seed : null,
+        });
+      }
+      if (m.size > 0) out.set(team, m);
+    }
+    _confRecordsCache = out;
+    return out;
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * Per-game records for an entire year (every team's full schedule). Loaded
+ * once per year, cached. Use to drive per-team schedule strips / tickers.
+ */
+export type GameLog = {
+  game_date: string;
+  team_id: number;
+  team_name: string | null;
+  opp_team_market: string | null;
+  // CBB Analytics game ID — string in the game-logs format
+  // "<numeric>-<team_id>-game-<bool>". The leading numeric prefix is the
+  // shared game ID across both teams' game-log rows and matches the
+  // team-games/<year>/<numeric>.json box-score file.
+  cbba_game_id?: string | null;
+  is_home: boolean | null;
+  is_neutral: boolean | null;
+  won: boolean | null;
+  pts_scored: number | null;
+  pts_against: number | null;
+  // Diffs (team vs opp). Present on most rows, occasionally null.
+  pts_diff?: number | null;
+  reb_diff?: number | null;
+  orb_diff?: number | null;
+  tov_diff?: number | null;
+  fbpts_diff?: number | null;
+  fg3_made_diff?: number | null;
+  // Shooting % for the team in this game.
+  efg_pct?: number | null;
+  ts_pct?: number | null;
+  fg3_pct?: number | null;
+  ft_pct?: number | null;
+};
+const _gameLogsCache = new Map<number, GameLog[]>();
+export async function readGameLogsForYear(year: number): Promise<GameLog[]> {
+  if (_gameLogsCache.has(year)) return _gameLogsCache.get(year)!;
+  try {
+    const games = await readJson<GameLog[]>(`game-logs-by-year/${year}.json`);
+    _gameLogsCache.set(year, games);
+    return games;
+  } catch {
+    _gameLogsCache.set(year, []);
+    return [];
+  }
+}
+
+let _rankedPlayerIdsCache: Set<number> | null = null;
+export async function readRankedPlayerIds(): Promise<Set<number>> {
+  if (_rankedPlayerIdsCache) return _rankedPlayerIdsCache;
+  try {
+    const files = await fs.readdir(path.join(DATA, "player-ranks"));
+    const ids = new Set<number>();
+    for (const f of files) {
+      if (!f.endsWith(".json")) continue;
+      const n = parseInt(f.replace(".json", ""), 10);
+      if (Number.isFinite(n)) ids.add(n);
+    }
+    _rankedPlayerIdsCache = ids;
+    return ids;
+  } catch {
+    return new Set();
+  }
+}
+
+/**
  * Per-player situational splits derived from the box-score data: home/away,
  * win/loss, conf/non-conf, plus best/worst game per season. Pre-computed by
  * scripts/compute-player-splits.mjs.

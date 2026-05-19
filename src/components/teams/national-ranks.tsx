@@ -15,9 +15,8 @@ export function NationalRanks({
 }) {
   if (top.length === 0 && bottom.length === 0) return null;
   return (
-    <div className="grid grid-cols-1 md:grid-cols-[1fr_1px_1fr] bg-card border border-hairline rounded-lg overflow-hidden">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
       <Column kicker="Where they rank best" items={top} total={total} />
-      <div className="hidden md:block bg-hairline" />
       <Column kicker="Where they rank worst" items={bottom} total={total} />
     </div>
   );
@@ -25,14 +24,14 @@ export function NationalRanks({
 
 function Column({ kicker, items, total }: { kicker: string; items: RankedStat[]; total: number }) {
   return (
-    <div className="p-5 lg:p-6">
+    <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-5 lg:p-6">
       <div className="flex items-baseline justify-between mb-4">
         <span className="text-xs uppercase tracking-widest text-coral font-medium">{kicker}</span>
         <span className="text-[0.65rem] text-ink-muted tabular">of {total} D-I teams</span>
       </div>
-      <ul className="divide-y divide-hairline/60">
+      <ul className="divide-y divide-hairline/40">
         {items.map((s) => (
-          <li key={s.key} className="flex items-center gap-4 py-2.5">
+          <li key={s.key} className="flex items-center gap-4 py-2.5 px-1 -mx-1 rounded transition-colors hover:bg-[var(--accent-tint)]">
             <RankBadge rank={s.rank} total={s.total} />
             <span className="flex-1 min-w-0 text-ink-soft text-sm">{s.label}</span>
             <span className="flex-none font-medium text-ink tabular text-sm">{formatStat(s.value, s.format)}</span>

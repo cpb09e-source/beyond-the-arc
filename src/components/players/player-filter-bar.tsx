@@ -74,7 +74,7 @@ export function PlayerFilterBar({ conferences }: { conferences: string[] }) {
   }
 
   return (
-    <div className={cn("bg-card border border-hairline rounded-lg p-4 lg:p-5", pending && "opacity-70")}>
+    <div className={cn("bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-4 lg:p-5", pending && "opacity-70")}>
       <div className="flex flex-wrap items-end gap-3">
         <Field label="Season">
           <Select value={String(spec.year)} onChange={(v) => update({ ...spec, year: Number(v) })}>

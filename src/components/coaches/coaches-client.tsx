@@ -103,7 +103,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
   return (
     <div className="space-y-6">
       {/* Filter bar */}
-      <div className="bg-card border border-hairline rounded-lg p-4 lg:p-5">
+      <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-4 lg:p-5">
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">Status</span>
@@ -139,8 +139,8 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
       </div>
 
       {/* Table */}
-      <div className="bg-card border border-hairline rounded-lg overflow-hidden">
-        <div className="flex items-end justify-between gap-4 px-4 lg:px-5 py-3 border-b border-hairline">
+      <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-hidden">
+        <div className="flex items-end justify-between gap-4 px-4 lg:px-5 py-3 border-b border-hairline bg-paper-deep/70">
           <div className="flex items-baseline gap-3">
             <span className="font-display text-xl text-ink tabular">
               {sorted.length.toLocaleString()}
@@ -163,7 +163,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="bg-paper-deep/70">
               <tr className="border-b border-hairline text-left">
                 <Th className="w-10 text-center">#</Th>
                 <ThSort label="Coach" active={sortBy==="name"} dir={sortDir} onClick={() => toggle("name","asc")} align="left" />
@@ -180,7 +180,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-ink-muted">No coaches match these filters.</td></tr>
               ) : (
                 pageRows.map((r, i) => (
-                  <tr key={`${r.slug}-${i}`} className="border-b border-hairline/60 hover:bg-paper-deep/50 transition-colors">
+                  <tr key={`${r.slug}-${i}`} className={cn("transition-colors hover:bg-coral/5", i % 2 === 0 ? "bg-paper/70" : "bg-transparent")}>
                     <Td className={cn("text-center tabular", r.is_active ? "text-coral" : "text-ink-muted")}>
                       {(safePage - 1) * pageSize + i + 1}
                     </Td>

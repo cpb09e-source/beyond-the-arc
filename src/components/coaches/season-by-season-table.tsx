@@ -125,7 +125,7 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
       </thead>
       <tbody>
         {sorted.map((s, i) => (
-          <tr key={`${s.year}-${s.team}-${i}`} className="border-b border-hairline/60 last:border-0 hover:bg-paper-deep/50 transition-colors">
+          <tr key={`${s.year}-${s.team}-${i}`} className={`transition-colors hover:bg-[var(--accent-tint,rgba(237,90,79,0.08))] ${i % 2 === 0 ? "bg-paper/70" : "bg-transparent"}`}>
             <td className="px-5 lg:px-7 py-2.5 tabular text-ink-soft">
               <Link
                 href={`/teams/${teamSlug(s.team)}/${s.year}/`}

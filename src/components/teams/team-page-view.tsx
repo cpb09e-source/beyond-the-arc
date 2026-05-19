@@ -1,19 +1,21 @@
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
-import { TourneyBadge } from "@/components/tourney-badge";
 import { SeasonSwitcher } from "@/components/teams/season-switcher";
 import { NationalRanks } from "@/components/teams/national-ranks";
-import type { StaticPlayerRow, StaticTeamSeasonRow } from "@/lib/static-data";
+import { SortableSeasonsTable } from "@/components/teams/sortable-seasons-table";
+import { SortableRosterTable } from "@/components/teams/sortable-roster-table";
+import { DistributionPanel, type DistributionRank } from "@/components/teams/distribution-panel";
+import { ScheduleTicker } from "@/components/teams/schedule-ticker";
+import { TourneyTimeline } from "@/components/teams/tourney-timeline";
+import { PlayerHeadshotStrip } from "@/components/teams/player-headshot-strip";
+import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog } from "@/lib/static-data";
 import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier } from "@/lib/conf-tiers";
 import { confDisplay } from "@/lib/conf-display";
+import { getTeamColors } from "@/lib/team-colors";
 
 function fmtNum(x: number | null, digits = 1): string {
   if (x === null || x === undefined) return "—";
   return x.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
-}
-function fmtPct(x: number | null, digits = 1): string {
-  if (x === null || x === undefined) return "—";
-  return (x * 100).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits }) + "%";
 }
 function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
@@ -162,12 +164,33 @@ export function TeamPageView({
   current,
   roster,
   slug,
+  rankedPlayerIds,
+  confRecords,
+  shootingRanks,
+  fourFactorRanks,
+  scheduleGames,
 }: {
   team: { name: string; seasons: StaticTeamSeasonRow[] };
   current: StaticTeamSeasonRow;
   roster: RosterEntry[];
   slug: string;
+  rankedPlayerIds: Set<number>;
+  confRecords: Map<number, ConfRecord>;
+  shootingRanks: DistributionRank[];
+  fourFactorRanks: DistributionRank[];
+  scheduleGames: GameLog[];
 }) {
+  const teamColors = getTeamColors(team.name);
+  const accentColor = teamColors?.primary ?? null;
+  // CSS vars set on the page wrapper let any descendant theme its hover
+  // states without prop-drilling. --accent is the full color (for text +
+  // border), --accent-tint is a low-alpha background suitable for row
+  // hovers. Always set; fall back to coral for unthemed teams.
+  const cssVars: React.CSSProperties = {
+    ["--accent" as string]: accentColor ?? "#ed5a4f",
+    ["--accent-tint" as string]: accentColor ? `${accentColor}1a` : "rgba(237, 90, 79, 0.08)",
+  };
+
   const currentTrank = current.team_trank_stats;
   const currentCbb = current.team_cbba_stats;
   // Newest season first — team.seasons already comes that way from the export.
@@ -180,29 +203,30 @@ export function TeamPageView({
     ? Math.round(last5Ranks.reduce((a, b) => a + b, 0) / last5Ranks.length)
     : null;
 
-  const cbbExt = (currentCbb as unknown) as Record<string, number | null> | null;
-  const rebDiff = cbbExt?.reb_diff ?? null;
-  const fbptsDiff = cbbExt?.fbpts_diff ?? null;
-  const fg3mDiff = cbbExt?.fg3_made_diff ?? null;
-
   return (
-    <>
+    <div style={cssVars}>
       {/* Hero */}
       <section className="border-b border-hairline">
         <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-10 pb-8">
           <div className="flex flex-wrap items-center gap-6 lg:gap-10">
             <TeamLogo name={current.name} size={96} className="rounded-md" />
             <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-4 mb-3">
-                <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
-                  <span className="h-px w-8 bg-coral" />
-                  <span>{confDisplay(current.conference)} · {seasonLabel(current.year)}</span>
-                </div>
-                <SeasonSwitcher
-                  slug={slug}
-                  currentYear={current.year}
-                  years={team.seasons.map((s) => s.year)}
+              <div
+                className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] font-medium mb-3"
+                style={accentColor ? { color: accentColor } : undefined}
+              >
+                <span
+                  className={accentColor ? "h-px w-8" : "h-px w-8 bg-coral"}
+                  style={accentColor ? { background: accentColor } : undefined}
                 />
+                <span className={accentColor ? "inline-flex items-center" : "inline-flex items-center text-coral"}>
+                  {confDisplay(current.conference)} ·{" "}
+                  <SeasonSwitcher
+                    slug={slug}
+                    currentYear={current.year}
+                    years={team.seasons.map((s) => s.year)}
+                  />
+                </span>
               </div>
               <div className="flex items-baseline gap-3 md:gap-4 flex-wrap">
                 <h1 className="font-display text-4xl md:text-6xl tracking-tight text-ink leading-none">
@@ -210,7 +234,8 @@ export function TeamPageView({
                 </h1>
                 {current.bta_rank !== null && current.bta_rank !== undefined && (
                   <span
-                    className="inline-flex items-baseline gap-1 px-3 py-1.5 rounded-md bg-coral text-white font-display text-xl md:text-2xl tabular leading-none shadow-sm"
+                    className="inline-flex items-baseline gap-1 px-3 py-1.5 rounded-md text-white font-display text-xl md:text-2xl tabular leading-none shadow-sm"
+                    style={accentColor ? { background: accentColor, color: teamColors?.onPrimary ?? "#fff" } : { background: "var(--color-coral, #ed5a4f)" }}
                     title={`BTA Rank for ${seasonLabel(current.year)}`}
                   >
                     <span className="text-[0.6em] opacity-80 uppercase tracking-widest mr-0.5">BTA</span>
@@ -230,7 +255,11 @@ export function TeamPageView({
                     Coach:{" "}
                     <Link
                       href={`/coaches/${coachSlug(current.coach)}/`}
-                      className="text-ink hover:text-coral transition-colors"
+                      className={
+                        accentColor
+                          ? "text-[color:var(--accent)] hover:opacity-80 transition-opacity"
+                          : "text-ink hover:text-coral transition-colors"
+                      }
                     >
                       {current.coach}
                     </Link>
@@ -239,6 +268,25 @@ export function TeamPageView({
               </div>
             </div>
           </div>
+
+          {scheduleGames.length > 0 && (
+            <div className="mt-8">
+              <ScheduleTicker games={scheduleGames} teamName={team.name} />
+            </div>
+          )}
+
+          {/* NCAA Tournament timeline — parked. Component still imported so
+              re-enabling is one line change. Keeping the data flow (confRecords
+              already carries tourneyRound/tourneySeed) ready. */}
+          {false && team.name === "Kansas" && confRecords.size > 0 && (
+            <div className="mt-4">
+              <TourneyTimeline
+                history={confRecords}
+                startYear={2013}
+                endYear={current.year}
+              />
+            </div>
+          )}
 
           {current.national_ranks && (current.national_ranks.top.length > 0 || current.national_ranks.bottom.length > 0) ? (
             <div className="mt-8">
@@ -259,22 +307,10 @@ export function TeamPageView({
       </section>
 
       <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Card title="Shooting">
-          <StatRow label="True Shooting %" value={fmtPct(currentCbb?.ts_pct ?? null)} />
-          <StatRow label="Effective FG %"  value={fmtPct(currentCbb?.efg_pct ?? null)} />
-          <StatRow label="3-Point %"        value={fmtPct(currentCbb?.fg3_pct ?? null)} />
-          <StatRow label="3PA Rate"         value={fmtPct(currentCbb?.fg3a_rate ?? null)} sub="3PA / FGA" />
-          <StatRow label="FTA Rate"         value={fmtPct(currentCbb?.fta_rate ?? null)} sub="FTA / FGA" />
-          <StatRow label="Assist %"         value={fmtPct(currentCbb?.ast_pct ?? null)} sub="% of FGM assisted" />
-        </Card>
-        <Card title="Four Factors" subtitle="Beyond the Arc · season totals">
-          <StatRow label="REB Diff" value={rebDiff !== null ? (rebDiff > 0 ? `+${rebDiff}` : String(rebDiff)) : "—"} sub="total rebounds vs allowed" />
-          <StatRow label="OREB %"   value={fmtPct(currentCbb?.orb_pct ?? null)} sub="offensive rebound rate" />
-          <StatRow label="FBP Diff" value={fbptsDiff !== null ? (fbptsDiff > 0 ? `+${fbptsDiff}` : String(fbptsDiff)) : "—"} sub="fast-break points vs allowed" />
-          <StatRow label="3PM Diff" value={fg3mDiff !== null ? (fg3mDiff > 0 ? `+${fg3mDiff}` : String(fg3mDiff)) : "—"} sub="3-pointers made vs allowed" />
-
+        <DistributionPanel title="Shooting" ranks={shootingRanks} />
+        <DistributionPanel title="Four Factors" ranks={fourFactorRanks}>
           {current.four_factor_record && current.four_factor_record.games > 0 && (
-            <div className="pt-5 mt-3 border-t border-hairline">
+            <>
               <div className="text-xs uppercase tracking-widest text-ink-muted font-medium mb-1">
                 Record when all three positive
               </div>
@@ -283,150 +319,57 @@ export function TeamPageView({
                   {current.four_factor_record.wins}-{current.four_factor_record.losses}
                 </span>
                 <span className="text-xs text-ink-muted">
-                  across {current.four_factor_record.games} game{current.four_factor_record.games === 1 ? "" : "s"} where
-                  REB Diff &gt; 0, FBP Diff &gt; 0, 3PM Diff &gt; 0
+                  {`across ${current.four_factor_record.games} game${current.four_factor_record.games === 1 ? "" : "s"} where REB Diff > 0, FBP Diff > 0, 3PM Diff > 0`}
                 </span>
               </div>
-            </div>
+            </>
           )}
-        </Card>
+        </DistributionPanel>
       </section>
 
       <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8">
-        <h2 className="font-display text-3xl text-ink mb-6">By season</h2>
-        <div className="bg-card border border-hairline rounded-lg overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="border-b border-hairline text-left">
-              <tr>
-                <Th>Season</Th><Th>Conf</Th><Th>Record</Th>
-                <Th align="right">BTA Rank</Th>
-                <Th align="right">Adj ORtg</Th><Th align="right">Adj DRtg</Th>
-                <Th align="right">Tempo</Th>
-                <Th align="right">TS%</Th><Th align="right">eFG%</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {chronological.map((s) => {
-                const t = s.team_trank_stats;
-                const c = s.team_cbba_stats;
-                const isCurrent = s.year === current.year;
-                return (
-                  <tr
-                    key={s.year}
-                    className={`border-b border-hairline/60 hover:bg-paper-deep/50 transition-colors ${isCurrent ? "bg-paper-deep/40" : ""}`}
-                  >
-                    <Td>
-                      <Link
-                        href={`/teams/${slug}/${s.year}/`}
-                        className="group inline-flex items-center gap-2.5 transition-colors"
-                      >
-                        <TeamLogo name={s.name} size={20} />
-                        <span className="font-medium text-ink group-hover:text-coral transition-colors">{seasonLabel(s.year)}</span>
-                        <TourneyBadge teamName={s.name} year={s.year} />
-                      </Link>
-                    </Td>
-                    <Td className="text-ink-muted">{confDisplay(s.conference)}</Td>
-                    <Td className="tabular text-ink-muted">{t?.record ?? "—"}</Td>
-                    <Td align="right" className="tabular text-coral">{s.bta_rank !== null ? `#${s.bta_rank}` : "—"}</Td>
-                    <Td align="right" className="tabular">{fmtNum(t?.adjoe ?? null, 1)}</Td>
-                    <Td align="right" className="tabular">{fmtNum(t?.adjde ?? null, 1)}</Td>
-                    <Td align="right" className="tabular">{fmtNum(t?.adjt ?? null, 1)}</Td>
-                    <Td align="right" className="tabular">{fmtPct(c?.ts_pct ?? null)}</Td>
-                    <Td align="right" className="tabular">{fmtPct(c?.efg_pct ?? null)}</Td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8 mb-20">
         <div className="flex items-baseline justify-between mb-6">
           <h2 className="font-display text-3xl text-ink">Roster — {seasonLabel(current.year)}</h2>
           <span className="text-xs uppercase tracking-widest text-ink-muted">
-            {roster.length} players, sorted by BTA PRTG
+            {roster.length} players · click headers to sort
           </span>
         </div>
+        {/* Player headshot strip — faces + names before the spreadsheet. */}
+        {roster.length > 0 && (
+          <div className="mb-5">
+            <PlayerHeadshotStrip players={roster} rankedPlayerIds={rankedPlayerIds} />
+          </div>
+        )}
         {roster.length === 0 ? (
           <p className="text-ink-muted text-sm">No roster data for this season.</p>
         ) : (
-          <div className="bg-card border border-hairline rounded-lg overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="border-b border-hairline text-left">
-                <tr>
-                  <Th>Player</Th><Th>Cl</Th><Th>Ht</Th>
-                  <Th align="right">BTA PRTG</Th><Th align="right">PIR</Th>
-                  <Th align="right">PPG</Th><Th align="right">RPG</Th><Th align="right">APG</Th>
-                  <Th align="right">3P%</Th><Th align="right">FT%</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {roster.map((p) => (
-                  <tr key={p.id} className="border-b border-hairline/60 hover:bg-paper-deep/50 transition-colors">
-                    <Td>
-                      {p.bart_player_id ? (
-                        <Link href={`/players/${p.bart_player_id}`} className="font-medium text-ink hover:text-coral transition-colors">
-                          {p.name}
-                        </Link>
-                      ) : (
-                        <span className="font-medium text-ink">{p.name}</span>
-                      )}
-                    </Td>
-                    <Td className="text-ink-muted">{p.class ?? "—"}</Td>
-                    <Td className="text-ink-muted whitespace-nowrap">{p.height ?? "—"}</Td>
-                    <Td align="right" className="tabular font-medium">{fmtNum(p.bta_portg, 1)}</Td>
-                    <Td align="right" className="tabular">{fmtNum(p.pir, 1)}</Td>
-                    <Td align="right" className="tabular">{fmtNum(p.pts, 1)}</Td>
-                    <Td align="right" className="tabular">{fmtNum(p.reb, 1)}</Td>
-                    <Td align="right" className="tabular">{fmtNum(p.ast, 1)}</Td>
-                    <Td align="right" className="tabular">{fmtPct(p.fg3_pct)}</Td>
-                    <Td align="right" className="tabular">{fmtPct(p.ft_pct)}</Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <SortableRosterTable roster={roster} rankedPlayerIds={rankedPlayerIds} />
         )}
       </section>
-    </>
+
+      <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-12 mb-20">
+        <div className="flex items-baseline justify-between mb-6">
+          <h2 className="font-display text-3xl text-ink">By season</h2>
+          <span className="text-xs uppercase tracking-widest text-ink-muted">click headers to sort</span>
+        </div>
+        <SortableSeasonsTable
+          seasons={chronological}
+          currentYear={current.year}
+          slug={slug}
+          confRecords={confRecords}
+          accentColor={accentColor}
+        />
+      </section>
+    </div>
   );
 }
 
 function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="bg-card px-5 py-4">
+    <div className="bg-paper/70 px-5 py-4">
       <div className="text-xs uppercase tracking-widest text-ink-muted font-medium">{label}</div>
       <div className="font-display text-3xl text-ink tabular mt-1">{value}</div>
       {sub && <div className="text-xs text-ink-muted mt-1">{sub}</div>}
     </div>
   );
-}
-function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
-  return (
-    <div className="bg-card border border-hairline rounded-lg p-6">
-      <div className="flex items-baseline justify-between mb-4">
-        <h3 className="font-display text-xl text-ink">{title}</h3>
-        {subtitle && <span className="text-xs text-ink-muted">{subtitle}</span>}
-      </div>
-      <div className="divide-y divide-hairline/60">{children}</div>
-    </div>
-  );
-}
-function StatRow({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="flex items-baseline justify-between py-2.5">
-      <span className="text-ink-soft text-sm">
-        {label}
-        {sub && <span className="text-ink-muted text-xs ml-2">{sub}</span>}
-      </span>
-      <span className="font-medium text-ink tabular">{value}</span>
-    </div>
-  );
-}
-function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {
-  return <th className={`px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium ${align === "right" ? "text-right" : ""}`}>{children}</th>;
-}
-function Td({ children, align = "left", className = "" }: { children: React.ReactNode; align?: "left" | "right"; className?: string }) {
-  return <td className={`px-3 py-2.5 ${align === "right" ? "text-right" : ""} ${className}`}>{children}</td>;
 }

@@ -23,13 +23,31 @@ const fraunces = Fraunces({
   axes: ["opsz", "SOFT"],
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://beyond-the-arc.netlify.app";
+const OG_IMAGE = "/images/nba-cc-open-graph.png";
+const SITE_DESCRIPTION =
+  "Editorial-grade college basketball analytics: team and player splits, shot charts, lineup data, and the transfer portal.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Beyond the Arc — College Basketball Analytics",
     template: "%s · Beyond the Arc",
   },
-  description:
-    "Editorial-grade college basketball analytics: team and player splits, shot charts, lineup data, and the transfer portal.",
+  description: SITE_DESCRIPTION,
+  openGraph: {
+    type: "website",
+    siteName: "Beyond the Arc",
+    title: "Beyond the Arc — College Basketball Analytics",
+    description: SITE_DESCRIPTION,
+    images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "Beyond the Arc" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Beyond the Arc — College Basketball Analytics",
+    description: SITE_DESCRIPTION,
+    images: [OG_IMAGE],
+  },
 };
 
 export default function RootLayout({

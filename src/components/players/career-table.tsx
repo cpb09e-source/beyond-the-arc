@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
 import { SeasonGamesModal } from "@/components/players/season-games-modal";
+import { cn } from "@/lib/utils";
 
 type Season = {
   year: number;
@@ -64,9 +65,9 @@ export function CareerTable({
 
   return (
     <>
-      <div className="bg-card border border-hairline rounded-lg overflow-x-auto">
+      <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="border-b border-hairline text-left">
+          <thead className="bg-paper-deep/70 text-left">
             <tr>
               <Th>Season</Th><Th>Team</Th>
               <Th hideUntil="sm">Cl</Th>
@@ -80,8 +81,8 @@ export function CareerTable({
             </tr>
           </thead>
           <tbody>
-            {seasons.map((s) => (
-              <tr key={s.year} className="border-b border-hairline/60 hover:bg-paper-deep/50 transition-colors">
+            {seasons.map((s, i) => (
+              <tr key={s.year} className={cn("transition-colors hover:bg-[var(--accent-tint,rgba(237,90,79,0.08))]", i % 2 === 0 ? "bg-paper/70" : "bg-transparent")}>
                 <Td className="font-medium">
                   <button
                     type="button"

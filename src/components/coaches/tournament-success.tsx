@@ -182,7 +182,7 @@ export function TournamentSuccess({
 
 function TourneyStat({ label, value, sub, rank, tone = "default" }: { label: string; value: string; sub?: string; rank?: string; tone?: "default" | "coral" }) {
   return (
-    <div className="bg-card p-4 lg:p-5">
+    <div className="bg-paper/70 p-4 lg:p-5">
       <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium mb-2">{label}</div>
       <div className={`font-display text-3xl md:text-4xl tabular leading-none ${tone === "coral" ? "text-coral" : "text-ink"}`}>{value}</div>
       {rank && <div className="text-[0.65rem] tabular text-coral font-medium mt-2 uppercase tracking-widest">{rank}</div>}

@@ -187,7 +187,7 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
       {/* PER-SCHOOL BREAKDOWN */}
       {profile.schools.length > 0 && (
         <section className="mx-auto max-w-[97rem] px-6 lg:px-10 mt-6">
-          <div className="bg-card border border-hairline rounded-lg overflow-hidden">
+          <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-hidden">
             <div className="px-5 lg:px-7 py-4 border-b border-hairline">
               <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium mb-1">Program breakdown</div>
               <h2 className="font-display text-2xl text-ink">By the school</h2>
@@ -203,10 +203,10 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
                 </tr>
               </thead>
               <tbody>
-                {profile.schools.map((s) => {
+                {profile.schools.map((s, i) => {
                   const pct = s.wins + s.losses > 0 ? s.wins / (s.wins + s.losses) : null;
                   return (
-                    <tr key={s.team} className="border-b border-hairline/60 hover:bg-paper-deep/50 transition-colors">
+                    <tr key={s.team} className={`transition-colors hover:bg-coral/5 ${i % 2 === 0 ? "bg-paper/70" : "bg-transparent"}`}>
                       <td className="px-5 lg:px-7 py-3">
                         <Link href={`/teams/${teamSlug(s.team)}/`} className="inline-flex items-center gap-2.5 group">
                           <TeamLogo name={s.team} size={28} />
@@ -244,7 +244,7 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
 
       {/* TOURNAMENT SUCCESS — now lives at the end, after Season-by-season. */}
       <section className="mx-auto max-w-[97rem] px-6 lg:px-10 mt-6 pb-12">
-        <div className="bg-card border border-hairline rounded-lg p-5 lg:p-7">
+        <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-5 lg:p-7">
           <div className="flex items-baseline justify-between gap-3 mb-1">
             <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Tournament success</div>
             {ncaaAppearances > 0 && (
@@ -266,7 +266,7 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
 
 function StatTile({ label, value, sub, rank, tone = "default" }: { label: string; value: string; sub?: string; rank?: string; tone?: "default" | "coral" }) {
   return (
-    <div className="bg-card p-5 lg:p-7">
+    <div className="bg-paper/70 p-5 lg:p-7">
       <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium mb-2">{label}</div>
       <div className={`font-display text-4xl md:text-5xl tabular leading-none ${tone === "coral" ? "text-coral" : "text-ink"}`}>{value}</div>
       {rank && <div className="text-[0.65rem] tabular text-coral font-medium mt-2 uppercase tracking-widest">{rank}</div>}

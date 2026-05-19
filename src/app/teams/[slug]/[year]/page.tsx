@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
-import { readIndex, readPlayersForYear, readTeam, readAllTeams } from "@/lib/static-data";
+import { readPlayersForYear, readTeam, readAllTeams, readRankedPlayerIds, readConfRecordsByTeam, readGameLogsForYear } from "@/lib/static-data";
 import { TeamPageView, buildRoster } from "@/components/teams/team-page-view";
+import { buildShootingRanks, buildFourFactorRanks } from "@/components/teams/distribution-panel";
 
 function slugFor(name: string): string {
   return name
@@ -27,6 +28,43 @@ export async function generateStaticParams() {
   return out;
 }
 
+function seasonLabel(y: number): string {
+  return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string; year: string }>;
+}) {
+  const { slug, year: yearStr } = await params;
+  const year = Number(yearStr);
+  if (!Number.isFinite(year)) return { title: "Team season not found" };
+  const team = await readTeam(slug);
+  if (!team) return { title: "Team not found" };
+  const current = team.seasons.find((s) => s.year === year);
+  if (!current) return { title: "Team season not found" };
+
+  const trank = current.team_trank_stats;
+  const recordBit = trank?.record ? `${trank.record} ` : "";
+  const confBit = current.conference ? ` (${current.conference})` : "";
+  const seasonStr = seasonLabel(year);
+  const description = `${team.name}${confBit} ${seasonStr} ${recordBit}— full season stats, roster, and advanced metrics.`.trim();
+
+  return {
+    title: `${team.name} ${seasonStr}`,
+    description,
+    openGraph: {
+      title: `${team.name} · ${seasonStr}`,
+      description,
+      url: `/teams/${slug}/${year}/`,
+      type: "website",
+    },
+    twitter: { card: "summary_large_image", title: `${team.name} · ${seasonStr}`, description },
+    alternates: { canonical: `/teams/${slug}/${year}/` },
+  };
+}
+
 export default async function TeamSeasonPage({
   params,
 }: {
@@ -44,6 +82,29 @@ export default async function TeamSeasonPage({
 
   const rosterPool = await readPlayersForYear(year);
   const roster = buildRoster(rosterPool, current.id, year);
+  const rankedPlayerIds = await readRankedPlayerIds();
+  const confRecordsAll = await readConfRecordsByTeam();
+  const confRecords = confRecordsAll.get(team.name) ?? new Map();
+  const allTeams = await readAllTeams();
+  const yearCohort = allTeams.filter((t) => t.year === year);
+  const shootingRanks = buildShootingRanks(current, yearCohort);
+  const fourFactorRanks = buildFourFactorRanks(current, yearCohort);
+  const allGames = await readGameLogsForYear(year);
+  const scheduleGames = allGames
+    .filter((g) => g.team_id === current.id)
+    .sort((a, b) => (a.game_date ?? "").localeCompare(b.game_date ?? ""));
 
-  return <TeamPageView team={team} current={current} roster={roster} slug={slug} />;
+  return (
+    <TeamPageView
+      team={team}
+      current={current}
+      roster={roster}
+      slug={slug}
+      rankedPlayerIds={rankedPlayerIds}
+      confRecords={confRecords}
+      shootingRanks={shootingRanks}
+      fourFactorRanks={fourFactorRanks}
+      scheduleGames={scheduleGames}
+    />
+  );
 }
