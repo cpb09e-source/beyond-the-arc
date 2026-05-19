@@ -6,6 +6,7 @@ import { Star } from "lucide-react";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { confDisplay } from "@/lib/conf-display";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 
 export type TCPlayer = {
   cbba_player_id: number;
@@ -101,11 +102,7 @@ export function TransferClassModal({ row, onClose }: { row: TransferClassRow; on
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
-  useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
-  }, []);
+  useBodyScrollLock(true);
 
   const inPlayers = row.in_players.filter((p) => p.stars >= 2);
   const outPlayers = row.out_players.filter((p) => p.stars >= 2);

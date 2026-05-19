@@ -128,7 +128,7 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
           <tr key={`${s.year}-${s.team}-${i}`} className="border-b border-hairline/60 last:border-0 hover:bg-paper-deep/50 transition-colors">
             <td className="px-5 lg:px-7 py-2.5 tabular text-ink-soft">
               <Link
-                href={`/teams/${teamSlug(s.team)}/?year=${s.year}`}
+                href={`/teams/${teamSlug(s.team)}/${s.year}/`}
                 className="hover:text-coral transition-colors"
                 title={`${s.team} ${seasonLabel(s.year)}`}
               >
@@ -136,7 +136,7 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
               </Link>
             </td>
             <td className="px-3 py-2.5">
-              <Link href={`/teams/${teamSlug(s.team)}/`} className="inline-flex items-center gap-2 group">
+              <Link href={`/teams/${teamSlug(s.team)}/${s.year}/`} className="inline-flex items-center gap-2 group">
                 <TeamLogo name={s.team} size={22} />
                 <span className="text-ink group-hover:text-coral transition-colors truncate">{s.team}</span>
                 <SeasonPostseasonBadge season={s} />

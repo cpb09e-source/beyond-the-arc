@@ -12,7 +12,11 @@
     "snapshot:coaches": "node scripts/snapshot-coaches.mjs",
     "snapshot:coach-history": "node scripts/snapshot-historical-coaches.mjs",
     "export:data": "tsx scripts/export-static-data.mts",
-    "export:portal": "tsx scripts/export-portal-only.mts"
+    "export:portal": "tsx scripts/export-portal-only.mts",
+    "scrape:nba-draftees": "node scripts/scrape-nba-draftees.mjs",
+    "scrape:nba-players": "node scripts/scrape-nba-players.mjs",
+    "scrape:tournament-games": "node scripts/scrape-tournament-games.mjs",
+    "scrape:tournament-boxscores": "node scripts/scrape-tournament-boxscores.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.105.4",

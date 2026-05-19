@@ -26,14 +26,14 @@ export default async function CoachesPage() {
         <div className="mx-auto max-w-[97rem] px-6 lg:px-10 pt-12 pb-10">
           <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium mb-4">
             <span className="h-px w-8 bg-coral" />
-            <span>Head coaches</span>
+            <span>Head coaches · 2012-26</span>
           </div>
           <h1 className="font-display text-4xl md:text-5xl lg:text-6xl leading-[1] tracking-tight text-ink mb-3">
             Every D-I head coach,
-            <span className="italic text-coral"> {activeCount > 0 ? `${activeCount} active` : "active and historical"}.</span>
+            <span className="italic text-coral"> {activeCount > 0 ? `${activeCount} active` : "active and historical"}</span>.
           </h1>
           <p className="text-base md:text-lg text-ink-soft max-w-2xl">
-            All-time records summed across our 2012-13 through 2025-26 data window. Click a coach to see their full career profile.
+            All-time records summed across the 2012-13 through 2025-26 seasons.
           </p>
         </div>
       </section>

@@ -115,6 +115,134 @@ export async function readPlayersForYear(year: number): Promise<StaticPlayerRow[
   return readJson<StaticPlayerRow[]>(`players-by-year/${year}.json`);
 }
 
+/**
+ * One transfer-portal entry for a specific player. Surface this on the
+ * player profile hero when the player has committed elsewhere — we strike
+ * through their current school and show the new destination.
+ */
+export type PortalEntry = {
+  cbba_player_id: number;
+  bart_player_id: number | null;
+  name: string;
+  status: "Active" | "Transferred" | "Withdrew";
+  team_from: string | null;
+  conf_from: string | null;
+  team_to: string | null;
+  conf_to: string | null;
+  date_entered: string | null;
+  date_updated: string | null;
+};
+
+let _portalCache: PortalEntry[] | null = null;
+async function readPortal(): Promise<PortalEntry[]> {
+  if (_portalCache) return _portalCache;
+  try {
+    const portal = await readJson<{ entries: PortalEntry[] }>("portal.json");
+    _portalCache = portal.entries;
+    return _portalCache;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Per-player percentile ranks across ~20 stats, cohorted by year × position
+ * bucket (G/F/C). Pre-computed by scripts/compute-player-ranks.mjs.
+ */
+export type PlayerStatRank = {
+  value: number;
+  percentile: number;     // 1-100 (higher = better, with direction already applied)
+};
+export type PlayerRanksSeason = {
+  year: number;
+  bucket: "G" | "F" | "C";
+  cohortSize: number;
+  stats: Record<string, PlayerStatRank>;
+};
+export type PlayerRanks = {
+  bartId: number;
+  seasonRanks: PlayerRanksSeason[];
+};
+export async function readPlayerRanks(bartId: number): Promise<PlayerRanks | null> {
+  try {
+    return await readJson<PlayerRanks>(`player-ranks/${bartId}.json`);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Per-player situational splits derived from the box-score data: home/away,
+ * win/loss, conf/non-conf, plus best/worst game per season. Pre-computed by
+ * scripts/compute-player-splits.mjs.
+ */
+export type SplitAgg = {
+  games: number;
+  ppg: number; rpg: number; apg: number; spg: number; bpg: number; tov_pg: number;
+  fg_pct: number | null;
+  fg3_pct: number | null;
+  ft_pct: number | null;
+  ts_pct: number | null;
+} | null;
+
+export type GameSummary = {
+  date: string | null;
+  opp: string | null;
+  is_home: boolean | null;
+  is_neutral: boolean | null;
+  won: boolean | null;
+  mins: number | null;
+  pts: number | null;
+  reb: number | null;
+  ast: number | null;
+  stl: number | null;
+  blk: number | null;
+  tov: number | null;
+  fgm: number | null; fga: number | null;
+  fgm3: number | null; fga3: number | null;
+  ftm: number | null; fta: number | null;
+};
+
+export type PlayerSplitsSeason = {
+  year: number;
+  splits: {
+    home: SplitAgg;
+    away: SplitAgg;
+    neutral: SplitAgg;
+    win: SplitAgg;
+    loss: SplitAgg;
+    conf: SplitAgg;
+    nonConf: SplitAgg;
+    all: SplitAgg;
+  };
+  bestGame: GameSummary | null;
+  worstGame: GameSummary | null;
+};
+export type PlayerSplits = {
+  bartId: number;
+  seasonSplits: PlayerSplitsSeason[];
+};
+export async function readPlayerSplits(bartId: number): Promise<PlayerSplits | null> {
+  try {
+    return await readJson<PlayerSplits>(`player-splits/${bartId}.json`);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Look up a player's portal entry by their Bart Torvik ID. Returns the latest
+ * entry (most recently updated) when the player has multiple — players who
+ * enter and re-enter the portal across cycles can have several rows.
+ */
+export async function readPortalEntryForBartId(bartId: number): Promise<PortalEntry | null> {
+  const all = await readPortal();
+  const matches = all.filter((e) => e.bart_player_id === bartId);
+  if (matches.length === 0) return null;
+  matches.sort((a, b) => (b.date_updated ?? "").localeCompare(a.date_updated ?? ""));
+  return matches[0]!;
+}
+
 export async function readPlayer(bartId: number): Promise<{
   bart_player_id: number;
   seasons: Array<{

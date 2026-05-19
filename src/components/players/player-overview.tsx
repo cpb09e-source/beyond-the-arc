@@ -1,0 +1,64 @@
+"use client";
+
+import { useState } from "react";
+import { TeamLogo } from "@/components/team-logo";
+import { Select } from "@/components/select";
+import type { PlayerRanksSeason } from "@/lib/static-data";
+import { PlayerStatsGrid } from "./player-stats-grid";
+import { bucketLabel, seasonLabel } from "./where-they-rank";
+
+/**
+ * Player Overview — the full-season stats panel. Header surfaces the team +
+ * year for the displayed season; a Year dropdown lets the user swap to any
+ * other season they're ranked in (defaults to most-recent).
+ *
+ * Years that don't appear in the ranks data (e.g. didn't clear the
+ * 18g/18mpg/5ppg eligibility floor) are hidden from the dropdown.
+ */
+export type PlayerOverviewOption = {
+  year: number;
+  team_name: string;
+  ranks: PlayerRanksSeason;
+};
+
+export function PlayerOverview({ options }: { options: PlayerOverviewOption[] }) {
+  // options arrive newest-first; default selection is the latest year.
+  const [selectedYear, setSelectedYear] = useState<number>(options[0]?.year ?? 0);
+  const selected = options.find((o) => o.year === selectedYear) ?? options[0];
+  if (!selected) return null;
+
+  return (
+    <>
+      <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium mb-3">
+        <span className="h-px w-8 bg-coral" />
+        <span>Player Overview · Full Season Stats</span>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-4">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <TeamLogo name={selected.team_name} size={28} />
+          <span className="text-sm sm:text-base font-medium text-ink truncate">{selected.team_name}</span>
+          <span className="text-ink-muted">·</span>
+          {options.length > 1 ? (
+            <Select
+              value={String(selected.year)}
+              onChange={(v) => setSelectedYear(Number(v))}
+              ariaLabel="Select season"
+            >
+              {options.map((o) => (
+                <option key={o.year} value={o.year}>{seasonLabel(o.year)}</option>
+              ))}
+            </Select>
+          ) : (
+            <span className="text-sm sm:text-base text-ink tabular">{seasonLabel(selected.year)}</span>
+          )}
+        </div>
+        <span className="text-xs text-ink-muted">
+          Percentile rank within {selected.ranks.cohortSize.toLocaleString()} {bucketLabel(selected.ranks.bucket)}
+        </span>
+      </div>
+
+      <PlayerStatsGrid season={selected.ranks} />
+    </>
+  );
+}

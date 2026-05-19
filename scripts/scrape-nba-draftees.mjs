@@ -85,13 +85,15 @@ function parseDraftPage(html, year) {
   const rows = [...tableMatch[0].matchAll(/<tr[^>]*>[\s\S]*?<\/tr>/g)].map((m) => m[0]);
   for (const row of rows) {
     if (/class="thead"/.test(row)) continue;
-    const pickMatch = row.match(/data-stat="pick"[^>]*>(\d+)</);
+    // SR's draft tables use `pick_overall` for the pick number and
+    // `college_name` for the college (different from the school index pages).
+    const pickMatch = row.match(/data-stat="pick_overall"[^>]*>(?:<a[^>]*>)?(\d+)/);
     const playerMatch = row.match(/data-stat="player"[^>]*>(?:<a[^>]*>)?([^<]+)/);
     if (!playerMatch) continue;
     const name = plainText(playerMatch[1]);
     if (!name || /Round|Player/i.test(name)) continue;
     const teamMatch = row.match(/data-stat="team_id"[^>]*>(?:<a[^>]*>)?([^<]+)/);
-    const collegeMatch = row.match(/data-stat="college_id"[^>]*>(?:<a[^>]*>)?([^<]+)/);
+    const collegeMatch = row.match(/data-stat="college_name"[^>]*>(?:<a[^>]*>)?([^<]+)/);
     out.push({
       name,
       year,

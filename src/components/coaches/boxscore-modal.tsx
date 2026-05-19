@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
+import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { SeedChip } from "./seed-chip";
 import { NbaBadge } from "./nba-badge";
 
@@ -18,7 +19,16 @@ function loadDraftees(): Promise<Record<string, Draftee>> {
   return DRAFTEES_FETCH;
 }
 function normName(s: string): string {
-  return s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+  return s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    // Strip generational suffixes ("Jr.", "Sr.", "II", "III", "IV") so
+    // "Walter Clayton Jr." matches SR's "Walter Clayton".
+    .replace(/\s+(jr|sr|ii|iii|iv|v)$/i, "");
 }
 
 type Player = {

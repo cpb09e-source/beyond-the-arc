@@ -65,7 +65,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
       switch (sortBy) {
         case "name":           return (r.name.split(" ").pop() ?? r.name).toLowerCase();
         case "team":           return (r.current_team ?? "zzz").toLowerCase();
-        case "conference":     return r.current_conference ?? "zzz";
+        case "conference":     return r.current_conference ? confDisplay(r.current_conference).toLowerCase() : "zzz";
         case "active":         return r.is_active ? 1 : 0;
         case "career_wins":    return r.career_wins;
         case "career_winpct":  return r.career_win_pct;
@@ -167,22 +167,23 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
               <tr className="border-b border-hairline text-left">
                 <Th className="w-10 text-center">#</Th>
                 <ThSort label="Coach" active={sortBy==="name"} dir={sortDir} onClick={() => toggle("name","asc")} align="left" />
-                <Th className="w-12">{""}</Th>
+                <Th className="w-9">{""}</Th>
                 <ThSort label="Current team" active={sortBy==="team"} dir={sortDir} onClick={() => toggle("team","asc")} align="left" />
                 <ThSort label="Conf" active={sortBy==="conference"} dir={sortDir} onClick={() => toggle("conference","asc")} align="left" />
-                <ThSort label="Status" active={sortBy==="active"} dir={sortDir} onClick={() => toggle("active","desc")} align="left" />
                 <ThSort label="Seasons" active={sortBy==="seasons"} dir={sortDir} onClick={() => toggle("seasons","desc")} />
-                <ThSort label="All-time" active={sortBy==="career_wins"} dir={sortDir} onClick={() => toggle("career_wins","desc")} />
-                <ThSort label="Win %" active={sortBy==="career_winpct"} dir={sortDir} onClick={() => toggle("career_winpct","desc")} />
+                <ThSort label="Record" active={sortBy==="career_wins"} dir={sortDir} onClick={() => toggle("career_wins","desc")} />
+                <ThSort label="Win" active={sortBy==="career_winpct"} dir={sortDir} onClick={() => toggle("career_winpct","desc")} />
               </tr>
             </thead>
             <tbody>
               {pageRows.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-12 text-center text-ink-muted">No coaches match these filters.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-ink-muted">No coaches match these filters.</td></tr>
               ) : (
                 pageRows.map((r, i) => (
                   <tr key={`${r.slug}-${i}`} className="border-b border-hairline/60 hover:bg-paper-deep/50 transition-colors">
-                    <Td className="text-center text-ink-muted tabular">{(safePage - 1) * pageSize + i + 1}</Td>
+                    <Td className={cn("text-center tabular", r.is_active ? "text-coral" : "text-ink-muted")}>
+                      {(safePage - 1) * pageSize + i + 1}
+                    </Td>
                     <Td>
                       <Link href={`/coaches/${coachSlug(r.name)}/`} className="text-ink hover:text-coral transition-colors">
                         {r.name}
@@ -202,19 +203,8 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                         </Link>
                       ) : <span className="text-ink-muted">—</span>}
                     </Td>
-                    <Td className="text-ink-soft">{r.current_conference ?? "—"}</Td>
-                    <Td>
-                      {r.is_active ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs">
-                          <span className="h-1.5 w-1.5 rounded-full bg-coral" />
-                          <span className="text-ink">Active</span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 text-xs">
-                          <span className="h-1.5 w-1.5 rounded-full bg-ink-muted/40" />
-                          <span className="text-ink-muted">Inactive</span>
-                        </span>
-                      )}
+                    <Td className="text-ink-soft">
+                      {r.current_conference ? confDisplay(r.current_conference) : <span className="text-ink-muted">—</span>}
                     </Td>
                     <Td className="text-right tabular text-ink-soft">{r.seasons_count}</Td>
                     <Td className="text-right tabular text-ink">{fmtRecord(r.career_wins, r.career_losses)}</Td>
@@ -259,7 +249,7 @@ function Pagination({
             type="button"
             onClick={() => onPage(Math.max(1, page - 1))}
             disabled={page <= 1}
-            className="px-2 py-1 rounded hover:bg-paper-deep/60 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+            className="px-2 py-1 rounded hover:bg-paper-deep/60 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
             aria-label="Previous page"
           >‹ Prev</button>
           {items.map((it, i) =>
@@ -282,7 +272,7 @@ function Pagination({
             type="button"
             onClick={() => onPage(Math.min(totalPages, page + 1))}
             disabled={page >= totalPages}
-            className="px-2 py-1 rounded hover:bg-paper-deep/60 disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
+            className="px-2 py-1 rounded hover:bg-paper-deep/60 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
             aria-label="Next page"
           >Next ›</button>
         </div>

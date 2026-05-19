@@ -140,7 +140,7 @@ export function SearchDialog() {
           role="dialog"
           aria-modal
           aria-label="Search teams and players"
-          className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 p-4 pt-[10vh]"
+          className="fixed inset-0 z-50 flex items-start justify-center bg-ink/15 backdrop-blur-sm p-4 pt-[10vh]"
           onClick={() => setOpen(false)}
         >
           <div
