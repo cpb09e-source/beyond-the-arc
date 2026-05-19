@@ -1,0 +1,174 @@
+Source Table,Field Name,Type,Notes
+players,id,int8 PK,Per-season DB row id (one per player-year)
+players,year,int4,Season-end year (2025-26 = 2026)
+players,team_id,int4 FK,Foreign key to teams.id
+players,bart_player_id,int8,Bart Torvik stable cross-season ID
+players,cbba_player_id,int8,CBB Analytics stable cross-season ID
+players,name,text,Display name
+players,name_normalized,text,Lowercased + diacritic-stripped for joins
+players,class,text,"""Fr"" | ""So"" | ""Jr"" | ""Sr"" | ""Gr"""
+players,height,text,"e.g. ""6-6"""
+players,hometown,text,"e.g. ""Omaha, NE"""
+players,dob,date,YYYY-MM-DD when present
+players,created_at,timestamptz,Row create time
+,,,
+player_bart_stats,player_id,int8 PK FK,FK to players.id
+player_bart_stats,year,int4 PK,
+player_bart_stats,games,int4,GP (named promotion from raw_row[3])
+player_bart_stats,notes,text,"Bart's position tag (""Stretch 4"", ""Combo G"")"
+player_bart_stats,projection,numeric,Bart's blended projection score
+player_bart_stats,raw_row,jsonb,Full 67-column CSV row (positional)
+player_bart_stats,updated_at,timestamptz,
+,,,
+raw_row[0],name,text,Verified vs Cooper Flagg / Robby Carmody
+raw_row[1],school,text,
+raw_row[2],conference,text,
+raw_row[3],games,int,GP
+raw_row[4],min_pct_OR_mpg,numeric,% of available minutes (varies by year)
+raw_row[5],ortg,numeric,Individual offensive rating
+raw_row[6],usage,numeric,% possessions used (Usg%)
+raw_row[7],efg_pct,numeric,Effective FG%
+raw_row[8],ts_pct,numeric,True shooting %
+raw_row[9],orb_pct,numeric,Offensive rebound %
+raw_row[10],drb_pct,numeric,Defensive rebound %
+raw_row[11],ast_pct,numeric,Assist %
+raw_row[12],tov_pct,numeric,Turnover %
+raw_row[13],ft_made,int,
+raw_row[14],ft_att,int,
+raw_row[15],ft_pct,numeric,Proportion (0.818 = 81.8%)
+raw_row[16],fg2_made,int,
+raw_row[17],fg2_att,int,
+raw_row[18],fg2_pct,numeric,2P% proportion
+raw_row[19],fg3_made,int,
+raw_row[20],fg3_att,int,
+raw_row[21],fg3_pct,numeric,3P% proportion
+raw_row[22],blk_pct,numeric,Block %
+raw_row[23],stl_pct,numeric,Steal %
+raw_row[24],ftr,numeric,FT rate (FTA / FGA)
+raw_row[25],class,text,Duplicated in players.class
+raw_row[26],height,text,Duplicated in players.height
+raw_row[27],jersey_or_num,int,Likely jersey or pick-related
+raw_row[28],porpag,numeric,"Points Over Replacement Per Adj Game (Bart's flagship per-game value metric)"
+raw_row[29],adjoe_player,numeric,Player-adjusted offensive metric
+raw_row[30],pfr_or_misc,numeric,Personal foul rate (unverified)
+raw_row[31],year,int,Duplicated in players.year
+raw_row[32],bart_player_id,int,Duplicated in players.bart_player_id
+raw_row[33],hometown,text,Duplicated in players.hometown
+raw_row[34],recruit_rank,nullable,Often null
+raw_row[35],ranking_pct,text,Looks like decimal proportion
+raw_row[36],dunks_made,int,Slam dunks made
+raw_row[37],dunks_att,int,Slam dunks attempted
+raw_row[38],rim_made,int,At-rim FG made
+raw_row[39],rim_att,int,At-rim FG attempted
+raw_row[40],rim_pct,numeric,At-rim FG%
+raw_row[41],mid_made,int,Mid-range FG made
+raw_row[42],mid_att,int,Mid-range FG attempted
+raw_row[43],mid_pct,numeric,Mid-range FG%
+raw_row[44],missed_ft_pg,numeric,"(FTA - FTM) / games (verified Flagg 0.92, Broome 0.94)"
+raw_row[45],unknown_45,nullable,Often null
+raw_row[46],ortg_adj_player,numeric,~Adjusted ORtg for player
+raw_row[47],drtg_adj_player,numeric,~Adjusted DRtg for player
+raw_row[48],pir_or_bpm,numeric,Box plus-minus family
+raw_row[49],bpm_component_1,numeric,Plus-minus breakdown
+raw_row[50],bpm_component_2,numeric,
+raw_row[51],bpm_component_3,numeric,
+raw_row[52],missed_fg_pg,numeric,"(FGA - FGM) / games (verified Flagg 6.96, Broome 6.71)"
+raw_row[53],unknown_53,numeric,
+raw_row[54],min_pg,numeric,"Minutes per game (verified Flagg 30.68, Sears 32.26)"
+raw_row[55],unknown_55,numeric,
+raw_row[56],unknown_56,numeric,
+raw_row[57],unknown_57,numeric,
+raw_row[58],unknown_58,numeric,
+raw_row[59],reb_pg_alt,numeric,~RPG (Bart has multiple RPG calcs)
+raw_row[60],ast_pg_alt,numeric,~APG
+raw_row[61],unknown_61,numeric,
+raw_row[62],unknown_62,numeric,
+raw_row[63],pts_pg_alt,numeric,~PPG
+raw_row[64],position_note,text,"""Stretch 4"", ""Combo G"", etc."
+raw_row[65],projection,numeric,Bart projection score (also promoted to projection column)
+raw_row[66],dob,text,YYYY-MM-DD (also promoted to players.dob)
+,,,
+"raw_row[fromEnd:3]",pts_pg,numeric,Per-game points (verified)
+"raw_row[fromEnd:4]",blk_pg,numeric,Per-game blocks (verified)
+"raw_row[fromEnd:5]",stl_pg,numeric,Per-game steals (verified)
+"raw_row[fromEnd:6]",ast_pg,numeric,Per-game assists (verified)
+"raw_row[fromEnd:7]",reb_pg,numeric,Per-game rebounds (verified)
+,,,
+player_cbba_stats,player_id,int8 PK FK,FK to players.id
+player_cbba_stats,year,int4 PK,
+player_cbba_stats,competition_id,int4,CBB Analytics competition id
+player_cbba_stats,raw,jsonb,Full CBBA player-season blob (40+ fields incl. usage_pct/orb_pct/drb_pct/ast_pct/tov_pct/blk_pct/stl_pct/efg_pct/ts_pct/three_pt_rate/ft_rate/poss_pct/scoring_pct)
+player_cbba_stats,updated_at,timestamptz,
+,,,
+player_game_stats,id,int8 PK,
+player_game_stats,cbba_game_player_id,text UNIQ,CBBA-side row id for the player-game
+player_game_stats,cbba_game_id,int4,CBBA game id
+player_game_stats,year,int4,
+player_game_stats,game_date,date,YYYY-MM-DD
+player_game_stats,cbba_player_id,int8,
+player_game_stats,bart_player_id,int8,Joinable with players
+player_game_stats,full_name,text,Snapshot of name at game time
+player_game_stats,jersey_num,text,
+player_game_stats,position,text,
+player_game_stats,team_id,int4 FK,
+player_game_stats,opp_team_id,int4 FK,Null when opponent not in our teams table
+player_game_stats,opp_team_market,text,"e.g. ""Kentucky Wildcats"""
+player_game_stats,is_home,bool,
+player_game_stats,is_neutral,bool,
+player_game_stats,is_starter,bool,
+player_game_stats,won,bool,
+player_game_stats,mins,numeric,Game minutes played
+player_game_stats,poss,numeric,Possessions played
+player_game_stats,pts_scored,int,
+player_game_stats,fgm,int,Field goals made (total)
+player_game_stats,fga,int,
+player_game_stats,fgm2,int,2-pt FG made
+player_game_stats,fga2,int,2-pt FG attempted
+player_game_stats,fgm3,int,3-pt FG made
+player_game_stats,fga3,int,3-pt FG attempted
+player_game_stats,ftm,int,Free throws made
+player_game_stats,fta,int,
+player_game_stats,orb,int,Offensive rebounds
+player_game_stats,drb,int,Defensive rebounds
+player_game_stats,reb,int,Total rebounds
+player_game_stats,ast,int,
+player_game_stats,stl,int,
+player_game_stats,blk,int,
+player_game_stats,tov,int,Turnovers
+player_game_stats,pf,int,Personal fouls
+player_game_stats,plus_minus,int,On-court plus/minus for the game
+player_game_stats,fg_pct,numeric,Game FG%
+player_game_stats,fg3_pct,numeric,Game 3P%
+player_game_stats,ft_pct,numeric,Game FT%
+player_game_stats,efg_pct,numeric,Game eFG%
+player_game_stats,ts_pct,numeric,Game TS%
+player_game_stats,usage_pct,numeric,Game Usage%
+player_game_stats,updated_at,timestamptz,
+,,,
+player_on_off_stats,id,int8 PK,
+player_on_off_stats,cbba_row_id,text UNIQ,
+player_on_off_stats,year,int4,
+player_on_off_stats,competition_id,int4,
+player_on_off_stats,cbba_player_id,int8,
+player_on_off_stats,bart_player_id,int8,
+player_on_off_stats,full_name,text,
+player_on_off_stats,team_id,int4 FK,
+player_on_off_stats,net_onoff,numeric,NetRtg with player on court
+player_on_off_stats,ortg_onoff,numeric,ORtg with player on
+player_on_off_stats,drtg_onoff,numeric,DRtg with player on
+player_on_off_stats,mins_on,numeric,Minutes played
+player_on_off_stats,mins_off,numeric,Minutes off court
+player_on_off_stats,mins_pct,numeric,Share of team minutes
+player_on_off_stats,is_qualified,bool,"CBBA's ""qualified"" minutes threshold flag"
+player_on_off_stats,updated_at,timestamptz,
+,,,
+COMPUTED (src/lib/players.ts),fg_pct,numeric,Combined 2P+3P percentage
+COMPUTED,ts_pct,numeric,PTS / (2 * (FGA + 0.44 * FTA))
+COMPUTED,pir,numeric,EuroLeague PIR minus TOV (per game)
+COMPUTED,bta_ind_ortg,numeric,"avg(z(PIR), z(PORPAG)) * 20 * conf-tier multiplier * elite-team bumps"
+COMPUTED,bta_portg_stars,int,1-5 star tier derived from bta_ind_ortg
+COMPUTED (NBA scrape),nba_pick,int|null,NBA Draft pick (null if undrafted)
+COMPUTED (NBA scrape),nba_draft_year,int,NBA Draft year (or first NBA season for undrafted)
+COMPUTED (NBA scrape),nba_team,text,NBA team abbreviation
+COMPUTED (NBA scrape),nba_college,text,College listed in draft
+COMPUTED (TBoxScore scrape),tournament_box_game,jsonb,"NCAA Tournament per-game box (818 games, 2013-26)"

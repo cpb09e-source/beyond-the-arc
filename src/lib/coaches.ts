@@ -16,6 +16,7 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { readAllTeams } from "@/lib/static-data";
+import { POWER_CONFS } from "@/lib/conf-tiers";
 
 const TEAM_NAME_OVERRIDES: Record<string, string> = {
   "Southern California": "USC",
@@ -116,6 +117,13 @@ export type CoachIndexRow = {
   career_win_pct: number | null;
   seasons_count: number;
   schools_count: number;
+  /** Every distinct team this coach has been at in our 2013-26 window.
+   *  Used by /coaches Team filter so picking "Abilene Christian" surfaces
+   *  every coach who's been there since 2013, not just the current one. */
+  all_teams: string[];
+  // Composite ranking — TODO: formula in progress. Optional + nullable so
+  // the UI can render "—" until the export pipeline populates it.
+  composite_score?: number | null;
 };
 
 export type CoachProfile = CoachIndexRow & {
@@ -493,6 +501,7 @@ function profilesFromSeasons(seasons: SeasonWithCoach[], raw: RawSourceData): Co
       career_win_pct: winPct(career_wins, career_losses),
       seasons_count: list.length,
       schools_count: byTeam.size,
+      all_teams: Array.from(new Set(list.map((s) => s.team))).sort(),
       by_year,
       schools,
       best_season: sortedByPct[0] ? { year: sortedByPct[0].year, team: sortedByPct[0].team, conference: sortedByPct[0].conference, wins: sortedByPct[0].wins, losses: sortedByPct[0].losses, seed: sortedByPct[0].seed, round: sortedByPct[0].round } : null,
@@ -503,18 +512,556 @@ function profilesFromSeasons(seasons: SeasonWithCoach[], raw: RawSourceData): Co
   return profiles;
 }
 
+// ---------- Composite score ----------
+
+/**
+ * Programs that are expected to dance every year. Missing the tournament at
+ * one of these schools is a stiff penalty in the composite score. Editorial
+ * list — feel free to edit if a program's tier shifts.
+ */
+const BLUEBLOOD_PROGRAMS = new Set([
+  // ACC
+  "Duke", "North Carolina", "Louisville", "Virginia",
+  // Big 12
+  "Kansas", "Texas", "Arizona",
+  // Big Ten
+  "Michigan St.", "Indiana", "Michigan", "Ohio St.", "Wisconsin", "Purdue", "UCLA",
+  // SEC
+  "Kentucky", "Florida", "Tennessee", "Auburn",
+  // Big East — title-winning programs in our 2013-26 window
+  "Villanova", "Connecticut",
+  // High mid-majors that have operated at Power tier the entire window.
+  // Treated as blueblood for miss-penalty purposes since a Few/Sampson
+  // missing the dance would be national news.
+  "Gonzaga", "Houston",
+]);
+
+/**
+ * The traditional college-basketball kings — programs where titles are part
+ * of the institutional expectation, not an upset. Used for the "harder-path
+ * title" bonus: winning the title at a non-elite blueblood (Villanova,
+ * Virginia, etc.) gets extra credit; doing it at an elite blueblood
+ * (Kentucky, Duke, UCLA, etc.) does not.
+ */
+const ELITE_BLUEBLOOD = new Set([
+  "Kentucky", "Duke", "North Carolina", "UCLA", "Kansas", "Indiana",
+  // UConn has 3 titles in our 2013-26 window alone (2014, 2023, 2024) —
+  // they're elite by every measure now, even if their pedigree is younger
+  // than the historical 6.
+  "Connecticut",
+]);
+
+/**
+ * Power-conference programs where making the tournament is a real
+ * accomplishment, not an expectation. No miss-tournament penalty.
+ */
+const LOW_EXPECTATION_POWER = new Set([
+  "Northwestern", "Vanderbilt", "Boston College", "Wake Forest",
+  "Penn St.", "Nebraska", "Rutgers",
+  "California", "Washington St.", "Oregon St.",
+  "South Carolina", "Mississippi St.", "Mississippi",
+  "Georgia Tech", "Pittsburgh",
+  "DePaul", "Georgetown",
+]);
+
+// Tournament reach points — asymmetric by tier. Power coaches face the
+// expectation tax (early exits are punishing); mid-major coaches are rewarded
+// just for being there. Final Four / Runner-up / Champion are weighted heavily
+// since the formula treats winning the title as the single most important
+// résumé line — a champion gets ~2× a Sweet 16 outright.
+const REACH_POINTS_POWER: Record<TourneyRound, number> = {
+  "First Four": -0.5,
+  "R64": -1,
+  "R32": 0,
+  "Sweet 16": 2,
+  "Elite Eight": 4,
+  "Final Four": 10,
+  "Runner-up": 13,
+  "Champion": 18,
+};
+const REACH_POINTS_MID: Record<TourneyRound, number> = {
+  "First Four": 0.5,
+  "R64": 2,
+  "R32": 3,
+  "Sweet 16": 6,
+  "Elite Eight": 9,
+  "Final Four": 17,
+  "Runner-up": 20,
+  "Champion": 25,
+};
+
+function btaRankBonus(rank: number | null | undefined): number {
+  if (rank == null) return 0;
+  if (rank <= 5) return 4;
+  if (rank <= 10) return 3;
+  if (rank <= 25) return 2;
+  if (rank <= 50) return 1;
+  if (rank <= 100) return 0.5;
+  return 0;
+}
+
+function powerMissPenalty(team: string): number {
+  if (BLUEBLOOD_PROGRAMS.has(team)) return -3.5;
+  if (LOW_EXPECTATION_POWER.has(team)) return 0;
+  return -0.5;
+}
+
+/**
+ * "Fall from grace" penalty — a Power-conf blueblood (Kansas, Duke, etc.)
+ * that wins under 20 games is a season-defining disappointment, and it
+ * compounds the standard miss-tournament penalty. Restricted to Power-conf
+ * bluebloods only (Gonzaga's bad year wouldn't trigger this since they play
+ * in WCC). Tiered by severity.
+ */
+function bluebloodSubTwentyPenalty(team: string, wins: number, confIsPower: boolean): number {
+  if (!confIsPower) return 0;
+  if (!BLUEBLOOD_PROGRAMS.has(team)) return 0;
+  if (wins >= 20) return 0;
+  if (wins < 10) return -5;     // disaster — e.g. <30% W%
+  if (wins < 15) return -3.5;   // very bad
+  return -2;                    // 15–19 wins
+}
+
+/**
+ * Is this season "expected tier" for the formula — i.e. should we apply
+ * Power-conf rules (tighter reach values, miss penalty, no upset bonus)?
+ *
+ * Two ways to qualify:
+ *   1. Conference is in POWER_CONFS (ACC/B10/B12/P12/SEC/BE), OR
+ *   2. BTA rank ≤ 30 for that season — captures Gonzaga, Saint Mary's,
+ *      Houston (pre-B12), and any mid-major program operating at Power level.
+ *
+ * Without this rule, Gonzaga's 14-season run at top-5 BTA would inflate via
+ * mid-major reach bonuses and end up 100 points above true Power coaches.
+ */
+function isExpectedTier(s: CoachSeason): boolean {
+  if (s.conference && POWER_CONFS.has(s.conference)) return true;
+  if (s.bta_rank != null && s.bta_rank <= 30) return true;
+  return false;
+}
+
+/**
+ * Career résumé score — per-season points summed across the coach's career.
+ * Tenure is implicit (longer good careers compound). Rewards:
+ *   - Win % × 10  (0–10 baseline)
+ *   - 20+ wins      +1.5
+ *   - Reg-season conf champ  +2
+ *   - BTA rank tiered bonus  +0.5 to +4
+ *   - Power-conf base bump   +0.5
+ *   - Tournament reach (asymmetric by conf tier)
+ *   - Mid-major upset bonus (per game): min(seedDiff × 0.4, 4)
+ *
+ * Penalties:
+ *   - Power miss-tournament: blueblood −2.5 / default −0.5 / low-expectation 0
+ *   - Power R64 first-round exit: −1
+ *
+ * Returns the raw composite (sum of season scores). Rounded to 1 decimal.
+ */
+function computeCompositeScore(
+  profile: CoachProfile,
+  gamesLookup: Map<string, TourneyGame[]>,
+): number {
+  // Pre-compute tenure per team — needed for the first-season-loss waiver.
+  // A losing first season is forgiven (no point deductions) when the coach
+  // stuck around long enough to build the program back up. Captures the
+  // "rebuilding a bad job" scenario that shouldn't dock a coach.
+  const tenureByTeam = new Map<string, { firstYear: number; total: number }>();
+  for (const s of profile.by_year) {
+    const cur = tenureByTeam.get(s.team);
+    if (!cur) tenureByTeam.set(s.team, { firstYear: s.year, total: 1 });
+    else tenureByTeam.set(s.team, {
+      firstYear: Math.min(cur.firstYear, s.year),
+      total: cur.total + 1,
+    });
+  }
+
+  let total = 0;
+  for (const s of profile.by_year) {
+    if (s.wins == null || s.losses == null) continue;
+    const games = s.wins + s.losses;
+    if (games === 0) continue;
+    const winPct = s.wins / games;
+    const expected = isExpectedTier(s);
+    const confIsPower = s.conference ? POWER_CONFS.has(s.conference) : false;
+
+    // First-season-loss waiver: if this is the coach's first season at this
+    // team AND they coached there for 4+ seasons AND the season was a losing
+    // record, all per-season penalties are suppressed. This forgives the
+    // rebuilding year when a coach inherits a struggling program.
+    const tenure = tenureByTeam.get(s.team);
+    const isFirstAtTeam = tenure ? tenure.firstYear === s.year : false;
+    const longTenure = tenure ? tenure.total > 3 : false;
+    const losingRecord = s.wins < s.losses;
+    const waiver = isFirstAtTeam && longTenure && losingRecord;
+
+    // Base — win % × 10 (0–10 points)
+    let season = winPct * 10;
+
+    // Threshold bonuses
+    if (s.wins >= 20) season += 1.5;
+    // 30+ wins is rare in a Power-conference schedule (gauntlet of P5 opponents
+    // means more losses baked in). Mid-major 30-win seasons only get the +1.5
+    // for 20+ wins; this extra bonus is conference-power-only.
+    if (s.wins >= 30 && confIsPower) season += 2;
+    if (s.reg_season_conf_champ) {
+      season += 2;
+      // Winning a Power-conf regular season title is materially harder than
+      // running the table in a one-bid league — extra bump for P5 reg champs.
+      if (confIsPower) season += 1.5;
+    }
+
+    // BTA rank bonus
+    season += btaRankBonus(s.bta_rank);
+
+    // Expected-tier base bump
+    if (expected) season += 0.5;
+
+    // Tournament reach (asymmetric). Reach values themselves can be negative
+    // for Power R64 exits — gate that branch on the waiver too so a 0-2 first
+    // R64 trip doesn't sting a coach we're forgiving for inheriting a bad team.
+    if (s.round != null) {
+      const reach = expected ? REACH_POINTS_POWER[s.round] : REACH_POINTS_MID[s.round];
+      // Positive reach (S16+) always counts. Negative reach (R64 Power = −1,
+      // First Four Power = −0.5) is suppressed under the waiver.
+      if (reach >= 0 || !waiver) season += reach;
+      // Top-seed first-round disaster — worst bracket outcome possible.
+      if (s.round === "R64" && s.seed != null && s.seed <= 3 && !waiver) {
+        season -= 6;
+      }
+      // Blueblood R1 exit, any seed — coaching at a top program raises the
+      // floor; a first-round exit at Duke/Kansas/UNC/etc. is a résumé negative
+      // even as a 5-seed. Tiny tax so it nudges without overwhelming the
+      // existing top-3 seed disaster penalty (which stacks).
+      if (s.round === "R64" && BLUEBLOOD_PROGRAMS.has(s.team) && !waiver) {
+        season -= 1;
+      }
+      // Cinderella deep-run bonus — flat bump for reaching F4+ as a high
+      // seed. Captures the rare significance of a Dusty-May-2023-style run
+      // (9-seed F4 with FAU) that the standard reach + per-game upset
+      // bonuses don't fully reward. Title-game finishes get a bigger tier
+      // than F4-only since reaching the title game as a Cinderella is
+      // historically thinner air.
+      //
+      // Power-conf teams are NOT eligible — a Power program reaching F4 as
+      // an 11-seed (Cronin's 2021 UCLA, Keatts' 2024 NC State) has inherent
+      // resource/recruiting advantages a true mid-major Cinderella lacks.
+      if (s.seed != null && !confIsPower) {
+        const isF4 = s.round === "Final Four";
+        const isFinal = s.round === "Runner-up" || s.round === "Champion";
+        if (isFinal) {
+          if (s.seed >= 13) season += 30;
+          else if (s.seed >= 10) season += 25;
+          else if (s.seed >= 8) season += 18;
+          else if (s.seed >= 6) season += 10;
+          else if (s.seed >= 5) season += 5;
+        } else if (isF4) {
+          if (s.seed >= 13) season += 20;
+          else if (s.seed >= 10) season += 15;
+          else if (s.seed >= 8) season += 8;
+          else if (s.seed >= 6) season += 5;
+        }
+      }
+    } else if (expected && !waiver && s.year !== 2020) {
+      // Missed tournament as an expected-tier coach — penalty depends on
+      // program tier. Mid-majors that didn't hit top-30 BTA escape penalty.
+      // 2020 exempt: the tournament was cancelled, not missed.
+      season += powerMissPenalty(s.team);
+    }
+
+    // Power-conf blueblood "fall from grace" — compounds the miss penalty
+    // when a top program also fails to clear 20 wins. Waived for rebuilding
+    // first seasons.
+    if (!waiver) {
+      season += bluebloodSubTwentyPenalty(s.team, s.wins, confIsPower);
+    }
+
+    // Sub-.500 Power-conf penalty — at a Power-conference job, a losing
+    // record is a résumé negative, not a positive. Without this rule a
+    // mediocre coach piles up "showed up to work" points just for staying
+    // employed (Pikiell at Rutgers archetype). −6/season, conf-power only
+    // (mid-major .470 records reflect real difficulty), waivered for
+    // rebuilding first seasons, and stacks with blueblood-sub-20 tax.
+    if (!waiver && confIsPower && s.wins < s.losses) {
+      season -= 6;
+    }
+
+    // Mediocre Power-conf tax — Power seasons in the .50-.60 win-pct range
+    // are "treading water" at a job that pays for above-average results.
+    // Without this, coaches like Michael White accumulate résumé points
+    // from a long career of mediocre-Power years. −3/season; waivered for
+    // first-season rebuilds.
+    if (!waiver && confIsPower && winPct >= 0.5 && winPct < 0.6) {
+      season -= 3;
+    }
+
+    // Catastrophic-bottom tax — sub-25% win-pct seasons. These are total
+    // collapses regardless of conference (3-27 at Mississippi Valley St.,
+    // 9-23 at Alabama A&M, etc.). −5/season on top of any sub-.500 Power
+    // penalty. Waivered for first-season rebuilds since a 5-25 season
+    // inheriting a bad job shouldn't dock a coach who builds from there.
+    if (!waiver && winPct < 0.25) {
+      season -= 5;
+    }
+
+    // Non-Power expected-tier schedule tax — coaches who get Power-conf
+    // treatment via top-30 BTA (Gonzaga, Saint Mary's, Houston pre-B12) are
+    // still partly riding a softer conference schedule. Small per-season
+    // tax keeps the formula honest. Doesn't apply if conference is Power.
+    if (expected && !confIsPower) {
+      season -= 0.65;
+    }
+
+    // Mid-major upset bonus — only when an UNEXPECTED-TIER team was the
+    // higher seed (worse number) AND won. Expected-tier teams (Power confs +
+    // top-30 BTA programs) get nothing here, per "Kansas as a 10-seed
+    // beating a 7-seed shouldn't matter" — same logic applies to Gonzaga.
+    if (!expected && s.seed != null) {
+      const tGames = gamesForTeamYear(gamesLookup, s.team, s.year);
+      for (const g of tGames) {
+        const isWinner = normSchool(g.winner.school) === normSchool(s.team);
+        if (!isWinner) continue;
+        const mySeed = g.winner.seed;
+        const oppSeed = g.loser.seed;
+        if (mySeed == null || oppSeed == null) continue;
+        if (mySeed <= oppSeed) continue; // not an upset — we were favored
+        const diff = mySeed - oppSeed;
+        season += Math.min(diff * 0.4, 4);
+      }
+    }
+
+    total += season;
+  }
+
+  // Repeated top-seed first-round disasters — career-level stacking penalty
+  // when a coach has flamed out as a 1-3 seed in R1 more than once. The
+  // per-season −6 already prices the individual mistake; this captures the
+  // pattern (Calipari's St. Peter's 2022 + Oakland 2024). −4 per repeat
+  // occurrence beyond the first.
+  {
+    const topSeedR1Losses = profile.by_year.filter(
+      (s) => s.round === "R64" && s.seed != null && s.seed <= 3,
+    ).length;
+    if (topSeedR1Losses > 1) {
+      total -= 4 * (topSeedR1Losses - 1);
+    }
+  }
+
+  const titles = profile.by_year.filter((s) => s.round === "Champion").length;
+
+  // Career-arc gate — all bumps and taxes that depend on cumulative career
+  // shape are suppressed for coaches with fewer than 5 total seasons. A
+  // 1-year wonder shouldn't get the +10 80%-Power-career bonus from one hot
+  // season, and a 4-year coach shouldn't be taxed for not winning a title
+  // yet. Keeps short-tenure coaches (Jon Scheyer, Ben McCollum, Tommy Lloyd
+  // through year-3) at a neutral "résumé in progress" score — just the sum
+  // of per-season points without career-arc multipliers in either direction.
+  const careerArcEligible = profile.seasons_count >= 5;
+
+  // Fast-start bonus — explicit reward for newer coaches having clear
+  // success. Sits OUTSIDE the career-arc gate so short-tenure standouts
+  // (Scheyer at Duke, McCollum at Iowa) get acknowledged without inflating
+  // them past long-tenured greats. Two tiers:
+  //   • 2-4 seasons, 75%+ career W%, majority at expected-tier programs
+  //     → +(seasons × 2) — scales with how much data backs the start
+  //   • 1 season, 75%+ W%, top-25 BTA rank that year → +3 flat
+  // Tommy Lloyd hits the 5-season mark so he goes through the regular
+  // career-arc pipeline and doesn't get this bonus.
+  if (profile.career_win_pct != null) {
+    const expectedSeasons = profile.by_year.filter(isExpectedTier).length;
+    const majorityExpected = expectedSeasons / Math.max(1, profile.seasons_count) >= 0.5;
+    if (
+      profile.seasons_count >= 2 &&
+      profile.seasons_count <= 4 &&
+      profile.career_win_pct >= 0.75 &&
+      majorityExpected
+    ) {
+      total += profile.seasons_count * 2;
+    } else if (profile.seasons_count === 1 && profile.career_win_pct >= 0.75) {
+      // 1-season case requires that single season to be top-25 BTA so we
+      // only reward genuine standouts, not random one-year flashes.
+      const bestRank = profile.by_year[0]?.bta_rank;
+      if (bestRank != null && bestRank <= 25) total += 3;
+    }
+  }
+
+  if (careerArcEligible) {
+    // Powerhouse-without-a-ring tax — Mark Few archetype. −0.5 per blueblood
+    // season when career-window title count is zero.
+    if (titles === 0) {
+      const ringlessYearsAtPowerhouse = profile.by_year.filter((s) =>
+        BLUEBLOOD_PROGRAMS.has(s.team),
+      ).length;
+      total += ringlessYearsAtPowerhouse * -0.5;
+    }
+
+    // "Harder path" title bonus — non-elite blueblood titles (Villanova,
+    // Virginia, etc.) +5/title.
+    const titleAtBorderlineBlueblood = profile.by_year.filter(
+      (s) =>
+        s.round === "Champion" &&
+        BLUEBLOOD_PROGRAMS.has(s.team) &&
+        !ELITE_BLUEBLOOD.has(s.team),
+    ).length;
+    total += titleAtBorderlineBlueblood * 5;
+
+    // Villanova-specific extra bump — removed per editorial preference;
+    // Wright still gets the non-elite blueblood bonus + multi-title +
+    // dynasty bonuses. Left as a comment so the rationale isn't lost.
+
+    // Power-conf reg-season champ accumulation — owning your league is a
+    // sustained-excellence marker the per-season +3 (reg-champ + Power bonus)
+    // already partially captures. Career-level bump rewards multiple titles
+    // beyond what cumulative season points alone produce. Slight at 4+, a
+    // little more at 8+.
+    {
+      const powerRegChamps = profile.by_year.filter(
+        (s) => s.reg_season_conf_champ && s.conference != null && POWER_CONFS.has(s.conference),
+      ).length;
+      if (powerRegChamps >= 8) total += 5;
+      else if (powerRegChamps >= 4) total += 3;
+    }
+
+    // Thin-deep-résumé tax — 8+ Power-conf seasons with no title and ≤1
+    // Final Four signals a coach who maxes regular-season production but
+    // underwhelms when it matters most. Captures the Cronin/Painter/Altman
+    // pattern: long Power-conf careers without the proportional March peak.
+    // Threshold of 8 lets coaches with split Power/non-Power careers (Cronin
+    // at Cincinnati AAC + UCLA Power) qualify on the Power portion alone.
+    // −2 career-level.
+    {
+      const finalFours = profile.by_year.filter(
+        (s) => s.round === "Final Four" || s.round === "Runner-up" || s.round === "Champion",
+      ).length;
+      const powerSeasons = profile.by_year.filter(
+        (s) => s.conference != null && POWER_CONFS.has(s.conference),
+      ).length;
+      if (powerSeasons >= 8 && titles === 0 && finalFours <= 1) {
+        total -= 2;
+      }
+    }
+
+    // NCAA tournament reliability — coaches who show up in March nearly every
+    // year carry weight beyond per-season reach points. 12+ tournament
+    // appearances in the data window separates the consistently-elite from
+    // coaches with NIT gaps (Izzo's 13-for-13 vs Calipari's 11-for-13).
+    {
+      const ncaaAppearances = profile.by_year.filter((s) => s.round != null).length;
+      if (ncaaAppearances >= 12) total += 2;
+    }
+
+    // Never-missed-the-tournament bonus — a tiny extra +1 for coaches who
+    // made the tournament every season they coached, ignoring the cancelled
+    // 2020 (which would otherwise disqualify everyone). Already gated by the
+    // 5-season career-arc check above, so 1-year wonders don't qualify.
+    {
+      const eligibleSeasons = profile.by_year.filter((s) => s.year !== 2020);
+      if (eligibleSeasons.length > 0 && eligibleSeasons.every((s) => s.round != null)) {
+        total += 1;
+      }
+    }
+
+    // Sweet 16 accumulation — repeated second-weekend trips signal sustained
+    // tournament excellence beyond what the per-season reach points capture.
+    // Slight career-level bump at 8+, a little more at 12+.
+    {
+      const sweetSixteenPlus = profile.by_year.filter((s) => {
+        if (s.round == null) return false;
+        return (
+          s.round === "Sweet 16" ||
+          s.round === "Elite Eight" ||
+          s.round === "Final Four" ||
+          s.round === "Runner-up" ||
+          s.round === "Champion"
+        );
+      }).length;
+      if (sweetSixteenPlus >= 12) total += 5;
+      else if (sweetSixteenPlus >= 8) total += 3;
+    }
+
+    // 80%+ career win-pct at a Power-conf program — exclusive club. Requires
+    // a majority of seasons played in Power conferences.
+    if (profile.career_win_pct != null && profile.career_win_pct >= 0.80) {
+      const powerSeasons = profile.by_year.filter(
+        (s) => s.conference != null && POWER_CONFS.has(s.conference),
+      ).length;
+      if (powerSeasons / profile.seasons_count >= 0.5) {
+        total += 10;
+      }
+    }
+
+    // Multi-title bonus + dynasty cluster — +10 per title past the first,
+    // plus +10 if back-to-back (gap 1, historically unprecedented in the
+    // modern era) or +5 if 2 in 3 years (gap 2).
+    if (titles >= 2) {
+      total += (titles - 1) * 10;
+      const titleYears = profile.by_year
+        .filter((s) => s.round === "Champion")
+        .map((s) => s.year)
+        .sort((a, b) => a - b);
+      let bestGap = Infinity;
+      for (let i = 0; i < titleYears.length - 1; i++) {
+        bestGap = Math.min(bestGap, titleYears[i + 1]! - titleYears[i]!);
+      }
+      if (bestGap === 1) total += 10;
+      else if (bestGap === 2) total += 5;
+    }
+  }
+
+  // Fast 3-start bonus — coach won 20+ games in EACH of their first 3
+  // seasons at a school. Rewards immediate, sustained impact (Tommy Lloyd
+  // at Arizona, Wade at LSU's first stint, etc.). +5 per qualifying school
+  // so multi-program coaches who repeated the feat get rewarded twice.
+  // Sits outside the career-arc gate — short-tenure coaches who pull this
+  // off deserve recognition even before the 5-season mark.
+  {
+    const byTeam = new Map<string, CoachSeason[]>();
+    for (const s of profile.by_year) {
+      if (!byTeam.has(s.team)) byTeam.set(s.team, []);
+      byTeam.get(s.team)!.push(s);
+    }
+    for (const [, teamSeasons] of byTeam) {
+      const sorted = [...teamSeasons].sort((a, b) => a.year - b.year);
+      const first3 = sorted.slice(0, 3);
+      if (first3.length === 3 && first3.every((s) => (s.wins ?? 0) >= 20)) {
+        total += 5;
+      }
+    }
+  }
+
+  // Blend a per-season-quality component into the cumulative composite —
+  // 75% raw sum + 25% (per-season × 14). The ×14 normalizes per-season to
+  // the scale of a full 14-year career, so coaches with full tenure who
+  // performed consistently are unchanged; short-tenure standouts get
+  // boosted by their per-season rate; long-tenure mediocre piles up less.
+  const TARGET_TENURE = 14;
+  const perSeason = profile.seasons_count > 0 ? total / profile.seasons_count : 0;
+  const blended = total * 0.75 + perSeason * TARGET_TENURE * 0.25;
+
+  return Math.round(blended * 10) / 10;
+}
+
 // ---------- exports ----------
 
 export async function loadAllCoachProfiles(): Promise<CoachProfile[]> {
   const raw = await loadRawSources();
   const seasons = flattenSeasons(raw);
   const withCoach = attachCoachNames(seasons, raw);
-  return profilesFromSeasons(withCoach, raw);
+  const profiles = profilesFromSeasons(withCoach, raw);
+
+  // Attach composite résumé score. Load tournament games once and share the
+  // (team, year) lookup across all profiles.
+  const tGames = await loadTournamentGames();
+  const gamesLookup = buildGamesByTeamYear(tGames);
+  for (const p of profiles) {
+    p.composite_score = computeCompositeScore(p, gamesLookup);
+  }
+  return profiles;
 }
 
 export async function loadCoachIndex(): Promise<CoachIndexRow[]> {
   const profiles = await loadAllCoachProfiles();
-  // Strip the heavy fields for the index page.
+  // Strip the heavy fields for the index page. composite_score is small (one
+  // number) and serves the table, so it stays.
   return profiles.map(({ by_year: _b, schools: _s, best_season: _bs, worst_season: _ws, best_record_season: _br, ...row }) => {
     void _b; void _s; void _bs; void _ws; void _br;
     return row;
@@ -567,12 +1114,61 @@ export function buildGamesByTeamYear(games: Record<string, TourneyGame[]>): Map<
   return out;
 }
 
+/**
+ * Bart name → SR (tournament-games.json) name. Only for schools where the
+ * two sources use materially different strings — the broad ".St." vs ".State"
+ * difference is handled by the suffix transform below. Add new entries here
+ * when an alias-needed school surfaces.
+ */
+const BART_TO_SR_ALIAS: Record<string, string> = {
+  "Connecticut":              "UConn",
+  "North Carolina":           "UNC",
+  "Pittsburgh":               "Pitt",
+  "Mississippi":              "Ole Miss",
+  "Massachusetts":            "UMass",
+  "East Tennessee St.":       "ETSU",
+  "N.C. State":               "NC State",
+  "McNeese St.":              "McNeese",
+  "Miami FL":                 "Miami (FL)",
+  "Miami OH":                 "Miami (OH)",
+  "Loyola Chicago":           "Loyola (IL)",
+  "St. John's":               "St. John's (NY)",
+  "Charleston":               "College of Charleston",
+  "Fairleigh Dickinson":      "FDU",
+  "Cal Baptist":              "California Baptist",
+  "Albany":                   "Albany (NY)",
+  "Queens":                   "Queens (NC)",
+  "Gardner Webb":             "Gardner-Webb",
+  "SIU Edwardsville":         "SIU-Edwardsville",
+  "Texas A&M Corpus Chris":   "Texas A&M-Corpus Christi",
+  "Nebraska Omaha":           "Omaha",
+  "Grambling St.":            "Grambling",
+};
+
 export function gamesForTeamYear(
   lookup: Map<string, TourneyGame[]>,
   team: string,
   year: number,
 ): TourneyGame[] {
-  return lookup.get(`${normSchool(team)}|${year}`) ?? [];
+  const direct = lookup.get(`${normSchool(team)}|${year}`);
+  if (direct) return direct;
+
+  // Hand-curated aliases for schools where Bart and SR use materially
+  // different names (UConn ↔ Connecticut, UNC ↔ North Carolina, etc).
+  const srAlias = BART_TO_SR_ALIAS[team];
+  if (srAlias) {
+    const aliased = lookup.get(`${normSchool(srAlias)}|${year}`);
+    if (aliased) return aliased;
+  }
+
+  // Bart uses "Michigan St." while SR uses "Michigan State". 62 schools
+  // differ on this suffix alone. Try the expanded form before giving up.
+  if (/\bSt\.$/.test(team)) {
+    const expanded = team.replace(/\bSt\.$/, "State");
+    const aliased = lookup.get(`${normSchool(expanded)}|${year}`);
+    if (aliased) return aliased;
+  }
+  return [];
 }
 
 /**

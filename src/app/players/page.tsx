@@ -12,11 +12,15 @@ export default async function PlayersOverviewPage() {
   return (
     <>
       <section className="border-b border-hairline">
-        <div className="mx-auto max-w-[97rem] px-6 lg:px-10 pt-12 pb-6">
-          <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
+        <div className="mx-auto max-w-[97rem] px-6 lg:px-10 pt-12 pb-10">
+          <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium mb-4">
             <span className="h-px w-8 bg-coral" />
             <span>The player explorer</span>
           </div>
+          <h1 className="font-display text-4xl md:text-5xl lg:text-6xl leading-[1] tracking-tight text-ink">
+            Every D-I player,
+            <span className="italic text-coral"> by the numbers</span>.
+          </h1>
         </div>
       </section>
 

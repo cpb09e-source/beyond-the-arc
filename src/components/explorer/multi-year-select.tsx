@@ -29,10 +29,18 @@ export function MultiYearSelect({
   years,
   onChange,
   className,
+  availableYears,
+  disabledYears,
 }: {
   years: number[];
   onChange: (years: number[]) => void;
   className?: string;
+  /** When provided, only these years render in the popover. Use for
+   *  coach-scoped pickers where most of ALL_YEARS would be irrelevant. */
+  availableYears?: number[];
+  /** Currently-disabled subset (e.g. cross-filtered by another picker).
+   *  Disabled options render but can't be toggled on. */
+  disabledYears?: Set<number>;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -63,6 +71,12 @@ export function MultiYearSelect({
   function selectAll() {
     onChange([...ALL_YEARS]);
   }
+  // Counterpart to "All" — collapses the selection back to a single season
+  // (the most recent year). We never allow truly empty since downstream
+  // consumers all expect at least one selection.
+  function clearAll() {
+    onChange([Math.max(...ALL_YEARS)]);
+  }
 
   // Button label: compact for many years, explicit for a few
   let buttonLabel: string;
@@ -81,29 +95,36 @@ export function MultiYearSelect({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="h-9 min-w-44 px-2 rounded border border-hairline bg-white text-ink text-sm text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-coral/40"
+        // Matches the global Select + SearchableMultiSelect chrome so all
+        // three controls line up at the same height across the site.
+        className="h-10 min-w-44 px-3 pr-8 rounded-md border border-ink/15 bg-white text-ink text-sm text-left shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors relative"
       >
-        <span className="truncate">{buttonLabel}</span>
-        <span aria-hidden className="text-ink-muted text-xs">▾</span>
+        <span className="truncate block">{buttonLabel}</span>
+        <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted text-[0.7rem]">▾</span>
       </button>
 
       {open && (
         <div className="absolute z-50 top-full left-0 mt-1 w-60 bg-white border border-hairline rounded-lg shadow-lg overflow-hidden">
           <div className="px-3 pt-2 pb-1 text-[0.65rem] uppercase tracking-widest text-coral font-medium">
-            Seasons (pick any combination)
+            Seasons
           </div>
           <div className="py-1">
-            {ALL_YEARS.map((y) => {
+            {(availableYears ?? ALL_YEARS).map((y) => {
               const checked = years.includes(y);
+              const isDisabled = disabledYears?.has(y) ?? false;
               return (
                 <label
                   key={y}
-                  className="flex items-center gap-3 px-3 py-1.5 text-sm cursor-pointer hover:bg-paper-deep"
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-1.5 text-sm",
+                    isDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:bg-paper-deep",
+                  )}
                 >
                   <input
                     type="checkbox"
                     checked={checked}
-                    onChange={() => toggle(y)}
+                    disabled={isDisabled}
+                    onChange={() => { if (!isDisabled) toggle(y); }}
                     className="accent-coral"
                   />
                   <span>{YEAR_LABEL[y]}</span>
@@ -114,6 +135,7 @@ export function MultiYearSelect({
           </div>
           <div className="border-t border-hairline p-2 flex flex-wrap gap-1.5 text-xs">
             <Chip onClick={selectAll}>All</Chip>
+            <Chip onClick={clearAll}>Clear</Chip>
           </div>
         </div>
       )}
@@ -124,15 +146,20 @@ export function MultiYearSelect({
 function Chip({
   onClick,
   children,
+  className,
 }: {
   onClick: () => void;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="px-2 py-1 rounded border border-hairline text-ink-soft hover:text-coral hover:border-coral/40 transition-colors"
+      className={cn(
+        "px-2 py-1 rounded border border-hairline text-ink-soft hover:text-coral hover:border-coral/40 transition-colors",
+        className,
+      )}
     >
       {children}
     </button>

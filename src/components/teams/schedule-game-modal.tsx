@@ -1,10 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
+import { NbaBadge } from "@/components/coaches/nba-badge";
+import { loadNbaDraftees, normNbaName, type NbaDraftee } from "@/lib/nba-draftees";
 import type { GameLog } from "@/lib/static-data";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { cn } from "@/lib/utils";
+
+// Lazy-loaded set of bart_player_ids that have a profile page. Fetched once
+// per page session from /data/profileable-ids.json (~103 KB). We resolve the
+// fetch promise eagerly on first modal open so the box score's player names
+// link out instead of showing as plain text. See scripts/emit-profileable-ids.mjs.
+let _profileableIdsPromise: Promise<Set<number>> | null = null;
+function loadProfileableIds(): Promise<Set<number>> {
+  if (_profileableIdsPromise) return _profileableIdsPromise;
+  _profileableIdsPromise = fetch("/data/profileable-ids.json")
+    .then((r) => (r.ok ? r.json() : []))
+    .then((arr: number[]) => new Set(arr))
+    .catch(() => new Set<number>());
+  return _profileableIdsPromise;
+}
 
 /**
  * Modal for a single game from the schedule ticker. Mirrors the coaches'
@@ -65,6 +82,8 @@ export function ScheduleGameModal({
   useBodyScrollLock(true);
   const [data, setData] = useState<BoxScore | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [profileableIds, setProfileableIds] = useState<Set<number>>(() => new Set());
+  const [draftees, setDraftees] = useState<Record<string, NbaDraftee>>({});
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -73,6 +92,15 @@ export function ScheduleGameModal({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Lazy-load the profileable-IDs set on first open; the module-level cache
+  // means subsequent modals resolve instantly.
+  useEffect(() => {
+    let cancelled = false;
+    loadProfileableIds().then((s) => { if (!cancelled) setProfileableIds(s); });
+    loadNbaDraftees().then((d) => { if (!cancelled) setDraftees(d); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Lazy-fetch the per-game box score on open.
   useEffect(() => {
@@ -106,7 +134,7 @@ export function ScheduleGameModal({
     return () => { cancelled = true; };
   }, [game.cbba_game_id, game.game_date]);
 
-  const venue = game.is_neutral ? "Neutral" : game.is_home ? "Home" : "Road";
+  const venue = game.is_neutral ? "Neutral" : game.is_home ? "Home" : "Away";
   const dateStr = fmtDate(game.game_date);
 
   return (
@@ -134,7 +162,7 @@ export function ScheduleGameModal({
 
         {!data && !err && <LoadingBody />}
         {err && <FallbackBody game={game} teamName={teamName} message={err} />}
-        {data && <FullBody data={data} ourTeam={teamName} won={game.won} />}
+        {data && <FullBody data={data} ourTeam={teamName} won={game.won} profileableIds={profileableIds} draftees={draftees} />}
       </div>
     </div>
   );
@@ -174,11 +202,13 @@ function FallbackBody({
 }
 
 function FullBody({
-  data, ourTeam, won,
+  data, ourTeam, won, profileableIds, draftees,
 }: {
   data: BoxScore;
   ourTeam: string;
   won: boolean | null;
+  profileableIds: Set<number>;
+  draftees: Record<string, NbaDraftee>;
 }) {
   // Order teams: our team on the LEFT, opp on the RIGHT.
   const teams = [...data.teams];
@@ -224,7 +254,7 @@ function FullBody({
                 {t.name} <span className="text-ink-muted">–</span> {t.score}
               </span>
             </div>
-            <PlayerTable team={t} />
+            <PlayerTable team={t} profileableIds={profileableIds} draftees={draftees} />
           </div>
         ))}
       </div>
@@ -245,7 +275,13 @@ function TeamHeader({ name, align }: { name: string; align: "left" | "right" }) 
   );
 }
 
-function PlayerTable({ team }: { team: TeamBox }) {
+function PlayerTable({
+  team, profileableIds, draftees,
+}: {
+  team: TeamBox;
+  profileableIds: Set<number>;
+  draftees: Record<string, NbaDraftee>;
+}) {
   const t = team.totals;
   function pct(made: number, att: number): string {
     if (att === 0) return "—";
@@ -272,12 +308,22 @@ function PlayerTable({ team }: { team: TeamBox }) {
           </tr>
         </thead>
         <tbody>
-          {team.players.map((p) => (
+          {team.players.map((p) => {
+            const clickable = p.bart_id != null && profileableIds.has(p.bart_id);
+            const draftee = draftees[normNbaName(p.name)];
+            return (
             <tr key={p.bart_id ?? p.name} className="border-b border-hairline/40 last:border-0">
               <td className={cn("px-2 py-1.5 whitespace-nowrap", p.is_starter ? "font-semibold text-ink" : "text-ink-soft")}>
-                {p.name}
+                {clickable ? (
+                  <Link href={`/players/${p.bart_id}/`} className="hover:text-coral transition-colors">
+                    {p.name}
+                  </Link>
+                ) : (
+                  p.name
+                )}
+                {draftee && <NbaBadge year={draftee.year} pick={draftee.pick} team={draftee.team} />}
               </td>
-              <td className="px-2 py-1.5 text-right tabular">{p.mins ?? "—"}</td>
+              <td className="px-2 py-1.5 text-right tabular">{p.mins != null ? Math.round(p.mins) : "—"}</td>
               <td className="px-2 py-1.5 text-right tabular font-medium">{p.pts ?? "—"}</td>
               <td className="px-2 py-1.5 text-right tabular">{p.fgm ?? 0}-{p.fga ?? 0}</td>
               <td className="px-2 py-1.5 text-right tabular">{p.fgm3 ?? 0}-{p.fga3 ?? 0}</td>
@@ -290,7 +336,8 @@ function PlayerTable({ team }: { team: TeamBox }) {
               <td className="px-2 py-1.5 text-right tabular">{p.tov ?? "—"}</td>
               <td className="px-2 py-1.5 text-right tabular">{p.pf ?? "—"}</td>
             </tr>
-          ))}
+            );
+          })}
           {/* Team totals */}
           <tr className="border-t border-hairline bg-paper-deep/40 font-semibold">
             <td className="px-2 py-1.5 uppercase text-[0.6rem] tracking-widest text-ink">Team totals</td>

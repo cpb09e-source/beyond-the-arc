@@ -303,7 +303,7 @@ function ConferenceRankingsModal({
       onClick={onClose}
     >
       <div
-        className="bg-card border border-hairline rounded-lg w-full max-w-xl max-h-[88vh] flex flex-col overflow-hidden"
+        className="bg-card border border-hairline rounded-lg w-full max-w-4xl max-h-[88vh] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-hairline">
@@ -311,7 +311,7 @@ function ConferenceRankingsModal({
             <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Conference rankings</div>
             <div className="font-display text-2xl text-ink leading-tight">Beyond the Arc Rating by Conference</div>
             <div className="text-xs text-ink-muted mt-1">
-              {years[0] ? `${seasonLabel(years[0])} season` : ""} · worst 2 teams dropped per conference
+              {years[0] ? `${seasonLabel(years[0])} season` : ""}
             </div>
           </div>
           <button
@@ -324,23 +324,36 @@ function ConferenceRankingsModal({
           </button>
         </div>
 
-        <div className="overflow-y-auto flex-1">
+        <div className="overflow-y-auto flex-1 px-5 py-2">
           {rankings.length === 0 ? (
             <p className="p-6 text-sm text-ink-muted text-center">No conferences to rank.</p>
           ) : (
-            <ul className="divide-y divide-hairline/60">
-              {rankings.map((r, i) => (
-                <li key={r.conference} className="flex items-center gap-3 px-5 py-3 hover:bg-paper-deep/40 transition-colors">
-                  <span className="font-display text-base text-ink-muted tabular w-6 text-center">{i + 1}</span>
-                  <span className="flex-1 min-w-0">
-                    <span className="font-medium text-ink text-sm">{confDisplay(r.conference)}</span>
-                  </span>
-                  <span className={`font-display text-lg tabular ${r.avg_bta_rtg >= 0 ? "text-coral" : "text-ink-muted"}`}>
-                    {r.avg_bta_rtg > 0 ? "+" : ""}{r.avg_bta_rtg.toFixed(1)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            // Split into two columns: first half by rank goes left, second
+            // half goes right. Both reset to rank 1 on the left side so the
+            // ranking reads top-down within each column.
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+              {(() => {
+                const half = Math.ceil(rankings.length / 2);
+                return [rankings.slice(0, half), rankings.slice(half)].map((col, ci) => (
+                  <ul key={ci} className="divide-y divide-hairline/60">
+                    {col.map((r, i) => {
+                      const rank = ci === 0 ? i + 1 : half + i + 1;
+                      return (
+                        <li key={r.conference} className="flex items-center gap-3 py-2.5 hover:bg-paper-deep/40 transition-colors -mx-2 px-2 rounded">
+                          <span className="font-display text-base text-ink-muted tabular w-6 text-center">{rank}</span>
+                          <span className="flex-1 min-w-0">
+                            <span className="font-medium text-ink text-sm">{confDisplay(r.conference)}</span>
+                          </span>
+                          <span className={`font-display text-lg tabular ${r.avg_bta_rtg >= 0 ? "text-coral" : "text-ink-muted"}`}>
+                            {r.avg_bta_rtg > 0 ? "+" : ""}{r.avg_bta_rtg.toFixed(1)}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ));
+              })()}
+            </div>
           )}
         </div>
       </div>
