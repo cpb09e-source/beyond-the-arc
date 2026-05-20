@@ -19,7 +19,7 @@
  * Mirror DIRS with R2_DIRS in src/lib/data-url.ts when adding new R2
  * subdirs.
  */
-import { rm } from "node:fs/promises";
+import { rm, readdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
 
@@ -62,7 +62,32 @@ async function main() {
       console.warn(`   could not strip ${d}: ${e.message}`);
     }
   }
-  console.log(`\n✓ Stripped ${stripped}/${STRIP_DIRS.length} dirs. Build complete.`);
+
+  // Next 16 emits an RSC prefetch payload (.txt) alongside every page —
+  // ~8 per route, 192k files total at our page count. They're optional:
+  // pages render fine without them, only <Link> client-nav prefetch is
+  // affected (falls back to a full nav, ~100ms slower). Stripping them
+  // cuts the Netlify CLI upload from 215k files to 32k, turning what
+  // was a 30-minute upload into a sub-2-minute one.
+  console.log("\n→ Stripping Next RSC .txt prefetch payloads from out/…");
+  let txtRemoved = 0;
+  async function rmTxtRecursive(dir) {
+    let entries;
+    try { entries = await readdir(dir, { withFileTypes: true }); }
+    catch { return; }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) await rmTxtRecursive(full);
+      else if (e.name.endsWith(".txt")) {
+        await rm(full, { force: true });
+        txtRemoved++;
+      }
+    }
+  }
+  await rmTxtRecursive(OUT);
+  console.log(`   removed ${txtRemoved.toLocaleString()} .txt files`);
+
+  console.log(`\n✓ Stripped ${stripped}/${STRIP_DIRS.length} R2 dirs + ${txtRemoved.toLocaleString()} .txt files. Build complete.`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

@@ -6,13 +6,24 @@
 # framework build to turn React + JSON into HTML.
 
 [build]
-  # The wrapper stashes ~153k R2-mirrored data dirs out of public/ for
-  # the duration of `next build`, then restores them in a `finally`.
-  # Necessary because Netlify's Next.js runtime path was bypassing the
-  # postbuild strip script — the only reliable way to keep those files
-  # out of out/ is to keep them out of public/ during the build itself.
+  # Production deploys are MANUAL from a local machine: run
+  # `node scripts/build-with-r2-stash.mjs` then
+  # `netlify deploy --prod --dir=out`. Netlify's hosted build runner
+  # times out on this project's ~23k static pages even after
+  # optimization — local builds (no cap) are the only reliable path.
+  #
+  # We still keep the build command set in case someone manually
+  # triggers a deploy from the dashboard, but the `ignore` rule below
+  # skips Netlify's automatic build on push so failing CI doesn't burn
+  # build minutes.
   command   = "node scripts/build-with-r2-stash.mjs"
   publish   = "out"
+  # Exit 0 = "no changes worth deploying" = Netlify skips the build.
+  # Auto-deploys on git push become no-ops; the live site stays on the
+  # last manual `netlify deploy --prod` snapshot. To re-enable auto-
+  # deploys, change this to `exit 1` (or remove the line) and pray the
+  # 18-min build cap holds.
+  ignore    = "exit 0"
 
 [build.environment]
   NODE_VERSION = "20"

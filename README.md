@@ -22,6 +22,22 @@ npm run sync:r2
 
 ETag-skip means only files whose content changed get re-uploaded.
 
+## Deploying
+
+**Production deploys are manual from a local machine.** Netlify's hosted build runner times out on this project's ~23k static pages even after every optimization we tried — local builds (no time cap) are the only reliable path.
+
+```bash
+node scripts/build-with-r2-stash.mjs   # ~5-10 min, no cap
+netlify deploy --prod --dir=out         # ~1-3 min depending on what's new
+```
+
+What each step does:
+
+1. **The wrapper** ([`scripts/build-with-r2-stash.mjs`](scripts/build-with-r2-stash.mjs)) runs `next build`, strips the R2-mirrored data dirs from `out/`, and strips Next 16's `.txt` RSC prefetch payloads (~192k files, optional — only impact is slightly slower client-side `<Link>` nav).
+2. **The CLI deploy** uses Netlify's API directly. After the first deploy, the CDN caches most assets by content hash, so subsequent deploys only upload what changed (often a few thousand files in <1 min).
+
+Git push does NOT auto-deploy — [`netlify.toml`](netlify.toml) sets `ignore = "exit 0"` so Netlify skips the build on push. To re-enable auto-deploys (and inherit the 18-min cap problem), remove that line.
+
 ## Getting Started
 
 First, run the development server:
