@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
 import { MultiYearSelect } from "@/components/explorer/multi-year-select";
+import { SearchableSelect, type SearchableOption } from "@/components/explorer/searchable-select";
+import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
 import { Select } from "@/components/select";
+import { confDisplay } from "@/lib/conf-display";
 
 // ---------- types matching game_logs JSON shape ----------
 type GameLog = {
@@ -109,12 +112,25 @@ function matches(g: GameLog, f: Filter): boolean {
 
 export function CalcClient() {
   const [years, setYears] = useState<number[]>([2026]);
-  const [conference, setConference] = useState<string>("__all__");
+  // Multi-select conference. Empty = "all conferences". Stores Bart codes
+  // (ACC/B10/BE/etc.); we display via confDisplay() so labels read nicely.
+  const [conferences, setConferences] = useState<string[]>([]);
   const [yearData, setYearData] = useState<Record<number, GameLog[]>>({});
   const [filters, setFilters] = useState<Filter[]>([makeFilter("tov_diff"), makeFilter("fg3_made_diff"), makeFilter("fbpts_diff")]);
-  const [submitted, setSubmitted] = useState<{ filters: Filter[]; conference: string } | null>(null);
+  const [submitted, setSubmitted] = useState<{ filters: Filter[]; conferences: string[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
+
+  // Stat options as SearchableOption[] for the typeable picker.
+  const statOptions = useMemo<SearchableOption[]>(
+    () => STAT_OPTIONS.map((o) => ({ value: o.key as string, label: o.label, group: o.group })),
+    [],
+  );
+  const statGroupLabels = useMemo<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    for (const o of STAT_OPTIONS) out[o.group] = o.group;
+    return out;
+  }, []);
 
   // Fetch every selected year that isn't already cached. Parallel fetches.
   useEffect(() => {
@@ -166,12 +182,16 @@ export function CalcClient() {
     for (const g of games) if (g.team_conference) s.add(g.team_conference);
     return [...s].sort();
   }, [games]);
+  const conferenceOptions = useMemo<SearchableOption[]>(
+    () => allConferences.map((c) => ({ value: c, label: confDisplay(c) })),
+    [allConferences],
+  );
 
   const results = useMemo(() => {
     if (!submitted || games.length === 0) return null;
-    const conf = submitted.conference;
+    const confSet = submitted.conferences.length === 0 ? null : new Set(submitted.conferences);
     const matching = games.filter((g) => {
-      if (conf !== "__all__" && g.team_conference !== conf) return false;
+      if (confSet && (g.team_conference == null || !confSet.has(g.team_conference))) return false;
       return submitted.filters.every((f) => matches(g, f));
     });
     const wins = matching.filter((g) => g.won).length;
@@ -205,16 +225,15 @@ export function CalcClient() {
             <MultiYearSelect years={years} onChange={setYears} />
           </Field>
           <Field label="Conference">
-            <Select
-              value={conference}
-              onChange={setConference}
+            <SearchableMultiSelect
+              value={conferences}
+              options={conferenceOptions}
+              onChange={setConferences}
+              placeholder="Type to filter…"
+              emptyLabel="All conferences"
               className="min-w-44"
-            >
-              <option value="__all__">All conferences</option>
-              {allConferences.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </Select>
+              ariaLabel="Conferences"
+            />
           </Field>
           <div className="ml-auto text-xs text-ink-muted">
             {loading
@@ -236,19 +255,15 @@ export function CalcClient() {
           {filters.map((f, i) => (
             <div key={f.id} className="flex items-center gap-2 flex-wrap">
               <span className="text-sm text-ink-muted w-10">{i === 0 ? "Where" : "And"}</span>
-              <Select
+              <SearchableSelect
                 value={f.stat as string}
+                options={statOptions}
+                groupLabels={statGroupLabels}
                 onChange={(v) => patchFilter(f.id, { stat: v as keyof GameLog })}
+                placeholder="Type a stat…"
                 className="min-w-44"
-              >
-                {Object.entries(groupedOptions()).map(([g, opts]) => (
-                  <optgroup key={g} label={g}>
-                    {opts.map((o) => (
-                      <option key={o.key as string} value={o.key as string}>{o.label}</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </Select>
+                ariaLabel="Filter stat"
+              />
               <Select value={f.op} onChange={(v) => patchFilter(f.id, { op: v as Op })} className="w-16">
                 {OPS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </Select>
@@ -284,14 +299,14 @@ export function CalcClient() {
             <div className="ml-auto flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => { setFilters([makeFilter("tov_diff")]); setConference("__all__"); setSubmitted(null); }}
+                onClick={() => { setFilters([makeFilter("tov_diff")]); setConferences([]); setSubmitted(null); }}
                 className="text-sm text-ink-muted hover:text-ink px-3 py-2"
               >
                 Reset
               </button>
               <button
                 type="button"
-                onClick={() => setSubmitted({ filters: [...filters], conference })}
+                onClick={() => setSubmitted({ filters: [...filters], conferences: [...conferences] })}
                 disabled={loading || games.length === 0}
                 className="text-sm font-medium bg-coral text-white px-5 py-2 rounded hover:bg-coral-soft disabled:opacity-40 transition-colors"
               >
@@ -333,8 +348,10 @@ export function CalcClient() {
               <span className="text-xs uppercase tracking-widest text-ink-muted font-medium mr-1">
                 Conditions
               </span>
-              {submitted.conference !== "__all__" && (
-                <ConditionChip>Conference = {submitted.conference}</ConditionChip>
+              {submitted.conferences.length > 0 && (
+                <ConditionChip>
+                  Conference in [{submitted.conferences.map((c) => confDisplay(c)).join(", ")}]
+                </ConditionChip>
               )}
               {submitted.filters.map((f) => (
                 <ConditionChip key={f.id}>{labelFor(f)}</ConditionChip>
@@ -433,15 +450,6 @@ function ConditionChip({ children }: { children: React.ReactNode }) {
       {children}
     </span>
   );
-}
-
-function groupedOptions() {
-  const groups: Record<string, typeof STAT_OPTIONS> = {};
-  for (const o of STAT_OPTIONS) {
-    if (!groups[o.group]) groups[o.group] = [];
-    groups[o.group]!.push(o);
-  }
-  return groups;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

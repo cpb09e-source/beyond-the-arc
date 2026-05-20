@@ -337,13 +337,41 @@ async function main() {
   }
   console.log(`   ${playerFileCount} per-player JSON files`);
 
-  // Per-player game-log files. One JSON per Bart player, all years concatenated,
-  // sorted newest game first. Fed by the "Career → click season" modal on the
-  // player profile (filters client-side by year).
+  // Per-player game-log files. One JSON per player (matched OR unmatched
+  // to a Bart profile), all years concatenated, sorted newest game first.
+  // Fed by both the "Career → click season" modal on the player profile
+  // (matched only) and the team-game box-score builder (uses both).
+  //
+  // File naming:
+  //   <bartId>.json       — player has a bart_player_id mapped from CBB
+  //   cbb_<cbbaId>.json   — unmatched player (e.g. RJ Barrett, whose CBB
+  //                         row had no bart join). The box-score builder
+  //                         needs these so high-profile NBA-bound guys
+  //                         show up in their team's box.
   console.log("\n🎯 Per-player game logs…");
+
+  // team_id → team_name lookup so we can embed team_name in each game row
+  // (the build-team-game-boxscores step uses this to group players by team
+  // without needing a player-profile round-trip).
+  const teamNameById = new Map<number, string>();
+  {
+    let from = 0;
+    while (true) {
+      const { data } = await sb.from("teams").select("id, name").range(from, from + 999);
+      if (!data || data.length === 0) break;
+      for (const t of data) teamNameById.set(t.id, t.name);
+      if (data.length < 1000) break;
+      from += 1000;
+    }
+  }
+  console.log(`   ${teamNameById.size} teams indexed for team_name embed`);
+
   type PgsRow = {
     id: number;
     bart_player_id: number | null;
+    cbba_player_id: number;
+    full_name: string;
+    team_id: number;
     year: number;
     game_date: string | null;
     cbba_game_id: number;
@@ -365,45 +393,63 @@ async function main() {
     ft_pct: number | null; efg_pct: number | null;
     ts_pct: number | null; usage_pct: number | null;
   };
-  const gamesByPlayer = new Map<number, PgsRow[]>();
+  // String-keyed: "<bartId>" or "cbb_<cbbaId>"
+  const gamesByKey = new Map<string, { bartId: number | null; cbbaId: number; name: string; rows: PgsRow[] }>();
   let lastId = 0;
   let pgsTotal = 0;
+  let unmatchedRows = 0;
   // Keyset pagination on `id`. OFFSET pagination timed out at ~1.5M rows
   // because Postgres has to skip every prior row each page. With keyset we
   // ride the primary-key index and each page is O(1) regardless of position.
   while (true) {
     const { data, error } = await sb
       .from("player_game_stats")
-      .select("id, bart_player_id, year, game_date, cbba_game_id, opp_team_market, is_home, is_neutral, won, is_starter, mins, pts_scored, fgm, fga, fgm3, fga3, ftm, fta, reb, orb, drb, ast, stl, blk, tov, pf, plus_minus, fg_pct, fg3_pct, ft_pct, efg_pct, ts_pct, usage_pct")
-      .not("bart_player_id", "is", null)
+      .select("id, bart_player_id, cbba_player_id, full_name, team_id, year, game_date, cbba_game_id, opp_team_market, is_home, is_neutral, won, is_starter, mins, pts_scored, fgm, fga, fgm3, fga3, ftm, fta, reb, orb, drb, ast, stl, blk, tov, pf, plus_minus, fg_pct, fg3_pct, ft_pct, efg_pct, ts_pct, usage_pct")
       .gt("id", lastId)
       .order("id", { ascending: true })
       .limit(1000);
     if (error) throw new Error(`player_game_stats: ${error.message}`);
     if (!data || data.length === 0) break;
     for (const r of data as PgsRow[]) {
-      const pid = r.bart_player_id;
-      if (pid === null) continue;
-      if (!gamesByPlayer.has(pid)) gamesByPlayer.set(pid, []);
-      gamesByPlayer.get(pid)!.push(r);
+      const key = r.bart_player_id !== null ? String(r.bart_player_id) : `cbb_${r.cbba_player_id}`;
+      if (r.bart_player_id === null) unmatchedRows++;
+      if (!gamesByKey.has(key)) {
+        gamesByKey.set(key, { bartId: r.bart_player_id, cbbaId: r.cbba_player_id, name: r.full_name, rows: [] });
+      }
+      gamesByKey.get(key)!.rows.push(r);
     }
     pgsTotal += data.length;
     lastId = data[data.length - 1]!.id;
     if (data.length < 1000) break;
   }
-  console.log(`   ${pgsTotal.toLocaleString()} matched game-player rows`);
+  console.log(`   ${pgsTotal.toLocaleString()} total game-player rows (${unmatchedRows.toLocaleString()} unmatched, now included)`);
+  console.log(`   ${gamesByKey.size} distinct player files to write`);
+
   let pgFileCount = 0;
-  for (const [bartId, games] of gamesByPlayer.entries()) {
-    games.sort((a, b) => (b.game_date ?? "").localeCompare(a.game_date ?? ""));
-    // Drop bart_player_id + id from each row — redundant for the JSON output.
-    const slim = games.map(({ bart_player_id: _b, id: _i, ...rest }) => { void _b; void _i; return rest; });
+  let unmatchedFileCount = 0;
+  for (const [key, info] of gamesByKey.entries()) {
+    info.rows.sort((a, b) => (b.game_date ?? "").localeCompare(a.game_date ?? ""));
+    // Embed team_name per row; drop redundant DB-only fields. For matched
+    // (bart) files we also strip cbba_player_id + full_name to keep payload
+    // small (the player profile already has those); for unmatched (cbb_)
+    // files the full_name + cbba_player_id live at the top-level body.
+    const slim = info.rows.map((r) => {
+      const { id: _i, bart_player_id: _b, cbba_player_id: _c, team_id, full_name: _f, ...rest } = r;
+      void _i; void _b; void _c; void _f;
+      return { ...rest, team_name: teamNameById.get(team_id) ?? null };
+    });
+    const body: Record<string, unknown> =
+      info.bartId !== null
+        ? { bart_player_id: info.bartId, games: slim }
+        : { cbba_player_id: info.cbbaId, full_name: info.name, games: slim };
     await fs.writeFile(
-      path.join(OUT, "player-games", `${bartId}.json`),
-      JSON.stringify({ bart_player_id: bartId, games: slim }),
+      path.join(OUT, "player-games", `${key}.json`),
+      JSON.stringify(body),
     );
     pgFileCount++;
+    if (info.bartId === null) unmatchedFileCount++;
   }
-  console.log(`   ${pgFileCount} per-player game-log JSON files`);
+  console.log(`   ${pgFileCount} per-player game-log JSON files (${unmatchedFileCount} cbb_-keyed)`);
 
   // ---------- Transfer portal ----------
   // Pull current-competition portal entries from CBB and enrich each with the

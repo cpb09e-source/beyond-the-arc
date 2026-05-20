@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Trophy } from "lucide-react";
 import { TeamLogo } from "@/components/team-logo";
+import { TeamName } from "@/components/team-name";
+import { SeedChip } from "@/components/coaches/seed-chip";
 import { confDisplay } from "@/lib/conf-display";
 import type { CoachSeason, TourneyRound } from "@/lib/coaches";
 
@@ -126,7 +128,7 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
       <tbody>
         {sorted.map((s, i) => (
           <tr key={`${s.year}-${s.team}-${i}`} className={`transition-colors hover:bg-[var(--accent-tint,rgba(237,90,79,0.08))] ${i % 2 === 0 ? "bg-paper/70" : "bg-transparent"}`}>
-            <td className="px-5 lg:px-7 py-2.5 tabular text-ink-soft">
+            <td className="px-5 lg:px-7 py-2.5 tabular text-ink-soft whitespace-nowrap">
               <Link
                 href={`/teams/${teamSlug(s.team)}/${s.year}/`}
                 className="hover:text-coral transition-colors"
@@ -138,7 +140,9 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
             <td className="px-3 py-2.5">
               <Link href={`/teams/${teamSlug(s.team)}/${s.year}/`} className="inline-flex items-center gap-2 group">
                 <TeamLogo name={s.team} size={22} />
-                <span className="text-ink group-hover:text-coral transition-colors truncate">{s.team}</span>
+                <span className="text-ink group-hover:text-coral transition-colors truncate"><TeamName name={s.team} /></span>
+                {/* Tournament seed chip — small, color-coded by tier. */}
+                {s.seed !== null && <SeedChip seed={s.seed} size="sm" />}
                 <SeasonPostseasonBadge season={s} />
               </Link>
             </td>
@@ -280,11 +284,14 @@ function SeasonPostseasonBadge({ season }: { season: CoachSeason }) {
       </span>
     );
   }
-  if (round === "Final Four") {
+  // Runner-up is the team that lost the national championship game — still a
+  // Final Four team. Show the same F4 badge (with a "Runner-up" tooltip) so
+  // these seasons aren't missed in the season-by-season view.
+  if (round === "Final Four" || round === "Runner-up") {
     return (
       <span
         className="inline-flex items-center justify-center rounded px-1.5 py-0 bg-coral text-white text-[0.6rem] font-display font-bold leading-tight tabular tracking-wide shadow-sm ml-1"
-        title={`${season.year - 1}-${String(season.year).slice(-2)} Final Four · #${season.seed} seed`}
+        title={`${season.year - 1}-${String(season.year).slice(-2)} ${round === "Runner-up" ? "Runner-Up" : "Final Four"} · #${season.seed} seed`}
       >
         F4
       </span>

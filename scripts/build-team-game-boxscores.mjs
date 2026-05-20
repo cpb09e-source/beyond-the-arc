@@ -69,22 +69,34 @@ async function main() {
   console.log(`   ${nameByBartId.size} names indexed`);
 
   // Pass 3: stream player-games → group by cbba_game_id.
-  // gamesByCbbaId: cbba_game_id → array of { bartId, row }
+  // gamesByCbbaId: cbba_game_id → array of { bartId, cbbaId, name, row }
+  // File naming conventions:
+  //   <bartId>.json       — bart-matched player; name via nameByBartId
+  //   cbb_<cbbaId>.json   — unmatched player (RJ Barrett, Vernon Carey, etc.);
+  //                         name + team embedded in file body / row
   console.log("\n📊 Grouping player-games by cbba_game_id...");
   const gamesByCbbaId = new Map();
   let processed = 0;
   for (const f of jsonFiles) {
     processed++;
     if (processed % 2500 === 0) process.stdout.write(`   ${processed}/${jsonFiles.length}\r`);
-    const bartId = parseInt(f.replace(".json", ""), 10);
-    if (!Number.isFinite(bartId)) continue;
+    const isCbb = f.startsWith("cbb_");
+    const idStr = isCbb ? f.replace("cbb_", "").replace(".json", "") : f.replace(".json", "");
+    const numId = parseInt(idStr, 10);
+    if (!Number.isFinite(numId)) continue;
     try {
       const data = JSON.parse(await fs.readFile(path.join(PLAYER_GAMES_DIR, f), "utf8"));
+      const fileName = data.full_name ?? null;
       for (const g of data.games ?? []) {
         if (!g.cbba_game_id) continue;
         let arr = gamesByCbbaId.get(g.cbba_game_id);
         if (!arr) { arr = []; gamesByCbbaId.set(g.cbba_game_id, arr); }
-        arr.push({ bartId, row: g });
+        arr.push({
+          bartId: isCbb ? null : numId,
+          cbbaId: isCbb ? numId : null,
+          fileName,
+          row: g,
+        });
       }
     } catch {}
   }
@@ -102,16 +114,19 @@ async function main() {
     const date = sample.game_date;
     if (!year || !date) { skipped++; continue; }
 
-    // Group rows into two teams by team_name (from teamByBartIdYear).
-    // Some rows will be missing team lookup — drop those.
+    // Group rows into two teams by team_name. Prefer row.team_name (embedded
+    // by the export step); fall back to the bart-profile lookup for older
+    // exports. Cbb_-keyed (unmatched) players ALWAYS have row.team_name.
     /** @type {Map<string, Array<any>>} */
     const teamsByName = new Map();
     for (const r of rows) {
-      const team = teamByBartIdYear.get(r.bartId)?.get(year);
+      const team =
+        r.row.team_name ??
+        (r.bartId != null ? teamByBartIdYear.get(r.bartId)?.get(year) : null);
       if (!team) continue;
       let arr = teamsByName.get(team);
       if (!arr) { arr = []; teamsByName.set(team, arr); }
-      arr.push({ ...r.row, _bartId: r.bartId, _team: team });
+      arr.push({ ...r.row, _bartId: r.bartId, _cbbaId: r.cbbaId, _fileName: r.fileName, _team: team });
     }
     if (teamsByName.size === 0) { skipped++; continue; }
 
@@ -127,8 +142,12 @@ async function main() {
         return (b.mins ?? 0) - (a.mins ?? 0);
       });
       const players = playerRows.map((p) => ({
-        name: nameByBartId.get(p._bartId) ?? `Player ${p._bartId}`,
+        name:
+          (p._bartId != null ? nameByBartId.get(p._bartId) : null) ??
+          p._fileName ??
+          (p._bartId != null ? `Player ${p._bartId}` : `Player cbb_${p._cbbaId}`),
         bart_id: p._bartId,
+        cbba_player_id: p._cbbaId ?? undefined,
         is_starter: p.is_starter ?? false,
         mins: p.mins ?? null,
         pts: p.pts_scored ?? null,

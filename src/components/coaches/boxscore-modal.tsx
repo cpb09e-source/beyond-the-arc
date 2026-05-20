@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
+import { TeamName } from "@/components/team-name";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { SeedChip } from "./seed-chip";
 import { NbaBadge } from "./nba-badge";
@@ -18,6 +20,35 @@ function loadDraftees(): Promise<Record<string, Draftee>> {
     .catch(() => ({}));
   return DRAFTEES_FETCH;
 }
+
+// Tournament box-scores are scraped from SR which doesn't carry bart_player_ids.
+// To make player names link to profile pages, we resolve names → bartIds via a
+// pre-built index. Both helpers are module-scoped so the fetches happen once
+// per page session regardless of how many modals open. Keys match the format
+// emitted by scripts/emit-tournament-bart-index.mjs and scripts/emit-profileable-ids.mjs.
+let BART_INDEX_CACHE: Record<string, number> | null = null;
+let BART_INDEX_FETCH: Promise<Record<string, number>> | null = null;
+function loadBartIndex(): Promise<Record<string, number>> {
+  if (BART_INDEX_CACHE) return Promise.resolve(BART_INDEX_CACHE);
+  if (BART_INDEX_FETCH) return BART_INDEX_FETCH;
+  BART_INDEX_FETCH = fetch("/data/tournament-bart-index.json")
+    .then((r) => (r.ok ? r.json() : {}))
+    .then((j) => { BART_INDEX_CACHE = j; return j; })
+    .catch(() => ({}));
+  return BART_INDEX_FETCH;
+}
+let PROFILEABLE_CACHE: Set<number> | null = null;
+let PROFILEABLE_FETCH: Promise<Set<number>> | null = null;
+function loadProfileableIds(): Promise<Set<number>> {
+  if (PROFILEABLE_CACHE) return Promise.resolve(PROFILEABLE_CACHE);
+  if (PROFILEABLE_FETCH) return PROFILEABLE_FETCH;
+  PROFILEABLE_FETCH = fetch("/data/profileable-ids.json")
+    .then((r) => (r.ok ? r.json() : []))
+    .then((arr: number[]) => { PROFILEABLE_CACHE = new Set(arr); return PROFILEABLE_CACHE; })
+    .catch(() => new Set<number>());
+  return PROFILEABLE_FETCH;
+}
+
 function normName(s: string): string {
   return s
     .toLowerCase()
@@ -29,6 +60,18 @@ function normName(s: string): string {
     // Strip generational suffixes ("Jr.", "Sr.", "II", "III", "IV") so
     // "Walter Clayton Jr." matches SR's "Walter Clayton".
     .replace(/\s+(jr|sr|ii|iii|iv|v)$/i, "");
+}
+
+// Aggressive team-name normalization for the bart-index lookup. Strips ALL
+// non-alphanumerics so "St. John's (NY)" and "St John's NY" collapse to the
+// same key. Mirrors the normTeam() used in emit-tournament-bart-index.mjs.
+function normTeamForIndex(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
 }
 
 type Player = {
@@ -86,6 +129,8 @@ export function BoxscoreModal({
   const [data, setData] = useState<BoxScore | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [draftees, setDraftees] = useState<Record<string, Draftee>>({});
+  const [bartIndex, setBartIndex] = useState<Record<string, number>>({});
+  const [profileableIds, setProfileableIds] = useState<Set<number>>(() => new Set());
 
   useEffect(() => {
     if (!open) return;
@@ -100,6 +145,8 @@ export function BoxscoreModal({
       .then((j: BoxScore) => { if (!cancelled) setData(j); })
       .catch((e) => { if (!cancelled) setErr(e.message); });
     loadDraftees().then((d) => { if (!cancelled) setDraftees(d); });
+    loadBartIndex().then((idx) => { if (!cancelled) setBartIndex(idx); });
+    loadProfileableIds().then((s) => { if (!cancelled) setProfileableIds(s); });
     return () => { cancelled = true; };
   }, [open, year, gameSlug]);
 
@@ -134,7 +181,13 @@ export function BoxscoreModal({
         ) : !data ? (
           <LoadingHeader onClose={onClose} />
         ) : (
-          <Body data={data} draftees={draftees} onClose={onClose} />
+          <Body
+            data={data}
+            draftees={draftees}
+            bartIndex={bartIndex}
+            profileableIds={profileableIds}
+            onClose={onClose}
+          />
         )}
       </div>
     </div>
@@ -175,7 +228,15 @@ function FallbackHeader({
   );
 }
 
-function Body({ data, draftees, onClose }: { data: BoxScore; draftees: Record<string, Draftee>; onClose: () => void }) {
+function Body({
+  data, draftees, bartIndex, profileableIds, onClose,
+}: {
+  data: BoxScore;
+  draftees: Record<string, Draftee>;
+  bartIndex: Record<string, number>;
+  profileableIds: Set<number>;
+  onClose: () => void;
+}) {
   const [home, away] = data.teams; // SR returns winner first in our scrape; order doesn't matter for display
   // Sort: visually put the higher-scoring team second (visual rhythm — "vs.")
   // Actually SR's bracket-page order is fine: winner first. Keep that.
@@ -199,17 +260,26 @@ function Body({ data, draftees, onClose }: { data: BoxScore; draftees: Record<st
       <ScoreLine teams={data.teams} />
 
       {/* Box score tables — stacked vertically, both teams full-width. */}
-      <div className="divide-y divide-hairline max-h-[60vh] overflow-y-auto">
+      <div className="divide-y divide-hairline max-h-[60vh] overflow-y-auto overscroll-contain">
         {data.teams.map((t) => (
           <div key={t.slug} className="p-4">
             <div className="flex items-center gap-2 px-2 pb-2">
               {t.seed !== null && <SeedChip seed={t.seed} size="sm" />}
               <TeamLogo name={t.name} size={20} />
               <span className="font-medium text-ink text-sm">
-                {t.name} <span className="text-ink-muted">–</span> {t.score ?? "—"}
+                <TeamName name={t.name} /> <span className="text-ink-muted">–</span> {t.score ?? "—"}
               </span>
             </div>
-            <PlayerTable players={t.players} draftees={draftees} />
+            <div className="overflow-x-auto overscroll-x-contain touch-pan-x">
+              <PlayerTable
+                players={t.players}
+                draftees={draftees}
+                teamName={t.name}
+                year={data.year}
+                bartIndex={bartIndex}
+                profileableIds={profileableIds}
+              />
+            </div>
           </div>
         ))}
       </div>
@@ -301,17 +371,35 @@ function TeamHeader({ team, align }: { team: Team; align: "left" | "right" }) {
             <SeedChip seed={team.seed} size="sm" />
           </div>
         )}
-        <div className="font-display text-2xl text-ink truncate">{team.name}</div>
+        <div className="font-display text-2xl text-ink truncate"><TeamName name={team.name} /></div>
       </div>
       <TeamLogo name={team.name} size={48} />
     </div>
   );
 }
 
-function PlayerTable({ players, draftees }: { players: Player[]; draftees: Record<string, Draftee> }) {
+function PlayerTable({
+  players, draftees, teamName, year, bartIndex, profileableIds,
+}: {
+  players: Player[];
+  draftees: Record<string, Draftee>;
+  teamName: string;
+  year: number;
+  bartIndex: Record<string, number>;
+  profileableIds: Set<number>;
+}) {
+  const normTeam = normTeamForIndex(teamName);
   if (players.length === 0) {
     return <div className="text-xs text-ink-muted px-2 py-6 text-center">No player stats in our cache for this game.</div>;
   }
+  // Total minutes — `mp` is a string like "37" or "37:12" from SR. Parse the
+  // leading integer; ignore the seconds component for a whole-minute total
+  // (matches how Bart/SR display per-team totals).
+  const totalMins = players.reduce((sum, p) => {
+    if (!p.mp) return sum;
+    const m = /^\d+/.exec(p.mp);
+    return m ? sum + parseInt(m[0], 10) : sum;
+  }, 0);
   // Compute team totals — summed across all players in the table.
   const totals = players.reduce(
     (acc, p) => ({
@@ -366,7 +454,17 @@ function PlayerTable({ players, draftees }: { players: Player[]; draftees: Recor
               className={`tabular hover:bg-paper-deep/50 ${isLastStarter ? "border-b border-hairline/60" : ""} ${p.starter ? "font-medium" : ""}`}
             >
               <td className="py-1 pl-2 text-ink truncate max-w-[20ch]" title={p.name}>
-                {p.name}
+                {(() => {
+                  const bartId = bartIndex[`${year}|${normTeam}|${normName(p.name)}`];
+                  const clickable = bartId != null && profileableIds.has(bartId);
+                  return clickable ? (
+                    <Link href={`/players/${bartId}/`} className="hover:text-coral transition-colors">
+                      {p.name}
+                    </Link>
+                  ) : (
+                    p.name
+                  );
+                })()}
                 {draftees[normName(p.name)] && (
                   <NbaBadge
                     year={draftees[normName(p.name)]!.year}
@@ -393,7 +491,7 @@ function PlayerTable({ players, draftees }: { players: Player[]; draftees: Recor
         {/* Team totals — bold; FG/3P/FT show count over % on two lines. */}
         <tr className="tabular border-t border-hairline font-bold text-ink align-top">
           <td className="py-1.5 pl-2 text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Team Totals</td>
-          <Td className="text-ink">—</Td>
+          <Td className="text-ink">{totalMins || "—"}</Td>
           <Td className="font-display text-ink">{totals.pts}</Td>
           <td className="text-right py-1 text-ink leading-tight">
             <div>{totals.fg}-{totals.fga}</div>

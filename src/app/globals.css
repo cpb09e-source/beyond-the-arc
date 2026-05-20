@@ -131,3 +131,35 @@ body {
   letter-spacing: -0.04em;
   color: var(--ink);
 }
+
+/* ------------------------------------------------------------------
+ * Animations — page-load reveals and bar-grow transitions.
+ * Used by the player showcase (shot signature + skill pinnacle).
+ * ----------------------------------------------------------------- */
+@keyframes bta-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes bta-bar-grow-v {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+@keyframes bta-bar-grow-h {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+@keyframes bta-fill-circle {
+  from { stroke-dashoffset: var(--bta-circ); }
+  to   { stroke-dashoffset: var(--bta-fill); }
+}
+
+.bta-fade-up   { animation: bta-fade-up    .6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.bta-bar-v     { transform-origin: bottom; animation: bta-bar-grow-v .9s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.bta-bar-h     { transform-origin: left;   animation: bta-bar-grow-h .9s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.bta-fill-ring { animation: bta-fill-circle 1.1s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bta-fade-up, .bta-bar-v, .bta-bar-h, .bta-fill-ring {
+    animation: none !important;
+  }
+}
