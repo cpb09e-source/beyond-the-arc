@@ -10,7 +10,7 @@ import { ScheduleTicker } from "@/components/teams/schedule-ticker";
 import { FindGameTrigger } from "@/components/teams/find-game-trigger";
 import { TourneyTimeline } from "@/components/teams/tourney-timeline";
 import { PlayerHeadshotStrip } from "@/components/teams/player-headshot-strip";
-import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog, PlayerRanks } from "@/lib/static-data";
+import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog } from "@/lib/static-data";
 import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier } from "@/lib/conf-tiers";
 import { confDisplay } from "@/lib/conf-display";
 import { getTeamColors } from "@/lib/team-colors";
@@ -74,32 +74,31 @@ export type RosterEntry = {
 };
 
 /**
- * Server-side helper — folds per-player percentile ranks (looked up from a
- * pre-loaded all-ranks map) into the roster entries. Sync because the map
- * is loaded once per build via readAllPlayerRanks(); each per-page call is
- * a cheap Map.get rather than a fresh disk read.
+ * Folds the pre-computed `roster_ranks` map (baked into the team JSON by
+ * scripts/embed-roster-ranks.mjs) into each roster entry. Pure sync lookup,
+ * zero extra I/O at build time — every Netlify deploy used to read tens of
+ * thousands of player-ranks files for the roster chips and blew the build
+ * budget. Now the percentiles ride along in the team JSON we already load.
  */
 export function attachRosterRanks(
   roster: RosterEntry[],
-  allRanks: Map<number, PlayerRanks>,
-  year: number,
+  rosterRanks: StaticTeamSeasonRow["roster_ranks"],
 ): RosterEntry[] {
+  if (!rosterRanks) return roster;
   return roster.map((p) => {
     if (p.bart_player_id === null) return p;
-    const ranks = allRanks.get(p.bart_player_id);
-    if (!ranks) return p;
-    const s = ranks.seasonRanks.find((sr) => sr.year === year);
-    if (!s) return p;
+    const r = rosterRanks[p.bart_player_id];
+    if (!r) return p;
     return {
       ...p,
       pcts: {
-        bta_portg: s.stats.bta_portg?.percentile ?? null,
-        pir:       s.stats.pir?.percentile       ?? null,
-        pts:       s.stats.pts_pg?.percentile    ?? null,
-        reb:       s.stats.reb_pg?.percentile    ?? null,
-        ast:       s.stats.ast_pg?.percentile    ?? null,
-        fg3_pct:   s.stats.fg3_pct?.percentile   ?? null,
-        ft_pct:    s.stats.ft_pct?.percentile    ?? null,
+        bta_portg: r.bta_portg ?? null,
+        pir:       r.pir       ?? null,
+        pts:       r.pts       ?? null,
+        reb:       r.reb       ?? null,
+        ast:       r.ast       ?? null,
+        fg3_pct:   r.fg3_pct   ?? null,
+        ft_pct:    r.ft_pct    ?? null,
       },
     };
   });

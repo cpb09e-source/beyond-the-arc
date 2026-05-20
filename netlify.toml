@@ -6,7 +6,12 @@
 # framework build to turn React + JSON into HTML.
 
 [build]
-  command   = "npm run build"
+  # `npm run build` runs `next build` + the npm `postbuild` lifecycle hook
+  # which strips R2-mirrored dirs from out/. We also invoke the strip
+  # explicitly here as defense in depth — if a future Netlify runtime or
+  # plugin bypasses lifecycle hooks, the upload would otherwise balloon
+  # from ~25k files to ~170k and blow the 18-minute build budget.
+  command   = "npm run build && node scripts/strip-r2-mirrored-from-out.mjs"
   publish   = "out"
 
 [build.environment]
