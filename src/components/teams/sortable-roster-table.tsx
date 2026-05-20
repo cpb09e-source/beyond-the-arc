@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { NbaBadge } from "@/components/coaches/nba-badge";
+import { PercentileChip } from "@/components/percentile-chip";
 import { loadNbaDraftees, normNbaName, type NbaDraftee } from "@/lib/nba-draftees";
 
 type RosterEntry = {
@@ -20,6 +21,15 @@ type RosterEntry = {
   ft_pct: number | null;
   pir: number | null;
   bta_portg: number | null;
+  pcts?: {
+    bta_portg?: number | null;
+    pir?: number | null;
+    pts?: number | null;
+    reb?: number | null;
+    ast?: number | null;
+    fg3_pct?: number | null;
+    ft_pct?: number | null;
+  };
 };
 
 type SortKey = "name" | "class" | "height" | "bta_portg" | "pir" | "pts" | "reb" | "ast" | "fg3_pct" | "ft_pct";
@@ -136,13 +146,13 @@ export function SortableRosterTable({
                 </Td>
                 <Td className="text-ink-muted">{p.class ?? "—"}</Td>
                 <Td className="text-ink-muted whitespace-nowrap">{p.height ?? "—"}</Td>
-                <Td align="right" className="tabular font-semibold text-ink">{fmtNum(p.bta_portg, 1)}</Td>
-                <Td align="right" className="tabular">{fmtNum(p.pir, 1)}</Td>
-                <Td align="right" className="tabular">{fmtNum(p.pts, 1)}</Td>
-                <Td align="right" className="tabular">{fmtNum(p.reb, 1)}</Td>
-                <Td align="right" className="tabular">{fmtNum(p.ast, 1)}</Td>
-                <Td align="right" className="tabular">{fmtPct(p.fg3_pct)}</Td>
-                <Td align="right" className="tabular">{fmtPct(p.ft_pct)}</Td>
+                <StatCell value={fmtNum(p.bta_portg, 1)} pct={p.pcts?.bta_portg ?? null} emphasized />
+                <StatCell value={fmtNum(p.pir, 1)}       pct={p.pcts?.pir       ?? null} />
+                <StatCell value={fmtNum(p.pts, 1)}       pct={p.pcts?.pts       ?? null} />
+                <StatCell value={fmtNum(p.reb, 1)}       pct={p.pcts?.reb       ?? null} />
+                <StatCell value={fmtNum(p.ast, 1)}       pct={p.pcts?.ast       ?? null} />
+                <StatCell value={fmtPct(p.fg3_pct)}      pct={p.pcts?.fg3_pct   ?? null} />
+                <StatCell value={fmtPct(p.ft_pct)}       pct={p.pcts?.ft_pct    ?? null} />
               </tr>
               );
             })}
@@ -155,6 +165,16 @@ export function SortableRosterTable({
 
 function Td({ children, align = "left", className = "" }: { children: React.ReactNode; align?: "left" | "right"; className?: string }) {
   return <td className={`px-2 sm:px-3 py-2.5 ${align === "right" ? "text-right" : ""} ${className}`}>{children}</td>;
+}
+function StatCell({ value, pct, emphasized = false }: { value: string; pct: number | null; emphasized?: boolean }) {
+  return (
+    <Td align="right" className={cn("tabular", emphasized && "font-semibold text-ink")}>
+      <span className="inline-flex items-baseline justify-end gap-1.5">
+        <span>{value}</span>
+        <PercentileChip pct={pct} />
+      </span>
+    </Td>
+  );
 }
 function ThSort({
   label, active, dir, onClick, align = "right",

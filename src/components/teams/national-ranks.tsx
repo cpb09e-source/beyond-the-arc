@@ -1,4 +1,5 @@
 import type { RankedStat } from "@/lib/static-data";
+import { PercentileChip } from "@/components/percentile-chip";
 
 /**
  * Hero-level "barbell" of a team's national ranks for the season.
@@ -43,20 +44,12 @@ function Column({ kicker, items, total }: { kicker: string; items: RankedStat[];
 }
 
 function RankBadge({ rank, total }: { rank: number; total: number }) {
-  // Position as percentile (1 = best). 0 = top, 1 = bottom.
-  const pos = total > 1 ? (rank - 1) / (total - 1) : 0;
-  // 0 → green, 1 → red. Use HSL hue 120 → 0.
-  const hue = (1 - pos) * 120;
-  const color = `hsl(${hue}, 38%, 30%)`;
-  const bg = `hsl(${hue}, 38%, 92%)`;
+  // rank 1 = best → percentile 100 (green); rank=total → percentile 0 (red).
+  const pct = total > 1 ? Math.round(((total - rank) / (total - 1)) * 100) : 100;
   return (
-    <span
-      className="flex-none inline-flex items-center justify-center font-display text-xl md:text-2xl tabular leading-none px-2.5 py-1.5 rounded w-[4.5rem]"
-      style={{ color, background: bg }}
-      aria-label={`Rank ${rank} of ${total}`}
-    >
+    <PercentileChip pct={pct} className="flex-none" ariaLabel={`Rank ${rank} of ${total}`}>
       #{rank}
-    </span>
+    </PercentileChip>
   );
 }
 

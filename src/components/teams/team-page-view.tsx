@@ -10,7 +10,8 @@ import { ScheduleTicker } from "@/components/teams/schedule-ticker";
 import { FindGameTrigger } from "@/components/teams/find-game-trigger";
 import { TourneyTimeline } from "@/components/teams/tourney-timeline";
 import { PlayerHeadshotStrip } from "@/components/teams/player-headshot-strip";
-import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog } from "@/lib/static-data";
+import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog, PlayerRanksSeason } from "@/lib/static-data";
+import { readPlayerRanks } from "@/lib/static-data";
 import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier } from "@/lib/conf-tiers";
 import { confDisplay } from "@/lib/conf-display";
 import { getTeamColors } from "@/lib/team-colors";
@@ -45,7 +46,7 @@ function pctFromIdx(row: Array<string | number | null> | null, idx: number): num
   return null;
 }
 
-type RosterEntry = {
+export type RosterEntry = {
   id: number;
   bart_player_id: number | null;
   name: string;
@@ -59,7 +60,55 @@ type RosterEntry = {
   ft_pct: number | null;
   pir: number | null;
   bta_portg: number | null;
+  /** Per-stat percentile chips, keyed by the roster column. `null` for any
+   *  stat the player didn't clear the rank cohort threshold for. Empty for
+   *  players without a rank file at all. */
+  pcts?: {
+    bta_portg?: number | null;
+    pir?: number | null;
+    pts?: number | null;
+    reb?: number | null;
+    ast?: number | null;
+    fg3_pct?: number | null;
+    ft_pct?: number | null;
+  };
 };
+
+/**
+ * Server-side helper — fetches per-player percentile ranks for everyone on
+ * the roster who has a rank file (bart_player_id ∈ rankedPlayerIds) and
+ * folds them into the roster entries. Returns a fresh roster array; the
+ * input is not mutated.
+ */
+export async function attachRosterRanks(
+  roster: RosterEntry[],
+  rankedPlayerIds: Set<number>,
+  year: number,
+): Promise<RosterEntry[]> {
+  const seasons = await Promise.all(
+    roster.map(async (p): Promise<PlayerRanksSeason | null> => {
+      if (p.bart_player_id === null || !rankedPlayerIds.has(p.bart_player_id)) return null;
+      const ranks = await readPlayerRanks(p.bart_player_id);
+      return ranks?.seasonRanks.find((s) => s.year === year) ?? null;
+    }),
+  );
+  return roster.map((p, i) => {
+    const s = seasons[i];
+    if (!s) return p;
+    return {
+      ...p,
+      pcts: {
+        bta_portg: s.stats.bta_portg?.percentile ?? null,
+        pir:       s.stats.pir?.percentile       ?? null,
+        pts:       s.stats.pts_pg?.percentile    ?? null,
+        reb:       s.stats.reb_pg?.percentile    ?? null,
+        ast:       s.stats.ast_pg?.percentile    ?? null,
+        fg3_pct:   s.stats.fg3_pct?.percentile   ?? null,
+        ft_pct:    s.stats.ft_pct?.percentile    ?? null,
+      },
+    };
+  });
+}
 
 // Cache PIR + BTA PRTG per (year, player.id) across team-page generations.
 // Computed once per year from the full D-I cohort the first time any team
@@ -304,7 +353,7 @@ export function TeamPageView({
           )}
 
           {current.national_ranks && (current.national_ranks.top.length > 0 || current.national_ranks.bottom.length > 0) ? (
-            <div className="mt-8">
+            <div className="mt-5">
               <NationalRanks
                 top={current.national_ranks.top}
                 bottom={current.national_ranks.bottom}
@@ -312,7 +361,7 @@ export function TeamPageView({
               />
             </div>
           ) : (
-            <div className="mt-8 grid grid-cols-2 md:grid-cols-3 gap-px bg-hairline border border-hairline rounded-lg overflow-hidden">
+            <div className="mt-5 grid grid-cols-2 md:grid-cols-3 gap-px bg-hairline border border-hairline rounded-lg overflow-hidden">
               <StatTile label="Adj ORtg" value={fmtNum(currentTrank?.adjoe ?? null, 1)} sub="points per 100" />
               <StatTile label="Adj DRtg" value={fmtNum(currentTrank?.adjde ?? null, 1)} sub="points per 100 (allowed)" />
               <StatTile label="Adj Tempo" value={fmtNum(currentTrank?.adjt ?? null, 1)} sub="possessions / 40 min" />
@@ -321,7 +370,7 @@ export function TeamPageView({
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-2 grid grid-cols-1 lg:grid-cols-2 gap-8">
         <DistributionPanel title="Shooting" ranks={shootingRanks} />
         <DistributionPanel title="Four Factors" ranks={fourFactorRanks}>
           {current.four_factor_record && current.four_factor_record.games > 0 && (
@@ -342,8 +391,8 @@ export function TeamPageView({
         </DistributionPanel>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8">
-        <div className="flex items-baseline justify-between mb-6">
+      <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-5">
+        <div className="flex items-baseline justify-between mb-4">
           <h2 className="font-display text-3xl text-ink">Roster — {seasonLabel(current.year)}</h2>
           <span className="text-xs uppercase tracking-widest text-ink-muted">
             {roster.length} players · click headers to sort

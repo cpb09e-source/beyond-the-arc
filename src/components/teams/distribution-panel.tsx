@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { StaticTeamSeasonRow } from "@/lib/static-data";
-import { cn } from "@/lib/utils";
+import { PercentileChip, pctColor } from "@/components/percentile-chip";
 
 /**
  * Distribution panel — a generic vs-D-I rank visualization. Each row shows
@@ -144,15 +144,9 @@ function StatRow({ stat }: { stat: DistributionRank }) {
             {formatValue(stat.value, stat.format)}
           </span>
           {stat.rank !== null && (
-            <span
-              className={cn(
-                "inline-flex items-center text-[0.65rem] tabular font-semibold px-1.5 py-0.5 rounded leading-none whitespace-nowrap",
-                chipClasses(stat.percentile),
-              )}
-              title={`#${stat.rank} of ${stat.total}`}
-            >
+            <PercentileChip pct={stat.percentile} ariaLabel={`#${stat.rank} of ${stat.total}`}>
               #{stat.rank}
-            </span>
+            </PercentileChip>
           )}
         </div>
       </div>
@@ -175,33 +169,11 @@ function DistributionBar({ percentile }: { percentile: number }) {
       aria-label={`${percentile}th percentile in D-I`}
     >
       <div
-        className={cn(
-          "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border-2 border-paper shadow ring-1 ring-hairline/40",
-          markerBg(percentile),
-        )}
-        style={{ left: `${left}%` }}
+        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border-2 border-paper shadow ring-1 ring-hairline/40"
+        style={{ left: `${left}%`, background: pctColor(percentile) }}
         aria-hidden
       />
     </div>
   );
 }
 
-function markerBg(p: number): string {
-  if (p >= 90) return "bg-emerald-500";
-  if (p >= 75) return "bg-emerald-400";
-  if (p >= 60) return "bg-emerald-300";
-  if (p >= 40) return "bg-ink-soft";
-  if (p >= 25) return "bg-rose-300";
-  if (p >= 10) return "bg-rose-400";
-  return "bg-rose-500";
-}
-
-function chipClasses(p: number): string {
-  if (p >= 90) return "bg-emerald-500 text-white";
-  if (p >= 75) return "bg-emerald-200 text-emerald-900";
-  if (p >= 60) return "bg-emerald-100 text-emerald-800";
-  if (p >= 40) return "bg-paper-deep text-ink-soft";
-  if (p >= 25) return "bg-rose-100 text-rose-800";
-  if (p >= 10) return "bg-rose-200 text-rose-900";
-  return "bg-rose-500 text-white";
-}

@@ -15,9 +15,13 @@ import {
 } from "@/lib/team-filters";
 import { cn } from "@/lib/utils";
 import { SearchableSelect, type SearchableOption } from "./searchable-select";
+import { SearchableMultiSelect } from "./searchable-multi-select";
 import { MultiYearSelect } from "./multi-year-select";
 import { Select } from "@/components/select";
 import { confDisplay } from "@/lib/conf-display";
+import { POWER_CONFS } from "@/lib/conf-tiers";
+
+const CONF_GROUP_LABELS = { power: "Power Conferences", midmajor: "Mid-Majors" } as const;
 
 const OPS: { value: Comparator; label: string }[] = [
   { value: "gt", label: ">" },
@@ -36,9 +40,10 @@ const STAT_OPTIONS: SearchableOption[] = FILTER_COLUMNS.map((c) => ({
 }));
 
 // Defaults applied by the Reset button (matches the empty-URL spec).
-const DEFAULT_DRAFT: Pick<TeamFilterSpec, "years" | "conf" | "filters"> = {
+const DEFAULT_DRAFT: Pick<TeamFilterSpec, "years" | "conf" | "teams" | "filters"> = {
   years: parseSpec({}).years,
-  conf: null,
+  conf: [],
+  teams: [],
   filters: [],
 };
 
@@ -46,10 +51,12 @@ export type ConferenceRanking = { conference: string; avg_bta_rtg: number; teams
 
 export function FilterBar({
   conferences,
+  teams,
   conferenceRankings = [],
   years = [],
 }: {
   conferences: string[];
+  teams: string[];
   conferenceRankings?: ConferenceRanking[];
   years?: number[];
 }) {
@@ -69,6 +76,7 @@ export function FilterBar({
   const [draft, setDraft] = useState({
     years: urlSpec.years,
     conf: urlSpec.conf,
+    teams: urlSpec.teams,
     filters: urlSpec.filters,
   });
   const [showRankings, setShowRankings] = useState(false);
@@ -77,7 +85,7 @@ export function FilterBar({
   // doesn't affect these fields but the dep is safe). Cheap because state
   // updates are reference-compared at the consumer level.
   useEffect(() => {
-    setDraft({ years: urlSpec.years, conf: urlSpec.conf, filters: urlSpec.filters });
+    setDraft({ years: urlSpec.years, conf: urlSpec.conf, teams: urlSpec.teams, filters: urlSpec.filters });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
@@ -102,7 +110,7 @@ export function FilterBar({
 
   function submit() {
     // Preserve sort/limit from the URL; only overwrite the draft-controlled fields.
-    const next: TeamFilterSpec = { ...urlSpec, years: draft.years, conf: draft.conf, filters: draft.filters };
+    const next: TeamFilterSpec = { ...urlSpec, years: draft.years, conf: draft.conf, teams: draft.teams, filters: draft.filters };
     const p = specToParams(next).toString();
     startTransition(() => router.replace(p ? `/?${p}` : "/", { scroll: false }));
   }
@@ -111,7 +119,25 @@ export function FilterBar({
     startTransition(() => router.replace("/", { scroll: false }));
   }
 
-  const dirty = !sameDraft(draft, { years: urlSpec.years, conf: urlSpec.conf, filters: urlSpec.filters });
+  const dirty = !sameDraft(draft, { years: urlSpec.years, conf: urlSpec.conf, teams: urlSpec.teams, filters: urlSpec.filters });
+
+  const teamOptions = useMemo<SearchableOption[]>(
+    () => teams.map((t) => ({ value: t, label: t })),
+    [teams],
+  );
+  const confOptions = useMemo<SearchableOption[]>(() => {
+    const opts = conferences.map((c) => ({
+      value: c,
+      label: confDisplay(c),
+      group: POWER_CONFS.has(c) ? "power" : "midmajor",
+    }));
+    // Power section first, then mid-majors; alpha within each. The picker
+    // renders groups in the order they first appear in `options`.
+    return opts.sort((a, b) => {
+      if (a.group !== b.group) return a.group === "power" ? -1 : 1;
+      return a.label.localeCompare(b.label);
+    });
+  }, [conferences]);
 
   return (
     <div className={cn("bg-paper-deep/25 border border-hairline rounded-xl shadow-sm", pending && "opacity-70")}>
@@ -124,17 +150,28 @@ export function FilterBar({
           />
         </Field>
 
+        <Field label="Team">
+          <SearchableMultiSelect
+            value={draft.teams}
+            options={teamOptions}
+            onChange={(teams) => patch({ teams })}
+            placeholder="Type to filter…"
+            emptyLabel="All teams"
+            ariaLabel="Teams"
+          />
+        </Field>
+
         <Field label="Conference">
           <div className="flex items-center gap-3">
-            <Select
-              value={draft.conf ?? ""}
-              onChange={(v) => patch({ conf: v || null })}
-            >
-              <option value="">All conferences</option>
-              {conferences.map((c) => (
-                <option key={c} value={c}>{confDisplay(c)}</option>
-              ))}
-            </Select>
+            <SearchableMultiSelect
+              value={draft.conf}
+              options={confOptions}
+              onChange={(conf) => patch({ conf })}
+              placeholder="Type to filter…"
+              emptyLabel="All conferences"
+              ariaLabel="Conferences"
+              groupLabels={CONF_GROUP_LABELS}
+            />
             {conferenceRankings.length > 0 && (
               <button
                 type="button"
@@ -242,10 +279,11 @@ export function FilterBar({
 }
 
 function sameDraft(
-  a: { years: number[]; conf: string | null; filters: StatFilter[] },
-  b: { years: number[]; conf: string | null; filters: StatFilter[] },
+  a: { years: number[]; conf: string[]; teams: string[]; filters: StatFilter[] },
+  b: { years: number[]; conf: string[]; teams: string[]; filters: StatFilter[] },
 ): boolean {
-  if (a.conf !== b.conf) return false;
+  if (!sameStringArr(a.conf, b.conf)) return false;
+  if (!sameStringArr(a.teams, b.teams)) return false;
   if (a.years.length !== b.years.length) return false;
   for (let i = 0; i < a.years.length; i++) if (a.years[i] !== b.years[i]) return false;
   if (a.filters.length !== b.filters.length) return false;
@@ -253,6 +291,16 @@ function sameDraft(
     const x = a.filters[i]!, y = b.filters[i]!;
     if (x.stat !== y.stat || x.op !== y.op || x.value !== y.value) return false;
   }
+  return true;
+}
+
+function sameStringArr(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  // Order-insensitive: the user can pick checkboxes in any order, but two
+  // drafts with the same set of selections should not show "unsaved changes".
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  for (let i = 0; i < sa.length; i++) if (sa[i] !== sb[i]) return false;
   return true;
 }
 

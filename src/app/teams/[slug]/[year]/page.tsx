@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { readPlayersForYear, readTeam, readAllTeams, readRankedPlayerIds, readConfRecordsByTeam, readGameLogsForYear } from "@/lib/static-data";
-import { TeamPageView, buildRoster } from "@/components/teams/team-page-view";
+import { TeamPageView, buildRoster, attachRosterRanks } from "@/components/teams/team-page-view";
 import { buildShootingRanks, buildFourFactorRanks } from "@/components/teams/distribution-panel";
 
 function slugFor(name: string): string {
@@ -81,8 +81,9 @@ export default async function TeamSeasonPage({
   if (!current) notFound();
 
   const rosterPool = await readPlayersForYear(year);
-  const roster = buildRoster(rosterPool, current.id, year);
+  const rosterBase = buildRoster(rosterPool, current.id, year);
   const rankedPlayerIds = await readRankedPlayerIds();
+  const roster = await attachRosterRanks(rosterBase, rankedPlayerIds, year);
   const confRecordsAll = await readConfRecordsByTeam();
   const confRecords = confRecordsAll.get(team.name) ?? new Map();
   const allTeams = await readAllTeams();

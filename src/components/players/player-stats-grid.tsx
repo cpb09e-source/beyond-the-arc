@@ -1,7 +1,7 @@
-import { cn } from "@/lib/utils";
 import type { PlayerRanksSeason } from "@/lib/static-data";
 import { STAT_META, fmtValue } from "./where-they-rank";
 import { StatInfo } from "./stat-info";
+import { PercentileChip } from "@/components/percentile-chip";
 
 /**
  * Categorized stats grid for a player-season. Each row shows the stat label,
@@ -97,29 +97,3 @@ function StatPanel({
   );
 }
 
-function PercentileChip({ pct }: { pct: number }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center justify-center text-xs tabular font-semibold rounded shrink-0 w-9 h-7",
-        chipClasses(pct),
-      )}
-      title={`${pct}th percentile in cohort`}
-    >
-      {pct}
-    </span>
-  );
-}
-
-// 7-bucket gradient from red (worst) → neutral (mid) → emerald (best). Mirrors
-// the CBB-Analytics style chip — saturated at the extremes, fading through
-// muted tones in the middle so the eye can sort a panel of 8-10 rows quickly.
-function chipClasses(p: number): string {
-  if (p >= 90) return "bg-emerald-500 text-white";
-  if (p >= 75) return "bg-emerald-200 text-emerald-900";
-  if (p >= 60) return "bg-emerald-100 text-emerald-800";
-  if (p >= 40) return "bg-paper-deep text-ink-soft";
-  if (p >= 25) return "bg-rose-100 text-rose-800";
-  if (p >= 10) return "bg-rose-200 text-rose-900";
-  return "bg-rose-500 text-white";
-}

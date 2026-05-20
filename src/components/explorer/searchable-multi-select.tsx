@@ -19,6 +19,7 @@ export function SearchableMultiSelect({
   className,
   ariaLabel,
   disabledValues,
+  groupLabels,
 }: {
   /** Selected values. Empty array = "All". */
   value: string[];
@@ -31,6 +32,10 @@ export function SearchableMultiSelect({
   /** Values that can't be toggled (cross-filtered by another picker). They
    *  still render but are visually muted and non-interactive. */
   disabledValues?: Set<string>;
+  /** Maps option.group → section header label. Sections render in the order
+   *  groups first appear in `options`, so sort `options` accordingly before
+   *  passing in. */
+  groupLabels?: Record<string, string>;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -143,31 +148,52 @@ export function SearchableMultiSelect({
             {filtered.length === 0 ? (
               <div className="px-3 py-4 text-sm text-ink-muted text-center">No matches</div>
             ) : (
-              filtered.map((o, idx) => {
-                const isActive = idx === activeIdx;
-                const isSelected = value.includes(o.value);
-                const isDisabled = disabledValues?.has(o.value) ?? false;
-                return (
-                  <label
-                    key={o.value}
-                    onMouseEnter={() => { if (!isDisabled) setActiveIdx(idx); }}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-1.5 text-sm",
-                      isDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer",
-                      isActive && !isDisabled && "bg-paper-deep",
+              (() => {
+                // Bucket filtered options into adjacency-run groups so each
+                // section's header renders once. activeIdx is a flat index into
+                // `filtered`, so we recompute it per row.
+                const groups: Array<{ group: string | undefined; items: SearchableOption[] }> = [];
+                for (const opt of filtered) {
+                  const last = groups[groups.length - 1];
+                  if (last && last.group === opt.group) last.items.push(opt);
+                  else groups.push({ group: opt.group, items: [opt] });
+                }
+                return groups.map((g, gi) => (
+                  <div key={`${g.group ?? ""}-${gi}`}>
+                    {g.group && groupLabels?.[g.group] && (
+                      <div className="px-3 pt-2 pb-1 text-[0.65rem] uppercase tracking-widest text-coral font-medium">
+                        {groupLabels[g.group]}
+                      </div>
                     )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      disabled={isDisabled}
-                      onChange={() => toggle(o.value)}
-                      className="accent-coral"
-                    />
-                    <span className={cn(isSelected && "font-medium text-coral")}>{o.label}</span>
-                  </label>
-                );
-              })
+                    {g.items.map((o) => {
+                      const idx = filtered.indexOf(o);
+                      const isActive = idx === activeIdx;
+                      const isSelected = value.includes(o.value);
+                      const isDisabled = disabledValues?.has(o.value) ?? false;
+                      return (
+                        <label
+                          key={o.value}
+                          onMouseEnter={() => { if (!isDisabled) setActiveIdx(idx); }}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-1.5 text-sm",
+                            isDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer",
+                            isActive && !isDisabled && "bg-paper-deep",
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            disabled={isDisabled}
+                            onChange={() => toggle(o.value)}
+                            className="accent-coral"
+                          />
+                          <span className={cn(isSelected && "font-medium text-coral")}>{o.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                ));
+              })()
             )}
           </div>
           <div className="border-t border-hairline p-2 flex flex-wrap gap-1.5 text-xs">

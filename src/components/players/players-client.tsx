@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
+import { PercentileChip } from "@/components/percentile-chip";
 import { PlayerFilterBar } from "@/components/players/player-filter-bar";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import {
@@ -34,6 +35,13 @@ const CLASS_LABEL: Record<string, string> = {
 };
 function seasonLabel(y: number): string {
   return `${y - 1}-${String(y).slice(-2)}`;
+}
+// Header kicker text for the chosen seasons. Single year → "2024-25 season";
+// 2 years → "2023-24, 2024-25 seasons"; ≥3 → "3 seasons" to keep it short.
+function seasonsKicker(years: number[]): string {
+  if (years.length === 1) return `${seasonLabel(years[0]!)} season`;
+  if (years.length === 2) return `${seasonLabel(years[1]!)}, ${seasonLabel(years[0]!)} seasons`;
+  return `${years.length} seasons`;
 }
 
 function fmtNum(x: number | null, digits = 1): string {
@@ -193,8 +201,18 @@ function isBelowBaseline(p: PlayerSummary): boolean {
 
 function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummary[] {
   let out = players.filter((p) => !isBelowBaseline(p));
-  if (spec.conference) out = out.filter((p) => p.team_conference === spec.conference);
-  if (spec.cls) out = out.filter((p) => p.class === spec.cls);
+  if (spec.conf.length) {
+    const confSet = new Set(spec.conf);
+    out = out.filter((p) => p.team_conference !== null && confSet.has(p.team_conference));
+  }
+  if (spec.teams.length) {
+    const teamSet = new Set(spec.teams);
+    out = out.filter((p) => teamSet.has(p.team_name));
+  }
+  if (spec.cls.length) {
+    const clsSet = new Set(spec.cls);
+    out = out.filter((p) => p.class !== null && clsSet.has(p.class));
+  }
   out = out.filter((p) => (p.games ?? 0) >= spec.minGames);
 
   const sortKeyMap: Record<PlayerListSpec["sortBy"], keyof PlayerSummary> = {
@@ -253,16 +271,6 @@ function attachPercentiles(players: PlayerSummary[]): PctMaps {
   return out;
 }
 
-function pctColor(pct: number | null): string {
-  if (pct === null) return "transparent";
-  const hue = (pct / 100) * 120;
-  return `hsl(${hue}, 38%, 38%)`;
-}
-function pctBg(pct: number | null): string {
-  if (pct === null) return "transparent";
-  const hue = (pct / 100) * 120;
-  return `hsl(${hue}, 38%, 92%)`;
-}
 
 export function PlayersClient({ confsByYear }: { confsByYear: Record<string, string[]> }) {
   const search = useSearchParams();
@@ -272,53 +280,103 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     return obj;
   }, [search]);
   const spec = parsePlayerSpec(params);
-  const conferences = confsByYear[String(spec.year)] ?? [];
+  // Union conferences across every year we have data for; matches the Team
+  // Explorer's behavior so the picker offers every historical conference.
+  const conferences = useMemo(() => {
+    const s = new Set<string>();
+    for (const list of Object.values(confsByYear)) for (const c of list) s.add(c);
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [confsByYear]);
 
   const [rawByYear, setRawByYear] = useState<Record<number, RawPlayer[]>>({});
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
 
   useEffect(() => {
-    if (rawByYear[spec.year]) {
+    const toFetch = spec.years.filter((y) => !rawByYear[y]);
+    if (toFetch.length === 0) {
       setLoading(false);
       return;
     }
     let cancelled = false;
     setLoading(true);
-    fetch(`/data/players-by-year/${spec.year}.json`)
-      .then((r) => r.json())
-      .then((arr: RawPlayer[]) => {
+    Promise.all(
+      toFetch.map((y) =>
+        fetch(`/data/players-by-year/${y}.json`)
+          .then((r) => r.json())
+          .then((arr: RawPlayer[]) => [y, arr] as const),
+      ),
+    )
+      .then((entries) => {
         if (cancelled) return;
-        setRawByYear((s) => ({ ...s, [spec.year]: arr }));
+        setRawByYear((s) => {
+          const next = { ...s };
+          for (const [y, arr] of entries) next[y] = arr;
+          return next;
+        });
         setLoading(false);
       })
       .catch(() => setLoading(false));
     return () => { cancelled = true; };
-  }, [spec.year, rawByYear]);
+  }, [spec.years, rawByYear]);
 
-  const yearRaw = rawByYear[spec.year] ?? [];
-  // Transform once, then attach the per-cohort composite + percentiles across
-  // the eligible D-I pool (post-baseline, pre-filter).
-  const transformed = useMemo(() => {
-    const arr = yearRaw.map(transformPlayer);
-    const eligible = arr.filter((p) => !isBelowBaseline(p));
-    attachBtaIndOrtg(eligible);
-    return arr;
-  }, [yearRaw]);
-  const pctMaps = useMemo(
-    () => attachPercentiles(transformed.filter((p) => !isBelowBaseline(p))),
-    [transformed],
+  // Per-year cohort processing: each season's BTA composite + percentile
+  // chips are computed against just that season's eligible D-I pool (matches
+  // the Team Explorer's year-only cohort rule). Multi-year selections merge
+  // the processed lists for display.
+  const processedByYear = useMemo(() => {
+    const out: Record<number, { players: PlayerSummary[]; pctMaps: PctMaps }> = {};
+    for (const y of spec.years) {
+      const raw = rawByYear[y];
+      if (!raw) continue;
+      const arr = raw.map(transformPlayer);
+      const eligible = arr.filter((p) => !isBelowBaseline(p));
+      attachBtaIndOrtg(eligible);
+      const pctMaps = attachPercentiles(eligible);
+      out[y] = { players: arr, pctMaps };
+    }
+    return out;
+  }, [rawByYear, spec.years]);
+
+  const transformed = useMemo(
+    () => spec.years.flatMap((y) => processedByYear[y]?.players ?? []),
+    [processedByYear, spec.years],
   );
+
+  // Per-stat percentile lookup that picks the right year's cohort for the
+  // player being chip'd. Player id is per-season-unique so no collisions.
+  const pctMaps: PctMaps = useMemo(() => {
+    const merged: PctMaps = {
+      bta_ind_ortg: new Map(), pir: new Map(),
+      fg_pct: new Map(), fg3_pct: new Map(), ts_pct: new Map(),
+    };
+    for (const y of spec.years) {
+      const yearPct = processedByYear[y]?.pctMaps;
+      if (!yearPct) continue;
+      for (const k of Object.keys(merged) as (keyof PctMaps)[]) {
+        for (const [id, v] of yearPct[k]) merged[k].set(id, v);
+      }
+    }
+    return merged;
+  }, [processedByYear, spec.years]);
+
+  const teamOptions = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of transformed) s.add(p.team_name);
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [transformed]);
+
   const players = useMemo(() => {
     const list = applySpec(transformed, spec);
     const q = query.trim().toLowerCase();
     if (!q) return list;
     return list.filter((p) => p.name.toLowerCase().includes(q));
   }, [transformed, spec, query]);
+  const multiYear = spec.years.length > 1;
 
   return (
     <>
-      <PlayerFilterBar conferences={conferences} />
+      <PlayerFilterBar conferences={conferences} teams={teamOptions} />
 
       {/* Headline ledger — coral accent rule, ring + shadow, big display
           title. Mirrors /coaches "Head coaches" and /teams "By season" cards
@@ -329,7 +387,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           <div>
             <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
               <span className="h-px w-6 bg-coral" />
-              <span>{seasonLabel(spec.year)} season · sorted by {SORT_LABEL[spec.sortBy]}</span>
+              <span>{seasonsKicker(spec.years)} · sorted by {SORT_LABEL[spec.sortBy]}</span>
             </div>
             <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
               Leaderboard
@@ -339,8 +397,8 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                 {loading ? "—" : players.length.toLocaleString()}
               </span>{" "}
               {loading ? "loading…" : players.length === 1 ? "player" : "players"}
-              {!loading && spec.conference && <> · {spec.conference}</>}
-              {!loading && spec.cls && <> · {CLASS_LABEL[spec.cls] ?? spec.cls}</>}
+              {!loading && spec.conf.length > 0 && <> · {spec.conf.length === 1 ? spec.conf[0] : `${spec.conf.length} conferences`}</>}
+              {!loading && spec.cls.length > 0 && <> · {spec.cls.length === 1 ? (CLASS_LABEL[spec.cls[0]!] ?? spec.cls[0]) : `${spec.cls.length} classes`}</>}
             </div>
           </div>
           <div className="relative shrink-0">
@@ -385,6 +443,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                 <Th className="w-12">{""}</Th>
                 <SortableTh statKey="name" label="Player" basePath="/players" defaultSort="bta_ind_ortg" defaultDir="asc" align="left" />
                 <Th>Team</Th>
+                {multiYear && <Th className="w-16">Season</Th>}
                 <Th className="w-10">Cl</Th>
                 <Th className="w-12">Ht</Th>
                 <SortableTh statKey="games" label="GP" basePath="/players" defaultSort="bta_ind_ortg" className="w-12" />
@@ -399,15 +458,15 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               </tr>
             </thead>
             <tbody>
-              {loading && yearRaw.length === 0 ? (
+              {loading && transformed.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="px-4 py-16 text-center text-ink-muted">
-                    Loading {spec.year - 1}-{String(spec.year).slice(-2)} players…
+                  <td colSpan={multiYear ? 15 : 14} className="px-4 py-16 text-center text-ink-muted">
+                    Loading {seasonsKicker(spec.years).toLowerCase()}…
                   </td>
                 </tr>
               ) : players.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="px-4 py-12 text-center text-ink-muted">
+                  <td colSpan={multiYear ? 15 : 14} className="px-4 py-12 text-center text-ink-muted">
                     No players match these filters.
                   </td>
                 </tr>
@@ -433,6 +492,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                         <span className="text-ink-soft text-sm">{p.team_name}</span>
                       </Link>
                     </Td>
+                    {multiYear && <Td className="text-ink-muted tabular">{seasonLabel(p.year)}</Td>}
                     <Td className="text-ink-muted">{p.class ?? "—"}</Td>
                     <Td className="text-ink-muted whitespace-nowrap">{p.height ?? "—"}</Td>
                     <Td className="text-right tabular">{p.games ?? "—"}</Td>
@@ -505,15 +565,7 @@ function ValuePctCell({
     <td className={`px-3 py-2.5 text-right tabular ${emphasized ? "font-medium" : ""}`}>
       <span className="inline-flex flex-col items-end gap-0.5 leading-tight">
         <span>{display}</span>
-        {pct !== null && (
-          <span
-            className="text-[0.6rem] font-medium tabular w-7 text-center py-px rounded leading-none"
-            style={{ color: pctColor(pct), background: pctBg(pct) }}
-            aria-label={`${pct}th percentile`}
-          >
-            {pct}
-          </span>
-        )}
+        <PercentileChip pct={pct} />
       </span>
     </td>
   );

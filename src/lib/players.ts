@@ -92,9 +92,10 @@ export type PlayerSummary = {
 };
 
 export type PlayerListSpec = {
-  year: number;
-  conference: string | null;
-  cls: string | null;          // "Fr" | "So" | "Jr" | "Sr" | "Gr"
+  years: number[];             // multi-select; any combination of seasons
+  conf: string[];              // empty = all conferences
+  teams: string[];             // empty = all teams
+  cls: string[];               // empty = all classes; each = "Fr" | "So" | "Jr" | "Sr" | "Gr"
   minGames: number;
   sortBy: "bta_ind_ortg" | "pir" | "pts" | "reb" | "ast" | "fg_pct" | "fg3_pct" | "ts_pct" | "games" | "name";
   sortDir: "asc" | "desc";
@@ -102,26 +103,49 @@ export type PlayerListSpec = {
 };
 
 export const DEFAULT_PLAYER_SPEC: PlayerListSpec = {
-  year: 2026,
-  conference: null,
-  cls: null,
+  years: [2026],
+  conf: [],
+  teams: [],
+  cls: [],
   minGames: 10,
   sortBy: "bta_ind_ortg",
   sortDir: "desc",
   limit: 100,
 };
 
-
-// Legacy Supabase fetchers removed — all reads now go through static-data.ts
-// and client-side processing. Re-add if a server-rendered read path returns.
+function clampYear(y: number): number {
+  if (!Number.isFinite(y)) return DEFAULT_PLAYER_SPEC.years[0]!;
+  return Math.max(2013, Math.min(2026, Math.trunc(y)));
+}
 
 export function parsePlayerSpec(searchParams: Record<string, string | string[] | undefined>): PlayerListSpec {
   const get = (k: string) => {
     const v = searchParams[k];
     return Array.isArray(v) ? v[0] : v;
   };
-  const yearRaw = Number(get("year"));
-  const year = Number.isFinite(yearRaw) ? Math.max(2013, Math.min(2026, Math.trunc(yearRaw))) : DEFAULT_PLAYER_SPEC.year;
+  // Years: prefer ?ys=2024,2025; fall back to legacy ?year=2026.
+  let years: number[] = [];
+  const ys = get("ys");
+  if (ys) {
+    years = ys
+      .split(",")
+      .map((s) => clampYear(Number(s.trim())))
+      .filter((n, i, a) => a.indexOf(n) === i);
+  } else if (get("year") !== undefined) {
+    years = [clampYear(Number(get("year")))];
+  }
+  if (years.length === 0) years = [...DEFAULT_PLAYER_SPEC.years];
+  years.sort((a, b) => b - a); // newest-first
+
+  // Conf / team / cls: comma-separated. Legacy single-value forms split to a
+  // one-element array, so old ?conf=ACC and ?cls=Fr bookmarks still work.
+  const confRaw = get("conf");
+  const conf = confRaw ? confRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  const teamRaw = get("team");
+  const teams = teamRaw ? teamRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  const clsRaw = get("cls");
+  const cls = clsRaw ? clsRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
+
   const minG = Number(get("ming"));
   const limitRaw = Number(get("limit"));
   const sortRaw = get("sort");
@@ -129,9 +153,10 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
   const sortBy = validSorts.includes(sortRaw as PlayerListSpec["sortBy"]) ? (sortRaw as PlayerListSpec["sortBy"]) : DEFAULT_PLAYER_SPEC.sortBy;
   const sortDirRaw = get("order");
   return {
-    year,
-    conference: get("conf") ?? null,
-    cls: get("cls") ?? null,
+    years,
+    conf,
+    teams,
+    cls,
     minGames: Number.isFinite(minG) && minG >= 0 ? minG : DEFAULT_PLAYER_SPEC.minGames,
     sortBy,
     sortDir: sortDirRaw === "asc" || sortDirRaw === "desc" ? sortDirRaw : DEFAULT_PLAYER_SPEC.sortDir,
@@ -141,9 +166,17 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
 
 export function playerSpecToParams(spec: PlayerListSpec): URLSearchParams {
   const p = new URLSearchParams();
-  if (spec.year !== DEFAULT_PLAYER_SPEC.year) p.set("year", String(spec.year));
-  if (spec.conference) p.set("conf", spec.conference);
-  if (spec.cls) p.set("cls", spec.cls);
+  // Years: only set ?ys= when it differs from the default (current season).
+  const defaultYears = DEFAULT_PLAYER_SPEC.years;
+  if (
+    spec.years.length !== defaultYears.length ||
+    spec.years.some((y, i) => y !== defaultYears[i])
+  ) {
+    p.set("ys", spec.years.join(","));
+  }
+  if (spec.conf.length) p.set("conf", spec.conf.join(","));
+  if (spec.teams.length) p.set("team", spec.teams.join(","));
+  if (spec.cls.length) p.set("cls", spec.cls.join(","));
   if (spec.minGames !== DEFAULT_PLAYER_SPEC.minGames) p.set("ming", String(spec.minGames));
   if (spec.sortBy !== DEFAULT_PLAYER_SPEC.sortBy) p.set("sort", spec.sortBy);
   if (spec.sortDir !== DEFAULT_PLAYER_SPEC.sortDir) p.set("order", spec.sortDir);

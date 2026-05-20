@@ -78,7 +78,7 @@ export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   { key: "drb_diff_ct",  source: "cbba", dbColumn: "drb_diff",       label: "DREB Diff",    desc: "Defensive rebounds − opp DREB",              format: "num1", group: "diffs" },
   { key: "reb_diff_ct",  source: "cbba", dbColumn: "reb_diff",       label: "REB Diff",     desc: "Total rebounds − opp REB",                   format: "num1", group: "diffs" },
   { key: "tov_diff_ct",  source: "cbba", dbColumn: "tov_diff_ct",    label: "TOV Diff",     desc: "Turnovers − opp TOV (negative = good)",      format: "num1", group: "diffs" },
-  { key: "fbpts_diff",   source: "cbba", dbColumn: "fbpts_diff",     label: "FB Pts Diff",  desc: "Fast-break points − allowed",                format: "num1", group: "diffs" },
+  { key: "fbpts_diff",   source: "cbba", dbColumn: "fbpts_diff",     label: "FBP Diff",     desc: "Fast-break points − allowed",                format: "num1", group: "diffs" },
   { key: "pitp_diff",    source: "cbba", dbColumn: "pitp_diff",      label: "Paint Pts Diff", desc: "Points in the paint − allowed",            format: "num1", group: "diffs" },
   { key: "pts_diff",     source: "cbba", dbColumn: "pts_diff",       label: "Pts Diff",     desc: "Total points scored − allowed (season)",     format: "num1", group: "diffs" },
   { key: "scp_diff",     source: "cbba", dbColumn: "scp_diff",       label: "2nd-Chance Diff", desc: "Second-chance points − allowed",          format: "num1", group: "diffs" },
@@ -107,7 +107,8 @@ export type StatFilter = { stat: TeamStatKey; op: Comparator; value: number };
 
 export type TeamFilterSpec = {
   years: number[];              // multi-select; any combination of seasons
-  conf: string | null;
+  conf: string[];               // empty = all conferences
+  teams: string[];              // empty = all teams
   filters: StatFilter[];
   sortBy: TeamStatKey;
   sortDir: "asc" | "desc";
@@ -121,7 +122,8 @@ export const ALL_YEARS = [
 
 export const DEFAULT_SPEC: TeamFilterSpec = {
   years: [2026],                // current season only by default
-  conf: null,
+  conf: [],
+  teams: [],
   filters: [],
   sortBy: "bta_rtg",
   sortDir: "desc",
@@ -155,7 +157,8 @@ export function specToParams(spec: TeamFilterSpec): URLSearchParams {
   ) {
     p.set("ys", spec.years.join(","));
   }
-  if (spec.conf) p.set("conf", spec.conf);
+  if (spec.conf.length) p.set("conf", spec.conf.join(","));
+  if (spec.teams.length) p.set("team", spec.teams.join(","));
   spec.filters.forEach((f, i) => p.set(`f${i}`, `${f.stat}.${f.op}.${f.value}`));
   if (spec.sortBy !== DEFAULT_SPEC.sortBy) p.set("sort", spec.sortBy);
   if (spec.sortDir !== DEFAULT_SPEC.sortDir) p.set("order", spec.sortDir);
@@ -211,9 +214,17 @@ export function parseSpec(searchParams: Record<string, string | string[] | undef
   if (years.length === 0) years = [...DEFAULT_SPEC.years];
   years.sort((a, b) => b - a);     // canonical newest-first
 
+  // Comma-separated for both. Legacy single-value ?conf=ACC URLs split to a
+  // one-element array (no migration needed for old bookmarks).
+  const confRaw = get("conf");
+  const conf = confRaw ? confRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  const teamRaw = get("team");
+  const teams = teamRaw ? teamRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
+
   return {
     years,
-    conf: get("conf") ?? null,
+    conf,
+    teams,
     filters,
     sortBy: isStatKey(sortBy) ? sortBy : DEFAULT_SPEC.sortBy,
     sortDir: sortDir === "asc" || sortDir === "desc" ? sortDir : DEFAULT_SPEC.sortDir,
@@ -456,15 +467,27 @@ export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { r
     if (f.op === "lt") return v < f.value;
     return v <= f.value;
   }
+  // Percentiles are computed across the FULL year cohort (every D-I team in
+  // that season), not the filtered view — so a team's percentile chips don't
+  // shift when the user narrows by conference, team, or stat filter. Multi-
+  // year selections still bucket per-year inside attachPercentiles, so
+  // 2024-Duke is measured against 2024 peers, not 2026.
+  attachPercentiles(allRows);
+
   let displaySet = allRows;
-  if (spec.conf) displaySet = displaySet.filter((r) => r.team_conference === spec.conf);
+  if (spec.conf.length) {
+    const confSet = new Set(spec.conf);
+    displaySet = displaySet.filter((r) => r.team_conference !== null && confSet.has(r.team_conference));
+  }
+  if (spec.teams.length) {
+    const teamSet = new Set(spec.teams);
+    displaySet = displaySet.filter((r) => teamSet.has(r.team_name));
+  }
   for (const f of spec.filters) {
     const col = COLUMN_BY_KEY.get(f.stat);
     if (!col || col.source === "derived") continue;
     displaySet = displaySet.filter((r) => passes(r, f));
   }
-
-  attachPercentiles(displaySet); // percentile within the visible cohort (matches prior UX)
 
   let filtered = displaySet;
   for (const f of spec.filters) {
@@ -521,6 +544,12 @@ const PERCENTILE_STATS: Array<{ key: keyof TeamRow; higherBetter: boolean }> = [
   { key: "cbb_efg",     higherBetter: true },
   { key: "cbb_fg3",     higherBetter: true },
   { key: "cbb_efg_def", higherBetter: false },
+  // Four Factors columns in the Team Explorer table — positive diffs are good
+  // for everything except tov_diff_ct (more TOVs than the opponent = bad).
+  { key: "reb_diff_ct",  higherBetter: true },
+  { key: "fg3m_diff_ct", higherBetter: true },
+  { key: "fbpts_diff",   higherBetter: true },
+  { key: "tov_diff_ct",  higherBetter: false },
 ];
 
 function attachPercentiles(rows: TeamRow[]) {

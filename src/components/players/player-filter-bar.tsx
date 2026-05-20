@@ -5,6 +5,10 @@ import { useMemo, useTransition } from "react";
 import { cn } from "@/lib/utils";
 import { Select } from "@/components/select";
 import { confDisplay } from "@/lib/conf-display";
+import { POWER_CONFS } from "@/lib/conf-tiers";
+import { MultiYearSelect } from "@/components/explorer/multi-year-select";
+import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
+import type { SearchableOption } from "@/components/explorer/searchable-select";
 import {
   DEFAULT_PLAYER_SPEC,
   parsePlayerSpec,
@@ -12,30 +16,16 @@ import {
   type PlayerListSpec,
 } from "@/lib/players";
 
-const YEARS = [
-  { value: 2026, label: "2025-26" },
-  { value: 2025, label: "2024-25" },
-  { value: 2024, label: "2023-24" },
-  { value: 2023, label: "2022-23" },
-  { value: 2022, label: "2021-22" },
-  { value: 2021, label: "2020-21" },
-  { value: 2020, label: "2019-20" },
-  { value: 2019, label: "2018-19" },
-  { value: 2018, label: "2017-18" },
-  { value: 2017, label: "2016-17" },
-  { value: 2016, label: "2015-16" },
-  { value: 2015, label: "2014-15" },
-  { value: 2014, label: "2013-14" },
-  { value: 2013, label: "2012-13" },
-];
-const CLASSES = [
-  { value: "", label: "All" },
+// Class options. Empty checkbox set = "all classes" (matches Team Explorer's
+// "all selected ⇒ All …" trigger convention).
+const CLASS_OPTIONS: SearchableOption[] = [
   { value: "Fr", label: "Freshman" },
   { value: "So", label: "Sophomore" },
   { value: "Jr", label: "Junior" },
   { value: "Sr", label: "Senior" },
   { value: "Gr", label: "Graduate" },
 ];
+
 const SORTS = [
   { value: "bta_ind_ortg", label: "BTA PRTG" },
   { value: "pir", label: "PIR" },
@@ -51,7 +41,15 @@ const SORTS = [
 const LIMITS = [50, 100, 250, 500];
 const MIN_GAMES = [0, 5, 10, 15, 20];
 
-export function PlayerFilterBar({ conferences }: { conferences: string[] }) {
+const CONF_GROUP_LABELS = { power: "Power Conferences", midmajor: "Mid-Majors" } as const;
+
+export function PlayerFilterBar({
+  conferences,
+  teams,
+}: {
+  conferences: string[];
+  teams: string[];
+}) {
   const router = useRouter();
   const search = useSearchParams();
   const [pending, startTransition] = useTransition();
@@ -73,24 +71,72 @@ export function PlayerFilterBar({ conferences }: { conferences: string[] }) {
     startTransition(() => router.replace("/players", { scroll: false }));
   }
 
+  const teamOptions = useMemo<SearchableOption[]>(
+    () => teams.map((t) => ({ value: t, label: t })),
+    [teams],
+  );
+  const confOptions = useMemo<SearchableOption[]>(() => {
+    const opts = conferences.map((c) => ({
+      value: c,
+      label: confDisplay(c),
+      group: POWER_CONFS.has(c) ? "power" : "midmajor",
+    }));
+    return opts.sort((a, b) => {
+      if (a.group !== b.group) return a.group === "power" ? -1 : 1;
+      return a.label.localeCompare(b.label);
+    });
+  }, [conferences]);
+
+  const isDefault =
+    spec.years.length === DEFAULT_PLAYER_SPEC.years.length &&
+    spec.years.every((y, i) => y === DEFAULT_PLAYER_SPEC.years[i]) &&
+    spec.conf.length === 0 &&
+    spec.teams.length === 0 &&
+    spec.cls.length === 0 &&
+    spec.minGames === DEFAULT_PLAYER_SPEC.minGames &&
+    spec.sortBy === DEFAULT_PLAYER_SPEC.sortBy &&
+    spec.sortDir === DEFAULT_PLAYER_SPEC.sortDir &&
+    spec.limit === DEFAULT_PLAYER_SPEC.limit;
+
   return (
     <div className={cn("bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-4 lg:p-5", pending && "opacity-70")}>
       <div className="flex flex-wrap items-end gap-3">
-        <Field label="Season">
-          <Select value={String(spec.year)} onChange={(v) => update({ ...spec, year: Number(v) })}>
-            {YEARS.map((y) => <option key={y.value} value={y.value}>{y.label}</option>)}
-          </Select>
+        <Field label="Seasons">
+          <MultiYearSelect
+            years={spec.years}
+            onChange={(years) => update({ ...spec, years })}
+          />
+        </Field>
+        <Field label="Team">
+          <SearchableMultiSelect
+            value={spec.teams}
+            options={teamOptions}
+            onChange={(t) => update({ ...spec, teams: t })}
+            placeholder="Type to filter…"
+            emptyLabel="All teams"
+            ariaLabel="Teams"
+          />
         </Field>
         <Field label="Conference">
-          <Select value={spec.conference ?? ""} onChange={(v) => update({ ...spec, conference: v || null })}>
-            <option value="">All conferences</option>
-            {conferences.map((c) => <option key={c} value={c}>{confDisplay(c)}</option>)}
-          </Select>
+          <SearchableMultiSelect
+            value={spec.conf}
+            options={confOptions}
+            onChange={(c) => update({ ...spec, conf: c })}
+            placeholder="Type to filter…"
+            emptyLabel="All conferences"
+            ariaLabel="Conferences"
+            groupLabels={CONF_GROUP_LABELS}
+          />
         </Field>
         <Field label="Class">
-          <Select value={spec.cls ?? ""} onChange={(v) => update({ ...spec, cls: v || null })}>
-            {CLASSES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-          </Select>
+          <SearchableMultiSelect
+            value={spec.cls}
+            options={CLASS_OPTIONS}
+            onChange={(c) => update({ ...spec, cls: c })}
+            placeholder="Type to filter…"
+            emptyLabel="All classes"
+            ariaLabel="Classes"
+          />
         </Field>
         <Field label="Min games">
           <Select value={String(spec.minGames)} onChange={(v) => update({ ...spec, minGames: Number(v) })}>
@@ -118,14 +164,14 @@ export function PlayerFilterBar({ conferences }: { conferences: string[] }) {
           <button
             type="button"
             onClick={reset}
-            className="h-9 text-sm text-ink-muted hover:text-ink px-2"
+            disabled={isDefault}
+            className="h-9 text-sm text-ink-muted hover:text-ink px-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Reset
           </button>
         </div>
       </div>
 
-      {/* Default-spec hint */}
       <p className="text-xs text-ink-muted mt-3">
         Showing top {spec.limit} by {SORTS.find((s) => s.value === spec.sortBy)?.label.toLowerCase()},
         minimum {spec.minGames} games played.

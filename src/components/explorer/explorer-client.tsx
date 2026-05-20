@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -13,6 +13,7 @@ import { SortControls } from "@/components/explorer/sort-controls";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { TeamLogo } from "@/components/team-logo";
 import { TourneyBadge } from "@/components/tourney-badge";
+import { PercentileChip } from "@/components/percentile-chip";
 import { confDisplay } from "@/lib/conf-display";
 
 function fmtNum(x: number | null, digits = 1): string {
@@ -39,35 +40,18 @@ function btaColor(v: number | null): string {
   if (v <= -40) return "text-ink-muted";
   return "text-ink-soft";
 }
-function pctColor(pct: number | null): string {
-  if (pct === null) return "transparent";
-  const hue = (pct / 100) * 120;
-  return `hsl(${hue}, 38%, 38%)`;
-}
-function pctBg(pct: number | null): string {
-  if (pct === null) return "transparent";
-  const hue = (pct / 100) * 120;
-  return `hsl(${hue}, 38%, 92%)`;
-}
-
-function ValueWithPct({ value, pct, format }: { value: number | null; pct: number | null; format: "num1" | "pct1" }) {
+function ValueWithPct({ value, pct, format }: { value: number | null; pct: number | null; format: "num1" | "pct1" | "num1signed" | "num0signed" }) {
   let display = "—";
   if (value !== null && value !== undefined) {
     if (format === "pct1") display = (value * 100).toFixed(1) + "%";
+    else if (format === "num1signed") display = (value > 0 ? "+" : "") + value.toFixed(1);
+    else if (format === "num0signed") display = (value > 0 ? "+" : "") + value.toFixed(0);
     else display = value.toFixed(1);
   }
   return (
     <span className="inline-flex items-baseline justify-end gap-1.5">
       <span>{display}</span>
-      {pct !== null && (
-        <span
-          className="text-[0.6rem] font-medium tabular w-7 text-center py-px rounded leading-none"
-          style={{ color: pctColor(pct), background: pctBg(pct) }}
-          aria-label={`${pct}th percentile`}
-        >
-          {pct}
-        </span>
-      )}
+      <PercentileChip pct={pct} />
     </span>
   );
 }
@@ -86,12 +70,36 @@ export function ExplorerClient({
     return obj;
   }, [search]);
   const spec = parseSpec(params);
-  const newest = spec.years[0] ?? 2026;
-  const conferences = confsByYear[String(newest)] ?? [];
 
-  // Pure-JS filter + sort + derive every time the spec changes.
-  // 2200 rows → ~5-15ms on modern hardware; sort is the cost.
-  const { rows, count } = useMemo(() => processTeams(allTeams, spec), [allTeams, spec]);
+  // Union conferences across every year we have data for, so users can pick
+  // a historical conference even when the visible-year selection wouldn't
+  // include it on its own. Same idea for team names — one flat picker list.
+  const conferences = useMemo(() => {
+    const s = new Set<string>();
+    for (const list of Object.values(confsByYear)) for (const c of list) s.add(c);
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [confsByYear]);
+  const teamNames = useMemo(() => {
+    const s = new Set<string>();
+    for (const t of allTeams) s.add(t.name);
+    return [...s].sort((a, b) => a.localeCompare(b));
+  }, [allTeams]);
+
+  // Inline quick-filter on the table — by team name only, separate from the
+  // URL-persisted Team picker in the FilterBar above. We run processTeams with
+  // limit=-1 so the search matches across the full result set rather than just
+  // the top-N visible window, then re-apply the limit after filtering.
+  const [tableSearch, setTableSearch] = useState("");
+
+  const { rows, count } = useMemo(() => {
+    const { rows: all } = processTeams(allTeams, { ...spec, limit: -1 });
+    const q = tableSearch.trim().toLowerCase();
+    const matched = q ? all.filter((r) => r.team_name.toLowerCase().includes(q)) : all;
+    return {
+      rows: spec.limit === -1 ? matched : matched.slice(0, spec.limit),
+      count: matched.length,
+    };
+  }, [allTeams, spec, tableSearch]);
   const multiYear = spec.years.length > 1;
 
   // Conference rankings — locked to the most-recent season available, regardless
@@ -125,31 +133,84 @@ export function ExplorerClient({
 
   return (
     <>
-      <FilterBar conferences={conferences} conferenceRankings={conferenceRankings} years={[latestYear]} />
+      <FilterBar conferences={conferences} teams={teamNames} conferenceRankings={conferenceRankings} years={[latestYear]} />
 
-      <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-hidden mt-6">
-        <div className="flex flex-wrap items-end justify-between gap-4 px-4 lg:px-5 py-3 border-b border-hairline bg-paper-deep/70">
-          <div className="flex items-baseline gap-3 pb-1">
-            <span className="font-display text-xl text-ink tabular">
-              {rows.length}
-              {count > rows.length ? ` of ${count.toLocaleString()}` : ""}
-            </span>
-            <span className="text-sm text-ink-muted">
+      {/* Headline-ledger treatment matches /coaches and /players. */}
+      <div className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 mt-6">
+        {/* Top accent rule. */}
+        <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
+        <div className="px-5 lg:px-7 pt-5 pb-3 lg:pt-6 lg:pb-4 bg-paper-deep/30 flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
+              Teams
+            </h2>
+            <div className="mt-2 text-sm text-ink-muted">
+              <span className="font-display text-xl text-ink tabular leading-none">{rows.length.toLocaleString()}</span>
+              {count > rows.length && (
+                <span className="text-ink-muted"> of {count.toLocaleString()}</span>
+              )}{" "}
               {rows.length === 1 ? "team-season" : "team-seasons"} match
-            </span>
-            {count > rows.length && (
-              <span className="text-xs text-ink-muted hidden md:inline">
-                · showing first {rows.length}
-              </span>
-            )}
+              {count > rows.length && (
+                <span className="text-ink-muted hidden md:inline"> · showing first {rows.length}</span>
+              )}
+            </div>
           </div>
-          <SortControls />
+          <div className="flex items-end gap-3 flex-wrap">
+            <label className="flex flex-col gap-1">
+              <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Search</span>
+              <div className="relative">
+                {/* Search-glass icon — inline SVG matches the /coaches search input. */}
+                <svg
+                  aria-hidden
+                  viewBox="0 0 24 24"
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx={11} cy={11} r={7} />
+                  <line x1={20} y1={20} x2={16.65} y2={16.65} />
+                </svg>
+                <input
+                  type="search"
+                  value={tableSearch}
+                  onChange={(e) => setTableSearch(e.target.value)}
+                  placeholder="Search team…"
+                  aria-label="Search teams in table"
+                  className="h-9 w-52 pl-8 pr-8 rounded-md border border-ink/15 bg-white text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+                />
+                {tableSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setTableSearch("")}
+                    aria-label="Clear search"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-base leading-none w-5 h-5 inline-flex items-center justify-center rounded hover:bg-paper-deep"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </label>
+            <SortControls />
+          </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-hairline text-left">
+              {/* Group-label band — sits ABOVE the column-header row in its own
+                  lighter strip so the "Four Factors" caption reads as a section
+                  label, not another header. Stays inside <thead> so it stays
+                  aligned with the four columns it labels. */}
+              <tr className="bg-paper-deep/30">
+                <th colSpan={multiYear ? 9 : 8} className="px-3 py-2" />
+                <th colSpan={4} className="px-3 py-2 text-[0.65rem] uppercase tracking-[0.18em] text-coral font-bold text-center">
+                  Four Factors
+                </th>
+              </tr>
+              <tr className="border-y border-hairline text-left bg-paper-deep/70">
                 <Th className="w-12 text-center">#</Th>
                 <Th>Team</Th>
                 <Th className="w-16">Conf</Th>
@@ -159,10 +220,10 @@ export function ExplorerClient({
                 <SortableTh statKey="bta_net"   label="Adj Net"  title="Adj ORtg − Adj DRtg. Points per 100 possessions vs an average D-I opponent" defaultDir="desc" />
                 <SortableTh statKey="bta_ortg"  label="Adj ORtg" title="Average of Bart adj ORtg and CBB adj ORtg" defaultDir="desc" />
                 <SortableTh statKey="bta_drtg"  label="Adj DRtg" title="Average of Bart adj DRtg and CBB adj DRtg (lower = better)" defaultDir="asc" />
-                <SortableThCbb statKey="cbb_ts"      label="TS%"      title="CBB true shooting %" />
-                <SortableThCbb statKey="cbb_efg"     label="eFG%"     title="CBB effective FG%" />
-                <SortableThCbb statKey="cbb_fg3"     label="3P%"      title="CBB 3-point %" />
-                <SortableThCbb statKey="cbb_efg_def" label="Opp eFG%" title="CBB opponent eFG% (lower = better)" defaultDir="asc" />
+                <SortableThCbb statKey="reb_diff_ct"  label="REB Diff" title="Total rebounds − opponent rebounds (season total)" defaultDir="desc" />
+                <SortableThCbb statKey="fg3m_diff_ct" label="3PM Diff" title="3-pointers made − allowed (season total)" defaultDir="desc" />
+                <SortableThCbb statKey="fbpts_diff"   label="FBP Diff" title="Fast-break points − allowed (season total)" defaultDir="desc" />
+                <SortableThCbb statKey="tov_diff_ct"  label="TOV Diff" title="Turnovers committed − opponent turnovers (negative = good)" defaultDir="asc" />
               </tr>
             </thead>
             <tbody>
@@ -176,7 +237,7 @@ export function ExplorerClient({
                 rows.map((r, i) => (
                   <tr
                     key={`${r.team_id}-${r.team_year}`}
-                    className={`transition-colors hover:bg-[var(--accent-tint,rgba(237,90,79,0.08))] ${i % 2 === 0 ? "bg-paper/70" : "bg-transparent"}`}
+                    className={`transition-colors hover:bg-coral/5 ${i % 2 === 0 ? "bg-paper/70" : "bg-transparent"}`}
                   >
                     <Td className="text-center text-ink-muted tabular">
                       {i + 1}
@@ -197,10 +258,10 @@ export function ExplorerClient({
                     <Td className="text-right tabular"><ValueWithPct value={r.bta_net}  pct={r.pct.bta_net ?? null}  format="num1" /></Td>
                     <Td className="text-right tabular"><ValueWithPct value={r.bta_ortg} pct={r.pct.bta_ortg ?? null} format="num1" /></Td>
                     <Td className="text-right tabular"><ValueWithPct value={r.bta_drtg} pct={r.pct.bta_drtg ?? null} format="num1" /></Td>
-                    <CbbTd><ValueWithPct value={r.cbb_ts}      pct={r.pct.cbb_ts ?? null}      format="pct1" /></CbbTd>
-                    <CbbTd><ValueWithPct value={r.cbb_efg}     pct={r.pct.cbb_efg ?? null}     format="pct1" /></CbbTd>
-                    <CbbTd><ValueWithPct value={r.cbb_fg3}     pct={r.pct.cbb_fg3 ?? null}     format="pct1" /></CbbTd>
-                    <CbbTd><ValueWithPct value={r.cbb_efg_def} pct={r.pct.cbb_efg_def ?? null} format="pct1" /></CbbTd>
+                    <CbbTd><ValueWithPct value={r.reb_diff_ct}  pct={r.pct.reb_diff_ct ?? null}  format="num0signed" /></CbbTd>
+                    <CbbTd><ValueWithPct value={r.fg3m_diff_ct} pct={r.pct.fg3m_diff_ct ?? null} format="num0signed" /></CbbTd>
+                    <CbbTd><ValueWithPct value={r.fbpts_diff}   pct={r.pct.fbpts_diff ?? null}   format="num0signed" /></CbbTd>
+                    <CbbTd><ValueWithPct value={r.tov_diff_ct}  pct={r.pct.tov_diff_ct ?? null}  format="num0signed" /></CbbTd>
                   </tr>
                 ))
               )}
