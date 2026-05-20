@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
+import { dataUrl } from "@/lib/data-url";
 
 type SortKey = "date" | "pir" | "pts" | "fg" | "fg3" | "ft" | "reb" | "ast" | "tov" | "stl" | "blk";
 
@@ -67,7 +68,7 @@ export function SeasonGamesModal({
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/data/player-games/${bartPlayerId}.json`)
+    fetch(dataUrl(`/data/player-games/${bartPlayerId}.json`))
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();

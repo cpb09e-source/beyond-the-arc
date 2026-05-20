@@ -6,6 +6,7 @@ import { TeamLogo } from "@/components/team-logo";
 import { TeamName } from "@/components/team-name";
 import { NbaBadge } from "@/components/coaches/nba-badge";
 import { loadNbaDraftees, normNbaName, type NbaDraftee } from "@/lib/nba-draftees";
+import { dataUrl } from "@/lib/data-url";
 import type { GameLog } from "@/lib/static-data";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { cn } from "@/lib/utils";
@@ -159,7 +160,7 @@ export function ScheduleGameModal({
     (async () => {
       for (const y of candidates) {
         try {
-          const r = await fetch(`/data/team-games/${y}/${cbba}.json`);
+          const r = await fetch(dataUrl(`/data/team-games/${y}/${cbba}.json`));
           if (!r.ok) continue;
           const j: BoxScore = await r.json();
           if (!cancelled) setData(j);

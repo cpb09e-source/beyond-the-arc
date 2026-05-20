@@ -98,11 +98,16 @@ export function SearchableMultiSelect({
     }
   }
 
-  // Trigger label: empty → "All"; 1 → that option's label; >1 → "N selected".
+  // Trigger label: empty → "All"; every option selected → also "All"
+  // (it's the same constraint); 1 → that option's label; otherwise "N selected".
   let triggerLabel: string;
-  if (value.length === 0) triggerLabel = emptyLabel;
-  else if (value.length === 1) triggerLabel = options.find((o) => o.value === value[0])?.label ?? value[0]!;
-  else triggerLabel = `${value.length} selected`;
+  if (value.length === 0 || (options.length > 0 && value.length === options.length)) {
+    triggerLabel = emptyLabel;
+  } else if (value.length === 1) {
+    triggerLabel = options.find((o) => o.value === value[0])?.label ?? value[0]!;
+  } else {
+    triggerLabel = `${value.length} selected`;
+  }
 
   return (
     <div ref={containerRef} className={cn("relative inline-block", className)}>
@@ -168,17 +173,17 @@ export function SearchableMultiSelect({
           <div className="border-t border-hairline p-2 flex flex-wrap gap-1.5 text-xs">
             <button
               type="button"
-              onClick={() => onChange([])}
-              className="px-2 py-1 rounded border border-hairline text-ink-soft hover:text-coral hover:border-coral/40 transition-colors"
-            >
-              Clear
-            </button>
-            <button
-              type="button"
               onClick={() => onChange(options.map((o) => o.value))}
               className="px-2 py-1 rounded border border-hairline text-ink-soft hover:text-coral hover:border-coral/40 transition-colors"
             >
               All
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="px-2 py-1 rounded border border-hairline text-ink-soft hover:text-coral hover:border-coral/40 transition-colors"
+            >
+              Clear
             </button>
           </div>
         </div>

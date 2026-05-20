@@ -5,8 +5,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/strip-r2-mirrored-from-out.mjs",
     "start": "next start",
     "lint": "eslint",
+    "sync:r2": "node scripts/sync-data-to-r2.mjs",
     "sync:bart": "tsx scripts/sync-bart.mts",
     "fetch:photos": "node scripts/fetch-player-images.mjs",
     "snapshot:coaches": "node scripts/snapshot-coaches.mjs",
@@ -41,6 +43,7 @@
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "^3.1050.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

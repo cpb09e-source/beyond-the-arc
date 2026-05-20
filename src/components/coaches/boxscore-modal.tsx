@@ -5,6 +5,7 @@ import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { TeamName } from "@/components/team-name";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
+import { dataUrl } from "@/lib/data-url";
 import { SeedChip } from "./seed-chip";
 import { NbaBadge } from "./nba-badge";
 
@@ -137,7 +138,7 @@ export function BoxscoreModal({
     setData(null);
     setErr(null);
     let cancelled = false;
-    fetch(`/data/tournament-box/${year}/${gameSlug}.json`)
+    fetch(dataUrl(`/data/tournament-box/${year}/${gameSlug}.json`))
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();

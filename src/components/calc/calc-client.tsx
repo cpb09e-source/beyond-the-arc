@@ -115,11 +115,21 @@ export function CalcClient() {
   // Multi-select conference. Empty = "all conferences". Stores Bart codes
   // (ACC/B10/BE/etc.); we display via confDisplay() so labels read nicely.
   const [conferences, setConferences] = useState<string[]>([]);
+  // Multi-select team. Empty = "all teams". Stores team_name strings as they
+  // appear in the game logs; team names are stable enough across seasons to
+  // use directly as keys.
+  const [teams, setTeams] = useState<string[]>([]);
   const [yearData, setYearData] = useState<Record<number, GameLog[]>>({});
   const [filters, setFilters] = useState<Filter[]>([makeFilter("tov_diff"), makeFilter("fg3_made_diff"), makeFilter("fbpts_diff")]);
-  const [submitted, setSubmitted] = useState<{ filters: Filter[]; conferences: string[] } | null>(null);
+  const [submitted, setSubmitted] = useState<{ filters: Filter[]; conferences: string[]; teams: string[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
+  // Two independent post-result filters. Persist across re-calcs so power
+  // users can lock in a team and watch the record shift as they iterate on
+  // conditions. dateFilter holds a 4-digit calendar year string (empty = all
+  // years). teamFilter is a free-text substring against team_name.
+  const [dateFilter, setDateFilter] = useState<string>("");
+  const [teamFilter, setTeamFilter] = useState<string>("");
 
   // Stat options as SearchableOption[] for the typeable picker.
   const statOptions = useMemo<SearchableOption[]>(
@@ -187,23 +197,84 @@ export function CalcClient() {
     [allConferences],
   );
 
+  // Team list derived from loaded games — same shape as conferences.
+  // Filtered by the conference picker so the team list narrows as the user
+  // commits to a conference (typical "Big 12 teams only" flow).
+  const allTeams = useMemo(() => {
+    const confSet = conferences.length === 0 ? null : new Set(conferences);
+    const s = new Set<string>();
+    for (const g of games) {
+      if (confSet && (!g.team_conference || !confSet.has(g.team_conference))) continue;
+      s.add(g.team_name);
+    }
+    return [...s].sort();
+  }, [games, conferences]);
+  const teamOptions = useMemo<SearchableOption[]>(
+    () => allTeams.map((t) => ({ value: t, label: t })),
+    [allTeams],
+  );
+
   const results = useMemo(() => {
     if (!submitted || games.length === 0) return null;
     const confSet = submitted.conferences.length === 0 ? null : new Set(submitted.conferences);
+    const teamSet = submitted.teams.length === 0 ? null : new Set(submitted.teams);
     const matching = games.filter((g) => {
       if (confSet && (g.team_conference == null || !confSet.has(g.team_conference))) return false;
+      if (teamSet && !teamSet.has(g.team_name)) return false;
       return submitted.filters.every((f) => matches(g, f));
     });
     const wins = matching.filter((g) => g.won).length;
     const losses = matching.length - wins;
+    // Average margin (signed). Positive => team typically won by X; negative
+    // => team typically lost by X. Skips rows with null pts_diff so missing
+    // data doesn't drag the mean toward zero.
+    let marginSum = 0;
+    let marginCount = 0;
+    for (const g of matching) {
+      if (typeof g.pts_diff === "number") {
+        marginSum += g.pts_diff;
+        marginCount++;
+      }
+    }
+    const avgMargin = marginCount > 0 ? marginSum / marginCount : null;
     return {
       total: matching.length,
       wins,
       losses,
       winPct: matching.length === 0 ? 0 : wins / matching.length,
-      sample: matching.slice(0, 8),
+      avgMargin,
+      matching,
     };
   }, [submitted, games]);
+
+  // Year options derived from matching results — only show years that
+  // actually have games in the current result set, sorted newest first.
+  const yearOptions = useMemo<SearchableOption[]>(() => {
+    if (!results) return [];
+    const years = new Set<string>();
+    for (const g of results.matching) {
+      if (g.game_date && g.game_date.length >= 4) years.add(g.game_date.slice(0, 4));
+    }
+    const sorted = [...years].sort((a, b) => b.localeCompare(a));
+    return [{ value: "", label: "All years" }, ...sorted.map((y) => ({ value: y, label: y }))];
+  }, [results]);
+
+  // Visible-rows derivation — applies both filters, caps at MAX_VISIBLE so
+  // the DOM stays small even when 50k games match.
+  const MAX_VISIBLE = 25;
+  const visibleSample = useMemo(() => {
+    if (!results) return { rows: [] as GameLog[], filteredTotal: 0 };
+    const teamQ = teamFilter.trim().toLowerCase();
+    const filtered = results.matching.filter((g) => {
+      if (dateFilter) {
+        if (!g.game_date || g.game_date.slice(0, 4) !== dateFilter) return false;
+      }
+      if (teamQ && !g.team_name.toLowerCase().includes(teamQ)) return false;
+      return true;
+    });
+    return { rows: filtered.slice(0, MAX_VISIBLE), filteredTotal: filtered.length };
+  }, [results, dateFilter, teamFilter]);
+  const hasResultFilter = dateFilter !== "" || teamFilter.trim() !== "";
 
   function addFilter() {
     if (filters.length >= 8) return;
@@ -228,11 +299,38 @@ export function CalcClient() {
             <SearchableMultiSelect
               value={conferences}
               options={conferenceOptions}
-              onChange={setConferences}
+              onChange={(next) => {
+                setConferences(next);
+                // Drop any selected team that's no longer in the narrowed
+                // conference set. Keeps state consistent so a hidden team
+                // can't silently constrain the calc. Skipped when the user
+                // selects "all conferences" because nothing narrows.
+                const narrowed = next.length > 0 && next.length < conferenceOptions.length;
+                if (narrowed) {
+                  const confSet = new Set(next);
+                  setTeams((prev) =>
+                    prev.filter((t) => {
+                      const g = games.find((x) => x.team_name === t);
+                      return g?.team_conference != null && confSet.has(g.team_conference);
+                    }),
+                  );
+                }
+              }}
               placeholder="Type to filter…"
               emptyLabel="All conferences"
               className="min-w-44"
               ariaLabel="Conferences"
+            />
+          </Field>
+          <Field label="Team">
+            <SearchableMultiSelect
+              value={teams}
+              options={teamOptions}
+              onChange={setTeams}
+              placeholder="Type to filter…"
+              emptyLabel="All teams"
+              className="min-w-44"
+              ariaLabel="Teams"
             />
           </Field>
           <div className="ml-auto text-xs text-ink-muted">
@@ -299,14 +397,14 @@ export function CalcClient() {
             <div className="ml-auto flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => { setFilters([makeFilter("tov_diff")]); setConferences([]); setSubmitted(null); }}
+                onClick={() => { setFilters([makeFilter("tov_diff")]); setConferences([]); setTeams([]); setSubmitted(null); }}
                 className="text-sm text-ink-muted hover:text-ink px-3 py-2"
               >
                 Reset
               </button>
               <button
                 type="button"
-                onClick={() => setSubmitted({ filters: [...filters], conferences: [...conferences] })}
+                onClick={() => setSubmitted({ filters: [...filters], conferences: [...conferences], teams: [...teams] })}
                 disabled={loading || games.length === 0}
                 className="text-sm font-medium bg-coral text-white px-5 py-2 rounded hover:bg-coral-soft disabled:opacity-40 transition-colors"
               >
@@ -320,11 +418,11 @@ export function CalcClient() {
       {/* Results */}
       {submitted && results && (
         <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-hidden">
-          <div className="p-6 lg:p-8 grid grid-cols-1 md:grid-cols-2 gap-6 border-b border-hairline">
+          <div className="p-6 lg:p-8 grid grid-cols-1 md:grid-cols-3 gap-6 border-b border-hairline">
             <div>
               <div className="text-xs uppercase tracking-widest text-ink-muted font-medium mb-2">Chance of winning</div>
-              <div className="font-display text-7xl text-coral tabular leading-none">
-                {(results.winPct * 100).toFixed(1)}<span className="text-3xl text-coral/80">%</span>
+              <div className="font-display text-6xl lg:text-7xl text-coral tabular leading-none">
+                {(results.winPct * 100).toFixed(1)}<span className="text-2xl lg:text-3xl text-coral/80">%</span>
               </div>
               <div className="mt-3 text-sm text-ink-muted">
                 across {results.total.toLocaleString()} matching game-team perspectives
@@ -332,13 +430,39 @@ export function CalcClient() {
             </div>
             <div>
               <div className="text-xs uppercase tracking-widest text-ink-muted font-medium mb-2">Record</div>
-              <div className="font-display text-7xl text-ink tabular leading-none">
+              <div className="font-display text-6xl lg:text-7xl text-ink tabular leading-none">
                 {results.wins}-{results.losses}
               </div>
               <div className="mt-3 text-sm text-ink-muted">
                 {results.total === 0
                   ? "No games matched these conditions."
                   : `${results.wins} wins, ${results.losses} losses`}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs uppercase tracking-widest text-ink-muted font-medium mb-2">Avg margin</div>
+              <div
+                className={
+                  "font-display text-6xl lg:text-7xl tabular leading-none " +
+                  (results.avgMargin === null
+                    ? "text-ink-muted"
+                    : results.avgMargin > 0
+                    ? "text-coral"
+                    : "text-ink")
+                }
+              >
+                {results.avgMargin === null
+                  ? "—"
+                  : (results.avgMargin > 0 ? "+" : "") + results.avgMargin.toFixed(1)}
+              </div>
+              <div className="mt-3 text-sm text-ink-muted">
+                {results.avgMargin === null
+                  ? "no margin data"
+                  : results.avgMargin > 0
+                  ? "average margin of victory"
+                  : results.avgMargin < 0
+                  ? "average margin of defeat"
+                  : "even on average"}
               </div>
             </div>
           </div>
@@ -348,9 +472,17 @@ export function CalcClient() {
               <span className="text-xs uppercase tracking-widest text-ink-muted font-medium mr-1">
                 Conditions
               </span>
-              {submitted.conferences.length > 0 && (
+              {/* Conference chip — hidden when "all" (length 0 OR every
+                  option selected) because both states mean "no filter". */}
+              {submitted.conferences.length > 0 && submitted.conferences.length < conferenceOptions.length && (
                 <ConditionChip>
                   Conference in [{submitted.conferences.map((c) => confDisplay(c)).join(", ")}]
+                </ConditionChip>
+              )}
+              {/* Same all-vs-some treatment for Team. */}
+              {submitted.teams.length > 0 && submitted.teams.length < teamOptions.length && (
+                <ConditionChip>
+                  Team in [{submitted.teams.join(", ")}]
                 </ConditionChip>
               )}
               {submitted.filters.map((f) => (
@@ -358,57 +490,131 @@ export function CalcClient() {
               ))}
             </div>
 
-            {results.sample.length > 0 && (
+            {results.matching.length > 0 && (
               <>
-                <div className="px-4 lg:px-5 py-3 border-b border-hairline">
-                  <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">
-                    Sample of matching games
-                  </span>
+                <div className="px-4 lg:px-5 py-3 border-b border-hairline flex items-center gap-3 flex-wrap">
+                  <div className="flex items-baseline gap-3 flex-wrap">
+                    <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">
+                      Matching games
+                    </span>
+                    <span className="text-xs text-ink-muted tabular">
+                      {hasResultFilter
+                        ? visibleSample.filteredTotal === 0
+                          ? "No matches"
+                          : `Showing ${Math.min(visibleSample.filteredTotal, MAX_VISIBLE).toLocaleString()} of ${visibleSample.filteredTotal.toLocaleString()} filtered`
+                        : `Showing ${Math.min(results.matching.length, MAX_VISIBLE).toLocaleString()} of ${results.matching.length.toLocaleString()}`}
+                    </span>
+                  </div>
+                  <div className="ml-auto flex items-center gap-10 flex-wrap">
+                    {/* Year picker — typeable single-select, dropdown lists every
+                        year present in the matching set newest-first plus an
+                        "All years" reset row at the top. */}
+                    <SearchableSelect
+                      value={dateFilter}
+                      options={yearOptions}
+                      onChange={setDateFilter}
+                      placeholder="All years"
+                      className="w-32"
+                      ariaLabel="Year filter"
+                    />
+                    {/* Team search */}
+                    <div className="relative">
+                      <svg
+                        aria-hidden
+                        viewBox="0 0 24 24"
+                        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <circle cx={11} cy={11} r={7} />
+                        <line x1={20} y1={20} x2={16.65} y2={16.65} />
+                      </svg>
+                      <input
+                        type="search"
+                        value={teamFilter}
+                        onChange={(e) => setTeamFilter(e.target.value)}
+                        placeholder="Search team…"
+                        aria-label="Search matching games by team"
+                        className="h-9 w-48 sm:w-60 pl-9 pr-8 rounded-md border border-ink/15 bg-white text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+                      />
+                      {teamFilter && (
+                        <button
+                          type="button"
+                          onClick={() => setTeamFilter("")}
+                          aria-label="Clear team search"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-base leading-none w-5 h-5 inline-flex items-center justify-center rounded hover:bg-paper-deep"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="border-b border-hairline text-left">
-                      <tr>
-                        <Th>Date</Th><Th>Team</Th><Th>Opp</Th><Th>Result</Th>
-                        {submitted.filters.map((f) => (
-                          <Th key={f.id} align="right">{STAT_OPTIONS.find((s) => s.key === f.stat)?.label ?? String(f.stat)}</Th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {results.sample.map((g) => (
-                        <tr key={g.cbba_game_id + "-" + g.team_id} className="border-b border-hairline/60">
-                          <Td className="text-ink-muted tabular">{g.game_date ?? "—"}</Td>
-                          <Td>
-                            <span className="inline-flex items-center gap-2">
-                              <TeamLogo name={g.team_name} size={20} />
-                              <span className="font-medium text-ink">{g.team_name}</span>
-                            </span>
-                          </Td>
-                          <Td className="text-ink-soft">
-                            {g.opp_team_market ? (
-                              <span className="inline-flex items-center gap-2">
-                                <span className="text-ink-muted">vs</span>
-                                <TeamLogo name={g.opp_team_market} size={20} />
-                                <span>{g.opp_team_market}</span>
-                              </span>
-                            ) : (
-                              "—"
-                            )}
-                          </Td>
-                          <Td className={g.won ? "text-coral font-medium" : "text-ink-muted"}>
-                            {g.won ? "W" : "L"} {g.pts_scored ?? "—"}-{g.pts_against ?? "—"}
-                          </Td>
+                {visibleSample.rows.length === 0 ? (
+                  <div className="px-4 lg:px-5 py-10 text-center text-sm text-ink-muted">
+                    No games match the current filters.
+                    {hasResultFilter && (
+                      <>
+                        {" "}
+                        <button
+                          type="button"
+                          onClick={() => { setDateFilter(""); setTeamFilter(""); }}
+                          className="text-coral hover:text-ink underline decoration-dotted underline-offset-4"
+                        >
+                          Clear filters
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="border-b border-hairline text-left">
+                        <tr>
+                          <Th>Date</Th><Th>Team</Th><Th>Opp</Th><Th>Result</Th>
                           {submitted.filters.map((f) => (
-                            <Td key={f.id} align="right" className="tabular">
-                              {formatStat(g[f.stat], f.stat as string)}
-                            </Td>
+                            <Th key={f.id} align="right">{STAT_OPTIONS.find((s) => s.key === f.stat)?.label ?? String(f.stat)}</Th>
                           ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {visibleSample.rows.map((g) => (
+                          <tr key={g.cbba_game_id + "-" + g.team_id} className="border-b border-hairline/60">
+                            <Td className="text-ink-muted tabular">{g.game_date ?? "—"}</Td>
+                            <Td>
+                              <span className="inline-flex items-center gap-2">
+                                <TeamLogo name={g.team_name} size={20} />
+                                <span className="font-medium text-ink">{g.team_name}</span>
+                              </span>
+                            </Td>
+                            <Td className="text-ink-soft">
+                              {g.opp_team_market ? (
+                                <span className="inline-flex items-center gap-2">
+                                  <span className="text-ink-muted">vs</span>
+                                  <TeamLogo name={g.opp_team_market} size={20} />
+                                  <span>{g.opp_team_market}</span>
+                                </span>
+                              ) : (
+                                "—"
+                              )}
+                            </Td>
+                            <Td className={g.won ? "text-coral font-medium" : "text-ink-muted"}>
+                              {g.won ? "W" : "L"} {g.pts_scored ?? "—"}-{g.pts_against ?? "—"}
+                            </Td>
+                            {submitted.filters.map((f) => (
+                              <Td key={f.id} align="right" className="tabular">
+                                {formatStat(g[f.stat], f.stat as string)}
+                              </Td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </>
             )}
           </div>
