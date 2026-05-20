@@ -19,7 +19,7 @@
  * Mirror DIRS with R2_DIRS in src/lib/data-url.ts when adding new R2
  * subdirs.
  */
-import { rm, readdir } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import path from "node:path";
 
@@ -63,31 +63,15 @@ async function main() {
     }
   }
 
-  // Next 16 emits an RSC prefetch payload (.txt) alongside every page —
-  // ~8 per route, 192k files total at our page count. They're optional:
-  // pages render fine without them, only <Link> client-nav prefetch is
-  // affected (falls back to a full nav, ~100ms slower). Stripping them
-  // cuts the Netlify CLI upload from 215k files to 32k, turning what
-  // was a 30-minute upload into a sub-2-minute one.
-  console.log("\n→ Stripping Next RSC .txt prefetch payloads from out/…");
-  let txtRemoved = 0;
-  async function rmTxtRecursive(dir) {
-    let entries;
-    try { entries = await readdir(dir, { withFileTypes: true }); }
-    catch { return; }
-    for (const e of entries) {
-      const full = path.join(dir, e.name);
-      if (e.isDirectory()) await rmTxtRecursive(full);
-      else if (e.name.endsWith(".txt")) {
-        await rm(full, { force: true });
-        txtRemoved++;
-      }
-    }
-  }
-  await rmTxtRecursive(OUT);
-  console.log(`   removed ${txtRemoved.toLocaleString()} .txt files`);
+  // DO NOT strip Next 16's .txt files (the RSC payloads + __next._tree.txt
+  // route manifest). They're not optional prefetches — the App Router
+  // fetches them aggressively on hydration, and missing files cause an
+  // infinite 404 retry loop on any page with <Link> children (broke
+  // /coaches/ on the May 20 2026 deploy). The CLI upload of ~215k files
+  // is slow but only happens once per data change; subsequent deploys
+  // dedupe by content hash and finish in <2 min.
 
-  console.log(`\n✓ Stripped ${stripped}/${STRIP_DIRS.length} R2 dirs + ${txtRemoved.toLocaleString()} .txt files. Build complete.`);
+  console.log(`\n✓ Stripped ${stripped}/${STRIP_DIRS.length} R2 dirs. Build complete.`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

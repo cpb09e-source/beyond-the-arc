@@ -52,3 +52,6 @@ next-env.d.ts
 
 # Build-time stash for R2-mirrored data dirs (see scripts/build-with-r2-stash.mjs)
 /.r2-stash
+
+# Playwright MCP local cache
+/.playwright-mcp
