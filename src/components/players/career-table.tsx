@@ -65,7 +65,7 @@ export function CareerTable({
 
   return (
     <>
-      <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-x-auto">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-paper-deep/70 text-left">
             <tr>

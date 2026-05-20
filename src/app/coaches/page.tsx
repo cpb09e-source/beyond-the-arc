@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { CoachesClient } from "@/components/coaches/coaches-client";
 import { loadCoachIndex, type CoachIndexRow } from "@/lib/coaches";
 
@@ -43,7 +44,12 @@ export default async function CoachesPage() {
             </p>
           </div>
         ) : (
-          <CoachesClient rows={rows} />
+          // CoachesClient uses useSearchParams() (for URL-synced filters).
+          // Next.js requires that hook to be wrapped in <Suspense> during
+          // static export, or the build fails with a CSR-bailout error.
+          <Suspense fallback={<div className="text-ink-muted text-sm">Loading coaches…</div>}>
+            <CoachesClient rows={rows} />
+          </Suspense>
         )}
       </section>
     </>

@@ -16,6 +16,26 @@ import {
 } from "@/lib/players";
 import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier } from "@/lib/conf-tiers";
 
+// Sort labels mirror PlayerFilterBar's SORTS but kept short for the kicker.
+const SORT_LABEL: Record<PlayerListSpec["sortBy"], string> = {
+  bta_ind_ortg: "BTA PRTG",
+  pir: "PIR",
+  pts: "PPG",
+  fg_pct: "FG%",
+  fg3_pct: "3P%",
+  ts_pct: "TS%",
+  reb: "RPG",
+  ast: "APG",
+  games: "GP",
+  name: "name",
+};
+const CLASS_LABEL: Record<string, string> = {
+  Fr: "Freshmen", So: "Sophomores", Jr: "Juniors", Sr: "Seniors", Gr: "Graduates",
+};
+function seasonLabel(y: number): string {
+  return `${y - 1}-${String(y).slice(-2)}`;
+}
+
 function fmtNum(x: number | null, digits = 1): string {
   if (x === null || x === undefined) return "—";
   return x.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -307,6 +327,10 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
         <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-4 flex-wrap">
           <div>
+            <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
+              <span className="h-px w-6 bg-coral" />
+              <span>{seasonLabel(spec.year)} season · sorted by {SORT_LABEL[spec.sortBy]}</span>
+            </div>
             <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
               Leaderboard
             </h2>
@@ -315,6 +339,8 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                 {loading ? "—" : players.length.toLocaleString()}
               </span>{" "}
               {loading ? "loading…" : players.length === 1 ? "player" : "players"}
+              {!loading && spec.conference && <> · {spec.conference}</>}
+              {!loading && spec.cls && <> · {CLASS_LABEL[spec.cls] ?? spec.cls}</>}
             </div>
           </div>
           <div className="relative shrink-0">

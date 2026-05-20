@@ -176,26 +176,63 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
             </div>
           </div>
 
-          <div className="mt-8 sm:mt-10 grid grid-cols-5 gap-px bg-hairline border border-hairline rounded-lg overflow-hidden">
-            <StatTile label="PPG" value={fmtNum(stats.pts, 1)} sub={`${current.games ?? "?"} games`} />
-            <StatTile label="RPG" value={fmtNum(stats.reb, 1)} />
-            <StatTile label="APG" value={fmtNum(stats.ast, 1)} />
-            <StatTile label="SPG" value={fmtNum(stats.stl, 1)} />
-            <StatTile label="BPG" value={fmtNum(stats.blk, 1)} />
+          {/* Stat tiles — coral hairline above to tie the row back to the
+              eyebrow rule on every other ledger card. Subtle but it stitches
+              the hero to the page rhythm. */}
+          <div className="mt-8 sm:mt-10 border border-ink/10 rounded-lg overflow-hidden ring-1 ring-ink/5 shadow-sm">
+            <div className="h-0.5 w-full bg-gradient-to-r from-coral via-coral to-coral/50" />
+            <div className="grid grid-cols-5 gap-px bg-hairline">
+              <StatTile label="PPG" value={fmtNum(stats.pts, 1)} sub={`${current.games ?? "?"} games`} />
+              <StatTile label="RPG" value={fmtNum(stats.reb, 1)} />
+              <StatTile label="APG" value={fmtNum(stats.ast, 1)} />
+              <StatTile label="SPG" value={fmtNum(stats.stl, 1)} />
+              <StatTile label="BPG" value={fmtNum(stats.blk, 1)} />
+            </div>
           </div>
         </div>
       </section>
 
       {overviewOptions.length > 0 && (
         <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-10">
-          <PlayerOverview options={overviewOptions} />
+          {/* Player Overview — ledger card matching /coaches season-by-season.
+              Inner component supplies the team/year picker band + grid. */}
+          <div className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5">
+            <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
+            <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30">
+              <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
+                <span className="h-px w-6 bg-coral" />
+                Full-season stats
+              </div>
+              <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Player overview</h2>
+            </div>
+            <PlayerOverview options={overviewOptions} />
+          </div>
         </section>
       )}
 
-      <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-14 mb-20">
-        <h2 className="font-display text-3xl text-ink mb-2">Career</h2>
-        <p className="text-xs text-ink-muted mb-6">Click a season to open the team&apos;s game log for that year.</p>
-        <CareerTable seasons={player.seasons} bartPlayerId={bartId} playerName={stats.name ?? `Player ${bartId}`} />
+      <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8 mb-20">
+        {/* Career ledger — heavier chrome than other cards on the page so this
+            anchors the profile as the canonical record. */}
+        <div className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5">
+          <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
+          <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-3 flex-wrap">
+            <div>
+              <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
+                <span className="h-px w-6 bg-coral" />
+                Year by year
+              </div>
+              <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Career</h2>
+              <p className="mt-2 text-xs text-ink-muted">
+                Click a season to open the team&apos;s game log for that year.
+              </p>
+            </div>
+            <span className="text-xs tabular text-ink-muted whitespace-nowrap">
+              <span className="font-display text-2xl text-ink tabular leading-none">{player.seasons.length}</span>{" "}
+              {player.seasons.length === 1 ? "season" : "seasons"}
+            </span>
+          </div>
+          <CareerTable seasons={player.seasons} bartPlayerId={bartId} playerName={stats.name ?? `Player ${bartId}`} />
+        </div>
       </section>
     </>
   );

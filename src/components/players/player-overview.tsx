@@ -29,15 +29,10 @@ export function PlayerOverview({ options }: { options: PlayerOverviewOption[] })
 
   return (
     <>
-      <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium mb-3">
-        <span className="h-px w-8 bg-coral" />
-        <span>Player Overview · Full Season Stats</span>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 lg:px-6 py-3 border-b border-hairline bg-paper/50">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <TeamLogo name={selected.team_name} size={28} />
-          <span className="text-sm sm:text-base font-medium text-ink truncate">{selected.team_name}</span>
+          <TeamLogo name={selected.team_name} size={24} />
+          <span className="text-sm font-medium text-ink truncate">{selected.team_name}</span>
           <span className="text-ink-muted">·</span>
           {options.length > 1 ? (
             <Select
@@ -50,15 +45,16 @@ export function PlayerOverview({ options }: { options: PlayerOverviewOption[] })
               ))}
             </Select>
           ) : (
-            <span className="text-sm sm:text-base text-ink tabular">{seasonLabel(selected.year)}</span>
+            <span className="text-sm text-ink tabular">{seasonLabel(selected.year)}</span>
           )}
         </div>
-        <span className="text-xs text-ink-muted">
+        <span className="text-[0.7rem] uppercase tracking-widest text-ink-muted">
           Percentile rank within {selected.ranks.cohortSize.toLocaleString()} {bucketLabel(selected.ranks.bucket)}
         </span>
       </div>
-
-      <PlayerStatsGrid season={selected.ranks} />
+      <div className="p-5 lg:p-6">
+        <PlayerStatsGrid season={selected.ranks} />
+      </div>
     </>
   );
 }
