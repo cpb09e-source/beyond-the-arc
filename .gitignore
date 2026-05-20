@@ -49,3 +49,6 @@ next-env.d.ts
 
 # Local Netlify folder
 .netlify
+
+# Build-time stash for R2-mirrored data dirs (see scripts/build-with-r2-stash.mjs)
+/.r2-stash
