@@ -10,8 +10,7 @@ import { ScheduleTicker } from "@/components/teams/schedule-ticker";
 import { FindGameTrigger } from "@/components/teams/find-game-trigger";
 import { TourneyTimeline } from "@/components/teams/tourney-timeline";
 import { PlayerHeadshotStrip } from "@/components/teams/player-headshot-strip";
-import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog, PlayerRanksSeason } from "@/lib/static-data";
-import { readPlayerRanks } from "@/lib/static-data";
+import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog, PlayerRanks } from "@/lib/static-data";
 import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier } from "@/lib/conf-tiers";
 import { confDisplay } from "@/lib/conf-display";
 import { getTeamColors } from "@/lib/team-colors";
@@ -75,25 +74,21 @@ export type RosterEntry = {
 };
 
 /**
- * Server-side helper — fetches per-player percentile ranks for everyone on
- * the roster who has a rank file (bart_player_id ∈ rankedPlayerIds) and
- * folds them into the roster entries. Returns a fresh roster array; the
- * input is not mutated.
+ * Server-side helper — folds per-player percentile ranks (looked up from a
+ * pre-loaded all-ranks map) into the roster entries. Sync because the map
+ * is loaded once per build via readAllPlayerRanks(); each per-page call is
+ * a cheap Map.get rather than a fresh disk read.
  */
-export async function attachRosterRanks(
+export function attachRosterRanks(
   roster: RosterEntry[],
-  rankedPlayerIds: Set<number>,
+  allRanks: Map<number, PlayerRanks>,
   year: number,
-): Promise<RosterEntry[]> {
-  const seasons = await Promise.all(
-    roster.map(async (p): Promise<PlayerRanksSeason | null> => {
-      if (p.bart_player_id === null || !rankedPlayerIds.has(p.bart_player_id)) return null;
-      const ranks = await readPlayerRanks(p.bart_player_id);
-      return ranks?.seasonRanks.find((s) => s.year === year) ?? null;
-    }),
-  );
-  return roster.map((p, i) => {
-    const s = seasons[i];
+): RosterEntry[] {
+  return roster.map((p) => {
+    if (p.bart_player_id === null) return p;
+    const ranks = allRanks.get(p.bart_player_id);
+    if (!ranks) return p;
+    const s = ranks.seasonRanks.find((sr) => sr.year === year);
     if (!s) return p;
     return {
       ...p,

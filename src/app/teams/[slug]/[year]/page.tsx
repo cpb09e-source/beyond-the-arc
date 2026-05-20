@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { readPlayersForYear, readTeam, readAllTeams, readRankedPlayerIds, readConfRecordsByTeam, readGameLogsForYear } from "@/lib/static-data";
+import { readPlayersForYear, readTeam, readAllTeams, readRankedPlayerIds, readConfRecordsByTeam, readGameLogsForYear, readAllPlayerRanks } from "@/lib/static-data";
 import { TeamPageView, buildRoster, attachRosterRanks } from "@/components/teams/team-page-view";
 import { buildShootingRanks, buildFourFactorRanks } from "@/components/teams/distribution-panel";
 
@@ -83,7 +83,8 @@ export default async function TeamSeasonPage({
   const rosterPool = await readPlayersForYear(year);
   const rosterBase = buildRoster(rosterPool, current.id, year);
   const rankedPlayerIds = await readRankedPlayerIds();
-  const roster = await attachRosterRanks(rosterBase, rankedPlayerIds, year);
+  const allPlayerRanks = await readAllPlayerRanks();
+  const roster = attachRosterRanks(rosterBase, allPlayerRanks, year);
   const confRecordsAll = await readConfRecordsByTeam();
   const confRecords = confRecordsAll.get(team.name) ?? new Map();
   const allTeams = await readAllTeams();

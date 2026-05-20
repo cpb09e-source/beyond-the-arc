@@ -172,6 +172,47 @@ export async function readPlayerRanks(bartId: number): Promise<PlayerRanks | nul
 }
 
 /**
+ * Bulk-load every player-ranks file once per build into an in-memory map.
+ * Used by the team dossier roster (~5k team-season pages × ~12 players each
+ * would otherwise re-read the same files thousands of times and blow the
+ * Netlify build timeout). Module-level cache, so the second+ caller is free.
+ */
+let _allPlayerRanksCache: Map<number, PlayerRanks> | null = null;
+export async function readAllPlayerRanks(): Promise<Map<number, PlayerRanks>> {
+  if (_allPlayerRanksCache) return _allPlayerRanksCache;
+  const dir = path.join(DATA, "player-ranks");
+  const out = new Map<number, PlayerRanks>();
+  let files: string[] = [];
+  try {
+    files = await fs.readdir(dir);
+  } catch {
+    _allPlayerRanksCache = out;
+    return out;
+  }
+  const ids: number[] = [];
+  for (const f of files) {
+    if (!f.endsWith(".json")) continue;
+    const n = parseInt(f.replace(".json", ""), 10);
+    if (Number.isFinite(n)) ids.push(n);
+  }
+  // Batch parallel reads so we don't run out of file descriptors on the
+  // build host. 200 simultaneous open files is well below ulimit defaults.
+  const BATCH = 200;
+  for (let i = 0; i < ids.length; i += BATCH) {
+    const slice = ids.slice(i, i + BATCH);
+    const results = await Promise.all(
+      slice.map((id) => readJson<PlayerRanks>(`player-ranks/${id}.json`).catch(() => null)),
+    );
+    slice.forEach((id, j) => {
+      const r = results[j];
+      if (r) out.set(id, r);
+    });
+  }
+  _allPlayerRanksCache = out;
+  return out;
+}
+
+/**
  * Set of bart_player_ids that get a profile page. This is the union of:
  *
  *   1. Cohort-ranked players — those with a `player-ranks/<id>.json` file
