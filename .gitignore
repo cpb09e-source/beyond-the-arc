@@ -55,3 +55,10 @@ next-env.d.ts
 
 # Playwright MCP local cache
 /.playwright-mcp
+
+# Claude Code project-local settings
+/.claude/
+
+# Root-level screenshots (ad-hoc Playwright captures).
+# Public image assets live under public/ and are unaffected.
+/*.png
