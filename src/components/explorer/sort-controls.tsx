@@ -47,25 +47,41 @@ export function SortControls() {
   }
 
   return (
-    <div className={cn("flex items-end gap-3", pending && "opacity-70")}>
-      <Field label="Sort by">
+    <div
+      className={cn(
+        // Mobile: Sort By takes the remaining width; Order + Show are
+        // tight because "Desc" / "500" are short and don't need a wide
+        // box. Desktop (sm+): natural flex layout with custom widths.
+        "flex items-end gap-3 w-full sm:w-auto",
+        pending && "opacity-70",
+      )}
+    >
+      <Field label="Sort by" className="flex-1 min-w-0 sm:flex-initial">
         <SearchableSelect
           value={spec.sortBy}
           options={STAT_OPTIONS}
           groupLabels={GROUP_LABEL}
           onChange={(v) => update({ ...spec, sortBy: v as TeamStatKey })}
           ariaLabel="Sort by"
-          className="min-w-36"
+          className="w-full sm:w-auto sm:min-w-24"
         />
       </Field>
-      <Field label="Order">
-        <Select value={spec.sortDir} onChange={(v) => update({ ...spec, sortDir: v as "asc" | "desc" })}>
+      <Field label="Order" className="shrink-0">
+        <Select
+          value={spec.sortDir}
+          onChange={(v) => update({ ...spec, sortDir: v as "asc" | "desc" })}
+          className="w-20"
+        >
           <option value="desc">Desc</option>
           <option value="asc">Asc</option>
         </Select>
       </Field>
-      <Field label="Show">
-        <Select value={String(spec.limit)} onChange={(v) => update({ ...spec, limit: Number(v) })}>
+      <Field label="Show" className="shrink-0">
+        <Select
+          value={String(spec.limit)}
+          onChange={(v) => update({ ...spec, limit: Number(v) })}
+          className="w-16 sm:w-20"
+        >
           {LIMIT_OPTIONS.map((n) => (
             <option key={n} value={n}>{limitLabel(n)}</option>
           ))}
@@ -75,9 +91,17 @@ export function SortControls() {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <label className="flex flex-col gap-1">
+    <label className={cn("flex flex-col gap-1", className)}>
       <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">{label}</span>
       {children}
     </label>

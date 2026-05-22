@@ -1,21 +1,40 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { PercentileChip } from "@/components/percentile-chip";
 import { PlayerFilterBar } from "@/components/players/player-filter-bar";
 import { SortableTh } from "@/components/explorer/sortable-th";
+import { Select } from "@/components/select";
 import {
   DEFAULT_PLAYER_SPEC,
   PLAYER_COLS,
   parsePlayerSpec,
+  playerSpecToParams,
   type PlayerListSpec,
   type PlayerSummary,
 } from "@/lib/players";
 import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier } from "@/lib/conf-tiers";
+
+// Sort-by options surfaced in the leaderboard header. Order chosen to match
+// the column priorities on the table itself (BTA PRTG → PIR → PPG → shooting
+// → rebounding / playmaking → games / name).
+const SORT_OPTIONS: { value: PlayerListSpec["sortBy"]; label: string }[] = [
+  { value: "bta_ind_ortg", label: "BTA PRTG" },
+  { value: "pir", label: "PIR" },
+  { value: "pts", label: "PPG" },
+  { value: "fg_pct", label: "FG%" },
+  { value: "fg3_pct", label: "3P%" },
+  { value: "ts_pct", label: "TS%" },
+  { value: "reb", label: "RPG" },
+  { value: "ast", label: "APG" },
+  { value: "games", label: "GP" },
+  { value: "name", label: "Name" },
+];
+const LIMIT_OPTIONS = [50, 100, 250, 500];
 
 // Sort labels mirror PlayerFilterBar's SORTS but kept short for the kicker.
 const SORT_LABEL: Record<PlayerListSpec["sortBy"], string> = {
@@ -158,12 +177,104 @@ function transformPlayer(raw: RawPlayer): PlayerSummary {
   };
 }
 
-// BTA PRTG = avg(0.69 × z(PIR), z(PORPAG)) × 20 × confMultiplier × topTeamMultiplier,
-// computed within a season cohort so it ranks players against their actual
-// peers. PIR is weighted at 69% to dampen raw PIR's bias toward high-usage
-// scorers. Conference multiplier ranges from +19 % (Tier 1) to −23 % (Tier 5);
-// players on a top-32 D-I team for 2025-26 get an additional +8 %. See
-// src/lib/conf-tiers.ts. Attached in place — mutates `bta_ind_ortg`.
+// Position bucket from Bart's position note. Mirrors the mapping in
+// scripts/compute-player-ranks.mts so the volume-shooter penalty's
+// "compared to their position" cohort matches the player-profile rank
+// section. Keep these in sync.
+const BUCKET_BY_NOTE: Record<string, "G" | "F" | "C"> = {
+  "Pure PG": "G", "Scoring PG": "G", "Combo G": "G", "Wing G": "G",
+  "Wing F": "F", "Stretch 4": "F",
+  "PF/C": "C", "C": "C",
+};
+function positionBucket(note: string | null | undefined): "G" | "F" | "C" | null {
+  return note ? (BUCKET_BY_NOTE[note] ?? null) : null;
+}
+
+// Per-(year, position bucket) efficiency percentile lookup. For each player
+// we compute their TS% percentile AND their FG% percentile within their
+// position bucket, then take the WORST of the two. Catches both:
+//   • low TS overall (the Tai'Reon Joseph archetype — bricks everything)
+//   • good TS propped up by FT volume but awful field efficiency
+//     (the Jahmir Young archetype — lives at the line, can't shoot)
+//
+// The ranking COHORT uses the stricter 18g/18mpg/5ppg floor (matches the
+// SHOOTING percentile chips on the player profile via
+// scripts/compute-player-ranks.mts), so a player whose profile chip says
+// "25 pctile eFG" gets a penalty calibrated to that same 25th percentile.
+// Non-strict players (above the leaderboard's 8/10/3 floor but below
+// 18/18/5) are still scored — we look up their TS/FG values against the
+// strict cohort's sorted distribution via binary search, so a 20-PPG
+// scorer who only played 15 games still gets penalized.
+// Returns 0–100 where 100 = most efficient at that position.
+function effPctileByPositionMap(players: PlayerSummary[]): Map<number, number> {
+  type Bucket = "G" | "F" | "C";
+  const inStrictCohort = (p: PlayerSummary) =>
+    (p.games ?? 0) >= 18 && (p.min_pg ?? 0) >= 18 && (p.pts_pg ?? 0) >= 5;
+  const byBucket: Record<Bucket, PlayerSummary[]> = { G: [], F: [], C: [] };
+  const strictByBucket: Record<Bucket, PlayerSummary[]> = { G: [], F: [], C: [] };
+  for (const p of players) {
+    const b = positionBucket(p.position_note);
+    if (!b) continue;
+    byBucket[b].push(p);
+    if (inStrictCohort(p)) strictByBucket[b].push(p);
+  }
+  // Returns a function that maps any value to its percentile within the
+  // strict cohort's distribution for the given key. Uses binary search so
+  // every player (strict or not) gets a percentile against the same
+  // calibrated distribution.
+  function rankerFor(strictArr: PlayerSummary[], key: "ts_pct" | "fg_pct"): (v: number) => number | null {
+    const sorted = strictArr
+      .map((p) => p[key])
+      .filter((v): v is number => typeof v === "number")
+      .sort((a, b) => a - b);
+    const n = sorted.length;
+    if (n < 2) return () => null;
+    return (v: number) => {
+      let lo = 0, hi = n;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (sorted[mid]! < v) lo = mid + 1;
+        else hi = mid;
+      }
+      return Math.max(0, Math.min(100, Math.round((lo / (n - 1)) * 100)));
+    };
+  }
+  const out = new Map<number, number>();
+  for (const b of ["G", "F", "C"] as const) {
+    const tsRanker = rankerFor(strictByBucket[b], "ts_pct");
+    const fgRanker = rankerFor(strictByBucket[b], "fg_pct");
+    for (const p of byBucket[b]) {
+      const t = typeof p.ts_pct === "number" ? tsRanker(p.ts_pct) : null;
+      const f = typeof p.fg_pct === "number" ? fgRanker(p.fg_pct) : null;
+      if (t == null && f == null) continue;
+      out.set(p.id, t == null ? f! : f == null ? t : Math.min(t, f));
+    }
+  }
+  return out;
+}
+
+// Volume-shooter penalty — punish high-usage scorers who are inefficient
+// relative to their position. Ramps in linearly:
+//   ppgFactor: 0 at ≤12 PPG, 1 at ≥20 PPG
+//   effFactor: 0 at ≥40th-percentile efficiency (worst-of TS / eFG vs position),
+//              1 at ≤10th
+// Max penalty: −8 BTA points. Applied as a flat add-on after the conference
+// and top-team multipliers so a high-major's penalty isn't amplified by
+// their schedule bonus.
+function volumeShooterPenalty(ppg: number | null, effPositionPctile: number | null): number {
+  if (ppg == null || effPositionPctile == null) return 0;
+  const ppgFactor = Math.max(0, Math.min(1, (ppg - 12) / 8));
+  const effFactor = Math.max(0, Math.min(1, (40 - effPositionPctile) / 30));
+  return -8 * ppgFactor * effFactor;
+}
+
+// BTA PRTG = avg(0.69 × z(PIR), z(PORPAG)) × 20 × confMultiplier × topTeamMultiplier
+//   + volumeShooterPenalty(ppg, worst-of(TS pctile, eFG pctile within position))
+// PIR is weighted at 69% to dampen its high-usage-scorer bias; the volume
+// penalty closes that gap further for genuine bad-volume cases (including
+// FT-line-inflated scorers whose TS looks fine but eFG is awful). Conference
+// multiplier ranges from +19 % (Tier 1) to −23 % (Tier 5); top-32 D-I teams
+// get an additional +8 %. See src/lib/conf-tiers.ts. Mutates `bta_ind_ortg`.
 function attachBtaIndOrtg(players: PlayerSummary[]): void {
   function moments(vals: number[]) {
     if (vals.length === 0) return { mean: 0, sd: 0 };
@@ -175,18 +286,20 @@ function attachBtaIndOrtg(players: PlayerSummary[]): void {
   const porVals = players.map((p) => p.porpag).filter((v): v is number => typeof v === "number");
   const pirM = moments(pirVals);
   const porM = moments(porVals);
+  const effByPos = effPctileByPositionMap(players);
   for (const p of players) {
     const zParts: number[] = [];
     if (typeof p.pir === "number" && pirM.sd > 0) zParts.push(((p.pir - pirM.mean) / pirM.sd) * 0.69);
     if (typeof p.porpag === "number" && porM.sd > 0) zParts.push((p.porpag - porM.mean) / porM.sd);
     if (zParts.length === 0) { p.bta_ind_ortg = null; continue; }
     const avg = zParts.reduce((a, b) => a + b, 0) / zParts.length;
-    p.bta_ind_ortg =
+    const base =
       avg * 20
       * confMultiplier(p.team_conference)
       * topTeamMultiplier(p.team_name)
       * top5Tier1Multiplier(p.team_name)
       * top3InConfMultiplier(p.team_name);
+    p.bta_ind_ortg = base + volumeShooterPenalty(p.pts_pg, effByPos.get(p.id) ?? null);
   }
 }
 
@@ -273,13 +386,25 @@ function attachPercentiles(players: PlayerSummary[]): PctMaps {
 
 
 export function PlayersClient({ confsByYear }: { confsByYear: Record<string, string[]> }) {
+  const router = useRouter();
   const search = useSearchParams();
+  const [, startTransition] = useTransition();
   const params = useMemo(() => {
     const obj: Record<string, string> = {};
     for (const [k, v] of search.entries()) obj[k] = v;
     return obj;
   }, [search]);
   const spec = parsePlayerSpec(params);
+
+  // URL-state update for the sort/order/show controls now living in the
+  // leaderboard header. Mirrors PlayerFilterBar's `update()` so the two
+  // surfaces stay in sync.
+  function updateSpec(next: PlayerListSpec) {
+    const p = playerSpecToParams(next).toString();
+    startTransition(() => {
+      router.replace(p ? `/players?${p}` : "/players", { scroll: false });
+    });
+  }
   // Union conferences across every year we have data for; matches the Team
   // Explorer's behavior so the picker offers every historical conference.
   const conferences = useMemo(() => {
@@ -399,40 +524,64 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               {loading ? "loading…" : players.length === 1 ? "player" : "players"}
               {!loading && spec.conf.length > 0 && <> · {spec.conf.length === 1 ? spec.conf[0] : `${spec.conf.length} conferences`}</>}
               {!loading && spec.cls.length > 0 && <> · {spec.cls.length === 1 ? (CLASS_LABEL[spec.cls[0]!] ?? spec.cls[0]) : `${spec.cls.length} classes`}</>}
+              {!loading && spec.minGames > 0 && <> · min {spec.minGames} games</>}
             </div>
           </div>
-          <div className="relative shrink-0">
-            <svg
-              aria-hidden
-              viewBox="0 0 24 24"
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx={11} cy={11} r={7} />
-              <line x1={20} y1={20} x2={16.65} y2={16.65} />
-            </svg>
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search players…"
-              aria-label="Search players by name"
-              className="h-10 w-56 sm:w-72 pl-9 pr-9 rounded-md border border-ink/15 bg-white text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
-            />
-            {query && (
-              <button
-                type="button"
-                onClick={() => setQuery("")}
-                aria-label="Clear search"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-base leading-none w-5 h-5 inline-flex items-center justify-center rounded hover:bg-paper-deep"
-              >
-                ×
-              </button>
-            )}
+          {/* Header controls — SEARCH | SORT BY | ORDER | SHOW. Mirrors the
+              /teams headline-card layout so the player and team explorers
+              read as siblings rather than two unrelated surfaces. */}
+          <div className="flex items-end gap-3 flex-wrap">
+            <HeaderField label="Search">
+              <div className="relative">
+                <svg
+                  aria-hidden
+                  viewBox="0 0 24 24"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx={11} cy={11} r={7} />
+                  <line x1={20} y1={20} x2={16.65} y2={16.65} />
+                </svg>
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search players…"
+                  aria-label="Search players by name"
+                  className="h-10 w-48 sm:w-56 pl-9 pr-9 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    onClick={() => setQuery("")}
+                    aria-label="Clear search"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-base leading-none w-5 h-5 inline-flex items-center justify-center rounded hover:bg-paper-deep"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </HeaderField>
+            <HeaderField label="Sort by">
+              <Select value={spec.sortBy} onChange={(v) => updateSpec({ ...spec, sortBy: v as PlayerListSpec["sortBy"] })} ariaLabel="Sort by">
+                {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </Select>
+            </HeaderField>
+            <HeaderField label="Order">
+              <Select value={spec.sortDir} onChange={(v) => updateSpec({ ...spec, sortDir: v as "asc" | "desc" })} ariaLabel="Sort direction">
+                <option value="desc">Desc</option>
+                <option value="asc">Asc</option>
+              </Select>
+            </HeaderField>
+            <HeaderField label="Show">
+              <Select value={String(spec.limit)} onChange={(v) => updateSpec({ ...spec, limit: Number(v) })} ariaLabel="Result count">
+                {LIMIT_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+              </Select>
+            </HeaderField>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -466,13 +615,16 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                 </tr>
               ) : players.length === 0 ? (
                 <tr>
-                  <td colSpan={multiYear ? 15 : 14} className="px-4 py-12 text-center text-ink-muted">
-                    No players match these filters.
+                  <td colSpan={multiYear ? 15 : 14} className="px-4 py-12 text-center">
+                    <div className="text-ink-soft">No players match these filters.</div>
+                    <div className="mt-1.5 text-xs text-ink-muted">
+                      Try widening conference, class, or games played.
+                    </div>
                   </td>
                 </tr>
               ) : (
                 players.map((p, i) => (
-                  <tr key={p.id} className={`transition-colors hover:bg-[var(--accent-tint,rgba(237,90,79,0.08))] ${i % 2 === 0 ? "bg-paper/70" : "bg-transparent"}`}>
+                  <tr key={p.id} className={`transition-colors hover:bg-coral/[0.06] ${i % 2 === 0 ? "bg-paper/70" : "bg-transparent"}`}>
                     <Td className="text-center text-ink-muted tabular">{i + 1}</Td>
                     <Td className="text-center">
                       <PlayerPhoto bartPlayerId={p.bart_player_id} name={p.name} size={28} />
@@ -515,7 +667,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       {/* Methodology — demoted out of the headline card so the leaderboard
           reads clean. Lives below as a quiet caption block where curious
           readers can find it without it dominating the page. */}
-      <details className="mt-6 group">
+      <details className="mt-8 group">
         <summary className="cursor-pointer inline-flex items-center gap-2 text-xs uppercase tracking-widest text-ink-muted font-medium hover:text-ink transition-colors">
           <span className="h-px w-6 bg-ink-muted/40 group-hover:bg-coral transition-colors" />
           How BTA PRTG is calculated
@@ -534,6 +686,17 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           an extra +6% on top of that. Missing terms are skipped so
           partial-data players still get scored. Players with fewer than 8
           games, 10 MPG, or 3 PPG are hidden.
+          <br /><br />
+          A volume-shooter penalty closes the high-usage / low-efficiency
+          gap PIR&apos;s 69% weighting leaves open. For each player we
+          compute their TS% AND eFG% percentile within their position bucket
+          (G / F / C), then take the worst of the two. Scorers above 12 PPG
+          whose worst-of efficiency is below the 40th percentile lose up to
+          &minus;8 BTA points, scaling linearly with both how much volume
+          they take and how far below the cohort their efficiency sits. The
+          worst-of rule catches FT-line-inflated archetypes (Jahmir Young
+          shooting 25-pctile eFG but 61-pctile TS thanks to 90% from the
+          line) that a pure TS-based penalty would miss.
         </p>
       </details>
     </>
@@ -545,6 +708,14 @@ function Th({ children, className = "" }: { children: React.ReactNode; className
 }
 function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <td className={`px-3 py-2.5 ${className}`}>{children}</td>;
+}
+function HeaderField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">{label}</span>
+      {children}
+    </label>
+  );
 }
 
 function ValuePctCell({

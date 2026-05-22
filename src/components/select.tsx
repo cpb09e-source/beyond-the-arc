@@ -28,7 +28,7 @@ export function Select({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-label={ariaLabel}
-        className="h-10 w-full pl-3 pr-8 rounded-md border border-ink/15 bg-white text-ink text-sm appearance-none capitalize shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+        className="h-10 w-full pl-3 pr-8 rounded-md border border-ink/15 bg-card text-ink text-sm appearance-none capitalize shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
       >
         {children}
       </select>

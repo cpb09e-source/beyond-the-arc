@@ -273,7 +273,7 @@ export function FindGameModal({
                   step="any"
                   value={f.value}
                   onChange={(e) => patchFilter(f.id, { value: Number(e.target.value) })}
-                  className="h-10 w-24 px-3 rounded-md border border-ink/15 bg-white text-ink text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+                  className="h-10 w-24 px-3 rounded-md border border-ink/15 bg-card text-ink text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
                 />
                 {filters.length > 1 && (
                   <button

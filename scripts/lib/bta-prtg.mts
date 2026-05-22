@@ -51,7 +51,34 @@ export type CohortStats = {
   pirSd: number;
   porMean: number;
   porSd: number;
+  // Map<bartId, percentile 0..100> for the player's WORSE-OF TS% / eFG%
+  // percentile within their position bucket. Drives the volume-shooter
+  // penalty. Players with no position note or no efficiency stats are
+  // absent from the map; their penalty resolves to 0.
+  effPositionPctile: Map<number, number>;
 };
+
+// Position bucket mapping. Mirrors src/components/players/players-client.tsx
+// and src/components/teams/team-page-view.tsx — keep these in sync.
+const BUCKET_BY_NOTE: Record<string, "G" | "F" | "C"> = {
+  "Pure PG": "G", "Scoring PG": "G", "Combo G": "G", "Wing G": "G",
+  "Wing F": "F", "Stretch 4": "F",
+  "PF/C": "C", "C": "C",
+};
+
+// Volume-shooter penalty — punish high-PPG / low-efficiency scorers, where
+// "efficiency" = worst-of(TS%-pctile, eFG%-pctile) within position bucket.
+// Catches both pure brick-throwers and FT-line-inflated scorers (Jahmir
+// Young archetype: 90% FT props up TS while eFG sits at 25th pctile).
+//   ppgFactor: 0 at ≤12 PPG, 1 at ≥20 PPG
+//   effFactor: 0 at ≥40th-percentile efficiency, 1 at ≤10th
+// Max: −8 BTA points. Applied AFTER multipliers as a flat adjustment.
+export function volumeShooterPenalty(ppg: number | null, effPositionPctile: number | null): number {
+  if (ppg == null || effPositionPctile == null) return 0;
+  const ppgFactor = Math.max(0, Math.min(1, (ppg - 12) / 8));
+  const effFactor = Math.max(0, Math.min(1, (40 - effPositionPctile) / 30));
+  return -8 * ppgFactor * effFactor;
+}
 
 export type ProductionResult = {
   last_year: number;
@@ -94,6 +121,16 @@ function pirOfRow(row: unknown): number | null {
 }
 function porpagOfRow(row: unknown): number | null { return fromStart(row, 28); }
 function mpgOfRow(row: unknown): number | null { return fromStart(row, 54); }
+// Bart's TS% column (already on 0..100 scale) lives at start index 8;
+// eFG% lives at start index 7.
+function tsOfRow(row: unknown): number | null { return fromStart(row, 8); }
+function eFgOfRow(row: unknown): number | null { return fromStart(row, 7); }
+// Bart's position note lives at the third-from-end column of raw_row, but we
+// also pass the parsed `notes` field on PlayerSeason directly. Helper that
+// prefers the parsed field.
+function bucketOf(notes: string | null): "G" | "F" | "C" | null {
+  return notes ? (BUCKET_BY_NOTE[notes] ?? null) : null;
+}
 
 /**
  * Build per-year mean/sd over the eligible D-I cohort. Eligibility matches
@@ -102,8 +139,19 @@ function mpgOfRow(row: unknown): number | null { return fromStart(row, 54); }
 export function computeCohortStats(
   playersByBartId: Map<number, PlayerSeason[]>,
 ): Map<number, CohortStats> {
-  const bags = new Map<number, { pir: number[]; por: number[] }>();
-  for (const [, seasons] of playersByBartId.entries()) {
+  type EffEntry = { id: number; ts: number | null; eFg: number | null; strict: boolean };
+  type Bag = {
+    pir: number[];
+    por: number[];
+    // Loose-eligible (bartId, ts, eFg, strict) tuples bucketed by position.
+    // We rank TS and eFG within each bucket against the STRICT cohort's
+    // sorted distribution (18g/18mpg/5ppg — matches the profile's SHOOTING
+    // chips), then look up each loose-eligible player's percentile via
+    // binary search. Per-player effPositionPctile = worst of (TS, eFG).
+    byBucket: { G: EffEntry[]; F: EffEntry[]; C: EffEntry[] };
+  };
+  const bags = new Map<number, Bag>();
+  for (const [bartId, seasons] of playersByBartId.entries()) {
     for (const s of seasons) {
       const row = s.raw_row;
       const games = s.games;
@@ -112,11 +160,16 @@ export function computeCohortStats(
       const eligible = !((games ?? 0) < 8 && (mpg ?? 0) < 10 && (ppg ?? 0) < 3);
       if (!eligible) continue;
       let bag = bags.get(s.year);
-      if (!bag) { bag = { pir: [], por: [] }; bags.set(s.year, bag); }
+      if (!bag) { bag = { pir: [], por: [], byBucket: { G: [], F: [], C: [] } }; bags.set(s.year, bag); }
       const pir = pirOfRow(row);
       const por = porpagOfRow(row);
       if (pir !== null) bag.pir.push(pir);
       if (por !== null) bag.por.push(por);
+      const ts = tsOfRow(row);
+      const eFg = eFgOfRow(row);
+      const bucket = bucketOf(s.notes);
+      const strict = (games ?? 0) >= 18 && (mpg ?? 0) >= 18 && (ppg ?? 0) >= 5;
+      if (bucket && (ts !== null || eFg !== null)) bag.byBucket[bucket].push({ id: bartId, ts, eFg, strict });
     }
   }
   const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
@@ -127,7 +180,37 @@ export function computeCohortStats(
     const pSd = bag.pir.length ? sd(bag.pir, pMu) : 0;
     const oMu = bag.por.length ? mean(bag.por) : 0;
     const oSd = bag.por.length ? sd(bag.por, oMu) : 0;
-    out.set(year, { pirMean: pMu, pirSd: pSd, porMean: oMu, porSd: oSd });
+    const effPositionPctile = new Map<number, number>();
+    for (const bucket of ["G", "F", "C"] as const) {
+      const arr = bag.byBucket[bucket];
+      const strictArr = arr.filter((e) => e.strict);
+      function rankerFor(metric: (e: EffEntry) => number | null): (v: number) => number | null {
+        const sorted = strictArr
+          .map(metric)
+          .filter((v): v is number => v !== null)
+          .sort((a, b) => a - b);
+        const n = sorted.length;
+        if (n < 2) return () => null;
+        return (v: number) => {
+          let lo = 0, hi = n;
+          while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (sorted[mid]! < v) lo = mid + 1;
+            else hi = mid;
+          }
+          return Math.max(0, Math.min(100, Math.round((lo / (n - 1)) * 100)));
+        };
+      }
+      const tsRanker = rankerFor((e) => e.ts);
+      const fgRanker = rankerFor((e) => e.eFg);
+      for (const e of arr) {
+        const t = e.ts !== null ? tsRanker(e.ts) : null;
+        const f = e.eFg !== null ? fgRanker(e.eFg) : null;
+        if (t == null && f == null) continue;
+        effPositionPctile.set(e.id, t == null ? f! : f == null ? t : Math.min(t, f));
+      }
+    }
+    out.set(year, { pirMean: pMu, pirSd: pSd, porMean: oMu, porSd: oSd, effPositionPctile });
   }
   return out;
 }
@@ -173,12 +256,13 @@ export function productionFor(
     if (typeof porpag === "number" && stats.porSd > 0) zs.push((porpag - stats.porMean) / stats.porSd);
     if (zs.length > 0) {
       const raw = (zs.reduce((s, v) => s + v, 0) / zs.length) * 20;
-      bta_portg =
+      const base =
         raw
         * confMultiplier(latest.team_conference)
         * topTeamMultiplier(latest.team_name)
         * top5Tier1Multiplier(latest.team_name)
         * top3InConfMultiplier(latest.team_name);
+      bta_portg = base + volumeShooterPenalty(pts, stats.effPositionPctile.get(bartId) ?? null);
     }
   }
   return {

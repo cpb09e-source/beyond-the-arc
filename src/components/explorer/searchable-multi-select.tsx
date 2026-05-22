@@ -20,6 +20,7 @@ export function SearchableMultiSelect({
   ariaLabel,
   disabledValues,
   groupLabels,
+  align = "left",
 }: {
   /** Selected values. Empty array = "All". */
   value: string[];
@@ -36,6 +37,11 @@ export function SearchableMultiSelect({
    *  groups first appear in `options`, so sort `options` accordingly before
    *  passing in. */
   groupLabels?: Record<string, string>;
+  /** Which edge of the trigger to anchor the popover to. Default "left" matches
+   *  the existing behavior. Use "right" for triggers placed near the right edge
+   *  of a narrow viewport (e.g. mobile grid right column) to keep the 288px
+   *  popover from overflowing. */
+  align?: "left" | "right";
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -100,6 +106,10 @@ export function SearchableMultiSelect({
       const picked = filtered[activeIdx];
       if (picked) toggle(picked.value);
       setQuery("");
+      // Enter commits the selection AND closes the dropdown. If the user
+      // wants to add more, they can reopen. Matches typical autocomplete
+      // behavior (type → arrow → enter → done).
+      setOpen(false);
     }
   }
 
@@ -122,7 +132,7 @@ export function SearchableMultiSelect({
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="h-10 min-w-44 px-3 pr-8 rounded-md border border-ink/15 bg-white text-ink text-sm text-left shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors relative"
+        className="h-10 w-full px-3 pr-8 rounded-md border border-ink/15 bg-card text-ink text-sm text-left shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors relative"
       >
         <span className="truncate block">{triggerLabel}</span>
         <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted text-[0.7rem]">▾</span>
@@ -130,7 +140,10 @@ export function SearchableMultiSelect({
 
       {open && (
         <div
-          className="absolute z-50 top-full left-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-white border border-hairline rounded-lg shadow-lg overflow-hidden"
+          className={cn(
+            "absolute z-50 top-full mt-1 w-60 max-w-[calc(100vw-2rem)] bg-card border border-hairline rounded-lg shadow-lg overflow-hidden",
+            align === "right" ? "right-0" : "left-0",
+          )}
           role="listbox"
         >
           <div className="p-2 border-b border-hairline">

@@ -31,7 +31,18 @@ export function PlayerPhoto({
   size?: number;
   className?: string;
 }) {
-  const src = bartPlayerId ? PHOTOS[String(bartPlayerId)] ?? null : null;
+  // The fetch script writes both <id>.webp (full 600x436) and
+  // <id>-sm.webp (240x174 face-cropped). Size-conditional swap:
+  //   • size ≤ 60 → use the thumbnail (240→display is a 4–8x downsample on
+  //     2x retina = crisp). Saves ~75% bandwidth on roster/leaderboard
+  //     avatars where dozens render at once.
+  //   • size > 60 → use the full 600x436 source so the player-profile
+  //     headshot (120px on retina = 240 device px) doesn't upscale the
+  //     thumb's 174px height. Downsampling 600→240 = still crisp.
+  const fullSrc = bartPlayerId ? PHOTOS[String(bartPlayerId)] ?? null : null;
+  const src = fullSrc
+    ? (size <= 60 ? fullSrc.replace(/\.webp$/, "-sm.webp") : fullSrc)
+    : null;
   const [errored, setErrored] = useState(false);
 
   if (src && !errored) {
@@ -44,7 +55,7 @@ export function PlayerPhoto({
         loading="lazy"
         onError={() => setErrored(true)}
         className={cn(
-          "inline-block object-cover object-top rounded-full bg-paper-deep shrink-0",
+          "inline-block object-cover object-top rounded-full bg-paper-deep shrink-0 max-w-none",
           className
         )}
         style={{ width: size, height: size }}

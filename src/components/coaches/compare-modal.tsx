@@ -444,7 +444,7 @@ function SlotPicker({
       )}
 
       {open && !coach && (
-        <div className="absolute top-full left-0 mt-1 w-72 bg-white border border-hairline rounded-lg shadow-lg z-30 overflow-hidden">
+        <div className="absolute top-full left-0 mt-1 w-72 bg-card border border-hairline rounded-lg shadow-lg z-30 overflow-hidden">
           <div className="p-2 border-b border-hairline">
             <input
               type="search"
@@ -453,7 +453,7 @@ function SlotPicker({
               onKeyDown={onInputKey}
               placeholder="Search coach or team…"
               autoFocus
-              className="w-full h-9 px-3 rounded border border-hairline bg-white text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40"
+              className="w-full h-9 px-3 rounded border border-hairline bg-card text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40"
             />
             <div className="mt-1.5 text-[0.6rem] text-ink-muted px-1">
               ↑↓ to navigate · Enter or Tab to select &amp; jump to next slot

@@ -119,7 +119,7 @@ export function SearchableSelect({
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="h-9 w-full min-w-40 px-2 rounded border border-hairline bg-white text-ink text-sm text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-coral/40"
+        className="h-9 w-full min-w-40 px-2 rounded border border-hairline bg-card text-ink text-sm text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-coral/40"
       >
         <span className="truncate">{currentLabel}</span>
         <span aria-hidden className="text-ink-muted text-xs">▾</span>
@@ -127,7 +127,7 @@ export function SearchableSelect({
 
       {open && (
         <div
-          className="absolute z-50 top-full left-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-white border border-hairline rounded-lg shadow-lg overflow-hidden"
+          className="absolute z-50 top-full left-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-card border border-hairline rounded-lg shadow-lg overflow-hidden"
           role="listbox"
         >
           <div className="p-2 border-b border-hairline">

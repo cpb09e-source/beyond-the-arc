@@ -42,6 +42,35 @@
   --radius: 0.5rem;
 }
 
+/* ------------------------------------------------------------------
+ * Dark theme — "After Hours". The brand identity is preserved by
+ * flipping the editorial roles of navy and cream: navy becomes the
+ * page (background), cream becomes the ink. Coral keeps its job as
+ * the accent, nudged slightly warmer so it carries on the darker
+ * ground. Cards and popovers drop their hardcoded white in favor of
+ * an elevated navy so depth still reads.
+ * ----------------------------------------------------------------- */
+[data-theme="dark"] {
+  --paper: #0e1320;          /* page — deepest navy, near-black */
+  --paper-deep: #171d2d;     /* elevated surfaces (cards, banners) */
+  --ink: #ebe6da;            /* primary text — warm cream */
+  --ink-soft: #b9b3a4;       /* body copy — softened cream */
+  --ink-muted: #807a6b;      /* secondary text — warm muted */
+  --hairline: #262c3b;       /* dividers — just-visible navy */
+  --coral: #d96450;          /* accent — touch brighter on dark */
+  --coral-soft: #e8896f;
+  --court: #b88a52;
+  --good: #6da57a;
+  --bad: #d96868;
+
+  --card: #171d2d;           /* no more white — elevated navy */
+  --card-foreground: var(--ink);
+  --popover: #1b2233;
+  --popover-foreground: var(--ink);
+  --accent-foreground: #faf7f2;
+  --destructive-foreground: #faf7f2;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -162,4 +191,17 @@ body {
   .bta-fade-up, .bta-bar-v, .bta-bar-h, .bta-fill-ring {
     animation: none !important;
   }
+}
+
+/* ------------------------------------------------------------------
+ * Theme-flip transition mute. ThemeToggle adds .theme-flipping to
+ * <html> for one frame around the data-theme swap, so every element's
+ * own `transition-colors` is suppressed and the whole page flips in
+ * one paint instead of cascading at different per-component speeds.
+ * ----------------------------------------------------------------- */
+.theme-flipping,
+.theme-flipping *,
+.theme-flipping *::before,
+.theme-flipping *::after {
+  transition: none !important;
 }

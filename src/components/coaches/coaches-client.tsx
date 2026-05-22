@@ -260,7 +260,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
               onChange={(e) => { setQuery(e.target.value); setPage(1); }}
               placeholder="Search coach or team"
               aria-label="Search coach or team"
-              className="h-10 w-full pl-9 pr-9 rounded-md border border-ink/15 bg-white text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+              className="h-10 w-full pl-9 pr-9 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
             />
             {query && (
               <button onClick={() => { setQuery(""); setPage(1); }} aria-label="Clear search"

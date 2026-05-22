@@ -136,7 +136,7 @@ export function ExplorerClient({
       <FilterBar conferences={conferences} teams={teamNames} conferenceRankings={conferenceRankings} years={[latestYear]} />
 
       {/* Headline-ledger treatment matches /coaches and /players. */}
-      <div className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 mt-6">
+      <div id="teams-table" className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 mt-6 scroll-mt-4">
         {/* Top accent rule. */}
         <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
         <div className="px-5 lg:px-7 pt-5 pb-3 lg:pt-6 lg:pb-4 bg-paper-deep/30 flex items-end justify-between gap-4 flex-wrap">
@@ -179,7 +179,7 @@ export function ExplorerClient({
                   onChange={(e) => setTableSearch(e.target.value)}
                   placeholder="Search team…"
                   aria-label="Search teams in table"
-                  className="h-9 w-52 pl-8 pr-8 rounded-md border border-ink/15 bg-white text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+                  className="h-9 w-52 pl-8 pr-8 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
                 />
                 {tableSearch && (
                   <button
@@ -243,9 +243,15 @@ export function ExplorerClient({
                       {i + 1}
                     </Td>
                     <Td>
-                      <Link href={`/teams/${teamSlug(r.team_name)}`} className="inline-flex items-center gap-2.5 group">
+                      <Link
+                        href={`/teams/${teamSlug(r.team_name)}/${r.team_year}`}
+                        className="inline-flex items-center gap-2.5 group"
+                        aria-label={r.team_name}
+                      >
                         <TeamLogo name={r.team_name} size={24} />
-                        <span className="font-medium text-ink group-hover:text-coral transition-colors">{r.team_name}</span>
+                        <span className="hidden sm:inline font-medium text-ink group-hover:text-coral transition-colors">
+                          {r.team_name}
+                        </span>
                         <TourneyBadge teamName={r.team_name} year={r.team_year} />
                       </Link>
                     </Td>

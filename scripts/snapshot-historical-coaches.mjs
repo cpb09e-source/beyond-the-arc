@@ -211,6 +211,16 @@ const BART_TO_SR_OVERRIDES = {
   "Nebraska Omaha": "nebraska-omaha",
   "SIU Edwardsville": "southern-illinois-edwardsville",
   "Fairleigh Dickinson": "fairleigh-dickinson",
+
+  // Round 4 — flagship state schools where SR's mascot suffix is longer than
+  // a sibling school's full display (e.g. "Illinois Fighting Illini" beats
+  // "Illinois State Redbirds" by length, so the shortest-displayName tiebreaker
+  // wrongly picked the sibling). Slug-parts heuristic added below also covers
+  // these, but explicit overrides are clearer and crash-proof.
+  "Illinois":     "illinois",
+  "Alabama":      "alabama",
+  "North Dakota": "north-dakota",
+  "Delaware":     "delaware",
 };
 
 // ---------- SR school-index → slug map ----------
@@ -239,10 +249,6 @@ async function loadSrSchoolMap() {
 function resolveBartToSr(bartName, srMap) {
   if (BART_TO_SR_OVERRIDES[bartName]) return BART_TO_SR_OVERRIDES[bartName];
   const bartNorm = norm(bartName);
-  // Collect all "startsWith" candidates, prefer the shortest SR display name.
-  // Why: bart "Texas" should match "Texas Longhorns" (extra word: Longhorns)
-  // rather than "Texas A&M Aggies" (extra words: A&M Aggies). Without sorting,
-  // alphabetical iteration would pick the A&M variant first.
   const startsWith = [];
   for (const [display, slug] of Object.entries(srMap)) {
     const displayNorm = norm(display);
@@ -251,10 +257,27 @@ function resolveBartToSr(bartName, srMap) {
     }
   }
   if (startsWith.length > 0) {
-    startsWith.sort((a, b) => a.displayNorm.length - b.displayNorm.length);
+    // Primary tiebreaker: slug-parts proximity to bart-name word count. SR's
+    // URL slugs reliably encode the place name (Illinois → illinois, Illinois
+    // State → illinois-state). The flagship school's slug therefore has the
+    // SAME number of dash-separated parts as bart's name has words; sibling
+    // schools have extra parts. This beats the old shortest-displayName rule,
+    // which mis-matched "Illinois" → "illinois-state" because "Illinois State
+    // Redbirds" (3 words) is shorter than "Illinois Fighting Illini" (3 words
+    // but more characters).
+    //
+    // Fallback tiebreaker: shortest displayNorm, for cases the slug heuristic
+    // can't resolve (e.g. both candidates have the same slug-parts count).
+    const bartWordCount = bartNorm.split(" ").length;
+    startsWith.sort((a, b) => {
+      const aExtra = a.slug.split("-").length - bartWordCount;
+      const bExtra = b.slug.split("-").length - bartWordCount;
+      if (aExtra !== bExtra) return aExtra - bExtra;
+      return a.displayNorm.length - b.displayNorm.length;
+    });
     return startsWith[0].slug;
   }
-  // Fallback: substring contains, also prefer shortest display.
+  // Fallback: substring contains, prefer shortest display.
   const contains = [];
   for (const [display, slug] of Object.entries(srMap)) {
     const displayNorm = norm(display);

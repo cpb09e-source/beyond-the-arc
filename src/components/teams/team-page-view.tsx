@@ -110,11 +110,43 @@ export function attachRosterRanks(
 // same cohort.
 const yearMetricsCache = new Map<number, Map<number, { pir: number | null; bta_portg: number | null }>>();
 
+// Position bucket mapping — mirrors src/components/players/players-client.tsx
+// and scripts/compute-player-ranks.mts. Keep in sync.
+const BUCKET_BY_NOTE: Record<string, "G" | "F" | "C"> = {
+  "Pure PG": "G", "Scoring PG": "G", "Combo G": "G", "Wing G": "G",
+  "Wing F": "F", "Stretch 4": "F",
+  "PF/C": "C", "C": "C",
+};
+
+// Volume-shooter penalty — mirrors players-client.tsx. Punishes high-PPG /
+// low-efficiency scorers (worst-of TS%-pctile and eFG%-pctile within
+// position bucket, so the Jahmir Young archetype — propped up by 90% FT
+// shooting on a 25-pctile eFG — gets caught). Caps at −8 BTA points.
+// Applied AFTER multipliers so schedule bonuses don't amplify it.
+function volumeShooterPenalty(ppg: number | null, effPositionPctile: number | null): number {
+  if (ppg == null || effPositionPctile == null) return 0;
+  const ppgFactor = Math.max(0, Math.min(1, (ppg - 12) / 8));
+  const effFactor = Math.max(0, Math.min(1, (40 - effPositionPctile) / 30));
+  return -8 * ppgFactor * effFactor;
+}
+
 function computeYearMetrics(players: StaticPlayerRow[], year: number) {
   const cached = yearMetricsCache.get(year);
   if (cached) return cached;
 
-  type Mid = { id: number; pir: number | null; porpag: number | null; conference: string | null; team_name: string | null; eligible: boolean };
+  type Mid = {
+    id: number;
+    pir: number | null;
+    porpag: number | null;
+    conference: string | null;
+    team_name: string | null;
+    eligible: boolean;          // loose 8/10/3 floor — gates BTA PRTG calc
+    strict: boolean;            // 18/18/5 floor — gates efficiency cohort
+    ppg: number | null;
+    ts: number | null;          // 0..100 (Bart's TS column at row[8])
+    eFg: number | null;         // 0..100 (Bart's eFG column at row[7])
+    bucket: "G" | "F" | "C" | null;
+  };
   const mids: Mid[] = players.map((p) => {
     const row = p.player_bart_stats?.raw_row ?? null;
     const games = p.player_bart_stats?.games ?? null;
@@ -131,10 +163,18 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
     const conference = team?.conference ?? null;
     const team_name = team?.name ?? null;
     const eligible = !((games ?? 0) < 8 && (mins ?? 0) < 10 && (pts ?? 0) < 3);
+    // Stricter "real contributor" floor for the efficiency-cohort ranking.
+    // Mirrors scripts/compute-player-ranks.mts so the penalty's "below 40th
+    // pctile" reads the same as the profile's SHOOTING percentile chips.
+    const strict = (games ?? 0) >= 18 && (mins ?? 0) >= 18 && (pts ?? 0) >= 5;
     const pir = (pts !== null && reb !== null && ast !== null && stl !== null && blk !== null)
       ? pts + reb + ast + stl + blk - (missedFg ?? 0) - (missedFt ?? 0)
       : null;
-    return { id: p.id, pir, porpag, conference, team_name, eligible };
+    const ts = pctFromIdx(row, 8);
+    const eFg = pctFromIdx(row, 7);
+    const note = p.player_bart_stats?.notes ?? null;
+    const bucket = note ? (BUCKET_BY_NOTE[note] ?? null) : null;
+    return { id: p.id, pir, porpag, conference, team_name, eligible, strict, ppg: pts, ts, eFg, bucket };
   });
 
   const pirVals: number[] = [];
@@ -151,6 +191,43 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
   const oMu = porVals.length ? mean(porVals) : 0;
   const oSd = porVals.length ? sd(porVals, oMu) : 0;
 
+  // Per-(position bucket) efficiency percentile: worst-of(TS% pctile,
+  // eFG% pctile). Ranking cohort is the STRICT pool (18g/18mpg/5ppg) so
+  // percentiles match the profile's SHOOTING chips. Non-strict players
+  // (8/10/3 ≤ X < 18/18/5) still get a percentile via binary search into
+  // the strict cohort's sorted distribution — so a 20-PPG / 15-game
+  // scorer doesn't escape the penalty just because of low GP.
+  const effByPos = new Map<number, number>();
+  for (const bucket of ["G", "F", "C"] as const) {
+    const inBucket = mids.filter((m) => m.eligible && m.bucket === bucket);
+    const strictInBucket = inBucket.filter((m) => m.strict);
+    function rankerFor(metric: (m: Mid) => number | null): (v: number) => number | null {
+      const sorted = strictInBucket
+        .map(metric)
+        .filter((v): v is number => typeof v === "number")
+        .sort((a, b) => a - b);
+      const n = sorted.length;
+      if (n < 2) return () => null;
+      return (v: number) => {
+        let lo = 0, hi = n;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (sorted[mid]! < v) lo = mid + 1;
+          else hi = mid;
+        }
+        return Math.max(0, Math.min(100, Math.round((lo / (n - 1)) * 100)));
+      };
+    }
+    const tsRanker = rankerFor((m) => m.ts);
+    const fgRanker = rankerFor((m) => m.eFg);
+    for (const m of inBucket) {
+      const t = typeof m.ts === "number" ? tsRanker(m.ts) : null;
+      const f = typeof m.eFg === "number" ? fgRanker(m.eFg) : null;
+      if (t == null && f == null) continue;
+      effByPos.set(m.id, t == null ? f! : f == null ? t : Math.min(t, f));
+    }
+  }
+
   const out = new Map<number, { pir: number | null; bta_portg: number | null }>();
   for (const m of mids) {
     let bta: number | null = null;
@@ -160,12 +237,13 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
       if (typeof m.porpag === "number" && oSd > 0) zs.push((m.porpag - oMu) / oSd);
       if (zs.length > 0) {
         const raw = (zs.reduce((s, v) => s + v, 0) / zs.length) * 20;
-        bta =
+        const base =
           raw
           * confMultiplier(m.conference)
           * topTeamMultiplier(m.team_name)
           * top5Tier1Multiplier(m.team_name)
           * top3InConfMultiplier(m.team_name);
+        bta = base + volumeShooterPenalty(m.ppg, effByPos.get(m.id) ?? null);
       }
     }
     out.set(m.id, { pir: m.pir, bta_portg: bta });

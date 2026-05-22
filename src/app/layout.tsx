@@ -56,8 +56,20 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}
     >
+      <head>
+        {/* Pre-hydration theme apply: read localStorage and set
+            data-theme on <html> BEFORE first paint so dark-mode users
+            don't flash a frame of light-mode tokens. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('bta-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();",
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col bg-paper text-ink">
         <SiteHeader />
         <main className="flex-1">{children}</main>

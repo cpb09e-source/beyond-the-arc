@@ -40,7 +40,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { computeCohortStats, type PlayerSeason, type CohortStats } from "./lib/bta-prtg.mts";
+import { computeCohortStats, volumeShooterPenalty, type PlayerSeason, type CohortStats } from "./lib/bta-prtg.mts";
 import {
   confMultiplier,
   topTeamMultiplier,
@@ -96,8 +96,9 @@ function pirFor(row: RawRow): number | null {
 function porpagOf(row: RawRow): number | null { return fromStart(row, 28); }
 
 // BTA PRTG for a single season — uses year cohort stats + conf/team multipliers,
-// matching the formula in scripts/lib/bta-prtg.mts :: productionFor.
-function btaPortgFor(season: PlayerSeason, stats: CohortStats | undefined): number | null {
+// then adds the volume-shooter penalty (TS% percentile vs position bucket).
+// Matches the formula in scripts/lib/bta-prtg.mts :: productionFor.
+function btaPortgFor(bartId: number, season: PlayerSeason, stats: CohortStats | undefined): number | null {
   if (!stats) return null;
   const row = season.raw_row as RawRow;
   const pir = pirFor(row);
@@ -107,55 +108,59 @@ function btaPortgFor(season: PlayerSeason, stats: CohortStats | undefined): numb
   if (typeof porpag === "number" && stats.porSd > 0) zs.push((porpag - stats.porMean) / stats.porSd);
   if (zs.length === 0) return null;
   const raw = (zs.reduce((s, v) => s + v, 0) / zs.length) * 20;
-  return raw
+  const base = raw
     * confMultiplier(season.team_conference)
     * topTeamMultiplier(season.team_name)
     * top5Tier1Multiplier(season.team_name)
     * top3InConfMultiplier(season.team_name);
+  const ppg = fromEnd(row, 3);
+  return base + volumeShooterPenalty(ppg, stats.effPositionPctile.get(bartId) ?? null);
 }
 
 // ---------- Stat list ----------
-// `read` receives the eligible season plus that year's cohort stats (used by
-// bta_portg). Most reads just look at the row.
+// `read` receives bartId + the eligible season + that year's cohort stats.
+// Most reads only need the season; bta_portg uses bartId to look up the
+// player's TS-by-position percentile from the cohort stats for the
+// volume-shooter penalty.
 type StatDef = {
   key: string;
   label: string;
-  read: (season: PlayerSeason, yearStats: CohortStats | undefined) => number | null;
+  read: (bartId: number, season: PlayerSeason, yearStats: CohortStats | undefined) => number | null;
   better: "high" | "low";
 };
 
 const STATS: StatDef[] = [
   // Per-game counting
-  { key: "pts_pg", label: "PTS/G",       read: (s) => fromEnd(s.raw_row as RawRow, 3),  better: "high" },
-  { key: "reb_pg", label: "REB/G",       read: (s) => fromEnd(s.raw_row as RawRow, 7),  better: "high" },
-  { key: "ast_pg", label: "AST/G",       read: (s) => fromEnd(s.raw_row as RawRow, 6),  better: "high" },
-  { key: "stl_pg", label: "STL/G",       read: (s) => fromEnd(s.raw_row as RawRow, 5),  better: "high" },
-  { key: "blk_pg", label: "BLK/G",       read: (s) => fromEnd(s.raw_row as RawRow, 4),  better: "high" },
+  { key: "pts_pg", label: "PTS/G",       read: (_bartId, s) => fromEnd(s.raw_row as RawRow, 3),  better: "high" },
+  { key: "reb_pg", label: "REB/G",       read: (_bartId, s) => fromEnd(s.raw_row as RawRow, 7),  better: "high" },
+  { key: "ast_pg", label: "AST/G",       read: (_bartId, s) => fromEnd(s.raw_row as RawRow, 6),  better: "high" },
+  { key: "stl_pg", label: "STL/G",       read: (_bartId, s) => fromEnd(s.raw_row as RawRow, 5),  better: "high" },
+  { key: "blk_pg", label: "BLK/G",       read: (_bartId, s) => fromEnd(s.raw_row as RawRow, 4),  better: "high" },
   // Efficiency / advanced
-  { key: "ortg",    label: "ORtg",       read: (s) => num((s.raw_row as RawRow)?.[5]),  better: "high" },
-  { key: "usage",   label: "Usage%",     read: (s) => num((s.raw_row as RawRow)?.[6]),  better: "high" },
-  { key: "efg_pct", label: "eFG%",       read: (s) => num((s.raw_row as RawRow)?.[7]),  better: "high" },
-  { key: "ts_pct",  label: "TS%",        read: (s) => num((s.raw_row as RawRow)?.[8]),  better: "high" },
-  { key: "orb_pct", label: "OREB%",      read: (s) => num((s.raw_row as RawRow)?.[9]),  better: "high" },
-  { key: "drb_pct", label: "DREB%",      read: (s) => num((s.raw_row as RawRow)?.[10]), better: "high" },
-  { key: "ast_pct", label: "AST%",       read: (s) => num((s.raw_row as RawRow)?.[11]), better: "high" },
-  { key: "tov_pct", label: "TOV%",       read: (s) => num((s.raw_row as RawRow)?.[12]), better: "low" },   // flip
-  { key: "ft_pct",  label: "FT%",        read: (s) => num((s.raw_row as RawRow)?.[15]), better: "high" },
-  { key: "fg2_pct", label: "2P%",        read: (s) => num((s.raw_row as RawRow)?.[18]), better: "high" },
-  { key: "fg3_pct", label: "3P%",        read: (s) => num((s.raw_row as RawRow)?.[21]), better: "high" },
-  { key: "blk_pct", label: "BLK%",       read: (s) => num((s.raw_row as RawRow)?.[22]), better: "high" },
-  { key: "stl_pct", label: "STL%",       read: (s) => num((s.raw_row as RawRow)?.[23]), better: "high" },
+  { key: "ortg",    label: "ORtg",       read: (_bartId, s) => num((s.raw_row as RawRow)?.[5]),  better: "high" },
+  { key: "usage",   label: "Usage%",     read: (_bartId, s) => num((s.raw_row as RawRow)?.[6]),  better: "high" },
+  { key: "efg_pct", label: "eFG%",       read: (_bartId, s) => num((s.raw_row as RawRow)?.[7]),  better: "high" },
+  { key: "ts_pct",  label: "TS%",        read: (_bartId, s) => num((s.raw_row as RawRow)?.[8]),  better: "high" },
+  { key: "orb_pct", label: "OREB%",      read: (_bartId, s) => num((s.raw_row as RawRow)?.[9]),  better: "high" },
+  { key: "drb_pct", label: "DREB%",      read: (_bartId, s) => num((s.raw_row as RawRow)?.[10]), better: "high" },
+  { key: "ast_pct", label: "AST%",       read: (_bartId, s) => num((s.raw_row as RawRow)?.[11]), better: "high" },
+  { key: "tov_pct", label: "TOV%",       read: (_bartId, s) => num((s.raw_row as RawRow)?.[12]), better: "low" },   // flip
+  { key: "ft_pct",  label: "FT%",        read: (_bartId, s) => num((s.raw_row as RawRow)?.[15]), better: "high" },
+  { key: "fg2_pct", label: "2P%",        read: (_bartId, s) => num((s.raw_row as RawRow)?.[18]), better: "high" },
+  { key: "fg3_pct", label: "3P%",        read: (_bartId, s) => num((s.raw_row as RawRow)?.[21]), better: "high" },
+  { key: "blk_pct", label: "BLK%",       read: (_bartId, s) => num((s.raw_row as RawRow)?.[22]), better: "high" },
+  { key: "stl_pct", label: "STL%",       read: (_bartId, s) => num((s.raw_row as RawRow)?.[23]), better: "high" },
   // Hakeem Percentage — BLK% + STL%. Both raw fields must be present.
-  { key: "hkm_pct", label: "HKM%",       read: (s) => {
+  { key: "hkm_pct", label: "HKM%",       read: (_bartId, s) => {
       const r = s.raw_row as RawRow;
       const b = num(r?.[22]); const sx = num(r?.[23]);
       return (b == null || sx == null) ? null : b + sx;
     }, better: "high" },
-  { key: "ftr",     label: "FT Rate",    read: (s) => num((s.raw_row as RawRow)?.[24]), better: "high" },
-  { key: "porpag",  label: "PORPAG",     read: (s) => num((s.raw_row as RawRow)?.[28]), better: "high" },
+  { key: "ftr",     label: "FT Rate",    read: (_bartId, s) => num((s.raw_row as RawRow)?.[24]), better: "high" },
+  { key: "porpag",  label: "PORPAG",     read: (_bartId, s) => num((s.raw_row as RawRow)?.[28]), better: "high" },
   // Derived ratings — PIR per game and BTA PRTG (cohort-z-scored production).
-  { key: "pir",       label: "PIR",      read: (s) => pirFor(s.raw_row as RawRow),               better: "high" },
-  { key: "bta_portg", label: "BTA PRTG", read: (s, yearStats) => btaPortgFor(s, yearStats),      better: "high" },
+  { key: "pir",       label: "PIR",      read: (_bartId, s) => pirFor(s.raw_row as RawRow),               better: "high" },
+  { key: "bta_portg", label: "BTA PRTG", read: (bartId, s, yearStats) => btaPortgFor(bartId, s, yearStats), better: "high" },
 ];
 
 // ---------- Cohort eligibility ----------
@@ -244,7 +249,7 @@ async function main() {
     const yearStats = yearCohortStats.get(year);
     for (const stat of STATS) {
       const valued = members
-        .map((m) => ({ bartId: m.bartId, value: stat.read(m.season, yearStats) }))
+        .map((m) => ({ bartId: m.bartId, value: stat.read(m.bartId, m.season, yearStats) }))
         .filter((x): x is { bartId: number; value: number } => x.value != null);
       if (valued.length < 10) continue; // cohort too small for this stat
       valued.sort((a, b) => stat.better === "high" ? b.value - a.value : a.value - b.value);

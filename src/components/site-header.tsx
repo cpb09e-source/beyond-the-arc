@@ -1,20 +1,31 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
 import { SearchDialog } from "@/components/search/search-dialog";
+import { BrandWordmark } from "@/components/brand-wordmark";
+import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "/", label: "Explorer" },
+  { href: "/", label: "Teams" },
   { href: "/players", label: "Players" },
   { href: "/coaches", label: "Coaches" },
   { href: "/calc", label: "Win Calc" },
-  { href: "/portal", label: "Portal" },
+  { href: "/portal", label: "Transfer Portal" },
 ];
+
+// Active-route detection. The home route ("/") must match EXACTLY — otherwise
+// every page starts with "/" and the home link would always read active.
+function isCurrent(pathname: string, href: string): boolean {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(href + "/");
+}
 
 export function SiteHeader() {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname() || "/";
 
   // Close the drawer if the viewport widens past mobile.
   useEffect(() => {
@@ -27,30 +38,49 @@ export function SiteHeader() {
   }, [open]);
 
   return (
-    <header className="border-b border-hairline bg-paper/80 backdrop-blur supports-[backdrop-filter]:bg-paper/60 relative z-40">
-      <div className="mx-auto max-w-7xl px-6 lg:px-10 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-3 group" onClick={() => setOpen(false)}>
-          <Logomark />
-          <span className="font-display text-xl text-ink leading-none tracking-tight">
-            Beyond the Arc
-          </span>
+    <header className="bg-paper/80 backdrop-blur supports-[backdrop-filter]:bg-paper/60 relative z-40">
+      <div className="mx-auto max-w-[88rem] px-6 lg:px-10 h-16 flex items-center justify-between">
+        <Link
+          href="/"
+          className="flex items-center group shrink-0"
+          onClick={() => setOpen(false)}
+        >
+          <BrandWordmark className="h-5 text-ink group-hover:text-coral transition-colors" />
         </Link>
 
-        {/* Desktop nav */}
-        <nav className="hidden md:flex items-center gap-1">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="px-3 py-1.5 text-sm text-ink-soft hover:text-ink hover:bg-paper-deep rounded-md transition-colors"
-            >
-              {item.label}
-            </Link>
-          ))}
+        {/* Desktop nav — small-caps tracked, coral baseline underline marks
+            the current page. The underline scales from 0 → 100% on hover for
+            non-active links (40% width tease) and stays full-width on the
+            active link. Mirrors the kicker-rule motif used across the site. */}
+        <nav className="hidden md:flex items-center gap-1 lg:gap-2">
+          {NAV.map((item) => {
+            const active = isCurrent(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "group relative px-3 py-2 text-[0.7rem] uppercase tracking-[0.18em] font-medium transition-colors",
+                  active ? "text-ink" : "text-ink-muted hover:text-ink",
+                )}
+              >
+                {item.label}
+                <span
+                  aria-hidden
+                  className={cn(
+                    "pointer-events-none absolute left-3 right-3 bottom-1 h-px bg-coral origin-center",
+                    "transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+                    active ? "scale-x-100" : "scale-x-0 group-hover:scale-x-[0.4]",
+                  )}
+                />
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Right cluster: search on desktop, hamburger on mobile. */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <div className="hidden md:block">
             <SearchDialog />
           </div>
@@ -69,19 +99,34 @@ export function SiteHeader() {
 
       {/* Mobile slide-down drawer */}
       {open && (
-        <div id="mobile-nav" className="md:hidden border-t border-hairline bg-paper">
-          <nav className="px-6 py-3 flex flex-col gap-1">
-            {NAV.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                className="px-3 py-2 text-sm text-ink-soft hover:text-ink hover:bg-paper-deep rounded-md transition-colors"
-              >
-                {item.label}
-              </Link>
-            ))}
-            <div className="mt-2 pt-2 border-t border-hairline">
+        <div id="mobile-nav" className="md:hidden bg-paper">
+          <nav className="px-6 py-4 flex flex-col">
+            {NAV.map((item) => {
+              const active = isCurrent(pathname, item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => setOpen(false)}
+                  className={cn(
+                    "group relative py-3 text-[0.75rem] uppercase tracking-[0.18em] font-medium transition-colors",
+                    active ? "text-ink" : "text-ink-muted hover:text-ink",
+                  )}
+                >
+                  {item.label}
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "pointer-events-none absolute left-0 bottom-2 h-px bg-coral origin-left",
+                      "transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+                      active ? "w-8 scale-x-100" : "w-8 scale-x-0",
+                    )}
+                  />
+                </Link>
+              );
+            })}
+            <div className="mt-3 pt-3 border-t border-hairline">
               <SearchDialog />
             </div>
           </nav>
@@ -91,25 +136,3 @@ export function SiteHeader() {
   );
 }
 
-function Logomark() {
-  // A 3-point arc in coral as the logo — fits "beyond the arc"
-  return (
-    <svg
-      width="28"
-      height="28"
-      viewBox="0 0 32 32"
-      fill="none"
-      aria-hidden="true"
-      className="text-coral group-hover:text-ink transition-colors"
-    >
-      <path
-        d="M2 28 Q 16 -2 30 28"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        fill="none"
-        strokeLinecap="round"
-      />
-      <circle cx="16" cy="28" r="1.5" fill="currentColor" />
-    </svg>
-  );
-}

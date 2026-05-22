@@ -97,14 +97,16 @@ export function MultiYearSelect({
         aria-expanded={open}
         // Matches the global Select + SearchableMultiSelect chrome so all
         // three controls line up at the same height across the site.
-        className="h-10 min-w-44 px-3 pr-8 rounded-md border border-ink/15 bg-white text-ink text-sm text-left shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors relative"
+        // w-full lets the parent control sizing (grid cell, flex item, etc.)
+        // so this button shrinks/stretches like its siblings.
+        className="h-10 w-full px-3 pr-8 rounded-md border border-ink/15 bg-card text-ink text-sm text-left shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors relative"
       >
         <span className="truncate block">{buttonLabel}</span>
         <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted text-[0.7rem]">▾</span>
       </button>
 
       {open && (
-        <div className="absolute z-50 top-full left-0 mt-1 w-60 bg-white border border-hairline rounded-lg shadow-lg overflow-hidden">
+        <div className="absolute z-50 top-full left-0 mt-1 w-60 bg-card border border-hairline rounded-lg shadow-lg overflow-hidden">
           <div className="px-3 pt-2 pb-1 text-[0.65rem] uppercase tracking-widest text-coral font-medium">
             Seasons
           </div>

@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { PortalClient, type PortalEntry } from "@/components/portal/portal-client";
 import type { TransferClassRow } from "@/components/portal/transfer-classes";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 type PortalFile = {
   competition_id: number;
@@ -29,16 +30,19 @@ export default async function PortalPage() {
 
   return (
     <>
-      <section className="border-b border-hairline">
-        <div className="mx-auto max-w-[97rem] px-6 lg:px-10 pt-12 pb-6">
-          <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
-            <span className="h-px w-8 bg-coral" />
-            <span>The transfer portal</span>
+      <section>
+        <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-10 pb-2">
+          <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
+            <div className="flex items-center gap-3">
+              <span className="h-px w-8 bg-coral" />
+              <span>The transfer portal</span>
+            </div>
+            <ThemeToggle />
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-[97rem] px-6 lg:px-10 pt-8 lg:pt-10 pb-4">
+      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-4 lg:pt-5 pb-4">
         {data === null ? (
           <div className="bg-card border border-hairline rounded-lg p-10 text-center text-ink-muted">
             <p>Portal data isn&apos;t exported yet.</p>

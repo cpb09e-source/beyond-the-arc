@@ -26,19 +26,6 @@ const CLASS_OPTIONS: SearchableOption[] = [
   { value: "Gr", label: "Graduate" },
 ];
 
-const SORTS = [
-  { value: "bta_ind_ortg", label: "BTA PRTG" },
-  { value: "pir", label: "PIR" },
-  { value: "pts", label: "PPG" },
-  { value: "fg_pct", label: "FG%" },
-  { value: "fg3_pct", label: "3P%" },
-  { value: "ts_pct", label: "TS%" },
-  { value: "reb", label: "RPG" },
-  { value: "ast", label: "APG" },
-  { value: "games", label: "GP" },
-  { value: "name", label: "Name" },
-];
-const LIMITS = [50, 100, 250, 500];
 const MIN_GAMES = [0, 5, 10, 15, 20];
 
 const CONF_GROUP_LABELS = { power: "Power Conferences", midmajor: "Mid-Majors" } as const;
@@ -100,6 +87,10 @@ export function PlayerFilterBar({
 
   return (
     <div className={cn("bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-4 lg:p-5", pending && "opacity-70")}>
+      {/* Single-row filter bar — primary scope only. Sort / Order / Show /
+          Search now live in the Leaderboard header (mirrors /teams). Reset
+          sits at the far right of this row, only enabled when filters are
+          non-default. */}
       <div className="flex flex-wrap items-end gap-3">
         <Field label="Seasons">
           <MultiYearSelect
@@ -143,39 +134,17 @@ export function PlayerFilterBar({
             {MIN_GAMES.map((n) => <option key={n} value={n}>{n}+</option>)}
           </Select>
         </Field>
-
-        <div className="ml-auto flex items-end gap-3">
-          <Field label="Sort by">
-            <Select value={spec.sortBy} onChange={(v) => update({ ...spec, sortBy: v as PlayerListSpec["sortBy"] })}>
-              {SORTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </Select>
-          </Field>
-          <Field label="Order">
-            <Select value={spec.sortDir} onChange={(v) => update({ ...spec, sortDir: v as "asc" | "desc" })}>
-              <option value="desc">Desc</option>
-              <option value="asc">Asc</option>
-            </Select>
-          </Field>
-          <Field label="Show">
-            <Select value={String(spec.limit)} onChange={(v) => update({ ...spec, limit: Number(v) })}>
-              {LIMITS.map((n) => <option key={n} value={n}>{n}</option>)}
-            </Select>
-          </Field>
+        <div className="ml-auto">
           <button
             type="button"
             onClick={reset}
             disabled={isDefault}
-            className="h-9 text-sm text-ink-muted hover:text-ink px-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="h-9 text-sm text-ink-muted hover:text-ink px-2 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             Reset
           </button>
         </div>
       </div>
-
-      <p className="text-xs text-ink-muted mt-3">
-        Showing top {spec.limit} by {SORTS.find((s) => s.value === spec.sortBy)?.label.toLowerCase()},
-        minimum {spec.minGames} games played.
-      </p>
     </div>
   );
 }

@@ -113,6 +113,14 @@ export function FilterBar({
     const next: TeamFilterSpec = { ...urlSpec, years: draft.years, conf: draft.conf, teams: draft.teams, filters: draft.filters };
     const p = specToParams(next).toString();
     startTransition(() => router.replace(p ? `/?${p}` : "/", { scroll: false }));
+
+    // On mobile (<md), jump down to the results card so the user lands on
+    // the freshly-filtered rows instead of scrolling past the filter bar.
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      requestAnimationFrame(() => {
+        document.getElementById("teams-table")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
   }
   function reset() {
     setDraft(DEFAULT_DRAFT);
@@ -200,13 +208,15 @@ export function FilterBar({
             Filters
           </span>
           <span className="text-xs text-ink-muted">
-            (all conditions must be true; nothing applies until you press Submit)
+            (nothing applies until you press Submit)
           </span>
         </div>
 
         {draft.filters.map((f, i) => (
-          <div key={i} className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm text-ink-muted w-10">
+          <div key={i} className="flex items-center gap-2 sm:gap-4 flex-nowrap">
+            {/* "Where" / "And" label is conversational filler on a narrow
+                screen — hide it under sm so the stat select gets the room. */}
+            <span className="hidden sm:inline text-sm text-ink-muted w-10 shrink-0">
               {i === 0 ? "Where" : "And"}
             </span>
             <SearchableSelect
@@ -215,12 +225,12 @@ export function FilterBar({
               groupLabels={GROUP_LABEL}
               onChange={(v) => patchFilter(i, { stat: v as TeamStatKey })}
               ariaLabel="Filter stat"
-              className="min-w-44"
+              className="flex-1 min-w-0 sm:flex-initial sm:min-w-44"
             />
             <Select
               value={f.op}
               onChange={(v) => patchFilter(i, { op: v as Comparator })}
-              className="w-20"
+              className="w-14 sm:w-16 shrink-0"
             >
               {OPS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -231,12 +241,12 @@ export function FilterBar({
               step="any"
               value={f.value}
               onChange={(e) => patchFilter(i, { value: Number(e.target.value) })}
-              className="h-9 w-28 px-2 rounded border border-hairline bg-white text-ink text-sm focus:outline-none focus:ring-2 focus:ring-coral/40"
+              className="h-10 w-16 sm:w-28 px-2 rounded-md border border-ink/15 bg-card text-ink text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 shrink-0"
             />
             <button
               type="button"
               onClick={() => removeFilter(i)}
-              className="text-sm text-ink-muted hover:text-coral px-2 py-1"
+              className="text-base text-ink-muted hover:text-coral px-1.5 shrink-0"
               aria-label="Remove filter"
             >
               ×

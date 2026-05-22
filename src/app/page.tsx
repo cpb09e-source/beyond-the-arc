@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { ExplorerClient } from "@/components/explorer/explorer-client";
 import { readAllTeams } from "@/lib/static-data";
+import { ThemeToggle } from "@/components/theme-toggle";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -14,16 +15,19 @@ export default async function HomePage() {
 
   return (
     <>
-      <section className="border-b border-hairline">
-        <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-12 pb-6">
-          <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
-            <span className="h-px w-8 bg-coral" />
-            <span>The team explorer</span>
+      <section>
+        <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-10 pb-2">
+          <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
+            <div className="flex items-center gap-3">
+              <span className="h-px w-8 bg-coral" />
+              <span>The team explorer · 2012–26</span>
+            </div>
+            <ThemeToggle />
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 py-8">
+      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-4 pb-8">
         <Suspense fallback={<div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-10 text-center text-ink-muted">Loading explorer…</div>}>
           <ExplorerClient allTeams={allTeams} confsByYear={confsByYear} />
         </Suspense>

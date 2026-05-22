@@ -193,6 +193,7 @@ async function main() {
         fg2_made_diff: int(g["fgm2Diff"]),
         fg_made_diff: int(g["fgmDiff"]),
         ft_made_diff: int(g["ftmDiff"]),
+        ft_att_diff: int(g["ftaDiff"]),
         reb_diff: int(g["rebDiff"]),
         orb_diff: int(g["orbDiff"]),
         drb_diff: int(g["drbDiff"]),

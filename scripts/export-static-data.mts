@@ -114,7 +114,7 @@ async function fetchGameLogsForYear(year: number) {
         is_home, is_neutral, won, pts_scored, pts_against, pts_diff,
         poss, pace,
         fg3_made_diff, fg3_att_diff, fg2_made_diff, fg_made_diff,
-        ft_made_diff, reb_diff, orb_diff, drb_diff, tov_diff,
+        ft_made_diff, ft_att_diff, reb_diff, orb_diff, drb_diff, tov_diff,
         ast_diff, stl_diff, blk_diff, fbpts_diff, pitp_diff, scp_diff,
         fg3_pct, fg2_pct, ft_pct, efg_pct, ts_pct,
         fg3_pct_def, efg_pct_def,

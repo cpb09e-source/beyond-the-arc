@@ -62,7 +62,7 @@ export function CoachSeasonPick({
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="inline-flex items-center gap-2 text-xs uppercase tracking-widest font-bold rounded-md px-4 py-2 shadow-sm hover:shadow-md hover:-translate-y-px active:translate-y-0 active:shadow-sm transition-all duration-150 text-ink border border-ink/15 bg-white focus:outline-none focus:ring-2 focus:ring-coral/40"
+        className="inline-flex items-center gap-2 text-xs uppercase tracking-widest font-bold rounded-md px-4 py-2 shadow-sm hover:shadow-md hover:-translate-y-px active:translate-y-0 active:shadow-sm transition-all duration-150 text-ink border border-ink/15 bg-card focus:outline-none focus:ring-2 focus:ring-coral/40"
       >
         <span>Select a year</span>
         <span aria-hidden className="text-[0.6rem] text-ink-muted">▾</span>
@@ -70,7 +70,7 @@ export function CoachSeasonPick({
 
       {open && (
         <div
-          className="absolute z-50 top-full left-0 mt-1 w-64 bg-white border border-hairline rounded-lg shadow-lg overflow-hidden"
+          className="absolute z-50 top-full left-0 mt-1 w-64 bg-card border border-hairline rounded-lg shadow-lg overflow-hidden"
           role="listbox"
         >
           <div className="max-h-72 overflow-y-auto sm:max-h-none sm:overflow-visible py-1">

@@ -73,7 +73,7 @@ export function PortalClient({
   const confsTo = useMemo(() => {
     const s = new Set<string>();
     for (const e of entries) if (e.conf_to) s.add(e.conf_to);
-    return ["All", "Uncommitted", ...Array.from(s).sort()];
+    return ["All", "N/A", ...Array.from(s).sort()];
   }, [entries]);
 
   const filtered = useMemo(() => {
@@ -93,8 +93,8 @@ export function PortalClient({
         if (e.status?.toLowerCase() !== status.toLowerCase()) return false;
       }
       if (confTo !== "All") {
-        if (confTo === "Uncommitted" && e.team_to !== null) return false;
-        if (confTo !== "Uncommitted" && e.conf_to !== confTo) return false;
+        if (confTo === "N/A" && e.team_to !== null) return false;
+        if (confTo !== "N/A" && e.conf_to !== confTo) return false;
       }
       if (q && !e.name.toLowerCase().includes(q)) return false;
       if (sq) {
@@ -182,7 +182,7 @@ export function PortalClient({
               onChange={(e) => { setQuery(e.target.value); setPage(1); }}
               placeholder="Search for a player"
               aria-label="Search players by name"
-              className="h-9 w-full pl-3 pr-8 rounded border border-hairline bg-white text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40"
+              className="h-9 w-full pl-3 pr-8 rounded border border-hairline bg-card text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40"
             />
             {query && (
               <button onClick={() => { setQuery(""); setPage(1); }} aria-label="Clear player search"
@@ -196,7 +196,7 @@ export function PortalClient({
               onChange={(e) => { setSchoolQuery(e.target.value); setPage(1); }}
               placeholder="Search for a school"
               aria-label="Search by school (from or to)"
-              className="h-9 w-full pl-3 pr-8 rounded border border-hairline bg-white text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40"
+              className="h-9 w-full pl-3 pr-8 rounded border border-hairline bg-card text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40"
             />
             {schoolQuery && (
               <button onClick={() => { setSchoolQuery(""); setPage(1); }} aria-label="Clear school search"
@@ -218,7 +218,7 @@ export function PortalClient({
       {/* Three-column layout: Top transfer classes (sticky) · transfers table · Worst (sticky) */}
       <div className="grid grid-cols-1 xl:grid-cols-[16rem_minmax(0,1fr)_16rem] gap-4 items-start">
         {transferClasses ? (
-          <aside className="xl:sticky xl:top-20 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto">
+          <aside className="xl:sticky xl:top-20 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:[scrollbar-width:none] xl:[&::-webkit-scrollbar]:hidden">
             <TransferClassesPanel
               title="Top transfer classes"
               subtitle="Net BTA PRTG · all D-I"
@@ -292,7 +292,7 @@ export function PortalClient({
                         <SchoolLogoCell school={e.team_to} bySchool={transferClasses?.by_school} onOpen={setOpenClass} />
                       ) : (
                         <span className={cn("text-xs uppercase tracking-wide", e.status === "Withdrew" ? "text-ink-muted" : "text-coral font-medium")}>
-                          {e.status === "Withdrew" ? "Withdrew" : "Uncommitted"}
+                          {e.status === "Withdrew" ? "Withdrew" : "N/A"}
                         </span>
                       )}
                     </Td>
@@ -322,7 +322,7 @@ export function PortalClient({
         </div>
 
         {transferClasses ? (
-          <aside className="xl:sticky xl:top-20 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto">
+          <aside className="xl:sticky xl:top-20 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:[scrollbar-width:none] xl:[&::-webkit-scrollbar]:hidden">
             <TransferClassesPanel
               title="Worst transfer classes"
               subtitle="ACC · B10 · B12 · SEC only"
