@@ -132,6 +132,134 @@ async function fetchGameLogsForYear(year: number) {
   return all;
 }
 
+// ---------- Advanced player stats (Supabase: player_game_stats + player_on_off_stats) ----------
+// Aggregates per-game box scores into per-season averages so the player
+// explorer can offer TOV / USG% / +/- filters without the client having to
+// load 1.5M raw rows.
+//
+// Output shape (attached to each row in players-by-year/<year>.json under
+// `advanced_stats`):
+//   tov_pg, usage_pct, plus_minus_pg, mins_pct, is_qualified
+//
+// NOTE: net_onoff / ortg_onoff / drtg_onoff are pulled from
+// player_on_off_stats and held in memory for internal analysis, but are
+// NOT serialized to the public JSONs — those are proprietary CBB
+// Analytics derived metrics whose redistribution is restricted by their
+// ToS. Re-enable only after written permission. (See `mins_pct` /
+// `is_qualified` — those are minutes-share quality flags, not derived
+// analytics, and remain in the output.)
+type PlayerAdvancedAggregate = {
+  tov_pg: number | null;
+  usage_pct: number | null;
+  plus_minus_pg: number | null;
+  mins_pct: number | null;
+  is_qualified: boolean | null;
+};
+
+async function fetchPlayerGameAggregates(): Promise<Map<string, { tov_pg: number | null; usage_pct: number | null; plus_minus_pg: number | null }>> {
+  console.log("   loading player_game_stats (per-year paginated to avoid statement timeouts)…");
+  const agg = new Map<string, { games: number; tovSum: number; tovN: number; usgSum: number; usgN: number; pmSum: number; pmN: number }>();
+  // Per-year pagination uses idx_pgs_bart_year (year as second key) — keeps
+  // each scan within Supabase's statement-timeout budget. A single full-table
+  // pagination times out around the 650k-row mark.
+  for (const year of YEARS) {
+    let from = 0;
+    let yearRows = 0;
+    while (true) {
+      const { data, error } = await sb
+        .from("player_game_stats")
+        .select("bart_player_id, year, tov, usage_pct, plus_minus")
+        .eq("year", year)
+        .not("bart_player_id", "is", null)
+        .range(from, from + 999);
+      if (error) throw new Error(`player_game_stats ${year}: ${error.message}`);
+      if (!data || data.length === 0) break;
+      for (const r of data as Array<{ bart_player_id: number | null; year: number; tov: number | null; usage_pct: number | null; plus_minus: number | null }>) {
+        if (r.bart_player_id == null) continue;
+        const k = `${r.bart_player_id}|${r.year}`;
+        const cur = agg.get(k) ?? { games: 0, tovSum: 0, tovN: 0, usgSum: 0, usgN: 0, pmSum: 0, pmN: 0 };
+        cur.games += 1;
+        if (typeof r.tov === "number") { cur.tovSum += r.tov; cur.tovN += 1; }
+        if (typeof r.usage_pct === "number") { cur.usgSum += r.usage_pct; cur.usgN += 1; }
+        if (typeof r.plus_minus === "number") { cur.pmSum += r.plus_minus; cur.pmN += 1; }
+        agg.set(k, cur);
+      }
+      yearRows += data.length;
+      if (data.length < 1000) break;
+      from += 1000;
+    }
+    console.log(`     ${year}: ${yearRows.toLocaleString()} rows`);
+  }
+  console.log(`   done. ${agg.size.toLocaleString()} player-seasons aggregated.`);
+  // Reduce to per-game averages.
+  const out = new Map<string, { tov_pg: number | null; usage_pct: number | null; plus_minus_pg: number | null }>();
+  for (const [k, v] of agg) {
+    out.set(k, {
+      tov_pg: v.tovN > 0 ? v.tovSum / v.tovN : null,
+      usage_pct: v.usgN > 0 ? v.usgSum / v.usgN : null,
+      plus_minus_pg: v.pmN > 0 ? v.pmSum / v.pmN : null,
+    });
+  }
+  return out;
+}
+
+async function fetchPlayerOnOff(): Promise<Map<string, { net_onoff: number | null; ortg_onoff: number | null; drtg_onoff: number | null; mins_pct: number | null; is_qualified: boolean | null }>> {
+  console.log("   loading player_on_off_stats (per-year paginated)…");
+  const map = new Map<string, { net_onoff: number | null; ortg_onoff: number | null; drtg_onoff: number | null; mins_pct: number | null; is_qualified: boolean | null }>();
+  for (const year of YEARS) {
+    let from = 0;
+    let yearRows = 0;
+    while (true) {
+      const { data, error } = await sb
+        .from("player_on_off_stats")
+        .select("bart_player_id, year, net_onoff, ortg_onoff, drtg_onoff, mins_pct, is_qualified")
+        .eq("year", year)
+        .not("bart_player_id", "is", null)
+        .range(from, from + 999);
+      if (error) throw new Error(`player_on_off_stats ${year}: ${error.message}`);
+      if (!data || data.length === 0) break;
+      for (const r of data as Array<{ bart_player_id: number | null; year: number; net_onoff: number | null; ortg_onoff: number | null; drtg_onoff: number | null; mins_pct: number | null; is_qualified: boolean | null }>) {
+        if (r.bart_player_id == null) continue;
+        map.set(`${r.bart_player_id}|${r.year}`, {
+          net_onoff: r.net_onoff,
+          ortg_onoff: r.ortg_onoff,
+          drtg_onoff: r.drtg_onoff,
+          mins_pct: r.mins_pct,
+          is_qualified: r.is_qualified,
+        });
+      }
+      yearRows += data.length;
+      if (data.length < 1000) break;
+      from += 1000;
+    }
+    console.log(`     ${year}: ${yearRows.toLocaleString()} rows`);
+  }
+  console.log(`   done. ${map.size.toLocaleString()} player-seasons with on/off data.`);
+  return map;
+}
+
+function buildAdvancedAggregate(
+  bartId: number | null,
+  year: number,
+  gameAgg: Map<string, { tov_pg: number | null; usage_pct: number | null; plus_minus_pg: number | null }>,
+  onOff: Map<string, { net_onoff: number | null; ortg_onoff: number | null; drtg_onoff: number | null; mins_pct: number | null; is_qualified: boolean | null }>,
+): PlayerAdvancedAggregate | null {
+  if (bartId == null) return null;
+  const k = `${bartId}|${year}`;
+  const g = gameAgg.get(k) ?? null;
+  const o = onOff.get(k) ?? null;
+  if (!g && !o) return null;
+  // Intentionally NOT emitting net_onoff / ortg_onoff / drtg_onoff —
+  // proprietary CBB Analytics outputs. See PlayerAdvancedAggregate doc.
+  return {
+    tov_pg: g?.tov_pg ?? null,
+    usage_pct: g?.usage_pct ?? null,
+    plus_minus_pg: g?.plus_minus_pg ?? null,
+    mins_pct: o?.mins_pct ?? null,
+    is_qualified: o?.is_qualified ?? null,
+  };
+}
+
 async function fetchAllPlayers(year: number) {
   const all: unknown[] = [];
   let from = 0;
@@ -281,9 +409,13 @@ async function main() {
   }
   console.log(`   ${teamSlugCount} per-team JSON files written (with four-factor record + ${coachByTeam.size > 0 ? "coach" : "no coach"})`);
 
+  console.log("\n📊 Loading advanced player aggregates (player_game_stats + player_on_off_stats)…");
+  const playerGameAgg = await fetchPlayerGameAggregates();
+  const playerOnOff = await fetchPlayerOnOff();
+
   console.log("\n👥 Exporting players (per year)…");
   let totalPlayers = 0;
-  const playersByBartId = new Map<number, Array<{ year: number; team_name: string; team_conference: string | null; class: string | null; raw_row: unknown; games: number | null; notes: string | null; projection: number | null }>>();
+  const playersByBartId = new Map<number, Array<{ year: number; team_name: string; team_conference: string | null; class: string | null; raw_row: unknown; games: number | null; notes: string | null; projection: number | null; advanced_stats: PlayerAdvancedAggregate | null }>>();
   for (const year of YEARS) {
     const players = await fetchAllPlayers(year) as Array<{
       bart_player_id: number | null;
@@ -300,11 +432,19 @@ async function main() {
         p.teams.name = overrideTeamName(p.teams.name);
       }
     }
-    console.log(`   ${year}: ${players.length}`);
-    await fs.writeFile(path.join(OUT, "players-by-year", `${year}.json`), JSON.stringify(players));
-    totalPlayers += players.length;
+    // Attach advanced stats (TOV/USG%/+- from game stats + on/off ratings)
+    // to each player. Players without coverage just get `advanced_stats: null`.
+    const enriched = players.map((p) => ({
+      ...p,
+      advanced_stats: buildAdvancedAggregate(p.bart_player_id, year, playerGameAgg, playerOnOff),
+    }));
+    let withAdv = 0;
+    for (const p of enriched) if (p.advanced_stats !== null) withAdv++;
+    console.log(`   ${year}: ${enriched.length} players (${withAdv} with advanced stats)`);
+    await fs.writeFile(path.join(OUT, "players-by-year", `${year}.json`), JSON.stringify(enriched));
+    totalPlayers += enriched.length;
     // Accumulate for per-player files
-    for (const p of players) {
+    for (const p of enriched) {
       const pid = p.bart_player_id;
       if (!pid) continue;
       const team = Array.isArray(p.teams) ? p.teams[0] : p.teams;
@@ -319,6 +459,7 @@ async function main() {
         games: stats?.games ?? null,
         notes: stats?.notes ?? null,
         projection: stats?.projection ?? null,
+        advanced_stats: p.advanced_stats,
       });
     }
   }

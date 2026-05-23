@@ -2,6 +2,18 @@ import { notFound } from "next/navigation";
 import { readIndex, readPlayersForYear, readTeam, readRankedPlayerIds, readConfRecordsByTeam, readAllTeams, readGameLogsForYear } from "@/lib/static-data";
 import { TeamPageView, buildRoster, attachRosterRanks } from "@/components/teams/team-page-view";
 import { buildShootingRanks, buildFourFactorRanks } from "@/components/teams/distribution-panel";
+import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches";
+
+const SHORT_ROUND: Record<string, string> = {
+  "First Four": "FF",
+  "R64": "R1",
+  "R32": "R2",
+  "Sweet 16": "S16",
+  "Elite Eight": "E8",
+  "Final Four": "F4",
+  "Runner-up": "NC",
+  "Champion": "NC",
+};
 
 export async function generateStaticParams() {
   const idx = await readIndex();
@@ -56,9 +68,23 @@ export default async function TeamPage({ params }: { params: Promise<{ slug: str
   const shootingRanks = buildShootingRanks(current, yearCohort);
   const fourFactorRanks = buildFourFactorRanks(current, yearCohort);
   const allGames = await readGameLogsForYear(current.year);
+  // Tag March Madness games with their round label so the ticker shows
+  // "R1 / R2 / S16…" above the W/L pill. Match by (team, year, date).
+  const tourneyGamesAll = await loadTournamentGames();
+  const tourneyLookup = buildGamesByTeamYear(tourneyGamesAll);
+  const teamTourneyGames = gamesForTeamYear(tourneyLookup, team.name, current.year);
+  const roundByDate = new Map<string, string>();
+  for (const tg of teamTourneyGames) {
+    if (!tg.date) continue;
+    roundByDate.set(tg.date, SHORT_ROUND[tg.round] ?? tg.round);
+  }
   const scheduleGames = allGames
     .filter((g) => g.team_id === current.id)
-    .sort((a, b) => (a.game_date ?? "").localeCompare(b.game_date ?? ""));
+    .sort((a, b) => (a.game_date ?? "").localeCompare(b.game_date ?? ""))
+    .map((g) => {
+      const round = g.game_date ? roundByDate.get(g.game_date) : undefined;
+      return round ? { ...g, tournamentRound: round } : g;
+    });
 
   return (
     <TeamPageView

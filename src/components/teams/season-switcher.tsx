@@ -60,10 +60,10 @@ export function SeasonSwitcher({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label="Switch season"
-        className="inline-flex items-center gap-1 cursor-pointer hover:opacity-80 transition-opacity"
+        className="inline-flex items-center gap-1.5 cursor-pointer rounded-md border border-current/30 hover:border-current/60 bg-current/[0.06] hover:bg-current/[0.12] px-2 py-0.5 transition-colors"
       >
         <span>{seasonLabel(currentYear)}</span>
-        <ChevronDown size={12} strokeWidth={2.5} className={cn("transition-transform", open && "rotate-180")} />
+        <ChevronDown size={12} strokeWidth={2.5} className={cn("transition-transform opacity-70", open && "rotate-180")} />
       </button>
       {open && (
         <div

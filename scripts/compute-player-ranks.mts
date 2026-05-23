@@ -3,7 +3,7 @@
  * across ~20 stats, cohorted by year × position bucket (G/F/C). Used by the
  * player profile's "Where they rank best/worst" section.
  *
- * Cohort eligibility: 18+ games, 18+ minutes per game, 5+ points per game.
+ * Cohort eligibility: 18+ games, 20+ minutes per game, 5.3+ points per game.
  *
  * Position bucket is derived from Bart's note (raw_row[64]):
  *   G = Pure PG / Scoring PG / Combo G / Wing G
@@ -46,6 +46,7 @@ import {
   topTeamMultiplier,
   top5Tier1Multiplier,
   top3InConfMultiplier,
+  POWER_CONFS,
 } from "../src/lib/conf-tiers.ts";
 
 const PLAYER_DIR = path.resolve("public/data/player");
@@ -93,6 +94,8 @@ function pirFor(row: RawRow): number | null {
   const missedFt = fromStart(row, 44) ?? 0;
   return pts + reb + ast + stl + blk - missedFg - missedFt;
 }
+// PORPAG — Bart Torvik's Points Over Replacement Per Adjusted Game (idx 28).
+// Second component of the BTA PRTG z-blend, paired with PIR.
 function porpagOf(row: RawRow): number | null { return fromStart(row, 28); }
 
 // BTA PRTG for a single season — uses year cohort stats + conf/team multipliers,
@@ -157,6 +160,21 @@ const STATS: StatDef[] = [
       return (b == null || sx == null) ? null : b + sx;
     }, better: "high" },
   { key: "ftr",     label: "FT Rate",    read: (_bartId, s) => num((s.raw_row as RawRow)?.[24]), better: "high" },
+  // FTA per game — raw FTA / games. Descriptive (not quality), so "better
+  // high" reads as "higher percentile = more aggressive at drawing fouls".
+  { key: "fta_pg",  label: "FTA/G",      read: (_bartId, s) => {
+      const fta = num((s.raw_row as RawRow)?.[14]);
+      const g = num(s.games);
+      return fta != null && g != null && g > 0 ? fta / g : null;
+    }, better: "high" },
+  // 3-Point Attempt Rate (3PAr) — 3PA / FGA. Descriptive style stat
+  // (perimeter-heavy shooters score higher); not a quality indicator.
+  { key: "tpar",    label: "3PAr",       read: (_bartId, s) => {
+      const fg3a = num((s.raw_row as RawRow)?.[20]);
+      const fg2a = num((s.raw_row as RawRow)?.[17]);
+      const fga = (fg3a ?? 0) + (fg2a ?? 0);
+      return fga > 0 && fg3a != null ? fg3a / fga : null;
+    }, better: "high" },
   { key: "porpag",  label: "PORPAG",     read: (_bartId, s) => num((s.raw_row as RawRow)?.[28]), better: "high" },
   // Derived ratings — PIR per game and BTA PRTG (cohort-z-scored production).
   { key: "pir",       label: "PIR",      read: (_bartId, s) => pirFor(s.raw_row as RawRow),               better: "high" },
@@ -165,8 +183,8 @@ const STATS: StatDef[] = [
 
 // ---------- Cohort eligibility ----------
 const MIN_GAMES = 18;
-const MIN_MPG = 18;
-const MIN_PPG = 5;
+const MIN_MPG = 20;
+const MIN_PPG = 5.3;
 
 function eligible(season: PlayerSeason): boolean {
   if (!season || !Array.isArray(season.raw_row)) return false;
@@ -266,18 +284,165 @@ async function main() {
   }
   console.log(`   players with at least one ranked season: ${playerRanks.size}`);
 
+  // Build a (bartId, year) → conference map by walking each cohort member's
+  // season metadata. Powers the mid-major split below.
+  const confByBartYear = new Map<string, string | null>();
+  for (const members of cohorts.values()) {
+    for (const m of members) {
+      confByBartYear.set(`${m.bartId}|${m.season.year}`, m.season.team_conference ?? null);
+    }
+  }
+
+  // Compute per-(bartId, year) leaderboard ranks:
+  //   - rank within position bucket (#3 guard)
+  //   - rank overall across all eligible D-I players (#5 overall)
+  //   - rank within non-power-conference cohort (#2 mid-major) — only
+  //     populated for players whose own conference is NOT a power league
+  // All three are sorted by BTA PRTG desc. Players without a bta_portg
+  // for the year are excluded (their season ranks just won't carry these
+  // fields). POWER_CONFS lives in src/lib/conf-tiers.ts.
+  console.log("\n📊 computing BTA PRTG ranks (bucket + overall + mid-major)…");
+  type RatingEntry = { bartId: number; bucket: "G" | "F" | "C"; rating: number; conf: string | null };
+  const ratingsByYear = new Map<number, RatingEntry[]>();
+  for (const [bartId, byYear] of playerRanks) {
+    for (const [year, info] of byYear) {
+      const rating = info.stats.bta_portg?.value;
+      if (typeof rating !== "number") continue;
+      if (!ratingsByYear.has(year)) ratingsByYear.set(year, []);
+      ratingsByYear.get(year)!.push({
+        bartId,
+        bucket: info.bucket,
+        rating,
+        conf: confByBartYear.get(`${bartId}|${year}`) ?? null,
+      });
+    }
+  }
+  const yearLeaderRanks = new Map<
+    number,
+    Map<number, {
+      rank: number;
+      rankOverall: number;
+      cohortOverall: number;
+      rankNonPower: number | null;
+      cohortNonPower: number | null;
+    }>
+  >();
+  for (const [year, list] of ratingsByYear) {
+    // Overall rank
+    const sortedOverall = [...list].sort((a, b) => b.rating - a.rating);
+    const total = sortedOverall.length;
+    const overallByBart = new Map<number, number>();
+    for (let i = 0; i < sortedOverall.length; i++) {
+      overallByBart.set(sortedOverall[i]!.bartId, i + 1);
+    }
+    // In-bucket rank
+    const byBucket: Record<"G" | "F" | "C", RatingEntry[]> = { G: [], F: [], C: [] };
+    for (const e of list) byBucket[e.bucket].push(e);
+    const bucketByBart = new Map<number, number>();
+    for (const bucket of ["G", "F", "C"] as const) {
+      byBucket[bucket].sort((a, b) => b.rating - a.rating);
+      for (let i = 0; i < byBucket[bucket].length; i++) {
+        bucketByBart.set(byBucket[bucket][i]!.bartId, i + 1);
+      }
+    }
+    // Mid-major (non-power) rank
+    const nonPowerList = list.filter((e) => e.conf == null || !POWER_CONFS.has(e.conf));
+    const nonPowerTotal = nonPowerList.length;
+    const sortedNonPower = [...nonPowerList].sort((a, b) => b.rating - a.rating);
+    const nonPowerByBart = new Map<number, number>();
+    for (let i = 0; i < sortedNonPower.length; i++) {
+      nonPowerByBart.set(sortedNonPower[i]!.bartId, i + 1);
+    }
+    const perYear = new Map<number, {
+      rank: number;
+      rankOverall: number;
+      cohortOverall: number;
+      rankNonPower: number | null;
+      cohortNonPower: number | null;
+    }>();
+    for (const e of list) {
+      const isMidMajor = e.conf == null || !POWER_CONFS.has(e.conf);
+      perYear.set(e.bartId, {
+        rank: bucketByBart.get(e.bartId)!,
+        rankOverall: overallByBart.get(e.bartId)!,
+        cohortOverall: total,
+        rankNonPower: isMidMajor ? nonPowerByBart.get(e.bartId) ?? null : null,
+        cohortNonPower: isMidMajor ? nonPowerTotal : null,
+      });
+    }
+    yearLeaderRanks.set(year, perYear);
+  }
+
+  // Players index — denormalized list of every ranked (bartId, year, team,
+  // conference, name) tuple. Drives the Compare Players modal picker so it
+  // can offer every ranked player-season without lazy-loading 14 separate
+  // players-by-year files at modal-open time. Compact field names (id/n/y/t/c)
+  // to keep the bundle small; gzipped it lands around 250-400 KB.
+  console.log("\n💾 writing players index…");
+  type IndexEntry = {
+    id: number;
+    n: string;
+    y: number;
+    t: string;
+    c: string | null;
+    cl: string | null;
+    h: string | null;
+    g: number | null;   // games
+    m: number | null;   // mpg
+  };
+  const indexEntries: IndexEntry[] = [];
+  for (const [bartId, byYear] of playerRanks) {
+    const seasons = allByBartId.get(bartId);
+    if (!seasons) continue;
+    for (const year of byYear.keys()) {
+      const s = seasons.find((x) => x.year === year);
+      if (!s) continue;
+      const row = s.raw_row;
+      const name = Array.isArray(row) && typeof row[0] === "string" ? row[0] : null;
+      if (!name) continue;
+      const height = Array.isArray(row) && typeof row[26] === "string" ? row[26] : null;
+      const mpg = Array.isArray(row) && typeof row[54] === "number" ? row[54] : null;
+      indexEntries.push({
+        id: bartId,
+        n: name,
+        y: year,
+        t: s.team_name,
+        c: s.team_conference ?? null,
+        cl: s.class ?? null,
+        h: height,
+        g: s.games ?? null,
+        m: mpg !== null ? Math.round(mpg * 10) / 10 : null,
+      });
+    }
+  }
+  // Newest year first, then alpha by name so picker defaults read sensibly.
+  indexEntries.sort((a, b) => b.y - a.y || a.n.localeCompare(b.n));
+  await fs.writeFile(
+    path.resolve("public/data/players-index.json"),
+    JSON.stringify(indexEntries),
+  );
+  console.log(`✓ wrote ${indexEntries.length} entries to public/data/players-index.json`);
+
   // Write one JSON file per player.
   console.log("\n💾 writing rank files…");
   let written = 0;
   for (const [bartId, byYear] of playerRanks) {
     const seasonRanks = [...byYear.entries()]
       .sort((a, b) => b[0] - a[0]) // newest first
-      .map(([year, info]) => ({
-        year,
-        bucket: info.bucket,
-        cohortSize: info.cohortSize,
-        stats: info.stats,
-      }));
+      .map(([year, info]) => {
+        const leader = yearLeaderRanks.get(year)?.get(bartId);
+        return {
+          year,
+          bucket: info.bucket,
+          cohortSize: info.cohortSize,
+          rank: leader?.rank ?? null,
+          rankOverall: leader?.rankOverall ?? null,
+          cohortOverall: leader?.cohortOverall ?? null,
+          rankNonPower: leader?.rankNonPower ?? null,
+          cohortNonPower: leader?.cohortNonPower ?? null,
+          stats: info.stats,
+        };
+      });
     const out = { bartId, seasonRanks };
     await fs.writeFile(path.join(OUT_DIR, `${bartId}.json`), JSON.stringify(out));
     written++;

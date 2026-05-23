@@ -7,6 +7,7 @@ import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
 import { confDisplay } from "@/lib/conf-display";
 import type { CoachRow } from "@/app/coaches/page";
+import * as htmlToImage from "html-to-image";
 
 /**
  * Head-to-head compare modal — pick 2-4 coaches and see them side by side.
@@ -147,6 +148,72 @@ export function CompareModal({
     });
   }
 
+  // Screenshot — same mechanism as Compare Teams / Compare Players modals:
+  // pre-fetch cross-origin team logos to data URLs so html-to-image's SVG
+  // renderer can inline them, strip backdrop-filter on the sticky thead via
+  // body attribute, then capture the full <table> (not the scroll wrapper)
+  // so every row lands in the PNG. Opens the resulting blob URL in a new
+  // tab for native save / copy / view.
+  const captureRef = useRef<HTMLTableElement | null>(null);
+  const [capturing, setCapturing] = useState(false);
+  async function takeScreenshot() {
+    const root = captureRef.current;
+    if (!root || capturing) return;
+    setCapturing(true);
+    const restore: Array<() => void> = [];
+    try {
+      const imgs = Array.from(root.querySelectorAll("img")) as HTMLImageElement[];
+      await Promise.all(imgs.map(async (img) => {
+        const src = img.src;
+        if (!src || src.startsWith("data:")) return;
+        try {
+          const res = await fetch(src, { mode: "cors", cache: "force-cache" });
+          if (!res.ok) return;
+          const blob = await res.blob();
+          const dataUrl: string = await new Promise((resolve, reject) => {
+            const fr = new FileReader();
+            fr.onload = () => resolve(fr.result as string);
+            fr.onerror = () => reject(fr.error);
+            fr.readAsDataURL(blob);
+          });
+          const originalSrc = img.src;
+          img.src = dataUrl;
+          restore.push(() => { img.src = originalSrc; });
+        } catch { /* leave as-is */ }
+      }));
+      document.body.setAttribute("data-screenshot-capturing", "true");
+      // Force a reflow + wait two frames so the CSS override (`.truncate →
+      // white-space: normal`) actually re-lays out before html-to-image
+      // snapshots the geometry. Otherwise long coach names render with the
+      // wrapped second line crashing into the sibling team block below.
+      void root.offsetHeight;
+      await new Promise<void>((res) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => res()));
+      });
+      const imagePlaceholder = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=";
+      const bg = getComputedStyle(document.body).backgroundColor || "#ffffff";
+      const blob = await htmlToImage.toBlob(root, {
+        backgroundColor: bg,
+        pixelRatio: 2,
+        cacheBust: true,
+        skipFonts: true,
+        imagePlaceholder,
+      });
+      if (!blob) throw new Error("html-to-image returned a null blob");
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : typeof e === "string" ? e : JSON.stringify(e);
+      console.error("Compare-coaches screenshot failed:", msg, e);
+      alert(`Screenshot failed: ${msg || "unknown error"}`);
+    } finally {
+      for (const r of restore) r();
+      document.body.removeAttribute("data-screenshot-capturing");
+      setCapturing(false);
+    }
+  }
+
   // Per-row best/worst lookup for highlighting.
   function rowExtremes(row: Row): { bestKey: string | null; worstKey: string | null } {
     if (row.dir === "none") return { bestKey: null, worstKey: null };
@@ -202,14 +269,32 @@ export function CompareModal({
               Ties get neither.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="text-ink-muted hover:text-ink transition-colors text-lg w-8 h-8 inline-flex items-center justify-center rounded hover:bg-paper-deep/60"
-          >
-            ×
-          </button>
+          <div className="flex items-center gap-1">
+            {showCompare && (
+              <button
+                type="button"
+                onClick={takeScreenshot}
+                disabled={capturing}
+                aria-label="Take screenshot of comparison"
+                title="Open comparison as PNG in a new tab"
+                className={cn(
+                  "text-ink-muted hover:text-coral transition-colors inline-flex items-center gap-1.5 h-8 px-2.5 rounded text-xs uppercase tracking-widest font-medium hover:bg-paper-deep/60",
+                  capturing && "opacity-50 pointer-events-none",
+                )}
+              >
+                <CameraIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">{capturing ? "Capturing…" : "Screenshot"}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="text-ink-muted hover:text-ink transition-colors text-lg w-8 h-8 inline-flex items-center justify-center rounded hover:bg-paper-deep/60"
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         {/* Slot pickers */}
@@ -262,7 +347,7 @@ export function CompareModal({
               Pick at least <span className="text-ink font-medium">2 coaches</span> to start comparing.
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <table ref={captureRef} className="w-full text-sm">
               <thead className="sticky top-0 bg-paper-deep/80 backdrop-blur z-10">
                 <tr className="border-b border-hairline">
                   <th className="px-5 py-3 text-left text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium w-56">Category</th>
@@ -484,5 +569,24 @@ function SlotPicker({
         </div>
       )}
     </div>
+  );
+}
+
+function CameraIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
   );
 }

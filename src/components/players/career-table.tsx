@@ -81,17 +81,30 @@ export function CareerTable({
 
   return (
     <>
-      {/* View toggle band — bridges the headline-card header (paper-deep/30)
-          and the table's thead (paper-deep/70). Kicker label + native Select
-          so the affordance reads as a sibling of the site's filter controls. */}
-      <div className="px-3 lg:px-5 py-2.5 flex items-center justify-end gap-3 border-b border-hairline bg-paper-deep/40">
-        <label className="flex items-center gap-3">
-          <span className="text-[0.65rem] uppercase tracking-[0.18em] text-ink-muted font-medium">View</span>
-          <Select value={view} onChange={(v) => setView(v as View)} ariaLabel="Career stats view">
-            <option value="per_game">Per game</option>
-            <option value="totals">Totals</option>
-          </Select>
-        </label>
+      {/* Card header — kicker + display title with the View dropdown tucked
+          alongside it. The season count sits on the right opposite the
+          title row. */}
+      <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
+            <span className="h-px w-6 bg-coral" />
+            Year by year
+          </div>
+          <div className="flex items-baseline gap-4 flex-wrap">
+            <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Career</h2>
+            <Select value={view} onChange={(v) => setView(v as View)} ariaLabel="Career stats view">
+              <option value="per_game">Per game</option>
+              <option value="totals">Totals</option>
+            </Select>
+          </div>
+          <p className="mt-2 text-xs text-ink-muted">
+            Click a season to open the player&apos;s game log.
+          </p>
+        </div>
+        <span className="text-xs tabular text-ink-muted whitespace-nowrap">
+          <span className="font-display text-2xl text-ink tabular leading-none">{seasons.length}</span>{" "}
+          {seasons.length === 1 ? "season" : "seasons"}
+        </span>
       </div>
 
       <div className="overflow-x-auto">

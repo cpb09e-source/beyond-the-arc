@@ -2,6 +2,21 @@ import { notFound } from "next/navigation";
 import { readPlayersForYear, readTeam, readAllTeams, readRankedPlayerIds, readConfRecordsByTeam, readGameLogsForYear } from "@/lib/static-data";
 import { TeamPageView, buildRoster, attachRosterRanks } from "@/components/teams/team-page-view";
 import { buildShootingRanks, buildFourFactorRanks } from "@/components/teams/distribution-panel";
+import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches";
+
+// Same SHORT_ROUND mapping the coach page uses for tournament-round badges,
+// so a March-Madness game in the schedule ticker reads as "R1 / R2 / S16…"
+// matching the coach-resume tickers.
+const SHORT_ROUND: Record<string, string> = {
+  "First Four": "FF",
+  "R64": "R1",
+  "R32": "R2",
+  "Sweet 16": "S16",
+  "Elite Eight": "E8",
+  "Final Four": "F4",
+  "Runner-up": "NC",
+  "Champion": "NC",
+};
 
 function slugFor(name: string): string {
   return name
@@ -91,9 +106,23 @@ export default async function TeamSeasonPage({
   const shootingRanks = buildShootingRanks(current, yearCohort);
   const fourFactorRanks = buildFourFactorRanks(current, yearCohort);
   const allGames = await readGameLogsForYear(year);
+  // Tag any of this team's games that match a March Madness date so the
+  // ticker shows the round (R1, S16, NC, etc.) above the W/L pill.
+  const tourneyGamesAll = await loadTournamentGames();
+  const tourneyLookup = buildGamesByTeamYear(tourneyGamesAll);
+  const teamTourneyGames = gamesForTeamYear(tourneyLookup, team.name, year);
+  const roundByDate = new Map<string, string>();
+  for (const tg of teamTourneyGames) {
+    if (!tg.date) continue;
+    roundByDate.set(tg.date, SHORT_ROUND[tg.round] ?? tg.round);
+  }
   const scheduleGames = allGames
     .filter((g) => g.team_id === current.id)
-    .sort((a, b) => (a.game_date ?? "").localeCompare(b.game_date ?? ""));
+    .sort((a, b) => (a.game_date ?? "").localeCompare(b.game_date ?? ""))
+    .map((g) => {
+      const round = g.game_date ? roundByDate.get(g.game_date) : undefined;
+      return round ? { ...g, tournamentRound: round } : g;
+    });
 
   return (
     <TeamPageView

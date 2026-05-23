@@ -209,7 +209,8 @@ function GameCell({
     game.pts_scored !== null && game.pts_against !== null
       ? `${game.pts_scored}-${game.pts_against}`
       : "";
-  const title = `${fmtDate(game.game_date)} ${venue} ${opp}${scoreStr ? ` · ${scoreStr}` : ""}${game.won === true ? " W" : game.won === false ? " L" : ""}`;
+  const isTourney = !!game.tournamentRound;
+  const title = `${fmtDate(game.game_date)} ${venue} ${opp}${scoreStr ? ` · ${scoreStr}` : ""}${game.won === true ? " W" : game.won === false ? " L" : ""}${isTourney ? ` · ${game.tournamentRound}` : ""}`;
 
   return (
     <button
@@ -218,11 +219,27 @@ function GameCell({
       title={title}
       // Disable drag from native browser so it doesn't try to drag the image.
       draggable={false}
-      className="flex flex-col items-center gap-1 shrink-0 w-9 rounded p-0.5 hover:bg-[var(--accent-tint)] transition-colors cursor-pointer"
+      className={cn(
+        "flex flex-col items-center gap-1 shrink-0 w-9 rounded p-0.5 hover:bg-[var(--accent-tint)] transition-colors cursor-pointer",
+        // Tournament cells get a subtle inset wash + hairline ring colored
+        // by result — green for a win, red for a loss — so the March
+        // Madness stretch reads as a color-coded mini-bracket.
+        isTourney && game.won === true && "bg-emerald-100/60 ring-1 ring-emerald-300/60",
+        isTourney && game.won === false && "bg-rose-100/60 ring-1 ring-rose-300/60",
+        isTourney && game.won === null && "bg-paper-deep ring-1 ring-hairline",
+      )}
     >
-      {/* Round badge — only present on tournament-themed tickers (R1/R2/S16/E8/F4/NC). */}
+      {/* Round badge — only present on tournament-themed tickers (R1/R2/S16/E8/F4/NC).
+          Label color follows the win/loss color so the round + result read together. */}
       {game.tournamentRound && (
-        <span className="text-[0.5rem] tabular text-ink-muted font-semibold uppercase tracking-wider leading-none pointer-events-none">
+        <span
+          className={cn(
+            "text-[0.5rem] tabular font-bold uppercase tracking-wider leading-none pointer-events-none",
+            game.won === true && "text-emerald-700",
+            game.won === false && "text-rose-700",
+            game.won === null && "text-ink-muted",
+          )}
+        >
           {game.tournamentRound}
         </span>
       )}

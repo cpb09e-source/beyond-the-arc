@@ -11,6 +11,7 @@ import {
 import { FilterBar } from "@/components/explorer/filter-bar";
 import { SortControls } from "@/components/explorer/sort-controls";
 import { SortableTh } from "@/components/explorer/sortable-th";
+import { CompareTeamsModal } from "@/components/explorer/compare-teams-modal";
 import { TeamLogo } from "@/components/team-logo";
 import { TourneyBadge } from "@/components/tourney-badge";
 import { PercentileChip } from "@/components/percentile-chip";
@@ -59,10 +60,15 @@ function ValueWithPct({ value, pct, format }: { value: number | null; pct: numbe
 export function ExplorerClient({
   allTeams,
   confsByYear,
+  coachByTeamYear,
+  tourneyFinishByTeamYear,
 }: {
   allTeams: RawTeamSeason[];
   confsByYear: Record<string, string[]>;
+  coachByTeamYear: Record<string, string | null>;
+  tourneyFinishByTeamYear: Record<string, string>;
 }) {
+  const [compareOpen, setCompareOpen] = useState(false);
   const search = useSearchParams();
   const params = useMemo(() => {
     const obj: Record<string, string> = {};
@@ -141,9 +147,24 @@ export function ExplorerClient({
         <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
         <div className="px-5 lg:px-7 pt-5 pb-3 lg:pt-6 lg:pb-4 bg-paper-deep/30 flex items-end justify-between gap-4 flex-wrap">
           <div>
-            <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
-              Teams
-            </h2>
+            <div className="flex items-baseline gap-4 flex-wrap">
+              <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
+                Teams
+              </h2>
+              <button
+                type="button"
+                onClick={() => setCompareOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-coral/40 bg-coral/[0.06] text-coral text-[0.65rem] uppercase tracking-widest font-bold hover:bg-coral/10 hover:border-coral/60 transition-colors"
+              >
+                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M16 3h5v5" />
+                  <path d="M8 21H3v-5" />
+                  <path d="M21 3l-7 7" />
+                  <path d="M3 21l7-7" />
+                </svg>
+                Compare Teams
+              </button>
+            </div>
             <div className="mt-2 text-sm text-ink-muted">
               <span className="font-display text-xl text-ink tabular leading-none">{rows.length.toLocaleString()}</span>
               {count > rows.length && (
@@ -275,6 +296,17 @@ export function ExplorerClient({
           </table>
         </div>
       </div>
+
+      {/* Head-to-head compare modal — triggered from the "Click to compare
+          teams" link in the Teams card header. Renders via a portal so it
+          can sit on top of the page regardless of where the trigger lives. */}
+      <CompareTeamsModal
+        open={compareOpen}
+        onClose={() => setCompareOpen(false)}
+        allTeams={allTeams}
+        coachByTeamYear={coachByTeamYear}
+        tourneyFinishByTeamYear={tourneyFinishByTeamYear}
+      />
     </>
   );
 }

@@ -35,12 +35,15 @@ export const STAT_META: Record<string, StatMeta> = {
   stl_pct: { label: "STL%",  format: "pct100" },
   hkm_pct: { label: "HKM%",  format: "pct100" },
   ftr:     { label: "FT Rate", format: "num" },
+  fta_pg:  { label: "FTA/G",   format: "num" },
+  tpar:    { label: "3PAr",    format: "pct" },
   porpag:  { label: "PORPAG", format: "num" },
   pir:       { label: "PIR",      format: "num" },
   bta_portg: { label: "BTA PRTG", format: "num" },
 };
 
-export function fmtValue(v: number, format: StatFormat): string {
+export function fmtValue(v: number | null, format: StatFormat): string {
+  if (v == null) return "—";
   if (format === "pct") return (v * 100).toFixed(1) + "%";
   if (format === "pct100") return v.toFixed(1) + "%";
   return v.toLocaleString("en-US", { maximumFractionDigits: 1, minimumFractionDigits: 1 });

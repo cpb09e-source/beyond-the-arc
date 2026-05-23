@@ -119,12 +119,38 @@ function pirOfRow(row: unknown): number | null {
   const missedFt = fromStart(row, 44) ?? 0;
   return pts + reb + ast + stl + blk - missedFg - missedFt;
 }
+// Second component of the BTA PRTG z-blend: Bart Torvik's PORPAG (Points Over
+// Replacement Per Adjusted Game), column 28 of the player raw row.
 function porpagOfRow(row: unknown): number | null { return fromStart(row, 28); }
 function mpgOfRow(row: unknown): number | null { return fromStart(row, 54); }
-// Bart's TS% column (already on 0..100 scale) lives at start index 8;
-// eFG% lives at start index 7.
-function tsOfRow(row: unknown): number | null { return fromStart(row, 8); }
-function eFgOfRow(row: unknown): number | null { return fromStart(row, 7); }
+// Volume-shooter penalty inputs — must match the live attachBtaIndOrtg in
+// src/components/players/players-client.tsx so the BTA PRTG stored in
+// player-ranks JSONs (and shown on the Player Overview card) matches what
+// users see on the /players leaderboard. The live page computes both
+// metrics from raw box-score counts rather than reading Bart's pre-computed
+// `raw_row[7]/[8]` cells, and pairs TS% with **FG%** (not eFG%) when picking
+// the worst-of percentile for the penalty.
+function fg2MadeOfRow(row: unknown): number | null { return fromStart(row, 16); }
+function fg2AttOfRow(row: unknown): number | null { return fromStart(row, 17); }
+function fg3MadeOfRow(row: unknown): number | null { return fromStart(row, 19); }
+function fg3AttOfRow(row: unknown): number | null { return fromStart(row, 20); }
+function ftAttOfRow(row: unknown): number | null { return fromStart(row, 14); }
+function fgPctOfRow(row: unknown): number | null {
+  const m2 = fg2MadeOfRow(row); const m3 = fg3MadeOfRow(row);
+  const a2 = fg2AttOfRow(row);  const a3 = fg3AttOfRow(row);
+  if (m2 == null || m3 == null || a2 == null || a3 == null) return null;
+  const made = m2 + m3, att = a2 + a3;
+  return att > 0 ? made / att : null;
+}
+function tsOfRow(row: unknown, games: number | null, ppg: number | null): number | null {
+  // TS% = PTS / (2 × (FGA + 0.44 × FTA)). Uses season totals — ppg × games
+  // for points, full-season FGA / FTA from the boxscore columns.
+  const a2 = fg2AttOfRow(row); const a3 = fg3AttOfRow(row); const fta = ftAttOfRow(row);
+  if (a2 == null || a3 == null || fta == null || games == null || ppg == null) return null;
+  const fga = a2 + a3;
+  const denom = 2 * (fga + 0.44 * fta);
+  return denom > 0 ? (ppg * games) / denom : null;
+}
 // Bart's position note lives at the third-from-end column of raw_row, but we
 // also pass the parsed `notes` field on PlayerSeason directly. Helper that
 // prefers the parsed field.
@@ -145,7 +171,7 @@ export function computeCohortStats(
     por: number[];
     // Loose-eligible (bartId, ts, eFg, strict) tuples bucketed by position.
     // We rank TS and eFG within each bucket against the STRICT cohort's
-    // sorted distribution (18g/18mpg/5ppg — matches the profile's SHOOTING
+    // sorted distribution (18g / 20mpg / 5.3ppg — matches the profile's SHOOTING
     // chips), then look up each loose-eligible player's percentile via
     // binary search. Per-player effPositionPctile = worst of (TS, eFG).
     byBucket: { G: EffEntry[]; F: EffEntry[]; C: EffEntry[] };
@@ -157,7 +183,10 @@ export function computeCohortStats(
       const games = s.games;
       const mpg = mpgOfRow(row);
       const ppg = fromEnd(row, 3);
-      const eligible = !((games ?? 0) < 8 && (mpg ?? 0) < 10 && (ppg ?? 0) < 3);
+      // Leaderboard floor: hide players with <8 games OR <3.5 PPG. Stricter
+      // than the previous AND-style filter — keeps deep-bench players off
+      // the table entirely.
+      const eligible = (games ?? 0) >= 8 && (ppg ?? 0) >= 3.5;
       if (!eligible) continue;
       let bag = bags.get(s.year);
       if (!bag) { bag = { pir: [], por: [], byBucket: { G: [], F: [], C: [] } }; bags.set(s.year, bag); }
@@ -165,10 +194,10 @@ export function computeCohortStats(
       const por = porpagOfRow(row);
       if (pir !== null) bag.pir.push(pir);
       if (por !== null) bag.por.push(por);
-      const ts = tsOfRow(row);
-      const eFg = eFgOfRow(row);
+      const ts = tsOfRow(row, games, ppg);
+      const eFg = fgPctOfRow(row);  // Note: variable name kept for downstream compat; this is FG%, not eFG%.
       const bucket = bucketOf(s.notes);
-      const strict = (games ?? 0) >= 18 && (mpg ?? 0) >= 18 && (ppg ?? 0) >= 5;
+      const strict = (games ?? 0) >= 18 && (mpg ?? 0) >= 20 && (ppg ?? 0) >= 5.3;
       if (bucket && (ts !== null || eFg !== null)) bag.byBucket[bucket].push({ id: bartId, ts, eFg, strict });
     }
   }

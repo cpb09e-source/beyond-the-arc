@@ -126,67 +126,90 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
             <span className="h-px w-8 bg-coral" />
             <span>Player · {seasonLabel(current.year)}</span>
           </div>
-          <div className="flex items-start sm:items-end gap-4 sm:gap-6 lg:gap-10">
-            {/* Two renders so we can scale the photo across breakpoints without
-                fighting PlayerPhoto's inline width/height styles. */}
-            <PlayerPhoto bartPlayerId={bartId} name={stats.name ?? `Player ${bartId}`} size={72} className="sm:hidden" />
-            <PlayerPhoto bartPlayerId={bartId} name={stats.name ?? `Player ${bartId}`} size={120} className="hidden sm:inline-flex" />
-            <div className="flex-1 min-w-0">
-              <h1 className="font-display text-3xl sm:text-5xl md:text-6xl tracking-tight text-ink leading-[1.05] sm:leading-none break-words">
-                {stats.name ?? `Player ${bartId}`}
-              </h1>
-              <div className="mt-3 sm:mt-4 flex flex-wrap items-center gap-x-3 sm:gap-x-5 gap-y-1.5 text-ink-soft text-sm sm:text-base">
-                <Link
-                  href={`/teams/${teamSlug(transfer ? transfer.from : current.team_name)}`}
-                  className="inline-flex items-center gap-2 hover:text-coral transition-colors"
-                  title={transfer ? `${transfer.from} → ${transfer.to}` : undefined}
-                >
-                  <TeamLogo name={transfer ? transfer.from : current.team_name} size={24} />
-                  <span>{transfer ? transfer.from : current.team_name}</span>
-                </Link>
-                <span className="text-ink-muted">·</span>
-                <span>{current.class ?? "—"}</span>
-                <span className="text-ink-muted">·</span>
-                <span>{stats.height ?? "—"}</span>
-                {stats.hometown && (
-                  <>
-                    <span className="text-ink-muted">·</span>
-                    <span className="text-ink-muted">{stats.hometown}</span>
-                  </>
+          {/* Hero row — photo + name | stats banner. On lg+ the stats sit
+              to the right of the name (ml-auto). Below lg the banner
+              wraps to a full-width row below the name (flex-wrap). The
+              banner scale is tuned smaller when inline so it doesn't
+              fight the player-name h1 for visual weight. */}
+          <div className="flex items-end gap-y-10 gap-x-6 sm:gap-x-8 lg:gap-x-12 flex-wrap">
+            {/* Photo + name cluster */}
+            <div className="flex items-start sm:items-end gap-4 sm:gap-6 lg:gap-10 min-w-0">
+              {/* Two renders so we can scale the photo across breakpoints without
+                  fighting PlayerPhoto's inline width/height styles. */}
+              <PlayerPhoto bartPlayerId={bartId} name={stats.name ?? `Player ${bartId}`} size={72} className="sm:hidden" />
+              <PlayerPhoto bartPlayerId={bartId} name={stats.name ?? `Player ${bartId}`} size={120} className="hidden sm:inline-flex" />
+              <div className="min-w-0">
+                <h1 className="font-display text-3xl sm:text-5xl md:text-6xl tracking-tight text-ink leading-[1.05] sm:leading-none break-words">
+                  {stats.name ?? `Player ${bartId}`}
+                </h1>
+                <div className="mt-3 sm:mt-4 flex flex-wrap items-center gap-x-3 sm:gap-x-5 gap-y-1.5 text-ink-soft text-sm sm:text-base">
+                  <Link
+                    href={`/teams/${teamSlug(transfer ? transfer.from : current.team_name)}`}
+                    className="inline-flex items-center gap-2 hover:text-coral transition-colors"
+                    title={transfer ? `${transfer.from} → ${transfer.to}` : undefined}
+                  >
+                    <TeamLogo name={transfer ? transfer.from : current.team_name} size={24} />
+                    <span>{transfer ? transfer.from : current.team_name}</span>
+                  </Link>
+                  <span className="text-ink-muted">·</span>
+                  <span>{current.class ?? "—"}</span>
+                  <span className="text-ink-muted">·</span>
+                  <span>{stats.height ?? "—"}</span>
+                  {stats.hometown && (
+                    <>
+                      <span className="text-ink-muted">·</span>
+                      <span className="text-ink-muted">{stats.hometown}</span>
+                    </>
+                  )}
+                </div>
+
+                {/* Transferred-to banner — shown when a portal commit exists. */}
+                {transfer && (
+                  <div className="mt-3 inline-flex items-center gap-2 sm:gap-3 px-3 py-1.5 rounded-md bg-coral/10 border border-coral/30">
+                    <span className="text-[0.6rem] uppercase tracking-widest text-coral font-bold whitespace-nowrap">
+                      Transfer →
+                    </span>
+                    <Link
+                      href={`/teams/${teamSlug(transfer.to)}`}
+                      className="inline-flex items-center gap-2 group min-w-0"
+                    >
+                      <TeamLogo name={transfer.to} size={22} />
+                      <span className="text-ink font-medium group-hover:text-coral transition-colors truncate">
+                        {transfer.to}
+                      </span>
+                    </Link>
+                  </div>
                 )}
               </div>
-
-              {/* Transferred-to banner — shown when a portal commit exists. */}
-              {transfer && (
-                <div className="mt-3 inline-flex items-center gap-2 sm:gap-3 px-3 py-1.5 rounded-md bg-coral/10 border border-coral/30">
-                  <span className="text-[0.6rem] uppercase tracking-widest text-coral font-bold whitespace-nowrap">
-                    Transfer →
-                  </span>
-                  <Link
-                    href={`/teams/${teamSlug(transfer.to)}`}
-                    className="inline-flex items-center gap-2 group min-w-0"
-                  >
-                    <TeamLogo name={transfer.to} size={22} />
-                    <span className="text-ink font-medium group-hover:text-coral transition-colors truncate">
-                      {transfer.to}
-                    </span>
-                  </Link>
-                </div>
-              )}
             </div>
-          </div>
 
-          {/* Stat tiles — coral hairline above to tie the row back to the
-              eyebrow rule on every other ledger card. Subtle but it stitches
-              the hero to the page rhythm. */}
-          <div className="mt-8 sm:mt-10 border border-ink/10 rounded-lg overflow-hidden ring-1 ring-ink/5 shadow-sm">
-            <div className="h-0.5 w-full bg-gradient-to-r from-coral via-coral to-coral/50" />
-            <div className="grid grid-cols-5 gap-px bg-hairline">
-              <StatTile label="PPG" value={fmtNum(stats.pts, 1)} sub={`${current.games ?? "?"} games`} />
-              <StatTile label="RPG" value={fmtNum(stats.reb, 1)} />
-              <StatTile label="APG" value={fmtNum(stats.ast, 1)} />
-              <StatTile label="SPG" value={fmtNum(stats.stl, 1)} />
-              <StatTile label="BPG" value={fmtNum(stats.blk, 1)} />
+            {/* Stat banner — inline on lg+, wraps below on smaller screens.
+                Scale is tuned down vs the standalone version so it sits
+                next to the player-name h1 without competing. */}
+            <div className="w-full lg:w-auto lg:ml-auto">
+              <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-3 sm:mb-4 flex items-center gap-2">
+                <span className="h-px w-6 bg-coral" />
+                Per game
+              </div>
+              <div className="flex items-end gap-x-6 sm:gap-x-8 lg:gap-x-10 gap-y-4 flex-wrap">
+                {/* Lede — points per game */}
+                <div>
+                  <div className="font-display text-ink tabular leading-[0.9] tracking-[-0.04em] text-[clamp(2.75rem,5vw,4rem)]">
+                    {fmtNum(stats.pts, 1)}
+                  </div>
+                  <div className="mt-2 text-[0.6rem] sm:text-[0.65rem] uppercase tracking-[0.18em] text-ink-muted font-medium">
+                    Points
+                  </div>
+                </div>
+
+                {/* Supporting — rebounds / assists / steals / blocks. */}
+                <div className="flex items-end gap-x-5 sm:gap-x-7 lg:gap-x-9 gap-y-4 flex-wrap">
+                  <SecondaryStat label="Rebounds" value={fmtNum(stats.reb, 1)} />
+                  <SecondaryStat label="Assists"  value={fmtNum(stats.ast, 1)} />
+                  <SecondaryStat label="Steals"   value={fmtNum(stats.stl, 1)} />
+                  <SecondaryStat label="Blocks"   value={fmtNum(stats.blk, 1)} />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -203,7 +226,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                 <span className="h-px w-6 bg-coral" />
                 Full-season stats
               </div>
-              <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Player overview</h2>
+              <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Player Overview</h2>
             </div>
             <PlayerOverview options={overviewOptions} />
           </div>
@@ -212,25 +235,11 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
 
       <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8 mb-20">
         {/* Career ledger — heavier chrome than other cards on the page so this
-            anchors the profile as the canonical record. */}
+            anchors the profile as the canonical record. CareerTable owns its
+            own header (season count + View toggle) so the dropdown sits
+            next to the count instead of in a separate band below. */}
         <div className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5">
           <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
-          <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-3 flex-wrap">
-            <div>
-              <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
-                <span className="h-px w-6 bg-coral" />
-                Year by year
-              </div>
-              <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Career</h2>
-              <p className="mt-2 text-xs text-ink-muted">
-                Click a season to open the team&apos;s game log for that year.
-              </p>
-            </div>
-            <span className="text-xs tabular text-ink-muted whitespace-nowrap">
-              <span className="font-display text-2xl text-ink tabular leading-none">{player.seasons.length}</span>{" "}
-              {player.seasons.length === 1 ? "season" : "seasons"}
-            </span>
-          </div>
           <CareerTable seasons={player.seasons} bartPlayerId={bartId} playerName={stats.name ?? `Player ${bartId}`} />
         </div>
       </section>
@@ -238,12 +247,20 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   );
 }
 
-function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+/**
+ * SecondaryStat — display-typeset stat with the label tucked underneath.
+ * Sized one step below the lede PPG so the eye picks up the hero number
+ * first and reads the supporting stats as a single subordinate cluster.
+ */
+function SecondaryStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-card px-2 sm:px-5 py-3 sm:py-4 min-w-0">
-      <div className="text-[0.6rem] sm:text-xs uppercase tracking-widest text-ink-muted font-medium">{label}</div>
-      <div className="font-display text-xl sm:text-3xl text-ink tabular mt-1">{value}</div>
-      {sub && <div className="text-[0.6rem] sm:text-xs text-ink-muted mt-1 truncate">{sub}</div>}
+    <div>
+      <div className="font-display text-ink tabular text-2xl sm:text-3xl lg:text-4xl leading-none tracking-[-0.02em]">
+        {value}
+      </div>
+      <div className="mt-2 text-[0.55rem] sm:text-[0.6rem] uppercase tracking-[0.18em] text-ink-muted font-medium">
+        {label}
+      </div>
     </div>
   );
 }

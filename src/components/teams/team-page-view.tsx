@@ -162,11 +162,11 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
     const team = Array.isArray(p.teams) ? p.teams[0] : p.teams;
     const conference = team?.conference ?? null;
     const team_name = team?.name ?? null;
-    const eligible = !((games ?? 0) < 8 && (mins ?? 0) < 10 && (pts ?? 0) < 3);
+    const eligible = (games ?? 0) >= 8 && (pts ?? 0) >= 3.5;
     // Stricter "real contributor" floor for the efficiency-cohort ranking.
     // Mirrors scripts/compute-player-ranks.mts so the penalty's "below 40th
     // pctile" reads the same as the profile's SHOOTING percentile chips.
-    const strict = (games ?? 0) >= 18 && (mins ?? 0) >= 18 && (pts ?? 0) >= 5;
+    const strict = (games ?? 0) >= 18 && (mins ?? 0) >= 20 && (pts ?? 0) >= 5.3;
     const pir = (pts !== null && reb !== null && ast !== null && stl !== null && blk !== null)
       ? pts + reb + ast + stl + blk - (missedFg ?? 0) - (missedFt ?? 0)
       : null;
@@ -342,8 +342,8 @@ export function TeamPageView({
                   className={accentColor ? "h-px w-8" : "h-px w-8 bg-coral"}
                   style={accentColor ? { background: accentColor } : undefined}
                 />
-                <span className={accentColor ? "inline-flex items-center" : "inline-flex items-center text-coral"}>
-                  {confDisplay(current.conference)} ·{" "}
+                <span className={accentColor ? "inline-flex items-center gap-2" : "inline-flex items-center gap-2 text-coral"}>
+                  {confDisplay(current.conference)}
                   <SeasonSwitcher
                     slug={slug}
                     currentYear={current.year}

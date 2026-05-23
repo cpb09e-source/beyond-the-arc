@@ -1,18 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { PercentileChip } from "@/components/percentile-chip";
 import { PlayerFilterBar } from "@/components/players/player-filter-bar";
+import { ComparePlayersModal } from "@/components/players/compare-players-modal";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { Select } from "@/components/select";
 import {
   DEFAULT_PLAYER_SPEC,
   PLAYER_COLS,
   parsePlayerSpec,
+  passesPlayerFilter,
   playerSpecToParams,
   type PlayerListSpec,
   type PlayerSummary,
@@ -110,6 +112,10 @@ function transformPlayer(raw: RawPlayer): PlayerSummary {
   const team = Array.isArray(raw.teams) ? raw.teams[0]! : raw.teams;
   const stats = Array.isArray(raw.player_bart_stats) ? raw.player_bart_stats[0]! : raw.player_bart_stats;
   const row = stats?.raw_row ?? null;
+  // Advanced aggregates from CBB Analytics player_game_stats — pre-baked
+  // into the JSON by scripts/export-static-data.mts. Null when the player
+  // has no game-log coverage for the season.
+  const adv = (raw as RawPlayer & { advanced_stats?: { tov_pg: number | null; usage_pct: number | null; plus_minus_pg: number | null } | null }).advanced_stats ?? null;
 
   const games = stats?.games ?? null;
   const pts_pg = asNum(fromEnd(row, PLAYER_COLS.pts_pg_offset));
@@ -135,6 +141,16 @@ function transformPlayer(raw: RawPlayer): PlayerSummary {
     const denom = 2 * (fga + 0.44 * ft_att);
     ts_pct = denom > 0 ? (pts_pg * games) / denom : null;
   }
+
+  // eFG% = (FGM + 0.5 * 3PM) / FGA — credits 3PT shooting.
+  const efg_pct = fgm !== null && fg3_made !== null && fga !== null && fga > 0
+    ? (fgm + 0.5 * fg3_made) / fga
+    : null;
+
+  // FTA Rate = FTA / FGA — how often the player gets to the line per shot.
+  const fta_rate = ft_att !== null && fga !== null && fga > 0 ? ft_att / fga : null;
+
+  const orb_pg = asNum(fromEnd(row, PLAYER_COLS.orb_pg_offset));
 
   // PIR per game (EuroLeague Performance Index Rating).
   // Bart's player CSV doesn't expose per-game turnovers reliably, so we
@@ -169,6 +185,16 @@ function transformPlayer(raw: RawPlayer): PlayerSummary {
     fg2_pct: asNum(fromStart(row, PLAYER_COLS.fg2_pct)),
     ft_pct:  asNum(fromStart(row, PLAYER_COLS.ft_pct)),
     ts_pct,
+    efg_pct,
+    fta_rate,
+    orb_pg,
+    tov_pg: adv?.tov_pg ?? null,
+    usage_pct: adv?.usage_pct ?? null,
+    plus_minus_pg: adv?.plus_minus_pg ?? null,
+    // AST/TOV ratio. Null when TOV is missing or zero (avoids inf/NaN).
+    ast_to_tov: ast_pg !== null && adv?.tov_pg != null && adv.tov_pg > 0
+      ? ast_pg / adv.tov_pg
+      : null,
     pir,
     porpag: asNum(fromStart(row, PLAYER_COLS.porpag)),
     bta_ind_ortg: null,   // attached per cohort below
@@ -197,7 +223,7 @@ function positionBucket(note: string | null | undefined): "G" | "F" | "C" | null
 //   • good TS propped up by FT volume but awful field efficiency
 //     (the Jahmir Young archetype — lives at the line, can't shoot)
 //
-// The ranking COHORT uses the stricter 18g/18mpg/5ppg floor (matches the
+// The ranking COHORT uses the stricter 18g / 20mpg / 5.3ppg floor (matches the
 // SHOOTING percentile chips on the player profile via
 // scripts/compute-player-ranks.mts), so a player whose profile chip says
 // "25 pctile eFG" gets a penalty calibrated to that same 25th percentile.
@@ -209,7 +235,7 @@ function positionBucket(note: string | null | undefined): "G" | "F" | "C" | null
 function effPctileByPositionMap(players: PlayerSummary[]): Map<number, number> {
   type Bucket = "G" | "F" | "C";
   const inStrictCohort = (p: PlayerSummary) =>
-    (p.games ?? 0) >= 18 && (p.min_pg ?? 0) >= 18 && (p.pts_pg ?? 0) >= 5;
+    (p.games ?? 0) >= 18 && (p.min_pg ?? 0) >= 20 && (p.pts_pg ?? 0) >= 5.3;
   const byBucket: Record<Bucket, PlayerSummary[]> = { G: [], F: [], C: [] };
   const strictByBucket: Record<Bucket, PlayerSummary[]> = { G: [], F: [], C: [] };
   for (const p of players) {
@@ -303,13 +329,15 @@ function attachBtaIndOrtg(players: PlayerSummary[]): void {
   }
 }
 
-// Excluded if a player's year line is below ALL three: <8 GP, <10 MPG, <3 PPG.
-// Keeps part-time contributors but trims deep-bench rows that clutter the list.
+// Leaderboard visibility floor: hide players with <8 games OR <3.5 PPG.
+// Stricter than the previous AND-style filter — keeps deep-bench cameos
+// off the leaderboard entirely. Players above this floor but below the
+// strict 18g / 20mpg / 5.3ppg cohort still appear and are ranked against
+// the cohort's distribution via binary search.
 function isBelowBaseline(p: PlayerSummary): boolean {
   const gp = p.games ?? 0;
-  const mpg = p.min_pg ?? 0;
   const ppg = p.pts_pg ?? 0;
-  return gp < 8 && mpg < 10 && ppg < 3;
+  return gp < 8 || ppg < 3.5;
 }
 
 function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummary[] {
@@ -326,7 +354,21 @@ function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummar
     const clsSet = new Set(spec.cls);
     out = out.filter((p) => p.class !== null && clsSet.has(p.class));
   }
+  if (spec.pos.length) {
+    const posSet = new Set(spec.pos);
+    out = out.filter((p) => {
+      const bucket = positionBucket(p.position_note);
+      return bucket !== null && posSet.has(bucket);
+    });
+  }
   out = out.filter((p) => (p.games ?? 0) >= spec.minGames);
+  // Stat filters (AND-combined). Each filter is gt/gte/lt/lte against a
+  // PlayerSummary field — see PLAYER_STAT_COLUMNS in @/lib/players.
+  if (spec.filters.length) {
+    for (const f of spec.filters) {
+      out = out.filter((p) => passesPlayerFilter(p, f));
+    }
+  }
 
   const sortKeyMap: Record<PlayerListSpec["sortBy"], keyof PlayerSummary> = {
     bta_ind_ortg: "bta_ind_ortg",
@@ -394,7 +436,11 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     for (const [k, v] of search.entries()) obj[k] = v;
     return obj;
   }, [search]);
-  const spec = parsePlayerSpec(params);
+  // Memoize the parsed spec — otherwise it's a brand-new object reference
+  // every render, which busts the `[..., spec]` dep on downstream memos
+  // (prefiltered, transformed) and causes the heavy sort to re-run on
+  // every keystroke even though nothing in the URL changed.
+  const spec = useMemo(() => parsePlayerSpec(params), [params]);
 
   // URL-state update for the sort/order/show controls now living in the
   // leaderboard header. Mirrors PlayerFilterBar's `update()` so the two
@@ -416,6 +462,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   const [rawByYear, setRawByYear] = useState<Record<number, RawPlayer[]>>({});
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [compareOpen, setCompareOpen] = useState(false);
 
   useEffect(() => {
     const toFetch = spec.years.filter((y) => !rawByYear[y]);
@@ -491,12 +538,37 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [transformed]);
 
-  const players = useMemo(() => {
-    const list = applySpec(transformed, spec);
-    const q = query.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((p) => p.name.toLowerCase().includes(q));
-  }, [transformed, spec, query]);
+  // Search input is debounced via useDeferredValue so React keeps the
+  // input field responsive while the heavy match runs at a lower priority.
+  // With all 14 seasons loaded (~55k player-seasons), every keystroke
+  // would otherwise re-render the entire pipeline before the next paint.
+  const deferredQuery = useDeferredValue(query);
+
+  // Pipeline split into two memos so typing only re-runs the cheap name
+  // match — not the expensive filter+sort+rank.
+  //   `prefiltered`: heavy. Runs full applySpec with the limit removed.
+  //                  Cached on `transformed` and `spec` changes only.
+  //   `players`:     cheap. Filters by name on the pre-sorted list and
+  //                  re-applies `spec.limit` for the visible window.
+  //                  Recomputes only when `deferredQuery` or limit changes.
+  const prefiltered = useMemo(
+    () => applySpec(transformed, { ...spec, limit: Number.MAX_SAFE_INTEGER }),
+    [transformed, spec],
+  );
+  const { players, count } = useMemo(() => {
+    // 3-char minimum on search — single-letter "L" matches thousands and
+    // burns time both filtering and re-rendering rows. The placeholder
+    // calls this out; queries below 3 chars are ignored and the default
+    // sorted view is shown.
+    const q = deferredQuery.trim().toLowerCase();
+    const matched = q.length >= 3
+      ? prefiltered.filter((p) => p.name.toLowerCase().includes(q))
+      : prefiltered;
+    return {
+      players: matched.slice(0, spec.limit),
+      count: matched.length,
+    };
+  }, [prefiltered, deferredQuery, spec.limit]);
   const multiYear = spec.years.length > 1;
 
   return (
@@ -506,22 +578,39 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       {/* Headline ledger — coral accent rule, ring + shadow, big display
           title. Mirrors /coaches "Head coaches" and /teams "By season" cards
           so the look reads consistently across the site. */}
-      <div className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 mt-8">
+      <div id="players-leaderboard" className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 mt-8 scroll-mt-4">
         <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
         <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-4 flex-wrap">
           <div>
-            <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
-              <span className="h-px w-6 bg-coral" />
-              <span>{seasonsKicker(spec.years)} · sorted by {SORT_LABEL[spec.sortBy]}</span>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
+                Players
+              </h2>
+              <button
+                type="button"
+                onClick={() => setCompareOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-coral/40 bg-coral/[0.06] text-coral text-[0.65rem] uppercase tracking-widest font-bold hover:bg-coral/10 hover:border-coral/60 transition-colors"
+              >
+                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M16 3h5v5" />
+                  <path d="M8 21H3v-5" />
+                  <path d="M21 3l-7 7" />
+                  <path d="M3 21l7-7" />
+                </svg>
+                Compare Players
+              </button>
             </div>
-            <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
-              Leaderboard
-            </h2>
             <div className="mt-2 text-sm text-ink-muted">
               <span className="font-display text-xl text-ink tabular leading-none">
                 {loading ? "—" : players.length.toLocaleString()}
-              </span>{" "}
-              {loading ? "loading…" : players.length === 1 ? "player" : "players"}
+              </span>
+              {!loading && count > players.length && (
+                <span className="text-ink-muted"> of {count.toLocaleString()}</span>
+              )}{" "}
+              {loading ? "loading…" : players.length === 1 ? "player" : "players"} match
+              {!loading && count > players.length && (
+                <span className="text-ink-muted hidden md:inline"> · showing first {players.length}</span>
+              )}
               {!loading && spec.conf.length > 0 && <> · {spec.conf.length === 1 ? spec.conf[0] : `${spec.conf.length} conferences`}</>}
               {!loading && spec.cls.length > 0 && <> · {spec.cls.length === 1 ? (CLASS_LABEL[spec.cls[0]!] ?? spec.cls[0]) : `${spec.cls.length} classes`}</>}
               {!loading && spec.minGames > 0 && <> · min {spec.minGames} games</>}
@@ -550,7 +639,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                   type="search"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search players…"
+                  placeholder="Search players (3+ chars)…"
                   aria-label="Search players by name"
                   className="h-10 w-48 sm:w-56 pl-9 pr-9 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
                 />
@@ -639,9 +728,13 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                       )}
                     </Td>
                     <Td>
-                      <Link href={`/teams/${teamSlug(p.team_name)}`} className="inline-flex items-center gap-2 hover:text-coral transition-colors">
+                      <Link
+                        href={`/teams/${teamSlug(p.team_name)}`}
+                        aria-label={p.team_name}
+                        className="inline-flex items-center gap-2 hover:text-coral transition-colors"
+                      >
                         <TeamLogo name={p.team_name} size={20} />
-                        <span className="text-ink-soft text-sm">{p.team_name}</span>
+                        <span className="hidden sm:inline text-ink-soft text-sm">{p.team_name}</span>
                       </Link>
                     </Td>
                     {multiYear && <Td className="text-ink-muted tabular">{seasonLabel(p.year)}</Td>}
@@ -684,8 +777,12 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           top-32 D-I team for 2025-26 receive an additional +8% bump, and
           players on a top-5 record team within a Tier 1 conference receive
           an extra +6% on top of that. Missing terms are skipped so
-          partial-data players still get scored. Players with fewer than 8
-          games, 10 MPG, or 3 PPG are hidden.
+          partial-data players still get scored. Players with fewer than
+          8 games or under 3.5 PPG are hidden from the leaderboard. The
+          percentile cohort itself uses a stricter 18g / 20mpg / 5.3ppg
+          floor — players above the visibility floor but below the
+          cohort floor are still scored against the cohort distribution
+          via binary search.
           <br /><br />
           A volume-shooter penalty closes the high-usage / low-efficiency
           gap PIR&apos;s 69% weighting leaves open. For each player we
@@ -698,7 +795,15 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           shooting 25-pctile eFG but 61-pctile TS thanks to 90% from the
           line) that a pure TS-based penalty would miss.
         </p>
+        <p className="mt-4 text-[0.65rem] uppercase tracking-widest text-ink-muted/70">
+          Data via Bart Torvik (
+          <a href="https://barttorvik.com" target="_blank" rel="noreferrer" className="hover:text-coral underline-offset-2 hover:underline">barttorvik.com</a>
+          ) &amp; CBB Analytics (
+          <a href="https://cbbanalytics.com" target="_blank" rel="noreferrer" className="hover:text-coral underline-offset-2 hover:underline">cbbanalytics.com</a>
+          )
+        </p>
       </details>
+      <ComparePlayersModal open={compareOpen} onClose={() => setCompareOpen(false)} />
     </>
   );
 }

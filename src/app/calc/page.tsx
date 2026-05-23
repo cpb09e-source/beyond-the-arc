@@ -55,7 +55,7 @@ export default async function CalcPage() {
             </div>
             <ThemeToggle />
           </div>
-          <h1 className="font-display text-sm sm:text-xl md:text-3xl lg:text-4xl leading-[1.1] tracking-tight text-ink whitespace-nowrap">
+          <h1 className="font-display text-sm sm:text-lg md:text-2xl lg:text-[1.75rem] leading-[1.1] tracking-tight text-ink whitespace-nowrap">
             If these things happen,
             <span className="italic text-coral"> how often do they win?</span>
           </h1>

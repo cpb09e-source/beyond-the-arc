@@ -165,6 +165,17 @@ export type PlayerRanksSeason = {
   year: number;
   bucket: "G" | "F" | "C";
   cohortSize: number;
+  // Headline BTA PRTG leaderboard position for the player's bucket and across
+  // all eligible D-I players in the same season. Null when the player has no
+  // bta_portg value (rare — usually only when PIR + PORPAG are both missing).
+  rank: number | null;
+  rankOverall: number | null;
+  cohortOverall: number | null;
+  // Mid-major (non-power-conf) rank — only populated when the player's own
+  // conference is NOT a power league (ACC/B10/B12/P12/SEC/BE). Null for
+  // power-conf players, since "mid-major" wouldn't apply to them.
+  rankNonPower: number | null;
+  cohortNonPower: number | null;
   stats: Record<string, PlayerStatRank>;
 };
 export type PlayerRanks = {

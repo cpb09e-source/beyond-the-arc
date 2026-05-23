@@ -289,10 +289,15 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
               <button
                 type="button"
                 onClick={() => setCompareOpen(true)}
-                className="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium text-coral hover:text-ink transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-coral/40 bg-coral/[0.06] text-coral text-[0.65rem] uppercase tracking-widest font-bold hover:bg-coral/10 hover:border-coral/60 transition-colors"
               >
-                <span className="text-base leading-none">⇄</span>
-                <span>Click to compare coaches</span>
+                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M16 3h5v5" />
+                  <path d="M8 21H3v-5" />
+                  <path d="M21 3l-7 7" />
+                  <path d="M3 21l7-7" />
+                </svg>
+                Compare Coaches
               </button>
             </div>
             <div className="mt-2 text-sm text-ink-muted">

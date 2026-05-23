@@ -194,6 +194,26 @@ body {
 }
 
 /* ------------------------------------------------------------------
+ * Player-overview stat tile heatmap. The tile JSX writes both light and
+ * dark variants of background + accent color into custom properties on
+ * the element (--tile-bg-light, --tile-bg-dark, --tile-color-light,
+ * --tile-color-dark). These rules pick the right pair based on the
+ * current theme so the heatmap re-tints automatically without a JS hook.
+ * ----------------------------------------------------------------- */
+.stat-tile {
+  background: var(--tile-bg-light);
+}
+[data-theme="dark"] .stat-tile {
+  background: var(--tile-bg-dark);
+}
+.stat-tile-color {
+  color: var(--tile-color-light);
+}
+[data-theme="dark"] .stat-tile-color {
+  color: var(--tile-color-dark);
+}
+
+/* ------------------------------------------------------------------
  * Theme-flip transition mute. ThemeToggle adds .theme-flipping to
  * <html> for one frame around the data-theme swap, so every element's
  * own `transition-colors` is suppressed and the whole page flips in
@@ -204,4 +224,27 @@ body {
 .theme-flipping *::before,
 .theme-flipping *::after {
   transition: none !important;
+}
+
+/* ------------------------------------------------------------------
+ * Screenshot capture override — html-to-image's SVG foreignObject
+ * pipeline can't render `backdrop-filter`, so for the duration of a
+ * capture we strip blur on any element inside the captured subtree.
+ * Toggled by the Compare Teams modal's screenshot handler.
+ *
+ * Also unfurl any `truncate` text so long team names ("Bethune Cookman")
+ * wrap onto multiple lines in the PNG instead of getting cut off.
+ * ----------------------------------------------------------------- */
+[data-screenshot-capturing="true"] [class*="backdrop-blur"] {
+  backdrop-filter: none !important;
+}
+[data-screenshot-capturing="true"] .truncate {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  /* When a long player or team name wraps to two lines we need a little
+   * vertical breathing room or html-to-image's SVG renderer crashes the
+   * second line into the sibling (year · team) block below. */
+  line-height: 1.2 !important;
+  word-break: break-word !important;
 }
