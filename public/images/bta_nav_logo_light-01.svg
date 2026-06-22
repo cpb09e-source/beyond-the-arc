@@ -4,11 +4,11 @@
   <defs>
     <style>
       .st0 {
-        filter: url(#drop-shadow-2);
+        
       }
 
       .st1 {
-        filter: url(#drop-shadow-1);
+        
       }
 
       .st2 {
@@ -16,7 +16,7 @@
       }
 
       .st3 {
-        filter: url(#drop-shadow-3);
+        
       }
     </style>
     <filter id="drop-shadow-1" x="18.42" y="8.26" width="1110.24" height="351.12" filterUnits="userSpaceOnUse">

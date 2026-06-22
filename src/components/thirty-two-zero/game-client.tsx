@@ -240,8 +240,9 @@ export function ThirtyTwoZeroClient() {
     >
       {/* header strip — mobile reset (desktop reset sits below the court). In the
           draft phase the reset moves onto the filter row; the done screen has its
-          own Play again, so the strip only shows while idle. */}
-      {phase === "idle" && (
+          own Play again. Only show it for the IDLE state mid-game (between picks),
+          not on the opening screen where there's nothing to reset yet. */}
+      {phase === "idle" && filledCount > 0 && (
         <div className="flex items-center justify-end mb-2 shrink-0 lg:hidden">
           <button
             onClick={reset}
@@ -310,7 +311,7 @@ export function ThirtyTwoZeroClient() {
                   >
                     <RotateCcw size={13} /> Reset
                   </button>
-                  <div className="relative flex-1 min-w-[140px]">
+                  <div className="relative flex-1 min-w-[140px] hidden lg:block">
                     <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-muted" />
                     <input
                       value={query}
@@ -572,7 +573,7 @@ function RollPanel({
         {/* Era */}
         <div className="rounded-xl border border-ink/12 bg-paper-deep/40 px-4 pt-3 pb-3.5 flex flex-col items-center gap-2.5">
           <div className="flex-1 grid place-items-center min-h-[56px]">
-            <div className="font-display text-4xl font-bold tabular text-[var(--ttz-era)] leading-none relative top-[3px]">
+            <div className="font-display text-4xl font-bold tabular text-[var(--ttz-era)] leading-none relative top-[3px] whitespace-nowrap">
               {roll!.group}
             </div>
           </div>
@@ -745,7 +746,7 @@ function SlotReel({
                   {kind === "conf" ? (
                     <ConfLogo code={items[idx]} size={72} />
                   ) : (
-                    <span className={cn("font-display text-4xl font-bold tabular leading-none", color)}>
+                    <span className={cn("font-display text-4xl font-bold tabular leading-none whitespace-nowrap", color)}>
                       {items[idx]}
                     </span>
                   )}
