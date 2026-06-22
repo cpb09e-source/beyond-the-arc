@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>32-0 — Roll Animation Mockups</title>
+<style>
+  :root{
+    --paper:#0e1320; --deep:#171d2d; --ink:#ebe6da; --muted:#807a6b;
+    --coral:#d96450; --green:#07f49e; --line:#262c3b;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--paper); color:var(--ink);
+    font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased; padding:32px 20px 80px;
+  }
+  h1{font-size:22px; letter-spacing:-.02em; margin:0 0 4px}
+  .sub{color:var(--muted); font-size:13px; margin:0 0 24px}
+  .rollall{
+    display:inline-flex; align-items:center; gap:8px; cursor:pointer;
+    background:var(--coral); color:#fff; border:0; border-radius:999px;
+    height:40px; padding:0 22px; font-weight:600; font-size:14px; margin-bottom:28px;
+  }
+  .rollall:hover{filter:brightness(1.08)}
+  .grid{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(380px,1fr));
+    gap:22px; max-width:1100px;
+  }
+  .card{
+    background:linear-gradient(180deg,#10182e,#0b1322);
+    border:1px solid var(--line); border-radius:16px; padding:20px;
+  }
+  .card h2{
+    font-size:13px; text-transform:uppercase; letter-spacing:.14em;
+    color:var(--green); margin:0 0 2px; font-weight:700;
+  }
+  .card .desc{font-size:12px; color:var(--muted); margin:0 0 16px; min-height:32px}
+  .reels{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px}
+  .box{
+    position:relative; overflow:hidden; border-radius:12px;
+    border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.03);
+    min-height:150px; display:flex; flex-direction:column; align-items:center;
+    padding:12px 8px; transition:border-color .2s, box-shadow .2s;
+  }
+  .box.spin{border-color:rgba(217,100,80,.45); box-shadow:0 0 0 3px rgba(217,100,80,.08) inset}
+  .lab{font-size:10px; text-transform:uppercase; letter-spacing:.16em; color:var(--muted); font-weight:700}
+  .stage{flex:1; display:grid; place-items:center; width:100%; position:relative}
+  .logo{width:76px; height:76px; border-radius:50%; background:#fff; object-fit:contain; padding:3px}
+  .era{
+    font-size:34px; font-weight:800; letter-spacing:-.01em; color:var(--green);
+    font-variant-numeric:tabular-nums;
+  }
+  .qmark{font-size:38px; font-weight:800; color:rgba(235,230,218,.35)}
+  .roll{
+    width:100%; height:46px; border:0; border-radius:999px; cursor:pointer;
+    background:var(--coral); color:#fff; font-weight:600; font-size:15px;
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .roll:hover{filter:brightness(1.08)}
+  .roll:disabled{opacity:.7; cursor:default}
+
+  /* ---------- V1 split-flap ---------- */
+  .flap{
+    position:relative; display:inline-flex; gap:3px;
+  }
+  .flapchar{
+    width:26px; height:40px; border-radius:5px; background:#0a1120;
+    border:1px solid rgba(255,255,255,.1);
+    display:grid; place-items:center; font-size:26px; font-weight:800;
+    color:var(--green); position:relative; overflow:hidden;
+    box-shadow:inset 0 -1px 0 rgba(0,0,0,.6);
+  }
+  .flapchar::after{content:""; position:absolute; left:0; right:0; top:50%; height:1px; background:rgba(0,0,0,.55)}
+  .flapchar.dash{background:transparent; border:0; box-shadow:none; width:10px; color:var(--muted)}
+  .logoflip{transition:transform .12s; transform-style:preserve-3d}
+
+  /* ---------- V2 slot reel ---------- */
+  .reelwin{height:90px; width:100%; overflow:hidden; position:relative; -webkit-mask:linear-gradient(180deg,transparent,#000 22%,#000 78%,transparent)}
+  .reelstrip{display:flex; flex-direction:column; align-items:center; will-change:transform}
+  .reelitem{height:90px; display:grid; place-items:center; flex:none}
+  .reelitem .logo{width:64px; height:64px}
+  .reelitem .era{font-size:30px}
+
+  /* ---------- V3 glitch ---------- */
+  .glitch{position:relative}
+  .glitch.fire{animation:gl .35s steps(2) 1}
+  @keyframes gl{
+    0%{transform:translate(0,0)} 20%{transform:translate(-2px,1px)}
+    40%{transform:translate(2px,-1px)} 60%{transform:translate(-1px,-1px)}
+    80%{transform:translate(1px,1px)} 100%{transform:translate(0,0)}
+  }
+  .scan{position:absolute; inset:0; pointer-events:none; opacity:0;
+    background:linear-gradient(180deg,transparent 45%,rgba(7,244,158,.18) 50%,transparent 55%);
+    background-size:100% 8px}
+  .box.spin .scan{opacity:1; animation:scanmove .5s linear infinite}
+  @keyframes scanmove{to{background-position:0 8px}}
+  .rgb{text-shadow:1.5px 0 rgba(255,0,80,.7), -1.5px 0 rgba(0,200,255,.7)}
+
+  /* ---------- V4 orbit / odometer ---------- */
+  .orbit{position:relative; width:90px; height:90px}
+  .orbit .logo{position:absolute; top:50%; left:50%; width:34px; height:34px; margin:-17px;
+    transition:none}
+  .orbit .center{width:72px; height:72px; margin:-36px; z-index:2}
+  .odo{height:44px; overflow:hidden; position:relative; -webkit-mask:linear-gradient(180deg,transparent,#000 30%,#000 70%,transparent)}
+  .odo .col{display:inline-flex; flex-direction:column; align-items:center}
+  .odo .digit{height:44px; display:grid; place-items:center; font-size:30px; font-weight:800; color:var(--green); font-variant-numeric:tabular-nums}
+  .odorow{display:inline-flex; gap:0; align-items:center}
+  .odorow .sep{font-size:30px; font-weight:800; color:var(--muted)}
+</style>
+</head>
+<body>
+  <h1>32-0 — Roll Animation Mockups</h1>
+  <p class="sub">4 takes on the conference + era roll. Click each card's Roll, or roll all at once. Pick the vibe.</p>
+  <button class="rollall" id="rollall">▶ Roll all four</button>
+
+  <div class="grid">
+    <!-- V1 -->
+    <div class="card" data-v="1">
+      <h2>1 · Split-Flap Board</h2>
+      <p class="desc">Airport-departure mechanical flaps. Era chars riffle through letters/digits; the conf logo flips face-down → face-up like a dealt tile. Tactile, retro, premium.</p>
+      <div class="reels">
+        <div class="box" id="b1c"><div class="lab">Conference</div><div class="stage"><div class="qmark">?</div></div></div>
+        <div class="box" id="b1e"><div class="lab">Era</div><div class="stage"><div class="qmark">?</div></div></div>
+      </div>
+      <button class="roll" data-roll="1">🎲 Roll</button>
+    </div>
+
+    <!-- V2 -->
+    <div class="card" data-v="2">
+      <h2>2 · Slot Reel</h2>
+      <p class="desc">Vegas one-armed bandit. Both reels scroll fast vertically with motion blur, decelerate, and snap into place with a satisfying bounce.</p>
+      <div class="reels">
+        <div class="box" id="b2c"><div class="lab">Conference</div><div class="stage"><div class="qmark">?</div></div></div>
+        <div class="box" id="b2e"><div class="lab">Era</div><div class="stage"><div class="qmark">?</div></div></div>
+      </div>
+      <button class="roll" data-roll="2">🎲 Roll</button>
+    </div>
+
+    <!-- V3 -->
+    <div class="card" data-v="3">
+      <h2>3 · Decode Glitch 2.0</h2>
+      <p class="desc">Your decipher, leveled up. Scanline sweep + RGB-split flicker while scrambling, then a hard glitch-shake on lock. Cyber, sharp, on-brand green.</p>
+      <div class="reels">
+        <div class="box" id="b3c"><div class="lab">Conference</div><div class="stage"><div class="scan"></div><div class="qmark">?</div></div></div>
+        <div class="box" id="b3e"><div class="lab">Era</div><div class="stage"><div class="scan"></div><div class="qmark">?</div></div></div>
+      </div>
+      <button class="roll" data-roll="3">🎲 Roll</button>
+    </div>
+
+    <!-- V4 -->
+    <div class="card" data-v="4">
+      <h2>4 · Orbit + Odometer</h2>
+      <p class="desc">Conf logos orbit a ring and one spirals to the center on lock. Era rolls like a car odometer — digits spin up and ease onto the number.</p>
+      <div class="reels">
+        <div class="box" id="b4c"><div class="lab">Conference</div><div class="stage"><div class="qmark">?</div></div></div>
+        <div class="box" id="b4e"><div class="lab">Era</div><div class="stage"><div class="qmark">?</div></div></div>
+      </div>
+      <button class="roll" data-roll="4">🎲 Roll</button>
+    </div>
+  </div>
+
+<script>
+// ---- shared data ----
+const CONFS = [
+  ['ACC','acc'],['SEC','sec'],['B10','big_ten'],['B12','big_12'],['BE','big_east'],
+  ['P12','pac_12'],['Amer','american'],['A10','atlantic_10'],['MWC','mountain_west'],
+  ['WCC','west_coast'],['MVC','missouri_valley'],['CUSA','conference_usa']
+];
+const ERAS = ['2013-14','2015-16','2017-18','2019-21','2022-23','2024-26'];
+const logoUrl = slug => `https://a.espncdn.com/i/teamlogos/ncaa_conf/500/${slug}.png`;
+const rnd = arr => arr[Math.floor(Math.random()*arr.length)];
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+function mkImg(slug, cls='logo'){
+  const i=document.createElement('img'); i.className=cls; i.src=logoUrl(slug);
+  i.alt=''; i.onerror=()=>{i.style.visibility='hidden'}; return i;
+}
+function stage(id){ return document.querySelector('#'+id+' .stage'); }
+function setSpin(id,on){ document.getElementById(id).classList.toggle('spin',on); }
+
+// ===================================================================
+// V1 — SPLIT-FLAP
+// ===================================================================
+const GL='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+async function v1(){
+  const ce=stage('b1c'), ee=stage('b1e');
+  setSpin('b1c',true); setSpin('b1e',true);
+  const conf=rnd(CONFS), era=rnd(ERAS);
+
+  // era flaps
+  ee.innerHTML='';
+  const wrap=document.createElement('div'); wrap.className='flap'; ee.appendChild(wrap);
+  const cells=[];
+  for(const ch of era){
+    if(ch==='-'){ const d=document.createElement('div'); d.className='flapchar dash'; d.textContent='–'; wrap.appendChild(d); cells.push(null); }
+    else { const d=document.createElement('div'); d.className='flapchar'; d.textContent=rnd(GL.split('')); wrap.appendChild(d); cells.push(d); }
+  }
+  // conf: spinning placeholder logo flip
+  ce.innerHTML='';
+  const cimg=mkImg(rnd(CONFS)[1],'logo logoflip'); ce.appendChild(cimg);
+
+  const t0=performance.now(), DUR=1500;
+  await new Promise(res=>{
+    function tick(now){
+      const p=Math.min(1,(now-t0)/DUR);
+      // flap each era cell, locking left→right
+      cells.forEach((c,i)=>{
+        if(!c) return;
+        const lockAt=0.4+0.5*(i/cells.length);
+        if(p>=lockAt){ c.textContent=era[i]; }
+        else { c.textContent=rnd(GL.split('')); c.style.transform='translateY(-2px)'; setTimeout(()=>c.style.transform='',60); }
+      });
+      // conf flip every ~120ms, lock near end
+      if(p<0.82){ if(Math.floor(p*12)!==cimg._k){ cimg._k=Math.floor(p*12); cimg.style.transform='rotateY(90deg)'; setTimeout(()=>{cimg.src=logoUrl(rnd(CONFS)[1]); cimg.style.transform='rotateY(0)';},60);} }
+      if(p>=1){ cimg.style.transform='rotateY(90deg)'; setTimeout(()=>{cimg.src=logoUrl(conf[1]); cimg.style.transform='rotateY(0)';},90); cells.forEach((c,i)=>{if(c)c.textContent=era[i]}); res(); return; }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+  setSpin('b1c',false); setSpin('b1e',false);
+}
+
+// ===================================================================
+// V2 — SLOT REEL
+// ===================================================================
+function buildStrip(items, render){
+  const strip=document.createElement('div'); strip.className='reelstrip';
+  items.forEach(it=>{ const cell=document.createElement('div'); cell.className='reelitem'; render(cell,it); strip.appendChild(cell); });
+  return strip;
+}
+async function reelSpin(stageEl, items, finalIdx, render, dur){
+  stageEl.innerHTML='';
+  const win=document.createElement('div'); win.className='reelwin';
+  const loops=6;
+  const seq=[]; for(let l=0;l<loops;l++) seq.push(...items.map((_,i)=>i));
+  for(let i=0;i<=finalIdx;i++) seq.push(i);
+  const strip=buildStrip(seq.map(i=>items[i]), render);
+  win.appendChild(strip); stageEl.appendChild(win);
+  await new Promise(r=>requestAnimationFrame(r));
+  const H=90, total=(seq.length-1)*H;
+  const t0=performance.now();
+  return new Promise(res=>{
+    function tick(now){
+      let p=Math.min(1,(now-t0)/dur);
+      const e=1-Math.pow(1-p,3); // easeOutCubic
+      let y=e*total;
+      strip.style.transform=`translateY(${-y}px)`;
+      strip.style.filter = p<0.7 ? 'blur(1.5px)' : 'none';
+      if(p>=1){
+        // bounce snap
+        strip.style.transform=`translateY(${-(total+6)}px)`;
+        setTimeout(()=>{strip.style.transition='transform .18s cubic-bezier(.34,1.56,.64,1)'; strip.style.transform=`translateY(${-total}px)`;},10);
+        res(); return;
+      }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+}
+async function v2(){
+  setSpin('b2c',true); setSpin('b2e',true);
+  const confIdx=Math.floor(Math.random()*CONFS.length);
+  const eraIdx=Math.floor(Math.random()*ERAS.length);
+  await Promise.all([
+    reelSpin(stage('b2c'), CONFS, confIdx, (cell,it)=>cell.appendChild(mkImg(it[1])), 1700),
+    reelSpin(stage('b2e'), ERAS, eraIdx, (cell,it)=>{const d=document.createElement('div'); d.className='era'; d.textContent=it; cell.appendChild(d);}, 1900),
+  ]);
+  setSpin('b2c',false); setSpin('b2e',false);
+}
+
+// ===================================================================
+// V3 — DECODE GLITCH 2.0
+// ===================================================================
+async function v3(){
+  const ce=stage('b3c'), ee=stage('b3e');
+  setSpin('b3c',true); setSpin('b3e',true);
+  const conf=rnd(CONFS), era=rnd(ERAS);
+  ce.querySelector('.qmark')?.remove(); ee.querySelector('.qmark')?.remove();
+  let cimg=ce.querySelector('img'); if(!cimg){cimg=mkImg(rnd(CONFS)[1]); cimg.classList.add('rgb'); ce.appendChild(cimg);}
+  let etxt=ee.querySelector('.era'); if(!etxt){etxt=document.createElement('div'); etxt.className='era rgb'; ee.appendChild(etxt);}
+  const scr=(reveal)=>{let o='';for(let i=0;i<era.length;i++){const c=era[i]; o+= (c==='-')?c : i<reveal? c : rnd(GL.split(''));} return o;};
+  const t0=performance.now(), DUR=1500;
+  await new Promise(res=>{
+    function tick(now){
+      const p=Math.min(1,(now-t0)/DUR);
+      etxt.textContent=scr(Math.floor(p*era.length*1.3));
+      if(Math.random()<0.5) cimg.src=logoUrl(rnd(CONFS)[1]);
+      if(p>=1){ etxt.textContent=era; cimg.src=logoUrl(conf[1]);
+        document.getElementById('b3c').classList.add('fire'); document.getElementById('b3e').classList.add('fire');
+        setTimeout(()=>{document.getElementById('b3c').classList.remove('fire'); document.getElementById('b3e').classList.remove('fire'); cimg.classList.remove('rgb'); etxt.classList.remove('rgb');},360);
+        res(); return; }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+  setSpin('b3c',false); setSpin('b3e',false);
+}
+
+// ===================================================================
+// V4 — ORBIT + ODOMETER
+// ===================================================================
+async function v4(){
+  const ce=stage('b4c'), ee=stage('b4e');
+  setSpin('b4c',true); setSpin('b4e',true);
+  const conf=rnd(CONFS), era=rnd(ERAS);
+
+  // orbit
+  ce.innerHTML='';
+  const orb=document.createElement('div'); orb.className='orbit'; ce.appendChild(orb);
+  const N=6, sats=[];
+  for(let i=0;i<N;i++){ const im=mkImg(CONFS[(i)%CONFS.length][1]); orb.appendChild(im); sats.push(im); }
+  const center=mkImg(rnd(CONFS)[1],'logo center'); orb.appendChild(center);
+
+  // odometer (one spinning column per digit position, dash fixed)
+  ee.innerHTML='';
+  const row=document.createElement('div'); row.className='odorow';
+  const digitCols=[];
+  for(const ch of era){
+    if(ch==='-'){ const s=document.createElement('span'); s.className='sep'; s.textContent='–'; row.appendChild(s); continue; }
+    const odo=document.createElement('div'); odo.className='odo';
+    const col=document.createElement('div'); col.className='col';
+    // long run of random digits ending on target
+    const seq=[]; for(let k=0;k<18;k++) seq.push(Math.floor(Math.random()*10)); seq.push(Number(ch));
+    seq.forEach(d=>{const dd=document.createElement('div'); dd.className='digit'; dd.textContent=d; col.appendChild(dd);});
+    odo.appendChild(col); row.appendChild(odo); digitCols.push({col, len:seq.length});
+  }
+  ee.appendChild(row);
+  await new Promise(r=>requestAnimationFrame(r));
+
+  const t0=performance.now(), DUR=1700;
+  await new Promise(res=>{
+    function tick(now){
+      const p=Math.min(1,(now-t0)/DUR);
+      const e=1-Math.pow(1-p,3);
+      // orbit satellites
+      sats.forEach((im,i)=>{
+        const ang=e*Math.PI*4 + i*(Math.PI*2/N);
+        const R=36*(1-e*0.15);
+        im.style.transform=`translate(${Math.cos(ang)*R}px,${Math.sin(ang)*R}px) scale(${1-e*0.3})`;
+        im.style.opacity=String(1-e*0.9);
+        if(p>0.6 && Math.random()<0.2) im.src=logoUrl(rnd(CONFS)[1]);
+      });
+      center.style.transform=`scale(${0.4+e*0.6})`; center.style.opacity=String(e);
+      if(p<0.85 && Math.random()<0.3) center.src=logoUrl(rnd(CONFS)[1]);
+      // odometer
+      digitCols.forEach(({col,len})=>{ const H=44; col.style.transform=`translateY(${-e*(len-1)*H}px)`; });
+      if(p>=1){ center.src=logoUrl(conf[1]); res(); return; }
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  });
+  setSpin('b4c',false); setSpin('b4e',false);
+}
+
+// ---- wiring ----
+const FNS={1:v1,2:v2,3:v3,4:v4};
+document.querySelectorAll('[data-roll]').forEach(btn=>{
+  btn.addEventListener('click', async ()=>{
+    btn.disabled=true; const t=btn.textContent; btn.textContent='Rolling…';
+    try{ await FNS[btn.dataset.roll](); }catch(e){console.error(e);}
+    btn.textContent=t; btn.disabled=false;
+  });
+});
+document.getElementById('rollall').addEventListener('click', ()=>{
+  document.querySelectorAll('[data-roll]').forEach(b=>{ if(!b.disabled) b.click(); });
+});
+</script>
+</body>
+</html>

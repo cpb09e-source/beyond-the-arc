@@ -55,10 +55,6 @@ export default async function CalcPage() {
             </div>
             <ThemeToggle />
           </div>
-          <h1 className="font-display text-sm sm:text-lg md:text-2xl lg:text-[1.75rem] leading-[1.1] tracking-tight text-ink whitespace-nowrap">
-            If these things happen,
-            <span className="italic text-coral"> how often do they win?</span>
-          </h1>
         </div>
       </section>
 
@@ -74,8 +70,7 @@ export default async function CalcPage() {
           Each row is one team&apos;s perspective on one game. Conditions are
           evaluated from that team&apos;s perspective, so &ldquo;TOV Diff &gt; 1&rdquo;
           means the team committed fewer turnovers than its opponent by more
-          than 1. Game data sourced from{" "}
-          <span className="text-ink">cbbanalytics.com</span>.
+          than 1.
         </p>
       </section>
     </>

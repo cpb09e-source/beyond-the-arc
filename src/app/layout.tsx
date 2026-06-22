@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Fraunces } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
@@ -16,11 +17,15 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
-const fraunces = Fraunces({
+// Display face — self-hosted Moneta Sans Bold. Mapped to every weight so any
+// heading using the display family always renders in the Bold cut.
+const moneta = localFont({
   variable: "--font-display",
-  subsets: ["latin"],
   display: "swap",
-  axes: ["opsz", "SOFT"],
+  src: [
+    { path: "../../public/fonts/MonetaSans-Bold.otf", weight: "400", style: "normal" },
+    { path: "../../public/fonts/MonetaSans-Bold.otf", weight: "700", style: "normal" },
+  ],
 });
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://beyond-the-arc.netlify.app";
@@ -57,16 +62,17 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} ${fraunces.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${moneta.variable} h-full antialiased`}
     >
       <head>
         {/* Pre-hydration theme apply: read localStorage and set
             data-theme on <html> BEFORE first paint so dark-mode users
-            don't flash a frame of light-mode tokens. */}
+            don't flash a frame of light-mode tokens. With no saved
+            preference, mobile (<768px) defaults to dark. */}
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "(function(){try{var t=localStorage.getItem('bta-theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();",
+              "(function(){try{var t=localStorage.getItem('bta-theme');var d=t==='dark'||(!t&&window.matchMedia&&window.matchMedia('(max-width:767px)').matches);if(d)document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();",
           }}
         />
       </head>

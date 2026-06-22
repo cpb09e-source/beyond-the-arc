@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>32-0 Court Mockups · Round 2</title>
+<style>
+  :root{
+    --paper:#faf7f2; --ink:#1a2238; --coral:#c8553d; --coral-soft:#e08a76; --court:#d4a574;
+    --g:#22c55e; --f:#a855f7; --c:#f97316; --cyan:#39d0ff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#060a14;color:var(--paper);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;padding:34px}
+  h1{font-size:15px;letter-spacing:.2em;text-transform:uppercase;color:#8a93ad;font-weight:600;margin-bottom:26px;text-align:center}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:30px;max-width:1080px;margin:0 auto}
+  .panel{background:#0d1426;border:1px solid rgba(255,255,255,.06);border-radius:18px;overflow:hidden}
+  .label{display:flex;align-items:center;justify-content:space-between;padding:13px 17px;border-bottom:1px solid rgba(255,255,255,.06)}
+  .label .name{font-size:13px;font-weight:700;letter-spacing:.04em}
+  .label .tag{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#7b85a0}
+  .court{position:relative;width:100%;aspect-ratio:1/1.04}
+  .slot{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:7px}
+  .ring{width:62px;height:62px;border-radius:999px;display:grid;place-items:center;font-weight:800;font-size:18px}
+  .cap{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:rgba(245,240,225,.55)}
+  .g{color:var(--g)} .f{color:var(--f)} .c{color:var(--c)}
+</style>
+</head>
+<body>
+<h1>32-0 · Court Concepts · Round 2</h1>
+<div class="grid">
+
+  <!-- ============ 1 · BLUEPRINT ELITE ============ -->
+  <div class="panel">
+    <div class="label"><span class="name">1 · Blueprint Elite</span><span class="tag">editorial schematic</span></div>
+    <div class="court" style="background:
+        radial-gradient(130% 100% at 50% -10%, #18244a 0, #0a1426 60%),
+        linear-gradient(180deg,#0e1830,#0a1322);">
+      <svg viewBox="0 0 400 416" style="position:absolute;inset:0;width:100%;height:100%">
+        <defs>
+          <pattern id="dots1" width="20" height="20" patternUnits="userSpaceOnUse">
+            <circle cx="1.4" cy="1.4" r="1" fill="rgba(245,240,225,.045)"/>
+          </pattern>
+          <filter id="glow1"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <rect width="400" height="416" fill="url(#dots1)"/>
+        <!-- court, coral hairlines -->
+        <g fill="none" stroke="var(--coral)" stroke-opacity=".6" stroke-width="1.4" filter="url(#glow1)">
+          <rect x="22" y="22" width="356" height="372" rx="4"/>
+          <rect x="152" y="22" width="96" height="132"/>
+          <circle cx="200" cy="154" r="38" stroke-dasharray="3 6"/>
+          <path d="M46 22 L46 100 A154 154 0 0 0 354 100 L354 22"/>
+        </g>
+        <!-- baseline measurement ticks -->
+        <g stroke="rgba(245,240,225,.25)" stroke-width="1">
+          <line x1="60" y1="22" x2="60" y2="30"/><line x1="100" y1="22" x2="100" y2="30"/>
+          <line x1="300" y1="22" x2="300" y2="30"/><line x1="340" y1="22" x2="340" y2="30"/>
+        </g>
+        <!-- spacing connectors -->
+        <polygon points="200,116 64,175 336,175 112,308 288,308"
+          fill="rgba(200,85,61,.04)" stroke="rgba(245,240,225,.18)" stroke-width="1" stroke-dasharray="2 6"/>
+        <text x="30" y="404" fill="rgba(245,240,225,.35)" font-size="9" letter-spacing="2" font-family="monospace">5-OUT · MOTION</text>
+      </svg>
+      <div class="slot" style="left:50%;top:28%"><div class="ring c" style="border:1.5px solid var(--c);background:rgba(249,115,22,.10)">C</div></div>
+      <div class="slot" style="left:16%;top:42%"><div class="ring f" style="border:1.5px solid var(--f);background:rgba(168,85,247,.10)">F</div></div>
+      <div class="slot" style="left:84%;top:42%"><div class="ring f" style="border:1.5px solid var(--f);background:rgba(168,85,247,.10)">F</div></div>
+      <div class="slot" style="left:28%;top:74%"><div class="ring g" style="border:1.5px solid var(--g);background:rgba(34,197,94,.10)">G</div></div>
+      <div class="slot" style="left:72%;top:74%"><div class="ring g" style="border:1.5px solid var(--g);background:rgba(34,197,94,.10)">G</div></div>
+    </div>
+  </div>
+
+  <!-- ============ 2 · STADIUM SPOTLIGHT ============ -->
+  <div class="panel">
+    <div class="label"><span class="name">2 · Stadium Spotlight</span><span class="tag" style="color:var(--coral)">arena</span></div>
+    <div class="court" style="background:#04060d;position:relative">
+      <!-- overhead light cones -->
+      <div style="position:absolute;inset:0;background:
+        conic-gradient(from 200deg at 30% -8%, transparent 0deg, rgba(255,245,220,.12) 18deg, transparent 34deg),
+        conic-gradient(from 130deg at 70% -8%, transparent 0deg, rgba(255,245,220,.12) 18deg, transparent 34deg);"></div>
+      <!-- per-position glows -->
+      <div style="position:absolute;inset:0;background:
+        radial-gradient(34% 40% at 50% 28%, color-mix(in oklab,var(--c) 42%,transparent), transparent 62%),
+        radial-gradient(30% 38% at 16% 42%, color-mix(in oklab,var(--f) 38%,transparent), transparent 62%),
+        radial-gradient(30% 38% at 84% 42%, color-mix(in oklab,var(--f) 38%,transparent), transparent 62%),
+        radial-gradient(32% 40% at 28% 74%, color-mix(in oklab,var(--g) 38%,transparent), transparent 62%),
+        radial-gradient(32% 40% at 72% 74%, color-mix(in oklab,var(--g) 38%,transparent), transparent 62%);"></div>
+      <!-- floor sheen + vignette -->
+      <div style="position:absolute;inset:0;background:
+        linear-gradient(180deg, transparent 55%, rgba(120,140,200,.06) 78%, rgba(160,180,230,.10) 100%),
+        radial-gradient(120% 80% at 50% 40%, transparent 55%, rgba(0,0,0,.6) 100%);"></div>
+      <svg viewBox="0 0 400 416" style="position:absolute;inset:0;width:100%;height:100%;mix-blend-mode:screen">
+        <g fill="none" stroke="rgba(255,255,255,.12)" stroke-width="1.4">
+          <path d="M46 0 L46 116 A154 154 0 0 0 354 116 L354 0"/>
+          <circle cx="200" cy="146" r="40"/>
+        </g>
+      </svg>
+      <div class="slot" style="left:50%;top:28%"><div class="ring c" style="border:2px solid var(--c);background:radial-gradient(circle,rgba(249,115,22,.30),transparent 72%);box-shadow:0 0 30px 5px color-mix(in oklab,var(--c) 60%,transparent)">C</div></div>
+      <div class="slot" style="left:16%;top:42%"><div class="ring f" style="border:2px solid var(--f);box-shadow:0 0 30px 5px color-mix(in oklab,var(--f) 55%,transparent)">F</div></div>
+      <div class="slot" style="left:84%;top:42%"><div class="ring f" style="border:2px solid var(--f);box-shadow:0 0 30px 5px color-mix(in oklab,var(--f) 55%,transparent)">F</div></div>
+      <div class="slot" style="left:28%;top:74%"><div class="ring g" style="border:2px solid var(--g);box-shadow:0 0 30px 5px color-mix(in oklab,var(--g) 55%,transparent)">G</div></div>
+      <div class="slot" style="left:72%;top:74%"><div class="ring g" style="border:2px solid var(--g);box-shadow:0 0 30px 5px color-mix(in oklab,var(--g) 55%,transparent)">G</div></div>
+    </div>
+  </div>
+
+  <!-- ============ 3 · HOLO DUOTONE ============ -->
+  <div class="panel">
+    <div class="label"><span class="name">3 · Holo Duotone</span><span class="tag" style="color:var(--coral)">hologram</span></div>
+    <div class="court" style="background:linear-gradient(180deg,#0a1c30,#070f1c)">
+      <svg viewBox="0 0 400 416" style="position:absolute;inset:0;width:100%;height:100%">
+        <defs>
+          <pattern id="hex2" width="28" height="24" patternUnits="userSpaceOnUse">
+            <path d="M14 0 L28 7 L28 17 L14 24 L0 17 L0 7 Z" fill="none" stroke="rgba(57,208,255,.10)" stroke-width="1"/>
+          </pattern>
+          <linearGradient id="beam2" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="var(--cyan)"/>
+            <stop offset="1" stop-color="var(--coral)"/>
+          </linearGradient>
+          <radialGradient id="node2" cx="50%" cy="50%" r="50%">
+            <stop offset="0" stop-color="#bdf0ff"/><stop offset="1" stop-color="#1a86b8" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <rect width="400" height="416" fill="url(#hex2)"/>
+        <!-- converging perspective floor -->
+        <g stroke="rgba(57,208,255,.16)" stroke-width="1" fill="none">
+          <path d="M40 410 L165 70"/><path d="M360 410 L235 70"/>
+          <path d="M0 330 L400 330"/><path d="M30 250 L370 250"/><path d="M70 175 L330 175"/><path d="M105 120 L295 120"/>
+        </g>
+        <!-- formation beams -->
+        <g stroke="url(#beam2)" stroke-width="2.2" fill="none" opacity=".85">
+          <path d="M200,116 L64,175"/><path d="M200,116 L336,175"/>
+          <path d="M64,175 L112,308"/><path d="M336,175 L288,308"/><path d="M112,308 L288,308"/>
+        </g>
+        <g>
+          <circle cx="200" cy="116" r="36" fill="url(#node2)"/><circle cx="64" cy="175" r="30" fill="url(#node2)"/>
+          <circle cx="336" cy="175" r="30" fill="url(#node2)"/><circle cx="112" cy="308" r="30" fill="url(#node2)"/><circle cx="288" cy="308" r="30" fill="url(#node2)"/>
+        </g>
+      </svg>
+      <!-- scanlines -->
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg, rgba(57,208,255,.05) 0 1px, transparent 1px 4px);mix-blend-mode:screen"></div>
+      <div class="slot" style="left:50%;top:28%"><div class="ring c" style="border:2px solid var(--c);background:rgba(249,115,22,.12)">C</div></div>
+      <div class="slot" style="left:16%;top:42%"><div class="ring f" style="border:2px solid var(--f);background:rgba(168,85,247,.12)">F</div></div>
+      <div class="slot" style="left:84%;top:42%"><div class="ring f" style="border:2px solid var(--f);background:rgba(168,85,247,.12)">F</div></div>
+      <div class="slot" style="left:28%;top:74%"><div class="ring g" style="border:2px solid var(--g);background:rgba(34,197,94,.12)">G</div></div>
+      <div class="slot" style="left:72%;top:74%"><div class="ring g" style="border:2px solid var(--g);background:rgba(34,197,94,.12)">G</div></div>
+    </div>
+  </div>
+
+  <!-- ============ 4 · AURORA MESH (new) ============ -->
+  <div class="panel">
+    <div class="label"><span class="name">4 · Aurora Mesh</span><span class="tag" style="color:var(--coral)">new · premium</span></div>
+    <div class="court" style="background:
+        radial-gradient(50% 45% at 22% 24%, color-mix(in oklab,var(--f) 55%,transparent), transparent 70%),
+        radial-gradient(55% 50% at 82% 30%, color-mix(in oklab,var(--coral) 50%,transparent), transparent 70%),
+        radial-gradient(60% 55% at 30% 86%, color-mix(in oklab,var(--g) 45%,transparent), transparent 72%),
+        radial-gradient(60% 55% at 80% 82%, color-mix(in oklab,var(--c) 40%,transparent), transparent 72%),
+        linear-gradient(180deg,#101a33,#0a1020);">
+      <!-- frosted overlay -->
+      <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,16,32,.25),rgba(10,16,32,.45));"></div>
+      <svg viewBox="0 0 400 416" style="position:absolute;inset:0;width:100%;height:100%">
+        <!-- etched glass court lines -->
+        <g fill="none" stroke="rgba(250,247,242,.30)" stroke-width="1.3">
+          <rect x="22" y="22" width="356" height="372" rx="6"/>
+          <rect x="152" y="22" width="96" height="130"/>
+          <circle cx="200" cy="152" r="38"/>
+          <path d="M46 22 L46 100 A154 154 0 0 0 354 100 L354 22"/>
+        </g>
+      </svg>
+      <!-- glass position chips -->
+      <div class="slot" style="left:50%;top:28%"><div class="ring c" style="border:1.5px solid rgba(250,247,242,.7);background:rgba(255,255,255,.10);box-shadow:0 4px 18px rgba(0,0,0,.3)">C</div></div>
+      <div class="slot" style="left:16%;top:42%"><div class="ring f" style="border:1.5px solid rgba(250,247,242,.7);background:rgba(255,255,255,.10);box-shadow:0 4px 18px rgba(0,0,0,.3)">F</div></div>
+      <div class="slot" style="left:84%;top:42%"><div class="ring f" style="border:1.5px solid rgba(250,247,242,.7);background:rgba(255,255,255,.10);box-shadow:0 4px 18px rgba(0,0,0,.3)">F</div></div>
+      <div class="slot" style="left:28%;top:74%"><div class="ring g" style="border:1.5px solid rgba(250,247,242,.7);background:rgba(255,255,255,.10);box-shadow:0 4px 18px rgba(0,0,0,.3)">G</div></div>
+      <div class="slot" style="left:72%;top:74%"><div class="ring g" style="border:1.5px solid rgba(250,247,242,.7);background:rgba(255,255,255,.10);box-shadow:0 4px 18px rgba(0,0,0,.3)">G</div></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

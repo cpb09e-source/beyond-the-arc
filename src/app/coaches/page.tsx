@@ -28,11 +28,7 @@ export default async function CoachesPage() {
     <>
       <section>
         <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-10 pb-2">
-          <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
-            <div className="flex items-center gap-3">
-              <span className="h-px w-8 bg-coral" />
-              <span>The coach explorer · 2012–26</span>
-            </div>
+          <div className="flex items-center justify-end gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
             <ThemeToggle />
           </div>
         </div>

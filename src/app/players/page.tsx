@@ -10,20 +10,11 @@ export default async function PlayersOverviewPage() {
     await fs.readFile(path.resolve("public/data/conferences.json"), "utf8")
   ) as Record<string, string[]>;
 
-  const years = Object.keys(confsByYear).map(Number).sort((a, b) => a - b);
-  const latestYear = years[years.length - 1] ?? 2026;
-  const earliestYear = years[0] ?? 2013;
-  const yearRange = `${earliestYear - 1}–${String(latestYear).slice(-2)}`;
-
   return (
     <>
       <section>
         <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-10 pb-2">
-          <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
-            <div className="flex items-center gap-3">
-              <span className="h-px w-8 bg-coral" />
-              <span>The player explorer · {yearRange}</span>
-            </div>
+          <div className="flex items-center justify-end gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
             <ThemeToggle />
           </div>
         </div>

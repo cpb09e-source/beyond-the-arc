@@ -113,18 +113,25 @@ export function TeamLogo({
   name,
   size = 24,
   className,
+  local = false,
 }: {
   name: string;
   size?: number;
   className?: string;
+  // Serve from the bundled same-origin copy (public/ttz-logos) instead of GCS.
+  // Needed wherever the node gets rasterized by html-to-image (the 32-0 share
+  // card) — the GCS host sends no CORS headers, which taints the canvas.
+  local?: boolean;
 }) {
   const entry = lookup(name);
   const [errored, setErrored] = useState(false);
 
   // No CBB match → monogram fallback in ink
-  // CBB match exists → try the GCS logo, fall back to colored monogram on error
+  // CBB match exists → try the logo, fall back to colored monogram on error
   const logoUrl = entry
-    ? `https://storage.googleapis.com/cbb-image-files/team-logos/${entry.id}.png`
+    ? local
+      ? `/ttz-logos/${entry.id}.png`
+      : `https://storage.googleapis.com/cbb-image-files/team-logos/${entry.id}.png`
     : null;
 
   if (logoUrl && !errored) {

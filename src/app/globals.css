@@ -126,10 +126,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Display headlines — serif, editorial weight */
+/* Display headlines — Moneta Sans Bold */
 .font-display {
-  font-family: var(--font-display), Georgia, "Times New Roman", serif;
-  font-feature-settings: "ss01", "ss02", "ss03";
+  font-family: var(--font-display), system-ui, -apple-system, sans-serif;
+  font-weight: 700;
   letter-spacing: -0.02em;
 }
 
@@ -154,11 +154,87 @@ body {
 
 /* Magazine pull-quote stat */
 .lede-stat {
-  font-family: var(--font-display), Georgia, serif;
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 700;
   font-size: clamp(3rem, 8vw, 6rem);
   line-height: 0.95;
   letter-spacing: -0.04em;
   color: var(--ink);
+}
+
+/* ------------------------------------------------------------------
+ * 32-0 court theming. The court used to be a fixed dark-navy "blueprint"
+ * slab, which looked great on the dark theme but read as a harsh black box
+ * dropped onto warm paper in light mode. These tokens flip the court (and the
+ * player chips that sit on it) to a soft light hardwood in light mode while
+ * preserving the after-hours blueprint in dark.
+ * ----------------------------------------------------------------- */
+:root {
+  --ttz-court-bg:
+    radial-gradient(130% 100% at 50% -8%, #f8f2e7, #ece2d0 62%),
+    linear-gradient(180deg, #f2ecdf, #e9dfcc);
+  --ttz-court-accent: rgba(200, 85, 61, 0.38); /* coral arc + key lines */
+  --ttz-court-line: rgba(26, 34, 56, 0.16); /* tick marks / faint detail */
+  --ttz-court-ring: rgba(26, 34, 56, 0.1); /* outer frame */
+  /* warm translucent paper so the hardwood tints through instead of a stark
+   * white block — lets the chip settle into the court */
+  --ttz-chip-bg: rgba(250, 246, 238, 0.72);
+  --ttz-chip-text: #1a2238;
+  --ttz-chip-accent: #c8553d;
+  --ttz-chip-shadow: 0 4px 14px -10px rgba(26, 34, 56, 0.4);
+  --ttz-conf-bg: transparent; /* conf logos sit straight on paper in light */
+  /* warm, barely-elevated card fill instead of stark #fff on warm paper */
+  --ttz-card-bg: #fcf9f3;
+  --ttz-era: #c5302e; /* era accent — red on light */
+}
+[data-theme="dark"] {
+  --ttz-court-bg:
+    radial-gradient(130% 100% at 50% -10%, #18244a, #0a1426 60%),
+    linear-gradient(180deg, #0e1830, #0a1322);
+  --ttz-court-accent: rgba(200, 85, 61, 0.6);
+  --ttz-court-line: rgba(245, 240, 225, 0.22);
+  --ttz-court-ring: rgba(255, 255, 255, 0.1);
+  --ttz-chip-bg: #101a30;
+  --ttz-chip-text: #faf7f2;
+  --ttz-chip-accent: #e8825f;
+  --ttz-chip-shadow: 0 10px 20px -8px rgba(0, 0, 0, 0.6);
+  --ttz-conf-bg: #ffffff; /* white disc keeps transparent logos legible on navy */
+  --ttz-card-bg: var(--card); /* elevated navy in dark — unchanged */
+  --ttz-era: #07f49e; /* era accent — 32-0 green on dark */
+}
+
+/* 32-0 nav logo — show the light artwork in light mode, the dark artwork in
+ * dark mode. Defaults to light so the logo is correct before/without a theme. */
+.ttz-nav-logo-dark {
+  display: none;
+}
+[data-theme="dark"] .ttz-nav-logo-light {
+  display: none;
+}
+[data-theme="dark"] .ttz-nav-logo-dark {
+  display: inline-block;
+}
+
+/* Thin, modern, theme-adaptive scrollbar (e.g. the 32-0 player pool). */
+.ttz-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--ink) 30%, transparent) transparent;
+}
+.ttz-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.ttz-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ttz-scroll::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklab, var(--ink) 28%, transparent);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.ttz-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklab, var(--ink) 48%, transparent);
+  background-clip: content-box;
 }
 
 /* ------------------------------------------------------------------

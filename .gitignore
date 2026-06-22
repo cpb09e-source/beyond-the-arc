@@ -62,3 +62,6 @@ next-env.d.ts
 # Root-level screenshots (ad-hoc Playwright captures).
 # Public image assets live under public/ and are unaffected.
 /*.png
+
+# Supabase CLI local temp
+supabase/.temp/
