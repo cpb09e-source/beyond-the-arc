@@ -29,7 +29,7 @@ const moneta = localFont({
 });
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://beyond-the-arc.netlify.app";
-const OG_IMAGE = "/images/nba-cc-open-graph.png";
+const OG_IMAGE = "/images/bta_open_graph-01.png";
 const SITE_DESCRIPTION =
   "Editorial-grade college basketball analytics: team and player splits, shot charts, lineup data, and the transfer portal.";
 
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     siteName: "Beyond the Arc",
     title: "Beyond the Arc — College Basketball Analytics",
     description: SITE_DESCRIPTION,
-    images: [{ url: OG_IMAGE, width: 1200, height: 630, alt: "Beyond the Arc" }],
+    images: [{ url: OG_IMAGE, width: 1440, height: 756, alt: "Beyond the Arc" }],
   },
   twitter: {
     card: "summary_large_image",
