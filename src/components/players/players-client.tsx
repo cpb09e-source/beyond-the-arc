@@ -1,7 +1,8 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
@@ -463,6 +464,25 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [compareOpen, setCompareOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  // Mobile: the table search collapses to an icon that slides open on tap.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus({ preventScroll: true });
+  }, [searchOpen]);
+  useEffect(() => {
+    if (!searchOpen) return;
+    function onDown(e: PointerEvent) {
+      if (searchPanelRef.current && !searchPanelRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [searchOpen]);
 
   useEffect(() => {
     const toFetch = spec.years.filter((y) => !rawByYear[y]);
@@ -555,7 +575,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     () => applySpec(transformed, { ...spec, limit: Number.MAX_SAFE_INTEGER }),
     [transformed, spec],
   );
-  const { players, count } = useMemo(() => {
+  const { players, count, totalPages, pageSafe } = useMemo(() => {
     // 3-char minimum on search — single-letter "L" matches thousands and
     // burns time both filtering and re-rendering rows. The placeholder
     // calls this out; queries below 3 chars are ignored and the default
@@ -564,11 +584,20 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     const matched = q.length >= 3
       ? prefiltered.filter((p) => p.name.toLowerCase().includes(q))
       : prefiltered;
+    const total = matched.length;
+    const totalPages = Math.max(1, Math.ceil(total / spec.limit));
+    const pageSafe = Math.min(Math.max(1, page), totalPages);
+    const start = (pageSafe - 1) * spec.limit;
     return {
-      players: matched.slice(0, spec.limit),
-      count: matched.length,
+      players: matched.slice(start, start + spec.limit),
+      count: total,
+      totalPages,
+      pageSafe,
     };
-  }, [prefiltered, deferredQuery, spec.limit]);
+  }, [prefiltered, deferredQuery, spec.limit, page]);
+
+  // Reset to page 1 whenever the result set changes (filters, sort, search, limit).
+  useEffect(() => { setPage(1); }, [prefiltered, deferredQuery, spec.limit, spec.sortBy, spec.sortDir]);
   const multiYear = spec.years.length > 1;
 
   return (
@@ -578,9 +607,9 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       {/* Headline ledger — coral accent rule, ring + shadow, big display
           title. Mirrors /coaches "Head coaches" and /teams "By season" cards
           so the look reads consistently across the site. */}
-      <div id="players-leaderboard" className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 mt-8 scroll-mt-4">
+      <div id="players-leaderboard" className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-8 scroll-mt-4 -mx-6 lg:mx-0">
         <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
-        <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-4 flex-wrap">
+        <div className="px-4 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-4 flex-wrap">
           <div>
             <div className="flex items-center gap-3 flex-wrap">
               <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
@@ -607,34 +636,22 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               {!loading && count > players.length && (
                 <span className="text-ink-muted"> of {count.toLocaleString()}</span>
               )}{" "}
-              {loading ? "loading…" : players.length === 1 ? "player" : "players"} match
+              {loading ? "loading…" : players.length === 1 ? "player" : "players"}
               {!loading && count > players.length && (
                 <span className="text-ink-muted hidden md:inline"> · showing first {players.length}</span>
               )}
               {!loading && spec.conf.length > 0 && <> · {spec.conf.length === 1 ? spec.conf[0] : `${spec.conf.length} conferences`}</>}
               {!loading && spec.cls.length > 0 && <> · {spec.cls.length === 1 ? (CLASS_LABEL[spec.cls[0]!] ?? spec.cls[0]) : `${spec.cls.length} classes`}</>}
-              {!loading && spec.minGames > 0 && <> · min {spec.minGames} games</>}
             </div>
           </div>
           {/* Header controls — SEARCH | SORT BY | ORDER | SHOW. Mirrors the
               /teams headline-card layout so the player and team explorers
               read as siblings rather than two unrelated surfaces. */}
-          <div className="flex items-end gap-3 flex-wrap">
-            <HeaderField label="Search">
+          <div className="relative flex items-end gap-2 lg:gap-3 w-full lg:w-auto">
+            {/* Desktop search — full input (hidden on mobile) */}
+            <HeaderField label="Search" className="hidden lg:flex">
               <div className="relative">
-                <svg
-                  aria-hidden
-                  viewBox="0 0 24 24"
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx={11} cy={11} r={7} />
-                  <line x1={20} y1={20} x2={16.65} y2={16.65} />
-                </svg>
+                <SearchGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none" />
                 <input
                   type="search"
                   value={query}
@@ -655,22 +672,67 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                 )}
               </div>
             </HeaderField>
-            <HeaderField label="Sort by">
-              <Select value={spec.sortBy} onChange={(v) => updateSpec({ ...spec, sortBy: v as PlayerListSpec["sortBy"] })} ariaLabel="Sort by">
-                {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </Select>
-            </HeaderField>
-            <HeaderField label="Order">
-              <Select value={spec.sortDir} onChange={(v) => updateSpec({ ...spec, sortDir: v as "asc" | "desc" })} ariaLabel="Sort direction">
-                <option value="desc">Desc</option>
-                <option value="asc">Asc</option>
-              </Select>
-            </HeaderField>
-            <HeaderField label="Show">
-              <Select value={String(spec.limit)} onChange={(v) => updateSpec({ ...spec, limit: Number(v) })} ariaLabel="Result count">
-                {LIMIT_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
-              </Select>
-            </HeaderField>
+
+            {/* Sort by / Order / Show — shares the mobile line with the search icon */}
+            <div className="flex-1 lg:flex-initial min-w-0 flex items-end gap-2 lg:gap-3">
+              <HeaderField label="Sort by" className="flex-1 min-w-0 lg:flex-initial">
+                <Select value={spec.sortBy} onChange={(v) => updateSpec({ ...spec, sortBy: v as PlayerListSpec["sortBy"] })} ariaLabel="Sort by" className="w-full lg:w-auto">
+                  {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </Select>
+              </HeaderField>
+              <HeaderField label="Order" className="shrink-0">
+                <Select value={spec.sortDir} onChange={(v) => updateSpec({ ...spec, sortDir: v as "asc" | "desc" })} ariaLabel="Sort direction" className="w-20">
+                  <option value="desc">Desc</option>
+                  <option value="asc">Asc</option>
+                </Select>
+              </HeaderField>
+              <HeaderField label="Show" className="shrink-0">
+                <Select value={String(spec.limit)} onChange={(v) => updateSpec({ ...spec, limit: Number(v) })} ariaLabel="Result count" className="w-18 lg:w-20">
+                  {LIMIT_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+                </Select>
+              </HeaderField>
+            </div>
+
+            {/* Mobile search icon */}
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search players"
+              className="lg:hidden shrink-0 h-10 w-10 inline-flex items-center justify-center rounded-md border border-ink/15 bg-card text-ink-muted hover:text-ink hover:border-ink/25 shadow-sm transition-colors"
+            >
+              <SearchGlass className="w-4 h-4" />
+            </button>
+
+            {/* Mobile sliding search — text-base (16px) avoids iOS zoom on focus */}
+            <div
+              ref={searchPanelRef}
+              className={cn(
+                "lg:hidden absolute inset-y-0 right-0 w-full flex items-center gap-2 bg-card transform-gpu transition-transform duration-200 ease-out",
+                searchOpen ? "translate-x-0" : "translate-x-[105%] pointer-events-none",
+              )}
+            >
+              <div className="relative flex-1">
+                <SearchGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none" />
+                <input
+                  ref={searchInputRef}
+                  type="search"
+                  inputMode="search"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search players…"
+                  aria-label="Search players by name"
+                  className="h-10 w-full pl-9 pr-3 rounded-md border border-ink/15 bg-card text-ink text-base placeholder:text-ink-muted shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => { setSearchOpen(false); setQuery(""); }}
+                aria-label="Close search"
+                className="shrink-0 h-10 px-2.5 text-sm font-medium text-coral hover:text-ink"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -678,14 +740,14 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
             <thead className="bg-paper-deep/70">
               <tr className="border-b border-hairline text-left">
                 <Th className="w-10 text-center">#</Th>
-                <Th className="w-12">{""}</Th>
+                <Th className="w-12 hidden sm:table-cell">{""}</Th>
                 <SortableTh statKey="name" label="Player" basePath="/players" defaultSort="bta_ind_ortg" defaultDir="asc" align="left" />
                 <Th>Team</Th>
                 {multiYear && <Th className="w-16">Season</Th>}
-                <Th className="w-10">Cl</Th>
+                <Th className="w-10 hidden sm:table-cell">Cl</Th>
                 <Th className="w-12">Ht</Th>
-                <SortableTh statKey="games" label="GP" basePath="/players" defaultSort="bta_ind_ortg" className="w-12" />
-                <SortableTh statKey="bta_ind_ortg" label="BTA PRTG" basePath="/players" defaultSort="bta_ind_ortg" />
+                <SortableTh statKey="games" label="GP" basePath="/players" defaultSort="bta_ind_ortg" className="w-12 hidden sm:table-cell" />
+                <SortableTh statKey="bta_ind_ortg" label="BTA PRTG" basePath="/players" defaultSort="bta_ind_ortg" nowrap={false} className="w-14" />
                 <SortableTh statKey="pir" label="PIR" basePath="/players" defaultSort="bta_ind_ortg" />
                 <SortableTh statKey="pts" label="PPG" basePath="/players" defaultSort="bta_ind_ortg" />
                 <SortableTh statKey="fg_pct" label="FG%" basePath="/players" defaultSort="bta_ind_ortg" />
@@ -714,8 +776,8 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               ) : (
                 players.map((p, i) => (
                   <tr key={p.id} className={`transition-colors hover:bg-coral/[0.06] ${i % 2 === 0 ? "bg-paper/70" : "bg-transparent"}`}>
-                    <Td className="text-center text-ink-muted tabular">{i + 1}</Td>
-                    <Td className="text-center">
+                    <Td className="text-center text-ink-muted tabular">{(pageSafe - 1) * spec.limit + i + 1}</Td>
+                    <Td className="text-center hidden sm:table-cell">
                       <PlayerPhoto bartPlayerId={p.bart_player_id} name={p.name} size={28} />
                     </Td>
                     <Td>
@@ -738,9 +800,9 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                       </Link>
                     </Td>
                     {multiYear && <Td className="text-ink-muted tabular">{seasonLabel(p.year)}</Td>}
-                    <Td className="text-ink-muted">{p.class ?? "—"}</Td>
-                    <Td className="text-ink-muted whitespace-nowrap">{p.height ?? "—"}</Td>
-                    <Td className="text-right tabular">{p.games ?? "—"}</Td>
+                    <Td className="text-ink-muted hidden sm:table-cell">{p.class ?? "—"}</Td>
+                    <Td className="text-ink-muted whitespace-nowrap">{p.height ? p.height.replace(/^(\d+)-(\d+)$/, "$1'$2\"") : "—"}</Td>
+                    <Td className="text-right tabular hidden sm:table-cell">{p.games ?? "—"}</Td>
                     <ValuePctCell value={p.bta_ind_ortg} pct={pctMaps.bta_ind_ortg.get(p.id) ?? null} format="num1" emphasized />
                     <ValuePctCell value={p.pir} pct={pctMaps.pir.get(p.id) ?? null} format="num1" />
                     <Td className="text-right tabular">{fmtNum(p.pts_pg, 1)}</Td>
@@ -755,6 +817,19 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
             </tbody>
           </table>
         </div>
+        {!loading && totalPages > 1 && (
+          <PlayerPagination
+            firstShown={(pageSafe - 1) * spec.limit + 1}
+            lastShown={Math.min(pageSafe * spec.limit, count)}
+            total={count}
+            page={pageSafe}
+            totalPages={totalPages}
+            onPage={(p) => {
+              setPage(p);
+              document.getElementById("players-leaderboard")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+          />
+        )}
       </div>
 
       {/* Methodology — demoted out of the headline card so the leaderboard
@@ -814,13 +889,95 @@ function Th({ children, className = "" }: { children: React.ReactNode; className
 function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <td className={`px-3 py-2.5 ${className}`}>{children}</td>;
 }
-function HeaderField({ label, children }: { label: string; children: React.ReactNode }) {
+function HeaderField({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <label className="flex flex-col gap-1">
+    <label className={cn("flex flex-col gap-1", className)}>
       <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">{label}</span>
       {children}
     </label>
   );
+}
+
+function SearchGlass({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx={11} cy={11} r={7} />
+      <line x1={20} y1={20} x2={16.65} y2={16.65} />
+    </svg>
+  );
+}
+
+function PlayerPagination({
+  firstShown, lastShown, total, page, totalPages, onPage,
+}: {
+  firstShown: number; lastShown: number; total: number; page: number; totalPages: number; onPage: (p: number) => void;
+}) {
+  const items = paginationItems(page, totalPages);
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3 border-t border-hairline text-xs text-ink-muted">
+      <span>
+        Showing <span className="text-ink tabular">{firstShown.toLocaleString()}</span>–
+        <span className="text-ink tabular">{lastShown.toLocaleString()}</span> of{" "}
+        <span className="text-ink tabular">{total.toLocaleString()}</span>
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onPage(Math.max(1, page - 1))}
+          disabled={page <= 1}
+          className="px-2 py-1 rounded hover:bg-paper-deep/60 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+          aria-label="Previous page"
+        >‹ Prev</button>
+        {items.map((it, i) =>
+          it === "…" ? (
+            <span key={`gap-${i}`} className="px-2 text-ink-muted hidden sm:inline">…</span>
+          ) : (
+            <button
+              key={it}
+              type="button"
+              onClick={() => onPage(it)}
+              aria-current={it === page ? "page" : undefined}
+              className={cn(
+                "min-w-8 px-2 py-1 rounded tabular transition-colors hidden sm:inline-block",
+                it === page ? "bg-coral text-white font-medium" : "hover:bg-paper-deep/60",
+              )}
+            >{it}</button>
+          ),
+        )}
+        <span className="sm:hidden tabular px-1">{page} / {totalPages}</span>
+        <button
+          type="button"
+          onClick={() => onPage(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+          className="px-2 py-1 rounded hover:bg-paper-deep/60 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+          aria-label="Next page"
+        >Next ›</button>
+      </div>
+    </div>
+  );
+}
+
+function paginationItems(page: number, totalPages: number): Array<number | "…"> {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+  const want = new Set<number>([1, totalPages, page, page - 1, page + 1, page - 2, page + 2]);
+  const visible = [...want].filter((n) => n >= 1 && n <= totalPages).sort((a, b) => a - b);
+  const out: Array<number | "…"> = [];
+  let prev = 0;
+  for (const n of visible) {
+    if (n - prev > 1) out.push("…");
+    out.push(n);
+    prev = n;
+  }
+  return out;
 }
 
 function ValuePctCell({

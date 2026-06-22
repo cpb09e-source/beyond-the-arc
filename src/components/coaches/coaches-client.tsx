@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
@@ -9,6 +9,7 @@ import { Select } from "@/components/select";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
 import type { SearchableOption } from "@/components/explorer/searchable-select";
 import { CompareModal } from "@/components/coaches/compare-modal";
+import { SlidersHorizontal, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
@@ -72,6 +73,26 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
     return Number.isFinite(n) && (n === 50 || n === 100 || n === 250) ? n : 100;
   });
   const [compareOpen, setCompareOpen] = useState(false);
+  // Filter card collapsed by default on mobile; always open on lg+.
+  const [open, setOpen] = useState(false);
+  // Mobile: the table search collapses to an icon that slides open on tap.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchPanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus({ preventScroll: true });
+  }, [searchOpen]);
+  useEffect(() => {
+    if (!searchOpen) return;
+    function onDown(e: PointerEvent) {
+      if (searchPanelRef.current && !searchPanelRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [searchOpen]);
   const [page, setPage] = useState<number>(() => {
     const n = Number(search.get("page"));
     return Number.isFinite(n) && n > 0 ? n : 1;
@@ -198,7 +219,22 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
   return (
     <div className="space-y-6">
       {/* Filter bar */}
-      <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-4 lg:p-5">
+      <div className="bg-paper-deep/25 border border-hairline border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-sm -mx-6 lg:mx-0">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className={cn(
+            "lg:hidden w-full flex items-center justify-between px-4 py-3.5",
+            open && "border-b border-hairline",
+          )}
+        >
+          <span className="flex items-center gap-2 text-xs uppercase tracking-widest text-ink-muted font-semibold">
+            <SlidersHorizontal size={15} /> Filters &amp; scope
+          </span>
+          <ChevronDown size={18} className={cn("text-ink-muted transition-transform", open && "rotate-180")} />
+        </button>
+        <div className={cn(open ? "block" : "hidden", "lg:block", "p-4 lg:p-5")}>
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">Status</span>
@@ -272,13 +308,14 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
             Reset
           </button>
         </div>
+        </div>
       </div>
 
       {/* Table — headline ledger treatment matches /coaches/<slug> and team pages. */}
-      <div className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5">
+      <div className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 -mx-6 lg:mx-0">
         {/* Top accent rule. */}
         <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
-        <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-3 flex-wrap">
+        <div className="px-4 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-3 flex-wrap">
           <div>
             <div className="flex items-baseline gap-3 flex-wrap">
               <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
@@ -312,14 +349,76 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
               )}
             </div>
           </div>
-          <label className="flex items-center gap-2 text-xs uppercase tracking-widest text-ink-muted font-medium">
-            <span>Show</span>
-            <Select value={String(pageSize)} onChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
-              <option value="50">50</option>
-              <option value="100">100</option>
-              <option value="250">250</option>
-            </Select>
-          </label>
+          <div className="relative flex items-end gap-2 lg:gap-3 w-full lg:w-auto">
+            {/* Sort by / Order / Show — shares the mobile line with the search icon */}
+            <div className="flex-1 lg:flex-initial min-w-0 flex items-end gap-2 lg:gap-3">
+              <HeaderField label="Sort by" className="flex-1 min-w-0 lg:flex-initial">
+                <Select value={sortBy} onChange={(v) => { setSortBy(v as SortKey); setPage(1); }} ariaLabel="Sort by" className="w-full lg:w-auto">
+                  <option value="composite">Composite</option>
+                  <option value="career_winpct">Win %</option>
+                  <option value="career_wins">Record</option>
+                  <option value="seasons">Seasons</option>
+                  <option value="name">Coach</option>
+                  <option value="team">Team</option>
+                  <option value="conference">Conf</option>
+                </Select>
+              </HeaderField>
+              <HeaderField label="Order" className="shrink-0">
+                <Select value={sortDir} onChange={(v) => setSortDir(v as "asc" | "desc")} ariaLabel="Sort direction" className="w-20">
+                  <option value="desc">Desc</option>
+                  <option value="asc">Asc</option>
+                </Select>
+              </HeaderField>
+              <HeaderField label="Show" className="shrink-0">
+                <Select value={String(pageSize)} onChange={(v) => { setPageSize(Number(v)); setPage(1); }} ariaLabel="Result count" className="w-18 lg:w-20">
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="250">250</option>
+                </Select>
+              </HeaderField>
+            </div>
+
+            {/* Mobile search icon */}
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search coaches"
+              className="lg:hidden shrink-0 h-10 w-10 inline-flex items-center justify-center rounded-md border border-ink/15 bg-card text-ink-muted hover:text-ink hover:border-ink/25 shadow-sm transition-colors"
+            >
+              <SearchGlass className="w-4 h-4" />
+            </button>
+
+            {/* Mobile sliding search — text-base (16px) avoids iOS zoom on focus */}
+            <div
+              ref={searchPanelRef}
+              className={cn(
+                "lg:hidden absolute inset-y-0 right-0 w-full flex items-center gap-2 bg-card transform-gpu transition-transform duration-200 ease-out",
+                searchOpen ? "translate-x-0" : "translate-x-[105%] pointer-events-none",
+              )}
+            >
+              <div className="relative flex-1">
+                <SearchGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none" />
+                <input
+                  ref={searchInputRef}
+                  type="search"
+                  inputMode="search"
+                  value={query}
+                  onChange={(e) => { setQuery(e.target.value); setPage(1); }}
+                  placeholder="Search coach or team"
+                  aria-label="Search coach or team"
+                  className="h-10 w-full pl-9 pr-3 rounded-md border border-ink/15 bg-card text-ink text-base placeholder:text-ink-muted shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => { setSearchOpen(false); setQuery(""); }}
+                aria-label="Close search"
+                className="shrink-0 h-10 px-2.5 text-sm font-medium text-coral hover:text-ink"
+              >
+                Done
+              </button>
+            </div>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -330,10 +429,10 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                 <Th className="w-9">{""}</Th>
                 <ThSort label="Team" active={sortBy==="team"} dir={sortDir} onClick={() => toggle("team","asc")} align="left" className="hidden sm:table-cell" />
                 <ThSort label="Conf" active={sortBy==="conference"} dir={sortDir} onClick={() => toggle("conference","asc")} align="left" className="hidden sm:table-cell" />
-                <ThSort label="Seasons" active={sortBy==="seasons"} dir={sortDir} onClick={() => toggle("seasons","desc")} className="hidden sm:table-cell" />
-                <ThSort label="Record" active={sortBy==="career_wins"} dir={sortDir} onClick={() => toggle("career_wins","desc")} className="hidden sm:table-cell" />
                 <ThSort label="Win" active={sortBy==="career_winpct"} dir={sortDir} onClick={() => toggle("career_winpct","desc")} />
                 <ThSort label="Composite" active={sortBy==="composite"} dir={sortDir} onClick={() => toggle("composite","desc")} />
+                <ThSort label="Seasons" active={sortBy==="seasons"} dir={sortDir} onClick={() => toggle("seasons","desc")} />
+                <ThSort label="Record" active={sortBy==="career_wins"} dir={sortDir} onClick={() => toggle("career_wins","desc")} />
               </tr>
             </thead>
             <tbody>
@@ -367,12 +466,12 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                     <Td className="text-ink-soft hidden sm:table-cell">
                       {r.current_conference ? confDisplay(r.current_conference) : <span className="text-ink-muted">—</span>}
                     </Td>
-                    <Td className="text-right tabular text-ink-soft hidden sm:table-cell">{r.seasons_count}</Td>
-                    <Td className="text-right tabular text-ink hidden sm:table-cell">{fmtRecord(r.career_wins, r.career_losses)}</Td>
                     <Td className="text-right tabular font-medium text-ink">{fmtPct(r.career_win_pct)}</Td>
                     <Td className="text-right tabular font-medium text-ink">
                       {r.composite_score != null ? r.composite_score.toFixed(1) : <span className="text-ink-muted/50">—</span>}
                     </Td>
+                    <Td className="text-right tabular text-ink-soft">{r.seasons_count}</Td>
+                    <Td className="text-right tabular text-ink whitespace-nowrap">{fmtRecord(r.career_wins, r.career_losses)}</Td>
                   </tr>
                 ))
               )}
@@ -461,6 +560,22 @@ function paginationItems(page: number, totalPages: number): Array<number | "…"
   return out;
 }
 
+function HeaderField({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
+  return (
+    <label className={cn("flex flex-col gap-1", className)}>
+      <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">{label}</span>
+      {children}
+    </label>
+  );
+}
+function SearchGlass({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx={11} cy={11} r={7} />
+      <line x1={20} y1={20} x2={16.65} y2={16.65} />
+    </svg>
+  );
+}
 function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <th className={`px-2 sm:px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium ${className}`}>{children}</th>;
 }

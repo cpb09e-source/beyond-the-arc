@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import {
   parseSpec,
   processTeams,
@@ -96,16 +97,49 @@ export function ExplorerClient({
   // limit=-1 so the search matches across the full result set rather than just
   // the top-N visible window, then re-apply the limit after filtering.
   const [tableSearch, setTableSearch] = useState("");
+  const [page, setPage] = useState(1);
+  // Mobile: the table search collapses to an icon that slides open on tap.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchPanelRef = useRef<HTMLDivElement>(null);
+  // Focus the input on open WITHOUT letting the browser scroll it into view
+  // (that scroll-jump is what reads as a "flash" of the table on mobile).
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus({ preventScroll: true });
+  }, [searchOpen]);
+  // Tap anywhere outside the open search to collapse it.
+  useEffect(() => {
+    if (!searchOpen) return;
+    function onDown(e: PointerEvent) {
+      if (searchPanelRef.current && !searchPanelRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+        setTableSearch("");
+      }
+    }
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [searchOpen]);
 
-  const { rows, count } = useMemo(() => {
+  const { rows, count, totalPages, pageSafe } = useMemo(() => {
     const { rows: all } = processTeams(allTeams, { ...spec, limit: -1 });
     const q = tableSearch.trim().toLowerCase();
     const matched = q ? all.filter((r) => r.team_name.toLowerCase().includes(q)) : all;
+    const total = matched.length;
+    if (spec.limit === -1) {
+      return { rows: matched, count: total, totalPages: 1, pageSafe: 1 };
+    }
+    const totalPages = Math.max(1, Math.ceil(total / spec.limit));
+    const pageSafe = Math.min(Math.max(1, page), totalPages);
+    const start = (pageSafe - 1) * spec.limit;
     return {
-      rows: spec.limit === -1 ? matched : matched.slice(0, spec.limit),
-      count: matched.length,
+      rows: matched.slice(start, start + spec.limit),
+      count: total,
+      totalPages,
+      pageSafe,
     };
-  }, [allTeams, spec, tableSearch]);
+  }, [allTeams, spec, tableSearch, page]);
+  // Reset to page 1 when the result set changes (filters, sort, search, limit).
+  useEffect(() => { setPage(1); }, [spec, tableSearch]);
   const multiYear = spec.years.length > 1;
 
   // Conference rankings — locked to the most-recent season available, regardless
@@ -142,10 +176,10 @@ export function ExplorerClient({
       <FilterBar conferences={conferences} teams={teamNames} conferenceRankings={conferenceRankings} years={[latestYear]} />
 
       {/* Headline-ledger treatment matches /coaches and /players. */}
-      <div id="teams-table" className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 mt-6 scroll-mt-4">
+      <div id="teams-table" className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-6 scroll-mt-4 -mx-6 lg:mx-0">
         {/* Top accent rule. */}
         <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
-        <div className="px-5 lg:px-7 pt-5 pb-3 lg:pt-6 lg:pb-4 bg-paper-deep/30 flex items-end justify-between gap-4 flex-wrap">
+        <div className="px-4 lg:px-7 pt-5 pb-1 lg:pt-6 lg:pb-4 bg-paper-deep/30 flex items-end justify-between gap-4 flex-wrap">
           <div>
             <div className="flex items-baseline gap-4 flex-wrap">
               <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
@@ -170,30 +204,18 @@ export function ExplorerClient({
               {count > rows.length && (
                 <span className="text-ink-muted"> of {count.toLocaleString()}</span>
               )}{" "}
-              {rows.length === 1 ? "team-season" : "team-seasons"} match
+              teams
               {count > rows.length && (
                 <span className="text-ink-muted hidden md:inline"> · showing first {rows.length}</span>
               )}
             </div>
           </div>
-          <div className="flex items-end gap-3 flex-wrap">
-            <label className="flex flex-col gap-1">
+          <div className="relative flex items-end gap-2 lg:gap-3 w-full lg:w-auto">
+            {/* Desktop search — full input with label (hidden on mobile) */}
+            <label className="hidden lg:flex flex-col gap-1">
               <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Search</span>
               <div className="relative">
-                {/* Search-glass icon — inline SVG matches the /coaches search input. */}
-                <svg
-                  aria-hidden
-                  viewBox="0 0 24 24"
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx={11} cy={11} r={7} />
-                  <line x1={20} y1={20} x2={16.65} y2={16.65} />
-                </svg>
+                <SearchGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none" />
                 <input
                   type="search"
                   value={tableSearch}
@@ -214,7 +236,53 @@ export function ExplorerClient({
                 )}
               </div>
             </label>
-            <SortControls />
+
+            {/* Sort by / Order / Show — shares the mobile line with the search icon */}
+            <div className="flex-1 lg:flex-initial min-w-0">
+              <SortControls />
+            </div>
+
+            {/* Mobile search icon */}
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search teams"
+              className="lg:hidden shrink-0 h-9 w-9 inline-flex items-center justify-center rounded-md border border-ink/15 bg-card text-ink-muted hover:text-ink hover:border-ink/25 shadow-sm transition-colors"
+            >
+              <SearchGlass className="w-4 h-4" />
+            </button>
+
+            {/* Mobile sliding search — slides over the row from the right on tap.
+                text-base (16px) keeps iOS from zooming the page on focus. */}
+            <div
+              ref={searchPanelRef}
+              className={cn(
+                "lg:hidden absolute inset-y-0 right-0 w-full flex items-center gap-2 bg-card transform-gpu transition-transform duration-200 ease-out",
+                searchOpen ? "translate-x-0" : "translate-x-[105%] pointer-events-none",
+              )}
+            >
+              <div className="relative flex-1">
+                <SearchGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none" />
+                <input
+                  ref={searchInputRef}
+                  type="search"
+                  inputMode="search"
+                  value={tableSearch}
+                  onChange={(e) => setTableSearch(e.target.value)}
+                  placeholder="Search team…"
+                  aria-label="Search teams in table"
+                  className="h-9 w-full pl-8 pr-3 rounded-md border border-ink/15 bg-card text-ink text-base placeholder:text-ink-muted shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => { setSearchOpen(false); setTableSearch(""); }}
+                aria-label="Close search"
+                className="shrink-0 h-9 px-2.5 text-sm font-medium text-coral hover:text-ink"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
 
@@ -226,15 +294,15 @@ export function ExplorerClient({
                   label, not another header. Stays inside <thead> so it stays
                   aligned with the four columns it labels. */}
               <tr className="bg-paper-deep/30">
-                <th colSpan={multiYear ? 9 : 8} className="px-3 py-2" />
-                <th colSpan={4} className="px-3 py-2 text-[0.65rem] uppercase tracking-[0.18em] text-coral font-bold text-center">
+                <th colSpan={multiYear ? 9 : 8} className="px-3 py-1" />
+                <th colSpan={4} className="px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-coral font-bold text-center">
                   Four Factors
                 </th>
               </tr>
               <tr className="border-y border-hairline text-left bg-paper-deep/70">
                 <Th className="w-12 text-center">#</Th>
                 <Th>Team</Th>
-                <Th className="w-16">Conf</Th>
+                <Th className="w-16 hidden sm:table-cell">Conf</Th>
                 {multiYear && <Th className="w-16">Season</Th>}
                 <Th className="w-20">Record</Th>
                 <SortableTh statKey="bta_rtg"   label="BTA RTG"  title="Weighted z-score composite ×40" defaultDir="desc" />
@@ -261,7 +329,7 @@ export function ExplorerClient({
                     className={`transition-colors hover:bg-coral/5 ${i % 2 === 0 ? "bg-paper/70" : "bg-transparent"}`}
                   >
                     <Td className="text-center text-ink-muted tabular">
-                      {i + 1}
+                      {(spec.limit === -1 ? 0 : (pageSafe - 1) * spec.limit) + i + 1}
                     </Td>
                     <Td>
                       <Link
@@ -276,7 +344,7 @@ export function ExplorerClient({
                         <TourneyBadge teamName={r.team_name} year={r.team_year} />
                       </Link>
                     </Td>
-                    <Td className="text-ink-muted">{confDisplay(r.team_conference)}</Td>
+                    <Td className="text-ink-muted hidden sm:table-cell">{confDisplay(r.team_conference)}</Td>
                     {multiYear && <Td className="text-ink-muted tabular">{seasonLabel(r.team_year)}</Td>}
                     <Td className="tabular text-ink-muted">{r.record ?? "—"}</Td>
                     <Td className={`text-right tabular ${btaColor(r.bta_rtg)}`}>
@@ -295,6 +363,19 @@ export function ExplorerClient({
             </tbody>
           </table>
         </div>
+        {spec.limit !== -1 && totalPages > 1 && (
+          <TeamPagination
+            firstShown={(pageSafe - 1) * spec.limit + 1}
+            lastShown={Math.min(pageSafe * spec.limit, count)}
+            total={count}
+            page={pageSafe}
+            totalPages={totalPages}
+            onPage={(p) => {
+              setPage(p);
+              document.getElementById("teams-table")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+          />
+        )}
       </div>
 
       {/* Head-to-head compare modal — triggered from the "Click to compare
@@ -316,6 +397,87 @@ function Th({ children, className = "" }: { children: React.ReactNode; className
 }
 function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <td className={`px-3 py-2.5 ${className}`}>{children}</td>;
+}
+function SearchGlass({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx={11} cy={11} r={7} />
+      <line x1={20} y1={20} x2={16.65} y2={16.65} />
+    </svg>
+  );
+}
+
+function TeamPagination({
+  firstShown, lastShown, total, page, totalPages, onPage,
+}: {
+  firstShown: number; lastShown: number; total: number; page: number; totalPages: number; onPage: (p: number) => void;
+}) {
+  const items = paginationItems(page, totalPages);
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3 border-t border-hairline text-xs text-ink-muted">
+      <span>
+        Showing <span className="text-ink tabular">{firstShown.toLocaleString()}</span>–
+        <span className="text-ink tabular">{lastShown.toLocaleString()}</span> of{" "}
+        <span className="text-ink tabular">{total.toLocaleString()}</span>
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onPage(Math.max(1, page - 1))}
+          disabled={page <= 1}
+          className="px-2 py-1 rounded hover:bg-paper-deep/60 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+          aria-label="Previous page"
+        >‹ Prev</button>
+        {items.map((it, i) =>
+          it === "…" ? (
+            <span key={`gap-${i}`} className="px-2 text-ink-muted hidden sm:inline">…</span>
+          ) : (
+            <button
+              key={it}
+              type="button"
+              onClick={() => onPage(it)}
+              aria-current={it === page ? "page" : undefined}
+              className={cn(
+                "min-w-8 px-2 py-1 rounded tabular transition-colors hidden sm:inline-block",
+                it === page ? "bg-coral text-white font-medium" : "hover:bg-paper-deep/60",
+              )}
+            >{it}</button>
+          ),
+        )}
+        <span className="sm:hidden tabular px-1">{page} / {totalPages}</span>
+        <button
+          type="button"
+          onClick={() => onPage(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+          className="px-2 py-1 rounded hover:bg-paper-deep/60 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent transition-colors"
+          aria-label="Next page"
+        >Next ›</button>
+      </div>
+    </div>
+  );
+}
+
+function paginationItems(page: number, totalPages: number): Array<number | "…"> {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+  const want = new Set<number>([1, totalPages, page, page - 1, page + 1, page - 2, page + 2]);
+  const visible = [...want].filter((n) => n >= 1 && n <= totalPages).sort((a, b) => a - b);
+  const out: Array<number | "…"> = [];
+  let prev = 0;
+  for (const n of visible) {
+    if (n - prev > 1) out.push("…");
+    out.push(n);
+    prev = n;
+  }
+  return out;
 }
 function CbbTd({ children }: { children: React.ReactNode }) {
   return <td className="px-3 py-2.5 text-right tabular border-l border-coral/15">{children}</td>;

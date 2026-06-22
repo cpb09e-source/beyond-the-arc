@@ -218,8 +218,9 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       {overviewOptions.length > 0 && (
         <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-10">
           {/* Player Overview — ledger card matching /coaches season-by-season.
-              Inner component supplies the team/year picker band + grid. */}
-          <div className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5">
+              Inner component supplies the team/year picker band + grid.
+              Full-bleed edge-to-edge on mobile; framed card on lg+. */}
+          <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
             <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
             <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30">
               <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
@@ -238,7 +239,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
             anchors the profile as the canonical record. CareerTable owns its
             own header (season count + View toggle) so the dropdown sits
             next to the count instead of in a separate band below. */}
-        <div className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5">
+        <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
           <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
           <CareerTable seasons={player.seasons} bartPlayerId={bartId} playerName={stats.name ?? `Player ${bartId}`} />
         </div>

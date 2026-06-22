@@ -554,14 +554,14 @@ function RollPanel({
   // draft phase — conference + era in containers, each with its own reroll
   return (
     <div
-      className="border border-ink/10 rounded-xl shadow-sm ring-1 ring-ink/5 p-4 lg:p-5"
+      className="border border-ink/10 rounded-xl shadow-sm ring-1 ring-ink/5 p-3 sm:p-4 lg:p-5"
       style={{ background: "var(--ttz-card-bg)" }}
     >
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
         {/* Conference */}
-        <div className="rounded-xl border border-ink/12 bg-paper-deep/40 px-4 pt-3 pb-3.5 flex flex-col items-center gap-2.5">
-          <div className="flex-1 grid place-items-center min-h-[56px]">
-            <ConfLogo code={roll!.conf} size={56} />
+        <div className="rounded-xl border border-ink/12 bg-paper-deep/40 px-3 sm:px-4 pt-2 pb-2.5 sm:pt-3 sm:pb-3.5 flex flex-col items-center gap-1.5 sm:gap-2.5">
+          <div className="flex-1 grid place-items-center min-h-11 sm:min-h-14">
+            <ConfLogo code={roll!.conf} size={48} />
           </div>
           <RerollChip
             label="Re-roll"
@@ -571,9 +571,9 @@ function RollPanel({
           />
         </div>
         {/* Era */}
-        <div className="rounded-xl border border-ink/12 bg-paper-deep/40 px-4 pt-3 pb-3.5 flex flex-col items-center gap-2.5">
-          <div className="flex-1 grid place-items-center min-h-[56px]">
-            <div className="font-display text-4xl font-bold tabular text-[var(--ttz-era)] leading-none relative top-[3px] whitespace-nowrap">
+        <div className="rounded-xl border border-ink/12 bg-paper-deep/40 px-3 sm:px-4 pt-2 pb-2.5 sm:pt-3 sm:pb-3.5 flex flex-col items-center gap-1.5 sm:gap-2.5">
+          <div className="flex-1 grid place-items-center min-h-11 sm:min-h-14">
+            <div className="font-display text-3xl sm:text-4xl font-extrabold tabular text-[var(--ttz-era)] leading-none relative top-[3px] whitespace-nowrap">
               {roll!.group}
             </div>
           </div>

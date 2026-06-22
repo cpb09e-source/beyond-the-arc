@@ -76,7 +76,7 @@ export default async function HomePage() {
 
   return (
     <>
-      <section>
+      <section className="hidden md:block">
         <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-10 pb-2">
           <div className="flex items-center justify-end gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
             <ThemeToggle />

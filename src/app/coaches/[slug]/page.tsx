@@ -192,7 +192,7 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
             overflow-hidden (which would clip the year-picker popover). */}
         <div className="absolute inset-0 pointer-events-none opacity-[0.04]"
              style={{ backgroundImage: "linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
-        <div className="relative mx-auto max-w-[97rem] px-6 lg:px-10 pt-12 pb-12">
+        <div className="relative mx-auto max-w-[97rem] px-6 lg:px-10 pt-12 pb-5 lg:pb-12">
           <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium mb-4">
             <span className="h-px w-8 bg-coral" />
             <Link href="/coaches/" className="hover:text-ink transition-colors">All head coaches</Link>
@@ -260,7 +260,7 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
 
       {/* MARCH MADNESS RESUME — every NCAA tournament game on the bench (preview, gated by slug) */}
       {marchGames.length > 0 && (
-        <section className="mx-auto max-w-[97rem] px-6 lg:px-10 pt-8">
+        <section className="mx-auto max-w-[97rem] px-6 lg:px-10 pt-4 lg:pt-8">
           <ScheduleTicker
             games={marchGames}
             teamName={profile.current_team ?? ""}
@@ -314,7 +314,7 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
       {/* PER-SCHOOL BREAKDOWN */}
       {profile.schools.length > 0 && (
         <section className="mx-auto max-w-[97rem] px-6 lg:px-10 mt-6">
-          <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-hidden">
+          <div className="bg-paper-deep/25 border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden -mx-6 lg:mx-0">
             <div className="px-5 lg:px-7 py-4 border-b border-hairline">
               <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium mb-1">Program breakdown</div>
               <h2 className="font-display text-2xl text-ink">By the school</h2>
@@ -338,11 +338,25 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
                       <td className="px-5 lg:px-7 py-3">
                         <Link href={`/teams/${teamSlug(s.team)}/`} className="inline-flex items-center gap-2.5 group">
                           <TeamLogo name={s.team} size={28} />
-                          <span className="font-medium text-ink group-hover:text-coral transition-colors"><TeamName name={s.team} /></span>
+                          <span className="font-medium text-ink group-hover:text-coral transition-colors hidden sm:inline"><TeamName name={s.team} /></span>
                         </Link>
                       </td>
-                      <td className="px-3 py-3 text-right tabular text-ink-soft text-xs whitespace-nowrap">
-                        {seasonLabel(s.first_year)} – {profile.is_active && s.team === profile.current_team && s.last_year === LATEST_YEAR ? "present" : seasonLabel(s.last_year)}
+                      <td className="px-3 py-3 text-right tabular text-ink-soft text-xs">
+                        {(() => {
+                          const last = profile.is_active && s.team === profile.current_team && s.last_year === LATEST_YEAR ? "present" : seasonLabel(s.last_year);
+                          return (
+                            <>
+                              {/* Stacked on mobile, single line on sm+. */}
+                              <span className="flex flex-col items-end leading-tight sm:hidden">
+                                <span>{seasonLabel(s.first_year)} –</span>
+                                <span>{last}</span>
+                              </span>
+                              <span className="hidden sm:inline whitespace-nowrap">
+                                {seasonLabel(s.first_year)} – {last}
+                              </span>
+                            </>
+                          );
+                        })()}
                       </td>
                       <td className="px-3 py-3 text-right tabular text-ink-soft">{s.seasons}</td>
                       <td className="px-3 py-3 text-right tabular text-ink">{s.wins}-{s.losses}</td>
@@ -360,7 +374,7 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
       {/* YEAR-BY-YEAR — headline ledger. Heavier chrome than the other
           cards on the page so this anchors the page as the canonical record. */}
       <section className="mx-auto max-w-[97rem] px-6 lg:px-10 mt-8">
-        <div className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5">
+        <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
           {/* Top accent rule — coral bar marks this table as the page's headline. */}
           <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
           <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-3">
@@ -382,7 +396,7 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
 
       {/* TOURNAMENT SUCCESS — now lives at the end, after Season-by-season. */}
       <section className="mx-auto max-w-[97rem] px-6 lg:px-10 mt-6 pb-12">
-        <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-5 lg:p-7">
+        <div className="bg-paper-deep/25 border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm p-5 lg:p-7 -mx-6 lg:mx-0">
           <div className="flex items-baseline justify-between gap-3 mb-1">
             <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Tournament success</div>
             {ncaaAppearances > 0 && (

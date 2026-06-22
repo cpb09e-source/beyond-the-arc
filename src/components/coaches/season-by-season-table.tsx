@@ -100,10 +100,14 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
   }
 
   return (
-    <table className="w-full text-sm table-fixed">
+    // Horizontal scroll on narrow viewports — 9 columns can't fit a phone, so
+    // the table keeps real column widths (min-w) and swipes left/right instead
+    // of collapsing into overlapping text.
+    <div className="overflow-x-auto overscroll-x-contain">
+    <table className="w-full min-w-[60rem] text-sm table-fixed">
       <colgroup>
-        <col style={{ width: "7%" }} />
-        <col style={{ width: "17%" }} />
+        <col style={{ width: "11%" }} />
+        <col style={{ width: "13%" }} />
         <col style={{ width: "7%" }} />
         <col style={{ width: "8%" }} />
         <col style={{ width: "9%" }} />
@@ -114,7 +118,7 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
       </colgroup>
       <thead>
         <tr className="border-b border-hairline text-left">
-          <SortHeader label="SEASON" k="year" active={sortBy} dir={sortDir} onClick={clickHeader} className="px-5 lg:px-7" />
+          <SortHeader label="SEASON" k="year" active={sortBy} dir={sortDir} onClick={clickHeader} className="px-4 lg:px-7" />
           <SortHeader label="SCHOOL" k="school" active={sortBy} dir={sortDir} onClick={clickHeader} />
           <SortHeader label="CONF" k="conf" active={sortBy} dir={sortDir} onClick={clickHeader} />
           <SortHeader label="RECORD" k="record" active={sortBy} dir={sortDir} onClick={clickHeader} align="center" />
@@ -128,7 +132,7 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
       <tbody>
         {sorted.map((s, i) => (
           <tr key={`${s.year}-${s.team}-${i}`} className={`transition-colors hover:bg-[var(--accent-tint,rgba(237,90,79,0.08))] ${i % 2 === 0 ? "bg-paper/70" : "bg-transparent"}`}>
-            <td className="px-5 lg:px-7 py-2.5 tabular text-ink-soft whitespace-nowrap">
+            <td className="px-4 lg:px-7 py-2.5 tabular text-ink-soft whitespace-nowrap">
               <Link
                 href={`/teams/${teamSlug(s.team)}/${s.year}/`}
                 className="hover:text-coral transition-colors"
@@ -140,7 +144,7 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
             <td className="px-3 py-2.5">
               <Link href={`/teams/${teamSlug(s.team)}/${s.year}/`} className="inline-flex items-center gap-2 group">
                 <TeamLogo name={s.team} size={22} />
-                <span className="text-ink group-hover:text-coral transition-colors truncate"><TeamName name={s.team} /></span>
+                <span className="text-ink group-hover:text-coral transition-colors truncate hidden sm:inline"><TeamName name={s.team} /></span>
                 {/* Tournament seed chip — small, color-coded by tier. */}
                 {s.seed !== null && <SeedChip seed={s.seed} size="sm" />}
                 <SeasonPostseasonBadge season={s} />
@@ -159,6 +163,7 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
 

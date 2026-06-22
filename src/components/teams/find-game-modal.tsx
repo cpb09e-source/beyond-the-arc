@@ -175,17 +175,19 @@ export function FindGameModal({
       role="dialog"
       aria-modal
       aria-label={`Find a ${displayName} game`}
-      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 p-4 pt-[5vh] overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 p-0 pt-0 sm:p-4 sm:pt-[5vh] overflow-y-auto"
       onClick={onClose}
     >
       <div
         // No `overflow-hidden` here — the MultiYearSelect popover needs to
         // escape the card. We round each top/bottom child explicitly so the
         // corners still clip cleanly.
-        className="bg-card border border-ink/10 rounded-xl shadow-xl ring-1 ring-ink/5 w-full max-w-4xl flex flex-col"
+        // Full-screen on mobile (edge-to-edge, fills the viewport); framed
+        // card on sm+.
+        className="bg-card border-y border-x-0 sm:border border-ink/10 rounded-none sm:rounded-xl shadow-xl ring-1 ring-ink/5 w-full max-w-4xl min-h-dvh sm:min-h-0 flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60 rounded-t-xl" />
+        <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60 rounded-none sm:rounded-t-xl" />
 
         {/* Header */}
         <div className="px-5 lg:px-7 py-4 lg:py-5 border-b border-hairline bg-paper-deep/30 flex items-start justify-between gap-3">
@@ -199,7 +201,7 @@ export function FindGameModal({
               {displayName} games matching…
             </h2>
             <p className="text-xs text-ink-muted mt-2">
-              Stack at least two filters, pick the seasons to scan, then submit.
+              Stack at least two filters, pick the seasons, then submit.
             </p>
           </div>
           <button
@@ -244,14 +246,14 @@ export function FindGameModal({
               Filters · {filters.length}/8
             </span>
             {filters.map((f, i) => (
-              <div key={f.id} className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-ink-muted w-10">
+              <div key={f.id} className="flex items-center gap-2">
+                <span className="text-xs text-ink-muted w-9 sm:w-10 shrink-0">
                   {i === 0 ? "Where" : "And"}
                 </span>
                 <Select
                   value={f.stat as string}
                   onChange={(v) => patchFilter(f.id, { stat: v as keyof GameLog })}
-                  className="min-w-44"
+                  className="flex-1 min-w-0 sm:flex-none sm:min-w-44"
                 >
                   {STAT_OPTIONS.map((s) => (
                     <option key={s.key as string} value={s.key as string}>
@@ -262,7 +264,7 @@ export function FindGameModal({
                 <Select
                   value={f.op}
                   onChange={(v) => patchFilter(f.id, { op: v as Filter["op"] })}
-                  className="w-20"
+                  className="w-16 sm:w-20 shrink-0"
                 >
                   {OPS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
@@ -273,13 +275,13 @@ export function FindGameModal({
                   step="any"
                   value={f.value}
                   onChange={(e) => patchFilter(f.id, { value: Number(e.target.value) })}
-                  className="h-10 w-24 px-3 rounded-md border border-ink/15 bg-card text-ink text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+                  className="h-10 w-14 sm:w-24 px-2 sm:px-3 rounded-md border border-ink/15 bg-card text-ink text-base sm:text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors shrink-0"
                 />
                 {filters.length > 1 && (
                   <button
                     type="button"
                     onClick={() => removeFilter(f.id)}
-                    className="text-sm text-ink-muted hover:text-coral px-2 py-1"
+                    className="text-base text-ink-muted hover:text-coral px-1 sm:px-2 py-1 shrink-0"
                     aria-label="Remove filter"
                   >
                     ×
@@ -323,7 +325,7 @@ export function FindGameModal({
         </div>
 
         {/* Results */}
-        <div className="px-5 lg:px-7 py-5 max-h-[55vh] overflow-y-auto rounded-b-xl">
+        <div className="px-5 lg:px-7 py-5 flex-1 min-h-0 sm:flex-none sm:max-h-[55vh] overflow-y-auto rounded-none sm:rounded-b-xl">
           {!submitted && (
             <p className="text-sm text-ink-muted text-center py-8">
               Set your filters and submit to see matching games.

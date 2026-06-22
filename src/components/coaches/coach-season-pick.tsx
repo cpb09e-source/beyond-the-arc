@@ -27,7 +27,26 @@ export function CoachSeasonPick({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  // Nudge the (left-anchored) popover left so it never bleeds off the right
+  // edge of a narrow viewport — the trigger often sits far right on mobile.
+  const [shiftX, setShiftX] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) { setShiftX(0); return; }
+    function reposition() {
+      const el = containerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const panelW = 256; // matches w-64
+      const margin = 8;
+      const overflow = rect.left + panelW - (window.innerWidth - margin);
+      setShiftX(overflow > 0 ? -overflow : 0);
+    }
+    reposition();
+    window.addEventListener("resize", reposition);
+    return () => window.removeEventListener("resize", reposition);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -70,7 +89,8 @@ export function CoachSeasonPick({
 
       {open && (
         <div
-          className="absolute z-50 top-full left-0 mt-1 w-64 bg-card border border-hairline rounded-lg shadow-lg overflow-hidden"
+          className="absolute z-50 top-full left-0 mt-1 w-64 max-w-[calc(100vw-1rem)] bg-card border border-hairline rounded-lg shadow-lg overflow-hidden"
+          style={shiftX ? { transform: `translateX(${shiftX}px)` } : undefined}
           role="listbox"
         >
           <div className="max-h-72 overflow-y-auto sm:max-h-none sm:overflow-visible py-1">

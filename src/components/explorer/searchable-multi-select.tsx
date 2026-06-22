@@ -46,6 +46,9 @@ export function SearchableMultiSelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
+  // How far to nudge the popover left so it never bleeds off the right edge of
+  // a narrow viewport (the popover is left-anchored to its trigger).
+  const [shiftX, setShiftX] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -56,6 +59,24 @@ export function SearchableMultiSelect({
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [open]);
+
+  // On open, measure the trigger and shift the (left-anchored) popover left if
+  // it would overflow the viewport. Re-measure on resize while open.
+  useEffect(() => {
+    if (!open || align === "right") { setShiftX(0); return; }
+    function reposition() {
+      const el = containerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const panelW = 240; // matches w-60
+      const margin = 8;
+      const overflow = rect.left + panelW - (window.innerWidth - margin);
+      setShiftX(overflow > 0 ? -overflow : 0);
+    }
+    reposition();
+    window.addEventListener("resize", reposition);
+    return () => window.removeEventListener("resize", reposition);
+  }, [open, align]);
 
   useEffect(() => {
     if (!open) return;
@@ -144,6 +165,7 @@ export function SearchableMultiSelect({
             "absolute z-50 top-full mt-1 w-60 max-w-[calc(100vw-2rem)] bg-card border border-hairline rounded-lg shadow-lg overflow-hidden",
             align === "right" ? "right-0" : "left-0",
           )}
+          style={shiftX ? { transform: `translateX(${shiftX}px)` } : undefined}
           role="listbox"
         >
           <div className="p-2 border-b border-hairline">

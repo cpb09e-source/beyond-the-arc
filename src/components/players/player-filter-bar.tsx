@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { SlidersHorizontal, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Select } from "@/components/select";
 import { confDisplay } from "@/lib/conf-display";
@@ -86,6 +87,8 @@ export function PlayerFilterBar({
   const router = useRouter();
   const search = useSearchParams();
   const [pending, startTransition] = useTransition();
+  // Collapsed by default on mobile to save vertical space; always open on lg+.
+  const [open, setOpen] = useState(false);
 
   const params = useMemo(() => {
     const obj: Record<string, string> = {};
@@ -200,7 +203,24 @@ export function PlayerFilterBar({
   }, [conferences]);
 
   return (
-    <div className={cn("bg-paper-deep/25 border border-hairline rounded-xl shadow-sm", pending && "opacity-70")}>
+    <div className={cn("bg-paper-deep/25 border border-hairline border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-sm -mx-6 lg:mx-0", pending && "opacity-70")}>
+      {/* Mobile collapse toggle — hidden on desktop where the bar is always open */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className={cn(
+          "lg:hidden w-full flex items-center justify-between px-4 py-3.5",
+          open && "border-b border-hairline",
+        )}
+      >
+        <span className="flex items-center gap-2 text-xs uppercase tracking-widest text-ink-muted font-semibold">
+          <SlidersHorizontal size={15} /> Filters &amp; scope
+        </span>
+        <ChevronDown size={18} className={cn("text-ink-muted transition-transform", open && "rotate-180")} />
+      </button>
+
+      <div className={cn(open ? "block" : "hidden", "lg:block")}>
       {/* Top row — primary scope. No Min Games dropdown (per request); use
           the GP filter in the Filters section below if you need that. */}
       <div className="flex flex-wrap items-end gap-3 p-4 lg:p-5 border-b border-hairline">
@@ -334,6 +354,7 @@ export function PlayerFilterBar({
             </button>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

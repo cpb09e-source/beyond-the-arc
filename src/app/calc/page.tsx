@@ -53,7 +53,7 @@ export default async function CalcPage() {
               <span className="h-px w-8 bg-coral" />
               <span>The win calculator</span>
             </div>
-            <ThemeToggle />
+            <ThemeToggle className="hidden md:inline-flex" />
           </div>
         </div>
       </section>

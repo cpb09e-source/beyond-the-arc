@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Star } from "lucide-react";
+import { Star, ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { confDisplay } from "@/lib/conf-display";
@@ -54,12 +55,22 @@ export function TransferClassesPanel({
   onOpen: (r: TransferClassRow) => void;
   className?: string;
 }) {
+  // Collapsed by default on mobile (expand on tap); always open on xl where it
+  // sits as a sticky sidebar.
+  const [open, setOpen] = useState(false);
   return (
-    <div className={`bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-4 ${className}`}>
-      <div className="flex items-baseline justify-between mb-3">
+    <div className={`bg-paper-deep/25 border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm p-4 -mx-6 lg:mx-0 ${className}`}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-2 xl:cursor-default"
+      >
         <h3 className="font-display text-lg text-ink">{title}</h3>
-      </div>
-      <div className="text-[0.65rem] text-ink-muted mb-2">{subtitle}</div>
+        <ChevronDown className={cn("w-4 h-4 text-ink-muted transition-transform xl:hidden", open && "rotate-180")} aria-hidden />
+      </button>
+      <div className={cn(open ? "block" : "hidden", "xl:block")}>
+      <div className="text-[0.65rem] text-ink-muted mb-2 mt-3 xl:mt-2">{subtitle}</div>
       {rows.length === 0 ? (
         <p className="text-sm text-ink-muted">No matching schools.</p>
       ) : (
@@ -87,6 +98,7 @@ export function TransferClassesPanel({
           ))}
         </ul>
       )}
+      </div>
     </div>
   );
 }
@@ -112,11 +124,11 @@ export function TransferClassModal({ row, onClose }: { row: TransferClassRow; on
       role="dialog"
       aria-modal
       aria-label={`${row.school} transfer class`}
-      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 p-4 pt-[6vh]"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 p-0 pt-0 sm:p-4 sm:pt-[6vh]"
       onClick={onClose}
     >
       <div
-        className="bg-card border border-hairline rounded-lg w-full max-w-4xl max-h-[88vh] flex flex-col overflow-hidden"
+        className="bg-card border-y sm:border border-hairline rounded-none sm:rounded-lg w-full max-w-4xl max-h-dvh sm:max-h-[88vh] min-h-dvh sm:min-h-0 flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-hairline">

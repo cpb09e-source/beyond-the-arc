@@ -15,6 +15,7 @@
     "snapshot:coach-history": "node scripts/snapshot-historical-coaches.mjs",
     "export:data": "tsx scripts/export-static-data.mts",
     "export:portal": "tsx scripts/export-portal-only.mts",
+    "refresh:portal": "tsx scripts/refresh-portal.mts",
     "scrape:nba-draftees": "node scripts/scrape-nba-draftees.mjs",
     "scrape:nba-players": "node scripts/scrape-nba-players.mjs",
     "scrape:tournament-games": "node scripts/scrape-tournament-games.mjs",

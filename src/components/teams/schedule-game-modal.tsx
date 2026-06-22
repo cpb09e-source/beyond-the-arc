@@ -180,11 +180,11 @@ export function ScheduleGameModal({
       role="dialog"
       aria-modal
       aria-label={`Game vs ${game.opp_team_market ?? "TBD"}`}
-      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 p-4 pt-[6vh] overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 p-0 pt-0 sm:p-4 sm:pt-[6vh] overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="bg-card border border-hairline rounded-lg shadow-xl w-full max-w-5xl flex flex-col overflow-hidden"
+        className="bg-card border-y sm:border border-hairline rounded-none sm:rounded-lg shadow-xl w-full max-w-5xl min-h-dvh sm:min-h-0 flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -283,8 +283,10 @@ function FullBody({
         </div>
       </div>
 
-      {/* Both teams' player tables, stacked */}
-      <div className="divide-y divide-hairline max-h-[60vh] overflow-y-auto overscroll-contain">
+      {/* Both teams' player tables, stacked. On mobile the modal is full-
+          screen, so this region grows to fill all remaining height instead of
+          capping at 60vh and leaving dead space below. */}
+      <div className="divide-y divide-hairline flex-1 min-h-0 sm:flex-none sm:max-h-[60vh] overflow-y-auto overscroll-contain">
         {teams.map((t) => (
           <div key={t.name} className="p-4">
             <div className="flex items-center gap-2 px-2 pb-2">
@@ -305,8 +307,9 @@ function TeamHeader({ name, align }: { name: string; align: "left" | "right" }) 
   const order = align === "right" ? "flex-row" : "flex-row-reverse";
   const textAlign = align === "right" ? "text-right" : "text-left";
   return (
-    <div className={`flex-1 min-w-0 flex items-center gap-3 ${order}`}>
-      <div className={`flex-1 min-w-0 ${textAlign}`}>
+    <div className={`flex-1 min-w-0 flex items-center justify-center sm:justify-start gap-3 ${order}`}>
+      {/* Name hidden on mobile — big logos flank the score instead. */}
+      <div className={`hidden sm:block flex-1 min-w-0 ${textAlign}`}>
         <div className="font-display text-2xl text-ink truncate"><TeamName name={name} /></div>
       </div>
       <TeamLogo name={name} size={48} />
@@ -335,9 +338,12 @@ function PlayerTable({
     if (att === 0) return "—";
     return `${Math.round((made / att) * 100)}%`;
   }
+  // No touch-action override — default lets the browser route horizontal
+  // swipes to this scroller and vertical swipes to the modal body, so both
+  // gestures work when a finger lands on the table.
   return (
-    <div className="overflow-x-auto overscroll-x-contain touch-pan-x">
-      <table className="w-full text-xs">
+    <div className="overflow-x-auto overscroll-x-contain">
+      <table className="w-full min-w-136 text-xs">
         <thead>
           <tr className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium text-left border-b border-hairline">
             <th className="px-2 py-1.5">Player</th>

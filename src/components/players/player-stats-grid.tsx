@@ -151,7 +151,7 @@ function StatPanel({
       {rows.length === 0 ? (
         <p className="text-sm text-ink-muted">No data.</p>
       ) : (
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 md:grid-cols-2 gap-2">
           {rows.map((r) => (
             <StatTile
               key={r.key}

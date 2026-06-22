@@ -12,7 +12,7 @@ export default async function PlayersOverviewPage() {
 
   return (
     <>
-      <section>
+      <section className="hidden md:block">
         <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-10 pb-2">
           <div className="flex items-center justify-end gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
             <ThemeToggle />
@@ -24,30 +24,6 @@ export default async function PlayersOverviewPage() {
         <Suspense fallback={<div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-10 text-center text-ink-muted">Loading players…</div>}>
           <PlayersClient confsByYear={confsByYear} />
         </Suspense>
-      </section>
-
-      <div className="mx-auto max-w-[88rem] px-6 lg:px-10 my-12">
-        <div className="court-divider" />
-      </div>
-      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mb-20">
-        <div className="flex items-start gap-4 max-w-3xl">
-          <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral/80 font-bold pt-1 whitespace-nowrap">
-            Sources
-          </div>
-          <p className="text-sm text-ink-muted leading-relaxed">
-            Per-game stats sourced from{" "}
-            <a
-              href="https://barttorvik.com/"
-              target="_blank"
-              rel="noreferrer"
-              className="text-ink hover:text-coral underline decoration-dotted underline-offset-4 transition-colors"
-            >
-              barttorvik.com
-            </a>
-            . Position label is Bart&apos;s heuristic (Combo G, Stretch 4, etc.).
-            Click any player for their full profile.
-          </p>
-        </div>
       </section>
     </>
   );

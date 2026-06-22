@@ -24,6 +24,7 @@ export function SortableTh({
   basePath = "/",
   defaultSort = "bta_rtg",
   align = "right",
+  nowrap = true,
 }: {
   statKey: string;
   label: string;
@@ -34,6 +35,7 @@ export function SortableTh({
   basePath?: string;
   defaultSort?: string;
   align?: "left" | "right";
+  nowrap?: boolean;
 }) {
   const params = useSearchParams();
   const sortInUrl = params.get("sort");
@@ -65,7 +67,7 @@ export function SortableTh({
   return (
     <th
       title={title ?? label}
-      className={cn(baseClasses, variantClasses, activeClass, className)}
+      className={cn(baseClasses, variantClasses, activeClass, nowrap ? "whitespace-nowrap" : "whitespace-normal", className)}
     >
       <Link
         href={href}

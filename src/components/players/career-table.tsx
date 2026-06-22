@@ -107,8 +107,10 @@ export function CareerTable({
         </span>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      {/* Horizontal scroll on narrow viewports — full stat line stays intact
+          and swipes left/right with touch momentum instead of dropping columns. */}
+      <div className="overflow-x-auto [-webkit-overflow-scrolling:touch] overscroll-x-contain">
+        <table className="w-full min-w-[46rem] text-sm">
           <thead className="bg-paper-deep/70 text-left">
             <tr>
               <Th>Season</Th>
@@ -209,7 +211,7 @@ export function CareerTable({
                   <Td>
                     <Link href={`/teams/${teamSlug(s.team_name)}`} className="inline-flex items-center gap-2 hover:text-coral transition-colors">
                       <TeamLogo name={s.team_name} size={20} />
-                      <span className="text-ink-soft">{s.team_name}</span>
+                      <span className="text-ink-soft hidden sm:inline">{s.team_name}</span>
                     </Link>
                   </Td>
                   <Td className="text-ink-muted" hideUntil="sm">{s.class ?? "—"}</Td>
@@ -267,9 +269,10 @@ function Td({
 }) {
   return <td className={`px-3 py-2.5 ${align === "right" ? "text-right" : ""} ${hideClass(hideUntil)} ${className}`}>{children}</td>;
 }
-function hideClass(hideUntil?: "sm" | "md" | "lg"): string {
-  if (hideUntil === "lg") return "hidden lg:table-cell";
-  if (hideUntil === "md") return "hidden md:table-cell";
-  if (hideUntil === "sm") return "hidden sm:table-cell";
+// Mobile now swipes the full table horizontally (min-w on <table>), so every
+// column renders at every width — no more column dropping on narrow screens.
+// `hideUntil` is kept on the call sites as documentation of column priority but
+// no longer hides anything.
+function hideClass(_hideUntil?: "sm" | "md" | "lg"): string {
   return "";
 }

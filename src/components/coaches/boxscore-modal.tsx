@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { TeamName } from "@/components/team-name";
@@ -132,6 +133,9 @@ export function BoxscoreModal({
   const [draftees, setDraftees] = useState<Record<string, Draftee>>({});
   const [bartIndex, setBartIndex] = useState<Record<string, number>>({});
   const [profileableIds, setProfileableIds] = useState<Set<number>>(() => new Set());
+  // Portal target — set after mount so createPortal is client-only (SSR-safe).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -164,17 +168,19 @@ export function BoxscoreModal({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
-  return (
+  if (!open || !mounted) return null;
+  // Portal to <body> so the modal's <div> isn't a child of the <tbody> that
+  // hosts the trigger row (that nesting is invalid HTML → hydration error).
+  return createPortal(
     <div
       role="dialog"
       aria-modal
       aria-label="Box score"
-      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 p-4 pt-[6vh] overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 p-0 pt-0 sm:p-4 sm:pt-[6vh] overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="bg-card border border-hairline rounded-lg shadow-xl w-full max-w-5xl flex flex-col overflow-hidden"
+        className="bg-card border-y sm:border border-hairline rounded-none sm:rounded-lg shadow-xl w-full max-w-5xl min-h-dvh sm:min-h-0 flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {err ? (
@@ -191,7 +197,8 @@ export function BoxscoreModal({
           />
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -260,8 +267,10 @@ function Body({
       {/* Score line — team left | scores+halves center | team right */}
       <ScoreLine teams={data.teams} />
 
-      {/* Box score tables — stacked vertically, both teams full-width. */}
-      <div className="divide-y divide-hairline max-h-[60vh] overflow-y-auto overscroll-contain">
+      {/* Box score tables — stacked vertically, both teams full-width. On
+          mobile the modal is full-screen so this grows to fill the viewport
+          instead of capping at 60vh and leaving dead space. */}
+      <div className="divide-y divide-hairline flex-1 min-h-0 sm:flex-none sm:max-h-[60vh] overflow-y-auto overscroll-contain">
         {data.teams.map((t) => (
           <div key={t.slug} className="p-4">
             <div className="flex items-center gap-2 px-2 pb-2">
@@ -271,7 +280,7 @@ function Body({
                 <TeamName name={t.name} /> <span className="text-ink-muted">–</span> {t.score ?? "—"}
               </span>
             </div>
-            <div className="overflow-x-auto overscroll-x-contain touch-pan-x">
+            <div className="overflow-x-auto overscroll-x-contain">
               <PlayerTable
                 players={t.players}
                 draftees={draftees}
@@ -365,8 +374,10 @@ function TeamHeader({ team, align }: { team: Team; align: "left" | "right" }) {
   // the far outside edge of the modal).
   const seedJustify = align === "right" ? "justify-end" : "justify-start";
   return (
-    <div className={`flex-1 min-w-0 flex items-center gap-3 ${order}`}>
-      <div className={`flex-1 min-w-0 ${textAlign}`}>
+    <div className={`flex-1 min-w-0 flex items-center justify-center sm:justify-start gap-3 ${order}`}>
+      {/* Name hidden on mobile — big logos flank the score instead. Seed chip
+          still shows above the logo so the matchup reads at a glance. */}
+      <div className={`hidden sm:block flex-1 min-w-0 ${textAlign}`}>
         {team.seed !== null && (
           <div className={`flex ${seedJustify} mb-1.5`}>
             <SeedChip seed={team.seed} size="sm" />
@@ -374,7 +385,11 @@ function TeamHeader({ team, align }: { team: Team; align: "left" | "right" }) {
         )}
         <div className="font-display text-2xl text-ink truncate"><TeamName name={team.name} /></div>
       </div>
-      <TeamLogo name={team.name} size={48} />
+      <div className="flex flex-col items-center gap-1 sm:hidden">
+        {team.seed !== null && <SeedChip seed={team.seed} size="sm" />}
+        <TeamLogo name={team.name} size={48} />
+      </div>
+      <TeamLogo name={team.name} size={48} className="hidden sm:inline-block" />
     </div>
   );
 }
@@ -426,7 +441,7 @@ function PlayerTable({
     return `${Math.round((made / att) * 100)}%`;
   }
   return (
-    <table className="w-full text-xs">
+    <table className="w-full min-w-136 text-xs">
       <thead>
         <tr className="text-left text-ink-muted">
           <Th className="pl-2">Player</Th>

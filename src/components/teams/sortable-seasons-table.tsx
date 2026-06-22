@@ -141,7 +141,7 @@ export function SortableSeasonsTable({
                       className="group inline-flex items-center gap-2.5 transition-colors"
                     >
                       <TeamLogo name={s.name} size={20} />
-                      <span className="font-medium text-ink group-hover:text-coral transition-colors">{seasonLabel(s.year)}</span>
+                      <span className="font-medium text-ink group-hover:text-coral transition-colors whitespace-nowrap shrink-0">{seasonLabel(s.year)}</span>
                       {/* NCAA tournament seed (tier-colored). Pairs naturally
                           with the F4/Champion badge that follows when present. */}
                       {cr?.tourneySeed != null && <SeedChip seed={cr.tourneySeed} size="sm" />}

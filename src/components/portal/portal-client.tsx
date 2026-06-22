@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Star } from "lucide-react";
+import { Star, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { Select } from "@/components/select";
@@ -47,21 +47,19 @@ type SortKey =
   | "name" | "stars" | "date" | "committed" | "from" | "to"
   | "mpg" | "ppg" | "rpg" | "apg" | "bta_portg";
 
-const STATUS_OPTIONS = ["All", "Active", "Transferred", "Withdrew"];
-
 export function PortalClient({
-  entries, generatedAt, transferClasses,
+  entries, transferClasses,
 }: {
   entries: PortalEntry[];
-  generatedAt: string;
+  generatedAt?: string;
   transferClasses?: {
     top_overall: TransferClassRow[];
     worst_power: TransferClassRow[];
     by_school?: Record<string, TransferClassRow>;
   };
 }) {
-  const [status, setStatus] = useState("All");
   const [confTo, setConfTo] = useState("All");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [pageSize, setPageSize] = useState<number>(50);
   const [page, setPage] = useState<number>(1);
   const [query, setQuery] = useState("");
@@ -73,7 +71,7 @@ export function PortalClient({
   const confsTo = useMemo(() => {
     const s = new Set<string>();
     for (const e of entries) if (e.conf_to) s.add(e.conf_to);
-    return ["All", "N/A", ...Array.from(s).sort()];
+    return ["All", ...Array.from(s).sort()];
   }, [entries]);
 
   const filtered = useMemo(() => {
@@ -89,13 +87,7 @@ export function PortalClient({
       const fromD1 = e.division_from === 1;
       const toD1 = e.division_to === 1;
       if (!fromD1 && !toD1) return false;
-      if (status !== "All") {
-        if (e.status?.toLowerCase() !== status.toLowerCase()) return false;
-      }
-      if (confTo !== "All") {
-        if (confTo === "N/A" && e.team_to !== null) return false;
-        if (confTo !== "N/A" && e.conf_to !== confTo) return false;
-      }
+      if (confTo !== "All" && e.conf_to !== confTo) return false;
       if (q && !e.name.toLowerCase().includes(q)) return false;
       if (sq) {
         const from = e.team_from?.toLowerCase() ?? "";
@@ -104,7 +96,7 @@ export function PortalClient({
       }
       return true;
     });
-  }, [entries, status, confTo, query, schoolQuery]);
+  }, [entries, confTo, query, schoolQuery]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -113,7 +105,10 @@ export function PortalClient({
         case "name":         return e.name;
         case "stars":        return e.stars;
         case "date":         return e.date_entered ?? "";
-        case "committed":    return e.team_to ? (e.date_updated ?? "") : "";
+        // Uncommitted players have no commit date — return null so the
+        // comparator's nulls-last rule parks them at the bottom in BOTH
+        // directions (instead of a wall of "—" floating to the top in asc).
+        case "committed":    return e.team_to ? (e.date_updated ?? null) : null;
         case "from":         return e.team_from ?? "";
         case "to":           return e.team_to ?? "zzz_uncommitted";
         case "mpg":          return e.mpg;
@@ -133,23 +128,12 @@ export function PortalClient({
     });
   }, [filtered, sortBy, sortDir]);
 
-  // Aggregates for hero strip
-  const counts = useMemo(() => {
-    const visible = filtered;
-    const active = visible.filter((e) => e.status === "Active").length;
-    const committed = visible.filter((e) => e.status === "Transferred").length;
-    const withdrawn = visible.filter((e) => e.status === "Withdrew").length;
-    return { total: visible.length, active, committed, withdrawn };
-  }, [filtered]);
-
-  const generated = new Date(generatedAt);
-
   function toggleSort(k: SortKey, defaultDir: "asc" | "desc") {
     if (sortBy === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortBy(k); setSortDir(defaultDir); }
   }
   function reset() {
-    setStatus("All"); setConfTo("All"); setQuery(""); setSchoolQuery(""); setPageSize(50); setPage(1);
+    setConfTo("All"); setQuery(""); setSchoolQuery(""); setPageSize(50); setPage(1);
   }
 
   // Derive paging from current state. Clamp page so a stale value (after a
@@ -162,14 +146,21 @@ export function PortalClient({
 
   return (
     <div className="space-y-6">
-      {/* Filter bar */}
-      <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-4 lg:p-5">
+      {/* Filter bar — collapsed by default on mobile, always open on lg+. */}
+      <div className="bg-paper-deep/25 border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm p-4 lg:p-5 -mx-6 lg:mx-0">
+        <button
+          type="button"
+          onClick={() => setFilterOpen((o) => !o)}
+          aria-expanded={filterOpen}
+          className="w-full flex items-center justify-between gap-2 lg:hidden"
+        >
+          <span className="inline-flex items-center gap-2 text-sm font-medium text-ink">
+            <SlidersHorizontal className="w-4 h-4 text-ink-muted" /> Filters
+          </span>
+          <ChevronDown className={cn("w-4 h-4 text-ink-muted transition-transform", filterOpen && "rotate-180")} aria-hidden />
+        </button>
+        <div className={cn(filterOpen ? "block" : "hidden", "lg:block mt-3 lg:mt-0")}>
         <div className="flex flex-wrap items-end gap-3">
-          <Field label="Status">
-            <Select value={status} onChange={(v) => { setStatus(v); setPage(1); }}>
-              {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-            </Select>
-          </Field>
           <Field label="Destination">
             <Select value={confTo} onChange={(v) => { setConfTo(v); setPage(1); }} className="min-w-40">
               {confsTo.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -208,17 +199,13 @@ export function PortalClient({
             Reset
           </button>
         </div>
-        <p className="text-xs text-ink-muted mt-3">
-          {counts.total.toLocaleString()} entries match · {counts.active.toLocaleString()} active ·
-          {" "}{counts.committed.toLocaleString()} transferred · {counts.withdrawn.toLocaleString()} withdrew ·
-          {" "}feed last refreshed {generated.toLocaleString()}
-        </p>
+        </div>
       </div>
 
       {/* Three-column layout: Top transfer classes (sticky) · transfers table · Worst (sticky) */}
       <div className="grid grid-cols-1 xl:grid-cols-[16rem_minmax(0,1fr)_16rem] gap-4 items-start">
         {transferClasses ? (
-          <aside className="xl:sticky xl:top-20 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:[scrollbar-width:none] xl:[&::-webkit-scrollbar]:hidden">
+          <aside className="order-1 xl:order-0 xl:sticky xl:top-20 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:[scrollbar-width:none] xl:[&::-webkit-scrollbar]:hidden">
             <TransferClassesPanel
               title="Top transfer classes"
               subtitle="Net BTA PRTG · all D-I"
@@ -228,8 +215,8 @@ export function PortalClient({
           </aside>
         ) : <div />}
 
-        {/* Entries table */}
-        <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-hidden min-w-0">
+        {/* Entries table — last on mobile (after both class panels), center column on xl. */}
+        <div className="order-3 xl:order-0 bg-paper-deep/25 border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden min-w-0 -mx-6 lg:mx-0">
           <div className="flex items-end justify-between gap-4 px-4 lg:px-5 py-3 border-b border-hairline bg-paper-deep/70">
             <div className="flex items-baseline gap-3">
               <span className="font-display text-xl text-ink tabular">{sorted.length.toLocaleString()}</span>
@@ -322,7 +309,7 @@ export function PortalClient({
         </div>
 
         {transferClasses ? (
-          <aside className="xl:sticky xl:top-20 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:[scrollbar-width:none] xl:[&::-webkit-scrollbar]:hidden">
+          <aside className="order-2 xl:order-0 xl:sticky xl:top-20 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:[scrollbar-width:none] xl:[&::-webkit-scrollbar]:hidden">
             <TransferClassesPanel
               title="Worst transfer classes"
               subtitle="ACC · B10 · B12 · SEC only"

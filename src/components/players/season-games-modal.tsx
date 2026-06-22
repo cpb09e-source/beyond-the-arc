@@ -29,6 +29,14 @@ function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
 }
 
+// "2025-06-11" → "6/11/25" (no Date() — avoid TZ drift on date-only strings).
+function shortDate(iso: string | null): string {
+  if (!iso) return "—";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  return `${Number(m[2])}/${Number(m[3])}/${m[1]!.slice(2)}`;
+}
+
 // Full EuroLeague PIR — now that we have per-game TOV, no more "minus turnovers".
 function pir(g: GameRow): number | null {
   const pts = g.pts_scored ?? 0;
@@ -144,11 +152,11 @@ export function SeasonGamesModal({
       role="dialog"
       aria-modal
       aria-label={`${playerName} ${seasonLabel(year)} game log`}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-0 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-card border border-hairline rounded-lg shadow-xl w-full max-w-6xl max-h-[85vh] flex flex-col"
+        className="bg-card border-y sm:border border-hairline rounded-none sm:rounded-lg shadow-xl w-full max-w-6xl max-h-dvh sm:max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
@@ -212,13 +220,16 @@ export function SeasonGamesModal({
                   const p = pir(g);
                   return (
                     <tr key={g.cbba_game_id} className="border-b border-hairline/60 hover:bg-paper-deep/30">
-                      <Td className="text-ink-muted tabular whitespace-nowrap">{g.game_date ?? "—"}</Td>
+                      <Td className="text-ink-muted tabular whitespace-nowrap">
+                        <span className="sm:hidden">{shortDate(g.game_date)}</span>
+                        <span className="hidden sm:inline">{g.game_date ?? "—"}</span>
+                      </Td>
                       <Td>
                         {g.opp_team_market ? (
                           <span className="inline-flex items-center gap-2">
                             <span className="text-ink-muted text-xs w-5 inline-block">{venue}</span>
                             <TeamLogo name={g.opp_team_market} size={18} />
-                            <span className="text-ink-soft whitespace-nowrap">{g.opp_team_market}</span>
+                            <span className="text-ink-soft whitespace-nowrap hidden sm:inline">{g.opp_team_market}</span>
                           </span>
                         ) : (
                           "—"
@@ -246,7 +257,7 @@ export function SeasonGamesModal({
         </div>
 
         <div className="px-5 py-3 border-t border-hairline text-[0.65rem] text-ink-muted">
-          Box scores from CBB Analytics. PIR = (PTS + REB + AST + STL + BLK) &minus; ((FGA &minus; FGM) + (FTA &minus; FTM) + TOV).
+          PIR = (PTS + REB + AST + STL + BLK) &minus; ((FGA &minus; FGM) + (FTA &minus; FTM) + TOV).
         </div>
       </div>
     </div>

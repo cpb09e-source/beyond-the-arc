@@ -51,7 +51,10 @@ export function FindGameTrigger({
       </button>
       {open && (
         <FindGameModal
-          matchGame={(g) => g.team_id === teamId}
+          // Match on team_name, NOT team_id — team_id is reassigned every
+          // season in the game-log data (Arizona is 3226 in 25-26, 2508 in
+          // 24-25, …), so an id match would only ever surface the current year.
+          matchGame={(g) => g.team_name === teamName}
           displayName={teamName}
           logoName={teamName}
           defaultYear={defaultYear}

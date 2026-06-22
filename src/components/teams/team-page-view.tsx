@@ -463,16 +463,13 @@ export function TeamPageView({
         </DistributionPanel>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-5">
-        <div className="flex items-baseline justify-between mb-4">
-          <h2 className="font-display text-3xl text-ink">Roster — {seasonLabel(current.year)}</h2>
-          <span className="text-xs uppercase tracking-widest text-ink-muted">
-            {roster.length} players · click headers to sort
-          </span>
+      <section className="mx-auto max-w-7xl px-4 lg:px-10 mt-5">
+        <div className="mb-2 sm:mb-4">
+          <h2 className="font-display text-3xl text-ink whitespace-nowrap">Roster — {seasonLabel(current.year)}</h2>
         </div>
         {/* Player headshot strip — faces + names before the spreadsheet. */}
         {roster.length > 0 && (
-          <div className="mb-5">
+          <div className="mb-3 sm:mb-5">
             <PlayerHeadshotStrip players={roster} rankedPlayerIds={rankedPlayerIds} />
           </div>
         )}
@@ -486,7 +483,7 @@ export function TeamPageView({
       {/* BY SEASON — headline ledger. Mirrors the coach page's "Season by
           season" treatment so cross-page recognition is consistent. */}
       <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-12 mb-20">
-        <div className="bg-card border border-ink/10 rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5">
+        <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
           {/* Top accent rule — coral bar marks this table as the headline. */}
           <div
             className="h-1 w-full"

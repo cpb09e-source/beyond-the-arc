@@ -106,7 +106,7 @@ export function SortableRosterTable({
   }, []);
 
   return (
-    <div className="border border-hairline rounded-xl shadow-sm overflow-hidden bg-paper-deep/25">
+    <div className="border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-4 lg:mx-0">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-paper-deep/70 text-left">
@@ -114,7 +114,7 @@ export function SortableRosterTable({
               <ThSort label="Player" active={sortBy==="name"} dir={sortDir} onClick={() => toggle("name","asc")} align="left" />
               <ThSort label="Cl"     active={sortBy==="class"} dir={sortDir} onClick={() => toggle("class","asc")} align="left" />
               <ThSort label="Ht"     active={sortBy==="height"} dir={sortDir} onClick={() => toggle("height","desc")} align="left" />
-              <ThSort label="BTA PRTG" active={sortBy==="bta_portg"} dir={sortDir} onClick={() => toggle("bta_portg","desc")} />
+              <ThSort label={<>BTA<br />PRTG</>} active={sortBy==="bta_portg"} dir={sortDir} onClick={() => toggle("bta_portg","desc")} wrap />
               <ThSort label="PIR"    active={sortBy==="pir"} dir={sortDir} onClick={() => toggle("pir","desc")} />
               <ThSort label="PPG"    active={sortBy==="pts"} dir={sortDir} onClick={() => toggle("pts","desc")} />
               <ThSort label="RPG"    active={sortBy==="reb"} dir={sortDir} onClick={() => toggle("reb","desc")} />
@@ -177,18 +177,19 @@ function StatCell({ value, pct, emphasized = false }: { value: string; pct: numb
   );
 }
 function ThSort({
-  label, active, dir, onClick, align = "right",
+  label, active, dir, onClick, align = "right", wrap = false,
 }: {
-  label: string; active: boolean; dir: "asc" | "desc"; onClick: () => void; align?: "left" | "right";
+  label: React.ReactNode; active: boolean; dir: "asc" | "desc"; onClick: () => void; align?: "left" | "right"; wrap?: boolean;
 }) {
   return (
     <th className={cn(
-      "px-2 sm:px-3 py-2 text-xs uppercase tracking-widest font-medium whitespace-nowrap select-none cursor-pointer hover:bg-paper-deep/90 transition-colors",
+      "px-2 sm:px-3 py-2 text-xs uppercase tracking-widest font-medium select-none cursor-pointer hover:bg-paper-deep/90 transition-colors",
+      wrap ? "whitespace-normal" : "whitespace-nowrap",
       align === "right" && "text-right",
       active ? "text-ink" : "text-ink-muted",
     )}>
       <button type="button" onClick={onClick} className={cn("inline-flex items-center gap-1", align === "right" && "justify-end w-full")}>
-        <span>{label}</span>
+        <span className={wrap ? "leading-tight text-center" : undefined}>{label}</span>
         {active && <span className="text-coral text-[0.65rem] leading-none">{dir === "asc" ? "↑" : "↓"}</span>}
       </button>
     </th>

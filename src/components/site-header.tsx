@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Search } from "lucide-react";
 import { SearchDialog } from "@/components/search/search-dialog";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -99,9 +100,9 @@ export function SiteHeader() {
             <img src="/images/320navlogo-01_light-01.svg" alt="32-0" className="ttz-nav-logo-light h-11 w-auto" />
             <img src="/images/320navlogo-01_dark.svg" alt="32-0" className="ttz-nav-logo-dark h-11 w-auto" />
           </Link>
-          <div className="hidden md:block">
-            <SearchDialog />
-          </div>
+          {/* SearchDialog renders its own desktop trigger (hidden on mobile) and
+              the modal. Kept un-wrapped so the modal works on mobile too. */}
+          <SearchDialog />
           {/* 32-0 — mobile, sits to the left of the hamburger. */}
           <Link
             href="/32-0"
@@ -113,6 +114,15 @@ export function SiteHeader() {
             <img src="/images/320navlogo-01_light-01.svg" alt="32-0" className="ttz-nav-logo-light h-8 w-auto" />
             <img src="/images/320navlogo-01_dark.svg" alt="32-0" className="ttz-nav-logo-dark h-8 w-auto" />
           </Link>
+          {/* Mobile search — opens the same dialog via a custom event. */}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event("bta:open-search"))}
+            aria-label="Open search"
+            className="md:hidden inline-flex items-center justify-center w-9 h-9 rounded-md text-ink hover:bg-paper-deep transition-colors"
+          >
+            <Search size={20} />
+          </button>
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -155,8 +165,11 @@ export function SiteHeader() {
                 </Link>
               );
             })}
-            <div className="mt-3 pt-3 border-t border-hairline">
-              <SearchDialog />
+            <div className="mt-3 pt-3 border-t border-hairline flex items-center justify-between">
+              <span className="text-[0.75rem] uppercase tracking-[0.18em] font-medium text-ink-muted">
+                Theme
+              </span>
+              <ThemeToggle />
             </div>
           </nav>
         </div>

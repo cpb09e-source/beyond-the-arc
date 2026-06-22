@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
@@ -40,6 +41,10 @@ export function SearchDialog() {
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  // Portal the modal to <body> so its backdrop-blur applies against the page
+  // and isn't nested inside the header's own backdrop-filter (which cancels it).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   // Global ⌘K / Ctrl+K toggle.
   useEffect(() => {
@@ -54,6 +59,14 @@ export function SearchDialog() {
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  // External open trigger (e.g. the mobile header search icon) — keyboard
+  // shortcuts don't exist on touch devices, so a button dispatches this event.
+  useEffect(() => {
+    function onOpenSearch() { setOpen(true); }
+    window.addEventListener("bta:open-search", onOpenSearch);
+    return () => window.removeEventListener("bta:open-search", onOpenSearch);
   }, []);
 
   // Reset query + cursor when closed.
@@ -135,17 +148,17 @@ export function SearchDialog() {
         Search
       </button>
 
-      {open && (
+      {open && mounted && createPortal(
         <div
           role="dialog"
           aria-modal
           aria-label="Search teams and players"
-          className="fixed inset-0 z-50 flex items-start justify-center bg-ink/15 backdrop-blur-sm p-4 pt-[10vh]"
-          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-[60] flex items-start justify-center backdrop-blur-md p-4 pt-[10vh]"
+          onPointerDown={() => setOpen(false)}
         >
           <div
             className="bg-card border border-hairline rounded-lg shadow-xl w-full max-w-xl max-h-[75vh] flex flex-col overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
           >
             <div className="border-b border-hairline">
               <input
@@ -226,7 +239,7 @@ export function SearchDialog() {
               )}
             </div>
 
-            <div className="border-t border-hairline px-5 py-2 text-[0.65rem] text-ink-muted flex items-center justify-between">
+            <div className="border-t border-hairline px-5 py-2 text-[0.65rem] text-ink-muted hidden sm:flex items-center justify-between">
               <span className="flex items-center gap-3">
                 <Hint k="↑↓">navigate</Hint>
                 <Hint k="↵">open</Hint>
@@ -238,7 +251,8 @@ export function SearchDialog() {
               </span>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
