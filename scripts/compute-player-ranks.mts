@@ -47,6 +47,8 @@ import {
   top5Tier1Multiplier,
   top3InConfMultiplier,
   POWER_CONFS,
+  BTA_DEF_WEIGHT,
+  btaDefScore,
 } from "../src/lib/conf-tiers.ts";
 
 const PLAYER_DIR = path.resolve("public/data/player");
@@ -97,6 +99,11 @@ function pirFor(row: RawRow): number | null {
 // PORPAG — Bart Torvik's Points Over Replacement Per Adjusted Game (idx 28).
 // Second component of the BTA PRTG z-blend, paired with PIR.
 function porpagOf(row: RawRow): number | null { return fromStart(row, 28); }
+// Defensive index for the additive defensive z-tilt — mirrors defScoreOfRow in
+// scripts/lib/bta-prtg.mts (blk + steals + a slice of defensive glass).
+function defScoreOf(row: RawRow): number {
+  return btaDefScore(fromEnd(row, 4), fromEnd(row, 5), fromEnd(row, 7));
+}
 
 // BTA PRTG for a single season — uses year cohort stats + conf/team multipliers,
 // then adds the volume-shooter penalty (TS% percentile vs position bucket).
@@ -110,7 +117,10 @@ function btaPortgFor(bartId: number, season: PlayerSeason, stats: CohortStats | 
   if (typeof pir === "number" && stats.pirSd > 0) zs.push(((pir - stats.pirMean) / stats.pirSd) * 0.69);
   if (typeof porpag === "number" && stats.porSd > 0) zs.push((porpag - stats.porMean) / stats.porSd);
   if (zs.length === 0) return null;
-  const raw = (zs.reduce((s, v) => s + v, 0) / zs.length) * 20;
+  // Offensive blend + additive defensive tilt (see bta-prtg.mts).
+  const off = zs.reduce((s, v) => s + v, 0) / zs.length;
+  const zDef = stats.defSd > 0 ? (defScoreOf(row) - stats.defMean) / stats.defSd : 0;
+  const raw = (off + BTA_DEF_WEIGHT * zDef) * 20;
   const base = raw
     * confMultiplier(season.team_conference)
     * topTeamMultiplier(season.team_name)

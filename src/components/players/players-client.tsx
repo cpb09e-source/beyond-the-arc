@@ -20,7 +20,7 @@ import {
   type PlayerListSpec,
   type PlayerSummary,
 } from "@/lib/players";
-import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier } from "@/lib/conf-tiers";
+import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier, BTA_DEF_WEIGHT, btaDefScore } from "@/lib/conf-tiers";
 
 // Sort-by options surfaced in the leaderboard header. Order chosen to match
 // the column priorities on the table itself (BTA PRTG → PIR → PPG → shooting
@@ -283,16 +283,16 @@ function effPctileByPositionMap(players: PlayerSummary[]): Map<number, number> {
 // Volume-shooter penalty — punish high-usage scorers who are inefficient
 // relative to their position. Ramps in linearly:
 //   ppgFactor: 0 at ≤12 PPG, 1 at ≥20 PPG
-//   effFactor: 0 at ≥40th-percentile efficiency (worst-of TS / eFG vs position),
+//   effFactor: 0 at ≥45th-percentile efficiency (worst-of TS / eFG vs position),
 //              1 at ≤10th
-// Max penalty: −8 BTA points. Applied as a flat add-on after the conference
+// Max penalty: −10 BTA points. Applied as a flat add-on after the conference
 // and top-team multipliers so a high-major's penalty isn't amplified by
-// their schedule bonus.
+// their schedule bonus. (Mirror of bta-prtg.mts :: volumeShooterPenalty.)
 function volumeShooterPenalty(ppg: number | null, effPositionPctile: number | null): number {
   if (ppg == null || effPositionPctile == null) return 0;
   const ppgFactor = Math.max(0, Math.min(1, (ppg - 12) / 8));
-  const effFactor = Math.max(0, Math.min(1, (40 - effPositionPctile) / 30));
-  return -8 * ppgFactor * effFactor;
+  const effFactor = Math.max(0, Math.min(1, (45 - effPositionPctile) / 35));
+  return -10 * ppgFactor * effFactor;
 }
 
 // BTA PRTG = avg(0.69 × z(PIR), z(PORPAG)) × 20 × confMultiplier × topTeamMultiplier
@@ -311,15 +311,20 @@ function attachBtaIndOrtg(players: PlayerSummary[]): void {
   }
   const pirVals = players.map((p) => p.pir).filter((v): v is number => typeof v === "number");
   const porVals = players.map((p) => p.porpag).filter((v): v is number => typeof v === "number");
+  const defVals = players.map((p) => btaDefScore(p.blk_pg, p.stl_pg, p.reb_pg));
   const pirM = moments(pirVals);
   const porM = moments(porVals);
+  const defM = moments(defVals);
   const effByPos = effPctileByPositionMap(players);
   for (const p of players) {
     const zParts: number[] = [];
     if (typeof p.pir === "number" && pirM.sd > 0) zParts.push(((p.pir - pirM.mean) / pirM.sd) * 0.69);
     if (typeof p.porpag === "number" && porM.sd > 0) zParts.push((p.porpag - porM.mean) / porM.sd);
     if (zParts.length === 0) { p.bta_ind_ortg = null; continue; }
-    const avg = zParts.reduce((a, b) => a + b, 0) / zParts.length;
+    // Offensive blend + additive defensive tilt (see conf-tiers btaDefScore).
+    const off = zParts.reduce((a, b) => a + b, 0) / zParts.length;
+    const zDef = defM.sd > 0 ? (btaDefScore(p.blk_pg, p.stl_pg, p.reb_pg) - defM.mean) / defM.sd : 0;
+    const avg = off + BTA_DEF_WEIGHT * zDef;
     const base =
       avg * 20
       * confMultiplier(p.team_conference)

@@ -102,7 +102,7 @@ export function DistributionPanel({
   children?: ReactNode;
 }) {
   return (
-    <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-6">
+    <div className="bg-paper-deep/25 -mx-6 lg:mx-0 rounded-none lg:rounded-xl border-y border-x-0 lg:border-x border-hairline shadow-sm p-6">
       <div className="flex items-baseline justify-between mb-5">
         <h3 className="font-display text-xl text-ink">{title}</h3>
         <span className="text-[0.65rem] uppercase tracking-widest text-ink-muted">
@@ -164,7 +164,7 @@ function DistributionBar({ percentile }: { percentile: number }) {
   const left = Math.max(2, Math.min(98, percentile));
   return (
     <div
-      className="relative h-2 rounded-full bg-gradient-to-r from-rose-200/70 via-paper-deep to-emerald-200/70"
+      className="ttz-ffbar relative h-2 rounded-full"
       role="img"
       aria-label={`${percentile}th percentile in D-I`}
     >

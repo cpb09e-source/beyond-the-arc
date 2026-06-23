@@ -131,7 +131,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
               wraps to a full-width row below the name (flex-wrap). The
               banner scale is tuned smaller when inline so it doesn't
               fight the player-name h1 for visual weight. */}
-          <div className="flex items-end gap-y-10 gap-x-6 sm:gap-x-8 lg:gap-x-12 flex-wrap">
+          <div className="flex items-end gap-y-6 sm:gap-y-10 gap-x-6 sm:gap-x-8 lg:gap-x-12 flex-wrap">
             {/* Photo + name cluster */}
             <div className="flex items-start sm:items-end gap-4 sm:gap-6 lg:gap-10 min-w-0">
               {/* Two renders so we can scale the photo across breakpoints without
@@ -216,7 +216,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       </section>
 
       {overviewOptions.length > 0 && (
-        <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-10">
+        <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-0 lg:mt-10">
           {/* Player Overview — ledger card matching /coaches season-by-season.
               Inner component supplies the team/year picker band + grid.
               Full-bleed edge-to-edge on mobile; framed card on lg+. */}

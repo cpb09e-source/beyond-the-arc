@@ -15,7 +15,7 @@
  */
 
 export { POWER_CONFS } from "../../src/lib/conf-tiers.ts";
-import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier } from "../../src/lib/conf-tiers.ts";
+import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier, BTA_DEF_WEIGHT, btaDefScore } from "../../src/lib/conf-tiers.ts";
 
 /**
  * Fixed BTA PRTG cutoffs for portal star tiers. Replaces the old percentile
@@ -51,6 +51,10 @@ export type CohortStats = {
   pirSd: number;
   porMean: number;
   porSd: number;
+  // Per-game defensive-index distribution over the same eligible cohort, for
+  // the additive defensive z-tilt (see btaDefScore / BTA_DEF_WEIGHT).
+  defMean: number;
+  defSd: number;
   // Map<bartId, percentile 0..100> for the player's WORSE-OF TS% / eFG%
   // percentile within their position bucket. Drives the volume-shooter
   // penalty. Players with no position note or no efficiency stats are
@@ -71,13 +75,15 @@ const BUCKET_BY_NOTE: Record<string, "G" | "F" | "C"> = {
 // Catches both pure brick-throwers and FT-line-inflated scorers (Jahmir
 // Young archetype: 90% FT props up TS while eFG sits at 25th pctile).
 //   ppgFactor: 0 at ≤12 PPG, 1 at ≥20 PPG
-//   effFactor: 0 at ≥40th-percentile efficiency, 1 at ≤10th
-// Max: −8 BTA points. Applied AFTER multipliers as a flat adjustment.
+//   effFactor: 0 at ≥45th-percentile efficiency, 1 at ≤10th
+// Max: −10 BTA points. Applied AFTER multipliers as a flat adjustment.
+// Slightly stronger than before (cap −8 → −10, trigger widened 40th → 45th
+// pctile) to pull down inefficient high-volume scorers a touch more.
 export function volumeShooterPenalty(ppg: number | null, effPositionPctile: number | null): number {
   if (ppg == null || effPositionPctile == null) return 0;
   const ppgFactor = Math.max(0, Math.min(1, (ppg - 12) / 8));
-  const effFactor = Math.max(0, Math.min(1, (40 - effPositionPctile) / 30));
-  return -8 * ppgFactor * effFactor;
+  const effFactor = Math.max(0, Math.min(1, (45 - effPositionPctile) / 35));
+  return -10 * ppgFactor * effFactor;
 }
 
 export type ProductionResult = {
@@ -122,6 +128,11 @@ function pirOfRow(row: unknown): number | null {
 // Second component of the BTA PRTG z-blend: Bart Torvik's PORPAG (Points Over
 // Replacement Per Adjusted Game), column 28 of the player raw row.
 function porpagOfRow(row: unknown): number | null { return fromStart(row, 28); }
+// Defensive index (blocks + steals + a slice of defensive glass) for the
+// additive defensive z-tilt. Per-game reb/stl/blk live at the row tail.
+function defScoreOfRow(row: unknown): number {
+  return btaDefScore(fromEnd(row, 4), fromEnd(row, 5), fromEnd(row, 7));
+}
 function mpgOfRow(row: unknown): number | null { return fromStart(row, 54); }
 // Volume-shooter penalty inputs — must match the live attachBtaIndOrtg in
 // src/components/players/players-client.tsx so the BTA PRTG stored in
@@ -169,6 +180,7 @@ export function computeCohortStats(
   type Bag = {
     pir: number[];
     por: number[];
+    def: number[];
     // Loose-eligible (bartId, ts, eFg, strict) tuples bucketed by position.
     // We rank TS and eFG within each bucket against the STRICT cohort's
     // sorted distribution (18g / 20mpg / 5.3ppg — matches the profile's SHOOTING
@@ -189,11 +201,12 @@ export function computeCohortStats(
       const eligible = (games ?? 0) >= 8 && (ppg ?? 0) >= 3.5;
       if (!eligible) continue;
       let bag = bags.get(s.year);
-      if (!bag) { bag = { pir: [], por: [], byBucket: { G: [], F: [], C: [] } }; bags.set(s.year, bag); }
+      if (!bag) { bag = { pir: [], por: [], def: [], byBucket: { G: [], F: [], C: [] } }; bags.set(s.year, bag); }
       const pir = pirOfRow(row);
       const por = porpagOfRow(row);
       if (pir !== null) bag.pir.push(pir);
       if (por !== null) bag.por.push(por);
+      bag.def.push(defScoreOfRow(row));
       const ts = tsOfRow(row, games, ppg);
       const eFg = fgPctOfRow(row);  // Note: variable name kept for downstream compat; this is FG%, not eFG%.
       const bucket = bucketOf(s.notes);
@@ -209,6 +222,8 @@ export function computeCohortStats(
     const pSd = bag.pir.length ? sd(bag.pir, pMu) : 0;
     const oMu = bag.por.length ? mean(bag.por) : 0;
     const oSd = bag.por.length ? sd(bag.por, oMu) : 0;
+    const dMu = bag.def.length ? mean(bag.def) : 0;
+    const dSd = bag.def.length ? sd(bag.def, dMu) : 0;
     const effPositionPctile = new Map<number, number>();
     for (const bucket of ["G", "F", "C"] as const) {
       const arr = bag.byBucket[bucket];
@@ -239,7 +254,7 @@ export function computeCohortStats(
         effPositionPctile.set(e.id, t == null ? f! : f == null ? t : Math.min(t, f));
       }
     }
-    out.set(year, { pirMean: pMu, pirSd: pSd, porMean: oMu, porSd: oSd, effPositionPctile });
+    out.set(year, { pirMean: pMu, pirSd: pSd, porMean: oMu, porSd: oSd, defMean: dMu, defSd: dSd, effPositionPctile });
   }
   return out;
 }
@@ -284,7 +299,11 @@ export function productionFor(
     if (typeof pir === "number" && stats.pirSd > 0) zs.push(((pir - stats.pirMean) / stats.pirSd) * 0.69);
     if (typeof porpag === "number" && stats.porSd > 0) zs.push((porpag - stats.porMean) / stats.porSd);
     if (zs.length > 0) {
-      const raw = (zs.reduce((s, v) => s + v, 0) / zs.length) * 20;
+      // Offensive blend, then add the small defensive tilt on top (additive so
+      // the offensive scale is preserved — not a third averaged term).
+      const off = zs.reduce((s, v) => s + v, 0) / zs.length;
+      const zDef = stats.defSd > 0 ? (defScoreOfRow(row) - stats.defMean) / stats.defSd : 0;
+      const raw = (off + BTA_DEF_WEIGHT * zDef) * 20;
       const base =
         raw
         * confMultiplier(latest.team_conference)

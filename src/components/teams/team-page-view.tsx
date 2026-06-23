@@ -11,7 +11,7 @@ import { FindGameTrigger } from "@/components/teams/find-game-trigger";
 import { TourneyTimeline } from "@/components/teams/tourney-timeline";
 import { PlayerHeadshotStrip } from "@/components/teams/player-headshot-strip";
 import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog } from "@/lib/static-data";
-import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier } from "@/lib/conf-tiers";
+import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier, BTA_DEF_WEIGHT, btaDefScore } from "@/lib/conf-tiers";
 import { confDisplay } from "@/lib/conf-display";
 import { getTeamColors } from "@/lib/team-colors";
 
@@ -121,13 +121,13 @@ const BUCKET_BY_NOTE: Record<string, "G" | "F" | "C"> = {
 // Volume-shooter penalty — mirrors players-client.tsx. Punishes high-PPG /
 // low-efficiency scorers (worst-of TS%-pctile and eFG%-pctile within
 // position bucket, so the Jahmir Young archetype — propped up by 90% FT
-// shooting on a 25-pctile eFG — gets caught). Caps at −8 BTA points.
+// shooting on a 25-pctile eFG — gets caught). Caps at −10 BTA points.
 // Applied AFTER multipliers so schedule bonuses don't amplify it.
 function volumeShooterPenalty(ppg: number | null, effPositionPctile: number | null): number {
   if (ppg == null || effPositionPctile == null) return 0;
   const ppgFactor = Math.max(0, Math.min(1, (ppg - 12) / 8));
-  const effFactor = Math.max(0, Math.min(1, (40 - effPositionPctile) / 30));
-  return -8 * ppgFactor * effFactor;
+  const effFactor = Math.max(0, Math.min(1, (45 - effPositionPctile) / 35));
+  return -10 * ppgFactor * effFactor;
 }
 
 function computeYearMetrics(players: StaticPlayerRow[], year: number) {
@@ -142,6 +142,7 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
     team_name: string | null;
     eligible: boolean;          // loose 8/10/3 floor — gates BTA PRTG calc
     strict: boolean;            // 18/18/5 floor — gates efficiency cohort
+    def: number;                // per-game defensive index (additive z-tilt)
     ppg: number | null;
     ts: number | null;          // 0..100 (Bart's TS column at row[8])
     eFg: number | null;         // 0..100 (Bart's eFG column at row[7])
@@ -174,15 +175,18 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
     const eFg = pctFromIdx(row, 7);
     const note = p.player_bart_stats?.notes ?? null;
     const bucket = note ? (BUCKET_BY_NOTE[note] ?? null) : null;
-    return { id: p.id, pir, porpag, conference, team_name, eligible, strict, ppg: pts, ts, eFg, bucket };
+    const def = btaDefScore(blk, stl, reb);
+    return { id: p.id, pir, porpag, conference, team_name, eligible, strict, def, ppg: pts, ts, eFg, bucket };
   });
 
   const pirVals: number[] = [];
   const porVals: number[] = [];
+  const defVals: number[] = [];
   for (const m of mids) {
     if (!m.eligible) continue;
     if (typeof m.pir === "number") pirVals.push(m.pir);
     if (typeof m.porpag === "number") porVals.push(m.porpag);
+    defVals.push(m.def);
   }
   const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
   const sd = (a: number[], mu: number) => Math.sqrt(a.reduce((s, v) => s + (v - mu) ** 2, 0) / a.length);
@@ -190,6 +194,8 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
   const pSd = pirVals.length ? sd(pirVals, pMu) : 0;
   const oMu = porVals.length ? mean(porVals) : 0;
   const oSd = porVals.length ? sd(porVals, oMu) : 0;
+  const dMu = defVals.length ? mean(defVals) : 0;
+  const dSd = defVals.length ? sd(defVals, dMu) : 0;
 
   // Per-(position bucket) efficiency percentile: worst-of(TS% pctile,
   // eFG% pctile). Ranking cohort is the STRICT pool (18g/18mpg/5ppg) so
@@ -236,7 +242,10 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
       if (typeof m.pir === "number" && pSd > 0) zs.push(((m.pir - pMu) / pSd) * 0.69);
       if (typeof m.porpag === "number" && oSd > 0) zs.push((m.porpag - oMu) / oSd);
       if (zs.length > 0) {
-        const raw = (zs.reduce((s, v) => s + v, 0) / zs.length) * 20;
+        // Offensive blend + additive defensive tilt (see conf-tiers btaDefScore).
+        const off = zs.reduce((s, v) => s + v, 0) / zs.length;
+        const zDef = dSd > 0 ? (m.def - dMu) / dSd : 0;
+        const raw = (off + BTA_DEF_WEIGHT * zDef) * 20;
         const base =
           raw
           * confMultiplier(m.conference)

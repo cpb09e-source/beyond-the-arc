@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Dices, RotateCcw, Trophy, Search, X, Share2 } from "lucide-react";
+import { Dices, RotateCcw, Trophy, Search, X, Share2, Volume2, VolumeX } from "lucide-react";
 import {
   SLOTS,
   scoreLineup,
+  overallRating,
+  projectFourFactors,
   comboBuckets,
   rollComboWeighted,
   FIRST_ROLL_POWER_WEIGHT,
@@ -16,6 +18,8 @@ import {
 } from "@/lib/thirty-two-zero";
 import { cn } from "@/lib/utils";
 import { TeamLogo } from "@/components/team-logo";
+import { PercentileChip, pctColor } from "@/components/percentile-chip";
+import { playRoll, playLand, playPlace, playComplete, isMuted, setMuted } from "@/lib/ttz-sound";
 
 type Phase = "loading" | "idle" | "draft" | "done";
 
@@ -58,6 +62,16 @@ export function ThirtyTwoZeroClient() {
   const [placing, setPlacing] = useState<GamePlayer | null>(null);
   const [filter, setFilter] = useState<"All" | Bucket>("All");
   const [query, setQuery] = useState("");
+
+  // Sound on/off — read persisted state after mount (avoids SSR mismatch).
+  const [soundOff, setSoundOff] = useState(false);
+  useEffect(() => { setSoundOff(isMuted()); }, []);
+  function toggleSound() {
+    const next = !soundOff;
+    setSoundOff(next);
+    setMuted(next);
+    if (!next) playLand(); // tiny confirmation blip when re-enabling
+  }
 
   const shareRef = useRef<HTMLDivElement>(null);
 
@@ -135,6 +149,7 @@ export function ThirtyTwoZeroClient() {
     if (!index) return;
     setRolling(true);
     setPlacing(null);
+    playRoll();
     // The opening roll leans harder toward a power conference.
     const firstRoll = filledCount === 0;
     const final = rollComboWeighted(index, comboBkts, {
@@ -153,6 +168,7 @@ export function ThirtyTwoZeroClient() {
       setSpin(null);
       setFilter("All");
       setQuery("");
+      playLand();
     }, SLOT_MS + 280);
   }
 
@@ -189,9 +205,12 @@ export function ThirtyTwoZeroClient() {
     setUsedIds(nextUsed);
     setPlacing(null);
     const filled = SLOTS.filter((s) => nextLineup[s.id]).length;
+    // Pentatonic note climbs with each filled slot; full lineup gets a flourish.
+    playPlace(filled - 1);
     if (filled >= SLOTS.length) {
       setPhase("done");
       setRoll(null);
+      window.setTimeout(playComplete, 180);
     } else {
       setRoll(null);
       setPhase("idle");
@@ -238,17 +257,30 @@ export function ThirtyTwoZeroClient() {
       className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-5 pb-4 flex flex-col overflow-hidden"
       style={{ height: "calc(100dvh - 64px)" }}
     >
-      {/* header strip — mobile reset (desktop reset sits below the court). In the
-          draft phase the reset moves onto the filter row; the done screen has its
-          own Play again. Only show it for the IDLE state mid-game (between picks),
-          not on the opening screen where there's nothing to reset yet. */}
-      {phase === "idle" && filledCount > 0 && (
-        <div className="flex items-center justify-end mb-2 shrink-0 lg:hidden">
+      {/* top utility strip — sound toggle (always) + mobile reset (desktop reset
+          sits below the court). In the draft phase the reset moves onto the
+          filter row; the done screen has its own Play again. The reset only
+          shows for the IDLE state mid-game (between picks), not on the opening
+          screen where there's nothing to reset yet. */}
+      {/* sound toggle — hidden on the done screen so the result sits flush at
+          the top (the result has its own Play again). Mobile reset moved below
+          the roll container. */}
+      {phase !== "done" && (
+        <div
+          className={cn(
+            "items-center justify-between mb-2 shrink-0",
+            // In draft the toggle moves down beside Reset on mobile, so hide the
+            // top strip there (desktop keeps it).
+            phase === "draft" ? "hidden lg:flex" : "flex",
+          )}
+        >
           <button
-            onClick={reset}
-            className="inline-flex items-center gap-1.5 rounded-full border border-ink/25 text-ink font-semibold text-xs uppercase tracking-[0.12em] px-4 h-9 hover:bg-paper-deep transition-colors"
+            onClick={toggleSound}
+            aria-label={soundOff ? "Turn sound on" : "Turn sound off"}
+            title={soundOff ? "Sound off" : "Sound on"}
+            className="w-9 h-9 inline-flex items-center justify-center rounded-full text-ink-muted hover:text-coral hover:bg-paper-deep/60 transition-colors"
           >
-            <RotateCcw size={14} /> Reset
+            {soundOff ? <VolumeX size={17} /> : <Volume2 size={17} />}
           </button>
         </div>
       )}
@@ -260,7 +292,7 @@ export function ThirtyTwoZeroClient() {
       )}
 
       {phase !== "loading" && (
-        <div className="flex flex-col lg:grid lg:grid-cols-[1.1fr_1fr] gap-4 lg:gap-8 flex-1 min-h-0">
+        <div className="flex flex-col lg:grid lg:grid-cols-[1.1fr_1fr] gap-0 lg:gap-8 flex-1 min-h-0">
           {/* ============ LEFT: roll + pool ============ */}
           <div className="order-2 lg:order-1 min-w-0 flex flex-col min-h-0 flex-1 lg:flex-none">
             <RollPanel
@@ -278,6 +310,18 @@ export function ThirtyTwoZeroClient() {
               yearRerollUsed={yearRerollUsed}
               placing={placing}
             />
+
+            {/* mobile reset — sits just below the roll container between picks */}
+            {phase === "idle" && filledCount > 0 && (
+              <div className="lg:hidden mt-3 flex justify-end shrink-0">
+                <button
+                  onClick={reset}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-ink/25 text-ink font-semibold text-xs uppercase tracking-[0.12em] px-5 h-9 hover:bg-paper-deep transition-colors"
+                >
+                  <RotateCcw size={14} /> Reset
+                </button>
+              </div>
+            )}
 
             {phase === "draft" && roll && (
               <>
@@ -304,10 +348,18 @@ export function ThirtyTwoZeroClient() {
                       )}
                     </button>
                   ))}
-                  {/* mobile reset — same line as the filters, pushed right */}
+                  {/* mobile sound toggle + reset — same line as the filters, pushed right */}
+                  <button
+                    onClick={toggleSound}
+                    aria-label={soundOff ? "Turn sound on" : "Turn sound off"}
+                    title={soundOff ? "Sound off" : "Sound on"}
+                    className="lg:hidden ml-auto w-8 h-8 inline-flex items-center justify-center rounded-full text-ink-muted hover:text-coral hover:bg-paper-deep/60 transition-colors"
+                  >
+                    {soundOff ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                  </button>
                   <button
                     onClick={reset}
-                    className="lg:hidden ml-auto inline-flex items-center gap-1.5 rounded-full border border-ink/25 text-ink font-semibold text-xs uppercase tracking-[0.1em] px-3.5 h-8 hover:bg-paper-deep transition-colors"
+                    className="lg:hidden inline-flex items-center gap-1.5 rounded-full border border-ink/25 text-ink font-semibold text-xs uppercase tracking-[0.1em] px-3.5 h-8 hover:bg-paper-deep transition-colors"
                   >
                     <RotateCcw size={13} /> Reset
                   </button>
@@ -332,7 +384,7 @@ export function ThirtyTwoZeroClient() {
                   {placing && <span className="text-coral normal-case tracking-normal">· placing {placing.n} — pick a highlighted slot</span>}
                 </p>
 
-                <div className="ttz-scroll space-y-2 flex-1 min-h-0 overflow-y-auto pr-1">
+                <div className="ttz-scroll space-y-1.5 sm:space-y-2 flex-1 min-h-0 overflow-y-auto pr-1">
                   {pool.map((p) => {
                     const used = usedIds.has(p.id);
                     const draftable = [...openBuckets].some((b) => playsBucket(p, b)) && !used;
@@ -356,7 +408,10 @@ export function ThirtyTwoZeroClient() {
             )}
 
             {phase === "done" && (
-              <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+              // Full-bleed the result's scroll area on mobile so the card can go
+              // edge-to-edge without a negative margin clipping inside the
+              // overflow container. The game itself keeps its normal padding.
+              <div className="flex-1 min-h-0 overflow-y-auto -mx-6 lg:mx-0">
                 <Result
                   shareRef={shareRef}
                   lineup={lineup}
@@ -415,7 +470,7 @@ function MobileSlots({
   onSlotClick: (slotId: string) => void;
 }) {
   return (
-    <div className="lg:hidden order-3 shrink-0 mt-1 pt-3 border-t border-ink/10 flex items-start justify-between gap-1">
+    <div className="lg:hidden order-3 shrink-0 pt-2 flex items-start justify-between gap-1">
       {SLOTS.map((s) => {
         const p = lineup[s.id];
         const eligible = eligibleSlots.has(s.id);
@@ -428,20 +483,33 @@ function MobileSlots({
             className={cn("flex flex-col items-center gap-1 min-w-0", eligible ? "cursor-pointer" : "cursor-default")}
           >
             {p ? (
-              <span
-                className="relative w-12 h-12 rounded-full grid place-items-center"
-                style={{ background: "#101a30", border: `2px solid ${color}` }}
-              >
-                <span className="text-[13px] font-bold leading-none" style={{ color: "#faf7f2" }}>
-                  {playerInitials(p.n)}
-                </span>
-                <span
-                  className="absolute -bottom-0.5 -right-0.5 rounded-full bg-white grid place-items-center"
-                  style={{ width: 18, height: 18 }}
-                >
-                  <TeamLogo name={p.t} size={15} className="rounded-full" />
-                </span>
-              </span>
+              (() => {
+                const ovr = overallRating(p.prtg);
+                const c = ovrBadgeColor(ovr);
+                return (
+                  <span
+                    className="relative w-12 h-12 rounded-full grid place-items-center"
+                    style={{ background: "#101a30", border: `2px solid ${color}` }}
+                  >
+                    <span className="text-[13px] font-bold leading-none" style={{ color: "#faf7f2" }}>
+                      {playerInitials(p.n)}
+                    </span>
+                    {/* team logo bottom-right, OVR badge top-right — tier-colored */}
+                    <span
+                      className="absolute -bottom-0.5 -right-0.5 rounded-full bg-white grid place-items-center"
+                      style={{ width: 18, height: 18 }}
+                    >
+                      <TeamLogo name={p.t} size={15} className="rounded-full" />
+                    </span>
+                    <span
+                      className="absolute -top-1.5 -right-1.5 rounded-full grid place-items-center text-[10px] font-bold tabular leading-none ring-1 ring-[#101a30]"
+                      style={{ minWidth: 18, height: 18, padding: "0 4px", background: c.bg, color: c.fg }}
+                    >
+                      {ovr}
+                    </span>
+                  </span>
+                );
+              })()
             ) : (
               <span
                 className={cn("w-12 h-12 rounded-full grid place-items-center text-xs font-bold uppercase", eligible && "animate-pulse")}
@@ -497,7 +565,7 @@ function RollPanel({
   if (phase === "idle") {
     return (
       <div
-        className="border border-ink/10 rounded-xl shadow-md ring-1 ring-ink/5 overflow-hidden"
+        className="-mx-6 lg:mx-0 rounded-none lg:rounded-xl border-y border-x-0 lg:border-x border-ink/10 shadow-md ring-1 ring-ink/5 overflow-hidden"
         style={{ background: "var(--ttz-card-bg)" }}
       >
         <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
@@ -554,13 +622,13 @@ function RollPanel({
   // draft phase — conference + era in containers, each with its own reroll
   return (
     <div
-      className="border border-ink/10 rounded-xl shadow-sm ring-1 ring-ink/5 p-3 sm:p-4 lg:p-5"
+      className="border border-ink/10 rounded-xl shadow-sm ring-1 ring-ink/5 p-2.5 sm:p-4 lg:p-5"
       style={{ background: "var(--ttz-card-bg)" }}
     >
       <div className="grid grid-cols-2 gap-2 sm:gap-3">
         {/* Conference */}
-        <div className="rounded-xl border border-ink/12 bg-paper-deep/40 px-3 sm:px-4 pt-2 pb-2.5 sm:pt-3 sm:pb-3.5 flex flex-col items-center gap-1.5 sm:gap-2.5">
-          <div className="flex-1 grid place-items-center min-h-11 sm:min-h-14">
+        <div className="rounded-xl border border-ink/12 bg-paper-deep/40 px-3 sm:px-4 pt-1.5 pb-2 sm:pt-3 sm:pb-3.5 flex flex-col items-center gap-1 sm:gap-2.5">
+          <div className="flex-1 grid place-items-center min-h-9 sm:min-h-14">
             <ConfLogo code={roll!.conf} size={48} />
           </div>
           <RerollChip
@@ -571,8 +639,8 @@ function RollPanel({
           />
         </div>
         {/* Era */}
-        <div className="rounded-xl border border-ink/12 bg-paper-deep/40 px-3 sm:px-4 pt-2 pb-2.5 sm:pt-3 sm:pb-3.5 flex flex-col items-center gap-1.5 sm:gap-2.5">
-          <div className="flex-1 grid place-items-center min-h-11 sm:min-h-14">
+        <div className="rounded-xl border border-ink/12 bg-paper-deep/40 px-3 sm:px-4 pt-1.5 pb-2 sm:pt-3 sm:pb-3.5 flex flex-col items-center gap-1 sm:gap-2.5">
+          <div className="flex-1 grid place-items-center min-h-9 sm:min-h-14">
             <div className="font-display text-3xl sm:text-4xl font-extrabold tabular text-[var(--ttz-era)] leading-none relative top-[3px] whitespace-nowrap">
               {roll!.group}
             </div>
@@ -779,7 +847,7 @@ function PlayerCard({
       onClick={onClick}
       disabled={!draftable}
       className={cn(
-        "w-full text-left rounded-lg border px-4 py-3 transition-colors flex items-center gap-3",
+        "w-full text-left rounded-lg border px-3 sm:px-4 py-2 sm:py-3 transition-colors flex items-center gap-3",
         active
           ? "border-coral ring-2 ring-coral/30 bg-coral/5"
           : draftable
@@ -798,6 +866,8 @@ function PlayerCard({
           <span className={cn("shrink-0 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded", BUCKET_CHIP[p.b])}>
             {p.alt ? `${p.b}/${p.alt}` : p.b}
           </span>
+          {/* Raw PRTG stays in the pool; the 2K-style OVR is the thing revealed
+              only after a player is placed on the court. */}
           <span className="inline-flex items-center gap-1 rounded bg-coral/12 px-1.5 py-0.5 leading-none">
             <span className="font-bold tabular text-coral text-[11px] leading-none">
               {p.prtg?.toFixed(1) ?? "—"}
@@ -908,33 +978,28 @@ function Court({
             style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
           >
             {p ? (
-              <div
-                className="w-[clamp(78px,17vw,120px)] rounded-lg px-2.5 py-2 text-center backdrop-blur-[3px]"
-                style={{
-                  background: "var(--ttz-chip-bg)",
-                  border: `1px solid ${color}`,
-                  boxShadow: "var(--ttz-chip-shadow)",
-                }}
-              >
-                <div className="flex items-center justify-center gap-1 mb-1">
-                  <TeamLogo name={p.t} size={15} className="rounded-sm" />
-                  <span className="text-[9px] font-bold uppercase" style={{ color }}>
-                    {s.label}
-                  </span>
-                </div>
-                <div
-                  className="text-[12px] font-semibold leading-tight truncate"
-                  style={{ color: "var(--ttz-chip-text)" }}
-                >
-                  {p.n}
-                </div>
-                <div
-                  className="font-bold tabular text-sm leading-none mt-1"
-                  style={{ color: "var(--ttz-chip-accent)" }}
-                >
-                  {p.prtg?.toFixed(1)}
-                </div>
-              </div>
+              (() => {
+                const ovr = overallRating(p.prtg);
+                // OVR-based rarity — all static brushed-metal foil, palette by
+                // tier: galaxy (90+), gold (84-89), silver (78-83), bronze (<=77).
+                const tier = ovr >= 90 ? "galaxy" : ovr >= 84 ? "gold" : ovr >= 78 ? "silver" : "bronze";
+                return (
+                  <div
+                    className={cn("ttz-foil", `ttz-foil--${tier}`)}
+                    style={{ ["--pos"]: color } as React.CSSProperties}
+                  >
+                    <span className="ttz-foil__sheen" aria-hidden />
+                    <span className="ttz-foil__body">
+                      <span className="ttz-foil__top">
+                        <TeamLogo name={p.t} size={16} className="rounded-sm" />
+                        <span className="ttz-foil__pos" style={{ color }}>{s.label}</span>
+                      </span>
+                      <span className="ttz-foil__name">{p.n}</span>
+                      <span className="ttz-foil__ovr"><b>{ovr}</b><i>OVR</i></span>
+                    </span>
+                  </div>
+                );
+              })()
             ) : (
               <div
                 className={cn(
@@ -959,6 +1024,52 @@ function Court({
 }
 
 /* ----------------------------- Result ----------------------------- */
+// OVR badge colors — matched to the court foil tiers (galaxy / gold / silver /
+// bronze) so the rating reads the same on the result list.
+function ovrBadgeColor(ovr: number): { fg: string; bg: string } {
+  if (ovr >= 90) return { fg: "#bda6ff", bg: "rgba(123, 79, 255, 0.16)" };
+  if (ovr >= 84) return { fg: "#e8b54b", bg: "rgba(232, 181, 75, 0.16)" };
+  if (ovr >= 78) return { fg: "#cdd8ea", bg: "rgba(200, 210, 228, 0.14)" };
+  return { fg: "#d6996a", bg: "rgba(205, 127, 50, 0.16)" };
+}
+
+// One result-breakdown row: label, optional value, a colored percentile chip,
+// and a rose→neutral→green gradient bar with a marker at the percentile.
+// Shared by Talent / Efficiency and the four-factor projections.
+function BreakdownRow({
+  label, pct, value, chip, chipAria,
+}: {
+  label: string;
+  pct: number;
+  value?: string;
+  chip: string;
+  chipAria?: string;
+}) {
+  const left = Math.max(3, Math.min(97, pct));
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-1 gap-2">
+        <span className="text-[11px] text-ink-soft min-w-0 truncate">{label}</span>
+        <div className="flex items-baseline gap-2 shrink-0">
+          {value != null && (
+            <span className="text-[13px] tabular font-semibold text-ink">{value}</span>
+          )}
+          <PercentileChip pct={pct} ariaLabel={chipAria ?? `${pct}th percentile`}>
+            {chip}
+          </PercentileChip>
+        </div>
+      </div>
+      <div className="ttz-ffbar relative h-1.5 rounded-full">
+        <div
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full border-2 border-paper shadow ring-1 ring-hairline/40"
+          style={{ left: `${left}%`, background: pctColor(pct) }}
+          aria-hidden
+        />
+      </div>
+    </div>
+  );
+}
+
 function Result({
   shareRef,
   lineup,
@@ -979,20 +1090,15 @@ function Result({
   // is unaffected — this only changes the shown number + fill.
   const TALENT_DISPLAY_MAX = 70;
   const talentDisplay = Math.min(100, (score.core / TALENT_DISPLAY_MAX) * 100);
-  const bars: { label: string; v: number; strong?: boolean }[] = [
-    { label: "Talent", v: talentDisplay, strong: true },
-    { label: "Efficiency", v: score.efficiency, strong: true },
-    { label: "REB diff", v: ff.reb },
-    { label: "3PM diff", v: ff.threeP },
-    { label: "FBP diff", v: ff.fbp },
-    { label: "TOV diff", v: ff.tov },
-  ];
+  // Four factors → projected season DIFF totals + national rank (vs 365 D-I),
+  // shown like the team page's Four Factors panel.
+  const ffProj = projectFourFactors(ff);
   return (
-    <div className="mt-5">
+    <div className="mt-1 lg:mt-5">
       {/* share card */}
       <div
         ref={shareRef}
-        className="rounded-xl border border-ink/10 ring-1 ring-ink/5 overflow-hidden"
+        className="rounded-none lg:rounded-xl border-y border-x-0 lg:border-x border-ink/10 ring-1 ring-ink/5 overflow-hidden"
         style={{ background: "var(--ttz-card-bg)" }}
       >
         <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
@@ -1031,41 +1137,60 @@ function Result({
                   </span>
                   {p && <TeamLogo name={p.t} size={24} local className="shrink-0 sm:my-1.5" />}
                   <div className="min-w-0 flex-1 sm:flex-none">
-                    <div className="text-[13px] sm:text-[11px] font-semibold text-ink leading-tight sm:truncate">{p?.n}</div>
+                    <div className="text-[13px] sm:text-[11px] font-semibold text-ink leading-tight truncate">{p?.n}</div>
                     <div className="text-[10px] sm:text-[9px] text-ink-muted">{p?.yr}</div>
                   </div>
+                  {/* OVR badge — right of each player on mobile, tier-colored. */}
+                  {p && (() => {
+                    const ovr = overallRating(p.prtg);
+                    const c = ovrBadgeColor(ovr);
+                    return (
+                      <span
+                        className="shrink-0 ml-auto sm:hidden inline-flex items-baseline gap-1 rounded-md px-2 py-1 font-bold leading-none"
+                        style={{ background: c.bg, color: c.fg }}
+                      >
+                        <span className="text-base tabular">{ovr}</span>
+                        <span className="text-[8px] uppercase tracking-wide opacity-80">OVR</span>
+                      </span>
+                    );
+                  })()}
                 </div>
               );
             })}
           </div>
 
-          {/* score breakdown */}
-          <div className="space-y-1.5">
-            {bars.map((b) => (
-              <div key={b.label} className="flex items-center gap-3">
-                <div
-                  className={cn(
-                    "w-20 text-[10px] uppercase tracking-wide",
-                    b.strong ? "text-ink font-semibold" : "text-ink-muted",
-                  )}
-                >
-                  {b.label}
-                </div>
-                <div className="flex-1 h-2 rounded-full bg-paper-deep/60 overflow-hidden">
-                  <div
-                    className={cn("h-full rounded-full", b.strong ? "bg-coral" : "bg-coral/55")}
-                    style={{ width: `${Math.max(2, Math.min(100, b.v))}%` }}
-                  />
-                </div>
-                <div className="w-8 text-right font-semibold tabular text-xs text-ink">{Math.round(b.v)}</div>
-              </div>
-            ))}
+          {/* Talent + Efficiency — same gradient-bar style as the four factors. */}
+          <div className="space-y-2.5">
+            <BreakdownRow label="Talent" pct={talentDisplay} chip={`${Math.round(talentDisplay)}`} />
+            <BreakdownRow label="Efficiency" pct={score.efficiency} chip={`${Math.round(score.efficiency)}`} />
           </div>
+
+          {/* Four Factors — projected season DIFF totals + national rank (vs 365
+              D-I), mirroring the team page's Four Factors panel. */}
+          <div className="mt-4 pt-3.5 border-t border-hairline/60">
+            <div className="flex items-baseline justify-between mb-2.5">
+              <span className="text-[10px] uppercase tracking-[0.18em] text-coral font-medium">Four Factors</span>
+              <span className="text-[10px] uppercase tracking-[0.14em] text-ink-muted">vs D-I</span>
+            </div>
+            <div className="space-y-2.5">
+              {ffProj.map((r) => (
+                <BreakdownRow
+                  key={r.key}
+                  label={r.label}
+                  pct={r.percentile}
+                  value={r.value > 0 ? `+${r.value}` : `${r.value}`}
+                  chip={`#${r.rank}`}
+                  chipAria={`#${r.rank} of ${r.total}`}
+                />
+              ))}
+            </div>
+          </div>
+
           <div className="mt-3 text-[10px] text-ink-muted">Beyond the Arc · 32-0</div>
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-3">
+      <div className="mt-4 flex items-center gap-3 px-6 lg:px-0">
         <button
           onClick={onShare}
           className="inline-flex items-center gap-2 rounded-full bg-ink text-paper font-medium px-5 h-10 text-sm hover:bg-ink-soft transition-colors"

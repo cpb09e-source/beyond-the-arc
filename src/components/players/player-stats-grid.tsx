@@ -118,7 +118,7 @@ const STAT_DEFS: Record<string, string> = {
 
 export function PlayerStatsGrid({ season }: { season: PlayerRanksSeason }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 lg:gap-x-8 gap-y-8 px-5 sm:px-6 lg:px-8 py-5 sm:py-6 lg:py-7">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 lg:gap-x-8 gap-y-8 px-2 sm:px-5 lg:px-8 pt-1 pb-5 sm:py-6 lg:py-7">
       {PANELS.map((p) => (
         <StatPanel key={p.title} title={p.title} keys={p.keys} season={season} />
       ))}

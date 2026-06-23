@@ -78,7 +78,7 @@ export const POWER_WEIGHT = 1.8
 export const NORMAL_WEIGHT = 1.0
 // The very first roll of a game leans harder toward a power conference so most
 // runs open on a marquee league. Subsequent rolls use the normal POWER_WEIGHT.
-export const FIRST_ROLL_POWER_WEIGHT = 2.6
+export const FIRST_ROLL_POWER_WEIGHT = 3.2
 
 // ---- Scoring config (tunable) ----
 export const SCORE_CONFIG = {
@@ -90,6 +90,13 @@ export const SCORE_CONFIG = {
   ffWeight: 0.25,
   // four-factor blend (equal by default, sums to 1)
   ff: { reb: 0.25, threeP: 0.25, fbp: 0.25, tov: 0.25 },
+  // Severe-lack-of-talent penalty. Below `talentFloor` (on the 0-100 Talent
+  // scale), subtract `talentPenaltyK` rating points per point under the floor —
+  // so a lineup of efficient role players with no real shot-makers can't post
+  // an elite record on Efficiency + Four Factors alone. Above the floor it's a
+  // no-op, so good/great teams (and the 32-0 tail) are untouched.
+  talentFloor: 52,
+  talentPenaltyK: 0.6,
   // Talent is scaled LINEARLY off raw BTA PRTG (not the cohort percentile, which
   // saturates at p100 and flattens a 105-PRTG monster to the same value as a
   // p100 role player). talentRef = the dataset max raw PRTG (Zach Edey 2024) so
@@ -108,6 +115,18 @@ export const SCORE_CONFIG = {
 
 const nz = (v: number | null | undefined, fallback = 50) =>
   v == null || Number.isNaN(v) ? fallback : v
+
+/**
+ * 2K-style overall rating (1-99) from a player's raw BTA PRTG. Anchored so the
+ * dataset's best season (Zach Edey 2024 ≈ talentRef) lands at 99 and the floor
+ * sits at 66 — i.e. the pool spans a believable ~69-99 "rotation player" band
+ * the way 2K ratings do, rather than 0-100. Revealed only after a player is
+ * placed (never in the pool).
+ */
+export function overallRating(prtg: number | null | undefined): number {
+  const v = 66 + (nz(prtg, 0) / SCORE_CONFIG.talentRef) * 33
+  return Math.max(1, Math.min(99, Math.round(v)))
+}
 
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0)
 
@@ -191,8 +210,13 @@ export function scoreLineup(players: GamePlayer[]): LineupScore {
   const ffOverall =
     cfg.ff.reb * reb + cfg.ff.threeP * threeP + cfg.ff.fbp * fbp + cfg.ff.tov * tov
 
+  // Penalize lineups whose talent sits below the floor (severe lack of
+  // shot-making), scaled by how far under they are.
+  const talentPenalty =
+    core < cfg.talentFloor ? -cfg.talentPenaltyK * (cfg.talentFloor - core) : 0
+
   const rating =
-    cfg.coreWeight * core + cfg.effWeight * efficiency + cfg.ffWeight * ffOverall
+    cfg.coreWeight * core + cfg.effWeight * efficiency + cfg.ffWeight * ffOverall + talentPenalty
 
   // Projected record — linear map of rating onto 0..games, clamped.
   const span = cfg.recordHi - cfg.recordLo
@@ -217,6 +241,61 @@ export function scoreLineup(players: GamePlayer[]): LineupScore {
     projectedL,
     perfect: projectedW >= cfg.games,
   }
+}
+
+// ---- Four-factor projection (vs D-I) ----
+// National distribution of each four-factor season DIFF total across the 365
+// D-I teams (2026, frozen). Stored as 21 ascending quantile breakpoints (p=0,
+// 5, …, 100). We map a lineup's 0-100 four-factor proxy → a percentile, then
+// read a projected season DIFF off the inverse-CDF and a rank out of 365 — so
+// the result reads like the team page's Four Factors panel.
+const FF_TOTAL = 365
+const FF_DIST = {
+  reb_diff:     [-324, -200, -153, -120, -103, -83, -61, -41, -32, -15, -5, 14, 23, 39, 59, 78, 90, 111, 135, 201, 514],
+  fg3_made_diff:[-179, -85, -67, -52, -43, -36, -29, -21, -14, -5, 1, 10, 16, 21, 26, 33, 42, 53, 63, 84, 163],
+  fbpts_diff:   [-264, -136, -109, -90, -80, -60, -51, -40, -30, -23, -16, -1, 14, 33, 47, 62, 73, 99, 115, 159, 308],
+  tov_diff_ct:  [-222, -105, -79, -66, -47, -36, -30, -16, -9, -2, 7, 13, 17, 24, 31, 38, 46, 57, 75, 98, 149],
+} as const
+
+// Linear-interpolated quantile from the 21-point ascending breakpoints (p 0-100).
+function ffQuantile(bp: readonly number[], p: number): number {
+  const x = Math.max(0, Math.min(100, p)) / 5
+  const lo = Math.floor(x)
+  if (lo >= bp.length - 1) return bp[bp.length - 1]!
+  const frac = x - lo
+  return bp[lo]! + (bp[lo + 1]! - bp[lo]!) * frac
+}
+
+export type FourFactorProjection = {
+  key: string
+  label: string
+  sub: string
+  value: number          // projected season DIFF total (signed)
+  rank: number           // 1..365 (1 = best)
+  total: number
+  percentile: number     // 0-100, higher = better (bar marker position)
+}
+
+/**
+ * Convert a scored lineup's four-factor proxies into projected season DIFF
+ * totals + a national rank, the way the team page shows them. `goodHigh=false`
+ * stats (TOV diff — negative is good) read the inverse-CDF from the other end
+ * so a strong ball-security lineup projects a negative (favorable) number.
+ */
+export function projectFourFactors(ff: FourFactors): FourFactorProjection[] {
+  const defs = [
+    { key: 'reb_diff',      label: 'REB Diff', sub: 'total rebounds vs allowed',      pct: ff.reb,    goodHigh: true },
+    { key: 'fg3_made_diff', label: '3PM Diff', sub: '3-pointers made vs allowed',     pct: ff.threeP, goodHigh: true },
+    { key: 'fbpts_diff',    label: 'FBP Diff', sub: 'fast-break points vs allowed',   pct: ff.fbp,    goodHigh: true },
+    { key: 'tov_diff_ct',   label: 'TOV Diff', sub: 'turnovers forced vs committed',  pct: ff.tov,    goodHigh: false },
+  ] as const
+  return defs.map((d) => {
+    const pct = Math.max(0, Math.min(100, d.pct))
+    const bp = FF_DIST[d.key as keyof typeof FF_DIST]
+    const value = Math.round(ffQuantile(bp, d.goodHigh ? pct : 100 - pct))
+    const rank = Math.max(1, Math.min(FF_TOTAL, Math.round(((100 - pct) / 100) * (FF_TOTAL - 1)) + 1))
+    return { key: d.key, label: d.label, sub: d.sub, value, rank, total: FF_TOTAL, percentile: pct }
+  })
 }
 
 // ---- Conference logos (ESPN) ----

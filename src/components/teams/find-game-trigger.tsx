@@ -46,7 +46,7 @@ export function FindGameTrigger({
           <circle cx={11} cy={11} r={7} />
           <line x1={20} y1={20} x2={16.65} y2={16.65} />
         </svg>
-        <span>Find a {teamName} game</span>
+        <span>Find a <span className="hidden sm:inline">{teamName} </span>game</span>
         <span aria-hidden className="text-[0.65rem] opacity-80">→</span>
       </button>
       {open && (

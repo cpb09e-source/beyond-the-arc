@@ -20,7 +20,7 @@ const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0)
 const TALENT_REF = Math.max(...J.players.map((p) => p.prtg ?? 0))
 
 // ---- final scoring (mirror of src/lib/thirty-two-zero.ts) ----
-const CFG = { coreWeight: 0.5, effWeight: 0.25, ffWeight: 0.25, recordLo: 7, recordHi: 68, games: 32 }
+const CFG = { coreWeight: 0.5, effWeight: 0.25, ffWeight: 0.25, talentFloor: 52, talentPenaltyK: 0.6, recordLo: 7, recordHi: 68, games: 32 }
 
 function components(players) {
   // Talent — linear off raw BTA PRTG (magnitude, not saturated percentile), so a
@@ -46,7 +46,8 @@ function components(players) {
 }
 function ratingOf(players, cfg = CFG) {
   const c = components(players)
-  return cfg.coreWeight * c.core + cfg.effWeight * c.efficiency + cfg.ffWeight * c.ffOverall
+  const talentPenalty = c.core < cfg.talentFloor ? -cfg.talentPenaltyK * (cfg.talentFloor - c.core) : 0
+  return cfg.coreWeight * c.core + cfg.effWeight * c.efficiency + cfg.ffWeight * c.ffOverall + talentPenalty
 }
 function winsOf(rating, cfg = CFG) {
   const span = cfg.recordHi - cfg.recordLo

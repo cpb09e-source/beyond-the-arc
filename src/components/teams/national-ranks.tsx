@@ -25,7 +25,7 @@ export function NationalRanks({
 
 function Column({ kicker, items, total }: { kicker: string; items: RankedStat[]; total: number }) {
   return (
-    <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-5 lg:p-6">
+    <div className="bg-paper-deep/25 -mx-6 md:mx-0 rounded-none md:rounded-xl border-y border-x-0 md:border-x border-hairline shadow-sm p-5 lg:p-6">
       <div className="flex items-baseline justify-between mb-4">
         <span className="text-xs uppercase tracking-widest text-coral font-medium">{kicker}</span>
         <span className="text-[0.65rem] text-ink-muted tabular">of {total} D-I teams</span>

@@ -36,6 +36,22 @@ export function confMultiplier(conf: string | null | undefined): number {
   return CONF_PRTG_MULTIPLIER[conf] ?? 1.0;
 }
 
+// ---- Defensive component (shared by all BTA PRTG call sites) ----
+// BTA PRTG's two core inputs (PIR, PORPAG) are offense-heavy and reward volume,
+// which buries efficient two-way players (rim protectors, low-usage glue bigs).
+// We add a small per-game defensive index as an ADDITIVE z-tilt on top of the
+// offensive blend (NOT a third averaged term — that would recompress the whole
+// scale): blend = avg(0.69·z(PIR), z(PORPAG)) + BTA_DEF_WEIGHT·z(def).
+//   def index = blocks (weighted most) + steals + a slice of defensive glass.
+// BTA_DEF_WEIGHT is small on purpose — defense tilts the ranking, offense still
+// dominates the magnitude. Mirror this in every BTA PRTG site (see bta-prtg.mts).
+export const BTA_DEF_WEIGHT = 0.15;
+export function btaDefScore(
+  blk: number | null, stl: number | null, reb: number | null,
+): number {
+  return (blk ?? 0) * 1.0 + (stl ?? 0) * 0.7 + (reb ?? 0) * 0.25;
+}
+
 // Top-32 D-I teams for the 2025-26 season, by BTA RTG. Players currently on
 // these rosters get an additional +8 % BTA PRTG boost (top-team competition
 // adjustment). Snapshot from `processTeams(allTeams, years=[2026])`; regenerate
