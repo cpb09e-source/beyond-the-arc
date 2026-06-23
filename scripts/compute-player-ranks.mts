@@ -47,6 +47,7 @@ import {
   top5Tier1Multiplier,
   top3InConfMultiplier,
   teamStrengthMultiplier,
+  powerConfSub500Multiplier,
   POWER_CONFS,
   BTA_DEF_WEIGHT,
   btaDefScore,
@@ -127,7 +128,8 @@ function btaPortgFor(bartId: number, season: PlayerSeason, stats: CohortStats | 
     * topTeamMultiplier(season.team_name)
     * top5Tier1Multiplier(season.team_name)
     * top3InConfMultiplier(season.team_name)
-    * teamStrengthMultiplier(season.team_name);
+    * teamStrengthMultiplier(season.team_name)
+    * powerConfSub500Multiplier(season.team_name);
   const ppg = fromEnd(row, 3);
   return base + volumeShooterPenalty(ppg, stats.effPositionPctile.get(bartId) ?? null);
 }

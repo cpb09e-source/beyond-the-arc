@@ -187,3 +187,21 @@ export function teamStrengthMultiplier(teamName: string | null | undefined): num
   if (WEAK_TEAMS_2026.has(teamName)) return 0.92;
   return 1.0;
 }
+
+// Power-conference teams that finished UNDER .500 in 2025-26. A power-league
+// schedule already collects the +19 % conf bump (and maybe a top-team bump), so
+// padding stats on a losing high-major squad shouldn't ride that bonus untaxed —
+// a slight ×0.95 claws some of it back. Membership already encodes both
+// conditions (power conf AND sub-.500), so it's a plain set lookup. Snapshot —
+// regenerate from teams-all.json (year 2026, POWER_CONFS, wins < losses).
+const POWER_SUB_500_2026 = new Set<string>([
+  "Utah", "Maryland", "Boston College", "Georgia Tech", "Marquette", "Oregon",
+  "Kansas St.", "Penn St.", "Pittsburgh", "South Carolina", "Mississippi St.", "Rutgers",
+  "Mississippi", "Notre Dame", "Northwestern", "Minnesota", "Providence", "Xavier", "LSU",
+  "Georgetown", "Syracuse", "Creighton", "Washington",
+]);
+
+export function powerConfSub500Multiplier(teamName: string | null | undefined): number {
+  if (teamName == null) return 1.0;
+  return POWER_SUB_500_2026.has(teamName) ? 0.95 : 1.0;
+}

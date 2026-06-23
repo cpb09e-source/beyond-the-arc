@@ -20,7 +20,7 @@ import {
   type PlayerListSpec,
   type PlayerSummary,
 } from "@/lib/players";
-import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier, teamStrengthMultiplier, BTA_DEF_WEIGHT, btaDefScore } from "@/lib/conf-tiers";
+import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier, teamStrengthMultiplier, powerConfSub500Multiplier, BTA_DEF_WEIGHT, btaDefScore } from "@/lib/conf-tiers";
 
 // Sort-by options surfaced in the leaderboard header. Order chosen to match
 // the column priorities on the table itself (BTA PRTG → PIR → PPG → shooting
@@ -331,7 +331,8 @@ function attachBtaIndOrtg(players: PlayerSummary[]): void {
       * topTeamMultiplier(p.team_name)
       * top5Tier1Multiplier(p.team_name)
       * top3InConfMultiplier(p.team_name)
-      * teamStrengthMultiplier(p.team_name);
+      * teamStrengthMultiplier(p.team_name)
+      * powerConfSub500Multiplier(p.team_name);
     p.bta_ind_ortg = base + volumeShooterPenalty(p.pts_pg, effByPos.get(p.id) ?? null);
   }
 }

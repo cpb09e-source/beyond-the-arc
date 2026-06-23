@@ -15,7 +15,7 @@
  */
 
 export { POWER_CONFS } from "../../src/lib/conf-tiers.ts";
-import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier, teamStrengthMultiplier, BTA_DEF_WEIGHT, btaDefScore } from "../../src/lib/conf-tiers.ts";
+import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier, teamStrengthMultiplier, powerConfSub500Multiplier, BTA_DEF_WEIGHT, btaDefScore } from "../../src/lib/conf-tiers.ts";
 
 /**
  * Fixed BTA PRTG cutoffs for portal star tiers. Replaces the old percentile
@@ -310,7 +310,8 @@ export function productionFor(
         * topTeamMultiplier(latest.team_name)
         * top5Tier1Multiplier(latest.team_name)
         * top3InConfMultiplier(latest.team_name)
-        * teamStrengthMultiplier(latest.team_name);
+        * teamStrengthMultiplier(latest.team_name)
+        * powerConfSub500Multiplier(latest.team_name);
       bta_portg = base + volumeShooterPenalty(pts, stats.effPositionPctile.get(bartId) ?? null);
     }
   }
