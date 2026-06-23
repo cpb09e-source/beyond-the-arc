@@ -11,7 +11,7 @@ import { FindGameTrigger } from "@/components/teams/find-game-trigger";
 import { TourneyTimeline } from "@/components/teams/tourney-timeline";
 import { PlayerHeadshotStrip } from "@/components/teams/player-headshot-strip";
 import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog } from "@/lib/static-data";
-import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier, BTA_DEF_WEIGHT, btaDefScore } from "@/lib/conf-tiers";
+import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier, teamStrengthMultiplier, BTA_DEF_WEIGHT, btaDefScore } from "@/lib/conf-tiers";
 import { confDisplay } from "@/lib/conf-display";
 import { getTeamColors } from "@/lib/team-colors";
 
@@ -251,7 +251,8 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
           * confMultiplier(m.conference)
           * topTeamMultiplier(m.team_name)
           * top5Tier1Multiplier(m.team_name)
-          * top3InConfMultiplier(m.team_name);
+          * top3InConfMultiplier(m.team_name)
+          * teamStrengthMultiplier(m.team_name);
         bta = base + volumeShooterPenalty(m.ppg, effByPos.get(m.id) ?? null);
       }
     }

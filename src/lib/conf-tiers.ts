@@ -136,3 +136,54 @@ export function top3InConfMultiplier(teamName: string | null | undefined): numbe
   if (teamName == null) return 1.0;
   return TOP_3_BY_CONF_2026.has(teamName) ? 1.06 : 1.0;
 }
+
+// Team-strength tilt by 2025-26 national BTA RANK (1 = best of 365). A slight
+// reward for playing on an elite roster and a slight penalty for a bad one, so
+// equal box-score production is worth a touch more at a top-15 program than at a
+// sub-300 one. Stacks with the multipliers above (an elite team also collects
+// the +8 % top-32 bump, etc.). Snapshot — regenerate from teams-all.json
+// (year 2026, sorted by bta_rank) after a data refresh.
+//   ELITE  = top 30      → ×1.05
+//   WEAK   = bottom 137  → ×0.92
+const ELITE_TEAMS_2026 = new Set<string>([
+  "Michigan", "Duke", "Florida", "Arizona", "Houston", "Iowa St.", "Illinois", "Purdue",
+  "Gonzaga", "Connecticut", "Michigan St.", "St. John's", "Tennessee", "Virginia",
+  "Vanderbilt", "Louisville", "Arkansas", "Alabama", "Texas Tech", "Nebraska", "Iowa",
+  "Saint Mary's", "Wisconsin", "Saint Louis", "Utah St.", "Kentucky", "Miami FL",
+  "North Carolina", "BYU", "Santa Clara",
+]);
+const WEAK_TEAMS_2026 = new Set<string>([
+  "Tarleton St.", "Stony Brook", "Montana", "Iona", "Radford", "Ohio",
+  "Charleston Southern", "Green Bay", "Georgia Southern", "Longwood", "La Salle",
+  "New Orleans", "Colgate", "San Diego", "Lindenwood", "Eastern Michigan",
+  "Abilene Christian", "Nicholls St.", "Tulane", "Wofford", "Bethune Cookman",
+  "UNC Asheville", "Milwaukee", "San Jose St.", "Elon", "Idaho St.", "SIU Edwardsville",
+  "Old Dominion", "Portland", "Hampton", "Princeton", "Boston University",
+  "Long Beach St.", "UTEP", "Mount St. Mary's", "Presbyterian", "Northeastern",
+  "East Carolina", "Mercyhurst", "UC Riverside", "Nebraska Omaha", "Southern",
+  "Purdue Fort Wayne", "Dartmouth", "Incarnate Word", "Denver", "Brown", "North Dakota",
+  "Western Michigan", "USC Upstate", "Ball St.", "Jacksonville", "Grambling St.",
+  "Sacramento St.", "Central Michigan", "Lehigh", "Loyola Chicago", "South Dakota",
+  "Eastern Kentucky", "Louisiana", "West Georgia", "Pepperdine", "Sacred Heart",
+  "Southeastern Louisiana", "Oral Roberts", "Wagner", "North Carolina A&T",
+  "UNC Greensboro", "Prairie View A&M", "Houston Christian", "Alabama St.", "Le Moyne",
+  "Southern Utah", "Alabama A&M", "Northwestern St.", "Central Connecticut", "Florida A&M",
+  "East Texas A&M", "IU Indy", "Morehead St.", "UMass Lowell", "Chattanooga",
+  "Georgia St.", "Delaware", "Albany", "Stonehill", "Loyola MD", "Norfolk St.", "Stetson",
+  "Texas Southern", "Lafayette", "Tennessee Tech", "Little Rock", "Arkansas Pine Bluff",
+  "Eastern Illinois", "Army", "New Haven", "Evansville", "NJIT", "Bucknell", "Bellarmine",
+  "Holy Cross", "Southern Indiana", "Cleveland St.", "New Hampshire", "Northern Arizona",
+  "Canisius", "Fairleigh Dickinson", "Northern Illinois", "Cal St. Bakersfield",
+  "Manhattan", "Niagara", "Maine", "North Alabama", "The Citadel", "Morgan St.",
+  "Chicago St.", "North Florida", "Bryant", "UTSA", "Air Force", "Maryland Eastern Shore",
+  "Saint Francis", "Jackson St.", "Alcorn St.", "Rider", "North Carolina Central",
+  "South Carolina St.", "Louisiana Monroe", "Delaware St.", "Binghamton", "UMKC", "VMI",
+  "Gardner Webb", "Coppin St.", "Western Illinois", "Mississippi Valley St.",
+]);
+
+export function teamStrengthMultiplier(teamName: string | null | undefined): number {
+  if (teamName == null) return 1.0;
+  if (ELITE_TEAMS_2026.has(teamName)) return 1.05;
+  if (WEAK_TEAMS_2026.has(teamName)) return 0.92;
+  return 1.0;
+}
