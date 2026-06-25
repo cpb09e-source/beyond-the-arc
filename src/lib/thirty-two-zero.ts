@@ -78,7 +78,7 @@ export const POWER_WEIGHT = 1.8
 export const NORMAL_WEIGHT = 1.0
 // The very first roll of a game leans harder toward a power conference so most
 // runs open on a marquee league. Subsequent rolls use the normal POWER_WEIGHT.
-export const FIRST_ROLL_POWER_WEIGHT = 3.2
+export const FIRST_ROLL_POWER_WEIGHT = 4.5
 
 // ---- Scoring config (tunable) ----
 export const SCORE_CONFIG = {
