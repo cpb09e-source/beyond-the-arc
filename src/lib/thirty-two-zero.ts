@@ -74,20 +74,24 @@ export function playsBucket(p: GamePlayer, bucket: Bucket): boolean {
 }
 
 // Power-6 conferences are rolled slightly more often.
-export const POWER_WEIGHT = 1.8
+export const POWER_WEIGHT = 2.2
 export const NORMAL_WEIGHT = 1.0
 // The very first roll of a game leans harder toward a power conference so most
 // runs open on a marquee league. Subsequent rolls use the normal POWER_WEIGHT.
-export const FIRST_ROLL_POWER_WEIGHT = 4.5
+export const FIRST_ROLL_POWER_WEIGHT = 6.0
 
 // ---- Scoring config (tunable) ----
 export const SCORE_CONFIG = {
   // rating = coreWeight*Talent + effWeight*Efficiency + ffWeight*FourFactors
   // Efficiency (eFG/TS percentile) separates dominant, efficient stars from
   // empty-calorie volume scorers that talent alone can overrate.
-  coreWeight: 0.5,
-  effWeight: 0.25,
-  ffWeight: 0.25,
+  // Talent-dominant blend. Bumped core 0.5 → 0.65 (and trimmed eff/ff) so a
+  // genuinely elite-TALENT roster reaches 32-0 while a mid-talent / high-
+  // efficiency one tops out in the high 20s — efficiency maxes too easily to
+  // deserve a quarter of the rating.
+  coreWeight: 0.65,
+  effWeight: 0.20,
+  ffWeight: 0.15,
   // four-factor blend (equal by default, sums to 1)
   ff: { reb: 0.25, threeP: 0.25, fbp: 0.25, tov: 0.25 },
   // Severe-lack-of-talent penalty. Below `talentFloor` (on the 0-100 Talent
@@ -102,6 +106,13 @@ export const SCORE_CONFIG = {
   // p100 role player). talentRef = the dataset max raw PRTG (Zach Edey 2024) so
   // the most dominant season maps to ~100 and everyone scales below it.
   talentRef: 105.7,
+  // OVR display anchor — SEPARATE from talentRef on purpose. The defensive tilt
+  // + elite-team multipliers stretched the top of the PRTG distribution (Edey
+  // 2024 went 105.7 → 129, Zion 2019 → 105), which flattened the OVR ceiling
+  // (everything above ~106 capped at 99). ovrRef rescales overallRating() so the
+  // inflated top compresses back to the pre-change feel (Zion ~95, not 99) while
+  // mid-tier cards barely move. Does NOT touch the Talent bar (still talentRef).
+  ovrRef: 120,
   // projected record = linear map of rating onto 0..games, clamped.
   // rating recordLo → 0 wins, recordHi → 32 wins. Retuned via Monte Carlo
   // (scripts/ttz-sim.mjs) for the linear-talent formula, whose ratings sit lower
@@ -109,7 +120,10 @@ export const SCORE_CONFIG = {
   // ~22 wins, tails stay rare — >=30 ~5.4%, 32-0 ~1.6% — and a genuinely stacked
   // roster (Edey/Cunningham/Dybantsa…) lands ~29-3 at the ~94th percentile.
   recordLo: 7,
-  recordHi: 68,
+  // Raised 68 → 73 (paired with the talent-heavier weights) so 32-0 demands an
+  // elite-TALENT roster: an all-elite lineup reaches it, a mid-talent/high-
+  // efficiency one tops out ~28-4. recordHi rating → 32 wins.
+  recordHi: 73,
   games: 32,
 }
 
@@ -124,7 +138,7 @@ const nz = (v: number | null | undefined, fallback = 50) =>
  * placed (never in the pool).
  */
 export function overallRating(prtg: number | null | undefined): number {
-  const v = 66 + (nz(prtg, 0) / SCORE_CONFIG.talentRef) * 33
+  const v = 66 + (nz(prtg, 0) / SCORE_CONFIG.ovrRef) * 33
   return Math.max(1, Math.min(99, Math.round(v)))
 }
 

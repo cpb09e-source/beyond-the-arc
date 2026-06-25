@@ -60,6 +60,8 @@ const OUT_DIR = path.resolve("public/data/player-ranks");
 const BUCKET_BY_NOTE: Record<string, "G" | "F" | "C"> = {
   "Pure PG": "G", "Scoring PG": "G", "Combo G": "G", "Wing G": "G",
   "Wing F": "F", "Stretch 4": "F",
+  // Height-derived dual-eligibility notes for 2008-09 (see derive-positions.mts).
+  "G/F": "G", "F/G": "F", "C/F": "C",
   "PF/C": "C", "C": "C",
 };
 

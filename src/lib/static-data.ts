@@ -384,9 +384,19 @@ export async function readRankedPlayerIds(): Promise<Set<number>> {
     }
   } catch { /* tolerate any I/O hiccup — ranked set is still useful */ }
 
+  // Manual page-includes — notable players who don't clear the ranking baseline
+  // or the freshman pass but should still get a profile page. Keep in sync with
+  // MANUAL_PROFILE_IDS in scripts/prune-search-index.mjs.
+  for (const id of MANUAL_PROFILE_IDS) ids.add(id);
+
   _rankedPlayerIdsCache = ids;
   return ids;
 }
+
+// Hand-picked profile pages (by bart_player_id). See note in readRankedPlayerIds.
+export const MANUAL_PROFILE_IDS: readonly number[] = [
+  73737, // Tommy Murr (Lipscomb) — requested by hand
+];
 
 // Newest season we'll scan for the freshman pass. Mirrors LATEST_YEAR in
 // coaches.ts; duplicated here to avoid a circular import.

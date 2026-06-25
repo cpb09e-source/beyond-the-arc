@@ -217,7 +217,7 @@ export function passesPlayerFilter(p: PlayerSummary, f: PlayerStatFilter): boole
 
 function clampYear(y: number): number {
   if (!Number.isFinite(y)) return DEFAULT_PLAYER_SPEC.years[0]!;
-  return Math.max(2013, Math.min(2026, Math.trunc(y)));
+  return Math.max(2008, Math.min(2026, Math.trunc(y)));
 }
 
 export function parsePlayerSpec(searchParams: Record<string, string | string[] | undefined>): PlayerListSpec {

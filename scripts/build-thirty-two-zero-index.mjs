@@ -19,6 +19,8 @@ const OUT = path.join(ROOT, 'public/data/thirty-two-zero-index.json')
 
 // Year groups — skip COVID 2020. 2019 pairs with 2021.
 const GROUPS = [
+  { id: '2008-10', years: [2008, 2009, 2010] },
+  { id: '2011-12', years: [2011, 2012] },
   { id: '2013-14', years: [2013, 2014] },
   { id: '2015-16', years: [2015, 2016] },
   { id: '2017-18', years: [2017, 2018] },
@@ -30,9 +32,9 @@ const yr2grp = {}
 for (const g of GROUPS) for (const y of g.years) yr2grp[y] = g.id
 
 // Power-6 weighted slightly higher in the roll.
-const POWER = new Set(['ACC', 'B12', 'B10', 'BE', 'SEC', 'P12'])
+const POWER = new Set(['ACC', 'B12', 'B10', 'BE', 'SEC', 'P12', 'P10'])
 const CONF_NAME = {
-  ACC: 'ACC', B12: 'Big 12', B10: 'Big Ten', BE: 'Big East', SEC: 'SEC', P12: 'Pac-12',
+  ACC: 'ACC', B12: 'Big 12', B10: 'Big Ten', BE: 'Big East', SEC: 'SEC', P12: 'Pac-12', P10: 'Pac-10',
   A10: 'Atlantic 10', Amer: 'American', MWC: 'Mountain West', WCC: 'West Coast',
   MVC: 'Missouri Valley', CUSA: 'Conference USA', SB: 'Sun Belt', MAC: 'MAC',
   CAA: 'Colonial', Horz: 'Horizon', Sum: 'Summit', OVC: 'Ohio Valley', BSky: 'Big Sky',
@@ -111,8 +113,15 @@ for (const id of ids) {
       continue
     }
 
-    // Stretch 4 → playable at both F and C.
-    const stretch4 = b === 'F' && noteByYear[sr.year] === 'Stretch 4'
+    // Dual-position eligibility → second draftable bucket. Stretch 4s play F+C;
+    // the height-derived 2008-09 notes (G/F, F/G, C/F) carry their own pairing.
+    const note = noteByYear[sr.year]
+    let alt = null
+    if (note === 'Stretch 4') alt = 'C'   // F primary
+    else if (note === 'G/F') alt = 'F'    // G primary
+    else if (note === 'F/G') alt = 'G'    // F primary
+    else if (note === 'C/F') alt = 'F'    // C primary
+    if (alt === b) alt = null             // never duplicate the primary bucket
 
     players.push({
       id,
@@ -122,7 +131,7 @@ for (const id of ids) {
       c: conf,
       g: grp,
       b,
-      ...(stretch4 ? { alt: 'C' } : {}),
+      ...(alt ? { alt } : {}),
       gp: m.g ?? null,
       // talent
       prtg: round(val('bta_portg'), 1),
@@ -152,6 +161,23 @@ for (const id of ids) {
     })
   }
 }
+
+// ---- One-time exception: Mitch Williams (id 79043) ----
+// Deep-bench walk-on — 4 GP / 1.0 ppg, never clears the ranking baseline, so he
+// has no rank file and the loop above skips him. Added by explicit request as an
+// easter egg. Hand-built record from his 2024-25 Northwestern St. (Southland)
+// line; low PRTG keeps him a clear bench scrub on the court.
+players.push({
+  id: 79043, yr: 2025, n: 'Mitch Williams', t: 'Northwestern St.',
+  c: 'Slnd', g: '2024-26', b: 'G',
+  gp: 4,
+  prtg: 5, prtgP: 3,
+  pts: 1.0, reb: 0.0, ast: 0.2, stl: 0.2,
+  fg3: null, fg3P: null, tparP: null,
+  rebP: 5, orbP: null, drbP: null,
+  astP: 20, stlP: 40, tovP: 50,
+  efg: null, efgP: 10, tsP: 10,
+})
 
 const conferences = [...new Set(players.map((p) => p.c))]
   .sort()

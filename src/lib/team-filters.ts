@@ -118,6 +118,7 @@ export type TeamFilterSpec = {
 export const ALL_YEARS = [
   2026, 2025, 2024, 2023, 2022, 2021,
   2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013,
+  2012, 2011, 2010, 2009, 2008,
 ] as const;
 
 export const DEFAULT_SPEC: TeamFilterSpec = {
@@ -144,7 +145,7 @@ function isComparator(s: string): s is Comparator {
 }
 function clampYear(y: number): number {
   if (!Number.isFinite(y)) return DEFAULT_SPEC.years[0]!;
-  return Math.max(2013, Math.min(2026, Math.trunc(y)));
+  return Math.max(2008, Math.min(2026, Math.trunc(y)));
 }
 
 // ---------- URL <-> spec ----------

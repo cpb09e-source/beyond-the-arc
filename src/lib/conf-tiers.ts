@@ -13,7 +13,8 @@
  *    after the season ends if rankings shift materially.
  */
 
-export const POWER_CONFS = new Set(["ACC", "B10", "B12", "P12", "SEC", "BE"]);
+// P10 = Pac-10 (2008-2011, before it became the Pac-12). Same power tier.
+export const POWER_CONFS = new Set(["ACC", "B10", "B12", "P12", "P10", "SEC", "BE"]);
 
 // Conference → BTA PRTG multiplier. Tier comments map to the 2025-26 rankings.
 // Right column shows the gap vs the Tier 1 (top-5) baseline of ×1.19, which is

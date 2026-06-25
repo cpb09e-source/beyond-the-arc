@@ -10,6 +10,7 @@
     "lint": "eslint",
     "sync:r2": "node scripts/sync-data-to-r2.mjs",
     "sync:bart": "tsx scripts/sync-bart.mts",
+    "derive:positions": "tsx scripts/derive-positions.mts",
     "fetch:photos": "node scripts/fetch-player-images.mjs",
     "snapshot:coaches": "node scripts/snapshot-coaches.mjs",
     "snapshot:coach-history": "node scripts/snapshot-historical-coaches.mjs",
