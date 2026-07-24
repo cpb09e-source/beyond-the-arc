@@ -14,6 +14,7 @@ import { Select } from "@/components/select";
 import {
   DEFAULT_PLAYER_SPEC,
   PLAYER_COLS,
+  PLAYER_STAT_COLUMNS,
   parsePlayerSpec,
   passesPlayerFilter,
   playerSpecToParams,
@@ -26,14 +27,23 @@ import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMulti
 // the column priorities on the table itself (BTA PRTG → PIR → PPG → shooting
 // → rebounding / playmaking → games / name).
 const SORT_OPTIONS: { value: PlayerListSpec["sortBy"]; label: string }[] = [
-  { value: "bta_ind_ortg", label: "BTA PRTG" },
+  { value: "epm", label: "EPM" },
+  { value: "off_epm", label: "Off EPM" },
+  { value: "def_epm", label: "Def EPM" },
   { value: "pir", label: "PIR" },
   { value: "pts", label: "PPG" },
+  { value: "usage", label: "USG" },
   { value: "fg_pct", label: "FG%" },
   { value: "fg3_pct", label: "3P%" },
   { value: "ts_pct", label: "TS%" },
+  { value: "orb", label: "ORB" },
+  { value: "drb", label: "DRB" },
   { value: "reb", label: "RPG" },
-  { value: "ast", label: "APG" },
+  { value: "ast", label: "AST" },
+  { value: "tov", label: "TOV" },
+  { value: "stl", label: "STL" },
+  { value: "blk", label: "BLK" },
+  { value: "hkm", label: "HKM" },
   { value: "games", label: "GP" },
   { value: "name", label: "Name" },
 ];
@@ -51,10 +61,76 @@ const SORT_LABEL: Record<PlayerListSpec["sortBy"], string> = {
   ast: "APG",
   games: "GP",
   name: "name",
+  epm: "EPM", off_epm: "Off EPM", def_epm: "Def EPM",
+  min: "MPG", usage: "USG", orb: "ORB", drb: "DRB",
+  tov: "TOV", stl: "STL", blk: "BLK", hkm: "HKM",
 };
 const CLASS_LABEL: Record<string, string> = {
   Fr: "Freshmen", So: "Sophomores", Jr: "Juniors", Sr: "Seniors", Gr: "Graduates",
 };
+
+// ---- Grouped stat-band grid (see docs/players-grid-rebuild-spec.md) ----
+// One entry per data column. `pct` names the percentile map feeding the chip
+// (null = no chip, e.g. MPG). `band` marks the EPM trio for the coral wash.
+type GridFmt = "num1" | "pct1" | "pct100" | "int" | "epm";
+type GridCol = {
+  label: string;
+  field: keyof PlayerSummary;
+  fmt: GridFmt;
+  pct: PctKey | null;
+  sortKey?: PlayerListSpec["sortBy"];
+  band?: boolean;
+};
+const GRID_COLS: GridCol[] = [
+  { label: "MPG", field: "min_pg", fmt: "int", pct: null, sortKey: "min" },
+  { label: "USG", field: "usage_pct", fmt: "pct1", pct: "usage_pct", sortKey: "usage" },
+  { label: "Off", field: "off_epm", fmt: "epm", pct: "off_epm", sortKey: "off_epm", band: true },
+  { label: "Def", field: "def_epm", fmt: "epm", pct: "def_epm", sortKey: "def_epm", band: true },
+  { label: "EPM", field: "epm", fmt: "epm", pct: "epm", sortKey: "epm", band: true },
+  { label: "PIR", field: "pir", fmt: "num1", pct: "pir", sortKey: "pir" },
+  { label: "PPG", field: "pts_pg", fmt: "num1", pct: "pts_pg", sortKey: "pts" },
+  { label: "TS%", field: "ts_pct", fmt: "pct1", pct: "ts_pct", sortKey: "ts_pct" },
+  { label: "FG%", field: "fg_pct", fmt: "pct1", pct: "fg_pct", sortKey: "fg_pct" },
+  { label: "3P%", field: "fg3_pct", fmt: "pct1", pct: "fg3_pct", sortKey: "fg3_pct" },
+  { label: "ORB", field: "orb_pg", fmt: "num1", pct: "orb_pg", sortKey: "orb" },
+  { label: "DRB", field: "drb_pg", fmt: "num1", pct: "drb_pg", sortKey: "drb" },
+  { label: "RPG", field: "reb_pg", fmt: "num1", pct: "reb_pg", sortKey: "reb" },
+  { label: "AST", field: "ast_pg", fmt: "num1", pct: "ast_pg", sortKey: "ast" },
+  { label: "TOV", field: "tov_pg", fmt: "num1", pct: "tov_pg", sortKey: "tov" },
+  { label: "STL", field: "stl_pg", fmt: "num1", pct: "stl_pg", sortKey: "stl" },
+  { label: "BLK", field: "blk_pg", fmt: "num1", pct: "blk_pg", sortKey: "blk" },
+  { label: "HKM", field: "hkm_pct", fmt: "pct100", pct: "hkm_pct", sortKey: "hkm" },
+];
+// Band header row: label + how many GRID_COLS it spans (order must match).
+const GRID_BANDS: Array<{ label: string; span: number; epm?: boolean }> = [
+  { label: "Role", span: 2 },
+  { label: "EPM", span: 3, epm: true },
+  { label: "Scoring", span: 2 },
+  { label: "Shooting", span: 3 },
+  { label: "Rebounding", span: 3 },
+  { label: "Handle", span: 2 },
+  { label: "Defense", span: 3 },
+];
+const GRID_FIELDS = new Set(GRID_COLS.map((c) => c.field));
+
+// One opaque hover fill for the WHOLE row — sticky (RK/Player) and scrolling
+// cells share it so the row reads as a single band, not two colors. Opaque
+// (mixed into --card) so the frozen columns still hide the scrolled content.
+const ROW_HOVER = "group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))]";
+// EPM band resting tint — a subtle dusty rose/mauve wash sets the headline
+// metric group apart from the warm coral palette and the green percentile chips.
+const EPM_BAND_TINT = "bg-[color-mix(in_oklab,#B06A8C_10%,transparent)]";
+
+function fmtGrid(v: number | null, fmt: GridFmt): string {
+  if (v === null || v === undefined) return "—";
+  switch (fmt) {
+    case "int": return String(Math.round(v));
+    case "pct1": return (v * 100).toLocaleString("en-US", { maximumFractionDigits: 1 }) + "%";
+    case "pct100": return v.toLocaleString("en-US", { maximumFractionDigits: 1 }) + "%";
+    case "epm": return (v >= 0 ? "+" : "") + v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    default: return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  }
+}
 function seasonLabel(y: number): string {
   return `${y - 1}-${String(y).slice(-2)}`;
 }
@@ -196,6 +272,13 @@ function transformPlayer(raw: RawPlayer): PlayerSummary {
     ast_to_tov: ast_pg !== null && adv?.tov_pg != null && adv.tov_pg > 0
       ? ast_pg / adv.tov_pg
       : null,
+    drb_pg: reb_pg !== null && orb_pg !== null ? reb_pg - orb_pg : null,
+    // HKM (Hakeem %) = BLK% + STL% — Bart raw cols 22/23 (verified: Bidunga 9 + 1.4).
+    hkm_pct: (() => {
+      const b = asNum(fromStart(row, 22)), s = asNum(fromStart(row, 23));
+      return b !== null && s !== null ? b + s : null;
+    })(),
+    epm: null, off_epm: null, def_epm: null, // attached from /data/epm-<year>.json
     pir,
     porpag: asNum(fromStart(row, PLAYER_COLS.porpag)),
     bta_ind_ortg: null,   // attached per cohort below
@@ -387,6 +470,9 @@ function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummar
     fg_pct: "fg_pct", fg3_pct: "fg3_pct", ts_pct: "ts_pct",
     games: "games",
     name: "name",
+    epm: "epm", off_epm: "off_epm", def_epm: "def_epm",
+    min: "min_pg", usage: "usage_pct", orb: "orb_pg", drb: "drb_pg",
+    tov: "tov_pg", stl: "stl_pg", blk: "blk_pg", hkm: "hkm_pct",
   };
   const key = sortKeyMap[spec.sortBy];
   const dir = spec.sortDir === "asc" ? 1 : -1;
@@ -403,34 +489,33 @@ function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummar
   return out.slice(0, spec.limit);
 }
 
-type PctMaps = {
-  bta_ind_ortg: Map<number, number>;
-  pir: Map<number, number>;
-  fg_pct: Map<number, number>;
-  fg3_pct: Map<number, number>;
-  ts_pct: Map<number, number>;
-};
+// Chip-bearing stats. TOV inverts (fewer turnovers = higher percentile).
+const PCT_KEYS = [
+  "bta_ind_ortg", "pir", "fg_pct", "fg3_pct", "ts_pct",
+  "epm", "off_epm", "def_epm", "usage_pct", "pts_pg",
+  "orb_pg", "drb_pg", "reb_pg", "ast_pg", "tov_pg", "stl_pg", "blk_pg", "hkm_pct",
+  // Filterable extras that can appear as dynamic columns:
+  "efg_pct", "fg2_pct", "ft_pct", "fta_rate", "ast_to_tov", "porpag", "min_pg", "plus_minus_pg",
+] as const;
+type PctKey = (typeof PCT_KEYS)[number];
+type PctMaps = Record<PctKey, Map<number, number>>;
+const INVERTED_PCT = new Set<PctKey>(["tov_pg"]);
 
 // Per-season percentile rank for each chip-bearing stat. Computed across the
 // eligible D-I pool (post-baseline, pre-filter) so chips remain meaningful
 // when filters narrow the visible list. Higher value = higher percentile.
 function attachPercentiles(players: PlayerSummary[]): PctMaps {
-  const keys = ["bta_ind_ortg", "pir", "fg_pct", "fg3_pct", "ts_pct"] as const;
-  const out = {
-    bta_ind_ortg: new Map<number, number>(),
-    pir: new Map<number, number>(),
-    fg_pct: new Map<number, number>(),
-    fg3_pct: new Map<number, number>(),
-    ts_pct: new Map<number, number>(),
-  };
-  for (const key of keys) {
+  const out = Object.fromEntries(PCT_KEYS.map((k) => [k, new Map<number, number>()])) as PctMaps;
+  for (const key of PCT_KEYS) {
     const ranked = players
       .filter((p) => typeof p[key] === "number")
       .sort((a, b) => (a[key] as number) - (b[key] as number));
     const n = ranked.length;
     if (n < 2) continue;
+    const inv = INVERTED_PCT.has(key);
     ranked.forEach((p, i) => {
-      out[key].set(p.id, Math.round((i / (n - 1)) * 100));
+      const pct = Math.round((i / (n - 1)) * 100);
+      out[key].set(p.id, inv ? 100 - pct : pct);
     });
   }
   return out;
@@ -470,6 +555,9 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   }, [confsByYear]);
 
   const [rawByYear, setRawByYear] = useState<Record<number, RawPlayer[]>>({});
+  // BTA EPM per season: bart_player_id -> {epm, off, def}. Fetched lazily per
+  // selected year; 404 (no fit for that season) caches as an empty map.
+  const [epmByYear, setEpmByYear] = useState<Record<number, Record<string, { epm: number; off: number; def: number }>>>({});
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [compareOpen, setCompareOpen] = useState(false);
@@ -478,6 +566,61 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchPanelRef = useRef<HTMLDivElement>(null);
+  const gridScrollRef = useRef<HTMLDivElement>(null);
+  // The RK column is sized purely by content (width utilities don't stick on
+  // these table cells), so we measure its real width and drive the Player
+  // column's sticky `left` off it — the pinned position then exactly equals the
+  // natural flow position (no gap, no 1px shimmy when panning).
+  const rkThRef = useRef<HTMLTableCellElement>(null);
+  const [rkW, setRkW] = useState(40);
+  useEffect(() => {
+    const measure = () => { const w = rkThRef.current?.getBoundingClientRect().width; if (w) setRkW(w); };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (rkThRef.current) ro.observe(rkThRef.current);
+    window.addEventListener("resize", measure);
+    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+  }, []);
+  const playerLeft = { left: `${rkW}px` };
+
+  // Click-and-drag panning over the stat columns (MPG → HKM): grab anywhere in
+  // the data area and drag left/right. A 4px threshold keeps plain clicks
+  // (links, copy buttons, sort headers) working; interactive elements and the
+  // sticky RK/Player cells never start a pan.
+  const pan = useRef<{ x: number; left: number; active: boolean } | null>(null);
+  const onGridPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    const t = e.target as HTMLElement;
+    if (t.closest("a,button,input,select,[data-no-pan]")) return;
+    pan.current = { x: e.clientX, left: gridScrollRef.current?.scrollLeft ?? 0, active: false };
+  };
+  const onGridPointerMove = (e: React.PointerEvent) => {
+    const el = gridScrollRef.current;
+    if (!pan.current || !el) return;
+    const dx = e.clientX - pan.current.x;
+    if (!pan.current.active && Math.abs(dx) < 4) return;
+    if (!pan.current.active) {
+      pan.current.active = true;
+      el.setPointerCapture(e.pointerId);
+      el.classList.add("select-none", "cursor-grabbing");
+    }
+    // Clamp to valid range so dragging past an edge can't push scrollLeft out of
+    // bounds (which momentarily shifts the sticky RK/Player cells → the glitchy
+    // truncation).
+    const max = el.scrollWidth - el.clientWidth;
+    // Round to whole pixels — a fractional scrollLeft leaves the sticky RK/Player
+    // cells snapped to integers while the scrolled content sits sub-pixel, which
+    // reads as a 1px shimmy on the frozen columns.
+    el.scrollLeft = Math.round(Math.min(max, Math.max(0, pan.current.left - dx)));
+  };
+  const onGridPointerEnd = (e: React.PointerEvent) => {
+    const el = gridScrollRef.current;
+    if (pan.current?.active && el) {
+      el.releasePointerCapture?.(e.pointerId);
+      el.classList.remove("select-none", "cursor-grabbing");
+    }
+    pan.current = null;
+  };
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus({ preventScroll: true });
   }, [searchOpen]);
@@ -521,6 +664,29 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     return () => { cancelled = true; };
   }, [spec.years, rawByYear]);
 
+  // Lazy-load the EPM fit for each selected season (missing file → empty map).
+  useEffect(() => {
+    const toFetch = spec.years.filter((y) => !epmByYear[y]);
+    if (!toFetch.length) return;
+    let cancelled = false;
+    Promise.all(
+      toFetch.map((y) =>
+        fetch(`/data/epm-${y}.json`)
+          .then((r) => (r.ok ? r.json() : { players: {} }))
+          .catch(() => ({ players: {} }))
+          .then((j) => [y, j.players ?? {}] as const),
+      ),
+    ).then((entries) => {
+      if (cancelled) return;
+      setEpmByYear((s) => {
+        const next = { ...s };
+        for (const [y, m] of entries) next[y] = m;
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [spec.years, epmByYear]);
+
   // Per-year cohort processing: each season's BTA composite + percentile
   // chips are computed against just that season's eligible D-I pool (matches
   // the Team Explorer's year-only cohort rule). Multi-year selections merge
@@ -531,13 +697,21 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       const raw = rawByYear[y];
       if (!raw) continue;
       const arr = raw.map(transformPlayer);
+      // Attach BTA EPM (ridge-RAPM fit) by bart id, when this season has one.
+      const epmMap = epmByYear[y];
+      if (epmMap) {
+        for (const p of arr) {
+          const e = p.bart_player_id != null ? epmMap[String(p.bart_player_id)] : undefined;
+          if (e) { p.epm = e.epm; p.off_epm = e.off; p.def_epm = e.def; }
+        }
+      }
       const eligible = arr.filter((p) => !isBelowBaseline(p));
       attachBtaIndOrtg(eligible);
       const pctMaps = attachPercentiles(eligible);
       out[y] = { players: arr, pctMaps };
     }
     return out;
-  }, [rawByYear, spec.years]);
+  }, [rawByYear, spec.years, epmByYear]);
 
   const transformed = useMemo(
     () => spec.years.flatMap((y) => processedByYear[y]?.players ?? []),
@@ -547,14 +721,11 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   // Per-stat percentile lookup that picks the right year's cohort for the
   // player being chip'd. Player id is per-season-unique so no collisions.
   const pctMaps: PctMaps = useMemo(() => {
-    const merged: PctMaps = {
-      bta_ind_ortg: new Map(), pir: new Map(),
-      fg_pct: new Map(), fg3_pct: new Map(), ts_pct: new Map(),
-    };
+    const merged = Object.fromEntries(PCT_KEYS.map((k) => [k, new Map<number, number>()])) as PctMaps;
     for (const y of spec.years) {
       const yearPct = processedByYear[y]?.pctMaps;
       if (!yearPct) continue;
-      for (const k of Object.keys(merged) as (keyof PctMaps)[]) {
+      for (const k of PCT_KEYS) {
         for (const [id, v] of yearPct[k]) merged[k].set(id, v);
       }
     }
@@ -609,6 +780,26 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   useEffect(() => { setPage(1); }, [prefiltered, deferredQuery, spec.limit, spec.sortBy, spec.sortDir]);
   const multiYear = spec.years.length > 1;
 
+  // Any stat the user filters on that ISN'T a default grid column gets
+  // prepended as its own column (before MPG) so the numbers driving the
+  // filter are visible. Label/format come from PLAYER_STAT_COLUMNS.
+  const dynamicCols: GridCol[] = useMemo(() => {
+    const seen = new Set<string>();
+    const out: GridCol[] = [];
+    for (const f of spec.filters) {
+      const col = PLAYER_STAT_COLUMNS.find((c) => c.key === f.stat);
+      if (!col || GRID_FIELDS.has(col.field) || seen.has(col.field as string)) continue;
+      seen.add(col.field as string);
+      out.push({
+        label: col.label,
+        field: col.field,
+        fmt: col.format === "pct1" ? "pct1" : "num1",
+        pct: (PCT_KEYS as readonly string[]).includes(col.field as string) ? (col.field as PctKey) : null,
+      });
+    }
+    return out;
+  }, [spec.filters]);
+
   return (
     <>
       <PlayerFilterBar conferences={conferences} teams={teamOptions} />
@@ -618,105 +809,74 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           so the look reads consistently across the site. */}
       <div id="players-leaderboard" className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-8 scroll-mt-4 -mx-6 lg:mx-0">
         <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
-        <div className="px-4 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-4 flex-wrap">
-          <div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
-                Players
-              </h2>
+        {/* Compact D&3-style toolbar: title + count + compare on the left,
+            label-less search/sort/order/show controls on the right — one row,
+            the table starts immediately below. */}
+        <div className="px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 flex items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3">
+              <h2 className="font-display text-xl lg:text-2xl text-ink leading-none tracking-tight">Players</h2>
+              <span className="text-xs text-ink-muted tabular whitespace-nowrap">
+                {loading ? "loading…" : count > players.length
+                  ? `${players.length.toLocaleString()} of ${count.toLocaleString()}`
+                  : `${count.toLocaleString()}`}
+                {!loading && spec.conf.length > 0 && <> · {spec.conf.length === 1 ? spec.conf[0] : `${spec.conf.length} confs`}</>}
+                {!loading && spec.cls.length > 0 && <> · {spec.cls.length === 1 ? (CLASS_LABEL[spec.cls[0]!] ?? spec.cls[0]) : `${spec.cls.length} classes`}</>}
+              </span>
               <button
                 type="button"
                 onClick={() => setCompareOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-coral/40 bg-coral/[0.06] text-coral text-[0.65rem] uppercase tracking-widest font-bold hover:bg-coral/10 hover:border-coral/60 transition-colors"
+                title="Compare players"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-coral/40 bg-coral/6 text-coral text-[0.6rem] uppercase tracking-widest font-bold hover:bg-coral/10 hover:border-coral/60 transition-colors whitespace-nowrap"
               >
-                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M16 3h5v5" />
-                  <path d="M8 21H3v-5" />
-                  <path d="M21 3l-7 7" />
-                  <path d="M3 21l7-7" />
+                <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M16 3h5v5" /><path d="M8 21H3v-5" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" />
                 </svg>
-                Compare Players
+                Compare
               </button>
             </div>
-            <div className="mt-2 text-sm text-ink-muted">
-              <span className="font-display text-xl text-ink tabular leading-none">
-                {loading ? "—" : players.length.toLocaleString()}
-              </span>
-              {!loading && count > players.length && (
-                <span className="text-ink-muted"> of {count.toLocaleString()}</span>
-              )}{" "}
-              {loading ? "loading…" : players.length === 1 ? "player" : "players"}
-              {!loading && count > players.length && (
-                <span className="text-ink-muted hidden md:inline"> · showing first {players.length}</span>
+            {/* Search — sits under the Players title, above the table. */}
+            <div className="relative mt-2 hidden lg:block">
+              <SearchGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search player"
+                aria-label="Search players by name"
+                className="h-8 w-56 pl-8 pr-8 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+              />
+              {query && (
+                <button type="button" onClick={() => setQuery("")} aria-label="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-base leading-none w-5 h-5 inline-flex items-center justify-center rounded hover:bg-paper-deep">×</button>
               )}
-              {!loading && spec.conf.length > 0 && <> · {spec.conf.length === 1 ? spec.conf[0] : `${spec.conf.length} conferences`}</>}
-              {!loading && spec.cls.length > 0 && <> · {spec.cls.length === 1 ? (CLASS_LABEL[spec.cls[0]!] ?? spec.cls[0]) : `${spec.cls.length} classes`}</>}
             </div>
           </div>
-          {/* Header controls — SEARCH | SORT BY | ORDER | SHOW. Mirrors the
-              /teams headline-card layout so the player and team explorers
-              read as siblings rather than two unrelated surfaces. */}
-          <div className="relative flex items-end gap-2 lg:gap-3 w-full lg:w-auto">
-            {/* Desktop search — full input (hidden on mobile) */}
-            <HeaderField label="Search" className="hidden lg:flex">
-              <div className="relative">
-                <SearchGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none" />
-                <input
-                  type="search"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search players (3+ chars)…"
-                  aria-label="Search players by name"
-                  className="h-10 w-48 sm:w-56 pl-9 pr-9 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
-                />
-                {query && (
-                  <button
-                    type="button"
-                    onClick={() => setQuery("")}
-                    aria-label="Clear search"
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-base leading-none w-5 h-5 inline-flex items-center justify-center rounded hover:bg-paper-deep"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            </HeaderField>
-
-            {/* Sort by / Order / Show — shares the mobile line with the search icon */}
-            <div className="flex-1 lg:flex-initial min-w-0 flex items-end gap-2 lg:gap-3">
-              <HeaderField label="Sort by" className="flex-1 min-w-0 lg:flex-initial">
-                <Select value={spec.sortBy} onChange={(v) => updateSpec({ ...spec, sortBy: v as PlayerListSpec["sortBy"] })} ariaLabel="Sort by" className="w-full lg:w-auto">
-                  {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </Select>
-              </HeaderField>
-              <HeaderField label="Order" className="shrink-0">
-                <Select value={spec.sortDir} onChange={(v) => updateSpec({ ...spec, sortDir: v as "asc" | "desc" })} ariaLabel="Sort direction" className="w-20">
-                  <option value="desc">Desc</option>
-                  <option value="asc">Asc</option>
-                </Select>
-              </HeaderField>
-              <HeaderField label="Show" className="shrink-0">
-                <Select value={String(spec.limit)} onChange={(v) => updateSpec({ ...spec, limit: Number(v) })} ariaLabel="Result count" className="w-18 lg:w-20">
-                  {LIMIT_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
-                </Select>
-              </HeaderField>
-            </div>
-
+          <div className="relative flex items-center gap-2 w-full sm:w-auto">
+            <Select value={spec.sortBy} onChange={(v) => updateSpec({ ...spec, sortBy: v as PlayerListSpec["sortBy"] })} ariaLabel="Sort by" className="flex-1 sm:flex-initial">
+              {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
+            <Select value={spec.sortDir} onChange={(v) => updateSpec({ ...spec, sortDir: v as "asc" | "desc" })} ariaLabel="Sort direction" className="w-20">
+              <option value="desc">Desc</option>
+              <option value="asc">Asc</option>
+            </Select>
+            <Select value={String(spec.limit)} onChange={(v) => updateSpec({ ...spec, limit: Number(v) })} ariaLabel="Result count" className="w-16 lg:w-18">
+              {LIMIT_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+            </Select>
             {/* Mobile search icon */}
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
               aria-label="Search players"
-              className="lg:hidden shrink-0 h-10 w-10 inline-flex items-center justify-center rounded-md border border-ink/15 bg-card text-ink-muted hover:text-ink hover:border-ink/25 shadow-sm transition-colors"
+              className="lg:hidden shrink-0 h-9 w-9 inline-flex items-center justify-center rounded-md border border-ink/15 bg-card text-ink-muted hover:text-ink hover:border-ink/25 shadow-sm transition-colors"
             >
               <SearchGlass className="w-4 h-4" />
             </button>
-
             {/* Mobile sliding search — text-base (16px) avoids iOS zoom on focus */}
             <div
               ref={searchPanelRef}
               className={cn(
-                "lg:hidden absolute inset-y-0 right-0 w-full flex items-center gap-2 bg-card transform-gpu transition-transform duration-200 ease-out",
+                "lg:hidden absolute inset-y-0 right-0 w-full flex items-center gap-2 bg-card transition-transform duration-200 ease-out",
                 searchOpen ? "translate-x-0" : "translate-x-[105%] pointer-events-none",
               )}
             >
@@ -730,52 +890,84 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search players…"
                   aria-label="Search players by name"
-                  className="h-10 w-full pl-9 pr-3 rounded-md border border-ink/15 bg-card text-ink text-base placeholder:text-ink-muted shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40"
+                  className="h-9 w-full pl-9 pr-3 rounded-md border border-ink/15 bg-card text-ink text-base placeholder:text-ink-muted shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40"
                 />
               </div>
               <button
                 type="button"
                 onClick={() => { setSearchOpen(false); setQuery(""); }}
                 aria-label="Close search"
-                className="shrink-0 h-10 px-2.5 text-sm font-medium text-coral hover:text-ink"
+                className="shrink-0 h-9 px-2.5 text-sm font-medium text-coral hover:text-ink"
               >
                 Done
               </button>
             </div>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-paper-deep/70">
-              <tr className="border-b border-hairline text-left">
-                <Th className="w-10 text-center">#</Th>
-                <Th className="w-12 hidden sm:table-cell">{""}</Th>
-                <SortableTh statKey="name" label="Player" basePath="/players" defaultSort="bta_ind_ortg" defaultDir="asc" align="left" />
-                <Th>Team</Th>
-                {multiYear && <Th className="w-16">Season</Th>}
-                <Th className="w-10 hidden sm:table-cell">Cl</Th>
-                <Th className="w-12">Ht</Th>
-                <SortableTh statKey="games" label="GP" basePath="/players" defaultSort="bta_ind_ortg" className="w-12 hidden sm:table-cell" />
-                <SortableTh statKey="bta_ind_ortg" label="BTA PRTG" basePath="/players" defaultSort="bta_ind_ortg" nowrap={false} className="w-14" />
-                <SortableTh statKey="pir" label="PIR" basePath="/players" defaultSort="bta_ind_ortg" />
-                <SortableTh statKey="pts" label="PPG" basePath="/players" defaultSort="bta_ind_ortg" />
-                <SortableTh statKey="fg_pct" label="FG%" basePath="/players" defaultSort="bta_ind_ortg" />
-                <SortableTh statKey="fg3_pct" label="3P%" basePath="/players" defaultSort="bta_ind_ortg" />
-                <SortableTh statKey="ts_pct" label="TS%" basePath="/players" defaultSort="bta_ind_ortg" />
-                <SortableTh statKey="reb" label="RPG" basePath="/players" defaultSort="bta_ind_ortg" />
-                <SortableTh statKey="ast" label="APG" basePath="/players" defaultSort="bta_ind_ortg" />
+        {/* D&3-style internal scroll: the table scrolls inside its own viewport
+            (both axes) while BOTH header rows stay frozen and the RK + Player
+            columns pin left. Sticky cells carry opaque backgrounds. */}
+        {/* ~24 rows tall before the internal scroll takes over. Custom vertical
+            rail (starts at the player rows); native thin horizontal bar. */}
+        <div className="relative">
+        <div
+          ref={gridScrollRef}
+          className="overflow-auto overscroll-x-contain max-h-312.5 players-scroll cursor-grab"
+          onPointerDown={onGridPointerDown}
+          onPointerMove={onGridPointerMove}
+          onPointerUp={onGridPointerEnd}
+          onPointerCancel={onGridPointerEnd}
+        >
+          <table className="w-full text-sm border-separate border-spacing-0">
+            <thead>
+              {/* Band row — fixed h-6 with zero vertical padding so the column
+                  row (sticky top-6) sits FLUSH beneath it: no see-through gap. */}
+              <tr>
+                <th className="sticky top-0 left-0 z-40 bg-paper-deep h-6 p-0" />
+                <th style={playerLeft} className="sticky top-0 z-40 bg-paper-deep h-6 p-0" />
+                {dynamicCols.length > 0 && (
+                  <th colSpan={dynamicCols.length} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-ink-muted text-center border-l border-hairline align-middle">
+                    Filtered
+                  </th>
+                )}
+                {GRID_BANDS.map((b) => (
+                  <th
+                    key={b.label}
+                    colSpan={b.span}
+                    className={cn(
+                      "sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-center border-l border-hairline align-middle",
+                      b.epm ? "text-coral" : "text-ink-muted",
+                    )}
+                  >
+                    {b.label}
+                  </th>
+                ))}
+              </tr>
+              {/* Column row — search lives in the Player cell (D&3-style). */}
+              <tr>
+                <th ref={rkThRef} className="sticky top-6 left-0 z-40 bg-paper-deep border-b border-hairline px-2 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">RK</th>
+                <th style={playerLeft} className="sticky top-6 z-40 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Player</th>
+                {[...dynamicCols, ...GRID_COLS].map((c) =>
+                  c.sortKey ? (
+                    <SortableTh key={c.label} statKey={c.sortKey} label={c.label} basePath="/players" defaultSort="epm" idleArrows className="sticky top-6 z-30 bg-paper-deep border-b border-hairline" />
+                  ) : (
+                    <th key={c.label} className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-2 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-right whitespace-nowrap align-middle">
+                      {c.label}
+                    </th>
+                  ),
+                )}
               </tr>
             </thead>
             <tbody>
               {loading && transformed.length === 0 ? (
                 <tr>
-                  <td colSpan={multiYear ? 15 : 14} className="px-4 py-16 text-center text-ink-muted">
+                  <td colSpan={dynamicCols.length + GRID_COLS.length + 2} className="px-4 py-16 text-center text-ink-muted">
                     Loading {seasonsKicker(spec.years).toLowerCase()}…
                   </td>
                 </tr>
               ) : players.length === 0 ? (
                 <tr>
-                  <td colSpan={multiYear ? 15 : 14} className="px-4 py-12 text-center">
+                  <td colSpan={dynamicCols.length + GRID_COLS.length + 2} className="px-4 py-12 text-center">
                     <div className="text-ink-soft">No players match these filters.</div>
                     <div className="mt-1.5 text-xs text-ink-muted">
                       Try widening conference, class, or games played.
@@ -784,47 +976,64 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                 </tr>
               ) : (
                 players.map((p, i) => (
-                  <tr key={p.id} className={`transition-colors hover:bg-coral/[0.06] ${i % 2 === 0 ? "bg-paper/70" : "bg-transparent"}`}>
-                    <Td className="text-center text-ink-muted tabular">{(pageSafe - 1) * spec.limit + i + 1}</Td>
-                    <Td className="text-center hidden sm:table-cell">
-                      <PlayerPhoto bartPlayerId={p.bart_player_id} name={p.name} size={28} />
-                    </Td>
-                    <Td>
-                      {p.bart_player_id ? (
-                        <Link href={`/players/${p.bart_player_id}`} className="font-medium text-ink hover:text-coral transition-colors">
-                          {p.name}
-                        </Link>
-                      ) : (
-                        <span className="font-medium text-ink">{p.name}</span>
-                      )}
-                    </Td>
-                    <Td>
-                      <Link
-                        href={`/teams/${teamSlug(p.team_name)}`}
-                        aria-label={p.team_name}
-                        className="inline-flex items-center gap-2 hover:text-coral transition-colors"
-                      >
-                        <TeamLogo name={p.team_name} size={20} />
-                        <span className="hidden sm:inline text-ink-soft text-sm">{p.team_name}</span>
-                      </Link>
-                    </Td>
-                    {multiYear && <Td className="text-ink-muted tabular">{seasonLabel(p.year)}</Td>}
-                    <Td className="text-ink-muted hidden sm:table-cell">{p.class ?? "—"}</Td>
-                    <Td className="text-ink-muted whitespace-nowrap">{p.height ? p.height.replace(/^(\d+)-(\d+)$/, "$1'$2\"") : "—"}</Td>
-                    <Td className="text-right tabular hidden sm:table-cell">{p.games ?? "—"}</Td>
-                    <ValuePctCell value={p.bta_ind_ortg} pct={pctMaps.bta_ind_ortg.get(p.id) ?? null} format="num1" emphasized />
-                    <ValuePctCell value={p.pir} pct={pctMaps.pir.get(p.id) ?? null} format="num1" />
-                    <Td className="text-right tabular">{fmtNum(p.pts_pg, 1)}</Td>
-                    <ValuePctCell value={p.fg_pct} pct={pctMaps.fg_pct.get(p.id) ?? null} format="pct1" />
-                    <ValuePctCell value={p.fg3_pct} pct={pctMaps.fg3_pct.get(p.id) ?? null} format="pct1" />
-                    <ValuePctCell value={p.ts_pct} pct={pctMaps.ts_pct.get(p.id) ?? null} format="pct1" />
-                    <Td className="text-right tabular">{fmtNum(p.reb_pg, 1)}</Td>
-                    <Td className="text-right tabular">{fmtNum(p.ast_pg, 1)}</Td>
+                  <tr key={p.id} className="group">
+                    {/* RK — rank within the CURRENT sort */}
+                    <td className="sticky left-0 z-20 bg-card border-b border-hairline px-2 py-2 text-center text-ink-muted tabular text-xs font-semibold group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))] transition-colors cursor-default">
+                      {(pageSafe - 1) * spec.limit + i + 1}
+                    </td>
+                    {/* Player — photo + name + team/class/height meta */}
+                    <td style={playerLeft} className="sticky z-20 bg-card border-b border-r border-hairline px-3 py-2 group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))] transition-colors">
+                      <span className="flex items-center gap-2.5 min-w-44">
+                        <PlayerPhoto bartPlayerId={p.bart_player_id} name={p.name} size={28} />
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1">
+                            {p.bart_player_id ? (
+                              <Link href={`/players/${p.bart_player_id}`} className="font-medium text-ink hover:text-coral transition-colors whitespace-nowrap block leading-tight">
+                                {p.name}
+                              </Link>
+                            ) : (
+                              <span className="font-medium text-ink whitespace-nowrap block leading-tight">{p.name}</span>
+                            )}
+                            <CopyName name={p.name} />
+                          </span>
+                          <span className="flex items-center gap-1.5 text-[0.66rem] text-ink-muted whitespace-nowrap leading-tight">
+                            <Link href={`/teams/${teamSlug(p.team_name)}`} className="inline-flex items-center gap-1 hover:text-coral transition-colors">
+                              <TeamLogo name={p.team_name} size={12} />
+                              {p.team_name}
+                            </Link>
+                            <span>· {p.class ?? "—"}{p.height ? ` · ${p.height.replace(/^(\d+)-(\d+)$/, "$1'$2\"")}` : ""}{multiYear ? ` · ${seasonLabel(p.year)}` : ""}</span>
+                          </span>
+                        </span>
+                      </span>
+                    </td>
+                    {[...dynamicCols, ...GRID_COLS].map((c) => {
+                      const v = p[c.field] as number | null;
+                      return (
+                        <td
+                          key={c.label}
+                          className={cn(
+                            "border-b border-hairline px-2 py-1.5 text-right tabular whitespace-nowrap transition-colors",
+                            c.band && EPM_BAND_TINT,
+                            ROW_HOVER,
+                          )}
+                        >
+                          <span className="inline-flex flex-col items-end gap-0.5 leading-tight">
+                            <span className={c.label === "EPM" ? "font-semibold" : undefined}>{fmtGrid(v, c.fmt)}</span>
+                            {c.pct
+                              ? <PercentileChip pct={pctMaps[c.pct].get(p.id) ?? null} />
+                              : <span className="h-5" aria-hidden="true" /> /* chip-height spacer keeps values row-aligned */}
+                          </span>
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))
               )}
             </tbody>
           </table>
+          <HScrollRail target={gridScrollRef} />
+        </div>
+        <VScrollRail target={gridScrollRef} />
         </div>
         {!loading && totalPages > 1 && (
           <PlayerPagination
@@ -841,52 +1050,6 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         )}
       </div>
 
-      {/* Methodology — demoted out of the headline card so the leaderboard
-          reads clean. Lives below as a quiet caption block where curious
-          readers can find it without it dominating the page. */}
-      <details className="mt-8 group">
-        <summary className="cursor-pointer inline-flex items-center gap-2 text-xs uppercase tracking-widest text-ink-muted font-medium hover:text-ink transition-colors">
-          <span className="h-px w-6 bg-ink-muted/40 group-hover:bg-coral transition-colors" />
-          How BTA PRTG is calculated
-          <span aria-hidden className="text-[0.6rem] text-ink-muted/60 group-open:rotate-90 transition-transform">▸</span>
-        </summary>
-        <p className="mt-3 text-xs text-ink-muted leading-relaxed max-w-3xl">
-          BTA PRTG is a per-season z-composite of PIR (EuroLeague Performance
-          Index Rating, per game minus turnovers, weighted 69% to dampen
-          high-usage scorer bias) and Bart Torvik&apos;s PORPAG (Points Over
-          Replacement Per Adjusted Game), scaled &times; 20. A conference
-          multiplier adjusts for strength of schedule: top-tier conferences
-          (SEC, Big 12, Big Ten, ACC, Big East) get a +19% boost, with
-          progressively larger reductions for weaker leagues. Players on a
-          top-32 D-I team for 2025-26 receive an additional +8% bump, and
-          players on a top-5 record team within a Tier 1 conference receive
-          an extra +6% on top of that. Missing terms are skipped so
-          partial-data players still get scored. Players with fewer than
-          8 games or under 3.5 PPG are hidden from the leaderboard. The
-          percentile cohort itself uses a stricter 18g / 20mpg / 5.3ppg
-          floor — players above the visibility floor but below the
-          cohort floor are still scored against the cohort distribution
-          via binary search.
-          <br /><br />
-          A volume-shooter penalty closes the high-usage / low-efficiency
-          gap PIR&apos;s 69% weighting leaves open. For each player we
-          compute their TS% AND eFG% percentile within their position bucket
-          (G / F / C), then take the worst of the two. Scorers above 12 PPG
-          whose worst-of efficiency is below the 40th percentile lose up to
-          &minus;8 BTA points, scaling linearly with both how much volume
-          they take and how far below the cohort their efficiency sits. The
-          worst-of rule catches FT-line-inflated archetypes (Jahmir Young
-          shooting 25-pctile eFG but 61-pctile TS thanks to 90% from the
-          line) that a pure TS-based penalty would miss.
-        </p>
-        <p className="mt-4 text-[0.65rem] uppercase tracking-widest text-ink-muted/70">
-          Data via Bart Torvik (
-          <a href="https://barttorvik.com" target="_blank" rel="noreferrer" className="hover:text-coral underline-offset-2 hover:underline">barttorvik.com</a>
-          ) &amp; CBB Analytics (
-          <a href="https://cbbanalytics.com" target="_blank" rel="noreferrer" className="hover:text-coral underline-offset-2 hover:underline">cbbanalytics.com</a>
-          )
-        </p>
-      </details>
       <ComparePlayersModal open={compareOpen} onClose={() => setCompareOpen(false)} />
     </>
   );
@@ -904,6 +1067,199 @@ function HeaderField({ label, children, className }: { label: string; children: 
       <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">{label}</span>
       {children}
     </label>
+  );
+}
+
+// Custom vertical scrollbar for the players grid. The native bar can't start
+// its rail below the frozen header rows, so we hide it (globals.css) and render
+// our own: up arrow, track, draggable thumb, down arrow — positioned to begin
+// exactly at the first player row and end above the horizontal bar.
+function VScrollRail({ target }: { target: React.RefObject<HTMLDivElement | null> }) {
+  const railRef = useRef<HTMLDivElement>(null);
+  const [thumb, setThumb] = useState<{ top: number; h: number } | null>(null);
+  const drag = useRef<{ startY: number; startTop: number } | null>(null);
+
+  const sync = () => {
+    const el = target.current, rail = railRef.current;
+    if (!el || !rail) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    if (scrollHeight <= clientHeight + 1) { setThumb(null); return; }
+    const railH = rail.clientHeight;
+    const h = Math.max(36, (clientHeight / scrollHeight) * railH);
+    const top = (scrollTop / (scrollHeight - clientHeight)) * (railH - h);
+    setThumb({ top, h });
+  };
+
+  useEffect(() => {
+    const el = target.current;
+    if (!el) return;
+    sync();
+    el.addEventListener("scroll", sync, { passive: true });
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    // Content height changes (rows load/filter) without a resize of the box:
+    const mo = new MutationObserver(sync);
+    mo.observe(el, { childList: true, subtree: true });
+    return () => { el.removeEventListener("scroll", sync); ro.disconnect(); mo.disconnect(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
+
+  const step = (dir: 1 | -1) => {
+    target.current?.scrollBy({ top: dir * 160, behavior: "smooth" });
+  };
+  const onThumbDown = (e: React.PointerEvent) => {
+    if (!thumb) return;
+    drag.current = { startY: e.clientY, startTop: thumb.top };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onThumbMove = (e: React.PointerEvent) => {
+    const el = target.current, rail = railRef.current;
+    if (!drag.current || !el || !rail || !thumb) return;
+    const railH = rail.clientHeight;
+    const maxTop = railH - thumb.h;
+    const next = Math.min(maxTop, Math.max(0, drag.current.startTop + (e.clientY - drag.current.startY)));
+    el.scrollTop = (next / maxTop) * (el.scrollHeight - el.clientHeight);
+  };
+  const onThumbUp = () => { drag.current = null; };
+  const onTrackClick = (e: React.MouseEvent) => {
+    const el = target.current, rail = railRef.current;
+    if (!el || !rail || !thumb) return;
+    const y = e.clientY - rail.getBoundingClientRect().top;
+    if (y < thumb.top || y > thumb.top + thumb.h) {
+      el.scrollBy({ top: (y < thumb.top ? -1 : 1) * el.clientHeight * 0.9, behavior: "smooth" });
+    }
+  };
+
+  if (!thumb) return null;
+  const arrowCls = "flex items-center justify-center w-3.5 h-3.5 text-ink-muted hover:text-coral cursor-pointer transition-colors";
+  return (
+    <div className="absolute right-0.5 top-14 bottom-4 z-30 flex flex-col items-center gap-0.5 w-3.5" aria-hidden>
+      <button type="button" tabIndex={-1} className={arrowCls} onClick={() => step(-1)}>
+        <svg viewBox="0 0 10 10" className="w-2 h-2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1.5 6.8 5 3.2l3.5 3.6" /></svg>
+      </button>
+      <div ref={railRef} onClick={onTrackClick} className="relative flex-1 w-2 rounded-full bg-ink/6 cursor-default">
+        <div
+          onPointerDown={onThumbDown}
+          onPointerMove={onThumbMove}
+          onPointerUp={onThumbUp}
+          className="absolute left-0 right-0 rounded-full bg-ink/30 hover:bg-ink/50 transition-colors cursor-grab active:cursor-grabbing"
+          style={{ top: thumb.top, height: thumb.h }}
+        />
+      </div>
+      <button type="button" tabIndex={-1} className={arrowCls} onClick={() => step(1)}>
+        <svg viewBox="0 0 10 10" className="w-2 h-2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M1.5 3.2 5 6.8l3.5-3.6" /></svg>
+      </button>
+    </div>
+  );
+}
+
+// Horizontal companion to VScrollRail — pinned to the visible bottom of the
+// grid via position:sticky INSIDE the scroll container, so it's always on
+// screen (the native bar would sit at the container's true bottom, ~1,200px
+// down). Left/right arrows + draggable thumb; width tracks the viewport.
+function HScrollRail({ target }: { target: React.RefObject<HTMLDivElement | null> }) {
+  const railRef = useRef<HTMLDivElement>(null);
+  const [state, setState] = useState<{ vw: number; left: number; w: number; x: number; bottomOff: number } | null>(null);
+  const drag = useRef<{ startX: number; startLeft: number } | null>(null);
+
+  const sync = () => {
+    const el = target.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    if (scrollWidth <= clientWidth + 1) { setState(null); return; }
+    const railW = clientWidth - 56; // room for the two arrows
+    const w = Math.max(48, (clientWidth / scrollWidth) * railW);
+    const left = (scrollLeft / (scrollWidth - clientWidth)) * (railW - w);
+    setState({ vw: clientWidth, left, w, x: 0, bottomOff: 0 });
+  };
+
+  useEffect(() => {
+    const el = target.current;
+    if (!el) return;
+    sync();
+    el.addEventListener("scroll", sync, { passive: true });
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    const mo = new MutationObserver(sync);
+    mo.observe(el, { childList: true, subtree: true });
+    return () => { el.removeEventListener("scroll", sync); ro.disconnect(); mo.disconnect(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
+
+  const step = (dir: 1 | -1) => target.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
+  const onDown = (e: React.PointerEvent) => {
+    if (!state) return;
+    drag.current = { startX: e.clientX, startLeft: state.left };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  };
+  const onMove = (e: React.PointerEvent) => {
+    const el = target.current;
+    if (!drag.current || !el || !state) return;
+    const railW = state.vw - 56;
+    const maxLeft = railW - state.w;
+    const next = Math.min(maxLeft, Math.max(0, drag.current.startLeft + (e.clientX - drag.current.startX)));
+    el.scrollLeft = (next / maxLeft) * (el.scrollWidth - el.clientWidth);
+  };
+  const onUp = () => { drag.current = null; };
+
+  if (!state) return null;
+  const arrowCls = "flex items-center justify-center w-4 h-3.5 text-ink-muted hover:text-coral cursor-pointer transition-colors shrink-0";
+  return (
+    // Sticky to the container's bottom edge; left-0 keeps it from drifting on
+    // horizontal scroll.
+    <div className="sticky bottom-0 left-0 z-40 h-4 bg-card/95" style={{ width: state.vw }} aria-hidden>
+      <div className="flex items-center h-full px-1.5 gap-1">
+        <button type="button" tabIndex={-1} className={arrowCls} onClick={() => step(-1)}>
+          <svg viewBox="0 0 10 10" className="w-2 h-2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6.8 1.5 3.2 5l3.6 3.5" /></svg>
+        </button>
+        <div ref={railRef} className="relative flex-1 h-2 rounded-full bg-ink/6">
+          <div
+            onPointerDown={onDown}
+            onPointerMove={onMove}
+            onPointerUp={onUp}
+            className="absolute top-0 bottom-0 rounded-full bg-ink/30 hover:bg-ink/50 transition-colors cursor-grab active:cursor-grabbing"
+            style={{ left: state.left, width: state.w }}
+          />
+        </div>
+        <button type="button" tabIndex={-1} className={arrowCls} onClick={() => step(1)}>
+          <svg viewBox="0 0 10 10" className="w-2 h-2" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3.2 1.5 6.8 5 3.2 8.5" /></svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Copy-name button — appears on row hover next to the player name; flashes a
+// check for a beat after copying.
+function CopyName({ name }: { name: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      title={`Copy "${name}"`}
+      aria-label={`Copy ${name} to clipboard`}
+      onClick={() => {
+        navigator.clipboard?.writeText(name).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1200);
+        });
+      }}
+      className={cn(
+        "shrink-0 inline-flex items-center justify-center w-4.5 h-4.5 rounded cursor-pointer text-ink-muted/60 hover:text-coral transition-colors",
+        copied && "text-coral",
+      )}
+    >
+      {copied ? (
+        <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M20 6L9 17l-5-5" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="9" y="9" width="13" height="13" rx="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      )}
+    </button>
   );
 }
 

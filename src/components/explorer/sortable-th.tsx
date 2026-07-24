@@ -25,6 +25,7 @@ export function SortableTh({
   defaultSort = "bta_rtg",
   align = "right",
   nowrap = true,
+  idleArrows = false,
 }: {
   statKey: string;
   label: string;
@@ -36,6 +37,8 @@ export function SortableTh({
   defaultSort?: string;
   align?: "left" | "right";
   nowrap?: boolean;
+  /** Show a faint ⇅ on inactive columns (D&3-style affordance). */
+  idleArrows?: boolean;
 }) {
   const params = useSearchParams();
   const sortInUrl = params.get("sort");
@@ -80,7 +83,11 @@ export function SortableTh({
             <span className="h-1 w-1 rounded-full bg-coral" aria-hidden />
           )}
           <span>{label}</span>
-          {arrow && <span className="text-coral text-[0.65rem] leading-none">{arrow}</span>}
+          {arrow ? (
+            <span className="text-coral text-[0.65rem] leading-none">{arrow}</span>
+          ) : idleArrows ? (
+            <span className="text-ink-muted/50 text-[0.6rem] leading-none tracking-tighter" aria-hidden>↑↓</span>
+          ) : null}
         </span>
       </Link>
     </th>

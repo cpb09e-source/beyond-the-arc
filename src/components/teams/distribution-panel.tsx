@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { StaticTeamSeasonRow } from "@/lib/static-data";
 import { PercentileChip, pctColor } from "@/components/percentile-chip";
+import { BlurOverlay } from "@/components/teams/preview-blur";
 
 /**
  * Distribution panel — a generic vs-D-I rank visualization. Each row shows
@@ -95,20 +96,17 @@ export function DistributionPanel({
   eyebrow = "vs D-I",
   ranks,
   children,
+  blurBody = false,
 }: {
   title: string;
   eyebrow?: string;
   ranks: DistributionRank[];
   children?: ReactNode;
+  /** Preview mode — blur the stat rows + overlay the "no games yet" note; title stays sharp. */
+  blurBody?: boolean;
 }) {
-  return (
-    <div className="bg-paper-deep/25 -mx-6 lg:mx-0 rounded-none lg:rounded-xl border-y border-x-0 lg:border-x border-hairline shadow-sm p-6">
-      <div className="flex items-baseline justify-between mb-5">
-        <h3 className="font-display text-xl text-ink">{title}</h3>
-        <span className="text-[0.65rem] uppercase tracking-widest text-ink-muted">
-          {eyebrow}
-        </span>
-      </div>
+  const body = (
+    <>
       <div className="space-y-4">
         {ranks.map((r) => <StatRow key={r.key} stat={r} />)}
       </div>
@@ -117,6 +115,17 @@ export function DistributionPanel({
           {children}
         </div>
       )}
+    </>
+  );
+  return (
+    <div className="bg-paper-deep/25 -mx-6 lg:mx-0 rounded-none lg:rounded-xl border-y border-x-0 lg:border-x border-hairline shadow-sm p-6">
+      <div className="flex items-baseline justify-between mb-5">
+        <h3 className="font-display text-xl text-ink">{title}</h3>
+        <span className="text-[0.65rem] uppercase tracking-widest text-ink-muted">
+          {eyebrow}
+        </span>
+      </div>
+      {blurBody ? <BlurOverlay>{body}</BlurOverlay> : body}
     </div>
   );
 }

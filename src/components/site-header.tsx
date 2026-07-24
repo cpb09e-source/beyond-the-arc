@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/", label: "Teams" },
+  { href: "/preview", label: "26-27 Preview" },
   { href: "/players", label: "Players" },
   { href: "/coaches", label: "Coaches" },
   { href: "/calc", label: "Win Calc" },
@@ -90,30 +91,10 @@ export function SiteHeader() {
 
         {/* Right cluster: 32-0 game pill, search on desktop, hamburger on mobile. */}
         <div className="flex items-center gap-2.5 shrink-0">
-          {/* 32-0 — just the clickable logo, no container. */}
-          <Link
-            href="/32-0"
-            aria-label="32-0"
-            aria-current={isCurrent(pathname, "/32-0") ? "page" : undefined}
-            className="hidden md:inline-flex items-center hover:opacity-80 transition-opacity"
-          >
-            <img src="/images/320navlogo-01_light-01.svg" alt="32-0" className="ttz-nav-logo-light h-11 w-auto" />
-            <img src="/images/320navlogo-01_dark.svg" alt="32-0" className="ttz-nav-logo-dark h-11 w-auto" />
-          </Link>
+          {/* 32-0 nav button hidden for now (game still lives at /32-0). */}
           {/* SearchDialog renders its own desktop trigger (hidden on mobile) and
               the modal. Kept un-wrapped so the modal works on mobile too. */}
           <SearchDialog />
-          {/* 32-0 — mobile, sits to the left of the hamburger. */}
-          <Link
-            href="/32-0"
-            aria-label="32-0"
-            aria-current={isCurrent(pathname, "/32-0") ? "page" : undefined}
-            onClick={() => setOpen(false)}
-            className="md:hidden inline-flex items-center hover:opacity-80 transition-opacity"
-          >
-            <img src="/images/320navlogo-01_light-01.svg" alt="32-0" className="ttz-nav-logo-light h-8 w-auto" />
-            <img src="/images/320navlogo-01_dark.svg" alt="32-0" className="ttz-nav-logo-dark h-8 w-auto" />
-          </Link>
           {/* Mobile search — opens the same dialog via a custom event. */}
           <button
             type="button"

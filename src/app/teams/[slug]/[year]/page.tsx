@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { readPlayersForYear, readTeam, readAllTeams, readRankedPlayerIds, readConfRecordsByTeam, readGameLogsForYear } from "@/lib/static-data";
-import { TeamPageView, buildRoster, attachRosterRanks } from "@/components/teams/team-page-view";
+import { TeamPageView, buildRoster, attachRosterRanks, PREVIEW_SEASON_YEAR, PREVIEW_SEASON_LABEL } from "@/components/teams/team-page-view";
 import { buildShootingRanks, buildFourFactorRanks } from "@/components/teams/distribution-panel";
 import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches";
 
@@ -28,17 +28,25 @@ function slugFor(name: string): string {
 }
 
 // Build (slug, year) for every team-season we have. Keeps the route fully
-// statically pre-rendered alongside the bare /teams/<slug> route.
+// statically pre-rendered alongside the bare /teams/<slug> route. Teams active
+// in the most recent completed season also get a PREVIEW_SEASON_YEAR page
+// (next-season preview — roster + projections hydrate client-side).
 export async function generateStaticParams() {
   const all = await readAllTeams();
   const seen = new Set<string>();
   const out: Array<{ slug: string; year: string }> = [];
+  let latest = 0;
+  for (const t of all) latest = Math.max(latest, t.year);
   for (const t of all) {
     const slug = slugFor(t.name);
     const key = `${slug}|${t.year}`;
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({ slug, year: String(t.year) });
+    if (t.year === latest && !seen.has(`${slug}|${PREVIEW_SEASON_YEAR}`)) {
+      seen.add(`${slug}|${PREVIEW_SEASON_YEAR}`);
+      out.push({ slug, year: String(PREVIEW_SEASON_YEAR) });
+    }
   }
   return out;
 }
@@ -57,6 +65,16 @@ export async function generateMetadata({
   if (!Number.isFinite(year)) return { title: "Team season not found" };
   const team = await readTeam(slug);
   if (!team) return { title: "Team not found" };
+  if (year === PREVIEW_SEASON_YEAR) {
+    const description = `${team.name} ${PREVIEW_SEASON_LABEL} season preview — projected record, preseason T-Rank, and next season's roster.`;
+    return {
+      title: `${team.name} ${PREVIEW_SEASON_LABEL} Preview`,
+      description,
+      openGraph: { title: `${team.name} · ${PREVIEW_SEASON_LABEL} Preview`, description, url: `/teams/${slug}/${year}/`, type: "website" },
+      twitter: { card: "summary_large_image", title: `${team.name} · ${PREVIEW_SEASON_LABEL} Preview`, description },
+      alternates: { canonical: `/teams/${slug}/${year}/` },
+    };
+  }
   const current = team.seasons.find((s) => s.year === year);
   if (!current) return { title: "Team season not found" };
 
@@ -92,25 +110,32 @@ export default async function TeamSeasonPage({
   const team = await readTeam(slug);
   if (!team) notFound();
 
-  const current = team.seasons.find((s) => s.year === year);
+  // Next-season preview — renders the last-completed-season layout with the
+  // game-dependent sections blurred (no 2026-27 games played yet). We hand
+  // TeamPageView the most-recent completed season for structure + the projected
+  // record/T-Rank for the hero.
+  const isPreview = year === PREVIEW_SEASON_YEAR;
+  const effYear = isPreview ? (team.seasons[0]?.year ?? year) : year;
+
+  const current = team.seasons.find((s) => s.year === effYear);
   if (!current) notFound();
 
-  const rosterPool = await readPlayersForYear(year);
-  const rosterBase = buildRoster(rosterPool, current.id, year);
+  const rosterPool = await readPlayersForYear(effYear);
+  const rosterBase = buildRoster(rosterPool, current.id, effYear);
   const rankedPlayerIds = await readRankedPlayerIds();
   const roster = attachRosterRanks(rosterBase, current.roster_ranks);
   const confRecordsAll = await readConfRecordsByTeam();
   const confRecords = confRecordsAll.get(team.name) ?? new Map();
   const allTeams = await readAllTeams();
-  const yearCohort = allTeams.filter((t) => t.year === year);
+  const yearCohort = allTeams.filter((t) => t.year === effYear);
   const shootingRanks = buildShootingRanks(current, yearCohort);
   const fourFactorRanks = buildFourFactorRanks(current, yearCohort);
-  const allGames = await readGameLogsForYear(year);
+  const allGames = await readGameLogsForYear(effYear);
   // Tag any of this team's games that match a March Madness date so the
   // ticker shows the round (R1, S16, NC, etc.) above the W/L pill.
   const tourneyGamesAll = await loadTournamentGames();
   const tourneyLookup = buildGamesByTeamYear(tourneyGamesAll);
-  const teamTourneyGames = gamesForTeamYear(tourneyLookup, team.name, year);
+  const teamTourneyGames = gamesForTeamYear(tourneyLookup, team.name, effYear);
   const roundByDate = new Map<string, string>();
   for (const tg of teamTourneyGames) {
     if (!tg.date) continue;
@@ -135,6 +160,7 @@ export default async function TeamSeasonPage({
       shootingRanks={shootingRanks}
       fourFactorRanks={fourFactorRanks}
       scheduleGames={scheduleGames}
+      preview={isPreview}
     />
   );
 }

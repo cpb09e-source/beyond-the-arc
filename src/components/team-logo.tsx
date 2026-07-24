@@ -70,6 +70,16 @@ function lookup(name: string): CbbEntry | null {
   // Try SR alias
   const alias = SR_NAME_ALIASES[k];
   if (alias && TEAMS[alias]) return TEAMS[alias]!;
+  // Drop "university"/"univ"/"the" — portal origin names come from On3 as full
+  // names ("Santa Clara University") that don't match Bart's short key.
+  const noUniv = k.replace(/\b(university|univ|the)\b/g, "").trim().replace(/\s+/g, " ");
+  if (noUniv !== k && noUniv.length > 0) {
+    if (TEAMS[noUniv]) return TEAMS[noUniv]!;
+    if (TEAMS_BY_MARKET[noUniv]) return TEAMS_BY_MARKET[noUniv]!;
+    const noUnivSt = noUniv.replace(/\bstate\b/g, "st");
+    if (TEAMS[noUnivSt]) return TEAMS[noUnivSt]!;
+    if (TEAMS_BY_MARKET[noUnivSt]) return TEAMS_BY_MARKET[noUnivSt]!;
+  }
   // " State" → " st" swap (SR writes "Oklahoma State", Bart writes "Oklahoma St.")
   const stateToSt = k.replace(/\bstate\b/g, "st");
   if (stateToSt !== k) {

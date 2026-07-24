@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { TeamName } from "@/components/team-name";
+import { SeasonPreview } from "@/components/teams/season-preview";
+
+// Bart's year key for the upcoming season (season-END year: 2027 = 2026-27).
+export const PREVIEW_SEASON_YEAR = 2027;
+export const PREVIEW_SEASON_LABEL = "2026-27";
+
 import { SeasonSwitcher } from "@/components/teams/season-switcher";
 import { NationalRanks } from "@/components/teams/national-ranks";
 import { SortableSeasonsTable } from "@/components/teams/sortable-seasons-table";
@@ -305,6 +311,7 @@ export function TeamPageView({
   shootingRanks,
   fourFactorRanks,
   scheduleGames,
+  preview = false,
 }: {
   team: { name: string; seasons: StaticTeamSeasonRow[] };
   current: StaticTeamSeasonRow;
@@ -315,6 +322,10 @@ export function TeamPageView({
   shootingRanks: DistributionRank[];
   fourFactorRanks: DistributionRank[];
   scheduleGames: GameLog[];
+  // Preview mode — renders the last-completed-season layout with game-dependent
+  // sections blurred, the roster swapped for the upcoming-season client roster,
+  // record shown as 0-0 and BTA rank as TBD.
+  preview?: boolean;
 }) {
   const teamColors = getTeamColors(team.name);
   const accentColor = teamColors?.primary ?? null;
@@ -359,8 +370,14 @@ export function TeamPageView({
                   {confDisplay(current.conference)}
                   <SeasonSwitcher
                     slug={slug}
-                    currentYear={current.year}
-                    years={team.seasons.map((s) => s.year)}
+                    currentYear={preview ? PREVIEW_SEASON_YEAR : current.year}
+                    years={
+                      // Teams still active in the latest completed season also
+                      // get the next-season preview in the picker.
+                      (team.seasons[0]?.year ?? 0) >= PREVIEW_SEASON_YEAR - 1
+                        ? [PREVIEW_SEASON_YEAR, ...team.seasons.map((s) => s.year)]
+                        : team.seasons.map((s) => s.year)
+                    }
                   />
                 </span>
               </div>
@@ -368,20 +385,33 @@ export function TeamPageView({
                 <h1 className="font-display text-4xl md:text-6xl tracking-tight text-ink leading-none">
                   <TeamName name={current.name} />
                 </h1>
-                {current.bta_rank !== null && current.bta_rank !== undefined && (
+                {preview ? (
                   <span
                     className="inline-flex items-baseline gap-1 px-3 py-1.5 rounded-md text-white font-display text-xl md:text-2xl tabular leading-none shadow-sm"
                     style={accentColor ? { background: accentColor, color: teamColors?.onPrimary ?? "#fff" } : { background: "var(--color-coral, #ed5a4f)" }}
-                    title={`BTA Rank for ${seasonLabel(current.year)}`}
+                    title={`BTA Rank for ${PREVIEW_SEASON_LABEL} — set once games are played`}
                   >
                     <span className="text-[0.6em] opacity-80 uppercase tracking-widest mr-0.5">BTA</span>
-                    #{current.bta_rank}
+                    TBD
                   </span>
+                ) : (
+                  current.bta_rank !== null && current.bta_rank !== undefined && (
+                    <span
+                      className="inline-flex items-baseline gap-1 px-3 py-1.5 rounded-md text-white font-display text-xl md:text-2xl tabular leading-none shadow-sm"
+                      style={accentColor ? { background: accentColor, color: teamColors?.onPrimary ?? "#fff" } : { background: "var(--color-coral, #ed5a4f)" }}
+                      title={`BTA Rank for ${seasonLabel(current.year)}`}
+                    >
+                      <span className="text-[0.6em] opacity-80 uppercase tracking-widest mr-0.5">BTA</span>
+                      #{current.bta_rank}
+                    </span>
+                  )
                 )}
               </div>
               <div className="mt-4 flex flex-wrap items-baseline gap-x-6 gap-y-2 text-ink-soft">
-                <span className="tabular text-2xl text-ink">{currentTrank?.record ?? "—"}</span>
-                {avgRank !== null && last5Ranks.length > 1 && (
+                <span className="tabular text-2xl text-ink">
+                  {preview ? "0-0" : (currentTrank?.record ?? "—")}
+                </span>
+                {!preview && avgRank !== null && last5Ranks.length > 1 && (
                   <span className="text-sm text-ink-muted">
                     Avg BTA Rank, last {last5Ranks.length} seasons: #{avgRank}
                   </span>
@@ -409,18 +439,20 @@ export function TeamPageView({
                     </span>
                   );
                 })()}
-                <FindGameTrigger
-                  teamId={current.id}
-                  teamName={team.name}
-                  defaultYear={current.year}
-                />
+                {!preview && (
+                  <FindGameTrigger
+                    teamId={current.id}
+                    teamName={team.name}
+                    defaultYear={current.year}
+                  />
+                )}
               </div>
             </div>
           </div>
 
           {scheduleGames.length > 0 && (
             <div className="mt-8">
-              <ScheduleTicker games={scheduleGames} teamName={team.name} />
+              <ScheduleTicker games={scheduleGames} teamName={team.name} blurBody={preview} />
             </div>
           )}
 
@@ -443,6 +475,7 @@ export function TeamPageView({
                 top={current.national_ranks.top}
                 bottom={current.national_ranks.bottom}
                 total={current.national_ranks.top[0]?.total ?? current.national_ranks.bottom[0]?.total ?? 0}
+                blurBody={preview}
               />
             </div>
           ) : (
@@ -456,8 +489,8 @@ export function TeamPageView({
       </section>
 
       <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-2 grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <DistributionPanel title="Shooting" ranks={shootingRanks} />
-        <DistributionPanel title="Four Factors" ranks={fourFactorRanks}>
+        <DistributionPanel title="Shooting" ranks={shootingRanks} blurBody={preview} />
+        <DistributionPanel title="Four Factors" ranks={fourFactorRanks} blurBody={preview}>
           {current.four_factor_record && current.four_factor_record.games > 0 && (
             <>
               <div className="text-xs uppercase tracking-widest text-ink-muted font-medium mb-1">
@@ -476,6 +509,11 @@ export function TeamPageView({
         </DistributionPanel>
       </section>
 
+      {preview ? (
+        // Upcoming-season roster + projected record — client-hydrated from
+        // season-preview.json, kept sharp (not blurred).
+        <SeasonPreview teamName={team.name} />
+      ) : (
       <section className="mx-auto max-w-7xl px-4 lg:px-10 mt-5">
         <div className="mb-2 sm:mb-4">
           <h2 className="font-display text-3xl text-ink whitespace-nowrap">Roster — {seasonLabel(current.year)}</h2>
@@ -492,6 +530,7 @@ export function TeamPageView({
           <SortableRosterTable roster={roster} rankedPlayerIds={rankedPlayerIds} />
         )}
       </section>
+      )}
 
       {/* BY SEASON — headline ledger. Mirrors the coach page's "Season by
           season" treatment so cross-page recognition is consistent. */}

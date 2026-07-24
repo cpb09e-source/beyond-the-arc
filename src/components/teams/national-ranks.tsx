@@ -1,5 +1,6 @@
 import type { RankedStat } from "@/lib/static-data";
 import { PercentileChip } from "@/components/percentile-chip";
+import { BlurOverlay } from "@/components/teams/preview-blur";
 
 /**
  * Hero-level "barbell" of a team's national ranks for the season.
@@ -8,37 +9,42 @@ import { PercentileChip } from "@/components/percentile-chip";
  * visual tone of each column tells the story before you read a label.
  */
 export function NationalRanks({
-  top, bottom, total,
+  top, bottom, total, blurBody = false,
 }: {
   top: RankedStat[];
   bottom: RankedStat[];
   total: number;
+  /** Preview mode — blur each column's list + overlay the "no games yet" note; headers stay sharp. */
+  blurBody?: boolean;
 }) {
   if (top.length === 0 && bottom.length === 0) return null;
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-      <Column kicker="Where they rank best" items={top} total={total} />
-      <Column kicker="Where they rank worst" items={bottom} total={total} />
+      <Column kicker="Where they rank best" items={top} total={total} blurBody={blurBody} />
+      <Column kicker="Where they rank worst" items={bottom} total={total} blurBody={blurBody} />
     </div>
   );
 }
 
-function Column({ kicker, items, total }: { kicker: string; items: RankedStat[]; total: number }) {
+function Column({ kicker, items, total, blurBody }: { kicker: string; items: RankedStat[]; total: number; blurBody: boolean }) {
+  const list = (
+    <ul className="divide-y divide-hairline/40">
+      {items.map((s) => (
+        <li key={s.key} className="flex items-center gap-4 py-2.5 px-1 -mx-1 rounded transition-colors hover:bg-[var(--accent-tint)]">
+          <RankBadge rank={s.rank} total={s.total} />
+          <span className="flex-1 min-w-0 text-ink-soft text-sm">{s.label}</span>
+          <span className="flex-none font-medium text-ink tabular text-sm">{formatStat(s.value, s.format)}</span>
+        </li>
+      ))}
+    </ul>
+  );
   return (
     <div className="bg-paper-deep/25 -mx-6 md:mx-0 rounded-none md:rounded-xl border-y border-x-0 md:border-x border-hairline shadow-sm p-5 lg:p-6">
       <div className="flex items-baseline justify-between mb-4">
         <span className="text-xs uppercase tracking-widest text-coral font-medium">{kicker}</span>
         <span className="text-[0.65rem] text-ink-muted tabular">of {total} D-I teams</span>
       </div>
-      <ul className="divide-y divide-hairline/40">
-        {items.map((s) => (
-          <li key={s.key} className="flex items-center gap-4 py-2.5 px-1 -mx-1 rounded transition-colors hover:bg-[var(--accent-tint)]">
-            <RankBadge rank={s.rank} total={s.total} />
-            <span className="flex-1 min-w-0 text-ink-soft text-sm">{s.label}</span>
-            <span className="flex-none font-medium text-ink tabular text-sm">{formatStat(s.value, s.format)}</span>
-          </li>
-        ))}
-      </ul>
+      {blurBody ? <BlurOverlay>{list}</BlurOverlay> : list}
     </div>
   );
 }

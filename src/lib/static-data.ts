@@ -10,7 +10,7 @@ import path from "node:path";
 
 const DATA = path.resolve("public/data");
 
-async function readJson<T>(rel: string): Promise<T> {
+export async function readJson<T>(rel: string): Promise<T> {
   const text = await fs.readFile(path.join(DATA, rel), "utf8");
   return JSON.parse(text) as T;
 }

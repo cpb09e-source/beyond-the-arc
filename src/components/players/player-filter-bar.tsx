@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { SlidersHorizontal, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Select } from "@/components/select";
 import { confDisplay } from "@/lib/conf-display";
@@ -87,8 +87,18 @@ export function PlayerFilterBar({
   const router = useRouter();
   const search = useSearchParams();
   const [pending, startTransition] = useTransition();
-  // Collapsed by default on mobile to save vertical space; always open on lg+.
-  const [open, setOpen] = useState(false);
+  // Stat-filter popover (the "rest" of the categories) anchored to the Filters
+  // button. Quick selects live inline in the bar.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const popRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!filtersOpen) return;
+    function onDown(e: PointerEvent) {
+      if (popRef.current && !popRef.current.contains(e.target as Node)) setFiltersOpen(false);
+    }
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+  }, [filtersOpen]);
 
   const params = useMemo(() => {
     const obj: Record<string, string> = {};
@@ -133,8 +143,8 @@ export function PlayerFilterBar({
   function addFilter() {
     setDraft((d) => ({
       ...d,
-      // Default new filter targets BTA PRTG since it's the headline stat.
-      filters: [...d.filters, { stat: "bta_prtg", op: "gt", value: 0 }],
+      // Default new filter targets EPM (the headline impact metric).
+      filters: [...d.filters, { stat: "epm", op: "gt", value: 0 }],
     }));
   }
   function removeFilter(i: number) {
@@ -202,168 +212,150 @@ export function PlayerFilterBar({
     });
   }, [conferences]);
 
+  const statFilterCount = draft.filters.length;
+
   return (
-    <div className={cn("bg-paper-deep/25 border border-hairline border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-sm -mx-6 lg:mx-0", pending && "opacity-70")}>
-      {/* Mobile collapse toggle — hidden on desktop where the bar is always open */}
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className={cn(
-          "lg:hidden w-full flex items-center justify-between px-4 py-3.5",
-          open && "border-b border-hairline",
-        )}
-      >
-        <span className="flex items-center gap-2 text-xs uppercase tracking-widest text-ink-muted font-semibold">
-          <SlidersHorizontal size={15} /> Filters &amp; scope
-        </span>
-        <ChevronDown size={18} className={cn("text-ink-muted transition-transform", open && "rotate-180")} />
-      </button>
-
-      <div className={cn(open ? "block" : "hidden", "lg:block")}>
-      {/* Top row — primary scope. No Min Games dropdown (per request); use
-          the GP filter in the Filters section below if you need that. */}
-      <div className="flex flex-wrap items-end gap-3 p-4 lg:p-5 border-b border-hairline">
-        <Field label="Seasons">
-          <MultiYearSelect
-            years={draft.years}
-            onChange={(years) => patch({ years })}
-          />
-        </Field>
-        <Field label="Team">
-          <SearchableMultiSelect
-            value={draft.teams}
-            options={teamOptions}
-            onChange={(t) => patch({ teams: t })}
-            placeholder="Type to filter…"
-            emptyLabel="All teams"
-            ariaLabel="Teams"
-          />
-        </Field>
-        <Field label="Conference">
-          <SearchableMultiSelect
-            value={draft.conf}
-            options={confOptions}
-            onChange={(c) => patch({ conf: c })}
-            placeholder="Type to filter…"
-            emptyLabel="All conferences"
-            ariaLabel="Conferences"
-            groupLabels={CONF_GROUP_LABELS}
-          />
-        </Field>
-        <Field label="Class">
-          <SearchableMultiSelect
-            value={draft.cls}
-            options={CLASS_OPTIONS}
-            onChange={(c) => patch({ cls: c })}
-            placeholder="Type to filter…"
-            emptyLabel="All classes"
-            ariaLabel="Classes"
-          />
-        </Field>
-        <Field label="Position">
-          <SearchableMultiSelect
-            value={draft.pos}
-            options={POSITION_OPTIONS}
-            onChange={(p) => patch({ pos: p as ("G" | "F" | "C")[] })}
-            placeholder="Type to filter…"
-            emptyLabel="All positions"
-            ariaLabel="Positions"
-          />
-        </Field>
-      </div>
-
-      {/* Stat filter rows */}
-      <div className="p-4 lg:p-5 space-y-2">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">
-            Filters
-          </span>
-          <span className="text-xs text-ink-muted">
-            (nothing applies until you press Submit)
-          </span>
-        </div>
-
-        {draft.filters.map((f, i) => (
-          <div key={i} className="flex items-center gap-2 sm:gap-4 flex-nowrap">
-            <span className="hidden sm:inline text-sm text-ink-muted w-10 shrink-0">
-              {i === 0 ? "Where" : "And"}
-            </span>
-            <SearchableSelect
-              value={f.stat}
-              options={STAT_OPTIONS}
-              groupLabels={PLAYER_STAT_GROUP_LABEL}
-              onChange={(v) => patchFilter(i, { stat: v })}
-              ariaLabel="Filter stat"
-              className="flex-1 min-w-0 sm:flex-initial sm:min-w-44"
-            />
-            <Select
-              value={f.op}
-              onChange={(v) => patchFilter(i, { op: v as PlayerComparator })}
-              className="w-14 sm:w-16 shrink-0"
-            >
-              {OPS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </Select>
-            <input
-              type="number"
-              step="any"
-              value={f.value}
-              onChange={(e) => patchFilter(i, { value: Number(e.target.value) })}
-              className="h-10 w-16 sm:w-28 px-2 rounded-md border border-ink/15 bg-card text-ink text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 shrink-0"
-            />
-            <button
-              type="button"
-              onClick={() => removeFilter(i)}
-              className="text-base text-ink-muted hover:text-coral px-1.5 shrink-0"
-              aria-label="Remove filter"
-            >
-              ×
-            </button>
-          </div>
-        ))}
-
-        <div className="flex items-center gap-3 pt-3 border-t border-hairline mt-3">
-          <button
-            type="button"
-            onClick={addFilter}
-            disabled={draft.filters.length >= 8}
-            className="text-sm font-medium text-coral hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            + Add filter
-          </button>
-          {dirty && (
-            <span className="text-xs text-ink-muted">unsaved changes</span>
+    // Slim quick-filter bar — no card container. Filters button (stat builder
+    // popover) + quick scope selects on the left, Reset/Submit on the right.
+    <div className={cn("relative flex flex-wrap items-end gap-2 mb-3", pending && "opacity-70")}>
+      {/* Filters button → stat-builder popover */}
+      <div className="relative self-end" ref={popRef}>
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((o) => !o)}
+          aria-expanded={filtersOpen}
+          className={cn(
+            "inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm font-medium shadow-sm transition-colors",
+            filtersOpen || statFilterCount > 0
+              ? "border-coral/50 bg-coral/6 text-coral"
+              : "border-ink/15 bg-card text-ink hover:border-ink/25",
           )}
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              onClick={reset}
-              className="text-sm text-ink-muted hover:text-ink px-3 py-2"
-            >
-              Reset
-            </button>
-            <button
-              type="button"
-              onClick={submit}
-              disabled={!dirty}
-              className="text-sm font-medium bg-coral text-white px-5 py-2 rounded hover:bg-coral-soft disabled:opacity-40 transition-colors"
-            >
-              Submit
-            </button>
+        >
+          <SlidersHorizontal size={15} />
+          Filters
+          {statFilterCount > 0 && (
+            <span className="ml-0.5 inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-coral text-white text-[0.6rem] font-bold tabular">
+              {statFilterCount}
+            </span>
+          )}
+        </button>
+
+        {filtersOpen && (
+          <div className="absolute left-0 top-11 z-50 w-[min(92vw,34rem)] rounded-xl border border-hairline bg-card shadow-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-xs uppercase tracking-widest text-ink-muted font-semibold">Stat filters</span>
+              <span className="text-xs text-ink-muted">(apply on Submit)</span>
+            </div>
+            <div className="space-y-2">
+              {draft.filters.length === 0 && (
+                <p className="text-sm text-ink-muted">No stat filters yet — add one below.</p>
+              )}
+              {draft.filters.map((f, i) => (
+                <div key={i} className="flex items-center gap-2 flex-nowrap">
+                  <span className="text-xs text-ink-muted w-9 shrink-0">{i === 0 ? "Where" : "And"}</span>
+                  <SearchableSelect
+                    value={f.stat}
+                    options={STAT_OPTIONS}
+                    groupLabels={PLAYER_STAT_GROUP_LABEL}
+                    onChange={(v) => patchFilter(i, { stat: v })}
+                    ariaLabel="Filter stat"
+                    className="flex-1 min-w-0"
+                  />
+                  <Select
+                    value={f.op}
+                    onChange={(v) => patchFilter(i, { op: v as PlayerComparator })}
+                    className="w-14 shrink-0"
+                  >
+                    {OPS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </Select>
+                  <input
+                    type="number"
+                    step="any"
+                    value={f.value}
+                    onChange={(e) => patchFilter(i, { value: Number(e.target.value) })}
+                    className="h-9 w-20 px-2 rounded-md border border-ink/15 bg-card text-ink text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 shrink-0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeFilter(i)}
+                    className="text-base text-ink-muted hover:text-coral px-1 shrink-0"
+                    aria-label="Remove filter"
+                  >×</button>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-3 pt-3 mt-3 border-t border-hairline">
+              <button
+                type="button"
+                onClick={addFilter}
+                disabled={draft.filters.length >= 8}
+                className="text-sm font-medium text-coral hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                + Add filter
+              </button>
+              <button
+                type="button"
+                onClick={() => { submit(); setFiltersOpen(false); }}
+                disabled={!dirty}
+                className="ml-auto text-sm font-medium bg-coral text-white px-4 py-1.5 rounded hover:bg-coral-soft disabled:opacity-40 transition-colors"
+              >
+                Apply
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
+
+      {/* Quick scope selects — each labeled so a "3 selected" pill reads clearly */}
+      <QuickField label="Seasons">
+        <MultiYearSelect years={draft.years} onChange={(years) => patch({ years })} />
+      </QuickField>
+      <QuickField label="Team">
+        <SearchableMultiSelect
+          value={draft.teams} options={teamOptions} onChange={(t) => patch({ teams: t })}
+          placeholder="Type to filter…" emptyLabel="All teams" ariaLabel="Teams"
+        />
+      </QuickField>
+      <QuickField label="Conference">
+        <SearchableMultiSelect
+          value={draft.conf} options={confOptions} onChange={(c) => patch({ conf: c })}
+          placeholder="Type to filter…" emptyLabel="All confs" ariaLabel="Conferences" groupLabels={CONF_GROUP_LABELS}
+        />
+      </QuickField>
+      <QuickField label="Class">
+        <SearchableMultiSelect
+          value={draft.cls} options={CLASS_OPTIONS} onChange={(c) => patch({ cls: c })}
+          placeholder="Type to filter…" emptyLabel="All classes" ariaLabel="Classes"
+        />
+      </QuickField>
+      <QuickField label="Position">
+        <SearchableMultiSelect
+          value={draft.pos} options={POSITION_OPTIONS} onChange={(p) => patch({ pos: p as ("G" | "F" | "C")[] })}
+          placeholder="Type to filter…" emptyLabel="All positions" ariaLabel="Positions"
+        />
+      </QuickField>
+
+      {/* Reset / Submit */}
+      <div className="ml-auto flex items-center gap-2">
+        {dirty && <span className="hidden sm:inline text-xs text-ink-muted">unsaved</span>}
+        <button type="button" onClick={reset} className="h-9 px-3 text-sm text-ink-muted hover:text-ink">Reset</button>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!dirty}
+          className="h-9 text-sm font-medium bg-coral text-white px-5 rounded-md hover:bg-coral-soft disabled:opacity-40 transition-colors"
+        >
+          Submit
+        </button>
       </div>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function QuickField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">{label}</span>
+      <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium pl-0.5">{label}</span>
       {children}
     </label>
   );

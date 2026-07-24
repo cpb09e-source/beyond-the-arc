@@ -133,7 +133,9 @@ export const DEFAULT_SPEC: TeamFilterSpec = {
 
 export const LIMIT_OPTIONS = [50, 100, 250, 500, -1] as const;
 export function limitLabel(n: number): string {
-  return n === -1 ? "Show all" : String(n);
+  // The picker sits under a "Show" label, so "All" reads as "Show: All" and
+  // fits the narrow select where "Show all" clipped to "Show".
+  return n === -1 ? "All" : String(n);
 }
 
 const COLUMN_BY_KEY = new Map(TEAM_STAT_COLUMNS.map((c) => [c.key, c]));

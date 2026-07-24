@@ -388,6 +388,29 @@ body {
   background-clip: content-box;
 }
 
+/* Players grid scroll — same thin themed bar, plus a top margin on the
+   vertical track so the bar visually starts BELOW the two frozen header rows
+   (band + column ≈ 3.5rem) instead of alongside them. Horizontal bar gets the
+   mirror treatment past the sticky RK+Player columns. */
+/* Chrome 121+ DISABLES ::-webkit-scrollbar styling entirely when the standard
+   scrollbar-width/color properties are present — so those only apply where the
+   webkit pseudo-elements don't exist (Firefox). */
+@supports not selector(::-webkit-scrollbar) {
+  .players-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--ink) 30%, transparent) transparent;
+  }
+}
+/* Both native bars hidden — custom React rails (players-client) render instead:
+   the vertical rail starts at the player rows (below the frozen headers) and
+   the horizontal rail stays pinned to the visible bottom of the grid instead of
+   sitting 1,200px down at the container's true bottom. Native scrollbars can do
+   neither. Scrolling itself stays native (wheel/trackpad/drag). */
+.players-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 /* ------------------------------------------------------------------
  * Animations — page-load reveals and bar-grow transitions.
  * Used by the player showcase (shot signature + skill pinnacle).

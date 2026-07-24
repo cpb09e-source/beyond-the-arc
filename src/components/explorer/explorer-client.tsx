@@ -76,7 +76,10 @@ export function ExplorerClient({
     for (const [k, v] of search.entries()) obj[k] = v;
     return obj;
   }, [search]);
-  const spec = parseSpec(params);
+  // Memoize so `spec`'s reference is stable across renders — the page-reset
+  // effect keys on it, and a fresh object every render would snap the table back
+  // to page 1 on any interaction (breaks pagination).
+  const spec = useMemo(() => parseSpec(params), [params]);
 
   // Union conferences across every year we have data for, so users can pick
   // a historical conference even when the visible-year selection wouldn't

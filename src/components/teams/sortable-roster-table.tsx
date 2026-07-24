@@ -5,6 +5,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { NbaBadge } from "@/components/coaches/nba-badge";
 import { PercentileChip } from "@/components/percentile-chip";
+import { TeamLogo } from "@/components/team-logo";
 import { loadNbaDraftees, normNbaName, type NbaDraftee } from "@/lib/nba-draftees";
 
 type RosterEntry = {
@@ -21,6 +22,13 @@ type RosterEntry = {
   ft_pct: number | null;
   pir: number | null;
   bta_portg: number | null;
+  // Preview-only — roster status shown as an inline badge next to the name
+  // (transfers also show the logo of the school they came from).
+  status?: "returning" | "transfer" | "newcomer";
+  from?: string | null;
+  // Preview-only — RSCI national recruit rank for incoming freshmen (top-100);
+  // null on a newcomer = unranked ("UR"). Undefined for non-newcomers.
+  rsci?: number | null;
   pcts?: {
     bta_portg?: number | null;
     pir?: number | null;
@@ -143,6 +151,8 @@ export function SortableRosterTable({
                     <span className="font-medium text-ink">{p.name}</span>
                   )}
                   {draftee && <NbaBadge year={draftee.year} pick={draftee.pick} team={draftee.team} />}
+                  {p.status && <StatusBadge status={p.status} from={p.from} />}
+                  {p.status === "newcomer" && p.rsci !== undefined && <RsciBadge rank={p.rsci} />}
                 </Td>
                 <Td className="text-ink-muted">{p.class ?? "—"}</Td>
                 <Td className="text-ink-muted whitespace-nowrap">{p.height ?? "—"}</Td>
@@ -160,6 +170,46 @@ export function SortableRosterTable({
         </table>
       </div>
     </div>
+  );
+}
+
+function StatusBadge({ status, from }: { status: "returning" | "transfer" | "newcomer"; from?: string | null }) {
+  if (status === "returning") {
+    return <span className="ml-2 inline-block align-middle text-[0.6rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-green-500/15 text-green-600">Ret</span>;
+  }
+  if (status === "newcomer") {
+    return <span className="ml-2 inline-block align-middle text-[0.6rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-500">New</span>;
+  }
+  return (
+    <>
+      <span className="ml-2 inline-block align-middle text-[0.6rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-coral/15 text-coral">
+        Xfer
+      </span>
+      {from && <TeamLogo name={from} size={18} className="ml-1.5 inline-block align-middle rounded-[2px]" />}
+    </>
+  );
+}
+
+// RSCI recruit-rank chip for incoming freshmen. Ranked (top-100) → amber "#13";
+// unranked → muted "UR". title carries the source for hover context.
+function RsciBadge({ rank }: { rank?: number | null }) {
+  if (rank == null) {
+    return (
+      <span
+        title="Outside the RSCI top 100"
+        className="ml-1.5 inline-block align-middle text-[0.6rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-ink/8 text-ink-muted"
+      >
+        UR
+      </span>
+    );
+  }
+  return (
+    <span
+      title={`RSCI national recruit rank #${rank}`}
+      className="ml-1.5 inline-block align-middle text-[0.6rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600"
+    >
+      #{rank}
+    </span>
   );
 }
 

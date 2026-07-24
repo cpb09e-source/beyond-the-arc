@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
 import type { GameLog } from "@/lib/static-data";
 import { ScheduleGameModal } from "@/components/teams/schedule-game-modal";
+import { BlurOverlay } from "@/components/teams/preview-blur";
 import { cn } from "@/lib/utils";
 
 /**
@@ -48,6 +49,7 @@ export function ScheduleTicker({
   helpText = "click + drag to scroll · click a game for details",
   helpTextMobile = "swipe to scroll · tap a game",
   showSeasonLabels = false,
+  blurBody = false,
 }: {
   games: GameLog[];
   teamName: string;
@@ -56,6 +58,8 @@ export function ScheduleTicker({
   helpTextMobile?: string;
   /** Group games by season-end year, with a small year label under each cluster. */
   showSeasonLabels?: boolean;
+  /** Preview mode — blur the ticker + overlay the "no games yet" note; header stays sharp. */
+  blurBody?: boolean;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const dragState = useRef({ down: false, startX: 0, startScrollLeft: 0, moved: 0 });
@@ -143,6 +147,8 @@ export function ScheduleTicker({
             {helpTextMobile}
           </span>
         </div>
+        {(() => {
+        const scroller = (
         <div
           ref={scrollerRef}
           className="overflow-x-auto select-none cursor-grab [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
@@ -181,6 +187,9 @@ export function ScheduleTicker({
                 ))}
           </div>
         </div>
+        );
+        return blurBody ? <BlurOverlay subtext={null}>{scroller}</BlurOverlay> : scroller;
+        })()}
       </div>
       {openGame && (
         <ScheduleGameModal

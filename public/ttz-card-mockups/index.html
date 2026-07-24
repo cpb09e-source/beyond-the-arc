@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>32-0 — court card mockups</title>
+<style>
+  :root{
+    --bg:#0b1322; --panel:#0f1b30; --ink:#eaf0fa; --muted:#93a4c0;
+    --coral:#ed5a4f; --court:#07f49e; --purple:#9b6cff; --gold:#e8b54b;
+    --chip:#15233e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:
+      radial-gradient(1200px 600px at 50% -10%, #14233f 0%, transparent 60%),
+      var(--bg);
+    color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    min-height:100vh;padding:48px 20px 80px}
+  h1{text-align:center;font-size:26px;letter-spacing:-.01em;margin:0 0 6px}
+  .sub{text-align:center;color:var(--muted);margin:0 0 40px;font-size:14px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:34px;max-width:1180px;margin:0 auto}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:14px}
+  .label{font-size:12px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted);font-weight:700}
+  .label b{color:var(--court)}
+  .desc{font-size:12px;color:var(--muted);text-align:center;max-width:240px;line-height:1.45}
+  .stage{display:grid;place-items:center;width:100%;min-height:230px;
+    background:
+      linear-gradient(transparent 0 49.5%, rgba(237,90,79,.16) 49.5% 50.5%, transparent 50.5%),
+      #0c1526;
+    border:1px solid #1d2c49;border-radius:16px;padding:30px}
+  /* monogram logo stand-in */
+  .logo{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;font-weight:800;font-size:11px;color:#1a2238;background:var(--gold);flex:none}
+  .pos{font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  .pos.c{color:var(--coral)} .pos.g{color:var(--court)} .pos.f{color:var(--purple)}
+
+  /* ============ 1 · POLISHED CLASSIC ============ */
+  .c1{position:relative;width:188px;border-radius:14px;padding:14px 14px 13px;text-align:center;
+    background:linear-gradient(180deg,#16243f 0%,#101b30 100%);
+    border:1px solid rgba(237,90,79,.5);
+    box-shadow:0 10px 30px -12px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.04);
+    transition:transform .15s, box-shadow .15s}
+  .c1:hover{transform:translateY(-3px);box-shadow:0 16px 36px -12px rgba(0,0,0,.8)}
+  .c1 .top{display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:6px}
+  .c1 .name{font-weight:700;font-size:15px;margin-bottom:4px}
+  .c1 .ovr{display:inline-flex;align-items:baseline;gap:4px}
+  .c1 .ovr b{font-size:26px;font-weight:800;color:var(--coral);font-variant-numeric:tabular-nums;line-height:1}
+  .c1 .ovr span{font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--coral);opacity:.65;text-transform:uppercase}
+
+  /* ============ 2 · 2K BADGE ============ */
+  .c2{position:relative;width:200px;border-radius:14px;overflow:hidden;
+    background:linear-gradient(135deg,#1a2a49 0%,#0f1a2e 60%);
+    border:1px solid #2a3c5e;box-shadow:0 12px 30px -12px rgba(0,0,0,.75);
+    transition:transform .15s}
+  .c2:hover{transform:translateY(-3px)}
+  .c2 .stripe{position:absolute;left:0;top:0;bottom:0;width:5px;background:linear-gradient(var(--coral),#b53b32)}
+  .c2 .ovrbadge{position:absolute;top:0;right:0;background:linear-gradient(135deg,var(--gold),#bb8a2c);
+    color:#1a1206;font-weight:900;font-size:22px;line-height:1;padding:9px 12px 11px;border-bottom-left-radius:14px;
+    font-variant-numeric:tabular-nums;box-shadow:-2px 2px 8px rgba(0,0,0,.4)}
+  .c2 .ovrbadge i{display:block;font-size:8px;font-weight:800;letter-spacing:.14em;font-style:normal;opacity:.7;text-align:center}
+  .c2 .body{padding:16px 14px 14px 16px}
+  .c2 .top{display:flex;align-items:center;gap:6px;margin-bottom:30px}
+  .c2 .name{font-weight:800;font-size:16px;letter-spacing:-.01em}
+  .c2 .meta{font-size:11px;color:var(--muted);margin-top:2px}
+
+  /* ============ 3 · HOLO FOIL (creative) ============ */
+  .c3{position:relative;width:196px;border-radius:16px;padding:16px 14px 14px;text-align:center;overflow:hidden;
+    background:#0d1830;border:1px solid rgba(155,108,255,.45);
+    box-shadow:0 14px 36px -14px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.03) inset;
+    transition:transform .18s}
+  .c3:hover{transform:translateY(-4px) rotate(-.6deg)}
+  .c3::before{content:"";position:absolute;inset:-40%;
+    background:linear-gradient(115deg,transparent 30%,
+      rgba(7,244,158,.18) 42%, rgba(155,108,255,.22) 50%, rgba(237,90,79,.18) 58%, transparent 70%);
+    background-size:300% 300%;animation:holo 4.5s linear infinite;mix-blend-mode:screen;pointer-events:none}
+  @keyframes holo{0%{background-position:0% 0%}100%{background-position:300% 300%}}
+  .c3 .bigovr{position:absolute;inset:0;display:grid;place-items:center;font-weight:900;font-size:96px;
+    color:#fff;opacity:.05;font-variant-numeric:tabular-nums;pointer-events:none}
+  .c3 .inner{position:relative}
+  .c3 .top{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);margin-bottom:10px}
+  .c3 .name{font-weight:800;font-size:15px;text-shadow:0 1px 8px rgba(0,0,0,.5)}
+  .c3 .ovr{margin-top:8px;font-weight:900;font-size:30px;font-variant-numeric:tabular-nums;
+    background:linear-gradient(100deg,var(--court),#bda6ff 55%,var(--coral));
+    -webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 2px 6px rgba(0,0,0,.3))}
+  .c3 .ovr small{font-size:9px;font-weight:800;letter-spacing:.14em;color:var(--muted);
+    -webkit-text-fill-color:var(--muted);margin-left:4px}
+
+  /* ============ 4 · HEX TIER SHIELD (creative) ============ */
+  .c4{position:relative;width:200px;border-radius:16px;padding:38px 14px 16px;text-align:center;overflow:hidden;
+    background:
+      radial-gradient(120px 80px at 50% 0%, rgba(232,181,75,.22), transparent 70%),
+      linear-gradient(160deg,#1b2336 0%,#0c1424 70%);
+    border:1px solid #34406a;box-shadow:0 16px 40px -16px rgba(0,0,0,.85);transition:transform .18s}
+  .c4:hover{transform:translateY(-4px)}
+  .c4 .diag{position:absolute;inset:0;background:
+      repeating-linear-gradient(135deg, rgba(232,181,75,.05) 0 2px, transparent 2px 14px);pointer-events:none}
+  .c4 .hex{position:absolute;top:-2px;left:50%;transform:translateX(-50%);width:74px;height:84px;
+    display:grid;place-items:center;
+    background:conic-gradient(from 200deg,var(--gold),#fff6d8,var(--gold),#a9791f,var(--gold));
+    clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    filter:drop-shadow(0 4px 12px rgba(232,181,75,.4));animation:pulse 2.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{filter:drop-shadow(0 3px 8px rgba(232,181,75,.35))}50%{filter:drop-shadow(0 5px 18px rgba(232,181,75,.7))}}
+  .c4 .hex i{width:66px;height:76px;display:grid;place-items:center;background:#0e1626;
+    clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);
+    font-weight:900;font-size:30px;color:var(--gold);font-style:normal;font-variant-numeric:tabular-nums;
+    flex-direction:column;line-height:.9}
+  .c4 .hex i b{font-size:30px}
+  .c4 .hex i s{font-size:8px;letter-spacing:.14em;color:var(--muted);text-decoration:none;font-weight:800;margin-top:2px}
+  .c4 .tier{position:absolute;top:8px;right:10px;font-weight:900;font-size:13px;color:var(--gold);
+    border:1.5px solid var(--gold);border-radius:6px;padding:1px 6px;letter-spacing:.05em}
+  .c4 .top{display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:5px}
+  .c4 .name{font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:.04em}
+</style>
+</head>
+<body>
+  <h1>32-0 — court player card mockups</h1>
+  <p class="sub">Same player (Zach Edey · Purdue · C · 96 OVR) in 4 styles. Tell me a number — or mix.</p>
+
+  <div class="grid">
+
+    <!-- 1 -->
+    <div class="cell">
+      <div class="label"><b>1</b> · Polished classic</div>
+      <div class="stage">
+        <div class="c1">
+          <div class="top"><span class="logo">P</span><span class="pos c">C</span></div>
+          <div class="name">Zach Edey</div>
+          <div class="ovr"><b>96</b><span>ovr</span></div>
+        </div>
+      </div>
+      <div class="desc">Your current card, refined: vertical gradient, soft lift, bigger OVR with subscript. Safe glow-up.</div>
+    </div>
+
+    <!-- 2 -->
+    <div class="cell">
+      <div class="label"><b>2</b> · 2K badge</div>
+      <div class="stage">
+        <div class="c2">
+          <span class="stripe"></span>
+          <span class="ovrbadge">96<i>ovr</i></span>
+          <div class="body">
+            <div class="top"><span class="logo">P</span><span class="pos c">C</span></div>
+            <div class="name">Zach Edey</div>
+            <div class="meta">Purdue · Center</div>
+          </div>
+        </div>
+      </div>
+      <div class="desc">Corner-cut gold OVR badge, team-color stripe, footer meta line. Reads like a 2K lineup tile.</div>
+    </div>
+
+    <!-- 3 -->
+    <div class="cell">
+      <div class="label"><b>3</b> · Holo foil <span style="color:var(--court)">★ creative</span></div>
+      <div class="stage">
+        <div class="c3">
+          <div class="bigovr">96</div>
+          <div class="inner">
+            <div class="top"><span class="logo">P</span><span class="pos c">C</span></div>
+            <div class="name">Zach Edey</div>
+            <div class="ovr">96<small>OVR</small></div>
+          </div>
+        </div>
+      </div>
+      <div class="desc">Animated holographic sheen sweeping across, ghosted giant OVR behind, gradient-text rating. Rare-pull energy.</div>
+    </div>
+
+    <!-- 4 -->
+    <div class="cell">
+      <div class="label"><b>4</b> · Hex tier shield <span style="color:var(--court)">★ creative</span></div>
+      <div class="stage">
+        <div class="c4">
+          <span class="diag"></span>
+          <span class="tier">S</span>
+          <span class="hex"><i><b>96</b><s>OVR</s></i></span>
+          <div class="top"><span class="logo">P</span><span class="pos c">C</span></div>
+          <div class="name">Zach Edey</div>
+        </div>
+      </div>
+      <div class="desc">OVR inside a pulsing gold hexagon, S/A/B tier tag, diagonal hatch + halo. Trading-card / rank-badge vibe.</div>
+    </div>
+
+  </div>
+</body>
+</html>

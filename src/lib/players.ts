@@ -96,6 +96,14 @@ export type PlayerSummary = {
   usage_pct: number | null;     // usage rate (fraction, e.g. 0.305 = 30.5%)
   plus_minus_pg: number | null; // average plus-minus per game
   ast_to_tov: number | null;    // assist-to-turnover ratio (ast_pg / tov_pg)
+  drb_pg: number | null;        // defensive rebounds per game (reb − orb)
+  hkm_pct: number | null;       // Hakeem % = BLK% + STL% (Bart raw cols 22+23)
+  // BTA EPM (ridge RAPM over CBBD stints; see scripts/compute-epm.py). Null
+  // for seasons without a fit or unmatched players. Attached client-side from
+  // /data/epm-<year>.json.
+  epm: number | null;
+  off_epm: number | null;
+  def_epm: number | null;
   pir: number | null;           // EuroLeague PIR per game (minus TOV; see note)
   porpag: number | null;        // Bart Torvik Points Over Replacement Player per Adj Game
   bta_ind_ortg: number | null;  // avg(z(PIR), z(PORPAG)) * 20, with 12% non-power-conf penalty
@@ -109,7 +117,7 @@ export type PlayerSummary = {
 // Groups render in `PLAYER_STAT_GROUP_ORDER` order; mirrors the editorial
 // pattern from the team explorer's TEAM_STAT_COLUMNS.
 
-export type PlayerStatGroup = "advanced" | "offense" | "shooting" | "defense" | "volume";
+export type PlayerStatGroup = "impact" | "advanced" | "offense" | "shooting" | "defense" | "volume";
 
 export type PlayerStatColumn = {
   key: string;
@@ -121,8 +129,12 @@ export type PlayerStatColumn = {
 };
 
 export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
+  // ── Impact (BTA EPM — ridge RAPM over play-by-play stints) ───
+  { key: "epm",     label: "EPM",     desc: "Estimated Plus-Minus — per-100-possession impact vs. an average player (offense + defense)", group: "impact", format: "num1", field: "epm" },
+  { key: "off_epm", label: "Off EPM", desc: "Offensive EPM — per-100 offensive impact",                                                   group: "impact", format: "num1", field: "off_epm" },
+  { key: "def_epm", label: "Def EPM", desc: "Defensive EPM — per-100 defensive impact (positive = better defense)",                        group: "impact", format: "num1", field: "def_epm" },
+
   // ── Advanced ─────────────────────────────────────────────
-  { key: "bta_prtg", label: "BTA PRTG", desc: "Beyond the Arc Player Rating (z-composite × 20, with cohort + position adjustments)", group: "advanced", format: "num1", field: "bta_ind_ortg" },
   { key: "pir",      label: "PIR",      desc: "EuroLeague Performance Index Rating (per game, minus TOV)",                              group: "advanced", format: "num1", field: "pir" },
   { key: "pm_pg",    label: "+/-",      desc: "Average plus-minus per game (team point differential while on the court)",              group: "advanced", format: "num1", field: "plus_minus_pg" },
   { key: "ast_tov",  label: "AST/TOV",  desc: "Assist-to-turnover ratio (assists per game ÷ turnovers per game)",                       group: "advanced", format: "num2", field: "ast_to_tov" },
@@ -132,6 +144,7 @@ export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
   { key: "apg",     label: "APG",   desc: "Assists per game",                                                  group: "offense", format: "num1", field: "ast_pg" },
   { key: "rpg",     label: "RPG",   desc: "Rebounds per game",                                                 group: "offense", format: "num1", field: "reb_pg" },
   { key: "orpg",    label: "OREB",  desc: "Offensive rebounds per game",                                       group: "offense", format: "num1", field: "orb_pg" },
+  { key: "drpg",    label: "DREB",  desc: "Defensive rebounds per game (RPG − OREB)",                          group: "offense", format: "num1", field: "drb_pg" },
   { key: "tov_pg",  label: "TOV",   desc: "Turnovers per game (lower is better)",                              group: "offense", format: "num1", field: "tov_pg" },
   { key: "usg_pct", label: "USG%",  desc: "Usage rate — fraction of team possessions ending with this player",  group: "offense", format: "pct1", field: "usage_pct" },
 
@@ -147,6 +160,7 @@ export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
   // ── Defense ──────────────────────────────────────────────
   { key: "spg", label: "SPG", desc: "Steals per game",  group: "defense", format: "num1", field: "stl_pg" },
   { key: "bpg", label: "BPG", desc: "Blocks per game",  group: "defense", format: "num1", field: "blk_pg" },
+  { key: "hkm", label: "HKM%", desc: "Hakeem % — BLK% + STL% (named after Hakeem Olajuwon)", group: "defense", format: "num1", field: "hkm_pct" },
 
   // ── Volume ───────────────────────────────────────────────
   { key: "gp",  label: "GP",  desc: "Games played",   group: "volume", format: "num1", field: "games" },
@@ -154,6 +168,7 @@ export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
 ];
 
 export const PLAYER_STAT_GROUP_LABEL: Record<PlayerStatGroup, string> = {
+  impact:   "Impact",
   advanced: "Advanced",
   offense:  "Offense",
   shooting: "Shooting",
@@ -181,7 +196,8 @@ export type PlayerListSpec = {
   pos: ("G" | "F" | "C")[];    // empty = all positions; bucket derived from Bart's position note
   minGames: number;
   filters: PlayerStatFilter[]; // stat threshold filters (AND-combined)
-  sortBy: "bta_ind_ortg" | "pir" | "pts" | "reb" | "ast" | "fg_pct" | "fg3_pct" | "ts_pct" | "games" | "name";
+  sortBy: "bta_ind_ortg" | "pir" | "pts" | "reb" | "ast" | "fg_pct" | "fg3_pct" | "ts_pct" | "games" | "name"
+    | "epm" | "off_epm" | "def_epm" | "min" | "usage" | "orb" | "drb" | "tov" | "stl" | "blk" | "hkm";
   sortDir: "asc" | "desc";
   limit: number;
 };
@@ -194,7 +210,7 @@ export const DEFAULT_PLAYER_SPEC: PlayerListSpec = {
   pos: [],
   minGames: 10,
   filters: [],
-  sortBy: "bta_ind_ortg",
+  sortBy: "epm",
   sortDir: "desc",
   limit: 100,
 };
@@ -276,7 +292,8 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
   const minG = Number(get("ming"));
   const limitRaw = Number(get("limit"));
   const sortRaw = get("sort");
-  const validSorts: PlayerListSpec["sortBy"][] = ["bta_ind_ortg", "pir", "pts", "reb", "ast", "fg_pct", "fg3_pct", "ts_pct", "games", "name"];
+  const validSorts: PlayerListSpec["sortBy"][] = ["bta_ind_ortg", "pir", "pts", "reb", "ast", "fg_pct", "fg3_pct", "ts_pct", "games", "name",
+    "epm", "off_epm", "def_epm", "min", "usage", "orb", "drb", "tov", "stl", "blk", "hkm"];
   const sortBy = validSorts.includes(sortRaw as PlayerListSpec["sortBy"]) ? (sortRaw as PlayerListSpec["sortBy"]) : DEFAULT_PLAYER_SPEC.sortBy;
   const sortDirRaw = get("order");
   return {
