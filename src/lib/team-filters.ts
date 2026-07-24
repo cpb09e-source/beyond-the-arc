@@ -115,10 +115,12 @@ export type TeamFilterSpec = {
   limit: number;                // -1 = show all
 };
 
+// Data floor is the 2013-14 season (year 2014): the first year with reliable
+// possession/efficiency data (CBBD's own adjusted ratings start here too).
+// Pre-2014 box data is missing possessions on many games, so we don't surface it.
 export const ALL_YEARS = [
   2026, 2025, 2024, 2023, 2022, 2021,
-  2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013,
-  2012, 2011, 2010, 2009, 2008,
+  2020, 2019, 2018, 2017, 2016, 2015, 2014,
 ] as const;
 
 export const DEFAULT_SPEC: TeamFilterSpec = {
@@ -147,7 +149,7 @@ function isComparator(s: string): s is Comparator {
 }
 function clampYear(y: number): number {
   if (!Number.isFinite(y)) return DEFAULT_SPEC.years[0]!;
-  return Math.max(2008, Math.min(2026, Math.trunc(y)));
+  return Math.max(2014, Math.min(2026, Math.trunc(y)));
 }
 
 // ---------- URL <-> spec ----------

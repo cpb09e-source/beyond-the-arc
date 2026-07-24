@@ -43,9 +43,12 @@ const OUT = path.resolve("public/data");
 // export and the fast portal-only export apply the same rewrites (CBB and
 // Bart sometimes use different names for the same school).
 import { overrideTeamName } from "../src/lib/team-overrides.ts";
+// Data floor: 2013-14 season (year 2014) — first year with reliable
+// possession/efficiency data. Mirrors ALL_YEARS + clampYear in the app.
+// A re-export with this floor regenerates every per-entity file (profiles,
+// game logs, indices) with pre-2014 seasons dropped.
 const YEARS = [
-  2008, 2009, 2010, 2011, 2012,
-  2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020,
+  2014, 2015, 2016, 2017, 2018, 2019, 2020,
   2021, 2022, 2023, 2024, 2025, 2026,
 ];
 

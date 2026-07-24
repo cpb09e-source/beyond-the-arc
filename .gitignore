@@ -68,3 +68,7 @@ supabase/.temp/
 
 # CBBD raw play-by-play archive (regenerable via scripts/cbbd-ingest.mjs; large)
 /data/cbbd/
+
+# Box-EPM build intermediates (regenerable via build-box-epm-features.mjs + compute-box-epm.py)
+/scripts/box-epm-features.csv
+/scripts/box-epm-pred.csv

@@ -15,12 +15,14 @@ export function Select({
   children,
   className,
   ariaLabel,
+  compact = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   children: React.ReactNode;
   className?: string;
   ariaLabel?: string;
+  compact?: boolean;
 }) {
   return (
     <span className={cn("relative inline-block", className)}>
@@ -28,7 +30,10 @@ export function Select({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-label={ariaLabel}
-        className="h-10 w-full pl-3 pr-8 rounded-md border border-ink/15 bg-card text-ink text-sm appearance-none capitalize shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+        className={cn(
+          "w-full pl-3 pr-8 rounded-md border border-ink/15 bg-card text-ink appearance-none capitalize shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors",
+          compact ? "h-8 text-xs" : "h-10 text-sm",
+        )}
       >
         {children}
       </select>

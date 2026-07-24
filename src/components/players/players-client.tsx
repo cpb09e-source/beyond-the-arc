@@ -7,7 +7,7 @@ import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { PercentileChip } from "@/components/percentile-chip";
-import { PlayerFilterBar } from "@/components/players/player-filter-bar";
+import { PlayerFilterBar, PlayerStatFilters } from "@/components/players/player-filter-bar";
 import { ComparePlayersModal } from "@/components/players/compare-players-modal";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { Select } from "@/components/select";
@@ -19,52 +19,13 @@ import {
   passesPlayerFilter,
   playerSpecToParams,
   type PlayerListSpec,
+  type PlayerStatFilter,
   type PlayerSummary,
 } from "@/lib/players";
 import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier, teamStrengthMultiplier, powerConfSub500Multiplier, BTA_DEF_WEIGHT, btaDefScore } from "@/lib/conf-tiers";
 
-// Sort-by options surfaced in the leaderboard header. Order chosen to match
-// the column priorities on the table itself (BTA PRTG → PIR → PPG → shooting
-// → rebounding / playmaking → games / name).
-const SORT_OPTIONS: { value: PlayerListSpec["sortBy"]; label: string }[] = [
-  { value: "epm", label: "EPM" },
-  { value: "off_epm", label: "Off EPM" },
-  { value: "def_epm", label: "Def EPM" },
-  { value: "pir", label: "PIR" },
-  { value: "pts", label: "PPG" },
-  { value: "usage", label: "USG" },
-  { value: "fg_pct", label: "FG%" },
-  { value: "fg3_pct", label: "3P%" },
-  { value: "ts_pct", label: "TS%" },
-  { value: "orb", label: "ORB" },
-  { value: "drb", label: "DRB" },
-  { value: "reb", label: "RPG" },
-  { value: "ast", label: "AST" },
-  { value: "tov", label: "TOV" },
-  { value: "stl", label: "STL" },
-  { value: "blk", label: "BLK" },
-  { value: "hkm", label: "HKM" },
-  { value: "games", label: "GP" },
-  { value: "name", label: "Name" },
-];
 const LIMIT_OPTIONS = [50, 100, 250, 500];
 
-// Sort labels mirror PlayerFilterBar's SORTS but kept short for the kicker.
-const SORT_LABEL: Record<PlayerListSpec["sortBy"], string> = {
-  bta_ind_ortg: "BTA PRTG",
-  pir: "PIR",
-  pts: "PPG",
-  fg_pct: "FG%",
-  fg3_pct: "3P%",
-  ts_pct: "TS%",
-  reb: "RPG",
-  ast: "APG",
-  games: "GP",
-  name: "name",
-  epm: "EPM", off_epm: "Off EPM", def_epm: "Def EPM",
-  min: "MPG", usage: "USG", orb: "ORB", drb: "DRB",
-  tov: "TOV", stl: "STL", blk: "BLK", hkm: "HKM",
-};
 const CLASS_LABEL: Record<string, string> = {
   Fr: "Freshmen", So: "Sophomores", Jr: "Juniors", Sr: "Seniors", Gr: "Graduates",
 };
@@ -278,7 +239,7 @@ function transformPlayer(raw: RawPlayer): PlayerSummary {
       const b = asNum(fromStart(row, 22)), s = asNum(fromStart(row, 23));
       return b !== null && s !== null ? b + s : null;
     })(),
-    epm: null, off_epm: null, def_epm: null, // attached from /data/epm-<year>.json
+    epm: null, off_epm: null, def_epm: null, epm_estimated: false, // attached from /data/epm-<year>.json (or box-epm-<year>.json)
     pir,
     porpag: asNum(fromStart(row, PLAYER_COLS.porpag)),
     bta_ind_ortg: null,   // attached per cohort below
@@ -433,35 +394,38 @@ function isBelowBaseline(p: PlayerSummary): boolean {
   return gp < 8 || ppg < 3.5;
 }
 
-function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummary[] {
-  let out = players.filter((p) => !isBelowBaseline(p));
-  if (spec.conf.length) {
-    const confSet = new Set(spec.conf);
-    out = out.filter((p) => p.team_conference !== null && confSet.has(p.team_conference));
-  }
-  if (spec.teams.length) {
-    const teamSet = new Set(spec.teams);
-    out = out.filter((p) => teamSet.has(p.team_name));
-  }
-  if (spec.cls.length) {
-    const clsSet = new Set(spec.cls);
-    out = out.filter((p) => p.class !== null && clsSet.has(p.class));
-  }
-  if (spec.pos.length) {
-    const posSet = new Set(spec.pos);
-    out = out.filter((p) => {
+// Filter-only pass (no sort/slice). Single loop, zero intermediate arrays — so
+// the live filter-count in the drawer (which only needs `.length`) doesn't pay
+// for a full O(n log n) sort of the pool on every slider tick.
+function filterSpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummary[] {
+  const confSet = spec.conf.length ? new Set(spec.conf) : null;
+  const teamSet = spec.teams.length ? new Set(spec.teams) : null;
+  const clsSet = spec.cls.length ? new Set(spec.cls) : null;
+  const posSet = spec.pos.length ? new Set(spec.pos) : null;
+  const out: PlayerSummary[] = [];
+  for (const p of players) {
+    if (isBelowBaseline(p)) continue;
+    if (confSet && (p.team_conference === null || !confSet.has(p.team_conference))) continue;
+    if (teamSet && !teamSet.has(p.team_name)) continue;
+    if (clsSet && (p.class === null || !clsSet.has(p.class))) continue;
+    if (posSet) {
       const bucket = positionBucket(p.position_note);
-      return bucket !== null && posSet.has(bucket);
-    });
-  }
-  out = out.filter((p) => (p.games ?? 0) >= spec.minGames);
-  // Stat filters (AND-combined). Each filter is gt/gte/lt/lte against a
-  // PlayerSummary field — see PLAYER_STAT_COLUMNS in @/lib/players.
-  if (spec.filters.length) {
-    for (const f of spec.filters) {
-      out = out.filter((p) => passesPlayerFilter(p, f));
+      if (bucket === null || !posSet.has(bucket)) continue;
     }
+    if ((p.games ?? 0) < spec.minGames) continue;
+    // Stat filters (AND-combined). gt/gte/lt/lte against a PlayerSummary field.
+    let ok = true;
+    for (const f of spec.filters) {
+      if (!passesPlayerFilter(p, f)) { ok = false; break; }
+    }
+    if (!ok) continue;
+    out.push(p);
   }
+  return out;
+}
+
+function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummary[] {
+  const out = filterSpec(players, spec);
 
   const sortKeyMap: Record<PlayerListSpec["sortBy"], keyof PlayerSummary> = {
     bta_ind_ortg: "bta_ind_ortg",
@@ -476,7 +440,8 @@ function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummar
   };
   const key = sortKeyMap[spec.sortBy];
   const dir = spec.sortDir === "asc" ? 1 : -1;
-  out = [...out].sort((a, b) => {
+  // `out` is already a fresh array from filterSpec, so sort in place.
+  out.sort((a, b) => {
     const av = a[key] as number | string | null;
     const bv = b[key] as number | string | null;
     if (av === null && bv === null) return 0;
@@ -557,7 +522,9 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   const [rawByYear, setRawByYear] = useState<Record<number, RawPlayer[]>>({});
   // BTA EPM per season: bart_player_id -> {epm, off, def}. Fetched lazily per
   // selected year; 404 (no fit for that season) caches as an empty map.
-  const [epmByYear, setEpmByYear] = useState<Record<number, Record<string, { epm: number; off: number; def: number }>>>({});
+  // Per-season impact map. `estimated` marks a season served by the box-score
+  // Box-EPM model (pre-2024, no play-by-play) rather than the real RAPM fit.
+  const [epmByYear, setEpmByYear] = useState<Record<number, { players: Record<string, { epm: number; off: number; def: number }>; estimated: boolean }>>({});
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [compareOpen, setCompareOpen] = useState(false);
@@ -664,19 +631,32 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     return () => { cancelled = true; };
   }, [spec.years, rawByYear]);
 
-  // Lazy-load the EPM fit for each selected season (missing file → empty map).
+  // Lazy-load impact per season: prefer the real play-by-play EPM fit; fall back
+  // to the estimated box-score model (Box-EPM) for seasons without it. Missing
+  // both → empty map.
   useEffect(() => {
     const toFetch = spec.years.filter((y) => !epmByYear[y]);
     if (!toFetch.length) return;
     let cancelled = false;
-    Promise.all(
-      toFetch.map((y) =>
-        fetch(`/data/epm-${y}.json`)
-          .then((r) => (r.ok ? r.json() : { players: {} }))
-          .catch(() => ({ players: {} }))
-          .then((j) => [y, j.players ?? {}] as const),
-      ),
-    ).then((entries) => {
+    const loadYear = async (y: number): Promise<readonly [number, { players: Record<string, { epm: number; off: number; def: number }>; estimated: boolean }]> => {
+      try {
+        const r = await fetch(`/data/epm-${y}.json`);
+        if (r.ok) {
+          const j = await r.json();
+          const players = j.players ?? {};
+          if (Object.keys(players).length) return [y, { players, estimated: false }] as const;
+        }
+      } catch { /* fall through to estimate */ }
+      try {
+        const rb = await fetch(`/data/box-epm-${y}.json`);
+        if (rb.ok) {
+          const j = await rb.json();
+          return [y, { players: j.players ?? {}, estimated: true }] as const;
+        }
+      } catch { /* no estimate either */ }
+      return [y, { players: {}, estimated: false }] as const;
+    };
+    Promise.all(toFetch.map(loadYear)).then((entries) => {
       if (cancelled) return;
       setEpmByYear((s) => {
         const next = { ...s };
@@ -697,12 +677,13 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       const raw = rawByYear[y];
       if (!raw) continue;
       const arr = raw.map(transformPlayer);
-      // Attach BTA EPM (ridge-RAPM fit) by bart id, when this season has one.
-      const epmMap = epmByYear[y];
-      if (epmMap) {
+      // Attach BTA EPM by bart id. Real RAPM fit where available, else the
+      // estimated box-score model — `estimated` flags which for the UI marker.
+      const epmEntry = epmByYear[y];
+      if (epmEntry) {
         for (const p of arr) {
-          const e = p.bart_player_id != null ? epmMap[String(p.bart_player_id)] : undefined;
-          if (e) { p.epm = e.epm; p.off_epm = e.off; p.def_epm = e.def; }
+          const e = p.bart_player_id != null ? epmEntry.players[String(p.bart_player_id)] : undefined;
+          if (e) { p.epm = e.epm; p.off_epm = e.off; p.def_epm = e.def; p.epm_estimated = epmEntry.estimated; }
         }
       }
       const eligible = arr.filter((p) => !isBelowBaseline(p));
@@ -755,6 +736,15 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     () => applySpec(transformed, { ...spec, limit: Number.MAX_SAFE_INTEGER }),
     [transformed, spec],
   );
+
+  // Live "how many players match" for the stat-filter popout. Runs the full
+  // pipeline with a candidate filter set (keeping the active scope) so the
+  // panel can show a running count as the user builds filters — before Apply.
+  const previewCount = useMemo(
+    () => (filters: PlayerStatFilter[]) =>
+      filterSpec(transformed, { ...spec, filters }).length,
+    [transformed, spec],
+  );
   const { players, count, totalPages, pageSafe } = useMemo(() => {
     // 3-char minimum on search — single-letter "L" matches thousands and
     // burns time both filtering and re-rendering rows. The placeholder
@@ -779,6 +769,8 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   // Reset to page 1 whenever the result set changes (filters, sort, search, limit).
   useEffect(() => { setPage(1); }, [prefiltered, deferredQuery, spec.limit, spec.sortBy, spec.sortDir]);
   const multiYear = spec.years.length > 1;
+  // Any visible row served by the estimated box-score model → show the legend.
+  const anyEstimated = players.some((p) => p.epm_estimated && p.epm !== null);
 
   // Any stat the user filters on that ISN'T a default grid column gets
   // prepended as its own column (before MPG) so the numbers driving the
@@ -807,36 +799,13 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       {/* Headline ledger — coral accent rule, ring + shadow, big display
           title. Mirrors /coaches "Head coaches" and /teams "By season" cards
           so the look reads consistently across the site. */}
-      <div id="players-leaderboard" className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-8 scroll-mt-4 -mx-6 lg:mx-0">
-        <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
-        {/* Compact D&3-style toolbar: title + count + compare on the left,
-            label-less search/sort/order/show controls on the right — one row,
-            the table starts immediately below. */}
+      <div id="players-leaderboard" className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-4 scroll-mt-4 -mx-6 lg:mx-0">
+        {/* Compact D&3-style toolbar: search + count + compare on the left,
+            sort/order/show on the right — one row, table starts below. */}
         <div className="px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 flex items-center justify-between gap-3 flex-wrap">
-          <div className="min-w-0">
-            <div className="flex items-center gap-3">
-              <h2 className="font-display text-xl lg:text-2xl text-ink leading-none tracking-tight">Players</h2>
-              <span className="text-xs text-ink-muted tabular whitespace-nowrap">
-                {loading ? "loading…" : count > players.length
-                  ? `${players.length.toLocaleString()} of ${count.toLocaleString()}`
-                  : `${count.toLocaleString()}`}
-                {!loading && spec.conf.length > 0 && <> · {spec.conf.length === 1 ? spec.conf[0] : `${spec.conf.length} confs`}</>}
-                {!loading && spec.cls.length > 0 && <> · {spec.cls.length === 1 ? (CLASS_LABEL[spec.cls[0]!] ?? spec.cls[0]) : `${spec.cls.length} classes`}</>}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCompareOpen(true)}
-                title="Compare players"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-coral/40 bg-coral/6 text-coral text-[0.6rem] uppercase tracking-widest font-bold hover:bg-coral/10 hover:border-coral/60 transition-colors whitespace-nowrap"
-              >
-                <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M16 3h5v5" /><path d="M8 21H3v-5" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" />
-                </svg>
-                Compare
-              </button>
-            </div>
-            {/* Search — sits under the Players title, above the table. */}
-            <div className="relative mt-2 hidden lg:block">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {/* Search */}
+            <div className="relative hidden lg:block">
               <SearchGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" />
               <input
                 type="search"
@@ -851,16 +820,32 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-base leading-none w-5 h-5 inline-flex items-center justify-center rounded hover:bg-paper-deep">×</button>
               )}
             </div>
+            {/* Filters button (stat builder) — between search and Compare. */}
+            <div className="hidden lg:block"><PlayerStatFilters previewCount={previewCount} /></div>
+            <button
+              type="button"
+              onClick={() => setCompareOpen(true)}
+              title="Compare players"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-coral/40 bg-coral/6 text-coral text-[0.6rem] uppercase tracking-widest font-bold hover:bg-coral/10 hover:border-coral/60 transition-colors whitespace-nowrap"
+            >
+              <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M16 3h5v5" /><path d="M8 21H3v-5" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" />
+              </svg>
+              Compare
+            </button>
+            <span className="text-xs text-ink-muted tabular whitespace-nowrap">
+              {loading ? "loading…" : count > players.length
+                ? `${players.length.toLocaleString()} of ${count.toLocaleString()}`
+                : `${count.toLocaleString()}`}
+              {!loading && spec.conf.length > 0 && <> · {spec.conf.length === 1 ? spec.conf[0] : `${spec.conf.length} confs`}</>}
+              {!loading && spec.cls.length > 0 && <> · {spec.cls.length === 1 ? (CLASS_LABEL[spec.cls[0]!] ?? spec.cls[0]) : `${spec.cls.length} classes`}</>}
+            </span>
           </div>
-          <div className="relative flex items-center gap-2 w-full sm:w-auto">
-            <Select value={spec.sortBy} onChange={(v) => updateSpec({ ...spec, sortBy: v as PlayerListSpec["sortBy"] })} ariaLabel="Sort by" className="flex-1 sm:flex-initial">
-              {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </Select>
-            <Select value={spec.sortDir} onChange={(v) => updateSpec({ ...spec, sortDir: v as "asc" | "desc" })} ariaLabel="Sort direction" className="w-20">
-              <option value="desc">Desc</option>
-              <option value="asc">Asc</option>
-            </Select>
-            <Select value={String(spec.limit)} onChange={(v) => updateSpec({ ...spec, limit: Number(v) })} ariaLabel="Result count" className="w-16 lg:w-18">
+          <div className="relative flex items-center gap-2 w-full sm:w-auto justify-end">
+            {/* Sort/order live on the column headers; only the row-count select
+                remains here. */}
+            <span className="hidden sm:inline text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Show</span>
+            <Select value={String(spec.limit)} onChange={(v) => updateSpec({ ...spec, limit: Number(v) })} ariaLabel="Result count" compact className="w-16 lg:w-18">
               {LIMIT_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
             </Select>
             {/* Mobile search icon */}
@@ -975,14 +960,18 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                   </td>
                 </tr>
               ) : (
-                players.map((p, i) => (
-                  <tr key={p.id} className="group">
+                players.map((p, i) => {
+                  // Zebra striping (opaque so the frozen columns can share it) —
+                  // matches the /teams + /coaches tables. No row borders.
+                  const zebra = i % 2 === 0 ? "bg-paper" : "bg-card";
+                  return (
+                  <tr key={p.id} className={cn("group", zebra)}>
                     {/* RK — rank within the CURRENT sort */}
-                    <td className="sticky left-0 z-20 bg-card border-b border-hairline px-2 py-2 text-center text-ink-muted tabular text-xs font-semibold group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))] transition-colors cursor-default">
+                    <td className={cn("sticky left-0 z-20 px-2 py-2 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
                       {(pageSafe - 1) * spec.limit + i + 1}
                     </td>
                     {/* Player — photo + name + team/class/height meta */}
-                    <td style={playerLeft} className="sticky z-20 bg-card border-b border-r border-hairline px-3 py-2 group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))] transition-colors">
+                    <td style={playerLeft} className={cn("sticky z-20 px-3 py-2 transition-colors", zebra, ROW_HOVER)}>
                       <span className="flex items-center gap-2.5 min-w-44">
                         <PlayerPhoto bartPlayerId={p.bart_player_id} name={p.name} size={28} />
                         <span className="min-w-0">
@@ -1012,13 +1001,19 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                         <td
                           key={c.label}
                           className={cn(
-                            "border-b border-hairline px-2 py-1.5 text-right tabular whitespace-nowrap transition-colors",
+                            "px-2 py-1.5 text-right tabular whitespace-nowrap transition-colors",
                             c.band && EPM_BAND_TINT,
                             ROW_HOVER,
                           )}
+                          title={c.band && p.epm_estimated ? "Estimated — box-score model (no play-by-play for this season)" : undefined}
                         >
                           <span className="inline-flex flex-col items-end gap-0.5 leading-tight">
-                            <span className={c.label === "EPM" ? "font-semibold" : undefined}>{fmtGrid(v, c.fmt)}</span>
+                            <span className={cn(c.label === "EPM" && "font-semibold", c.band && p.epm_estimated && "text-ink-soft")}>
+                              {c.band && p.epm_estimated && c.label === "EPM" && (
+                                <span className="text-coral/70 font-normal mr-0.5" aria-label="estimated">≈</span>
+                              )}
+                              {fmtGrid(v, c.fmt)}
+                            </span>
                             {c.pct
                               ? <PercentileChip pct={pctMaps[c.pct].get(p.id) ?? null} />
                               : <span className="h-5" aria-hidden="true" /> /* chip-height spacer keeps values row-aligned */}
@@ -1027,7 +1022,8 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                       );
                     })}
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -1035,6 +1031,12 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         </div>
         <VScrollRail target={gridScrollRef} />
         </div>
+        {anyEstimated && (
+          <div className="px-3 lg:px-4 py-2 border-t border-hairline bg-paper-deep/20 flex items-center gap-1.5 text-[0.68rem] text-ink-muted">
+            <span className="text-coral/70">≈</span>
+            <span>Estimated EPM — box-score model for seasons before play-by-play tracking (pre-2024). Real EPM resumes for 2024 onward.</span>
+          </div>
+        )}
         {!loading && totalPages > 1 && (
           <PlayerPagination
             firstShown={(pageSafe - 1) * spec.limit + 1}

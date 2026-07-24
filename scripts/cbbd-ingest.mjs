@@ -37,10 +37,12 @@ const OUT_ROOT = path.resolve("data/cbbd");
 // Season window: Bart-style end-year key. 2026 = 2025-26 (Nov 3 – Apr 7 covers
 // opening night through the title game with margin).
 const SEASON_WINDOWS = {
+  2024: ["2023-11-01", "2024-04-09"],
+  2025: ["2024-11-01", "2025-04-09"],
   2026: ["2025-11-03", "2026-04-07"],
   2027: ["2026-11-02", "2027-04-06"],
 };
-const PAUSE_MS = 1100; // courtesy gap between calls — never hammer the API
+const PAUSE_MS = Number(process.env.CBBD_PAUSE_MS) || 1100; // courtesy gap; raise via env to avoid 502s on big historical slates
 
 // ---- env ----
 function loadEnvLocal() {
@@ -74,11 +76,28 @@ let calls = 0;
 async function get(pathname, params = {}) {
   const url = new URL(API + pathname);
   for (const [k, v] of Object.entries(params)) if (v != null) url.searchParams.set(k, String(v));
-  calls++;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${KEY}`, accept: "application/json" } });
-  if (res.status === 429) throw new Error(`429 rate-limited on ${pathname} — stop and check quota`);
-  if (!res.ok) throw new Error(`${res.status} on ${url.pathname}${url.search}`);
-  return res.json();
+  // Retry 5xx (big historical slates time out under load) and 429 (burst
+  // throttle) with exponential backoff. Only a genuinely persistent failure
+  // after several tries bubbles up to the per-date catch.
+  for (let attempt = 0; ; attempt++) {
+    calls++;
+    let res;
+    try {
+      // Hard timeout — some big historical slates hang open without ever
+      // responding; abort + retry rather than block the whole run forever.
+      res = await fetch(url, { headers: { Authorization: `Bearer ${KEY}`, accept: "application/json" }, signal: AbortSignal.timeout(45000) });
+    } catch (e) {
+      if (attempt >= 4) throw new Error(`network on ${url.pathname}${url.search}: ${e.message}`);
+      await sleep(2000 * (attempt + 1)); continue;
+    }
+    if ((res.status === 429 || res.status >= 500) && attempt < 4) {
+      await sleep((res.status === 429 ? 4000 : 2500) * (attempt + 1));
+      continue;
+    }
+    if (res.status === 429) throw new Error(`429 rate-limited on ${pathname} — stop and check quota`);
+    if (!res.ok) throw new Error(`${res.status} on ${url.pathname}${url.search}`);
+    return res.json();
+  }
 }
 
 function writeGz(fp, data) {

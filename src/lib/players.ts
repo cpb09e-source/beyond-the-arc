@@ -104,6 +104,10 @@ export type PlayerSummary = {
   epm: number | null;
   off_epm: number | null;
   def_epm: number | null;
+  // True when epm/off/def are the box-score ESTIMATE (Box-EPM) rather than the
+  // real play-by-play RAPM fit — i.e. seasons before onFloor data (pre-2024).
+  // Drives the "≈ estimated" marker in the grid.
+  epm_estimated: boolean;
   pir: number | null;           // EuroLeague PIR per game (minus TOV; see note)
   porpag: number | null;        // Bart Torvik Points Over Replacement Player per Adj Game
   bta_ind_ortg: number | null;  // avg(z(PIR), z(PORPAG)) * 20, with 12% non-power-conf penalty
@@ -180,6 +184,10 @@ const PLAYER_STAT_COLUMN_BY_KEY = new Map(PLAYER_STAT_COLUMNS.map((c) => [c.key,
 function isPlayerStatKey(s: string | undefined): s is string {
   return !!s && PLAYER_STAT_COLUMN_BY_KEY.has(s);
 }
+/** Lookup a filterable stat column by key (label/format/desc for the filter UI). */
+export function playerStatColumn(key: string): PlayerStatColumn | undefined {
+  return PLAYER_STAT_COLUMN_BY_KEY.get(key);
+}
 
 export type PlayerComparator = "gt" | "gte" | "lt" | "lte";
 function isPlayerComparator(s: string): s is PlayerComparator {
@@ -233,7 +241,9 @@ export function passesPlayerFilter(p: PlayerSummary, f: PlayerStatFilter): boole
 
 function clampYear(y: number): number {
   if (!Number.isFinite(y)) return DEFAULT_PLAYER_SPEC.years[0]!;
-  return Math.max(2008, Math.min(2026, Math.trunc(y)));
+  // Floor is the 2013-14 season — first year with reliable possession/efficiency
+  // data. See ALL_YEARS in team-filters.ts.
+  return Math.max(2014, Math.min(2026, Math.trunc(y)));
 }
 
 export function parsePlayerSpec(searchParams: Record<string, string | string[] | undefined>): PlayerListSpec {
@@ -272,9 +282,10 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
     : [];
 
   // Stat filters serialized as ?f0=ppg.gte.15&f1=ts_pct.gt.0.6 — mirrors
-  // the team explorer's URL encoding. Cap at 8 to keep URLs bounded.
+  // the team explorer's URL encoding. Cap at 40 (each range slider can emit a
+  // min + a max, so the range panel needs headroom well past a handful).
   const filters: PlayerStatFilter[] = [];
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 40; i++) {
     const raw = get(`f${i}`);
     if (!raw) continue;
     const dot1 = raw.indexOf(".");

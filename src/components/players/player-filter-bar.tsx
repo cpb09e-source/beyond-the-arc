@@ -1,22 +1,18 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
+import { SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Select } from "@/components/select";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { MultiYearSelect } from "@/components/explorer/multi-year-select";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
-import { SearchableSelect, type SearchableOption } from "@/components/explorer/searchable-select";
+import { type SearchableOption } from "@/components/explorer/searchable-select";
 import {
   DEFAULT_PLAYER_SPEC,
-  PLAYER_STAT_COLUMNS,
-  PLAYER_STAT_GROUP_LABEL,
   parsePlayerSpec,
   playerSpecToParams,
-  type PlayerComparator,
   type PlayerListSpec,
   type PlayerStatFilter,
 } from "@/lib/players";
@@ -36,23 +32,6 @@ const POSITION_OPTIONS: SearchableOption[] = [
 ];
 
 const CONF_GROUP_LABELS = { power: "Power Conferences", midmajor: "Mid-Majors" } as const;
-
-const OPS: { value: PlayerComparator; label: string }[] = [
-  { value: "gt",  label: ">" },
-  { value: "gte", label: "≥" },
-  { value: "lt",  label: "<" },
-  { value: "lte", label: "≤" },
-];
-
-// Build the stat-picker option list once. Groups render in the order they
-// first appear, so the PLAYER_STAT_COLUMNS source order is what the user
-// sees in the dropdown.
-const STAT_OPTIONS: SearchableOption[] = PLAYER_STAT_COLUMNS.map((c) => ({
-  value: c.key,
-  label: c.label,
-  group: c.group,
-  desc: c.desc,
-}));
 
 type Draft = {
   years: number[];
@@ -87,18 +66,6 @@ export function PlayerFilterBar({
   const router = useRouter();
   const search = useSearchParams();
   const [pending, startTransition] = useTransition();
-  // Stat-filter popover (the "rest" of the categories) anchored to the Filters
-  // button. Quick selects live inline in the bar.
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const popRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!filtersOpen) return;
-    function onDown(e: PointerEvent) {
-      if (popRef.current && !popRef.current.contains(e.target as Node)) setFiltersOpen(false);
-    }
-    document.addEventListener("pointerdown", onDown);
-    return () => document.removeEventListener("pointerdown", onDown);
-  }, [filtersOpen]);
 
   const params = useMemo(() => {
     const obj: Record<string, string> = {};
@@ -133,22 +100,6 @@ export function PlayerFilterBar({
 
   function patch(next: Partial<Draft>) {
     setDraft((d) => ({ ...d, ...next }));
-  }
-  function patchFilter(i: number, p: Partial<PlayerStatFilter>) {
-    setDraft((d) => ({
-      ...d,
-      filters: d.filters.map((f, j) => (j === i ? { ...f, ...p } : f)),
-    }));
-  }
-  function addFilter() {
-    setDraft((d) => ({
-      ...d,
-      // Default new filter targets EPM (the headline impact metric).
-      filters: [...d.filters, { stat: "epm", op: "gt", value: 0 }],
-    }));
-  }
-  function removeFilter(i: number) {
-    setDraft((d) => ({ ...d, filters: d.filters.filter((_, j) => j !== i) }));
   }
 
   function submit() {
@@ -212,133 +163,42 @@ export function PlayerFilterBar({
     });
   }, [conferences]);
 
-  const statFilterCount = draft.filters.length;
-
   return (
-    // Slim quick-filter bar — no card container. Filters button (stat builder
-    // popover) + quick scope selects on the left, Reset/Submit on the right.
+    // Slim quick-filter bar — no card container. Quick scope selects on the
+    // left, Reset/Submit on the right. (The Filters range drawer now lives
+    // inside the table toolbar via <PlayerStatFilters/>.)
     <div className={cn("relative flex flex-wrap items-end gap-2 mb-3", pending && "opacity-70")}>
-      {/* Filters button → stat-builder popover */}
-      <div className="relative self-end" ref={popRef}>
-        <button
-          type="button"
-          onClick={() => setFiltersOpen((o) => !o)}
-          aria-expanded={filtersOpen}
-          className={cn(
-            "inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm font-medium shadow-sm transition-colors",
-            filtersOpen || statFilterCount > 0
-              ? "border-coral/50 bg-coral/6 text-coral"
-              : "border-ink/15 bg-card text-ink hover:border-ink/25",
-          )}
-        >
-          <SlidersHorizontal size={15} />
-          Filters
-          {statFilterCount > 0 && (
-            <span className="ml-0.5 inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-coral text-white text-[0.6rem] font-bold tabular">
-              {statFilterCount}
-            </span>
-          )}
-        </button>
-
-        {filtersOpen && (
-          <div className="absolute left-0 top-11 z-50 w-[min(92vw,34rem)] rounded-xl border border-hairline bg-card shadow-xl p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-xs uppercase tracking-widest text-ink-muted font-semibold">Stat filters</span>
-              <span className="text-xs text-ink-muted">(apply on Submit)</span>
-            </div>
-            <div className="space-y-2">
-              {draft.filters.length === 0 && (
-                <p className="text-sm text-ink-muted">No stat filters yet — add one below.</p>
-              )}
-              {draft.filters.map((f, i) => (
-                <div key={i} className="flex items-center gap-2 flex-nowrap">
-                  <span className="text-xs text-ink-muted w-9 shrink-0">{i === 0 ? "Where" : "And"}</span>
-                  <SearchableSelect
-                    value={f.stat}
-                    options={STAT_OPTIONS}
-                    groupLabels={PLAYER_STAT_GROUP_LABEL}
-                    onChange={(v) => patchFilter(i, { stat: v })}
-                    ariaLabel="Filter stat"
-                    className="flex-1 min-w-0"
-                  />
-                  <Select
-                    value={f.op}
-                    onChange={(v) => patchFilter(i, { op: v as PlayerComparator })}
-                    className="w-14 shrink-0"
-                  >
-                    {OPS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </Select>
-                  <input
-                    type="number"
-                    step="any"
-                    value={f.value}
-                    onChange={(e) => patchFilter(i, { value: Number(e.target.value) })}
-                    className="h-9 w-20 px-2 rounded-md border border-ink/15 bg-card text-ink text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 shrink-0"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeFilter(i)}
-                    className="text-base text-ink-muted hover:text-coral px-1 shrink-0"
-                    aria-label="Remove filter"
-                  >×</button>
-                </div>
-              ))}
-            </div>
-            <div className="flex items-center gap-3 pt-3 mt-3 border-t border-hairline">
-              <button
-                type="button"
-                onClick={addFilter}
-                disabled={draft.filters.length >= 8}
-                className="text-sm font-medium text-coral hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                + Add filter
-              </button>
-              <button
-                type="button"
-                onClick={() => { submit(); setFiltersOpen(false); }}
-                disabled={!dirty}
-                className="ml-auto text-sm font-medium bg-coral text-white px-4 py-1.5 rounded hover:bg-coral-soft disabled:opacity-40 transition-colors"
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* Quick scope selects — each labeled so a "3 selected" pill reads clearly */}
       <QuickField label="Seasons">
-        <MultiYearSelect years={draft.years} onChange={(years) => patch({ years })} />
+        <MultiYearSelect years={draft.years} onChange={(years) => patch({ years })} className="w-32" />
       </QuickField>
       <QuickField label="Team">
         <SearchableMultiSelect
           value={draft.teams} options={teamOptions} onChange={(t) => patch({ teams: t })}
-          placeholder="Type to filter…" emptyLabel="All teams" ariaLabel="Teams"
+          placeholder="Type to filter…" emptyLabel="All" ariaLabel="Teams" className="w-52"
         />
       </QuickField>
       <QuickField label="Conference">
         <SearchableMultiSelect
           value={draft.conf} options={confOptions} onChange={(c) => patch({ conf: c })}
-          placeholder="Type to filter…" emptyLabel="All confs" ariaLabel="Conferences" groupLabels={CONF_GROUP_LABELS}
+          placeholder="Type to filter…" emptyLabel="All" ariaLabel="Conferences" groupLabels={CONF_GROUP_LABELS} className="w-44"
         />
       </QuickField>
       <QuickField label="Class">
         <SearchableMultiSelect
           value={draft.cls} options={CLASS_OPTIONS} onChange={(c) => patch({ cls: c })}
-          placeholder="Type to filter…" emptyLabel="All classes" ariaLabel="Classes"
+          placeholder="Type to filter…" emptyLabel="All" ariaLabel="Classes" className="w-36"
         />
       </QuickField>
       <QuickField label="Position">
         <SearchableMultiSelect
           value={draft.pos} options={POSITION_OPTIONS} onChange={(p) => patch({ pos: p as ("G" | "F" | "C")[] })}
-          placeholder="Type to filter…" emptyLabel="All positions" ariaLabel="Positions"
+          placeholder="Type to filter…" emptyLabel="All" ariaLabel="Positions" className="w-36"
         />
       </QuickField>
 
-      {/* Reset / Submit */}
-      <div className="ml-auto flex items-center gap-2">
-        {dirty && <span className="hidden sm:inline text-xs text-ink-muted">unsaved</span>}
-        <button type="button" onClick={reset} className="h-9 px-3 text-sm text-ink-muted hover:text-ink">Reset</button>
+      {/* Submit / Reset — right after Position */}
+      <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={submit}
@@ -347,6 +207,7 @@ export function PlayerFilterBar({
         >
           Submit
         </button>
+        <button type="button" onClick={reset} className="h-9 px-3 text-sm text-ink-muted hover:text-ink">Reset</button>
       </div>
     </div>
   );
@@ -358,5 +219,417 @@ function QuickField({ label, children }: { label: string; children: React.ReactN
       <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium pl-0.5">{label}</span>
       {children}
     </label>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Stat range drawer
+// ---------------------------------------------------------------------------
+// Each stat gets a slider bounded by realistic min/max (display units). A range
+// with a moved low thumb emits a `gte` filter; a moved high thumb emits `lte`.
+// Both thumbs at the extremes = no filter (the stat is "off"). `pct` stats are
+// stored as fractions in the URL but shown/edited as whole percent here.
+type RangeStat = {
+  key: string;    // matches a PLAYER_STAT_COLUMNS key
+  label: string;
+  min: number;    // slider lower bound (display units)
+  max: number;    // slider upper bound (display units)
+  step: number;
+  pct?: boolean;  // display 0–100 %, store fraction
+};
+type RangeGroup = { label: string; stats: RangeStat[] };
+
+const RANGE_GROUPS: RangeGroup[] = [
+  {
+    label: "Estimated +/-",
+    stats: [
+      { key: "epm",     label: "Estimated Plus-Minus",  min: -12, max: 12, step: 0.1 },
+      { key: "off_epm", label: "Offensive EPM",         min: -12, max: 12, step: 0.1 },
+      { key: "def_epm", label: "Defensive EPM",         min: -8,  max: 8,  step: 0.1 },
+    ],
+  },
+  {
+    label: "Role",
+    stats: [
+      { key: "mpg",     label: "Minutes per game",      min: 0, max: 40, step: 1 },
+      { key: "usg_pct", label: "Usage",                 min: 0, max: 60, step: 1, pct: true },
+      { key: "gp",      label: "Games played",          min: 0, max: 40, step: 1 },
+    ],
+  },
+  {
+    label: "Scoring",
+    stats: [
+      { key: "ppg",    label: "Points per game",        min: 0, max: 40, step: 0.5 },
+      { key: "apg",    label: "Assists per game",       min: 0, max: 14, step: 0.5 },
+      { key: "tov_pg", label: "Turnovers per game",     min: 0, max: 7,  step: 0.1 },
+      { key: "pir",    label: "PIR",                    min: 0, max: 40, step: 0.5 },
+    ],
+  },
+  {
+    label: "Shooting",
+    stats: [
+      { key: "ts_pct",  label: "True shooting",         min: 0, max: 100, step: 1, pct: true },
+      { key: "fg_pct",  label: "Field goal",            min: 0, max: 100, step: 1, pct: true },
+      { key: "fg3_pct", label: "3-point",               min: 0, max: 100, step: 1, pct: true },
+      { key: "ft_pct",  label: "Free throw",            min: 0, max: 100, step: 1, pct: true },
+    ],
+  },
+  {
+    label: "Rebounding",
+    stats: [
+      { key: "rpg",  label: "Rebounds per game",        min: 0, max: 20, step: 0.5 },
+      { key: "orpg", label: "Off reb per game",         min: 0, max: 7,  step: 0.1 },
+      { key: "drpg", label: "Def reb per game",         min: 0, max: 13, step: 0.1 },
+    ],
+  },
+  {
+    label: "Defense",
+    stats: [
+      { key: "spg", label: "Steals per game",           min: 0, max: 4,  step: 0.1 },
+      { key: "bpg", label: "Blocks per game",           min: 0, max: 5,  step: 0.1 },
+      { key: "hkm", label: "Hakeem % (BLK + STL)",      min: 0, max: 15, step: 0.5 },
+    ],
+  },
+  {
+    label: "Playmaking",
+    stats: [
+      { key: "pm_pg",   label: "Plus / minus",          min: -20, max: 20, step: 0.5 },
+      { key: "ast_tov", label: "Assist : turnover",     min: 0,   max: 8,  step: 0.1 },
+    ],
+  },
+];
+
+const ALL_RANGE_STATS: RangeStat[] = RANGE_GROUPS.flatMap((g) => g.stats);
+const RANGE_BY_KEY = new Map(ALL_RANGE_STATS.map((s) => [s.key, s]));
+
+type Bound = { lo: number | null; hi: number | null };
+type RangeState = Record<string, Bound>;
+
+function isBoundActive(b: Bound | undefined): boolean {
+  return !!b && (b.lo !== null || b.hi !== null);
+}
+function roundNice(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
+
+// URL filters → per-stat {lo, hi} in display units.
+function filtersToRanges(filters: PlayerStatFilter[]): RangeState {
+  const out: RangeState = {};
+  for (const f of filters) {
+    const st = RANGE_BY_KEY.get(f.stat);
+    if (!st) continue;
+    const slot = (out[f.stat] ??= { lo: null, hi: null });
+    const disp = st.pct ? roundNice(f.value * 100) : f.value;
+    if (f.op === "gte" || f.op === "gt") slot.lo = disp;
+    else slot.hi = disp;
+  }
+  return out;
+}
+// Per-stat {lo, hi} → URL filters (gte/lte), skipping untouched extremes.
+function rangesToFilters(state: RangeState): PlayerStatFilter[] {
+  const out: PlayerStatFilter[] = [];
+  for (const st of ALL_RANGE_STATS) {
+    const b = state[st.key];
+    if (!b) continue;
+    if (b.lo !== null) out.push({ stat: st.key, op: "gte", value: st.pct ? roundNice(b.lo / 100) : b.lo });
+    if (b.hi !== null) out.push({ stat: st.key, op: "lte", value: st.pct ? roundNice(b.hi / 100) : b.hi });
+  }
+  return out;
+}
+function sameFilterSet(a: PlayerStatFilter[], b: PlayerStatFilter[]): boolean {
+  if (a.length !== b.length) return false;
+  const key = (f: PlayerStatFilter) => `${f.stat}.${f.op}.${f.value}`;
+  const sa = new Set(a.map(key));
+  return b.every((f) => sa.has(key(f)));
+}
+
+/**
+ * Filters trigger + full range-filter drawer. Lives INSIDE the table toolbar
+ * (next to the search box). Self-contained: reads its own draft of stat ranges
+ * from the URL and, on Submit, pushes { ...urlSpec, filters } — preserving the
+ * quick-scope params (seasons/team/conf/class/position) that PlayerFilterBar
+ * owns.
+ *
+ * `previewCount` (optional) runs the live pipeline against the working draft so
+ * the footer shows a running "N players" total before Submit.
+ */
+export function PlayerStatFilters({
+  block = false,
+  previewCount,
+}: {
+  block?: boolean;
+  previewCount?: (filters: PlayerStatFilter[]) => number;
+}) {
+  const router = useRouter();
+  const search = useSearchParams();
+  const [, startTransition] = useTransition();
+  const [open, setOpen] = useState(false);
+
+  const params = useMemo(() => {
+    const obj: Record<string, string> = {};
+    for (const [k, v] of search.entries()) obj[k] = v;
+    return obj;
+  }, [search]);
+  const urlSpec: PlayerListSpec = parsePlayerSpec(params);
+
+  const [draft, setDraft] = useState<RangeState>(() => filtersToRanges(urlSpec.filters));
+  useEffect(() => { setDraft(filtersToRanges(urlSpec.filters)); /* eslint-disable-next-line */ }, [search]);
+
+  // Lock body scroll + wire Escape while the drawer is open.
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => { document.body.style.overflow = prev; document.removeEventListener("keydown", onKey); };
+  }, [open]);
+
+  // Stable so memoized RangeRows don't re-render on every drag tick — only the
+  // row whose lo/hi actually changed reconciles.
+  const setBound = useCallback(
+    (key: string, lo: number | null, hi: number | null) =>
+      setDraft((d) => ({ ...d, [key]: { lo, hi } })),
+    [],
+  );
+  const clearAll = () => setDraft({});
+
+  const draftFilters = useMemo(() => rangesToFilters(draft), [draft]);
+  const dirty = !sameFilterSet(draftFilters, urlSpec.filters);
+  // The live count runs applySpec over the whole pool — heavy. Defer it so
+  // dragging a slider stays smooth; the count catches up at low priority once
+  // the drag settles instead of recomputing on every pointermove tick.
+  const deferredFilters = useDeferredValue(draftFilters);
+  const matches = useMemo(
+    () => (previewCount ? previewCount(deferredFilters) : null),
+    [previewCount, deferredFilters],
+  );
+
+  // Badge counts (distinct active stats, not raw filter count).
+  const activeDraft = ALL_RANGE_STATS.reduce((n, s) => n + (isBoundActive(draft[s.key]) ? 1 : 0), 0);
+  const committed = useMemo(() => filtersToRanges(urlSpec.filters), [urlSpec.filters]);
+  const activeCommitted = ALL_RANGE_STATS.reduce((n, s) => n + (isBoundActive(committed[s.key]) ? 1 : 0), 0);
+
+  const submit = () => {
+    const p = playerSpecToParams({ ...urlSpec, filters: draftFilters }).toString();
+    startTransition(() => router.replace(p ? `/players?${p}` : "/players", { scroll: false }));
+    setOpen(false);
+  };
+
+  return (
+    <div className={cn("relative", block && "w-full")}>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-expanded={open}
+        className={cn(
+          "inline-flex items-center gap-1.5 h-8 px-3 rounded-md border text-sm font-medium shadow-sm transition-colors",
+          block ? "w-full justify-center" : "",
+          activeCommitted > 0 ? "border-coral/50 bg-coral/6 text-coral" : "border-ink/15 bg-card text-ink hover:border-ink/25",
+        )}
+      >
+        <SlidersHorizontal size={15} />
+        Filters
+        {activeCommitted > 0 && (
+          <span className="ml-0.5 inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-coral text-white text-[0.6rem] font-bold tabular">{activeCommitted}</span>
+        )}
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-60 flex items-start sm:items-center justify-center p-4 sm:p-6">
+          {/* Backdrop */}
+          <div
+            className="bta-backdrop-in absolute inset-0 bg-ink/40 backdrop-blur-[1px]"
+            onClick={() => setOpen(false)}
+            aria-hidden
+          />
+          {/* Centered modal */}
+          <div
+            className="bta-modal-in relative z-10 w-full max-w-176 max-h-[85vh] bg-paper rounded-2xl shadow-2xl ring-1 ring-ink/10 flex flex-col overflow-hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Stat filters"
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-5 pb-4 border-b border-hairline">
+              <div className="min-w-0">
+                {/* min-h reserves the badge's height so the header doesn't grow
+                    (and the centered modal doesn't recenter/jump) on first filter */}
+                <div className="flex items-center gap-2 min-h-6">
+                  <h3 className="text-base font-semibold text-ink leading-none">View &amp; Filters</h3>
+                  {activeDraft > 0 && (
+                    <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-coral text-white text-[0.62rem] font-bold tabular">{activeDraft}</span>
+                  )}
+                  {activeDraft > 0 && (
+                    <button type="button" onClick={clearAll} className="text-xs text-ink-muted hover:text-coral transition-colors">Clear all</button>
+                  )}
+                </div>
+                <p className="mt-1.5 text-xs text-ink-muted leading-snug">Drag a slider or type a min / max, then Submit.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close filters"
+                className="shrink-0 w-8 h-8 -mr-1 inline-flex items-center justify-center rounded-md text-ink-muted hover:text-ink hover:bg-paper-deep transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Scrollable body — two columns of stat ranges */}
+            <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-6">
+              {RANGE_GROUPS.map((g) => {
+                const gc = g.stats.reduce((n, s) => n + (isBoundActive(draft[s.key]) ? 1 : 0), 0);
+                return (
+                  <section key={g.label}>
+                    <div className="flex items-center gap-2 mb-3 min-h-5">
+                      <h4 className="text-[0.62rem] uppercase tracking-[0.18em] font-semibold text-ink-soft">{g.label}</h4>
+                      {gc > 0 && (
+                        <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-coral/15 text-coral text-[0.58rem] font-bold tabular">{gc}</span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                      {g.stats.map((st) => (
+                        <RangeRow
+                          key={st.key}
+                          st={st}
+                          lo={draft[st.key]?.lo ?? null}
+                          hi={draft[st.key]?.hi ?? null}
+                          setBound={setBound}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 sm:px-6 py-4 border-t border-hairline bg-paper-deep/30 flex items-center gap-3">
+              {matches !== null && (
+                <div className="text-sm text-ink-soft leading-none">
+                  <span className="text-lg font-bold text-ink tabular">{matches.toLocaleString()}</span>
+                  <span className="ml-1.5 text-xs text-ink-muted">{matches === 1 ? "player" : "players"}</span>
+                </div>
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="h-9 px-3 text-sm text-ink-muted hover:text-ink transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={submit}
+                  disabled={!dirty}
+                  className="h-9 text-sm font-semibold bg-coral text-white px-6 rounded-md hover:bg-coral-soft disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  Submit
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// One stat: label + min/max number boxes + dual-thumb slider. Memoized so a
+// drag only re-renders the row being dragged (setBound is stable upstream).
+const RangeRow = memo(function RangeRow({
+  st,
+  lo,
+  hi,
+  setBound,
+}: {
+  st: RangeStat;
+  lo: number | null;
+  hi: number | null;
+  setBound: (key: string, lo: number | null, hi: number | null) => void;
+}) {
+  const onChange = (lo: number | null, hi: number | null) => setBound(st.key, lo, hi);
+  const clamp = (n: number) => Math.min(Math.max(n, st.min), st.max);
+  const setLo = (raw: string) => {
+    if (raw === "") return onChange(null, hi);
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return;
+    let v = clamp(n);
+    if (hi !== null && v > hi) v = hi;
+    onChange(v, hi);
+  };
+  const setHi = (raw: string) => {
+    if (raw === "") return onChange(lo, null);
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return;
+    let v = clamp(n);
+    if (lo !== null && v < lo) v = lo;
+    onChange(lo, v);
+  };
+  const boxCls =
+    "h-8 w-16 px-1.5 rounded-md border border-ink/15 bg-card text-ink text-xs text-center tabular shadow-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40";
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <span className="text-sm text-ink truncate">
+          {st.label}
+          {st.pct && <span className="text-ink-muted"> %</span>}
+        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <input
+            type="number" inputMode="decimal" min={st.min} max={st.max} step={st.step}
+            value={lo ?? ""} placeholder="min" aria-label={`${st.label} minimum`}
+            onChange={(e) => setLo(e.target.value)} className={boxCls}
+          />
+          <span className="text-ink-muted text-xs">–</span>
+          <input
+            type="number" inputMode="decimal" min={st.min} max={st.max} step={st.step}
+            value={hi ?? ""} placeholder="max" aria-label={`${st.label} maximum`}
+            onChange={(e) => setHi(e.target.value)} className={boxCls}
+          />
+        </div>
+      </div>
+      <RangeDual st={st} lo={lo} hi={hi} onChange={onChange} />
+    </div>
+  );
+});
+
+// Dual-thumb slider over one stat. Sitting a thumb at its extreme clears that
+// bound (→ null), so a full-width slider emits no filter. See .bta-range in
+// globals.css for the thumb styling + pointer-events trick.
+function RangeDual({
+  st,
+  lo,
+  hi,
+  onChange,
+}: {
+  st: RangeStat;
+  lo: number | null;
+  hi: number | null;
+  onChange: (lo: number | null, hi: number | null) => void;
+}) {
+  const { min, max, step } = st;
+  const effLo = lo ?? min;
+  const effHi = hi ?? max;
+  const span = max - min || 1;
+  const leftPct = ((effLo - min) / span) * 100;
+  const rightPct = ((max - effHi) / span) * 100;
+  return (
+    <div className="relative h-4 mx-1.5">
+      <div className="absolute top-1/2 -translate-y-1/2 inset-x-0 h-1 rounded-full bg-ink/12" />
+      <div className="absolute top-1/2 -translate-y-1/2 h-1 rounded-full bg-coral" style={{ left: `${leftPct}%`, right: `${rightPct}%` }} />
+      <input
+        type="range" min={min} max={max} step={step} value={effLo}
+        onChange={(e) => { const n = Number(e.target.value); onChange(n <= min ? null : Math.min(n, effHi), hi); }}
+        className="bta-range z-30" aria-label={`${st.label} minimum slider`}
+      />
+      <input
+        type="range" min={min} max={max} step={step} value={effHi}
+        onChange={(e) => { const n = Number(e.target.value); onChange(lo, n >= max ? null : Math.max(n, effLo)); }}
+        className="bta-range z-20" aria-label={`${st.label} maximum slider`}
+      />
+    </div>
   );
 }
