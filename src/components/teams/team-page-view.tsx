@@ -11,6 +11,7 @@ import { SeasonSwitcher } from "@/components/teams/season-switcher";
 import { NationalRanks } from "@/components/teams/national-ranks";
 import { SortableSeasonsTable } from "@/components/teams/sortable-seasons-table";
 import { SortableRosterTable } from "@/components/teams/sortable-roster-table";
+import { TeamLineups } from "@/components/teams/team-lineups";
 import { DistributionPanel, type DistributionRank } from "@/components/teams/distribution-panel";
 import { ScheduleTicker } from "@/components/teams/schedule-ticker";
 import { FindGameTrigger } from "@/components/teams/find-game-trigger";
@@ -530,6 +531,13 @@ export function TeamPageView({
           <SortableRosterTable roster={roster} rankedPlayerIds={rankedPlayerIds} />
         )}
       </section>
+      )}
+
+      {/* Top 5-man lineups (play-by-play seasons only; renders nothing otherwise) */}
+      {!preview && (
+        <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8">
+          <TeamLineups teamName={team.name} year={current.year} />
+        </section>
       )}
 
       {/* BY SEASON — headline ledger. Mirrors the coach page's "Season by

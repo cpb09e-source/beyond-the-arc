@@ -1,8 +1,9 @@
 import type { PlayerRanksSeason } from "@/lib/static-data";
 import { STAT_META, fmtValue, type StatFormat } from "./where-they-rank";
 import { StatInfo } from "./stat-info";
-// (Local pctColor variants below — we don't use the chip's helper here so
-// the player-overview heatmap can swap palettes per theme.)
+import { pctColor, pctBg } from "@/components/percentile-chip";
+// pctBgStrong/pctColorLight variants (below) are kept for the shot-profile card;
+// the Player Overview tiles use the players-table chip ramp (pctBg/pctColor).
 
 /**
  * Editorial heatmap palette — DataGolf-inspired but with a middle yellow
@@ -22,7 +23,7 @@ const OLIVE_RGB = "61, 153, 112";
 const AMBER_RGB = "255, 193, 7";
 const TOMATO_RGB = "255, 65, 54";
 
-function pctBgStrong(pct: number | null): string {
+export function pctBgStrong(pct: number | null): string {
   if (pct === null) return "transparent";
   if (pct >= 67) {
     // 67th → low alpha, 100th → max bold olive
@@ -41,7 +42,7 @@ function pctBgStrong(pct: number | null): string {
   return `rgba(${TOMATO_RGB}, ${alpha.toFixed(3)})`;
 }
 
-function pctBgStrongDark(pct: number | null): string {
+export function pctBgStrongDark(pct: number | null): string {
   if (pct === null) return "transparent";
   // Same color regions, alpha bumped so the wash reads against navy.
   if (pct >= 67) {
@@ -57,14 +58,14 @@ function pctBgStrongDark(pct: number | null): string {
   return `rgba(${TOMATO_RGB}, ${alpha.toFixed(3)})`;
 }
 
-function pctColorLight(pct: number): string {
+export function pctColorLight(pct: number): string {
   // Solid versions for the gauge arc + percentile number text. The
   // amber band gets a darker mustard so the chip reads on a yellow tile.
   if (pct >= 67) return `rgb(${OLIVE_RGB})`;
   if (pct >= 34) return "rgb(180, 130, 5)"; // dark mustard, reads on amber
   return `rgb(${TOMATO_RGB})`;
 }
-function pctColorDark(pct: number): string {
+export function pctColorDark(pct: number): string {
   // Lighter variants for visibility on dark navy tinted tiles.
   if (pct >= 67) return "rgb(120, 200, 160)";
   if (pct >= 34) return "rgb(255, 210, 100)"; // brighter amber
@@ -188,11 +189,13 @@ function StatTile({
   // globals.css picks the right one based on [data-theme="dark"]. This
   // keeps the tile a server-renderable component (no client theme hook)
   // and avoids any flash during hydration.
+  // Match the players-table percentile chips: the continuous HSL ramp
+  // (pctBg background + pctColor text/gauge), theme-agnostic like the chip.
   const tileStyle: React.CSSProperties = {
-    "--tile-bg-light": pctBgStrong(percentile),
-    "--tile-bg-dark": pctBgStrongDark(percentile),
-    "--tile-color-light": pctColorLight(percentile),
-    "--tile-color-dark": pctColorDark(percentile),
+    "--tile-bg-light": pctBg(percentile),
+    "--tile-bg-dark": pctBg(percentile),
+    "--tile-color-light": pctColor(percentile),
+    "--tile-color-dark": pctColor(percentile),
   } as React.CSSProperties;
   return (
     <div
@@ -219,7 +222,7 @@ function StatTile({
  * their color from the parent tile's `--tile-color-*` variables, so the
  * dial automatically retints when the theme flips without a JS hook.
  */
-function PercentileGauge({ pct }: { pct: number }) {
+export function PercentileGauge({ pct }: { pct: number }) {
   const size = 30;
   const stroke = 2.5;
   const radius = (size - stroke) / 2;

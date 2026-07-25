@@ -107,13 +107,19 @@ export async function readIndex(): Promise<StaticIndex> {
   return readJson<StaticIndex>("index.json");
 }
 
+// Data floor: 2013-14 season. The team-season exports still carry full history,
+// so gate here to match the site-wide floor (ALL_YEARS / clampYear).
+const TEAM_FLOOR_YEAR = 2014;
+
 export async function readAllTeams(): Promise<StaticTeamSeasonRow[]> {
-  return readJson<StaticTeamSeasonRow[]>("teams-all.json");
+  const all = await readJson<StaticTeamSeasonRow[]>("teams-all.json");
+  return all.filter((t) => t.year >= TEAM_FLOOR_YEAR);
 }
 
 export async function readTeam(slug: string): Promise<{ name: string; seasons: StaticTeamSeasonRow[] } | null> {
   try {
-    return await readJson<{ name: string; seasons: StaticTeamSeasonRow[] }>(`team/${slug}.json`);
+    const t = await readJson<{ name: string; seasons: StaticTeamSeasonRow[] }>(`team/${slug}.json`);
+    return { ...t, seasons: t.seasons.filter((s) => s.year >= TEAM_FLOOR_YEAR) };
   } catch {
     return null;
   }

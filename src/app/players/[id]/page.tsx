@@ -5,6 +5,7 @@ import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayer
 import { PlayerPhoto } from "@/components/player-photo";
 import { CareerTable } from "@/components/players/career-table";
 import { PlayerOverview, type PlayerOverviewOption } from "@/components/players/player-overview";
+import { PlayerShotImpact } from "@/components/players/player-shot-impact";
 
 export async function generateStaticParams() {
   // Only emit profile pages for ranked players. Unranked players (didn't
@@ -233,6 +234,8 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
           </div>
         </section>
       )}
+
+      <PlayerShotImpact bartPlayerId={bartId} years={player.seasons.map((s) => s.year)} />
 
       <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8 mb-20">
         {/* Career ledger — heavier chrome than other cards on the page so this

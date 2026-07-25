@@ -26,9 +26,9 @@ export function pctBg(pct: number | null): string {
 }
 
 /**
- * Compact percentile chip — small square badge colored by percentile.
- * Default content is the percentile number itself; pass `children` to show
- * something else (e.g. `#{rank}`) while keeping the same color treatment.
+ * Compact percentile chip — small badge colored by percentile, matching the
+ * Player Overview stat tiles. Default content is the percentile number itself;
+ * pass `children` to show something else (e.g. `#{rank}`) with the same color.
  */
 export function PercentileChip({
   pct,

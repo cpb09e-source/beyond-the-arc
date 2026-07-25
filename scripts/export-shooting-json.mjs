@@ -89,6 +89,23 @@ for (let season = FROM; season <= TO; season++) {
       tracked: num(r.trackedShots),
     };
   }
+  // Percentiles for the zone FG%s (higher = better) so the player page can
+  // color them on the same ramp as the site's percentile chips. Computed over
+  // players who have a value for that zone this season.
+  for (const stat of ["rim_pct", "mid_pct", "tp_pct"]) {
+    const withVal = Object.values(out).filter((p) => typeof p[stat] === "number");
+    const sorted = withVal.map((p) => p[stat]).sort((a, b) => a - b);
+    const n = sorted.length;
+    const pctileKey = stat.replace("_pct", "_ptile");
+    for (const p of Object.values(out)) {
+      if (typeof p[stat] !== "number" || n < 2) { p[pctileKey] = null; continue; }
+      // rank = count of values strictly below → 0..n-1 → 0..100
+      let lo = 0, hi = n;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (sorted[mid] < p[stat]) lo = mid + 1; else hi = mid; }
+      p[pctileKey] = Math.round((lo / (n - 1)) * 100);
+    }
+  }
+
   fs.writeFileSync(path.join(DATA, `shooting-${season}.json`), JSON.stringify({ season, players: out }));
   grand += matched;
   console.log(`shooting-${season}.json: ${matched}/${rows.length} matched`);
