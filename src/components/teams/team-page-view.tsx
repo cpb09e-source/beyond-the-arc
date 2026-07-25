@@ -66,6 +66,9 @@ export type RosterEntry = {
   ft_pct: number | null;
   pir: number | null;
   bta_portg: number | null;
+  epm: number | null;
+  ts_pct: number | null;
+  usg_pct: number | null;
   /** Per-stat percentile chips, keyed by the roster column. `null` for any
    *  stat the player didn't clear the rank cohort threshold for. Empty for
    *  players without a rank file at all. */
@@ -77,6 +80,9 @@ export type RosterEntry = {
     ast?: number | null;
     fg3_pct?: number | null;
     ft_pct?: number | null;
+    epm?: number | null;
+    ts_pct?: number | null;
+    usg_pct?: number | null;
   };
 };
 
@@ -99,6 +105,7 @@ export function attachRosterRanks(
     return {
       ...p,
       pcts: {
+        ...p.pcts, // keep EPM / TS% / USG% percentiles set in buildRoster
         bta_portg: r.bta_portg ?? null,
         pir:       r.pir       ?? null,
         pts:       r.pts       ?? null,
@@ -273,8 +280,48 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
 }
 
 
-export function buildRoster(players: StaticPlayerRow[], teamId: number, year: number): RosterEntry[] {
+// Percentile rank (0-100, higher value = higher percentile) of each id's value
+// across the pool; ids with no value are omitted. Used for the roster chips on
+// EPM / TS% / USG% so they read on the same ramp as the players table.
+function poolPercentiles(byId: Map<number, number | null>): Map<number, number> {
+  const vals = [...byId.entries()].filter((e): e is [number, number] => typeof e[1] === "number")
+    .sort((a, b) => a[1] - b[1]);
+  const out = new Map<number, number>();
+  const n = vals.length;
+  if (n < 2) return out;
+  vals.forEach(([id], i) => out.set(id, Math.round((i / (n - 1)) * 100)));
+  return out;
+}
+
+export function buildRoster(
+  players: StaticPlayerRow[],
+  teamId: number,
+  year: number,
+  epmByBart: Map<number, number>,
+): RosterEntry[] {
   const metrics = computeYearMetrics(players, year);
+
+  // TS% / USG% / EPM over the FULL year pool so the roster chips are percentiles
+  // vs all of D-I (matching the players table), not just this team.
+  const tsById = new Map<number, number | null>();
+  const usgById = new Map<number, number | null>();
+  const epmById = new Map<number, number | null>();
+  for (const p of players) {
+    const row = p.player_bart_stats?.raw_row ?? null;
+    const games = p.player_bart_stats?.games ?? null;
+    const pts = fromEnd(row, 3);
+    const fga = (pctFromIdx(row, 17) ?? 0) + (pctFromIdx(row, 20) ?? 0);
+    const fta = pctFromIdx(row, 14) ?? 0;
+    const denom = 2 * (fga + 0.44 * fta);
+    tsById.set(p.id, pts != null && games != null && denom > 0 ? (pts * games) / denom : null);
+    const usgRaw = pctFromIdx(row, 6); // Bart usage %, 0–100
+    usgById.set(p.id, usgRaw != null ? usgRaw / 100 : null);
+    epmById.set(p.id, p.bart_player_id != null ? (epmByBart.get(p.bart_player_id) ?? null) : null);
+  }
+  const pctlTs = poolPercentiles(tsById);
+  const pctlUsg = poolPercentiles(usgById);
+  const pctlEpm = poolPercentiles(epmById);
+
   return players
     .filter((p) => {
       const team = Array.isArray(p.teams) ? p.teams[0] : p.teams;
@@ -297,9 +344,17 @@ export function buildRoster(players: StaticPlayerRow[], teamId: number, year: nu
         ft_pct: pctFromIdx(row, 15),
         pir: m?.pir ?? null,
         bta_portg: m?.bta_portg ?? null,
+        epm: epmById.get(p.id) ?? null,
+        ts_pct: tsById.get(p.id) ?? null,
+        usg_pct: usgById.get(p.id) ?? null,
+        pcts: {
+          epm: pctlEpm.get(p.id) ?? null,
+          ts_pct: pctlTs.get(p.id) ?? null,
+          usg_pct: pctlUsg.get(p.id) ?? null,
+        },
       };
     })
-    .sort((a, b) => (b.bta_portg ?? -Infinity) - (a.bta_portg ?? -Infinity));
+    .sort((a, b) => (b.epm ?? -Infinity) - (a.epm ?? -Infinity));
 }
 
 export function TeamPageView({

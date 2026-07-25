@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { readPlayersForYear, readTeam, readAllTeams, readRankedPlayerIds, readConfRecordsByTeam, readGameLogsForYear } from "@/lib/static-data";
+import { readPlayersForYear, readImpactForYear, readTeam, readAllTeams, readRankedPlayerIds, readConfRecordsByTeam, readGameLogsForYear } from "@/lib/static-data";
 import { TeamPageView, buildRoster, attachRosterRanks, PREVIEW_SEASON_YEAR, PREVIEW_SEASON_LABEL } from "@/components/teams/team-page-view";
 import { buildShootingRanks, buildFourFactorRanks } from "@/components/teams/distribution-panel";
 import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches";
@@ -121,7 +121,8 @@ export default async function TeamSeasonPage({
   if (!current) notFound();
 
   const rosterPool = await readPlayersForYear(effYear);
-  const rosterBase = buildRoster(rosterPool, current.id, effYear);
+  const epmByBart = await readImpactForYear(effYear);
+  const rosterBase = buildRoster(rosterPool, current.id, effYear, epmByBart);
   const rankedPlayerIds = await readRankedPlayerIds();
   const roster = attachRosterRanks(rosterBase, current.roster_ranks);
   const confRecordsAll = await readConfRecordsByTeam();

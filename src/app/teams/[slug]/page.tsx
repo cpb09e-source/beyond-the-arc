@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { readIndex, readPlayersForYear, readTeam, readRankedPlayerIds, readConfRecordsByTeam, readAllTeams, readGameLogsForYear } from "@/lib/static-data";
+import { readIndex, readPlayersForYear, readImpactForYear, readTeam, readRankedPlayerIds, readConfRecordsByTeam, readAllTeams, readGameLogsForYear } from "@/lib/static-data";
 import { TeamPageView, buildRoster, attachRosterRanks } from "@/components/teams/team-page-view";
 import { buildShootingRanks, buildFourFactorRanks } from "@/components/teams/distribution-panel";
 import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches";
@@ -58,7 +58,8 @@ export default async function TeamPage({ params }: { params: Promise<{ slug: str
   // Default to the team's most recent season.
   const current = team.seasons[0]!;
   const rosterPool = await readPlayersForYear(current.year);
-  const rosterBase = buildRoster(rosterPool, current.id, current.year);
+  const epmByBart = await readImpactForYear(current.year);
+  const rosterBase = buildRoster(rosterPool, current.id, current.year, epmByBart);
   const rankedPlayerIds = await readRankedPlayerIds();
   const roster = attachRosterRanks(rosterBase, current.roster_ranks);
   const confRecordsAll = await readConfRecordsByTeam();

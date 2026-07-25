@@ -130,6 +130,25 @@ export async function readPlayersForYear(year: number): Promise<StaticPlayerRow[
 }
 
 /**
+ * bart_player_id → EPM for a season, for the roster columns. Prefers the real
+ * play-by-play EPM (epm-<year>.json); fills any gaps with the estimated
+ * box-epm. Empty map when neither file exists.
+ */
+export async function readImpactForYear(year: number): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  const real = await readJson<{ players: Record<string, { epm: number }> }>(`epm-${year}.json`).catch(() => null);
+  if (real?.players) for (const [bid, v] of Object.entries(real.players)) {
+    if (typeof v.epm === "number") out.set(Number(bid), v.epm);
+  }
+  const box = await readJson<{ players: Record<string, { epm: number }> }>(`box-epm-${year}.json`).catch(() => null);
+  if (box?.players) for (const [bid, v] of Object.entries(box.players)) {
+    const id = Number(bid);
+    if (!out.has(id) && typeof v.epm === "number") out.set(id, v.epm);
+  }
+  return out;
+}
+
+/**
  * One transfer-portal entry for a specific player. Surface this on the
  * player profile hero when the player has committed elsewhere — we strike
  * through their current school and show the new destination.

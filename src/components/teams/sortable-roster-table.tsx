@@ -22,6 +22,9 @@ type RosterEntry = {
   ft_pct: number | null;
   pir: number | null;
   bta_portg: number | null;
+  epm: number | null;
+  ts_pct: number | null;
+  usg_pct: number | null;
   // Preview-only — roster status shown as an inline badge next to the name
   // (transfers also show the logo of the school they came from).
   status?: "returning" | "transfer" | "newcomer";
@@ -37,10 +40,13 @@ type RosterEntry = {
     ast?: number | null;
     fg3_pct?: number | null;
     ft_pct?: number | null;
+    epm?: number | null;
+    ts_pct?: number | null;
+    usg_pct?: number | null;
   };
 };
 
-type SortKey = "name" | "class" | "height" | "bta_portg" | "pir" | "pts" | "reb" | "ast" | "fg3_pct" | "ft_pct";
+type SortKey = "name" | "class" | "height" | "epm" | "ts_pct" | "usg_pct" | "pts" | "reb" | "ast" | "fg3_pct" | "ft_pct";
 
 // Class ordering Fr → So → Jr → Sr → Gr; unknowns last.
 const CLASS_ORDER: Record<string, number> = { Fr: 1, So: 2, Jr: 3, Sr: 4, Gr: 5 };
@@ -68,8 +74,8 @@ export function SortableRosterTable({
   roster: RosterEntry[];
   rankedPlayerIds: Set<number>;
 }) {
-  // Default: BTA PRTG desc (best player first), preserving existing behavior.
-  const [sortBy, setSortBy] = useState<SortKey>("bta_portg");
+  // Default: EPM desc (best player first).
+  const [sortBy, setSortBy] = useState<SortKey>("epm");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const sorted = useMemo(() => {
@@ -79,8 +85,9 @@ export function SortableRosterTable({
         case "name":      return p.name.toLowerCase();
         case "class":     return CLASS_ORDER[p.class ?? ""] ?? 99;
         case "height":    return heightInches(p.height);
-        case "bta_portg": return p.bta_portg;
-        case "pir":       return p.pir;
+        case "epm":       return p.epm;
+        case "ts_pct":    return p.ts_pct;
+        case "usg_pct":   return p.usg_pct;
         case "pts":       return p.pts;
         case "reb":       return p.reb;
         case "ast":       return p.ast;
@@ -122,8 +129,9 @@ export function SortableRosterTable({
               <ThSort label="Player" active={sortBy==="name"} dir={sortDir} onClick={() => toggle("name","asc")} align="left" />
               <ThSort label="Cl"     active={sortBy==="class"} dir={sortDir} onClick={() => toggle("class","asc")} align="left" />
               <ThSort label="Ht"     active={sortBy==="height"} dir={sortDir} onClick={() => toggle("height","desc")} align="left" />
-              <ThSort label={<>BTA<br />PRTG</>} active={sortBy==="bta_portg"} dir={sortDir} onClick={() => toggle("bta_portg","desc")} wrap />
-              <ThSort label="PIR"    active={sortBy==="pir"} dir={sortDir} onClick={() => toggle("pir","desc")} />
+              <ThSort label="EPM"    active={sortBy==="epm"} dir={sortDir} onClick={() => toggle("epm","desc")} />
+              <ThSort label="TS%"    active={sortBy==="ts_pct"} dir={sortDir} onClick={() => toggle("ts_pct","desc")} />
+              <ThSort label="USG%"   active={sortBy==="usg_pct"} dir={sortDir} onClick={() => toggle("usg_pct","desc")} />
               <ThSort label="PPG"    active={sortBy==="pts"} dir={sortDir} onClick={() => toggle("pts","desc")} />
               <ThSort label="RPG"    active={sortBy==="reb"} dir={sortDir} onClick={() => toggle("reb","desc")} />
               <ThSort label="APG"    active={sortBy==="ast"} dir={sortDir} onClick={() => toggle("ast","desc")} />
@@ -156,8 +164,9 @@ export function SortableRosterTable({
                 </Td>
                 <Td className="text-ink-muted">{p.class ?? "—"}</Td>
                 <Td className="text-ink-muted whitespace-nowrap">{p.height ?? "—"}</Td>
-                <StatCell value={fmtNum(p.bta_portg, 1)} pct={p.pcts?.bta_portg ?? null} emphasized />
-                <StatCell value={fmtNum(p.pir, 1)}       pct={p.pcts?.pir       ?? null} />
+                <StatCell value={p.epm != null ? (p.epm >= 0 ? "+" : "") + fmtNum(p.epm, 1) : "—"} pct={p.pcts?.epm ?? null} emphasized />
+                <StatCell value={fmtPct(p.ts_pct)}       pct={p.pcts?.ts_pct    ?? null} />
+                <StatCell value={fmtPct(p.usg_pct)}      pct={p.pcts?.usg_pct   ?? null} />
                 <StatCell value={fmtNum(p.pts, 1)}       pct={p.pcts?.pts       ?? null} />
                 <StatCell value={fmtNum(p.reb, 1)}       pct={p.pcts?.reb       ?? null} />
                 <StatCell value={fmtNum(p.ast, 1)}       pct={p.pcts?.ast       ?? null} />
