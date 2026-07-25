@@ -32,11 +32,12 @@ FEATURES = [
     "is_g", "is_f", "is_c",
     "team_adj_net",
 ]
-# Winsor caps (display units) — clip absurd small-sample rates before the fit.
-CAPS = {
-    "pts40": 40, "ast40": 14, "reb40": 22, "orb40": 9, "drb40": 16,
-    "stl40": 5.5, "blk40": 7, "to_rate": 40, "usg": 45,
-}
+# Era-normalized features arrive from build-box-epm-features.mjs already z-scored
+# within each season; clip extreme z (low-sample flukes) at +/-5 SD.
+ERA_FEATURES = [
+    "usg", "to_rate", "porpag", "ts", "efg", "ftr", "tpar",
+    "pts40", "ast40", "reb40", "orb40", "drb40", "stl40", "blk40", "blk_pct", "stl_pct",
+]
 # Training-eligibility gate — a season must clear this to inform the coefficients.
 TRAIN_MIN_PG, TRAIN_MIN_GP = 10.0, 13
 
@@ -75,9 +76,9 @@ def cv_r2(X, y, w, lam, folds=5, seed=17):
 def main():
     df = pd.read_csv(HERE / "box-epm-features.csv")
 
-    # Winsorize rate features across ALL rows (train + predict) consistently.
-    for col, cap in CAPS.items():
-        df[col] = df[col].clip(upper=cap, lower=-cap if df[col].min() < 0 else 0)
+    # Clip extreme within-season z-scores (small-sample flukes) consistently.
+    for col in ERA_FEATURES:
+        df[col] = df[col].clip(lower=-5, upper=5)
 
     labeled = df["off"].notna() & df["def"].notna()
     train = labeled & (df["min_pg"] >= TRAIN_MIN_PG) & (df["poss"].fillna(0) > 0)

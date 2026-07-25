@@ -156,6 +156,36 @@ for (const year of YEARS) {
   }
 }
 
+// ── Era normalization ──────────────────────────────────────────────
+// College efficiency has drifted up over the years (avg D1 ORtg ~105 in the
+// mid-2010s → ~110 by 2026). Raw efficiency/rate features would make older
+// players look weak against a model trained on modern norms, so we z-score the
+// drift-sensitive features WITHIN each season: each becomes "SDs above/below
+// your own era." A 2016 player at +1 SD TS scores like a 2026 player at +1 SD.
+// Left RAW (not era stats): min_pg, height, class, position dummies, and
+// team_adj_net (already adjusted vs its season's league average).
+const ERA_FEATURES = [
+  "usg", "to_rate", "porpag", "ts", "efg", "ftr", "tpar",
+  "pts40", "ast40", "reb40", "orb40", "drb40", "stl40", "blk40", "blk_pct", "stl_pct",
+];
+{
+  const byYear = new Map();
+  for (const r of rows) { if (!byYear.has(r.year)) byYear.set(r.year, []); byYear.get(r.year).push(r); }
+  for (const [, yrows] of byYear) {
+    for (const f of ERA_FEATURES) {
+      const vals = yrows.map((r) => r[f]).filter((v) => typeof v === "number" && Number.isFinite(v));
+      if (vals.length < 2) continue;
+      const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+      const sd = Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length) || 1;
+      for (const r of yrows) {
+        if (typeof r[f] === "number" && Number.isFinite(r[f])) {
+          r[f] = Math.round(((r[f] - mean) / sd) * 10000) / 10000;
+        }
+      }
+    }
+  }
+}
+
 const header = ["year", "bart_player_id", "name", "team", ...FEATURES, "epm", "off", "def", "poss"];
 const csvEsc = (v) => {
   if (v == null || v === "") return "";
