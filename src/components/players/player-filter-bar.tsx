@@ -246,6 +246,8 @@ const RANGE_GROUPS: RangeGroup[] = [
       { key: "epm",     label: "Estimated Plus-Minus",  min: -12, max: 12, step: 0.1 },
       { key: "off_epm", label: "Offensive EPM",         min: -12, max: 12, step: 0.1 },
       { key: "def_epm", label: "Defensive EPM",         min: -8,  max: 8,  step: 0.1 },
+      { key: "ewins",   label: "eWins",                 min: -1,  max: 12, step: 0.1 },
+      { key: "on_off",  label: "On / Off (net)",        min: -40, max: 40, step: 0.5 },
     ],
   },
   {
@@ -272,6 +274,17 @@ const RANGE_GROUPS: RangeGroup[] = [
       { key: "fg_pct",  label: "Field goal",            min: 0, max: 100, step: 1, pct: true },
       { key: "fg3_pct", label: "3-point",               min: 0, max: 100, step: 1, pct: true },
       { key: "ft_pct",  label: "Free throw",            min: 0, max: 100, step: 1, pct: true },
+    ],
+  },
+  {
+    // Shooting profile (CBBD) — values already 0–100, so NOT pct (no /100).
+    label: "Shot profile",
+    stats: [
+      { key: "rim_pct",  label: "Rim FG %",              min: 0, max: 100, step: 1 },
+      { key: "mid_pct",  label: "Mid FG %",              min: 0, max: 100, step: 1 },
+      { key: "asst_pct", label: "Assisted %",            min: 0, max: 100, step: 1 },
+      { key: "rim_rate", label: "Rim shot rate %",       min: 0, max: 100, step: 1 },
+      { key: "tp_rate",  label: "3PT shot rate %",       min: 0, max: 100, step: 1 },
     ],
   },
   {

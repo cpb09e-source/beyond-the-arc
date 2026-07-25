@@ -98,6 +98,18 @@ export type PlayerSummary = {
   ast_to_tov: number | null;    // assist-to-turnover ratio (ast_pg / tov_pg)
   drb_pg: number | null;        // defensive rebounds per game (reb − orb)
   hkm_pct: number | null;       // Hakeem % = BLK% + STL% (Bart raw cols 22+23)
+  // EPM-extras (real-EPM seasons only; from epm-<year>.json). Filter-only.
+  ewins: number | null;         // wins added vs an average player
+  on_off: number | null;        // team net rating on-court minus off-court (raw)
+  // Shooting profile from CBBD /stats/player/shooting/season (attached from
+  // /data/shooting-<year>.json). Filter-only for now — NOT shown in the grid.
+  // All are 0–100 numbers (not fractions). Zone FG% null below a small-sample
+  // floor. rim = dunks+layups+tipIns, mid = 2PT jumpers.
+  rim_pct: number | null;       // FG% at the rim
+  mid_pct: number | null;       // mid-range (2PT jumper) FG%
+  assisted_pct: number | null;  // % of made FGs that were assisted
+  rim_rate: number | null;      // % of shot attempts at the rim (shot diet)
+  tp_rate: number | null;       // % of shot attempts that are 3s (shot diet)
   // BTA EPM (ridge RAPM over CBBD stints; see scripts/compute-epm.py). Null
   // for seasons without a fit or unmatched players. Attached client-side from
   // /data/epm-<year>.json.
@@ -130,6 +142,9 @@ export type PlayerStatColumn = {
   group: PlayerStatGroup;
   format: "pct1" | "num1" | "num2";
   field: keyof PlayerSummary;
+  // Filterable but never surfaced as a grid column (even when filtered on).
+  // Used for the shooting-profile stats that live only in the filter drawer.
+  filterOnly?: boolean;
 };
 
 export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
@@ -137,6 +152,9 @@ export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
   { key: "epm",     label: "EPM",     desc: "Estimated Plus-Minus — per-100-possession impact vs. an average player (offense + defense)", group: "impact", format: "num1", field: "epm" },
   { key: "off_epm", label: "Off EPM", desc: "Offensive EPM — per-100 offensive impact",                                                   group: "impact", format: "num1", field: "off_epm" },
   { key: "def_epm", label: "Def EPM", desc: "Defensive EPM — per-100 defensive impact (positive = better defense)",                        group: "impact", format: "num1", field: "def_epm" },
+  // EPM-extras — filterable only (real-EPM seasons 2024+ have them).
+  { key: "ewins",  label: "eWins",  desc: "Estimated wins added vs an average player (EPM × possessions)", group: "impact", format: "num1", field: "ewins",  filterOnly: true },
+  { key: "on_off", label: "On/Off", desc: "Team net rating with the player on the court minus off (raw, per 100)", group: "impact", format: "num1", field: "on_off", filterOnly: true },
 
   // ── Advanced ─────────────────────────────────────────────
   { key: "pir",      label: "PIR",      desc: "EuroLeague Performance Index Rating (per game, minus TOV)",                              group: "advanced", format: "num1", field: "pir" },
@@ -160,6 +178,12 @@ export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
   { key: "ts_pct",   label: "TS%",       desc: "True shooting %: PTS / (2 × (FGA + 0.44 × FTA))",         group: "shooting", format: "pct1", field: "ts_pct" },
   { key: "efg_pct",  label: "eFG%",      desc: "Effective FG%: (FGM + 0.5 × 3PM) / FGA",                  group: "shooting", format: "pct1", field: "efg_pct" },
   { key: "fta_rate", label: "FTA Rate",  desc: "Free-throw attempts / FG attempts (line-drawing volume)", group: "shooting", format: "pct1", field: "fta_rate" },
+  // Shooting profile (CBBD) — 0–100 values, filter-only. See PlayerSummary.
+  { key: "rim_pct",  label: "Rim%",      desc: "Field goal % at the rim (dunks + layups + tip-ins)",            group: "shooting", format: "num1", field: "rim_pct",      filterOnly: true },
+  { key: "mid_pct",  label: "Mid%",      desc: "Mid-range (2-point jumper) field goal %",                       group: "shooting", format: "num1", field: "mid_pct",      filterOnly: true },
+  { key: "asst_pct", label: "Assisted%", desc: "% of made field goals that were assisted (lower = more self-created)", group: "shooting", format: "num1", field: "assisted_pct", filterOnly: true },
+  { key: "rim_rate", label: "Rim rate",  desc: "% of shot attempts taken at the rim (shot diet)",               group: "shooting", format: "num1", field: "rim_rate",     filterOnly: true },
+  { key: "tp_rate",  label: "3PT rate",  desc: "% of shot attempts that are 3-pointers (shot diet)",            group: "shooting", format: "num1", field: "tp_rate",      filterOnly: true },
 
   // ── Defense ──────────────────────────────────────────────
   { key: "spg", label: "SPG", desc: "Steals per game",  group: "defense", format: "num1", field: "stl_pg" },

@@ -46,6 +46,22 @@ function main() {
     name: r[iN], team: r[iT], poss: +r[iP], off: +r[iO], def: +r[iD], epm: +r[iE],
   }));
 
+  // EPM-extras (on/off + eWins), keyed by name|team so it merges through the
+  // same join. Optional — only present once compute-epm-extras.py has run.
+  const extras = new Map();
+  const extrasPath = path.resolve(`data/cbbd/${SEASON}/epm-extras.csv`);
+  if (fs.existsSync(extrasPath)) {
+    const ex = fs.readFileSync(extrasPath, "utf8").trim().split(/\r?\n/).map((l) => l.replace(/\r$/, ""));
+    const eh = ex[0].split(",");
+    const eN = eh.indexOf("name"), eT = eh.indexOf("team"), eW = eh.indexOf("ewins"), eOO = eh.indexOf("on_off");
+    for (const line of ex.slice(1)) {
+      const r = parseCsvLine(line);
+      const ewins = r[eW] === "" ? null : +r[eW];
+      const on_off = r[eOO] === "" ? null : +r[eOO];
+      extras.set(`${norm(r[eN])}|${normTeam(r[eT])}`, { ewins, on_off });
+    }
+  }
+
   // 2. Bart players for the season → name/team indices.
   const bart = JSON.parse(fs.readFileSync(path.join(DATA, "players-by-year", `${SEASON}.json`), "utf8"));
   const byNameTeam = new Map(), byName = new Map(), byIL = new Map();
@@ -84,9 +100,11 @@ function main() {
     }
     if (bid == null) { unmatched.push(`${r.name} (${r.team})`); continue; }
     matched++;
+    const ex = extras.get(`${nn}|${nt}`);
     players[bid] = {
       epm: r.epm, off: r.off, def: r.def, poss: r.poss,
       rk: rkByNameTeam.get(`${nn}|${nt}`) ?? null,
+      ...(ex ? { ewins: ex.ewins, on_off: ex.on_off } : {}),
     };
   }
 

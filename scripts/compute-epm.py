@@ -105,7 +105,10 @@ def solve(X, y, w, lam: float, prior: np.ndarray | None = None):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--season", type=int, required=True)
-    ap.add_argument("--lam", type=float, default=2500.0)
+    # Default tuned for the SPM-prior workflow (D&3-style): higher lambda pulls
+    # RAPM toward the box prior, taming thin-off-court/collinear starters while
+    # keeping true stars' RAPM signal. Always run with --priors.
+    ap.add_argument("--lam", type=float, default=12000.0)
     ap.add_argument("--priors", type=str, default=None,
                     help="CSV with playerId,priorOff,priorDef (per-100 vs avg)")
     args = ap.parse_args()

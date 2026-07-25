@@ -240,6 +240,9 @@ function transformPlayer(raw: RawPlayer): PlayerSummary {
       return b !== null && s !== null ? b + s : null;
     })(),
     epm: null, off_epm: null, def_epm: null, epm_estimated: false, // attached from /data/epm-<year>.json (or box-epm-<year>.json)
+    ewins: null, on_off: null, // EPM-extras (filter-only), from epm-<year>.json
+    // Shooting profile — attached from /data/shooting-<year>.json (filter-only).
+    rim_pct: null, mid_pct: null, assisted_pct: null, rim_rate: null, tp_rate: null,
     pir,
     porpag: asNum(fromStart(row, PLAYER_COLS.porpag)),
     bta_ind_ortg: null,   // attached per cohort below
@@ -524,7 +527,9 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   // selected year; 404 (no fit for that season) caches as an empty map.
   // Per-season impact map. `estimated` marks a season served by the box-score
   // Box-EPM model (pre-2024, no play-by-play) rather than the real RAPM fit.
-  const [epmByYear, setEpmByYear] = useState<Record<number, { players: Record<string, { epm: number; off: number; def: number }>; estimated: boolean }>>({});
+  const [epmByYear, setEpmByYear] = useState<Record<number, { players: Record<string, { epm: number; off: number; def: number; ewins?: number | null; on_off?: number | null }>; estimated: boolean }>>({});
+  // Shooting profile per season: bart_player_id -> {rim_pct,mid_pct,asst,rim_rate,tp_rate}. Filter-only.
+  const [shootingByYear, setShootingByYear] = useState<Record<number, Record<string, { rim_pct: number | null; mid_pct: number | null; asst: number | null; rim_rate: number | null; tp_rate: number | null }>>>({});
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [compareOpen, setCompareOpen] = useState(false);
@@ -667,6 +672,29 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     return () => { cancelled = true; };
   }, [spec.years, epmByYear]);
 
+  // Lazy-load the shooting profile per season (filter-only; 404 → empty map).
+  useEffect(() => {
+    const toFetch = spec.years.filter((y) => !shootingByYear[y]);
+    if (!toFetch.length) return;
+    let cancelled = false;
+    Promise.all(
+      toFetch.map((y) =>
+        fetch(`/data/shooting-${y}.json`)
+          .then((r) => (r.ok ? r.json() : { players: {} }))
+          .catch(() => ({ players: {} }))
+          .then((j) => [y, j.players ?? {}] as const),
+      ),
+    ).then((entries) => {
+      if (cancelled) return;
+      setShootingByYear((s) => {
+        const next = { ...s };
+        for (const [y, m] of entries) next[y] = m;
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [spec.years, shootingByYear]);
+
   // Per-year cohort processing: each season's BTA composite + percentile
   // chips are computed against just that season's eligible D-I pool (matches
   // the Team Explorer's year-only cohort rule). Multi-year selections merge
@@ -683,7 +711,15 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       if (epmEntry) {
         for (const p of arr) {
           const e = p.bart_player_id != null ? epmEntry.players[String(p.bart_player_id)] : undefined;
-          if (e) { p.epm = e.epm; p.off_epm = e.off; p.def_epm = e.def; p.epm_estimated = epmEntry.estimated; }
+          if (e) { p.epm = e.epm; p.off_epm = e.off; p.def_epm = e.def; p.epm_estimated = epmEntry.estimated; p.ewins = e.ewins ?? null; p.on_off = e.on_off ?? null; }
+        }
+      }
+      // Shooting profile (filter-only fields).
+      const shootMap = shootingByYear[y];
+      if (shootMap) {
+        for (const p of arr) {
+          const s = p.bart_player_id != null ? shootMap[String(p.bart_player_id)] : undefined;
+          if (s) { p.rim_pct = s.rim_pct; p.mid_pct = s.mid_pct; p.assisted_pct = s.asst; p.rim_rate = s.rim_rate; p.tp_rate = s.tp_rate; }
         }
       }
       const eligible = arr.filter((p) => !isBelowBaseline(p));
@@ -692,7 +728,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       out[y] = { players: arr, pctMaps };
     }
     return out;
-  }, [rawByYear, spec.years, epmByYear]);
+  }, [rawByYear, spec.years, epmByYear, shootingByYear]);
 
   const transformed = useMemo(
     () => spec.years.flatMap((y) => processedByYear[y]?.players ?? []),
@@ -780,12 +816,14 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     const out: GridCol[] = [];
     for (const f of spec.filters) {
       const col = PLAYER_STAT_COLUMNS.find((c) => c.key === f.stat);
-      if (!col || GRID_FIELDS.has(col.field) || seen.has(col.field as string)) continue;
+      // filterOnly stats (shooting profile) never become grid columns.
+      if (!col || col.filterOnly || GRID_FIELDS.has(col.field) || seen.has(col.field as string)) continue;
       seen.add(col.field as string);
       out.push({
         label: col.label,
         field: col.field,
-        fmt: col.format === "pct1" ? "pct1" : "num1",
+        // games + plus/minus display as whole numbers.
+        fmt: col.field === "games" || col.field === "plus_minus_pg" ? "int" : col.format === "pct1" ? "pct1" : "num1",
         pct: (PCT_KEYS as readonly string[]).includes(col.field as string) ? (col.field as PctKey) : null,
       });
     }
