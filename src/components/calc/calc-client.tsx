@@ -7,109 +7,80 @@ import { SearchableSelect, type SearchableOption } from "@/components/explorer/s
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
 import { Select } from "@/components/select";
 import { confDisplay } from "@/lib/conf-display";
+// Single source of truth for the game-log shape + filter catalog. This file
+// used to carry its own copy, which had already drifted from the shared one
+// (it listed ft_att_diff, the shared list didn't). Both /calc and the team /
+// coach "Find a game" modal now read the same STAT_OPTIONS.
+import {
+  CALC_STAT_OPTIONS,
+  OPS,
+  makeFilter,
+  matches,
+  type GameLog,
+  type Filter,
+  type Op,
+} from "@/lib/game-filters";
+import { isExhibitionGame } from "@/lib/seasons";
+import { attachGameBox, type GameBoxFile } from "@/lib/game-box";
+import {
+  quadFor,
+  ratingKey,
+  normTeamKey,
+  gameKey,
+  type Quad,
+  type TeamRatingsFile,
+} from "@/lib/quad";
 
-// ---------- types matching game_logs JSON shape ----------
-type GameLog = {
-  cbba_game_id: string;
-  year: number;
-  game_date: string | null;
-  team_id: number;
-  team_name: string;
-  team_conference: string | null;
-  opp_team_market: string | null;
-  is_home: boolean | null;
-  is_neutral: boolean | null;
-  won: boolean;
-  pts_scored: number | null;
-  pts_against: number | null;
-  pts_diff: number | null;
-  poss: number | null;
-  pace: number | null;
-  fg3_made_diff: number | null;
-  fg3_att_diff: number | null;
-  fg2_made_diff: number | null;
-  fg_made_diff: number | null;
-  ft_made_diff: number | null;
-  ft_att_diff: number | null;
-  reb_diff: number | null;
-  orb_diff: number | null;
-  drb_diff: number | null;
-  tov_diff: number | null;
-  ast_diff: number | null;
-  stl_diff: number | null;
-  blk_diff: number | null;
-  fbpts_diff: number | null;
-  pitp_diff: number | null;
-  scp_diff: number | null;
-  fg3_pct: number | null;
-  fg2_pct: number | null;
-  ft_pct: number | null;
-  efg_pct: number | null;
-  ts_pct: number | null;
-};
-
-type Op = "gt" | "gte" | "lt" | "lte" | "eq";
-type Filter = { id: string; stat: keyof GameLog; op: Op; value: number };
-
-// ---------- filter stat catalog (count diffs + shooting %s) ----------
-const STAT_OPTIONS: Array<{ key: keyof GameLog; label: string; group: string; defaultDir?: "gt" | "lt" }> = [
-  // Scoring margin
-  { key: "pts_diff",        label: "Pts Diff",        group: "Margin" },
-  // Diff stats
-  { key: "fg3_made_diff",   label: "3PM Diff",        group: "Differentials" },
-  { key: "fg3_att_diff",    label: "3PA Diff",        group: "Differentials" },
-  { key: "fg2_made_diff",   label: "2PM Diff",        group: "Differentials" },
-  { key: "ft_made_diff",    label: "FTM Diff",        group: "Differentials" },
-  { key: "ft_att_diff",     label: "FTA Diff",        group: "Differentials" },
-  { key: "reb_diff",        label: "REB Diff",        group: "Differentials" },
-  { key: "orb_diff",        label: "OREB Diff",       group: "Differentials" },
-  { key: "drb_diff",        label: "DREB Diff",       group: "Differentials" },
-  { key: "tov_diff",        label: "TOV Diff",        group: "Differentials", defaultDir: "lt" },
-  { key: "ast_diff",        label: "AST Diff",        group: "Differentials" },
-  { key: "stl_diff",        label: "STL Diff",        group: "Differentials" },
-  { key: "blk_diff",        label: "BLK Diff",        group: "Differentials" },
-  { key: "fbpts_diff",      label: "FB Pts Diff",     group: "Differentials" },
-  { key: "pitp_diff",       label: "Paint Pts Diff",  group: "Differentials" },
-  { key: "scp_diff",        label: "2nd-Chance Diff", group: "Differentials" },
-  // Shooting (offense)
-  { key: "fg3_pct",         label: "3P%",   group: "Shooting (off)" },
-  { key: "fg2_pct",         label: "2P%",   group: "Shooting (off)" },
-  { key: "ft_pct",          label: "FT%",   group: "Shooting (off)" },
-  { key: "efg_pct",         label: "eFG%",  group: "Shooting (off)" },
-  { key: "ts_pct",          label: "TS%",   group: "Shooting (off)" },
-  // Pace
-  { key: "poss",            label: "Possessions", group: "Pace" },
-  { key: "pace",            label: "Pace",        group: "Pace" },
-];
-
-const OPS: Array<{ value: Op; label: string }> = [
-  { value: "gt",  label: ">" },
-  { value: "gte", label: "≥" },
-  { value: "lt",  label: "<" },
-  { value: "lte", label: "≤" },
-  { value: "eq",  label: "=" },
-];
-
-function makeFilter(stat: keyof GameLog = "tov_diff"): Filter {
-  const def = STAT_OPTIONS.find((s) => s.key === stat);
-  return {
-    id: Math.random().toString(36).slice(2, 9),
-    stat,
-    op: def?.defaultDir === "lt" ? "lt" : "gt",
-    value: 0,
-  };
+// Venue buckets. A neutral-site game appears twice in the logs (once per
+// team) with is_neutral true on both rows, so neutral must be tested BEFORE
+// is_home — otherwise half of every neutral game counts as "home".
+type Venue = "all" | "home" | "away" | "neutral";
+function venueOf(g: GameLog): Exclude<Venue, "all"> {
+  if (g.is_neutral) return "neutral";
+  return g.is_home ? "home" : "away";
 }
+const VENUE_OPTIONS: Array<{ value: Venue; label: string }> = [
+  { value: "all",     label: "All venues" },
+  { value: "home",    label: "Home" },
+  { value: "away",    label: "Away" },
+  { value: "neutral", label: "Neutral" },
+];
 
-function matches(g: GameLog, f: Filter): boolean {
-  const v = g[f.stat];
-  if (typeof v !== "number") return false;
-  switch (f.op) {
-    case "gt":  return v >  f.value;
-    case "gte": return v >= f.value;
-    case "lt":  return v <  f.value;
-    case "lte": return v <= f.value;
-    case "eq":  return v === f.value;
+const QUAD_OPTIONS: SearchableOption[] = [
+  { value: "1", label: "Quad 1" },
+  { value: "2", label: "Quad 2" },
+  { value: "3", label: "Quad 3" },
+  { value: "4", label: "Quad 4" },
+];
+
+/**
+ * Attach opponent rank + quadrant to one season's rows.
+ *
+ * The opponent is found by pairing rows on the shared numeric prefix of
+ * cbba_game_id rather than by matching opp_team_market, which is a third name
+ * space. A game with no paired row is a non-D1 opponent (~5% of rows) and gets
+ * a null rank, which quadFor() maps to Q4 — matching how the committee treats
+ * non-D1 games.
+ */
+function enrichWithQuad(rows: GameLog[], ratings: TeamRatingsFile | null): GameLog[] {
+  const rankByTeam = new Map<string, number>();
+  if (ratings) for (const t of ratings.teams) rankByTeam.set(normTeamKey(t.team), t.rank_net);
+
+  const byGame = new Map<string, GameLog[]>();
+  for (const r of rows) {
+    const k = gameKey(r.cbba_game_id);
+    const arr = byGame.get(k);
+    if (arr) arr.push(r);
+    else byGame.set(k, [r]);
   }
+
+  return rows.map((r) => {
+    const pair = byGame.get(gameKey(r.cbba_game_id));
+    const opp = pair && pair.length > 1 ? pair.find((x) => x !== r) : undefined;
+    const oppRank = opp ? rankByTeam.get(ratingKey(opp.team_name)) ?? null : null;
+    // No paired row means the opponent isn't a D1 team in our data.
+    return { ...r, opp_rank: oppRank, quad: quadFor(oppRank, venueOf(r)), non_d1: !opp };
+  });
 }
 
 export function CalcClient({
@@ -135,9 +106,26 @@ export function CalcClient({
   // Multi-select coach. Empty = "all coaches". Stores raw coach names. A
   // game qualifies if coachByTeamYear[team_name][year] is in this set.
   const [coaches, setCoaches] = useState<string[]>([]);
+  // Venue bucket — "all" | "home" | "away" | "neutral". Single-select; the
+  // three real buckets are mutually exclusive so a multi-select would only
+  // ever mean "all".
+  const [venue, setVenue] = useState<Venue>("all");
+  // Multi-select opponent. Empty = "all opponents". NOTE this is a different
+  // name space from `teams`: opp_team_market includes non-D1 opponents, so the
+  // 2026 logs carry ~781 distinct opponents against only ~365 team_names.
+  // Hence its own option list rather than reusing teamOptions.
+  const [opponents, setOpponents] = useState<string[]>([]);
+  // Multi-select quadrant. Empty = all quads. Values are "1".."4" strings so
+  // they fit SearchableMultiSelect's string API.
+  const [quads, setQuads] = useState<string[]>([]);
+  // Games against non-D1 opponents count toward a team's official NCAA record
+  // but are excluded by every serious rating system (NET, KenPom, Torvik),
+  // because a 40-point win over a D3 school tells you nothing. Default to
+  // excluding them here; the toggle keeps the official-record view available.
+  const [d1Only, setD1Only] = useState(true);
   const [yearData, setYearData] = useState<Record<number, GameLog[]>>({});
   const [filters, setFilters] = useState<Filter[]>([makeFilter("tov_diff"), makeFilter("fg3_made_diff"), makeFilter("fbpts_diff")]);
-  const [submitted, setSubmitted] = useState<{ filters: Filter[]; conferences: string[]; teams: string[]; coaches: string[] } | null>(null);
+  const [submitted, setSubmitted] = useState<{ filters: Filter[]; conferences: string[]; teams: string[]; coaches: string[]; venue: Venue; opponents: string[]; quads: string[]; d1Only: boolean } | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   // Two independent post-result filters. Persist across re-calcs so power
@@ -149,12 +137,12 @@ export function CalcClient({
 
   // Stat options as SearchableOption[] for the typeable picker.
   const statOptions = useMemo<SearchableOption[]>(
-    () => STAT_OPTIONS.map((o) => ({ value: o.key as string, label: o.label, group: o.group })),
+    () => CALC_STAT_OPTIONS.map((o) => ({ value: o.key as string, label: o.label, group: o.group })),
     [],
   );
   const statGroupLabels = useMemo<Record<string, string>>(() => {
     const out: Record<string, string> = {};
-    for (const o of STAT_OPTIONS) out[o.group] = o.group;
+    for (const o of CALC_STAT_OPTIONS) out[o.group] = o.group;
     return out;
   }, []);
 
@@ -167,12 +155,32 @@ export function CalcClient({
     setLoadErr(null);
     Promise.all(
       missing.map((y) =>
-        fetch(`/data/game-logs-by-year/${y}.json`)
-          .then((r) => {
+        // Ratings ride along so opponent rank / quadrant can be attached once,
+        // here, rather than recomputed on every Calculate. The ratings file is
+        // ~80 KB against a ~7.5 MB game-log file, so it's effectively free.
+        Promise.all([
+          fetch(`/data/game-logs-by-year/${y}.json`).then((r) => {
             if (!r.ok) throw new Error(`${y}: HTTP ${r.status}`);
-            return r.json();
-          })
-          .then((arr: GameLog[]) => ({ y, arr }))
+            return r.json() as Promise<GameLog[]>;
+          }),
+          fetch(`/data/team-ratings-${y}.json`)
+            .then((r) => (r.ok ? (r.json() as Promise<TeamRatingsFile>) : null))
+            .catch(() => null),
+          // Per-game team box from CBBD (four factors, ratings, halftime
+          // margin, fouls...). ~1.5 MB/season columnar. Optional: a missing
+          // file just leaves those fields null.
+          fetch(`/data/game-box-by-year/${y}.json`)
+            .then((r) => (r.ok ? (r.json() as Promise<GameBoxFile>) : null))
+            .catch(() => null),
+        ]).then(([arr, ratings, box]) => ({
+          y,
+          // Preseason exhibitions are not real results — drop before enrichment so
+          // they can't reach the record, win%, or quadrant maths.
+          arr: attachGameBox(
+            enrichWithQuad(arr.filter((g) => !isExhibitionGame(g.game_date, y)), ratings),
+            box,
+          ),
+        }))
       )
     )
       .then((results) => {
@@ -230,6 +238,14 @@ export function CalcClient({
     [allTeams],
   );
 
+  // Opponent list — derived from opp_team_market, which is its own name space
+  // (includes non-D1 opponents that never appear as team_name).
+  const opponentOptions = useMemo<SearchableOption[]>(() => {
+    const s = new Set<string>();
+    for (const g of games) if (g.opp_team_market) s.add(g.opp_team_market);
+    return [...s].sort().map((t) => ({ value: t, label: t }));
+  }, [games]);
+
   // Coach options — list every coach (alphabetical last name) regardless of
   // current filter selection. Narrowing this by year would hide active
   // coaches when the user hasn't picked their year yet; keeping it broad
@@ -244,9 +260,15 @@ export function CalcClient({
     const confSet = submitted.conferences.length === 0 ? null : new Set(submitted.conferences);
     const teamSet = submitted.teams.length === 0 ? null : new Set(submitted.teams);
     const coachSet = submitted.coaches.length === 0 ? null : new Set(submitted.coaches);
+    const oppSet = submitted.opponents.length === 0 ? null : new Set(submitted.opponents);
+    const quadSet = submitted.quads.length === 0 ? null : new Set(submitted.quads);
     const matching = games.filter((g) => {
       if (confSet && (g.team_conference == null || !confSet.has(g.team_conference))) return false;
       if (teamSet && !teamSet.has(g.team_name)) return false;
+      if (oppSet && (g.opp_team_market == null || !oppSet.has(g.opp_team_market))) return false;
+      if (submitted.venue !== "all" && venueOf(g) !== submitted.venue) return false;
+      if (quadSet && !quadSet.has(String(g.quad ?? 4))) return false;
+      if (submitted.d1Only && g.non_d1) return false;
       if (coachSet) {
         const coach = coachByTeamYear[g.team_name]?.[g.year];
         if (!coach || !coachSet.has(coach)) return false;
@@ -376,6 +398,53 @@ export function CalcClient({
               align="right"
             />
           </Field>
+          <Field label="Opponent">
+            <SearchableMultiSelect
+              value={opponents}
+              options={opponentOptions}
+              onChange={setOpponents}
+              placeholder="Type to filter…"
+              emptyLabel="All opponents"
+              className="w-full sm:w-auto sm:min-w-44"
+              ariaLabel="Opponents"
+              align="right"
+            />
+          </Field>
+          <Field label="Venue">
+            <Select
+              value={venue}
+              onChange={(v) => setVenue(v as Venue)}
+              className="w-full sm:w-auto sm:min-w-32"
+              aria-label="Venue"
+            >
+              {VENUE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
+          </Field>
+          <Field label="Quad">
+            <SearchableMultiSelect
+              value={quads}
+              options={QUAD_OPTIONS}
+              onChange={setQuads}
+              placeholder="Type to filter…"
+              emptyLabel="All quads"
+              className="w-full sm:w-auto sm:min-w-36"
+              ariaLabel="Quadrants"
+              align="right"
+            />
+          </Field>
+          <Field label="Opponents">
+            <label className="flex h-9 items-center gap-2 text-sm text-ink cursor-pointer select-none whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={d1Only}
+                onChange={(e) => setD1Only(e.target.checked)}
+                className="accent-coral"
+              />
+              <span title="Games against non-D1 teams count toward a team's official record but are excluded from NET, KenPom and Torvik. Off = include them.">
+                D-I only
+              </span>
+            </label>
+          </Field>
           <div className="col-span-2 text-xs text-ink-muted sm:col-span-1 sm:ml-auto">
             {loading
               ? `Loading game logs…`
@@ -440,14 +509,14 @@ export function CalcClient({
             <div className="ml-auto flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => { setFilters([makeFilter("tov_diff")]); setConferences([]); setTeams([]); setCoaches([]); setSubmitted(null); }}
+                onClick={() => { setFilters([makeFilter("tov_diff")]); setConferences([]); setTeams([]); setCoaches([]); setOpponents([]); setVenue("all"); setQuads([]); setD1Only(true); setSubmitted(null); }}
                 className="text-sm text-ink-muted hover:text-ink px-3 py-2"
               >
                 Reset
               </button>
               <button
                 type="button"
-                onClick={() => setSubmitted({ filters: [...filters], conferences: [...conferences], teams: [...teams], coaches: [...coaches] })}
+                onClick={() => setSubmitted({ filters: [...filters], conferences: [...conferences], teams: [...teams], coaches: [...coaches], venue, opponents: [...opponents], quads: [...quads], d1Only })}
                 disabled={loading || games.length === 0}
                 className="text-sm font-medium bg-coral text-white px-5 py-2 rounded hover:bg-coral-soft disabled:opacity-40 transition-colors"
               >
@@ -621,7 +690,7 @@ export function CalcClient({
                         <tr>
                           <Th>Date</Th><Th>Team</Th><Th>Opp</Th><Th>Result</Th>
                           {submitted.filters.map((f) => (
-                            <Th key={f.id} align="right">{STAT_OPTIONS.find((s) => s.key === f.stat)?.label ?? String(f.stat)}</Th>
+                            <Th key={f.id} align="right">{CALC_STAT_OPTIONS.find((s) => s.key === f.stat)?.label ?? String(f.stat)}</Th>
                           ))}
                         </tr>
                       </thead>
@@ -651,7 +720,7 @@ export function CalcClient({
                             </Td>
                             {submitted.filters.map((f) => (
                               <Td key={f.id} align="right" className="tabular">
-                                {formatStat(g[f.stat], f.stat as string)}
+                                {formatStat(g[f.stat] ?? null, f.stat as string)}
                               </Td>
                             ))}
                           </tr>
@@ -698,7 +767,7 @@ function formatStat(v: number | string | boolean | null, key: string): string {
 }
 
 function labelFor(f: Filter): string {
-  const stat = STAT_OPTIONS.find((s) => s.key === f.stat)?.label ?? String(f.stat);
+  const stat = CALC_STAT_OPTIONS.find((s) => s.key === f.stat)?.label ?? String(f.stat);
   const op = OPS.find((o) => o.value === f.op)?.label ?? f.op;
   return `${stat} ${op} ${f.value}`;
 }

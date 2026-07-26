@@ -38,7 +38,15 @@ const CAL = 0.84;
 const BUILT_AT = process.env.BUILD_STAMP || "";
 
 const dir = path.resolve("data/cbbd", String(SEASON));
-const files = fs.readdirSync(dir).filter((f) => f.startsWith("box-teams-") && f.endsWith(".json.gz")).sort();
+// Prefer the single complete archive written by pull-team-box-v2.mjs. The older
+// box-teams-<from>-<to> window files must NOT be merged alongside it: they came
+// from a pull that dropped leap days, silently truncated any window hitting the
+// API's 3000-row ceiling, and lost part of every window's boundary day. Reading
+// both would also double-count, since the full file is a superset.
+const allFiles = fs.readdirSync(dir).filter((f) => f.startsWith("box-teams-") && f.endsWith(".json.gz"));
+const files = allFiles.includes("box-teams-full.json.gz")
+  ? ["box-teams-full.json.gz"]
+  : allFiles.sort();
 if (!files.length) { console.error(`no box-teams-*.json.gz in ${dir}`); process.exit(1); }
 
 // team id -> aggregates + per-game observations.

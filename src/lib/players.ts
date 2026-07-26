@@ -1,3 +1,4 @@
+import { clampSeason } from "@/lib/seasons";
 /**
  * Player query helpers. Bart's player advanced-stats CSV has no header; we
  * read by column position against a Cooper Flagg "rosetta stone" row.
@@ -264,10 +265,8 @@ export function passesPlayerFilter(p: PlayerSummary, f: PlayerStatFilter): boole
 }
 
 function clampYear(y: number): number {
-  if (!Number.isFinite(y)) return DEFAULT_PLAYER_SPEC.years[0]!;
-  // Floor is the 2013-14 season — first year with reliable possession/efficiency
-  // data. See ALL_YEARS in team-filters.ts.
-  return Math.max(2014, Math.min(2026, Math.trunc(y)));
+  // Window (floor / ceiling / excluded COVID season) lives in src/lib/seasons.ts.
+  return clampSeason(y, DEFAULT_PLAYER_SPEC.years[0]!);
 }
 
 export function parsePlayerSpec(searchParams: Record<string, string | string[] | undefined>): PlayerListSpec {

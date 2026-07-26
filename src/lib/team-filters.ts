@@ -7,6 +7,8 @@
  *   - team_cbba_stats   (CBB Analytics season aggregates)
  */
 
+import { ALL_SEASONS, clampSeason } from "@/lib/seasons";
+
 export type StatSource = "trank" | "cbba" | "derived";
 
 export type StatGroup = "overall" | "scoring" | "defense" | "diffs" | "misc";
@@ -115,13 +117,10 @@ export type TeamFilterSpec = {
   limit: number;                // -1 = show all
 };
 
-// Data floor is the 2013-14 season (year 2014): the first year with reliable
-// possession/efficiency data (CBBD's own adjusted ratings start here too).
-// Pre-2014 box data is missing possessions on many games, so we don't surface it.
-export const ALL_YEARS = [
-  2026, 2025, 2024, 2023, 2022, 2021,
-  2020, 2019, 2018, 2017, 2016, 2015, 2014,
-] as const;
+// Season window (floor, ceiling, and the excluded COVID year) is defined once
+// in src/lib/seasons.ts. Re-exported here as ALL_YEARS because a lot of call
+// sites already import that name.
+export const ALL_YEARS = ALL_SEASONS;
 
 export const DEFAULT_SPEC: TeamFilterSpec = {
   years: [2026],                // current season only by default
@@ -148,8 +147,7 @@ function isComparator(s: string): s is Comparator {
   return s === "gt" || s === "gte" || s === "lt" || s === "lte";
 }
 function clampYear(y: number): number {
-  if (!Number.isFinite(y)) return DEFAULT_SPEC.years[0]!;
-  return Math.max(2014, Math.min(2026, Math.trunc(y)));
+  return clampSeason(y, DEFAULT_SPEC.years[0]!);
 }
 
 // ---------- URL <-> spec ----------

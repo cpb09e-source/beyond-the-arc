@@ -6,6 +6,7 @@
  * preserve the existing call sites that expected promises.
  */
 import fs from "node:fs/promises";
+import { isUsableSeason, isExhibitionGame } from "@/lib/seasons";
 import path from "node:path";
 
 const DATA = path.resolve("public/data");
@@ -107,19 +108,19 @@ export async function readIndex(): Promise<StaticIndex> {
   return readJson<StaticIndex>("index.json");
 }
 
-// Data floor: 2013-14 season. The team-season exports still carry full history,
-// so gate here to match the site-wide floor (ALL_YEARS / clampYear).
-const TEAM_FLOOR_YEAR = 2014;
+// The team-season exports still carry full history, so gate here to match the
+// site-wide window defined in src/lib/seasons.ts — floor 2013-14 plus the
+// excluded 2020-21 COVID season.
 
 export async function readAllTeams(): Promise<StaticTeamSeasonRow[]> {
   const all = await readJson<StaticTeamSeasonRow[]>("teams-all.json");
-  return all.filter((t) => t.year >= TEAM_FLOOR_YEAR);
+  return all.filter((t) => isUsableSeason(t.year));
 }
 
 export async function readTeam(slug: string): Promise<{ name: string; seasons: StaticTeamSeasonRow[] } | null> {
   try {
     const t = await readJson<{ name: string; seasons: StaticTeamSeasonRow[] }>(`team/${slug}.json`);
-    return { ...t, seasons: t.seasons.filter((s) => s.year >= TEAM_FLOOR_YEAR) };
+    return { ...t, seasons: t.seasons.filter((s) => isUsableSeason(s.year)) };
   } catch {
     return null;
   }
@@ -358,7 +359,10 @@ const _gameLogsCache = new Map<number, GameLog[]>();
 export async function readGameLogsForYear(year: number): Promise<GameLog[]> {
   if (_gameLogsCache.has(year)) return _gameLogsCache.get(year)!;
   try {
-    const games = await readJson<GameLog[]>(`game-logs-by-year/${year}.json`);
+    const raw = await readJson<GameLog[]>(`game-logs-by-year/${year}.json`);
+    // Drop preseason exhibitions — they aren't real results and would pollute
+    // records, schedules and win% everywhere these logs are consumed.
+    const games = raw.filter((g) => !isExhibitionGame(g.game_date, year));
     _gameLogsCache.set(year, games);
     return games;
   } catch {

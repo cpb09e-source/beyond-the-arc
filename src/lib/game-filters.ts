@@ -8,6 +8,8 @@
  * sync — add a stat to STAT_OPTIONS once and it shows up everywhere.
  */
 
+import { BOX_FIELDS } from "@/lib/game-box";
+
 export type GameLog = {
   cbba_game_id: string;
   year: number;
@@ -44,6 +46,25 @@ export type GameLog = {
   ft_pct: number | null;
   efg_pct: number | null;
   ts_pct: number | null;
+  // Opponent shooting — the only defensive rate the game logs actually carry.
+  // (fg3_pct_def exists as a key in the JSON but is null in every season, so
+  // it is deliberately NOT surfaced as a filter — see STAT_OPTIONS note.)
+  efg_pct_def: number | null;
+  // ---- enriched client-side, NOT present in the raw JSON ----
+  // Attached by /calc from team-ratings-<year>.json (see src/lib/quad.ts).
+  // Anything consuming raw game logs without that enrichment will see these
+  // undefined, which is why they live in CALC_STAT_OPTIONS rather than the
+  // shared STAT_OPTIONS list.
+  opp_rank?: number | null;
+  quad?: 1 | 2 | 3 | 4;
+  /** True when the opponent is not a D1 team (no paired row in the logs). */
+  non_d1?: boolean;
+  /**
+   * Box-derived fields merged from the game-box sidecar (see src/lib/game-box.ts).
+   * Declared as an index signature rather than 27 explicit optional keys to
+   * avoid a circular import with game-box.ts, which needs this type.
+   */
+  [boxKey: string]: string | number | boolean | null | undefined;
 };
 
 export type Op = "gt" | "gte" | "lt" | "lte" | "eq";
@@ -56,10 +77,28 @@ export type StatOption = {
   defaultDir?: "gt" | "lt";
 };
 
+/**
+ * Filterable game-log stats.
+ *
+ * IMPORTANT — only list keys that are actually populated. `matches()` returns
+ * false for a non-number, so a column that is null in the data silently yields
+ * "0 games", which reads to a user as "this never happened" rather than "we
+ * don't have this stat". Four options were removed in July 2026 for exactly
+ * that reason — ast_diff, stl_diff, blk_diff and ft_att_diff are null in 100%
+ * of rows across every season (2014-2026). CBBD's /games/teams box carries real
+ * assists/steals/blocks/FTA, so they can come back once that source is joined
+ * into the export.
+ *
+ * Same rule killed fg3_pct_def (null everywhere); efg_pct_def is real and is
+ * the one defensive rate we can offer today.
+ */
 export const STAT_OPTIONS: StatOption[] = [
-  // Scoring margin
-  { key: "pts_diff",        label: "Pts Diff",        group: "Margin" },
+  // Scoring
+  { key: "pts_diff",        label: "Pts Diff",        group: "Scoring" },
+  { key: "pts_scored",      label: "Pts Scored",      group: "Scoring" },
+  { key: "pts_against",     label: "Pts Allowed",     group: "Scoring", defaultDir: "lt" },
   // Diff stats
+  { key: "fg_made_diff",    label: "FGM Diff",        group: "Differentials" },
   { key: "fg3_made_diff",   label: "3PM Diff",        group: "Differentials" },
   { key: "fg3_att_diff",    label: "3PA Diff",        group: "Differentials" },
   { key: "fg2_made_diff",   label: "2PM Diff",        group: "Differentials" },
@@ -68,9 +107,6 @@ export const STAT_OPTIONS: StatOption[] = [
   { key: "orb_diff",        label: "OREB Diff",       group: "Differentials" },
   { key: "drb_diff",        label: "DREB Diff",       group: "Differentials" },
   { key: "tov_diff",        label: "TOV Diff",        group: "Differentials", defaultDir: "lt" },
-  { key: "ast_diff",        label: "AST Diff",        group: "Differentials" },
-  { key: "stl_diff",        label: "STL Diff",        group: "Differentials" },
-  { key: "blk_diff",        label: "BLK Diff",        group: "Differentials" },
   { key: "fbpts_diff",      label: "FB Pts Diff",     group: "Differentials" },
   { key: "pitp_diff",       label: "Paint Pts Diff",  group: "Differentials" },
   { key: "scp_diff",        label: "2nd-Chance Diff", group: "Differentials" },
@@ -80,9 +116,28 @@ export const STAT_OPTIONS: StatOption[] = [
   { key: "ft_pct",          label: "FT%",   group: "Shooting (off)" },
   { key: "efg_pct",         label: "eFG%",  group: "Shooting (off)" },
   { key: "ts_pct",          label: "TS%",   group: "Shooting (off)" },
+  // Shooting (defense)
+  { key: "efg_pct_def",     label: "Opp eFG%", group: "Shooting (def)", defaultDir: "lt" },
   // Pace
   { key: "poss",            label: "Possessions", group: "Pace" },
   { key: "pace",            label: "Pace",        group: "Pace" },
+];
+
+/**
+ * /calc-only additions. These depend on the opponent-rank enrichment in
+ * src/lib/quad.ts, so they must NOT go in STAT_OPTIONS — the team/coach
+ * "Find a game" modal reads raw logs and would render them as dead options
+ * (always-null → silently 0 results).
+ */
+export const CALC_STAT_OPTIONS: StatOption[] = [
+  ...STAT_OPTIONS,
+  { key: "opp_rank", label: "Opp Rank", group: "Opponent", defaultDir: "lt" },
+  ...BOX_FIELDS.map((f) => ({
+    key: f.key as keyof GameLog,
+    label: f.label,
+    group: f.group,
+    ...("lower" in f && f.lower ? { defaultDir: "lt" as const } : {}),
+  })),
 ];
 
 export const OPS: Array<{ value: Op; label: string }> = [
