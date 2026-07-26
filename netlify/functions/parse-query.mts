@@ -44,7 +44,7 @@ const STATS = [
   "ast_diff", "stl_diff", "blk_diff", "ft_att_diff", "fouls_diff",
   "ast", "stl", "blk", "fouls",
   "largest_lead", "largest_lead_opp", "h1_margin", "h2_margin",
-  "conf_game", "tourney", "postseason",
+  "conf_game", "tourney",
 ] as const;
 
 // Mirrors src/lib/seasons.ts. Same bundling constraint as STATS above — the
@@ -110,7 +110,7 @@ Four factors (0-1): ff_efg, ff_ftr, ff_tov, ff_orb, and the _def versions for wh
 Efficiency: ortg, drtg (per 100 possessions), game_score, poss, pace
 Game shape: largest_lead, largest_lead_opp, h1_margin (first-half margin), h2_margin
 Raw counts: ast, stl, blk, fouls
-Context flags (use 1 for yes, 0 for no): conf_game, tourney, postseason
+Context flags (use 1 for yes, 0 for no): conf_game (conference matchup), tourney (any tournament setting: conference tournaments, MTEs, NCAA/NIT)
 Opponent: opp_rank (1 = best team in the country, so "played a top-25 team" = opp_rank <= 25)
 
 RULES
@@ -134,6 +134,19 @@ const MAX_QUERY_CHARS = 500;
  * well short of the platform cutoff, which would kill the request with no body.
  */
 const UPSTREAM_TIMEOUT_MS = 30_000;
+
+/**
+ * True when a parse contradicts itself: no conditions, but the analysis names a
+ * stat key it was supposedly about to filter on. The `analysis` field is
+ * instructed to name each stat, so a key appearing there and nowhere in
+ * `conditions` is a dropped filter rather than a question with no condition.
+ */
+function needsRepair(parsed: Record<string, unknown>): boolean {
+  const conditions = parsed.conditions;
+  if (Array.isArray(conditions) && conditions.length > 0) return false;
+  const analysis = typeof parsed.analysis === "string" ? parsed.analysis : "";
+  return STATS.some((s) => analysis.includes(s));
+}
 
 export default async (req: Request, _context: Context) => {
   if (req.method !== "POST") {
@@ -163,21 +176,21 @@ export default async (req: Request, _context: Context) => {
     return Response.json({ error: `Keep it under ${MAX_QUERY_CHARS} characters.` }, { status: 400 });
   }
 
-  // maxRetries 0 on purpose: the failure being guarded against is a slow
-  // generation, not a flaky socket, so a retry just spends the budget twice and
-  // doubles the wait before the user is told anything.
-  const client = new Anthropic({ apiKey, timeout: UPSTREAM_TIMEOUT_MS, maxRetries: 0 });
+  // Retries were 0 back when the failure mode was a slow non-streaming
+  // generation, where a second attempt only spent the budget twice. Streaming
+  // removed that failure mode; what's left is transient socket resets
+  // (ECONNRESET mid-stream), which is precisely what retries exist for.
+  const client = new Anthropic({ apiKey, timeout: UPSTREAM_TIMEOUT_MS, maxRetries: 2 });
 
-  try {
-    // STREAMED, and it has to be. A non-streaming request sends no response
-    // headers until the whole message is generated, so time-to-first-byte is
-    // the full generation time and the runtime's header timeout kills anything
-    // slow. Measured: parses needing more than ~11s died as
-    // APIConnectionTimeoutError no matter what `timeout` was set to — 8.5s,
-    // 30s and 45s all failed at the same ~11s mark, because the limit was never
-    // ours. Streaming sends headers immediately and keeps the socket busy, so
-    // the only ceiling left is the one configured above. finalMessage() still
-    // hands back a normal assembled Message, so nothing downstream changes.
+  // STREAMED, and it has to be. A non-streaming request sends no response
+  // headers until the whole message is generated, so time-to-first-byte is the
+  // full generation time and the runtime's header timeout kills anything slow.
+  // Measured: parses needing more than ~11s died as APIConnectionTimeoutError
+  // no matter what `timeout` was set to — 8.5s, 30s and 45s all failed at the
+  // same ~11s mark, because the limit was never ours. Streaming sends headers
+  // immediately and keeps the socket busy, so the only ceiling left is the one
+  // configured above. finalMessage() hands back a normal assembled Message.
+  const ask = async (messages: Anthropic.MessageParam[]) => {
     const response = await client.messages.stream({
       model: "claude-opus-5",
       max_tokens: 2048,
@@ -192,19 +205,55 @@ export default async (req: Request, _context: Context) => {
         effort: "low",
         format: { type: "json_schema", schema: SCHEMA },
       },
-      messages: [{ role: "user", content: query }],
+      messages,
     }).finalMessage();
 
-    if (response.stop_reason === "refusal") {
+    if (response.stop_reason === "refusal") return { refused: true as const };
+    const text = response.content.find((b) => b.type === "text");
+    if (!text || text.type !== "text") return { empty: true as const };
+    return { parsed: JSON.parse(text.text) as Record<string, unknown> };
+  };
+
+  try {
+    let out = await ask([{ role: "user", content: query }]);
+    if ("refused" in out) {
       return Response.json({ error: "Could not process that question." }, { status: 422 });
     }
-
-    const text = response.content.find((b) => b.type === "text");
-    if (!text || text.type !== "text") {
+    if ("empty" in out) {
       return Response.json({ error: "Empty response from the parser." }, { status: 502 });
     }
 
-    return Response.json(JSON.parse(text.text), {
+    // REPAIR PASS. The dominant failure mode isn't misunderstanding — it's the
+    // model working out the answer, writing it into `analysis`, and then
+    // emitting an empty `conditions`. Measured 2 of 4 identical runs of "bill
+    // self record on the road where he scores more fastbreak points": every one
+    // named fbpts_diff in the analysis, half shipped no condition.
+    //
+    // That contradiction is detectable, so repair it rather than hand back a
+    // parse that quietly answers a much broader question. Only fires on the
+    // broken half, and re-asks with the model's own analysis quoted back, which
+    // beats blind resampling because the reasoning is already correct.
+    if (needsRepair(out.parsed)) {
+      const first = out.parsed;
+      const repaired = await ask([
+        { role: "user", content: query },
+        { role: "assistant", content: JSON.stringify(first) },
+        {
+          role: "user",
+          content:
+            `That response described the filter as "${String(first.analysis ?? "")}" but returned an empty "conditions" array, ` +
+            `so it would match every game instead. Return the same JSON with "conditions" filled in to match your own analysis.`,
+        },
+      ]);
+      // Keep the repair only if it actually produced conditions — a second
+      // empty answer means the question genuinely has none, and the client
+      // warns about that case anyway.
+      if ("parsed" in repaired && Array.isArray(repaired.parsed.conditions) && repaired.parsed.conditions.length) {
+        out = repaired;
+      }
+    }
+
+    return Response.json(out.parsed, {
       headers: { "cache-control": "no-store" },
     });
   } catch (err) {

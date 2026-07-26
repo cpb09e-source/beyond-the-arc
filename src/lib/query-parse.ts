@@ -49,6 +49,34 @@ export type ResolvedQuery = ParsedQuery & {
   unresolved: string[];
 };
 
+/**
+ * Search-time alias expansion for typeahead pickers. Given a display name,
+ * return every normalized string that should count as a hit for it — the name
+ * itself plus both sides of any SPOKEN_ALIASES pair it belongs to. This is
+ * what lets "uconn" find "Connecticut" in the Teams picker AND "connecticut"
+ * find "UConn" in the Opponents picker, whose two sources name the same
+ * school differently.
+ */
+export function searchKeysFor(name: string): string[] {
+  const n = norm(name);
+  const out = new Set<string>([n]);
+  for (const [alias, canonical] of Object.entries(SPOKEN_ALIASES)) {
+    const a = norm(alias);
+    const c = norm(canonical);
+    if (a === n || c === n) {
+      out.add(a);
+      out.add(c);
+    }
+  }
+  return [...out];
+}
+
+/** The resolver's normalizer, exported for the pickers so search-time
+ *  matching agrees with resolve-time matching ("St." → "state", etc.). */
+export function normName(s: string): string {
+  return norm(s);
+}
+
 function norm(s: string): string {
   return s
     .toLowerCase()

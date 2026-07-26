@@ -132,7 +132,11 @@ export const STAT_OPTIONS: StatOption[] = [
 export const CALC_STAT_OPTIONS: StatOption[] = [
   ...STAT_OPTIONS,
   { key: "opp_rank", label: "Opp Rank", group: "Opponent", defaultDir: "lt" },
-  ...BOX_FIELDS.map((f) => ({
+  // postseason (NCAA/NIT) is deliberately not offered: as a combined flag it
+  // couldn't isolate March Madness from the NIT, which made it more confusing
+  // than useful. The data still ships in the sidecar (attachGameBox), so an
+  // NCAA-only filter can come back once the export distinguishes the two.
+  ...BOX_FIELDS.filter((f) => f.key !== "postseason").map((f) => ({
     key: f.key as keyof GameLog,
     label: f.label,
     group: f.group,

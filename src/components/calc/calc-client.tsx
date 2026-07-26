@@ -2,11 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
-import { MultiYearSelect } from "@/components/explorer/multi-year-select";
-import { SearchableSelect, type SearchableOption } from "@/components/explorer/searchable-select";
-import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
+import { type SearchableOption } from "@/components/explorer/searchable-select";
 import { Select } from "@/components/select";
-import { confDisplay } from "@/lib/conf-display";
+import { confDisplay, CONF_DISPLAY } from "@/lib/conf-display";
 // Single source of truth for the game-log shape + filter catalog. This file
 // used to carry its own copy, which had already drifted from the shared one
 // (it listed ft_att_diff, the shared list didn't). Both /calc and the team /
@@ -19,9 +17,10 @@ import {
   type GameLog,
   type Filter,
   type Op,
+  type StatOption,
 } from "@/lib/game-filters";
-import { isExhibitionGame, ALL_SEASONS } from "@/lib/seasons";
-import { resolveQuery, type ParsedQuery, type ResolvedQuery } from "@/lib/query-parse";
+import { isExhibitionGame, ALL_SEASONS, SEASON_CEIL } from "@/lib/seasons";
+import { resolveQuery, searchKeysFor, normName, type ParsedQuery, type ResolvedQuery } from "@/lib/query-parse";
 import { attachGameBox, type GameBoxFile } from "@/lib/game-box";
 import {
   quadFor,
@@ -52,6 +51,161 @@ const QUAD_OPTIONS: SearchableOption[] = [
   { value: "3", label: "Quad 3" },
   { value: "4", label: "Quad 4" },
 ];
+
+/**
+ * Static conference list. This used to derive from loaded games, which made
+ * the pill grid visibly reflow as season files streamed in ("All seasons"
+ * finished loading and the Pac-12 shoved everything sideways). CONF_DISPLAY
+ * is the app's master code list; GWC is dropped because it folded before our
+ * 2014 data floor, so it could only ever be a dead option.
+ *
+ * Power conferences lead, in their own order — they're what most questions
+ * are about — and get a subtly heavier pill.
+ */
+const POWER_CONFS = ["ACC", "B10", "B12", "BE", "SEC", "P12"];
+const CONFERENCE_OPTIONS: SearchableOption[] = (() => {
+  const rest = Object.keys(CONF_DISPLAY)
+    .filter((c) => c !== "GWC" && !POWER_CONFS.includes(c))
+    .sort((a, b) => a.localeCompare(b));
+  return [...POWER_CONFS, ...rest].map((c) => ({ value: c, label: confDisplay(c) }));
+})();
+
+/* ------------------------------------------------------------------
+ * Stat-sheet metadata. The conditions builder lays every stat out on a
+ * grouped sheet of compact tile rows — engage a tile and it becomes a
+ * condition — so every stat needs a display range and every group a hue.
+ * ---------------------------------------------------------------- */
+
+/** 0/1 flags — rendered as a Yes/No toggle, not a slider + comparator. */
+const FLAG_KEYS = new Set(["conf_game", "tourney", "postseason"]);
+
+/** Rate-shaped keys (0–1 decimals shown as %). `_pct` also catches efg_pct_def. */
+function isPctKey(key: string): boolean {
+  return key.includes("_pct") || key.startsWith("ff_");
+}
+
+/**
+ * Group accent hues. Used only for small areas — slider fills, comparator
+ * accents — so mid-saturation values read fine on both paper and dark themes.
+ * Brand vars are reused where a group has a natural owner (scoring = coral,
+ * defense = bad).
+ */
+const GROUP_HUES: Record<string, string> = {
+  "Context":       "var(--court)",
+  "Scoring":       "var(--coral)",
+  "Differentials": "#c98a2d",
+  "Defense":       "var(--bad)",
+  "Efficiency":    "#3e7cb1",
+  "Box":           "#7a7f4b",
+  "Game Shape":    "#b8763e",
+  "Pace":          "#2d8a8a",
+  "Opponent":      "#4a5d8a",
+};
+
+/**
+ * The sheet's own grouping — a display concern, deliberately NOT the shared
+ * `group` strings in game-filters/game-box (those still feed the team/coach
+ * "Find a game" modal). The Four Factors groups are dissolved into the
+ * sections each stat actually belongs to, and offensive shooting lives under
+ * Scoring; the defensive rates get a section of their own.
+ */
+const GROUP_ORDER = [
+  "Context", "Scoring", "Differentials", "Defense",
+  "Efficiency", "Box", "Game Shape", "Pace", "Opponent",
+] as const;
+
+function displayGroup(o: StatOption): string {
+  const byKey: Record<string, string> = {
+    ff_efg: "Scoring", ff_ftr: "Scoring",
+    ff_tov: "Efficiency", ff_orb: "Efficiency",
+    ff_efg_def: "Defense", ff_ftr_def: "Defense", ff_tov_def: "Defense", ff_orb_def: "Defense",
+  };
+  const key = o.key as string;
+  if (byKey[key]) return byKey[key];
+  if (o.group === "Shooting (off)") return "Scoring";
+  if (o.group === "Shooting (def)") return "Defense";
+  return o.group;
+}
+
+const CONDITION_GROUPS: Array<[string, StatOption[]]> = (() => {
+  const seen = new Map<string, StatOption[]>();
+  for (const o of CALC_STAT_OPTIONS) {
+    const g = displayGroup(o);
+    const arr = seen.get(g);
+    if (arr) arr.push(o);
+    else seen.set(g, [o]);
+  }
+  return GROUP_ORDER.filter((g) => seen.has(g)).map((g) => [g, seen.get(g)!]);
+})();
+
+/**
+ * Slider bounds per stat. These are DISPLAY ranges tuned to where real games
+ * live, not data extremes — the number input still accepts anything, so an
+ * outlier query ("won by 60") is typed, not dragged.
+ */
+function rangeFor(key: string): { min: number; max: number; step: number } {
+  if (isPctKey(key)) return { min: 0, max: 1, step: 0.005 };
+  switch (key) {
+    case "opp_rank":         return { min: 1, max: 364, step: 1 };
+    case "pts_scored":
+    case "pts_against":      return { min: 30, max: 140, step: 1 };
+    case "pts_diff":         return { min: -50, max: 50, step: 1 };
+    case "poss":
+    case "pace":             return { min: 55, max: 90, step: 0.5 };
+    case "ortg":
+    case "drtg":             return { min: 60, max: 150, step: 1 };
+    case "game_score":       return { min: 0, max: 150, step: 1 };
+    case "largest_lead":
+    case "largest_lead_opp": return { min: 0, max: 50, step: 1 };
+    case "h1_margin":
+    case "h2_margin":        return { min: -40, max: 40, step: 1 };
+    case "ast":              return { min: 0, max: 40, step: 1 };
+    case "stl":              return { min: 0, max: 25, step: 1 };
+    case "blk":              return { min: 0, max: 20, step: 1 };
+    case "fouls":            return { min: 0, max: 40, step: 1 };
+  }
+  if (key.endsWith("_diff")) return { min: -30, max: 30, step: 1 };
+  return { min: -50, max: 50, step: 1 };
+}
+
+/**
+ * Starting value when a tile is first engaged. A slider that lands on a
+ * plausible threshold ("3P% > 40%", "Opp Rank ≤ 25") invites dragging;
+ * landing on 0 for a percentage reads as broken.
+ */
+const PICK_DEFAULTS: Record<string, number> = {
+  fg3_pct: 0.4, fg2_pct: 0.5, ft_pct: 0.75, efg_pct: 0.5, ts_pct: 0.55, efg_pct_def: 0.45,
+  ff_efg: 0.5, ff_efg_def: 0.45, ff_ftr: 0.3, ff_ftr_def: 0.25, ff_tov: 0.15, ff_tov_def: 0.18, ff_orb: 0.3, ff_orb_def: 0.25,
+  opp_rank: 25, pts_scored: 80, pts_against: 70, ortg: 110, drtg: 100, game_score: 50,
+  poss: 70, pace: 70, largest_lead: 10, largest_lead_opp: 10,
+  ast: 15, stl: 8, blk: 5, fouls: 20,
+};
+function defaultValueFor(key: string): number {
+  if (FLAG_KEYS.has(key)) return 1;
+  return PICK_DEFAULTS[key] ?? 0;
+}
+
+/** Strip the "(1=yes)" hack from flag labels — the toggle says it better. */
+function cleanLabel(label: string): string {
+  return label.replace(/\s*\(1=yes\)/, "");
+}
+
+/** Format a value the way the stat reads: 40% / +5 / 72.5. */
+function fmtCondValue(key: string, v: number): string {
+  if (isPctKey(key)) return `${Math.round(v * 1000) / 10}%`;
+  if (key.endsWith("_diff") || key.endsWith("_margin")) return v > 0 ? `+${v}` : String(v);
+  return String(Math.round(v * 10) / 10);
+}
+
+/** "2014-15 → 2025-26 (12)" style summary for the collapsed bar. */
+function seasonSummary(years: number[]): string {
+  if (years.length === 0) return "No seasons";
+  if (years.length === ALL_SEASONS.length) return "All seasons";
+  const s = [...years].sort((a, b) => a - b);
+  const name = (y: number) => `${y - 1}-${String(y).slice(2)}`;
+  if (s.length <= 3) return s.map(name).join(", ");
+  return `${name(s[0]!)} → ${name(s[s.length - 1]!)} (${s.length})`;
+}
 
 /**
  * Attach opponent rank + quadrant to one season's rows.
@@ -131,7 +285,10 @@ export function CalcClient({
   // excluding them here; the toggle keeps the official-record view available.
   const [d1Only, setD1Only] = useState(true);
   const [yearData, setYearData] = useState<Record<number, GameLog[]>>({});
-  const [filters, setFilters] = useState<Filter[]>([makeFilter("tov_diff"), makeFilter("fg3_made_diff"), makeFilter("fbpts_diff")]);
+  // Active conditions. Starts empty — every stat is visible on the sheet
+  // below, so the starting state is "nothing constrained" rather than a demo.
+  // At most one condition per stat (the tile IS the condition).
+  const [filters, setFilters] = useState<Filter[]>([]);
   const [submitted, setSubmitted] = useState<{ filters: Filter[]; conferences: string[]; teams: string[]; coaches: string[]; venue: Venue; opponents: string[]; quads: string[]; d1Only: boolean } | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -141,17 +298,20 @@ export function CalcClient({
   // years). teamFilter is a free-text substring against team_name.
   const [dateFilter, setDateFilter] = useState<string>("");
   const [teamFilter, setTeamFilter] = useState<string>("");
+  // Result-table paging. `page` is 0-based and clamped at render (see
+  // visibleSample) so a narrowing filter can't strand it past the end.
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
 
-  // Stat options as SearchableOption[] for the typeable picker.
-  const statOptions = useMemo<SearchableOption[]>(
-    () => CALC_STAT_OPTIONS.map((o) => ({ value: o.key as string, label: o.label, group: o.group })),
-    [],
-  );
-  const statGroupLabels = useMemo<Record<string, string>>(() => {
-    const out: Record<string, string> = {};
-    for (const o of CALC_STAT_OPTIONS) out[o.group] = o.group;
-    return out;
-  }, []);
+  // Builder chrome. `panelOpen` is the scope+conditions panel — Calculate
+  // collapses it to a chip summary so the numbers get the screen; "Edit
+  // filters" reopens it. `collapsedGroups` folds individual stat-sheet
+  // sections (all open by default).
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  // Game whose box score is open in the modal (double-click a row / click a
+  // score). The opponent's row is looked up at render via the game-id pair.
+  const [boxGame, setBoxGame] = useState<GameLog | null>(null);
 
   // Fetch every selected year that isn't already cached. Parallel fetches.
   useEffect(() => {
@@ -217,16 +377,9 @@ export function CalcClient({
     return out;
   }, [years, yearData]);
 
-  // Conference list derived from loaded games — stays in sync with years.
-  const allConferences = useMemo(() => {
-    const s = new Set<string>();
-    for (const g of games) if (g.team_conference) s.add(g.team_conference);
-    return [...s].sort();
-  }, [games]);
-  const conferenceOptions = useMemo<SearchableOption[]>(
-    () => allConferences.map((c) => ({ value: c, label: confDisplay(c) })),
-    [allConferences],
-  );
+  // Conference options are the static module-level CONFERENCE_OPTIONS — see
+  // its comment for why they must not derive from loaded games.
+  const conferenceOptions = CONFERENCE_OPTIONS;
 
   // Team list derived from loaded games — same shape as conferences.
   // Filtered by the conference picker so the team list narrows as the user
@@ -245,11 +398,13 @@ export function CalcClient({
     [allTeams],
   );
 
-  // Opponent list — derived from opp_team_market, which is its own name space
-  // (includes non-D1 opponents that never appear as team_name).
+  // Opponent list — derived from opp_team_market, which is its own name space.
+  // Non-D1 opponents are excluded from the PICKER (rows where the game has no
+  // paired D1 row, ~400 names of noise); the games themselves stay in results
+  // whenever the D-I only toggle is off.
   const opponentOptions = useMemo<SearchableOption[]>(() => {
     const s = new Set<string>();
-    for (const g of games) if (g.opp_team_market) s.add(g.opp_team_market);
+    for (const g of games) if (g.opp_team_market && !g.non_d1) s.add(g.opp_team_market);
     return [...s].sort().map((t) => ({ value: t, label: t }));
   }, [games]);
 
@@ -284,12 +439,13 @@ export function CalcClient({
       });
       const body = await res.json().catch(() => ({}));
       // A 404 here means the route isn't being served at all, which in practice
-      // means `next dev` — the site is a static export, so /api/parse-query only
-      // exists as a Netlify Function. Say that instead of "Parser error (404)",
-      // which reads like the parser is broken when nothing is wrong with it.
+      // means the page was opened on Next's own port. `netlify dev` runs Next on
+      // 3000 AND a proxy on 8899, and only the proxy serves netlify/functions —
+      // so :3000 looks like a working site where Ask is mysteriously broken.
+      // Name the port; "use dev:netlify" isn't enough when both are listening.
       if (res.status === 404) {
         throw new Error(
-          "Ask isn't available under `next dev` — it runs as a Netlify Function. Use `npm run dev:netlify`. The filters below work either way.",
+          "Ask isn't served on this port. Open http://localhost:8899/calc (npm run dev:netlify) — port 3000 is Next on its own, with no functions. The filters below work either way.",
         );
       }
       if (!res.ok) throw new Error(body?.error || `Parser error (${res.status})`);
@@ -303,26 +459,71 @@ export function CalcClient({
         validSeasons: [...ALL_SEASONS],
       });
 
-      // Only overwrite a dimension the question actually spoke to, so a
-      // follow-up question ("...and only at home") refines rather than resets.
-      if (resolved.seasons.length) setYears([...resolved.seasons].sort((a, b) => b - a));
-      if (resolved.resolved.conferences.length) setConferences(resolved.resolved.conferences);
-      if (resolved.resolved.teams.length) setTeams(resolved.resolved.teams);
-      if (resolved.resolved.coaches.length) setCoaches(resolved.resolved.coaches);
-      if (resolved.resolved.opponents.length) setOpponents(resolved.resolved.opponents);
-      if (resolved.quads.length) setQuads(resolved.quads.map(String));
-      if (resolved.venue !== "all") setVenue(resolved.venue);
-      if (resolved.conditions.length) {
-        setFilters(
-          resolved.conditions.slice(0, 8).map((c) => ({
+      // Seasons are the one dimension we must NOT leave alone when the question
+      // didn't name one. The parser documents an empty list as "all seasons",
+      // but the form defaults to the current season, so "what's Roy Williams'
+      // record on the road" silently answered "...in 2025-26" — and he retired
+      // in 2021. That renders as a confident 0-0, which reads as "never
+      // happened" rather than "wrong years selected".
+      //
+      // So an unspecified season means every season, matching what the parser
+      // already promises. This is deliberately universal rather than a
+      // coach-shaped special case: a coach, a team, a conference or no subject
+      // at all each get the full history unless the question names a year, and
+      // a named year always wins.
+      // Every dimension is resolved to its NEXT value first, then used for both
+      // the form state and the auto-submit below. Reading the state variables
+      // back after setX() would submit the PREVIOUS question's values — React
+      // hasn't applied them yet at this point in the handler.
+      const nextYears = resolved.seasons.length
+        ? [...resolved.seasons].sort((a, b) => b - a)
+        : [...ALL_SEASONS].sort((a, b) => b - a);
+      // Dimensions the question didn't speak to keep their current value, so a
+      // follow-up ("...and only at home") refines rather than resets.
+      const nextConferences = resolved.resolved.conferences.length ? resolved.resolved.conferences : conferences;
+      const nextTeams = resolved.resolved.teams.length ? resolved.resolved.teams : teams;
+      const nextCoaches = resolved.resolved.coaches.length ? resolved.resolved.coaches : coaches;
+      const nextOpponents = resolved.resolved.opponents.length ? resolved.resolved.opponents : opponents;
+      const nextQuads = resolved.quads.length ? resolved.quads.map(String) : quads;
+      const nextVenue = resolved.venue !== "all" ? resolved.venue : venue;
+      const nextFilters = resolved.conditions.length
+        ? resolved.conditions.slice(0, 8).map((c) => ({
             ...makeFilter(c.stat as keyof GameLog),
             op: c.op,
             value: c.value,
-          })),
-        );
-      }
+          }))
+        : filters;
+
+      setYears(nextYears);
+      setConferences(nextConferences);
+      setTeams(nextTeams);
+      setCoaches(nextCoaches);
+      setOpponents(nextOpponents);
+      setQuads(nextQuads);
+      setVenue(nextVenue);
+      setFilters(nextFilters);
       setAskResult(resolved);
-      setSubmitted(null); // stale results would contradict the new filters
+
+      // Auto-calculate. Asking a question and then having to press a second
+      // button read as an unfinished thought. Safe to submit before the season
+      // files finish downloading: the results memo returns null until the games
+      // for the selected years are in, so this renders the loading state and
+      // then the answer, rather than a wrong answer computed against half the
+      // data. The filled-in filters stay editable, and any caveat from the
+      // parse (unmatched name, no condition found) sits directly above.
+      setSubmitted({
+        filters: nextFilters,
+        conferences: nextConferences,
+        teams: nextTeams,
+        coaches: nextCoaches,
+        venue: nextVenue,
+        opponents: nextOpponents,
+        quads: nextQuads,
+        d1Only,
+      });
+      // Same fold as pressing Calculate — the answer takes the screen, the
+      // parse summary above explains what was understood, Edit reopens.
+      setPanelOpen(false);
     } catch (e) {
       setAskErr(e instanceof Error ? e.message : "Could not parse that question.");
     } finally {
@@ -386,11 +587,10 @@ export function CalcClient({
     return [{ value: "", label: "All years" }, ...sorted.map((y) => ({ value: y, label: y }))];
   }, [results]);
 
-  // Visible-rows derivation — applies both filters, caps at MAX_VISIBLE so
-  // the DOM stays small even when 50k games match.
-  const MAX_VISIBLE = 25;
+  // Visible-rows derivation — applies both filters, then pages. Only one page
+  // of rows ever reaches the DOM, so a 50k-game result set stays cheap.
   const visibleSample = useMemo(() => {
-    if (!results) return { rows: [] as GameLog[], filteredTotal: 0 };
+    if (!results) return { rows: [] as GameLog[], filteredTotal: 0, pageCount: 1, safePage: 0 };
     const teamQ = teamFilter.trim().toLowerCase();
     const filtered = results.matching.filter((g) => {
       if (dateFilter) {
@@ -399,19 +599,86 @@ export function CalcClient({
       if (teamQ && !g.team_name.toLowerCase().includes(teamQ)) return false;
       return true;
     });
-    return { rows: filtered.slice(0, MAX_VISIBLE), filteredTotal: filtered.length };
-  }, [results, dateFilter, teamFilter]);
+    // Clamp BEFORE slicing. Tightening a filter while deep in the results
+    // otherwise leaves `page` past the end and renders a blank table, which
+    // reads as "no matches" rather than "you're past the last page".
+    const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const safePage = Math.min(page, pageCount - 1);
+    const start = safePage * pageSize;
+    return {
+      rows: filtered.slice(start, start + pageSize),
+      filteredTotal: filtered.length,
+      pageCount,
+      safePage,
+    };
+  }, [results, dateFilter, teamFilter, page, pageSize]);
   const hasResultFilter = dateFilter !== "" || teamFilter.trim() !== "";
+  const { pageCount, safePage } = visibleSample;
+  const rangeStart = visibleSample.filteredTotal === 0 ? 0 : safePage * pageSize + 1;
+  const rangeEnd = Math.min(visibleSample.filteredTotal, (safePage + 1) * pageSize);
 
-  function addFilter() {
-    if (filters.length >= 8) return;
-    setFilters((f) => [...f, makeFilter()]);
+  // Active-filter tally for the panel header badge. A section counts when it
+  // actually narrows: a full or empty multi-select filters nothing.
+  const activeFilterCount =
+    (years.length < ALL_SEASONS.length ? 1 : 0) +
+    (conferences.length > 0 ? 1 : 0) +
+    (teams.length > 0 ? 1 : 0) +
+    (coaches.length > 0 ? 1 : 0) +
+    (opponents.length > 0 ? 1 : 0) +
+    (venue !== "all" ? 1 : 0) +
+    (quads.length > 0 && quads.length < 4 ? 1 : 0) +
+    (d1Only ? 1 : 0) + // counted when lit, matching the section badge
+    
+    filters.length;
+
+  /** Snapshot the current form and run it. Shared by the top and bottom
+   *  Calculate buttons so they can never drift apart. */
+  function calculate() {
+    setSubmitted({ filters: [...filters], conferences: [...conferences], teams: [...teams], coaches: [...coaches], venue, opponents: [...opponents], quads: [...quads], d1Only });
+    setPanelOpen(false);
+    setPage(0); // a new question starts at the first page of its answer
   }
-  function removeFilter(id: string) {
-    setFilters((f) => f.filter((x) => x.id !== id));
+
+  /** "Clear All": no scope filters, no conditions, no stale results. */
+  function clearAll() {
+    setYears([...ALL_SEASONS]);
+    setConferences([]);
+    setTeams([]);
+    setCoaches([]);
+    setOpponents([]);
+    setVenue("all");
+    setQuads([]);
+    setD1Only(true);
+    setFilters([]);
+    setSubmitted(null);
   }
-  function patchFilter(id: string, patch: Partial<Filter>) {
-    setFilters((f) => f.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+
+  /**
+   * Engage a stat tile — patch its condition if live, otherwise bring it to
+   * life with sensible defaults merged with whatever the interaction set.
+   * Comparator direction comes from CALC_STAT_OPTIONS (not makeFilter, whose
+   * lookup misses the calc-only stats like opp_rank); flags are forced to
+   * their only sensible shape, "= Yes".
+   */
+  function tilePatch(stat: keyof GameLog, patch: Partial<Filter>) {
+    setFilters((fs) => {
+      const existing = fs.find((f) => f.stat === stat);
+      if (existing) return fs.map((f) => (f.stat === stat ? { ...f, ...patch } : f));
+      const key = stat as string;
+      const def = CALC_STAT_OPTIONS.find((s) => s.key === stat);
+      return [
+        ...fs,
+        {
+          ...makeFilter(stat),
+          op: FLAG_KEYS.has(key) ? ("eq" as Op) : def?.defaultDir === "lt" ? ("lt" as Op) : ("gt" as Op),
+          value: defaultValueFor(key),
+          ...patch,
+        },
+      ];
+    });
+  }
+  function tileClear(stat: keyof GameLog) {
+    setFilters((fs) => fs.filter((f) => f.stat !== stat));
   }
 
   return (
@@ -436,8 +703,16 @@ export function CalcClient({
             type="button"
             onClick={runAsk}
             disabled={asking || ask.trim().length < 3}
-            className="h-10 shrink-0 text-sm font-medium bg-ink text-paper px-5 rounded hover:bg-ink/85 disabled:opacity-40 transition-colors"
+            className="h-10 shrink-0 text-sm font-medium bg-ink text-paper px-5 rounded hover:bg-ink/85 disabled:opacity-40 transition-colors inline-flex items-center justify-center gap-2"
           >
+            {asking && (
+              // aria-hidden: the button text already announces the state, so the
+              // spinner would just be a second, redundant announcement.
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                <path className="opacity-90" fill="currentColor" d="M12 2a10 10 0 0 1 10 10h-3a7 7 0 0 0-7-7V2Z" />
+              </svg>
+            )}
             {asking ? "Reading…" : "Fill filters"}
           </button>
         </div>
@@ -469,29 +744,148 @@ export function CalcClient({
                 No statistical condition was picked up, so this would return the overall record. Add one below, or rephrase as e.g. &ldquo;games where they shot over 40% from three&rdquo;.
               </p>
             )}
-            <p className="text-ink-muted">Check the filters below, then Calculate.</p>
+            <p className="text-ink-muted">Calculated below — adjust any filter and re-run to refine.</p>
           </div>
         )}
       </div>
 
-      {/* Year + filters */}
-      <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm">
-        <div className="grid grid-cols-2 gap-3 p-4 sm:flex sm:flex-wrap sm:items-end lg:p-5 border-b border-hairline">
-          <Field label="Seasons">
-            <MultiYearSelect years={years} onChange={setYears} />
-          </Field>
-          <Field label="Conference">
-            <SearchableMultiSelect
-              value={conferences}
-              options={conferenceOptions}
-              onChange={(next) => {
+      {/* Scope + conditions. After Calculate the whole panel folds into the
+          chip summary below — the answer is the point, the machinery isn't —
+          and "Edit filters" unfolds it. The fold is a grid-rows transition
+          (1fr → 0fr), which animates height without measuring anything. */}
+      <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-hidden">
+        {!panelOpen && (
+          <div className="bta-pop-in flex flex-wrap items-center gap-2 p-4 lg:px-5">
+            <span className="text-xs uppercase tracking-widest text-ink font-bold mr-1">
+              Filters
+            </span>
+            <ConditionChip>{seasonSummary(years)}</ConditionChip>
+            {submitted && submitted.conferences.length > 0 && submitted.conferences.length < conferenceOptions.length && (
+              <ConditionChip>{submitted.conferences.map((c) => confDisplay(c)).join(", ")}</ConditionChip>
+            )}
+            {submitted && submitted.teams.length > 0 && submitted.teams.length < teamOptions.length && (
+              <ConditionChip>{submitted.teams.join(", ")}</ConditionChip>
+            )}
+            {submitted && submitted.coaches.length > 0 && (
+              <ConditionChip>{submitted.coaches.join(", ")}</ConditionChip>
+            )}
+            {submitted && submitted.opponents.length > 0 && (
+              <ConditionChip>vs {submitted.opponents.join(", ")}</ConditionChip>
+            )}
+            {submitted && submitted.venue !== "all" && (
+              <ConditionChip>{VENUE_OPTIONS.find((v) => v.value === submitted.venue)?.label}</ConditionChip>
+            )}
+            {submitted && submitted.quads.length > 0 && submitted.quads.length < 4 && (
+              <ConditionChip>Quad {submitted.quads.join("/")}</ConditionChip>
+            )}
+            {submitted?.filters.map((f) => (
+              <ConditionChip key={f.id}>{labelFor(f)}</ConditionChip>
+            ))}
+            {loading && <span className="text-xs text-ink-muted">Loading game logs…</span>}
+            <button
+              type="button"
+              onClick={() => setPanelOpen(true)}
+              className="ml-auto shrink-0 text-sm font-medium text-coral border border-coral/40 rounded px-4 py-1.5 hover:bg-coral hover:text-white transition-colors"
+            >
+              Edit filters
+            </button>
+          </div>
+        )}
+        <div
+          className={`grid transition-[grid-template-rows] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+            panelOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+          }`}
+        >
+        <div className="min-h-0 overflow-hidden">
+        <div className="p-4 lg:p-5 border-b border-hairline space-y-5">
+          {/* Panel header — mirrors the D&3 filter drawer: name, live count of
+              active filters, one Clear all. The records-loaded note earns the
+              right edge so data problems stay visible. */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="font-medium text-ink">Filter games</span>
+            {activeFilterCount > 0 && <CountBadge n={activeFilterCount} />}
+            <MiniButton onClick={clearAll}>Clear All</MiniButton>
+            <span className="ml-auto text-xs text-ink-muted">
+              {loading
+                ? `Loading game logs…`
+                : games.length > 0
+                ? `${games.length.toLocaleString()} game records loaded`
+                : loadErr
+                ? `Game-log data not exported yet — run sync + re-export`
+                : ""}
+            </span>
+            {/* Calculate lives at both ends of the panel — the header copy is
+                for people who came back to tweak one pill and shouldn't have
+                to scroll past the conditions to re-run. */}
+            <button
+              type="button"
+              onClick={calculate}
+              disabled={loading || games.length === 0}
+              className="text-sm font-medium bg-coral text-white px-5 py-2 rounded-lg shadow-sm hover:bg-coral-soft hover:shadow-md active:scale-[0.98] disabled:opacity-40 transition-all"
+            >
+              Calculate
+            </button>
+          </div>
+
+          <div>
+            <SectionLabel
+              count={years.length < ALL_SEASONS.length ? years.length : 0}
+              action={
+                <>
+                  <MiniButton onClick={() => setYears([...ALL_SEASONS])}>All</MiniButton>
+                  {/* Seasons can't be empty (no seasons = no games to load),
+                      so Clear returns to the default: the current season. */}
+                  <MiniButton onClick={() => setYears([SEASON_CEIL])}>Clear</MiniButton>
+                </>
+              }
+            >
+              Seasons
+            </SectionLabel>
+            <div className="flex flex-wrap gap-1.5">
+              {ALL_SEASONS.map((y) => (
+                <TogglePill
+                  key={y}
+                  active={years.includes(y)}
+                  onClick={() =>
+                    setYears((prev) =>
+                      prev.includes(y)
+                        // Never allow an empty selection — deselecting the last
+                        // season means "stop filtering", i.e. all of them.
+                        ? prev.length === 1 ? [...ALL_SEASONS] : prev.filter((x) => x !== y)
+                        : [...prev, y],
+                    )
+                  }
+                >
+                  {`${String(y - 1).slice(2)}-${String(y).slice(2)}`}
+                </TogglePill>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <SectionLabel
+              count={conferences.length}
+              action={
+                <>
+                  <MiniButton onClick={() => setConferences(conferenceOptions.map((c) => c.value))}>All</MiniButton>
+                  <MiniButton onClick={() => setConferences([])}>Clear</MiniButton>
+                </>
+              }
+            >
+              Conferences
+            </SectionLabel>
+            {(() => {
+              // One handler for both grids so the power/rest split stays
+              // purely presentational.
+              const toggleConf = (code: string) => {
+                const next = conferences.includes(code)
+                  ? conferences.filter((x) => x !== code)
+                  : [...conferences, code];
                 setConferences(next);
                 // Drop any selected team that's no longer in the narrowed
-                // conference set. Keeps state consistent so a hidden team
-                // can't silently constrain the calc. Skipped when the user
-                // selects "all conferences" because nothing narrows.
-                const narrowed = next.length > 0 && next.length < conferenceOptions.length;
-                if (narrowed) {
+                // conference set, so a hidden chip can't silently constrain
+                // the calc. Skipped when nothing narrows.
+                if (next.length > 0 && next.length < conferenceOptions.length) {
                   const confSet = new Set(next);
                   setTeams((prev) =>
                     prev.filter((t) => {
@@ -500,217 +894,279 @@ export function CalcClient({
                     }),
                   );
                 }
-              }}
-              placeholder="Type to filter…"
-              emptyLabel="All conferences"
-              className="w-full sm:w-auto sm:min-w-44"
-              ariaLabel="Conferences"
-              align="right"
-            />
-          </Field>
-          <Field label="Team">
-            <SearchableMultiSelect
-              value={teams}
-              options={teamOptions}
-              onChange={setTeams}
-              placeholder="Type to filter…"
-              emptyLabel="All teams"
-              className="w-full sm:w-auto sm:min-w-44"
-              ariaLabel="Teams"
-            />
-          </Field>
-          <Field label="Coach">
-            <SearchableMultiSelect
-              value={coaches}
-              options={coachOptions}
-              onChange={setCoaches}
-              placeholder="Type to filter…"
-              emptyLabel="All coaches"
-              className="w-full sm:w-auto sm:min-w-44"
-              ariaLabel="Coaches"
-              align="right"
-            />
-          </Field>
-          <Field label="Opponent">
-            <SearchableMultiSelect
-              value={opponents}
-              options={opponentOptions}
-              onChange={setOpponents}
-              placeholder="Type to filter…"
-              emptyLabel="All opponents"
-              className="w-full sm:w-auto sm:min-w-44"
-              ariaLabel="Opponents"
-              align="right"
-            />
-          </Field>
-          <Field label="Venue">
-            <Select
-              value={venue}
-              onChange={(v) => setVenue(v as Venue)}
-              className="w-full sm:w-auto sm:min-w-32"
-              aria-label="Venue"
-            >
-              {VENUE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </Select>
-          </Field>
-          <Field label="Quad">
-            <SearchableMultiSelect
-              value={quads}
-              options={QUAD_OPTIONS}
-              onChange={setQuads}
-              placeholder="Type to filter…"
-              emptyLabel="All quads"
-              className="w-full sm:w-auto sm:min-w-36"
-              ariaLabel="Quadrants"
-              align="right"
-            />
-          </Field>
-          <Field label="Opponents">
-            <label className="flex h-9 items-center gap-2 text-sm text-ink cursor-pointer select-none whitespace-nowrap">
-              <input
-                type="checkbox"
-                checked={d1Only}
-                onChange={(e) => setD1Only(e.target.checked)}
-                className="accent-coral"
-              />
-              <span title="Games against non-D1 teams count toward a team's official record but are excluded from NET, KenPom and Torvik. Off = include them.">
+              };
+              const power = conferenceOptions.filter((c) => POWER_CONFS.includes(c.value));
+              const rest = conferenceOptions.filter((c) => !POWER_CONFS.includes(c.value));
+              const pill = (c: SearchableOption) => (
+                <TogglePill
+                  key={c.value}
+                  active={conferences.includes(c.value)}
+                  title={c.label}
+                  className="w-full px-1 text-center"
+                  emphasis={POWER_CONFS.includes(c.value)}
+                  onClick={() => toggleConf(c.value)}
+                >
+                  {c.value}
+                </TogglePill>
+              );
+              return (
+                <div className="space-y-2">
+                  {/* Power conferences get their own bordered plate — they
+                      answer most questions, so they're worth finding without
+                      reading all 31 codes. */}
+                  <div className="inline-block rounded-lg border border-ink/15 bg-paper-deep/30 p-2 pt-1.5">
+                    <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-semibold mb-1.5">
+                      Power Conferences
+                    </div>
+                    <div className="grid gap-1.5 grid-cols-3 sm:grid-cols-6">{power.map(pill)}</div>
+                  </div>
+                  {/* Column count derived from the list length so the rows stay
+                      near-even and never leave a one-pill orphan row. */}
+                  <div
+                    className="grid gap-1.5 grid-cols-5 sm:grid-cols-6 lg:grid-cols-[repeat(var(--cc3),minmax(0,1fr))] xl:grid-cols-[repeat(var(--cc2),minmax(0,1fr))]"
+                    style={{
+                      "--cc2": Math.ceil(rest.length / 2),
+                      "--cc3": Math.ceil(rest.length / 3),
+                    } as React.CSSProperties}
+                  >
+                    {rest.map(pill)}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          <div className="flex flex-wrap gap-x-10 gap-y-5">
+            <div>
+              <SectionLabel count={venue !== "all" ? 1 : 0}>Venue</SectionLabel>
+              <div className="flex flex-wrap gap-1.5">
+                {VENUE_OPTIONS.filter((o) => o.value !== "all").map((o) => (
+                  <TogglePill
+                    key={o.value}
+                    active={venue === o.value}
+                    // Single-select with an off state: tapping the lit pill
+                    // returns to "all venues".
+                    onClick={() => setVenue(venue === o.value ? "all" : o.value)}
+                  >
+                    {o.label}
+                  </TogglePill>
+                ))}
+              </div>
+            </div>
+            <div>
+              <SectionLabel count={quads.length > 0 && quads.length < 4 ? quads.length : 0}>Quad</SectionLabel>
+              <div className="flex flex-wrap gap-1.5">
+                {QUAD_OPTIONS.map((o) => (
+                  <TogglePill
+                    key={o.value}
+                    active={quads.includes(o.value)}
+                    onClick={() =>
+                      setQuads((prev) => (prev.includes(o.value) ? prev.filter((x) => x !== o.value) : [...prev, o.value]))
+                    }
+                  >
+                    {o.label.replace("Quad ", "Q")}
+                  </TogglePill>
+                ))}
+              </div>
+            </div>
+            <div>
+              {/* Badge tracks the lit pill, not "deviates from default" — the
+                  user reads the marble as "this section has a selection". */}
+              <SectionLabel count={d1Only ? 1 : 0}>Opponents</SectionLabel>
+              <TogglePill
+                active={d1Only}
+                title="Games against non-D1 teams count toward a team's official record but are excluded from NET, KenPom and Torvik. Off = include them."
+                onClick={() => setD1Only(!d1Only)}
+              >
                 D-I only
-              </span>
-            </label>
-          </Field>
-          <div className="col-span-2 text-xs text-ink-muted sm:col-span-1 sm:ml-auto">
-            {loading
-              ? `Loading game logs…`
-              : games.length > 0
-              ? `${games.length.toLocaleString()} game records loaded`
-              : loadErr
-              ? `Game-log data not exported yet — run sync + re-export`
-              : ""}
+              </TogglePill>
+            </div>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-3">
+            <ChipSearchMulti
+              label="Teams"
+              values={teams}
+              options={allTeams}
+              onChange={setTeams}
+              placeholder="Type a team, press Enter…"
+              allLabel="All Teams"
+              icon={(n) => <TeamLogo name={n} size={16} />}
+            />
+            <ChipSearchMulti
+              label="Coaches"
+              values={coaches}
+              options={allCoaches}
+              onChange={setCoaches}
+              placeholder="Type a coach, press Enter…"
+              allLabel="All Coaches"
+            />
+            <ChipSearchMulti
+              label="Opponents"
+              values={opponents}
+              options={opponentOptions.map((o) => o.value)}
+              onChange={setOpponents}
+              placeholder="Type an opponent, press Enter…"
+              allLabel="All Opponents"
+              icon={(n) => <TeamLogo name={n} size={16} />}
+            />
           </div>
         </div>
 
-        <div className="p-4 lg:p-5 space-y-2">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">Conditions</span>
-            <span className="hidden sm:inline text-xs text-ink-muted">(all must be true; perspective = the team in the row)</span>
+        <div className="p-4 lg:p-5">
+          <div className="mb-4">
+            <SectionLabel
+              count={filters.length}
+              action={filters.length > 0 ? <MiniButton onClick={() => setFilters([])}>Clear</MiniButton> : null}
+            >
+              Conditions
+            </SectionLabel>
+            <span className="hidden sm:block -mt-1 text-xs text-ink-muted">
+              Every stat is listed — set the ones that matter. All must be true; perspective = the team in the row.
+            </span>
           </div>
 
-          {filters.map((f, i) => (
-            <div key={f.id} className="flex items-center gap-3 flex-nowrap">
-              <span className="text-sm text-ink-muted w-10 shrink-0">{i === 0 ? "Where" : "And"}</span>
-              <SearchableSelect
-                value={f.stat as string}
-                options={statOptions}
-                groupLabels={statGroupLabels}
-                onChange={(v) => patchFilter(f.id, { stat: v as keyof GameLog })}
-                placeholder="Type a stat…"
-                className="flex-1 min-w-0 sm:flex-initial sm:min-w-44"
-                ariaLabel="Filter stat"
-              />
-              <Select value={f.op} onChange={(v) => patchFilter(f.id, { op: v as Op })} className="w-16 shrink-0 ml-1 sm:ml-0">
-                {OPS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </Select>
-              <input
-                type="number"
-                step="any"
-                value={f.value}
-                onChange={(e) => patchFilter(f.id, { value: Number(e.target.value) })}
-                className="h-9 w-14 sm:w-28 px-2 rounded border border-hairline bg-card text-ink text-sm focus:outline-none focus:ring-2 focus:ring-coral/40 shrink-0"
-              />
-              {filters.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeFilter(f.id)}
-                  className="text-sm text-ink-muted hover:text-coral px-2 py-1"
-                  aria-label="Remove filter"
-                >
-                  ×
-                </button>
-              )}
-            </div>
-          ))}
+          {/* The whole stat sheet, grouped. Each row is a live control: drag
+              the slider or touch the comparator/value and the stat becomes a
+              condition (hue tick + count badge); × releases it. Box-score
+              styling on purpose — hairline rows, not a wall of inputs. */}
+          <div className="space-y-4">
+            {CONDITION_GROUPS.map(([group, opts]) => {
+              const hue = GROUP_HUES[group] ?? "var(--coral)";
+              const activeInGroup = opts.filter((o) => filters.some((f) => f.stat === o.key)).length;
+              const collapsed = collapsedGroups.has(group);
+              return (
+                <div key={group}>
+                  <button
+                    type="button"
+                    aria-expanded={!collapsed}
+                    onClick={() =>
+                      setCollapsedGroups((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(group)) next.delete(group);
+                        else next.add(group);
+                        return next;
+                      })
+                    }
+                    className="group/hd flex w-full items-center gap-2 mb-1 py-0.5 text-left"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className={`w-3.5 h-3.5 text-ink-muted group-hover/hd:text-coral transition-transform ${collapsed ? "-rotate-90" : ""}`}
+                      fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                    <span className="text-xs uppercase tracking-widest text-ink font-bold group-hover/hd:text-coral transition-colors">{group}</span>
+                    {/* Badge stays visible while collapsed — the one signal
+                        that a folded section is still constraining results. */}
+                    {activeInGroup > 0 && <CountBadge n={activeInGroup} />}
+                  </button>
+                  {!collapsed && (
+                    <div className="grid gap-x-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {opts.map((o) => (
+                        <StatTile
+                          key={o.key as string}
+                          opt={o}
+                          hue={hue}
+                          filter={filters.find((f) => f.stat === o.key)}
+                          onPatch={(patch) => tilePatch(o.key, patch)}
+                          onClear={() => tileClear(o.key)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
 
-          <div className="flex items-center gap-3 pt-3 border-t border-hairline mt-3">
+          <div className="flex items-center gap-3 pt-4 border-t border-hairline mt-5">
             <button
               type="button"
-              onClick={addFilter}
-              disabled={filters.length >= 8}
-              className="text-sm font-medium text-coral hover:text-ink disabled:opacity-40"
+              onClick={calculate}
+              disabled={loading || games.length === 0}
+              className="ml-auto text-sm font-medium bg-coral text-white px-6 py-2.5 rounded-lg shadow-sm hover:bg-coral-soft hover:shadow-md active:scale-[0.98] disabled:opacity-40 transition-all"
             >
-              + Add condition
+              Calculate
             </button>
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => { setFilters([makeFilter("tov_diff")]); setConferences([]); setTeams([]); setCoaches([]); setOpponents([]); setVenue("all"); setQuads([]); setD1Only(true); setSubmitted(null); }}
-                className="text-sm text-ink-muted hover:text-ink px-3 py-2"
-              >
-                Reset
-              </button>
-              <button
-                type="button"
-                onClick={() => setSubmitted({ filters: [...filters], conferences: [...conferences], teams: [...teams], coaches: [...coaches], venue, opponents: [...opponents], quads: [...quads], d1Only })}
-                disabled={loading || games.length === 0}
-                className="text-sm font-medium bg-coral text-white px-5 py-2 rounded hover:bg-coral-soft disabled:opacity-40 transition-colors"
-              >
-                Calculate
-              </button>
-            </div>
           </div>
+        </div>
+        </div>
         </div>
       </div>
 
       {/* Results */}
       {submitted && results && (
         <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-hidden">
-          <div className="p-4 sm:p-6 lg:p-8 grid grid-cols-3 md:grid-cols-3 gap-3 sm:gap-6 border-b border-hairline">
-            <div>
-              <div className="text-[0.6rem] sm:text-xs uppercase tracking-widest text-ink-muted font-medium mb-1 sm:mb-2">Win %</div>
-              <div className="font-display text-2xl sm:text-5xl lg:text-7xl whitespace-nowrap text-coral tabular leading-none">
-                {(results.winPct * 100).toFixed(1)}<span className="text-sm sm:text-2xl lg:text-3xl text-coral/80">%</span>
-              </div>
-              <div className="hidden sm:block mt-3 text-sm text-ink-muted">
-                across {results.total.toLocaleString()} games
-              </div>
-            </div>
-            <div>
-              <div className="text-[0.6rem] sm:text-xs uppercase tracking-widest text-ink-muted font-medium mb-1 sm:mb-2">Record</div>
-              <div className="font-display text-2xl sm:text-5xl lg:text-7xl whitespace-nowrap text-ink tabular leading-none">
-                {results.wins}-{results.losses}
-              </div>
-              {results.total === 0 && (
-                <div className="mt-3 text-sm text-ink-muted">
-                  No games matched these conditions.
+          <div className="border-b border-hairline">
+            <div className="p-4 sm:p-6 lg:p-8 lg:pb-6 grid grid-cols-3 gap-3 sm:gap-6">
+              <div>
+                <div className="text-[0.6rem] sm:text-xs uppercase tracking-widest text-ink-muted font-medium mb-1 sm:mb-2">Win %</div>
+                <div className="font-display text-2xl sm:text-5xl lg:text-7xl whitespace-nowrap text-coral tabular leading-none">
+                  {(results.winPct * 100).toFixed(1)}<span className="text-sm sm:text-2xl lg:text-3xl text-coral/80">%</span>
                 </div>
-              )}
-            </div>
-            <div>
-              <div className="text-[0.6rem] sm:text-xs uppercase tracking-widest text-ink-muted font-medium mb-1 sm:mb-2">Avg margin</div>
-              <div
-                className={
-                  "font-display text-2xl sm:text-5xl lg:text-7xl whitespace-nowrap tabular leading-none " +
-                  (results.avgMargin === null
-                    ? "text-ink-muted"
-                    : results.avgMargin > 0
-                    ? "text-coral"
-                    : "text-ink")
-                }
-              >
-                {results.avgMargin === null
-                  ? "—"
-                  : (results.avgMargin > 0 ? "+" : "") + results.avgMargin.toFixed(1)}
-              </div>
-              {results.avgMargin === null && (
-                <div className="mt-3 text-sm text-ink-muted">
-                  no margin data
+                <div className="hidden sm:block mt-3 text-sm text-ink-muted">
+                  across {results.total.toLocaleString()} games
                 </div>
-              )}
+              </div>
+              <div>
+                <div className="text-[0.6rem] sm:text-xs uppercase tracking-widest text-ink-muted font-medium mb-1 sm:mb-2">Record</div>
+                {/* Wins wear the accent; the dash and losses recede. The number
+                    reads before the label does. */}
+                <div className="font-display text-2xl sm:text-5xl lg:text-7xl whitespace-nowrap tabular leading-none">
+                  <span className="text-coral">{results.wins}</span>
+                  <span className="text-ink-muted/60">–</span>
+                  <span className="text-ink">{results.losses}</span>
+                </div>
+                {results.total === 0 && (
+                  <div className="mt-3 text-sm text-ink-muted">
+                    No games matched these conditions.
+                  </div>
+                )}
+              </div>
+              <div>
+                <div className="text-[0.6rem] sm:text-xs uppercase tracking-widest text-ink-muted font-medium mb-1 sm:mb-2">Avg margin</div>
+                <div
+                  className={
+                    "font-display text-2xl sm:text-5xl lg:text-7xl whitespace-nowrap tabular leading-none " +
+                    (results.avgMargin === null
+                      ? "text-ink-muted"
+                      : results.avgMargin > 0
+                      ? "text-coral"
+                      : "text-ink")
+                  }
+                >
+                  {results.avgMargin === null
+                    ? "—"
+                    : (results.avgMargin > 0 ? "+" : "") + results.avgMargin.toFixed(1)}
+                </div>
+                <div className="hidden sm:block mt-3 text-sm text-ink-muted">
+                  {results.avgMargin === null ? "no margin data" : "per game"}
+                </div>
+              </div>
             </div>
+            {/* The record as a bar — wins vs losses at a glance, and the one
+                place the whole result set is visible in a single glyph. */}
+            {results.total > 0 && (
+              <div className="px-4 sm:px-6 lg:px-8 pb-4 sm:pb-5">
+                <div className="h-1.5 rounded-full bg-ink/10 overflow-hidden">
+                  <div
+                    className="h-full bg-coral rounded-full transition-[width] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
+                    style={{ width: `${results.winPct * 100}%` }}
+                  />
+                </div>
+                <div className="mt-1.5 flex justify-between text-[0.65rem] uppercase tracking-widest font-medium">
+                  <span className="text-coral">{results.wins.toLocaleString()} {results.wins === 1 ? "win" : "wins"}</span>
+                  <span className="text-ink-muted">{results.losses.toLocaleString()} {results.losses === 1 ? "loss" : "losses"}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
             <div className="px-4 lg:px-5 py-3 border-b border-hairline flex items-center flex-wrap gap-2">
-              <span className="text-xs uppercase tracking-widest text-ink-muted font-medium mr-1">
+              <span className="text-xs uppercase tracking-widest text-ink font-bold mr-1">
                 Conditions
               </span>
               {/* Conference chip — hidden when "all" (length 0 OR every
@@ -741,29 +1197,32 @@ export function CalcClient({
               <>
                 <div className="px-4 lg:px-5 py-3 border-b border-hairline flex items-center gap-3 flex-wrap">
                   <div className="flex items-baseline gap-3 flex-wrap">
-                    <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">
+                    <span className="text-xs uppercase tracking-widest text-ink font-bold">
                       Matching games
                     </span>
                     <span className="text-xs text-ink-muted tabular">
-                      {hasResultFilter
-                        ? visibleSample.filteredTotal === 0
-                          ? "No matches"
-                          : `Showing ${Math.min(visibleSample.filteredTotal, MAX_VISIBLE).toLocaleString()} of ${visibleSample.filteredTotal.toLocaleString()} filtered`
-                        : `Showing ${Math.min(results.matching.length, MAX_VISIBLE).toLocaleString()} of ${results.matching.length.toLocaleString()}`}
+                      {visibleSample.filteredTotal === 0
+                        ? "No matches"
+                        : `${rangeStart.toLocaleString()}–${rangeEnd.toLocaleString()} of ${visibleSample.filteredTotal.toLocaleString()}${hasResultFilter ? " filtered" : ""}`}
                     </span>
                   </div>
                   <div className="w-full grid grid-cols-2 gap-3 sm:w-auto sm:ml-auto sm:flex sm:items-center sm:gap-6 sm:flex-wrap">
-                    {/* Year picker — typeable single-select, dropdown lists every
-                        year present in the matching set newest-first plus an
-                        "All years" reset row at the top. */}
-                    <SearchableSelect
+                    {/* Year picker — a NATIVE select on purpose. The searchable
+                        popover variant opened a wide panel with its own inner
+                        search box under this narrow trigger, which read as two
+                        scrambled inputs. Thirteen years don't need search. */}
+                    <Select
                       value={dateFilter}
-                      options={yearOptions}
-                      onChange={setDateFilter}
-                      placeholder="All years"
-                      className="w-full sm:w-24"
-                      ariaLabel="Year filter"
-                    />
+                      // Changing what's being filtered starts the paging over —
+                      // staying on page 7 of a different result set is noise.
+                      onChange={(v) => { setDateFilter(v); setPage(0); }}
+                      className="w-full sm:w-28"
+                      aria-label="Year filter"
+                    >
+                      {yearOptions.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </Select>
                     {/* Team search */}
                     <div className="relative w-full sm:w-auto">
                       <svg
@@ -782,7 +1241,7 @@ export function CalcClient({
                       <input
                         type="search"
                         value={teamFilter}
-                        onChange={(e) => setTeamFilter(e.target.value)}
+                        onChange={(e) => { setTeamFilter(e.target.value); setPage(0); }}
                         placeholder="Search team…"
                         aria-label="Search matching games by team"
                         className="h-9 w-full sm:w-60 pl-9 pr-8 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
@@ -790,7 +1249,7 @@ export function CalcClient({
                       {teamFilter && (
                         <button
                           type="button"
-                          onClick={() => setTeamFilter("")}
+                          onClick={() => { setTeamFilter(""); setPage(0); }}
                           aria-label="Clear team search"
                           className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-base leading-none w-5 h-5 inline-flex items-center justify-center rounded hover:bg-paper-deep"
                         >
@@ -808,7 +1267,7 @@ export function CalcClient({
                         {" "}
                         <button
                           type="button"
-                          onClick={() => { setDateFilter(""); setTeamFilter(""); }}
+                          onClick={() => { setDateFilter(""); setTeamFilter(""); setPage(0); }}
                           className="text-coral hover:text-ink underline decoration-dotted underline-offset-4"
                         >
                           Clear filters
@@ -823,33 +1282,68 @@ export function CalcClient({
                         <tr>
                           <Th>Date</Th><Th>Team</Th><Th>Opp</Th><Th>Result</Th>
                           {submitted.filters.map((f) => (
-                            <Th key={f.id} align="right">{CALC_STAT_OPTIONS.find((s) => s.key === f.stat)?.label ?? String(f.stat)}</Th>
+                            <Th key={f.id} align="right">{cleanLabel(CALC_STAT_OPTIONS.find((s) => s.key === f.stat)?.label ?? String(f.stat))}</Th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {visibleSample.rows.map((g) => (
-                          <tr key={g.cbba_game_id + "-" + g.team_id} className="border-b border-hairline/60">
+                          <tr
+                            key={g.cbba_game_id + "-" + g.team_id}
+                            onDoubleClick={() => setBoxGame(g)}
+                            title="Double-click for the box score"
+                            className="border-b border-hairline/60 hover:bg-paper-deep/40 transition-colors cursor-pointer select-none"
+                          >
                             <Td className="text-ink-muted tabular whitespace-nowrap">{fmtGameDate(g.game_date)}</Td>
                             <Td>
                               <span className="inline-flex items-center gap-2">
                                 <TeamLogo name={g.team_name} size={20} />
+                                {typeof g.seed === "number" && <SeedBadge seed={g.seed} />}
                                 <span className="hidden sm:inline font-medium text-ink">{g.team_name}</span>
                               </span>
                             </Td>
                             <Td className="text-ink-soft">
                               {g.opp_team_market ? (
                                 <span className="inline-flex items-center gap-2">
-                                  <span className="hidden sm:inline text-ink-muted">vs</span>
+                                  {/* Box-score notation as a badge: vs = home,
+                                      @ = away, N = neutral. */}
+                                  <span
+                                    className="hidden sm:inline-flex items-center justify-center w-7 h-5 rounded bg-paper-deep border border-hairline text-[10px] font-semibold uppercase text-ink-soft"
+                                    title={g.is_neutral ? "Neutral site" : g.is_home ? "Home" : "Away"}
+                                  >
+                                    {g.is_neutral ? "N" : g.is_home ? "vs" : "@"}
+                                  </span>
                                   <TeamLogo name={g.opp_team_market} size={20} />
+                                  {typeof g.opp_seed === "number" && <SeedBadge seed={g.opp_seed} />}
                                   <span className="hidden sm:inline">{g.opp_team_market}</span>
+                                  {typeof g.round === "string" && g.round && (
+                                    <span className="hidden lg:inline px-1.5 py-0.5 rounded bg-coral/10 border border-coral/25 text-[10px] font-semibold text-coral whitespace-nowrap">
+                                      {g.round}
+                                    </span>
+                                  )}
                                 </span>
                               ) : (
                                 "—"
                               )}
                             </Td>
-                            <Td className={g.won ? "text-coral font-medium" : "text-ink-muted"}>
-                              {g.won ? "W" : "L"} {g.pts_scored ?? "—"}-{g.pts_against ?? "—"}
+                            <Td>
+                              <button
+                                type="button"
+                                onClick={() => setBoxGame(g)}
+                                title="Open box score"
+                                className="inline-flex items-center gap-2 whitespace-nowrap group/score"
+                              >
+                                <span
+                                  className={`inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold ${
+                                    g.won ? "bg-coral text-white" : "bg-ink/10 text-ink-soft"
+                                  }`}
+                                >
+                                  {g.won ? "W" : "L"}
+                                </span>
+                                <span className="tabular text-ink group-hover/score:text-coral underline decoration-dotted decoration-hairline underline-offset-4 group-hover/score:decoration-coral/60 transition-colors">
+                                  {g.pts_scored ?? "—"}-{g.pts_against ?? "—"}
+                                </span>
+                              </button>
                             </Td>
                             {submitted.filters.map((f) => (
                               <Td key={f.id} align="right" className="tabular">
@@ -860,6 +1354,44 @@ export function CalcClient({
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+
+                {visibleSample.filteredTotal > 0 && (
+                  <div className="px-4 lg:px-5 py-3 border-t border-hairline flex items-center gap-3 flex-wrap">
+                    <label className="flex items-center gap-2 text-xs text-ink-muted">
+                      <span className="uppercase tracking-widest font-medium">Rows</span>
+                      <Select
+                        value={String(pageSize)}
+                        // Keep the first visible row visible across a size
+                        // change: jumping from "row 51" to page 1 loses the
+                        // reader's place for no reason.
+                        onChange={(v) => {
+                          const next = Number(v);
+                          const firstRow = safePage * pageSize;
+                          setPageSize(next);
+                          setPage(Math.floor(firstRow / next));
+                        }}
+                        className="w-20"
+                        aria-label="Rows per page"
+                      >
+                        {[25, 50, 100].map((n) => (
+                          <option key={n} value={String(n)}>{n}</option>
+                        ))}
+                      </Select>
+                    </label>
+
+                    {pageCount > 1 && (
+                      <div className="ml-auto flex items-center gap-1">
+                        <PagerButton onClick={() => setPage(0)} disabled={safePage === 0} label="First page">«</PagerButton>
+                        <PagerButton onClick={() => setPage(safePage - 1)} disabled={safePage === 0} label="Previous page">‹</PagerButton>
+                        <span className="px-2 text-xs text-ink-muted tabular whitespace-nowrap">
+                          Page {(safePage + 1).toLocaleString()} of {pageCount.toLocaleString()}
+                        </span>
+                        <PagerButton onClick={() => setPage(safePage + 1)} disabled={safePage >= pageCount - 1} label="Next page">›</PagerButton>
+                        <PagerButton onClick={() => setPage(pageCount - 1)} disabled={safePage >= pageCount - 1} label="Last page">»</PagerButton>
+                      </div>
+                    )}
                   </div>
                 )}
               </>
@@ -877,6 +1409,215 @@ export function CalcClient({
           </p>
         </div>
       )}
+
+      {boxGame && (
+        <GameBoxModal
+          game={boxGame}
+          opp={
+            games.find(
+              (x) => x !== boxGame && gameKey(x.cbba_game_id) === gameKey(boxGame.cbba_game_id),
+            ) ?? null
+          }
+          onClose={() => setBoxGame(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Team box score for one game, both sides compared stat-by-stat. Opened by
+ * double-clicking a matching-games row or clicking its score.
+ *
+ * TEAM stats only, deliberately: everything here is already in the browser
+ * (the game's two log rows + the CBBD sidecar). Individual player box scores
+ * need a per-game player index that the export doesn't produce yet — R2 keys
+ * player data by player-season — so that's an export change, not a UI one.
+ */
+function GameBoxModal({
+  game,
+  opp,
+  onClose,
+}: {
+  game: GameLog;
+  /** The opponent's perspective row; null for non-D1 opponents (no row). */
+  opp: GameLog | null;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const num = (r: GameLog | null, k: string): number | null => {
+    const v = r?.[k];
+    return typeof v === "number" ? v : null;
+  };
+  const str = (r: GameLog | null, k: string): string | null => {
+    const v = r?.[k];
+    return typeof v === "string" && v ? v : null;
+  };
+  /** "24-62" made-attempted, the way a box score reads it. */
+  const madeAtt = (r: GameLog | null, m: string, a: string): string | null => {
+    const mm = num(r, m), aa = num(r, a);
+    return mm === null || aa === null ? null : `${mm}-${aa}`;
+  };
+
+  // Per-side rows. `lower` marks stats where less is better, for highlighting.
+  // `raw` rows are already-formatted strings (made-attempted) and skip the
+  // better/worse comparison — "24-62 vs 27-63" has no single winner.
+  const ROWS: Array<{ key: string; label: string; lower?: boolean; raw?: boolean }> = [
+    { key: "fg", label: "FG", raw: true },
+    { key: "fg3", label: "3PT", raw: true },
+    { key: "ft", label: "FT", raw: true },
+    { key: "efg_pct", label: "eFG%" },
+    { key: "ts_pct", label: "TS%" },
+    { key: "fg3_pct", label: "3P%" },
+    { key: "ft_pct", label: "FT%" },
+    { key: "ortg", label: "ORtg" },
+    { key: "reb", label: "Rebounds" },
+    { key: "oreb", label: "Off. rebounds" },
+    { key: "ast", label: "Assists" },
+    { key: "tov", label: "Turnovers", lower: true },
+    { key: "stl", label: "Steals" },
+    { key: "blk", label: "Blocks" },
+    { key: "fouls", label: "Fouls", lower: true },
+    { key: "largest_lead", label: "Largest lead" },
+    { key: "game_score", label: "Game Score" },
+  ];
+
+  const rawValue = (r: GameLog | null, key: string): string | null =>
+    key === "fg" ? madeAtt(r, "fgm", "fga")
+    : key === "fg3" ? madeAtt(r, "fg3m", "fg3a")
+    : key === "ft" ? madeAtt(r, "ftm", "fta")
+    : null;
+
+  const venueLabel = game.is_neutral ? "Neutral site" : game.is_home ? `at ${game.team_name}` : `at ${game.opp_team_market ?? "opponent"}`;
+  // CBBD's whole-number possession count, not the game logs' `poss` — that one
+  // is a formula estimate (FGA − OREB + TOV + 0.475·FTA) and lands on 71.9,
+  // which reads as nonsense for a single game.
+  const poss = num(game, "poss_box");
+  const pace = num(game, "pace");
+  const round = str(game, "round");
+  const tourneyName = str(game, "tourney_name");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="bta-backdrop-in absolute inset-0 bg-ink/40" onClick={onClose} aria-hidden />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Box score: ${game.team_name} ${game.pts_scored ?? ""}, ${game.opp_team_market ?? "opponent"} ${game.pts_against ?? ""}`}
+        className="bta-modal-in relative w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-xl border border-hairline bg-card shadow-xl"
+      >
+        <div className="p-4 sm:p-5 border-b border-hairline">
+          <div className="flex items-center gap-2 text-xs text-ink-muted flex-wrap">
+            <span className="tabular">{fmtGameDate(game.game_date)}</span>
+            <span aria-hidden>·</span>
+            <span>{venueLabel}</span>
+            {round ? (
+              // The round is the headline for a tournament game — "NCAA ·
+              // Sweet 16" says more than a generic Tourney chip.
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-coral/10 border border-coral/30 text-coral font-semibold">
+                {tourneyName ? `${tourneyName} · ${round}` : round}
+              </span>
+            ) : (
+              num(game, "tourney") === 1 && <ConditionChip>Tourney</ConditionChip>
+            )}
+            {num(game, "conf_game") === 1 && <ConditionChip>Conf</ConditionChip>}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close box score"
+              className="ml-auto w-6 h-6 inline-flex items-center justify-center rounded text-base leading-none text-ink-muted hover:text-coral hover:bg-paper-deep transition-colors"
+            >
+              ×
+            </button>
+          </div>
+          {/* Score lines — winner carries the accent. */}
+          {[
+            { name: game.team_name, pts: game.pts_scored, won: !!game.won, seed: num(game, "seed") },
+            { name: game.opp_team_market ?? "Non-D1 opponent", pts: game.pts_against, won: !game.won, seed: num(game, "opp_seed") },
+          ].map((side) => (
+            <div key={side.name} className="mt-3 flex items-center gap-3">
+              <TeamLogo name={side.name} size={28} />
+              {side.seed !== null && <SeedBadge seed={side.seed} />}
+              <span className={`text-lg ${side.won ? "font-semibold text-ink" : "text-ink-soft"}`}>{side.name}</span>
+              <span
+                className={`ml-auto font-display text-3xl tabular leading-none ${side.won ? "text-coral" : "text-ink-muted"}`}
+              >
+                {side.pts ?? "—"}
+              </span>
+              <span
+                className={`inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold ${
+                  side.won ? "bg-coral text-white" : "bg-ink/10 text-ink-soft"
+                }`}
+              >
+                {side.won ? "W" : "L"}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="p-4 sm:p-5">
+          {opp ? (
+            <>
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-4 text-sm">
+                <span className="text-xs uppercase tracking-widest text-ink-muted font-medium truncate">{game.team_name}</span>
+                <span />
+                <span className="text-xs uppercase tracking-widest text-ink-muted font-medium text-right truncate">{game.opp_team_market}</span>
+                {ROWS.map((row) => {
+                  if (row.raw) {
+                    const a = rawValue(game, row.key);
+                    const b = rawValue(opp, row.key);
+                    if (a === null && b === null) return null;
+                    return (
+                      <div key={row.key} className="contents">
+                        <span className="py-1.5 tabular border-t border-hairline/60 text-ink">{a ?? "—"}</span>
+                        <span className="py-1.5 text-xs text-ink-muted text-center whitespace-nowrap border-t border-hairline/60">{row.label}</span>
+                        <span className="py-1.5 tabular text-right border-t border-hairline/60 text-ink">{b ?? "—"}</span>
+                      </div>
+                    );
+                  }
+                  const a = num(game, row.key);
+                  const b = num(opp, row.key);
+                  if (a === null && b === null) return null;
+                  const aBetter = a !== null && b !== null && a !== b && (row.lower ? a < b : a > b);
+                  const bBetter = a !== null && b !== null && a !== b && (row.lower ? b < a : b > a);
+                  return (
+                    <div key={row.key} className="contents">
+                      <span className={`py-1.5 tabular border-t border-hairline/60 ${aBetter ? "text-coral font-semibold" : "text-ink"}`}>
+                        {a === null ? "—" : formatStat(a, row.key)}
+                      </span>
+                      <span className="py-1.5 text-xs text-ink-muted text-center whitespace-nowrap border-t border-hairline/60">{row.label}</span>
+                      <span className={`py-1.5 tabular text-right border-t border-hairline/60 ${bBetter ? "text-coral font-semibold" : "text-ink"}`}>
+                        {b === null ? "—" : formatStat(b, row.key)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-3 pt-2 border-t border-hairline flex flex-wrap gap-x-6 gap-y-1 text-xs text-ink-muted tabular">
+                {poss !== null && <span>Possessions {poss}</span>}
+                {pace !== null && <span>Pace {formatStat(pace, "pace")}</span>}
+                <span
+                  className="cursor-help border-b border-dotted border-hairline"
+                  title="Hollinger Game Score — a single-number summary of a box-score line, scaled roughly like points. The team figure is the sum of its players'."
+                >
+                  What&apos;s Game Score?
+                </span>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-ink-muted">
+              No opponent stat line — non-D1 opponents don&apos;t carry a full box in our data.
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -889,20 +1630,23 @@ function fmtGameDate(iso: string | null): string {
   return `${m[2]}/${m[3]}/${m[1]!.slice(2)}`;
 }
 
-// Format a game-log stat value for display. Percentages → "55.5%", diff stats
-// → signed integers ("+8" / "-5"), pace/poss → 1 decimal, anything else → 1 decimal.
+// Format a game-log stat value for display. Flags → Yes/No, percentages →
+// "55.5%", diff stats → signed integers ("+8" / "-5"), everything else → 1 dp.
 function formatStat(v: number | string | boolean | null, key: string): string {
   if (typeof v !== "number") return "—";
-  if (key.endsWith("_pct")) return (v * 100).toLocaleString("en-US", { maximumFractionDigits: 1 }) + "%";
+  if (FLAG_KEYS.has(key)) return v === 1 ? "Yes" : v === 0 ? "No" : "—";
+  if (isPctKey(key)) return (v * 100).toLocaleString("en-US", { maximumFractionDigits: 1 }) + "%";
   if (key.endsWith("_diff")) return v > 0 ? `+${v}` : String(v);
   if (key === "poss" || key === "pace") return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   return v.toLocaleString("en-US", { maximumFractionDigits: 1 });
 }
 
 function labelFor(f: Filter): string {
-  const stat = CALC_STAT_OPTIONS.find((s) => s.key === f.stat)?.label ?? String(f.stat);
+  const key = String(f.stat);
+  const stat = cleanLabel(CALC_STAT_OPTIONS.find((s) => s.key === f.stat)?.label ?? key);
+  if (FLAG_KEYS.has(key)) return `${stat}: ${f.value === 1 ? "Yes" : "No"}`;
   const op = OPS.find((o) => o.value === f.op)?.label ?? f.op;
-  return `${stat} ${op} ${f.value}`;
+  return `${stat} ${op} ${fmtCondValue(key, f.value)}`;
 }
 
 function ConditionChip({ children }: { children: React.ReactNode }) {
@@ -913,12 +1657,418 @@ function ConditionChip({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+/**
+ * One stat as a compact sheet row: name, comparator glyph (tap to cycle),
+ * exact-value input, thin slider. Dormant until touched — any interaction
+ * turns the row into a live condition (bold name, hue-filled slider, ×);
+ * × puts it back to sleep. Flags trade the whole apparatus for Any/Yes/No.
+ *
+ * The slider is the thumb-only .bta-range the Players drawer uses: track and
+ * fill are plain divs behind a transparent input, which is what lets the fill
+ * take the group hue with no per-hue CSS.
+ */
+function StatTile({
+  opt,
+  hue,
+  filter,
+  onPatch,
+  onClear,
+}: {
+  opt: StatOption;
+  hue: string;
+  /** The live condition for this stat, or undefined while dormant. */
+  filter: Filter | undefined;
+  onPatch: (patch: Partial<Filter>) => void;
+  onClear: () => void;
+}) {
+  const key = opt.key as string;
+  const active = !!filter;
+  const label = cleanLabel(opt.label);
+  const r = rangeFor(key);
+  const pct = isPctKey(key);
+  const value = filter?.value ?? defaultValueFor(key);
+  const shown = pct ? Math.round(value * 1000) / 10 : value;
+  const frac = Math.min(1, Math.max(0, (value - r.min) / (r.max - r.min)));
+  const [opOpen, setOpOpen] = useState(false);
+
+  if (FLAG_KEYS.has(key)) {
+    const flagState = !filter ? "any" : filter.value === 1 ? "yes" : "no";
+    return (
+      <div className="flex items-center justify-between gap-2 min-h-13 py-2 border-b border-hairline/60">
+        <span className={`text-sm truncate transition-colors ${active ? "text-ink font-medium" : "text-ink-soft"}`}>{label}</span>
+        <div className="inline-flex rounded-md border border-hairline overflow-hidden shrink-0">
+          {(["any", "yes", "no"] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => (s === "any" ? onClear() : onPatch({ op: "eq", value: s === "yes" ? 1 : 0 }))}
+              aria-pressed={flagState === s}
+              className={`px-2 h-6 text-[11px] font-medium transition-colors ${
+                flagState === s ? "text-white" : "text-ink-muted hover:text-ink"
+              }`}
+              style={flagState === s ? { background: hue } : undefined}
+            >
+              {s === "any" ? "Any" : s === "yes" ? "Yes" : "No"}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const op: Op = filter?.op ?? (opt.defaultDir === "lt" ? "lt" : "gt");
+  const opLabel = OPS.find((o) => o.value === op)?.label ?? ">";
+
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">{label}</span>
+    <div className="py-2 border-b border-hairline/60">
+      <div className="flex items-center gap-1.5">
+        <span className={`text-sm truncate transition-colors ${active ? "text-ink font-medium" : "text-ink-soft"}`}>
+          {label}
+        </span>
+        <div className="ml-auto flex items-center gap-1 shrink-0">
+          <div className="relative">
+            <button
+              type="button"
+              title="Change comparator"
+              aria-label={`${label} comparator: ${opLabel}`}
+              aria-expanded={opOpen}
+              onClick={() => setOpOpen((o) => !o)}
+              className={`w-6 h-6 rounded border text-xs font-semibold transition-colors ${
+                active ? "bg-card" : "border-hairline text-ink-muted hover:text-ink hover:border-ink/30"
+              }`}
+              style={active ? { borderColor: hue, color: hue } : undefined}
+            >
+              {opLabel}
+            </button>
+            {opOpen && (
+              <>
+                {/* Invisible backdrop — one click anywhere else closes. */}
+                <div className="fixed inset-0 z-20" onClick={() => setOpOpen(false)} aria-hidden />
+                <div className="bta-pop-in absolute right-0 top-7 z-30 rounded-md border border-hairline bg-popover shadow-md overflow-hidden">
+                  {OPS.map((o) => (
+                    <button
+                      key={o.value}
+                      type="button"
+                      onClick={() => {
+                        // Choosing a comparator wakes a dormant tile too.
+                        onPatch({ op: o.value });
+                        setOpOpen(false);
+                      }}
+                      aria-pressed={o.value === op}
+                      className={`block w-9 px-2 py-1.5 text-sm text-center transition-colors ${
+                        o.value === op ? "bg-coral/10 text-coral font-semibold" : "text-ink-soft hover:bg-paper-deep hover:text-ink"
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          <input
+            type="number"
+            step={pct ? 0.5 : r.step}
+            value={shown}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isNaN(n)) return;
+              onPatch({ value: pct ? n / 100 : n });
+            }}
+            aria-label={`${label} value`}
+            className={`w-14 h-6 px-1 rounded border text-right text-sm tabular bg-transparent focus:outline-none focus:ring-1 focus:ring-coral/40 transition-colors ${
+              active ? "border-hairline bg-card text-ink" : "border-transparent hover:border-hairline text-ink-muted"
+            }`}
+          />
+          {pct && <span className="text-[11px] text-ink-muted w-3">%</span>}
+          <button
+            type="button"
+            onClick={onClear}
+            aria-label={`Clear ${label} condition`}
+            className={`w-5 h-5 inline-flex items-center justify-center rounded-full text-sm font-semibold leading-none transition-all ${
+              active
+                ? "text-coral bg-coral/10 border border-coral/40 hover:bg-coral hover:text-white"
+                : "opacity-0 pointer-events-none"
+            }`}
+          >
+            ×
+          </button>
+        </div>
+      </div>
+      <div className="relative h-4 mt-0.5">
+        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 rounded-full bg-hairline" aria-hidden />
+        {active && (
+          <div
+            className="absolute left-0 top-1/2 -translate-y-1/2 h-1 rounded-l-full"
+            style={{ width: `${frac * 100}%`, background: hue, opacity: 0.75 }}
+            aria-hidden
+          />
+        )}
+        <input
+          type="range"
+          className="bta-range"
+          min={r.min}
+          max={r.max}
+          step={r.step}
+          value={Math.min(r.max, Math.max(r.min, value))}
+          onChange={(e) => onPatch({ value: Number(e.target.value) })}
+          aria-label={`${label} threshold`}
+        />
+      </div>
+    </div>
+  );
+}
+
+function PagerButton({
+  onClick,
+  disabled,
+  label,
+  children,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className="w-7 h-7 inline-flex items-center justify-center rounded-md border border-hairline bg-card text-sm text-ink-soft hover:border-coral/60 hover:text-coral disabled:opacity-30 disabled:hover:border-hairline disabled:hover:text-ink-soft transition-colors"
+    >
       {children}
-    </label>
+    </button>
+  );
+}
+
+/**
+ * NCAA/NIT seed. Only ~1% of rows carry one, and that's the point — a game
+ * with no seed simply renders nothing rather than a placeholder.
+ */
+function SeedBadge({ seed }: { seed: number }) {
+  return (
+    <span
+      title={`No. ${seed} seed`}
+      className="inline-flex items-center justify-center min-w-4.5 h-4.5 px-1 rounded-sm bg-ink/10 text-ink-soft text-[10px] font-bold tabular leading-none"
+    >
+      {seed}
+    </span>
+  );
+}
+
+/** Coral count marble — the D&3-style "this section is filtering" signal. */
+function CountBadge({ n }: { n: number }) {
+  return (
+    <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-coral text-white text-[10px] font-semibold tabular leading-none">
+      {n}
+    </span>
+  );
+}
+
+function SectionLabel({
+  children,
+  count = 0,
+  action,
+}: {
+  children: React.ReactNode;
+  count?: number;
+  action?: React.ReactNode;
+}) {
+  return (
+    // Fixed height on purpose: the count badge and All/Clear buttons come and
+    // go with the selection, and without a reserved line-height their arrival
+    // made this row taller — visibly shoving the input below it out of
+    // alignment with its neighbors (Teams grew, Coaches didn't).
+    <div className="flex items-center gap-2 mb-2 h-7">
+      <span className="text-xs uppercase tracking-widest text-ink font-bold">{children}</span>
+      {count > 0 && <CountBadge n={count} />}
+      {action}
+    </div>
+  );
+}
+
+/** One selectable pill. Lit = coral fill, like D&3's team grid. */
+function TogglePill({
+  active,
+  onClick,
+  title,
+  children,
+  className = "",
+  emphasis = false,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title?: string;
+  children: React.ReactNode;
+  className?: string;
+  /** Slightly heavier dormant treatment (power conferences). */
+  emphasis?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-pressed={active}
+      className={`px-3 py-1.5 rounded-md border text-sm transition-all ${
+        active
+          ? "bg-coral border-coral text-white shadow-sm font-medium"
+          : `bg-card text-ink-soft hover:border-coral/50 hover:text-ink ${
+              emphasis ? "border-ink/25 font-semibold" : "border-hairline font-medium"
+            }`
+      } ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * Small utility button — Clear All and the per-section All/Clear actions.
+ * Distinct from TogglePill by shape and hue, not weight: fully-rounded coral
+ * ghost vs the pills' square-ish bordered cards. (A dark ink fill was tried
+ * first and read as "selected", which is exactly the wrong signal.)
+ */
+const MINI_CLS =
+  "px-2.5 py-1 rounded-md border border-coral/40 bg-coral/5 text-xs font-semibold text-coral";
+
+function MiniButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} className={`${MINI_CLS} hover:bg-coral hover:text-white transition-colors`}>
+      {children}
+    </button>
+  );
+}
+
+/**
+ * Type-ahead multi-select: type, pick a suggestion (Enter takes the top one),
+ * the choice becomes a removable chip, keep typing for the next. Empty
+ * selection = no filter, said out loud via the allLabel chip so "nothing
+ * selected" never reads as "nothing will match".
+ */
+function ChipSearchMulti({
+  label,
+  values,
+  options,
+  onChange,
+  placeholder,
+  allLabel,
+  icon,
+}: {
+  label: string;
+  values: string[];
+  options: string[];
+  onChange: (next: string[]) => void;
+  placeholder: string;
+  allLabel: string;
+  /** Optional per-name icon (school logos for teams/opponents). */
+  icon?: (name: string) => React.ReactNode;
+}) {
+  const [q, setQ] = useState("");
+  const [hi, setHi] = useState(0);
+  const matches = useMemo(() => {
+    const tokens = normName(q).split(" ").filter(Boolean);
+    if (tokens.length === 0) return [];
+    // Alias-aware and token-based: an option matches when every typed word
+    // appears somewhere in its own name OR in any nickname it belongs to —
+    // in both directions. "uconn" finds Connecticut, "connecticut" finds
+    // UConn in the opponent name space, "south california" finds Southern
+    // California because each token matches independently.
+    return options
+      .filter(
+        (o) => !values.includes(o) && searchKeysFor(o).some((k) => tokens.every((t) => k.includes(t))),
+      )
+      .slice(0, 8);
+  }, [q, options, values]);
+
+  function pick(name: string) {
+    onChange([...values, name]);
+    setQ("");
+    setHi(0);
+  }
+
+  return (
+    <div>
+      <SectionLabel
+        count={values.length}
+        action={values.length > 0 ? <MiniButton onClick={() => onChange([])}>All</MiniButton> : null}
+      >
+        {label}
+      </SectionLabel>
+      <div className="relative">
+        <input
+          value={q}
+          onChange={(e) => { setQ(e.target.value); setHi(0); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              if (matches[hi]) pick(matches[hi]);
+            } else if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setHi((h) => Math.min(h + 1, matches.length - 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setHi((h) => Math.max(h - 1, 0));
+            } else if (e.key === "Escape") {
+              setQ("");
+            }
+          }}
+          placeholder={placeholder}
+          aria-label={label}
+          className="h-9 w-full px-3 rounded-md border border-hairline bg-card text-ink text-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-coral/40"
+        />
+        {matches.length > 0 && (
+          <ul className="bta-pop-in absolute z-20 mt-1 w-full rounded-md border border-hairline bg-popover shadow-md overflow-hidden" role="listbox">
+            {matches.map((m, i) => (
+              <li key={m}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={i === hi}
+                  // onMouseDown so the pick lands before the input blurs.
+                  onMouseDown={(e) => { e.preventDefault(); pick(m); }}
+                  onMouseEnter={() => setHi(i)}
+                  className={`w-full text-left px-3 py-2 text-sm transition-colors inline-flex items-center gap-2 ${
+                    i === hi ? "bg-coral/10 text-ink" : "text-ink-soft"
+                  }`}
+                >
+                  {icon?.(m)}
+                  {m}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {values.length === 0 ? (
+          // Empty selection MEANS "all", and this chip says so in the same
+          // visual language as a lit pill — filled, clearly the current state.
+          // cursor-default/select-none so it can't show a text caret and read
+          // as a broken button.
+          <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-coral text-white text-xs font-semibold shadow-sm cursor-default select-none">
+            {allLabel}
+          </span>
+        ) : (
+          values.map((v) => (
+            <span key={v} className="bta-pop-in inline-flex items-center gap-1.5 pl-2 pr-1 py-1 rounded-md bg-coral/10 border border-coral/30 text-xs text-ink">
+              {icon?.(v)}
+              {v}
+              <button
+                type="button"
+                onClick={() => onChange(values.filter((x) => x !== v))}
+                aria-label={`Remove ${v}`}
+                className="w-4 h-4 inline-flex items-center justify-center rounded text-ink-muted hover:text-white hover:bg-coral transition-colors leading-none"
+              >
+                ×
+              </button>
+            </span>
+          ))
+        )}
+      </div>
+    </div>
   );
 }
 function Th({ children, align = "left" }: { children: React.ReactNode; align?: "left" | "right" }) {

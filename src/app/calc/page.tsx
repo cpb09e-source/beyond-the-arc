@@ -62,17 +62,6 @@ export default async function CalcPage() {
         <CalcClient coachByTeamYear={coachByTeamYear} allCoaches={allCoaches} />
       </section>
 
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-10 my-6 sm:my-12">
-        <div className="court-divider" />
-      </div>
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-10 mb-4 sm:mb-20">
-        <p className="text-sm text-ink-muted max-w-2xl leading-relaxed">
-          Each row is one team&apos;s perspective on one game. Conditions are
-          evaluated from that team&apos;s perspective, so &ldquo;TOV Diff &gt; 1&rdquo;
-          means the team committed fewer turnovers than its opponent by more
-          than 1.
-        </p>
-      </section>
     </>
   );
 }
