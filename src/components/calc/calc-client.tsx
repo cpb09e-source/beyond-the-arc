@@ -28,7 +28,6 @@ import {
   ratingKey,
   normTeamKey,
   gameKey,
-  type Quad,
   type TeamRatingsFile,
 } from "@/lib/quad";
 
@@ -120,7 +119,7 @@ export function CalcClient({
   // they fit SearchableMultiSelect's string API.
   const [quads, setQuads] = useState<string[]>([]);
   // Natural-language box. `ask` is the textarea, `asking` the in-flight flag,
-  // `askResult` the last parse (kept so its interpretation / caveats stay on
+  // `askResult` the last parse (kept so its analysis / caveats stay on
   // screen while the user reviews the filled-in form before calculating).
   const [ask, setAsk] = useState("");
   const [asking, setAsking] = useState(false);
@@ -439,16 +438,26 @@ export function CalcClient({
         {askResult && (
           <div className="mt-3 text-sm space-y-1">
             <p className="text-ink">
-              <span className="text-ink-muted">Understood:</span> {askResult.interpretation}
+              <span className="text-ink-muted">Understood:</span> {askResult.analysis}
             </p>
-            {askResult.ambiguities.length > 0 && (
+            {askResult.notes.length > 0 && (
               <p className="text-ink-muted">
-                Judgement call{askResult.ambiguities.length > 1 ? "s" : ""}: {askResult.ambiguities.join(" · ")}
+                Judgement call{askResult.notes.length > 1 ? "s" : ""}: {askResult.notes.join(" · ")}
               </p>
             )}
             {askResult.unresolved.length > 0 && (
               <p className="text-coral">
                 Couldn&apos;t match: {askResult.unresolved.join(", ")} — set {askResult.unresolved.length > 1 ? "those" : "that"} manually.
+              </p>
+            )}
+            {/* A parse with no conditions is the quietest way this can be
+                wrong: the form still fills in the team and seasons, Calculate
+                still returns a number, and that number is the team's overall
+                record rather than the answer to what was asked. Rare, but it
+                reads as a confident answer, so say so outright. */}
+            {askResult.conditions.length === 0 && (
+              <p className="text-coral">
+                No statistical condition was picked up, so this would return the overall record. Add one below, or rephrase as e.g. &ldquo;games where they shot over 40% from three&rdquo;.
               </p>
             )}
             <p className="text-ink-muted">Check the filters below, then Calculate.</p>

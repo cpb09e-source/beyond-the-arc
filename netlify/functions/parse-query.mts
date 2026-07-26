@@ -47,14 +47,33 @@ const STATS = [
   "conf_game", "tourney", "postseason",
 ] as const;
 
+// Mirrors src/lib/seasons.ts. Same bundling constraint as STATS above — the
+// function can't resolve "@/". The client re-filters against its own list, so
+// drift here costs a bad suggestion, never a bad result.
+const SEASON_FLOOR = 2014;
+const SEASON_CEIL = 2026;
+const EXCLUDED_SEASONS = [2021];
+
 const SCHEMA = {
   type: "object",
   properties: {
+    // WHY THIS IS "analysis" AND NOT "interpretation": structured-output keys
+    // come back ALPHABETIZED, not in schema order. Under the old name the model
+    // wrote `conditions` (3rd) before `interpretation` (7th) — committing to
+    // filters before reasoning about the question, and dropping the condition
+    // outright on 3 of 5 runs. "analysis" sorts ahead of "conditions", so the
+    // reasoning now lands first. Renaming it back reintroduces the bug.
+    // A dedicated scratchpad field fixed it too, but cost extra tokens on every
+    // call; renaming an existing field reorders the generation for free.
+    analysis: { type: "string", description: "Write this FIRST. One short sentence restating what you understood, naming each stat you are about to use. Shown to the user." },
     coaches: { type: "array", items: { type: "string" }, description: "Coach names exactly as the user wrote them, corrected for obvious spelling errors. Empty if none mentioned." },
     teams: { type: "array", items: { type: "string" }, description: "The team(s) whose perspective the question is asked from. Empty if none." },
     opponents: { type: "array", items: { type: "string" }, description: "Specific opponents faced. Only when the user names who they PLAYED, not who they are." },
     conferences: { type: "array", items: { type: "string" }, description: "Conference names, e.g. ACC, Big Ten. Empty if none." },
-    seasons: { type: "array", items: { type: "integer" }, description: "Season END years (2015-16 season = 2016). Empty means all seasons." },
+    // No minimum/maximum here — structured outputs reject numeric bounds on
+    // integer. The range lives in the description, and the client drops any
+    // season outside its own window anyway (resolveQuery -> validSeasons).
+    seasons: { type: "array", items: { type: "integer" }, description: `Season END years (2015-16 season = 2016), between ${SEASON_FLOOR} and ${SEASON_CEIL}. An open-ended range such as "since 2022" runs through ${SEASON_CEIL}. Never include ${EXCLUDED_SEASONS.join(", ")} (absent from the data). Empty means all seasons.` },
     venue: { type: "string", enum: ["all", "home", "away", "neutral"] },
     quads: { type: "array", items: { type: "integer", enum: [1, 2, 3, 4] }, description: "NCAA quadrants. Empty means all." },
     conditions: {
@@ -71,16 +90,17 @@ const SCHEMA = {
         additionalProperties: false,
       },
     },
-    interpretation: { type: "string", description: "One short sentence restating what you understood, in plain English." },
-    ambiguities: { type: "array", items: { type: "string" }, description: "Any place a different reading was plausible, e.g. 'shot more 3s' could mean attempted or made." },
+    notes: { type: "array", items: { type: "string" }, description: "Any place a different reading was plausible, e.g. 'shot more 3s' could mean attempted or made." },
   },
-  required: ["coaches", "teams", "opponents", "conferences", "seasons", "venue", "quads", "conditions", "interpretation", "ambiguities"],
+  required: ["analysis", "coaches", "teams", "opponents", "conferences", "seasons", "venue", "quads", "conditions", "notes"],
   additionalProperties: false,
 } as const;
 
 const SYSTEM = `You translate plain-English college basketball questions into filters for a "Win Calculator" — a tool that answers "when X happened, how often did the team win?"
 
 Every row of data is ONE TEAM'S PERSPECTIVE ON ONE GAME. Conditions are evaluated from that team's point of view, so a "diff" stat is always (this team − opponent).
+
+Conditions are ALWAYS evaluated per individual game — never against a season total or a season average. "Teams that shot over 40% from three" means games in which that team shot over 40%, so it is still fg3_pct > 0.4. There is no way to express a season-level condition, so never drop a condition because it sounded like a season stat.
 
 STAT REFERENCE
 Margin/scoring: pts_diff, pts_scored, pts_against
@@ -96,15 +116,24 @@ Opponent: opp_rank (1 = best team in the country, so "played a top-25 team" = op
 RULES
 - "more X than their opponent" -> the _diff stat > 0.
 - Turnovers, fouls, points allowed and opponent shooting are all BETTER when LOWER. "Protected the ball" / "won the turnover battle" = tov_diff < 0.
-- "shot more threes" is ambiguous — prefer fg3_att_diff (attempts) and say so in ambiguities. "MADE more threes" is fg3_made_diff.
+- "shot more threes" is ambiguous — prefer fg3_att_diff (attempts) and say so in notes. "MADE more threes" is fg3_made_diff.
 - Percentages are decimals: "shot over 40% from three" = fg3_pct > 0.4.
-- Seasons are END years. "2015-16" and "the 2016 season" are both 2016. A range like "since 2020" means every season from 2020 onward.
+- Seasons are END years. "2015-16" and "the 2016 season" are both 2016. Data covers ${SEASON_FLOOR}-${SEASON_CEIL}; ${SEASON_CEIL} is the most recent season. An open-ended range like "since 2020" means every season from 2020 through ${SEASON_CEIL} inclusive — do not stop early. ${EXCLUDED_SEASONS.join(", ")} is missing from the data, so never emit it, and silently skip it inside a range.
 - Return names as the user wrote them (fixing obvious typos). Do NOT try to guess an official name — the caller resolves names against the real list.
 - If the user names a school as the subject ("Duke games where..."), that is teams. If they name who was PLAYED ("against Duke"), that is opponents.
+- The subject can be a group rather than one school — "ACC teams", "Big Ten teams", "any team". Put the conference in conferences, leave teams empty, and still emit every per-game condition exactly as you would for a single school.
+- "<group> teams that <did something>" is NOT a request to list teams or to rank them by a season average. It is the same per-game filter as "<school> games where they <did something>". Rewrite it that way in your head first: "ACC teams that shot over 40% from three" is "ACC games where the team shot over 40% from three" -> conferences ["ACC"], fg3_pct > 0.4. Never return an empty conditions array for a question that describes something happening on the court.
 - Only include a condition you can point at in the question. Do not invent thresholds.
-- Note nothing in ambiguities if the question is unambiguous.`;
+- Leave notes empty if the question is unambiguous.`;
 
 const MAX_QUERY_CHARS = 500;
+/**
+ * Netlify allows a synchronous function 60s (not the 10s often assumed, and not
+ * configurable either way). Typical parses land in 4-9s; vague questions with no
+ * named team deliberate much longer. 30s keeps those alive while still failing
+ * well short of the platform cutoff, which would kill the request with no body.
+ */
+const UPSTREAM_TIMEOUT_MS = 30_000;
 
 export default async (req: Request, _context: Context) => {
   if (req.method !== "POST") {
@@ -134,10 +163,22 @@ export default async (req: Request, _context: Context) => {
     return Response.json({ error: `Keep it under ${MAX_QUERY_CHARS} characters.` }, { status: 400 });
   }
 
-  const client = new Anthropic({ apiKey });
+  // maxRetries 0 on purpose: the failure being guarded against is a slow
+  // generation, not a flaky socket, so a retry just spends the budget twice and
+  // doubles the wait before the user is told anything.
+  const client = new Anthropic({ apiKey, timeout: UPSTREAM_TIMEOUT_MS, maxRetries: 0 });
 
   try {
-    const response = await client.messages.create({
+    // STREAMED, and it has to be. A non-streaming request sends no response
+    // headers until the whole message is generated, so time-to-first-byte is
+    // the full generation time and the runtime's header timeout kills anything
+    // slow. Measured: parses needing more than ~11s died as
+    // APIConnectionTimeoutError no matter what `timeout` was set to — 8.5s,
+    // 30s and 45s all failed at the same ~11s mark, because the limit was never
+    // ours. Streaming sends headers immediately and keeps the socket busy, so
+    // the only ceiling left is the one configured above. finalMessage() still
+    // hands back a normal assembled Message, so nothing downstream changes.
+    const response = await client.messages.stream({
       model: "claude-opus-5",
       max_tokens: 2048,
       system: SYSTEM,
@@ -150,7 +191,7 @@ export default async (req: Request, _context: Context) => {
         format: { type: "json_schema", schema: SCHEMA },
       },
       messages: [{ role: "user", content: query }],
-    });
+    }).finalMessage();
 
     if (response.stop_reason === "refusal") {
       return Response.json({ error: "Could not process that question." }, { status: 422 });
@@ -168,6 +209,14 @@ export default async (req: Request, _context: Context) => {
     const message = err instanceof Error ? err.message : "Unknown error";
     if (err instanceof Anthropic.RateLimitError) {
       return Response.json({ error: "Busy right now — try again in a moment." }, { status: 429 });
+    }
+    if (err instanceof Anthropic.APIConnectionTimeoutError) {
+      // Actionable on purpose: naming the team is what actually makes this
+      // query fast, and the manual filters below are always available.
+      return Response.json(
+        { error: "That question took too long to work out. Naming a specific team usually helps — or set the filters below by hand." },
+        { status: 504 },
+      );
     }
     console.error("parse-query failed:", message);
     return Response.json({ error: "Could not parse that question." }, { status: 502 });

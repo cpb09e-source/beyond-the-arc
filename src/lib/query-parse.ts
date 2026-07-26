@@ -27,8 +27,14 @@ export type ParsedQuery = {
   venue: "all" | "home" | "away" | "neutral";
   quads: number[];
   conditions: ParsedCondition[];
-  interpretation: string;
-  ambiguities: string[];
+  /**
+   * The model's restatement of the question, shown to the user as "Understood:".
+   * Named `analysis` to match the wire field — see parse-query.mts, where the
+   * name is load-bearing: structured-output keys are alphabetised, so this has
+   * to sort before `conditions` for the model to reason before it filters.
+   */
+  analysis: string;
+  notes: string[];
 };
 
 /** After name resolution — every string here is a real option value. */
