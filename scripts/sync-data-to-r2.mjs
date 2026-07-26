@@ -53,7 +53,7 @@ for (const [k, v] of Object.entries({
 }
 
 // Match dirs to the R2 mirror — same prefixes the dataUrl() helper expects.
-const DIRS = [
+const ALL_DIRS = [
   "public/data/team-games",
   "public/data/player-games",
   "public/data/player",
@@ -62,6 +62,23 @@ const DIRS = [
   "public/data/team",
   "public/data/game-players",
 ];
+
+/**
+ * `--only <substring>` narrows the sync to matching dirs. A full run HEADs all
+ * ~152k existing objects just to skip them, which is minutes of waiting when
+ * only one directory is new. Example:
+ *   node scripts/sync-data-to-r2.mjs --only game-players
+ */
+const onlyArg = (() => {
+  const i = process.argv.indexOf("--only");
+  return i > -1 ? process.argv[i + 1] : null;
+})();
+const DIRS = onlyArg ? ALL_DIRS.filter((d) => d.includes(onlyArg)) : ALL_DIRS;
+if (onlyArg && DIRS.length === 0) {
+  console.error(`--only ${onlyArg} matched no directory. Known: ${ALL_DIRS.join(", ")}`);
+  process.exit(1);
+}
+if (onlyArg) console.log(`--only ${onlyArg} → ${DIRS.join(", ")}\n`);
 
 // Concurrency: R2 happily takes hundreds of parallel writes; we don't want to
 // thrash the local file system or saturate the upload bandwidth, so 50 is a

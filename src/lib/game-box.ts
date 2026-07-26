@@ -43,7 +43,6 @@ export const BOX_FIELDS = [
   // Efficiency
   { key: "ortg",         label: "ORtg",          group: "Efficiency" },
   { key: "drtg",         label: "DRtg",          group: "Efficiency", lower: true },
-  { key: "game_score",   label: "Game Score",    group: "Efficiency" },
   // These four were previously dead options on the game logs (null in every
   // season). CBBD's box carries the real counts, so they work again.
   { key: "ast_diff",     label: "AST Diff",      group: "Differentials" },
@@ -65,7 +64,7 @@ export const BOX_FIELDS = [
   // comparator — "Conf Game = 1" is conference games only, "= 0" is
   // non-conference. The UI renders these as Any/Yes/No toggles.
   { key: "conf_game",    label: "Conf Game (1=yes)",   group: "Context" },
-  { key: "tourney",      label: "Tourney Game (1=yes)", group: "Context" },
+  { key: "tourney",      label: "NCAA Tournament (1=yes)", group: "Context" },
   { key: "postseason",   label: "NCAA/NIT (1=yes)",     group: "Context" },
 ] as const;
 
@@ -85,6 +84,7 @@ export type BoxFieldKey = (typeof BOX_FIELDS)[number]["key"];
 export const BOX_DISPLAY_FIELDS = [
   "poss_box", "fgm", "fga", "fg3m", "fg3a", "ftm", "fta",
   "tov", "oreb", "reb", "seed", "opp_seed", "tourney_name", "round",
+  "ap_rank", "opp_ap_rank",
 ] as const;
 
 /**

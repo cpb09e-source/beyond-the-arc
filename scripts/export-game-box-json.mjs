@@ -41,7 +41,7 @@ const EXCLUDED = new Set([2021]); // COVID season, skipped site-wide
 // ---------- team-name bridge + date join (shared with the player export) ----
 // Imported rather than defined here so both sidecars resolve a game the same
 // way; see scripts/lib/cbbd-join.mjs for what went wrong when they didn't.
-import { buildIndexes, findBoxRow } from "./lib/cbbd-join.mjs";
+import { buildIndexes, findBoxRow, norm, etDate } from "./lib/cbbd-join.mjs";
 
 // ---------- field extraction ----------
 const n1 = (v) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
@@ -53,7 +53,7 @@ const diff = (a, b) => (typeof a === "number" && typeof b === "number" ? a - b :
  * arrive from CBBD as 0-100; we store them as 0-1 to match the game logs'
  * existing convention (efg_pct etc.), so the UI formats them uniformly.
  */
-function extract(r) {
+function extract(r, rankAt = null) {
   const t = r.teamStats ?? {};
   const o = r.opponentStats ?? {};
   const tf = t.fourFactors ?? {};
@@ -77,7 +77,6 @@ function extract(r) {
     // Per-game efficiency
     ortg: n1(t.rating),
     drtg: n1(o.rating),
-    game_score: n1(t.gameScore),
     // Restores the four filter options that were dead in the game logs
     ast_diff: diff(t.assists, o.assists),
     stl_diff: diff(t.steals, o.steals),
@@ -99,13 +98,16 @@ function extract(r) {
     ),
     // Flags, 0/1 so they work with the numeric comparator UI.
     //
-    // `gameType === "TRNMNT"` is deliberately used for the tournament flag
-    // rather than CBBD's `tournament` field. `tournament` only names the NCAA
-    // and NIT (168 rows in 2026); gameType catches conference tournaments and
-    // multi-team events too (1,152 rows) — which is what people actually mean
-    // by "tournament game". `postseason` keeps the narrow NCAA/NIT sense.
+    // `tourney` means THE NCAA TOURNAMENT and nothing else. It previously used
+    // `gameType === "TRNMNT"`, which also caught conference tournaments and
+    // multi-team events — so "tourney game" answered a much broader question
+    // than the one people ask. Conference tournament games are now ordinary
+    // games as far as this flag is concerned.
+    //
+    // `postseason` (NCAA *or* NIT) is still exported but no longer offered as
+    // a filter: as one flag it couldn't separate March Madness from the NIT.
     conf_game: r.conferenceGame ? 1 : 0,
-    tourney: r.gameType === "TRNMNT" ? 1 : 0,
+    tourney: r.tournament === "NCAA" ? 1 : 0,
     postseason: r.seasonType === "postseason" ? 1 : 0,
 
     // ---- DISPLAY-ONLY (box-score modal + result table badges) ----
@@ -131,6 +133,11 @@ function extract(r) {
     opp_seed: int(r.opponentSeed),
     tourney_name: r.tournament || null,
     round: parseRound(r.notes),
+    // AP rank AS OF THIS GAME — from the most recent poll before it, not the
+    // final standings. A team that finished 4th may well have been unranked
+    // the night it lost in December, and that is the interesting fact.
+    ap_rank: rankAt && r.startDate ? rankAt(r.team, etDate(r.startDate)) : null,
+    opp_ap_rank: rankAt && r.startDate ? rankAt(r.opponent, etDate(r.startDate)) : null,
   };
 }
 
@@ -162,6 +169,73 @@ function parseRound(notes) {
   if (s.includes("1st round")) return "1st Round";
   if (s.includes("championship")) return "Championship";
   return null;
+}
+
+// ---------- AP poll lookup ("what were they ranked at the time") ----------
+
+/**
+ * Build a (date -> team -> AP rank) lookup for one season, plus the sorted
+ * poll dates, so a game can be matched to the most recent poll before it.
+ *
+ * WEEK -> DATE. Most seasons ship a real `pollDate`, but 2014-2016 ship null
+ * for every row and carry only a week number. Those weeks are recoverable
+ * because the AP cadence is fixed: week 1 is the preseason poll, and week 2
+ * onward land on consecutive Mondays starting the first Monday STRICTLY AFTER
+ * the season's first game. That formula was validated against every season
+ * that does carry dates — 144 of 145 weeks reproduced exactly.
+ *
+ * The one exception is a corrupt upstream row (2026 week 3 carrying an April
+ * poll date), which is why a supplied date more than 10 days from its derived
+ * position is rejected in favour of the derived one: trusting it would rank a
+ * November game off the final poll of the season.
+ */
+function buildRankIndex(season, boxRows) {
+  const p = path.join(ROOT, "data/cbbd", String(season), "rankings.json.gz");
+  if (!fs.existsSync(p) || boxRows.length === 0) return null;
+  let rows;
+  try {
+    rows = JSON.parse(zlib.gunzipSync(fs.readFileSync(p)).toString());
+  } catch { return null; }
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+
+  const firstGame = boxRows.map((r) => r.startDate).filter(Boolean).sort()[0];
+  if (!firstGame) return null;
+  const anchor = new Date(`${firstGame.slice(0, 10)}T00:00:00Z`);
+  do { anchor.setUTCDate(anchor.getUTCDate() + 1); } while (anchor.getUTCDay() !== 1);
+  const derived = (week) =>
+    new Date(anchor.getTime() + (week - 2) * 7 * 86400000).toISOString().slice(0, 10);
+
+  const byDate = new Map();
+  for (const r of rows) {
+    if (typeof r.week !== "number" || typeof r.ranking !== "number" || !r.team) continue;
+    // Week 1 is the preseason poll — before any game, so it can never be the
+    // "most recent poll" for a game and is skipped.
+    if (r.week < 2) continue;
+    const d = derived(r.week);
+    const supplied = r.pollDate ? String(r.pollDate).slice(0, 10) : null;
+    const gap = supplied
+      ? Math.abs(new Date(`${supplied}T00:00:00Z`) - new Date(`${d}T00:00:00Z`)) / 86400000
+      : Infinity;
+    const date = supplied && gap <= 10 ? supplied : d;
+    let m = byDate.get(date);
+    if (!m) { m = new Map(); byDate.set(date, m); }
+    m.set(norm(r.team), r.ranking);
+  }
+  const dates = [...byDate.keys()].sort();
+  if (dates.length === 0) return null;
+
+  /** Rank for `team` as of `gameDate`, or null if unranked/too early. */
+  return function rankAt(team, gameDate) {
+    if (!team || !gameDate) return null;
+    // Latest poll on or before the game.
+    let lo = 0, hi = dates.length - 1, best = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (dates[mid] <= gameDate) { best = mid; lo = mid + 1; } else hi = mid - 1;
+    }
+    if (best < 0) return null;
+    return byDate.get(dates[best]).get(norm(team)) ?? null;
+  };
 }
 
 // ---------- per-season work ----------
@@ -211,6 +285,7 @@ function run(season) {
   }
 
   const indexes = buildIndexes(boxRows);
+  const rankAt = buildRankIndex(season, boxRows);
 
   const out = {};
   let matched = 0, miss = 0, exhib = 0;
@@ -222,7 +297,7 @@ function run(season) {
     const hit = findBoxRow(g, indexes);
     if (!hit) { miss++; continue; }
     matched++;
-    out[g.cbba_game_id] = extract(hit);
+    out[g.cbba_game_id] = extract(hit, rankAt);
   }
 
   // Columnar on purpose. Object-per-row repeats ~27 key names 11k times, which

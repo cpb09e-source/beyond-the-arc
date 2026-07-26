@@ -39,10 +39,21 @@ const PAUSE_MS = 1100;
 const ROW_CAP = 1000;
 /** Treat anything this close to the ceiling as suspect and split anyway. */
 const SAFE_ROWS = 850;
-const MIN_WINDOW_DAYS = 1;
+/**
+ * 0, not 1: `span > MIN_WINDOW_DAYS` has to stay true for a two-calendar-day
+ * window so it can split into two single days. At 1 it refused, and dense
+ * mid-November dates sat at the cap with no way down.
+ */
+const MIN_WINDOW_DAYS = 0;
 const START_WINDOW_DAYS = 7;
-/** See pull-team-box-v2.mjs — the endpoint under-serves a range's edge days. */
-const OVERLAP_DAYS = 3;
+/**
+ * See pull-team-box-v2.mjs for why edge days need padding at all. ONE day here,
+ * not the team pull's three: padding is applied to both ends, so a 3-day pad
+ * makes even a single-day request span seven days — and seven days of rosters
+ * blows a 1000-row ceiling in November no matter how far the splitter recurses.
+ * One day still makes every target date interior to its request.
+ */
+const OVERLAP_DAYS = 1;
 
 for (const line of fs.readFileSync(path.resolve(".env.local"), "utf8").split("\n")) {
   const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*"?([^"\r\n]+)"?\s*$/);
@@ -110,9 +121,11 @@ async function fetchRange(season, from, to, sink) {
     return a + b;
   }
   if (rows.length >= ROW_CAP) {
-    // A single calendar day at the cap: unsplittable, so record it loudly
-    // rather than let the loss stay invisible the way it did before.
-    console.warn(`    ! ${iso(from)}..${iso(to)} still at cap (${rows.length}) at 1-day granularity`);
+    // A single calendar day at the cap and unsplittable. Reported, but NOT
+    // treated as loss: the overlap padding means neighbouring windows usually
+    // carry this day too. The completeness verdict printed per season (row
+    // parity with the team box) is what actually decides.
+    console.warn(`    · ${iso(from)}..${iso(to)} at cap (${rows.length}) at 1-day granularity — checking coverage below`);
     sink.push(...rows);
     return 1;
   }
@@ -155,10 +168,34 @@ for (const season of seasons) {
   fs.writeFileSync(dst, zlib.gzipSync(JSON.stringify(rows)));
   const dates = rows.map((r) => new Date(r.startDate).toISOString().slice(0, 10)).sort();
   const feb29 = rows.filter((r) => new Date(r.startDate).toISOString().slice(5, 10) === "02-29").length;
+
+  /**
+   * VERIFY against the team pull rather than trusting the cap warnings.
+   *
+   * Both endpoints return exactly one row per (gameId, teamId), so the team
+   * box is a ready-made expected set. This matters because a "still at cap"
+   * warning does NOT imply data was lost: the ±OVERLAP_DAYS padding means a
+   * capped day is usually also covered by its neighbours' windows, and the
+   * dedupe merges them. 2016 and 2017 both warned and both came out complete.
+   * Only a non-empty `missing` set is real loss.
+   */
+  let verdict = "";
+  const teamPath = path.join(dir, "box-teams-full.json.gz");
+  if (fs.existsSync(teamPath)) {
+    try {
+      const teamRows = JSON.parse(zlib.gunzipSync(fs.readFileSync(teamPath)).toString());
+      const have = new Set(rows.map((r) => `${r.gameId}|${r.teamId}`));
+      const missing = teamRows.filter((r) => !have.has(`${r.gameId}|${r.teamId}`)).length;
+      verdict = missing === 0
+        ? `  ✓ complete vs team box (${teamRows.length})`
+        : `  ✗ MISSING ${missing} of ${teamRows.length} team-game rows`;
+    } catch { /* team box unreadable — skip the check rather than fail the pull */ }
+  }
+
   console.log(
     `✓ ${season}: ${rows.length} rows (${sink.length - rows.length} dupes dropped)  ` +
     `${dates[0]}..${dates[dates.length - 1]}  feb29=${feb29}` +
-    (failures ? `  ⚠ ${failures} window(s) failed` : ""),
+    (failures ? `  (${failures} window(s) hit the cap)` : "") + verdict,
   );
 }
 console.log(`\ndone — ${calls} API calls`);
