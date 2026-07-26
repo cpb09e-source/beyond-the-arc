@@ -20,7 +20,8 @@ import {
   type Filter,
   type Op,
 } from "@/lib/game-filters";
-import { isExhibitionGame } from "@/lib/seasons";
+import { isExhibitionGame, ALL_SEASONS } from "@/lib/seasons";
+import { resolveQuery, type ParsedQuery, type ResolvedQuery } from "@/lib/query-parse";
 import { attachGameBox, type GameBoxFile } from "@/lib/game-box";
 import {
   quadFor,
@@ -118,6 +119,13 @@ export function CalcClient({
   // Multi-select quadrant. Empty = all quads. Values are "1".."4" strings so
   // they fit SearchableMultiSelect's string API.
   const [quads, setQuads] = useState<string[]>([]);
+  // Natural-language box. `ask` is the textarea, `asking` the in-flight flag,
+  // `askResult` the last parse (kept so its interpretation / caveats stay on
+  // screen while the user reviews the filled-in form before calculating).
+  const [ask, setAsk] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [askErr, setAskErr] = useState<string | null>(null);
+  const [askResult, setAskResult] = useState<ResolvedQuery | null>(null);
   // Games against non-D1 opponents count toward a team's official NCAA record
   // but are excluded by every serious rating system (NET, KenPom, Torvik),
   // because a 40-point win over a D3 school tells you nothing. Default to
@@ -255,6 +263,65 @@ export function CalcClient({
     [allCoaches],
   );
 
+  /**
+   * Ask the parser to turn a plain-English question into filters, resolve the
+   * names it returns against the real option lists, and POPULATE THE FORM.
+   *
+   * Deliberately does not run the query. A wrong parse that silently returned
+   * a win percentage is worse than no feature — the user reviews the filled-in
+   * controls (and the "here's what I understood" line) and presses Calculate.
+   */
+  async function runAsk() {
+    const q = ask.trim();
+    if (q.length < 3 || asking) return;
+    setAsking(true);
+    setAskErr(null);
+    setAskResult(null);
+    try {
+      const res = await fetch("/api/parse-query", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: q }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error || `Parser error (${res.status})`);
+
+      const resolved = resolveQuery(body as ParsedQuery, {
+        coaches: allCoaches,
+        teams: allTeams,
+        opponents: opponentOptions.map((o) => o.value),
+        conferences: conferenceOptions.map((o) => ({ value: o.value, label: o.label })),
+        validStats: new Set(CALC_STAT_OPTIONS.map((o) => o.key as string)),
+        validSeasons: [...ALL_SEASONS],
+      });
+
+      // Only overwrite a dimension the question actually spoke to, so a
+      // follow-up question ("...and only at home") refines rather than resets.
+      if (resolved.seasons.length) setYears([...resolved.seasons].sort((a, b) => b - a));
+      if (resolved.resolved.conferences.length) setConferences(resolved.resolved.conferences);
+      if (resolved.resolved.teams.length) setTeams(resolved.resolved.teams);
+      if (resolved.resolved.coaches.length) setCoaches(resolved.resolved.coaches);
+      if (resolved.resolved.opponents.length) setOpponents(resolved.resolved.opponents);
+      if (resolved.quads.length) setQuads(resolved.quads.map(String));
+      if (resolved.venue !== "all") setVenue(resolved.venue);
+      if (resolved.conditions.length) {
+        setFilters(
+          resolved.conditions.slice(0, 8).map((c) => ({
+            ...makeFilter(c.stat as keyof GameLog),
+            op: c.op,
+            value: c.value,
+          })),
+        );
+      }
+      setAskResult(resolved);
+      setSubmitted(null); // stale results would contradict the new filters
+    } catch (e) {
+      setAskErr(e instanceof Error ? e.message : "Could not parse that question.");
+    } finally {
+      setAsking(false);
+    }
+  }
+
   const results = useMemo(() => {
     if (!submitted || games.length === 0) return null;
     const confSet = submitted.conferences.length === 0 ? null : new Set(submitted.conferences);
@@ -341,6 +408,54 @@ export function CalcClient({
 
   return (
     <div className="space-y-6">
+      {/* Natural-language entry. Fills the form below; never runs the query
+          itself — the user reviews and presses Calculate. */}
+      <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-4 lg:p-5">
+        <label htmlFor="calc-ask" className="block text-xs uppercase tracking-widest text-ink-muted mb-2">
+          Ask in plain English
+        </label>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            id="calc-ask"
+            type="text"
+            value={ask}
+            onChange={(e) => setAsk(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); runAsk(); } }}
+            placeholder="Roy Williams games where UNC had more fast break points and shot more 3s than their opponent"
+            className="flex-1 min-w-0 h-10 px-3 rounded border border-hairline bg-card text-ink text-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-coral/40"
+          />
+          <button
+            type="button"
+            onClick={runAsk}
+            disabled={asking || ask.trim().length < 3}
+            className="h-10 shrink-0 text-sm font-medium bg-ink text-paper px-5 rounded hover:bg-ink/85 disabled:opacity-40 transition-colors"
+          >
+            {asking ? "Reading…" : "Fill filters"}
+          </button>
+        </div>
+
+        {askErr && <p className="mt-2 text-sm text-coral">{askErr}</p>}
+
+        {askResult && (
+          <div className="mt-3 text-sm space-y-1">
+            <p className="text-ink">
+              <span className="text-ink-muted">Understood:</span> {askResult.interpretation}
+            </p>
+            {askResult.ambiguities.length > 0 && (
+              <p className="text-ink-muted">
+                Judgement call{askResult.ambiguities.length > 1 ? "s" : ""}: {askResult.ambiguities.join(" · ")}
+              </p>
+            )}
+            {askResult.unresolved.length > 0 && (
+              <p className="text-coral">
+                Couldn&apos;t match: {askResult.unresolved.join(", ")} — set {askResult.unresolved.length > 1 ? "those" : "that"} manually.
+              </p>
+            )}
+            <p className="text-ink-muted">Check the filters below, then Calculate.</p>
+          </div>
+        )}
+      </div>
+
       {/* Year + filters */}
       <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm">
         <div className="grid grid-cols-2 gap-3 p-4 sm:flex sm:flex-wrap sm:items-end lg:p-5 border-b border-hairline">

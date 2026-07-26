@@ -25,6 +25,13 @@
   # 18-min build cap holds.
   ignore    = "exit 0"
 
+# Serverless functions ship alongside the static export. The site itself is
+# `output: "export"` with no server, so this is the only place server-side
+# secrets (ANTHROPIC_API_KEY) can live — they are never bundled into the client.
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
 [build.environment]
   NODE_VERSION = "20"
   # Skip Next telemetry to keep build logs clean
