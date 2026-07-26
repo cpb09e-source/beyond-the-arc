@@ -23,6 +23,7 @@ import { isExhibitionGame, ALL_SEASONS, SEASON_CEIL } from "@/lib/seasons";
 import { resolveQuery, searchKeysFor, normName, type ParsedQuery, type ResolvedQuery } from "@/lib/query-parse";
 import { attachGameBox, type GameBoxFile } from "@/lib/game-box";
 import { dataUrl } from "@/lib/data-url";
+import { getTeamColors } from "@/lib/team-colors";
 import {
   quadFor,
   ratingKey,
@@ -1447,9 +1448,78 @@ type BoxPlayer = {
 type BoxTeam = { team: string; logName: string; players: BoxPlayer[] };
 type GamePlayersFile = { teams: BoxTeam[] };
 
-/** The two sides get one colour each, used by every ring and bar below. */
+/**
+ * Fallback side colours, used when a team has no palette entry. Real team
+ * colours come from getTeamColors() — the same source the team pages use — so
+ * a Michigan/UCLA box reads maize vs blue rather than generic coral vs steel.
+ */
 const SIDE_A = "var(--coral)";
 const SIDE_B = "#3e7cb1";
+
+/**
+ * Two visually distinguishable colours for one matchup.
+ *
+ * Same-colour matchups are common in college basketball (two navy teams, two
+ * reds), and two near-identical bars would make the comparison unreadable —
+ * so when the pair is too close, the second team falls back to its secondary
+ * colour, then to the neutral steel.
+ */
+function sideColors(teamA: string, teamB: string): [string, string] {
+  const a = getTeamColors(teamA);
+  const b = getTeamColors(teamB);
+  const ca = a?.primary ?? SIDE_A;
+  const candidates = [b?.primary, b?.secondary, ...FALLBACK_HUES].filter(
+    (c): c is string => typeof c === "string" && c.length > 0,
+  );
+  // First candidate that is actually distinguishable from side A. The last
+  // entry in FALLBACK_HUES spans enough of the wheel that something always
+  // qualifies, but fall back to its primary rather than crash if not.
+  const cb = candidates.find((c) => !tooClose(ca, c)) ?? b?.primary ?? SIDE_B;
+  return [ca, cb];
+}
+
+/**
+ * Neutral second-side colours, spread around the hue wheel.
+ *
+ * Needed because blue-vs-blue is the norm in college basketball, not the
+ * exception — Duke/UNC, Kansas/Kentucky, Michigan/UCLA and Gonzaga/Saint
+ * Mary's all resolve to two blues. A single neutral fallback doesn't help when
+ * the fallback is itself blue, so this walks hues until one clears.
+ */
+const FALLBACK_HUES = ["#c8553d", "#2d8a8a", "#c98a2d", "#6b5ca5", "#4a7c59", SIDE_B];
+
+/**
+ * Are two colours too similar to tell apart across a chart?
+ *
+ * Compares HUE, not RGB distance. RGB distance passes pairs like Michigan navy
+ * (#00274C) against a mid-blue: numerically far apart because one is much
+ * darker, but both unmistakably "blue" once they're two bars in the same row.
+ * Hue catches that; a low-saturation colour (near-black, near-white, grey) has
+ * no meaningful hue, so those are compared on lightness instead.
+ */
+function tooClose(x: string, y: string): boolean {
+  const hsl = (h: string) => {
+    const s = h.replace("#", "");
+    if (s.length !== 6) return null;
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(s.slice(i, i + 2), 16) / 255) as [number, number, number];
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    const d = max - min;
+    if (d === 0) return { h: 0, s: 0, l };
+    const sat = d / (1 - Math.abs(2 * l - 1));
+    let hue: number;
+    if (max === r) hue = ((g - b) / d) % 6;
+    else if (max === g) hue = (b - r) / d + 2;
+    else hue = (r - g) / d + 4;
+    return { h: ((hue * 60) + 360) % 360, s: sat, l };
+  };
+  const p = hsl(x), q = hsl(y);
+  if (!p || !q) return false;
+  // Either colour effectively greyscale → judge on lightness only.
+  if (p.s < 0.15 || q.s < 0.15) return Math.abs(p.l - q.l) < 0.25;
+  const dh = Math.min(Math.abs(p.h - q.h), 360 - Math.abs(p.h - q.h));
+  return dh < 45;
+}
 
 /**
  * Box score for one game — team comparison and both line-ups. Opened by
@@ -1514,6 +1584,7 @@ function GameBoxModal({
   const round = str(game, "round");
   const tourneyName = str(game, "tourney_name");
   const oppName = game.opp_team_market ?? "Non-D1 opponent";
+  const [colorA, colorB] = sideColors(game.team_name, oppName);
 
   // Linescore. Built only when both halves are known for BOTH teams — showing
   // one team's halves next to the other's blanks would read as a scoring
@@ -1524,8 +1595,16 @@ function GameBoxModal({
   const lineScore =
     h1a !== null && h2a !== null && h1b !== null && h2b !== null
       ? [
-          { h1: h1a, h2: h2a, ot: ota, total: game.pts_scored, won: !!game.won },
-          { h1: h1b, h2: h2b, ot: otb, total: game.pts_against, won: !game.won },
+          {
+            name: game.team_name, h1: h1a, h2: h2a, ot: ota,
+            total: game.pts_scored, won: !!game.won,
+            rank: num(game, "ap_rank"), seed: num(game, "seed"),
+          },
+          {
+            name: oppName, h1: h1b, h2: h2b, ot: otb,
+            total: game.pts_against, won: !game.won,
+            rank: num(game, "opp_ap_rank"), seed: num(game, "opp_seed"),
+          },
         ]
       : null;
 
@@ -1605,53 +1684,33 @@ function GameBoxModal({
             ×
           </button>
 
-          <div className="flex items-start justify-center gap-4 sm:gap-6 flex-wrap pr-8">
-            <div className="flex items-center gap-2 min-w-0 pt-1.5">
-              <span className={`truncate ${game.won ? "font-semibold text-ink" : "text-ink-soft"}`}>
+          <div className="flex items-center justify-center gap-4 sm:gap-6 flex-wrap pr-8">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className={`truncate text-right ${game.won ? "font-semibold text-ink" : "text-ink-soft"}`}>
                 {game.team_name}
               </span>
               {num(game, "ap_rank") !== null && <RankBadge rank={num(game, "ap_rank")!} />}
               {num(game, "seed") !== null && <SeedBadge seed={num(game, "seed")!} />}
-              <TeamLogo name={game.team_name} size={34} />
+              <TeamLogo name={game.team_name} size={44} />
             </div>
 
-            <div className="text-center shrink-0">
-              <div className="font-display text-3xl sm:text-4xl tabular leading-none whitespace-nowrap">
-                <span className={game.won ? "text-ink" : "text-ink-muted"}>{game.pts_scored ?? "—"}</span>
-                <span className="text-ink-muted/50 mx-1.5">-</span>
-                <span className={!game.won ? "text-ink" : "text-ink-muted"}>{game.pts_against ?? "—"}</span>
-              </div>
-              <div className="mt-0.5 text-[0.65rem] uppercase tracking-widest text-ink-muted font-medium">
+            {/* Scoreboard: score – FINAL – score, the way a broadcast bug
+                reads. The half-by-half breakdown lives in the linescore in
+                the panel below, not here. */}
+            <div className="flex items-center gap-4 sm:gap-5 shrink-0">
+              <span className={`font-display text-4xl sm:text-5xl tabular leading-none ${game.won ? "text-ink" : "text-ink-muted"}`}>
+                {game.pts_scored ?? "—"}
+              </span>
+              <span className="text-[0.65rem] uppercase tracking-widest text-ink-muted font-semibold whitespace-nowrap">
                 {hasOT ? "Final / OT" : "Final"}
-              </div>
-              {/* Linescore. Only when both halves are known for both sides —
-                  a partial row would imply a half was played and not scored. */}
-              {lineScore && (
-                <table className="mt-2 mx-auto text-[0.7rem] tabular">
-                  <thead>
-                    <tr className="text-ink-muted">
-                      <th className="px-1.5 font-medium">1H</th>
-                      <th className="px-1.5 font-medium">2H</th>
-                      {hasOT && <th className="px-1.5 font-medium">OT</th>}
-                      <th className="px-1.5 font-semibold text-ink">T</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lineScore.map((r, i) => (
-                      <tr key={i} className={i === 0 ? "" : "border-t border-hairline"}>
-                        <td className="px-1.5 text-ink-soft">{r.h1}</td>
-                        <td className="px-1.5 text-ink-soft">{r.h2}</td>
-                        {hasOT && <td className="px-1.5 text-ink-soft">{r.ot ?? "—"}</td>}
-                        <td className={`px-1.5 font-semibold ${r.won ? "text-ink" : "text-ink-muted"}`}>{r.total ?? "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              </span>
+              <span className={`font-display text-4xl sm:text-5xl tabular leading-none ${!game.won ? "text-ink" : "text-ink-muted"}`}>
+                {game.pts_against ?? "—"}
+              </span>
             </div>
 
-            <div className="flex items-center gap-2 min-w-0 pt-1.5">
-              <TeamLogo name={oppName} size={34} />
+            <div className="flex items-center gap-2.5 min-w-0">
+              <TeamLogo name={oppName} size={44} />
               {num(game, "opp_seed") !== null && <SeedBadge seed={num(game, "opp_seed")!} />}
               {num(game, "opp_ap_rank") !== null && <RankBadge rank={num(game, "opp_ap_rank")!} />}
               <span className={`truncate ${!game.won ? "font-semibold text-ink" : "text-ink-soft"}`}>
@@ -1695,9 +1754,9 @@ function GameBoxModal({
                         <span className="w-16 text-base tabular text-ink text-right shrink-0">
                           {am === null ? "—" : `${am}/${aa}`}
                         </span>
-                        <PctRing made={am} att={aa} color={SIDE_A} />
+                        <PctRing made={am} att={aa} color={colorA} />
                         <span className="flex-1 text-center text-xs text-ink-muted px-1">{row.label}</span>
-                        <PctRing made={bm} att={ba} color={SIDE_B} />
+                        <PctRing made={bm} att={ba} color={colorB} />
                         <span className="w-16 text-base tabular text-ink shrink-0">
                           {bm === null ? "—" : `${bm}/${ba}`}
                         </span>
@@ -1705,35 +1764,58 @@ function GameBoxModal({
                     );
                   })}
 
-                  {/* Game context fills the space the rings leave, instead of
-                      crowding the scoreline in the header. */}
-                  <dl className="pt-4 mt-2 border-t border-hairline space-y-2 text-sm">
-                    {[
-                      { k: "Date", v: fmtGameDate(game.game_date) },
-                      {
-                        k: "Venue",
-                        v: game.is_neutral
-                          ? "Neutral site"
-                          : game.is_home
-                          ? `Home — ${game.team_name}`
-                          : `Away — ${oppName}`,
-                      },
-                      round
-                        ? { k: "Round", v: tourneyName ? `${tourneyName} · ${round}` : round, accent: true }
-                        : num(game, "conf_game") === 1
-                        ? { k: "Type", v: "Conference game" }
-                        : { k: "Type", v: "Non-conference" },
-                      { k: "Possessions", v: num(game, "poss_box") ?? "—" },
-                      { k: "Pace", v: (() => { const p = num(game, "pace"); return p === null ? "—" : formatStat(p, "pace"); })() },
-                    ].map((r) => (
-                      <div key={r.k} className="flex items-baseline justify-between gap-3">
-                        <dt className="text-xs uppercase tracking-widest text-ink-muted font-medium">{r.k}</dt>
-                        <dd className={`tabular text-right ${"accent" in r && r.accent ? "text-coral font-semibold" : "text-ink"}`}>
-                          {r.v}
-                        </dd>
+                  {/* LINESCORE — fills the space the rings leave. Only drawn
+                      when both halves are known for both teams; one team's
+                      halves beside the other's blanks would read as a scoring
+                      failure rather than a data gap. */}
+                  {lineScore && (
+                    <div className="pt-4 mt-2 border-t border-hairline">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-ink-muted">
+                            <th />
+                            <th className="w-9 pb-1 text-right text-xs font-medium">1</th>
+                            <th className="w-9 pb-1 text-right text-xs font-medium">2</th>
+                            {hasOT && <th className="w-9 pb-1 text-right text-xs font-medium">OT</th>}
+                            <th className="w-9 pb-1 text-right text-xs font-semibold text-ink">T</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {lineScore.map((r, i) => (
+                            <tr key={i}>
+                              <td className="py-1">
+                                <span className="inline-flex items-center gap-2 min-w-0">
+                                  <TeamLogo name={r.name} size={20} />
+                                  {r.rank !== null && <RankBadge rank={r.rank} />}
+                                  {r.seed !== null && <SeedBadge seed={r.seed} />}
+                                  <span className={`truncate ${r.won ? "font-semibold text-ink" : "text-ink-soft"}`}>{r.name}</span>
+                                </span>
+                              </td>
+                              <td className="py-1 text-right tabular text-ink-soft">{r.h1}</td>
+                              <td className="py-1 text-right tabular text-ink-soft">{r.h2}</td>
+                              {hasOT && <td className="py-1 text-right tabular text-ink-soft">{r.ot ?? "—"}</td>}
+                              <td className={`py-1 text-right tabular font-semibold ${r.won ? "text-ink" : "text-ink-muted"}`}>
+                                {r.total ?? "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className="mt-2 -mx-1 px-2 py-1.5 rounded bg-paper-deep/60 text-xs text-ink-muted flex items-center gap-1.5 flex-wrap">
+                        <span className="tabular">{fmtGameDate(game.game_date)}</span>
+                        <span aria-hidden>·</span>
+                        <span>
+                          {game.is_neutral ? "Neutral site" : game.is_home ? `at ${game.team_name}` : `at ${oppName}`}
+                        </span>
+                        <span aria-hidden>·</span>
+                        {round ? (
+                          <span className="font-semibold text-coral">{tourneyName ? `${tourneyName} · ${round}` : round}</span>
+                        ) : (
+                          <span>{num(game, "conf_game") === 1 ? "Conference game" : "Non-conference"}</span>
+                        )}
                       </div>
-                    ))}
-                  </dl>
+                    </div>
+                  )}
                 </div>
 
                 {/* Ratings first, then BTA's Four Factors, then the rest. */}
@@ -1742,7 +1824,7 @@ function GameBoxModal({
                     const a = num(game, row.key);
                     const b = num(opp, row.key);
                     if (!showRow(row.key, a, b)) return null;
-                    return <SplitBar key={row.label} label={row.label} a={a} b={b} lower={row.lower} />;
+                    return <SplitBar key={row.label} label={row.label} a={a} b={b} lower={row.lower} colorA={colorA} colorB={colorB} />;
                   })}
 
                   <div className="pt-1 border-t border-hairline" />
@@ -1754,7 +1836,7 @@ function GameBoxModal({
                     const a = num(game, row.key);
                     const b = num(opp, row.key);
                     if (!showRow(row.key, a, b, row.untracked)) return null;
-                    return <SplitBar key={row.label} label={row.label} a={a} b={b} lower={row.lower} major />;
+                    return <SplitBar key={row.label} label={row.label} a={a} b={b} lower={row.lower} major colorA={colorA} colorB={colorB} />;
                   })}
 
                   <div className="pt-1 border-t border-hairline" />
@@ -1763,7 +1845,7 @@ function GameBoxModal({
                     const a = num(game, row.key);
                     const b = num(opp, row.key);
                     if (!showRow(row.key, a, b, row.untracked)) return null;
-                    return <SplitBar key={row.label} label={row.label} a={a} b={b} lower={row.lower} />;
+                    return <SplitBar key={row.label} label={row.label} a={a} b={b} lower={row.lower} colorA={colorA} colorB={colorB} />;
                   })}
                 </div>
               </div>
@@ -1825,9 +1907,10 @@ function PctRing({ made, att, color }: { made: number | null; att: number | null
  * `lower` stats (turnovers, fouls) that is the SMALLER number.
  */
 function SplitBar({
-  label, a, b, lower, major,
+  label, a, b, lower, major, colorA = SIDE_A, colorB = SIDE_B,
 }: {
   label: string; a: number | null; b: number | null; lower?: boolean; major?: boolean;
+  colorA?: string; colorB?: string;
 }) {
   const av = a ?? 0, bv = b ?? 0;
   const total = av + bv;
@@ -1839,22 +1922,31 @@ function SplitBar({
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-1">
-        <span className={`text-sm tabular ${aWins ? "font-semibold" : "text-ink-soft"}`} style={aWins ? { color: SIDE_A } : undefined}>
-          {a ?? "—"}
+        <span className="flex items-center gap-1 min-w-0">
+          <span className={`text-sm tabular ${aWins ? "font-semibold" : "text-ink-soft"}`} style={aWins ? { color: colorA } : undefined}>
+            {a ?? "—"}
+          </span>
+          {/* Arrow points at the better side. On `lower` rows (turnovers,
+              fouls, DRtg) that is the smaller number, so the arrow — not the
+              size of the number — is what tells you who won the row. */}
+          {aWins && <span aria-label="better" style={{ color: colorA }} className="text-[0.6rem] leading-none">◀</span>}
         </span>
         <span className={`text-xs text-center ${major ? "text-ink font-medium" : "text-ink-muted"}`}>{label}</span>
-        <span className={`text-sm tabular ${bWins ? "font-semibold" : "text-ink-soft"}`} style={bWins ? { color: SIDE_B } : undefined}>
-          {b ?? "—"}
+        <span className="flex items-center gap-1 min-w-0">
+          {bWins && <span aria-label="better" style={{ color: colorB }} className="text-[0.6rem] leading-none">▶</span>}
+          <span className={`text-sm tabular ${bWins ? "font-semibold" : "text-ink-soft"}`} style={bWins ? { color: colorB } : undefined}>
+            {b ?? "—"}
+          </span>
         </span>
       </div>
       <div className="flex h-1.5 rounded-full overflow-hidden bg-hairline">
         <div
           className="transition-[width] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
-          style={{ width: `${aShare * 100}%`, background: SIDE_A, opacity: aWins ? 1 : 0.55 }}
+          style={{ width: `${aShare * 100}%`, background: colorA, opacity: aWins ? 1 : 0.5 }}
         />
         <div
           className="flex-1 transition-[width] duration-500"
-          style={{ background: SIDE_B, opacity: bWins ? 1 : 0.55 }}
+          style={{ background: colorB, opacity: bWins ? 1 : 0.5 }}
         />
       </div>
     </div>
