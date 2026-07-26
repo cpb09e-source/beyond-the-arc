@@ -24,7 +24,8 @@ import type { GameLog } from "@/lib/game-filters";
 export type GameBoxFile = {
   season: number;
   fields: string[];
-  rows: Record<string, Array<number | null>>;
+  /** Values are strings for the two label columns (tourney_name, round). */
+  rows: Record<string, Array<number | string | null>>;
 };
 
 /** Every box-derived key, and how it should be labelled/grouped in the UI. */
@@ -62,16 +63,29 @@ export const BOX_FIELDS = [
   { key: "h2_margin",        label: "2nd-Half Margin",  group: "Game Shape" },
   // Yes/no flags. Exposed as 0/1 because the condition row is a numeric
   // comparator — "Conf Game = 1" is conference games only, "= 0" is
-  // non-conference. Clunky; these want to be dropdowns in the design pass.
-  //
-  // Seed is deliberately absent: populated for only ~1.2% of rows (NCAA/NIT
-  // games), so it would behave like a dead option.
+  // non-conference. The UI renders these as Any/Yes/No toggles.
   { key: "conf_game",    label: "Conf Game (1=yes)",   group: "Context" },
   { key: "tourney",      label: "Tourney Game (1=yes)", group: "Context" },
   { key: "postseason",   label: "NCAA/NIT (1=yes)",     group: "Context" },
 ] as const;
 
 export type BoxFieldKey = (typeof BOX_FIELDS)[number]["key"];
+
+/**
+ * Carried onto each row for DISPLAY only — the box-score modal and the result
+ * table's seed/round badges — and deliberately kept out of BOX_FIELDS so they
+ * never become filter tiles.
+ *
+ * Seeds and rounds exist on roughly 1% of rows (NCAA/NIT games only). As
+ * filters that sparseness reads as "this never happened"; as badges it reads
+ * correctly as "not applicable" and simply renders nothing. Raw counts are
+ * excluded for a different reason: the sheet already offers them as
+ * differentials, and 10 more near-duplicate tiles would bury the useful ones.
+ */
+export const BOX_DISPLAY_FIELDS = [
+  "poss_box", "fgm", "fga", "fg3m", "fg3a", "ftm", "fta",
+  "tov", "oreb", "reb", "seed", "opp_seed", "tourney_name", "round",
+] as const;
 
 /**
  * Merge a season's sidecar onto its game-log rows. Rows with no box entry are
@@ -82,13 +96,15 @@ export function attachGameBox(rows: GameLog[], box: GameBoxFile | null): GameLog
   const idx = new Map<string, number>();
   box.fields.forEach((f, i) => idx.set(f, i));
 
+  const keys: string[] = [...BOX_FIELDS.map((f) => f.key), ...BOX_DISPLAY_FIELDS];
+
   return rows.map((r) => {
     const vals = r.cbba_game_id ? box.rows[r.cbba_game_id] : undefined;
     if (!vals) return r;
-    const out: Record<string, number | null> = {};
-    for (const f of BOX_FIELDS) {
-      const i = idx.get(f.key);
-      out[f.key] = i === undefined ? null : vals[i] ?? null;
+    const out: Record<string, number | string | null> = {};
+    for (const key of keys) {
+      const i = idx.get(key);
+      out[key] = i === undefined ? null : vals[i] ?? null;
     }
     return { ...r, ...out } as GameLog;
   });

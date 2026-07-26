@@ -72,3 +72,10 @@ supabase/.temp/
 # Box-EPM build intermediates (regenerable via build-box-epm-features.mjs + compute-box-epm.py)
 /scripts/box-epm-features.csv
 /scripts/box-epm-pred.csv
+
+# Per-game player box scores (public/data/game-players) — regenerable via
+# scripts/pull-player-box-v2.mjs + scripts/export-game-players-json.mjs, and
+# served from R2 like the other per-entity dirs. Left untracked because only
+# some seasons have been generated so far; drop this rule once the full
+# 12-season pull has run, to match how team-games/player-games are tracked.
+/public/data/game-players/

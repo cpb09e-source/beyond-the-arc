@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * One-shot uploader: public/data/{team-games,player-games,player,player-ranks,tournament-box,team}
+ * One-shot uploader: public/data/{team-games,player-games,player,player-ranks,tournament-box,team,game-players}
  * → Cloudflare R2.
  *
  * Why this exists: the directories above contain ~152k tiny JSON files. Netlify's
@@ -60,6 +60,7 @@ const DIRS = [
   "public/data/player-ranks",
   "public/data/tournament-box",
   "public/data/team",
+  "public/data/game-players",
 ];
 
 // Concurrency: R2 happily takes hundreds of parallel writes; we don't want to

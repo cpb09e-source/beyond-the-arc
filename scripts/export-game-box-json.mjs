@@ -38,28 +38,10 @@ const SEASON_FLOOR = 2014;
 const SEASON_CEIL = 2026;
 const EXCLUDED = new Set([2021]); // COVID season, skipped site-wide
 
-// ---------- team-name bridge (single source: src/lib/quad.ts) ----------
-function loadAliases() {
-  const src = fs.readFileSync(path.join(ROOT, "src/lib/quad.ts"), "utf8");
-  const block = src.match(/TEAM_RATING_ALIASES[^=]*=\s*\{([\s\S]*?)\n\};/);
-  if (!block) throw new Error("Could not parse TEAM_RATING_ALIASES from src/lib/quad.ts");
-  const out = {};
-  for (const m of block[1].matchAll(/"((?:[^"\\]|\\.)*)":\s*"((?:[^"\\]|\\.)*)"/g)) out[m[1]] = m[2];
-  return out;
-}
-const ALIASES = loadAliases();
-const norm = (s) =>
-  (s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
-    .replace(/\bst\.?\b/g, "state").replace(/\bu\b/g, "")
-    .replace(/[^a-z0-9]+/g, " ").trim();
-const teamKey = (logName) => norm(ALIASES[logName] ?? logName);
-
-const ET = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
-});
-const etDate = (iso) => ET.format(new Date(iso));
-const shiftDate = (ymd, days) =>
-  new Date(new Date(`${ymd}T12:00:00Z`).getTime() + days * 86400000).toISOString().slice(0, 10);
+// ---------- team-name bridge + date join (shared with the player export) ----
+// Imported rather than defined here so both sidecars resolve a game the same
+// way; see scripts/lib/cbbd-join.mjs for what went wrong when they didn't.
+import { buildIndexes, findBoxRow } from "./lib/cbbd-join.mjs";
 
 // ---------- field extraction ----------
 const n1 = (v) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
@@ -122,15 +104,64 @@ function extract(r) {
     // and NIT (168 rows in 2026); gameType catches conference tournaments and
     // multi-team events too (1,152 rows) — which is what people actually mean
     // by "tournament game". `postseason` keeps the narrow NCAA/NIT sense.
-    //
-    // NOT exported: teamSeed. It is only populated for NCAA/NIT games — 1.2% of
-    // rows — so as a general filter it would return "0 games" almost always,
-    // which reads as "never happened" rather than "not applicable". Same reason
-    // ast/stl/blk/fta were pulled from the game-log options.
     conf_game: r.conferenceGame ? 1 : 0,
     tourney: r.gameType === "TRNMNT" ? 1 : 0,
     postseason: r.seasonType === "postseason" ? 1 : 0,
+
+    // ---- DISPLAY-ONLY (box-score modal + result table badges) ----
+    // These are deliberately NOT filter options — see BOX_DISPLAY_FIELDS in
+    // src/lib/game-box.ts. Seeds and rounds exist on ~1% of rows, so as
+    // filters they'd read as "never happened"; as badges that same sparseness
+    // is exactly right ("not applicable" simply renders nothing).
+    // Named poss_box, NOT poss: the game logs already carry a `poss` that the
+    // Possessions filter reads (CBB Analytics' raw estimate, e.g. 71.9).
+    // Overwriting it would silently swap that filter's data source, and would
+    // do it only for rows that got a box join — a mixed-source column.
+    poss_box: int(t.possessions),
+    fgm: int(t.fieldGoals?.made),
+    fga: int(t.fieldGoals?.attempted),
+    fg3m: int(t.threePointFieldGoals?.made),
+    fg3a: int(t.threePointFieldGoals?.attempted),
+    ftm: int(t.freeThrows?.made),
+    fta: int(t.freeThrows?.attempted),
+    tov: int(t.turnovers?.total),
+    oreb: int(t.rebounds?.offensive),
+    reb: int(t.rebounds?.total),
+    seed: int(r.teamSeed),
+    opp_seed: int(r.opponentSeed),
+    tourney_name: r.tournament || null,
+    round: parseRound(r.notes),
   };
+}
+
+/**
+ * CBBD's free-text `notes` → a short round label ("Sweet 16", "Final Four").
+ *
+ * The raw strings are inconsistent across seasons — casing flips between
+ * years ("SWEET 16" vs "Sweet 16"), the NCAA prefix varies ("Men's Basketball
+ * Championship" vs "NCAA Men's Basketball Championship"), and sponsor names
+ * drift ("Discount Tire CBI", "Roman CBI", "Ro CBI"). Matching on the round
+ * keyword alone survives all of it; anything unrecognized returns null rather
+ * than a mangled label.
+ */
+function parseRound(notes) {
+  if (!notes) return null;
+  const s = String(notes).toLowerCase();
+  // ORDER MATTERS. Every NCAA note contains the words "Men's Basketball
+  // Championship" — including first-round games — so the specific round
+  // keywords must all be tested before the bare "championship" fallback,
+  // which exists only for the NIT/CBI/CIT title games ("NIT - Championship").
+  if (s.includes("national championship")) return "National Championship";
+  if (s.includes("final four")) return "Final Four";
+  if (s.includes("elite 8")) return "Elite Eight";
+  if (s.includes("sweet 16")) return "Sweet 16";
+  if (s.includes("first four")) return "First Four";
+  if (s.includes("quarterfinal")) return "Quarterfinal";
+  if (s.includes("semifinal")) return "Semifinal";
+  if (s.includes("2nd round")) return "2nd Round";
+  if (s.includes("1st round")) return "1st Round";
+  if (s.includes("championship")) return "Championship";
+  return null;
 }
 
 // ---------- per-season work ----------
@@ -179,54 +210,18 @@ function run(season) {
     return;
   }
 
-  // (date|team) -> box row. Dedupe defensively: the pull's date windows overlap
-  // by a day in a couple of seasons, so the same game can appear twice.
-  const byDateTeam = new Map();
-  // (team|opponent) -> [box rows], the fallback when the date is off by more
-  // than a day (rare, but happens around late West-coast tips).
-  const byMatchup = new Map();
-  for (const r of boxRows) {
-    if (!r.startDate || !r.team) continue;
-    const d = etDate(r.startDate);
-    const tk = norm(r.team);
-    const k = `${d}|${tk}`;
-    if (!byDateTeam.has(k)) byDateTeam.set(k, r);
-    const mk = `${tk}|${norm(r.opponent)}`;
-    const arr = byMatchup.get(mk);
-    if (arr) arr.push(r);
-    else byMatchup.set(mk, [r]);
-  }
+  const indexes = buildIndexes(boxRows);
 
   const out = {};
-  let exact = 0, near = 0, viaMatchup = 0, miss = 0, exhib = 0;
+  let matched = 0, miss = 0, exhib = 0;
   for (const g of logs) {
     // Preseason exhibitions are excluded site-wide (see src/lib/seasons.ts) and
     // CBBD's box carries none of them, so skip rather than count as a miss.
     if (g.game_date && g.game_date < `${season - 1}-11-01`) { exhib++; continue; }
     if (!g.game_date || !g.team_name || !g.cbba_game_id) { miss++; continue; }
-    const tk = teamKey(g.team_name);
-    let hit = byDateTeam.get(`${g.game_date}|${tk}`);
-    if (hit) exact++;
-    if (!hit) {
-      for (const off of [-1, 1]) {
-        hit = byDateTeam.get(`${shiftDate(g.game_date, off)}|${tk}`);
-        if (hit) { near++; break; }
-      }
-    }
-    if (!hit && g.opp_team_market) {
-      // Same two teams, closest date within a week. Only accept when it is
-      // unambiguous or clearly the nearest meeting (teams can play twice).
-      const cands = byMatchup.get(`${tk}|${teamKey(g.opp_team_market)}`);
-      if (cands?.length) {
-        let best = null, bestGap = Infinity;
-        for (const c of cands) {
-          const gap = Math.abs(new Date(etDate(c.startDate)) - new Date(g.game_date)) / 86400000;
-          if (gap < bestGap) { bestGap = gap; best = c; }
-        }
-        if (best && bestGap <= 7) { hit = best; viaMatchup++; }
-      }
-    }
+    const hit = findBoxRow(g, indexes);
     if (!hit) { miss++; continue; }
+    matched++;
     out[g.cbba_game_id] = extract(hit);
   }
 
@@ -242,11 +237,10 @@ function run(season) {
   const dst = path.join(OUT_DIR, `${season}.json`);
   fs.writeFileSync(dst, JSON.stringify({ season, fields: FIELDS, rows }));
   const kb = (fs.statSync(dst).size / 1024).toFixed(0);
-  const matched = exact + near + viaMatchup;
   const eligible = logs.length - exhib;
   console.log(
     `${season}: ${String(matched).padStart(6)}/${String(eligible).padStart(6)} eligible rows ` +
-    `(${((100 * matched) / eligible).toFixed(1)}%)  exact=${exact} +/-1d=${near} matchup=${viaMatchup} ` +
+    `(${((100 * matched) / eligible).toFixed(1)}%)  ` +
     `miss=${miss} exhib-skipped=${exhib}  -> ${kb} KB`,
   );
 }
