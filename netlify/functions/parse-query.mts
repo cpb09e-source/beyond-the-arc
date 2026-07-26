@@ -182,10 +182,12 @@ export default async (req: Request, _context: Context) => {
       model: "claude-opus-5",
       max_tokens: 2048,
       system: SYSTEM,
-      // effort "low" keeps this fast and cheap — it's a bounded extraction, not
-      // a reasoning problem. Thinking is left at its default rather than
-      // disabled: on this model disabling it can leak internal tags into the
-      // output, and low effort already does the cost work.
+      // effort "low" keeps this cheap — it's a bounded extraction, not a
+      // reasoning problem. Thinking stays at its adaptive default: disabling it
+      // was measured at roughly half the latency with clean output, but the
+      // nuanced reads are the ones worth having (converting "under 1.0 points
+      // per possession" to drtg < 100, flagging that "shot more 3s" could mean
+      // attempts or makes), and streaming already bought back the time.
       output_config: {
         effort: "low",
         format: { type: "json_schema", schema: SCHEMA },
