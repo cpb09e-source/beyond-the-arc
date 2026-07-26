@@ -40,7 +40,7 @@ const STATS = [
   "poss", "pace", "opp_rank",
   "ff_efg", "ff_ftr", "ff_tov", "ff_orb",
   "ff_efg_def", "ff_ftr_def", "ff_tov_def", "ff_orb_def",
-  "ortg", "drtg", "game_score",
+  "ortg", "drtg",
   "ast_diff", "stl_diff", "blk_diff", "ft_att_diff", "fouls_diff",
   "ast", "stl", "blk", "fouls",
   "largest_lead", "largest_lead_opp", "h1_margin", "h2_margin",
@@ -106,11 +106,11 @@ STAT REFERENCE
 Margin/scoring: pts_diff, pts_scored, pts_against
 Differentials (team − opponent): fg_made_diff (FG made), fg3_made_diff (3PT MADE), fg3_att_diff (3PT ATTEMPTED), fg2_made_diff, ft_made_diff, ft_att_diff, reb_diff, orb_diff, drb_diff, tov_diff (turnovers — FEWER is better, so "won the turnover battle" = tov_diff < 0), ast_diff, stl_diff, blk_diff, fouls_diff, fbpts_diff (fast break points), pitp_diff (points in the paint), scp_diff (second-chance points)
 Shooting rates (0-1 decimals, so 45% = 0.45): fg3_pct, fg2_pct, ft_pct, efg_pct, ts_pct, efg_pct_def (opponent's eFG%)
-Four factors (0-1): ff_efg, ff_ftr, ff_tov, ff_orb, and the _def versions for what the opponent managed
-Efficiency: ortg, drtg (per 100 possessions), game_score, poss, pace
+Rate stats (0-1): ff_efg, ff_ftr, ff_tov, ff_orb, and the _def versions for what the opponent managed
+Efficiency: ortg, drtg (per 100 possessions), poss, pace
 Game shape: largest_lead, largest_lead_opp, h1_margin (first-half margin), h2_margin
 Raw counts: ast, stl, blk, fouls
-Context flags (use 1 for yes, 0 for no): conf_game (conference matchup), tourney (any tournament setting: conference tournaments, MTEs, NCAA/NIT)
+Context flags (use 1 for yes, 0 for no): conf_game (conference matchup), tourney (NCAA tournament / March Madness ONLY -- not conference tournaments)
 Opponent: opp_rank (1 = best team in the country, so "played a top-25 team" = opp_rank <= 25)
 
 RULES

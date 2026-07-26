@@ -73,7 +73,15 @@ const onlyArg = (() => {
   const i = process.argv.indexOf("--only");
   return i > -1 ? process.argv[i + 1] : null;
 })();
-const DIRS = onlyArg ? ALL_DIRS.filter((d) => d.includes(onlyArg)) : ALL_DIRS;
+// A value containing "/" is treated as an explicit path under public/data,
+// so one season can be synced at a time: --only game-players/2019. Useful
+// because a single 72k-file run is long enough to be interrupted, and each
+// season is a natural, independently verifiable chunk.
+const DIRS = !onlyArg
+  ? ALL_DIRS
+  : onlyArg.includes("/")
+  ? [`public/data/${onlyArg}`]
+  : ALL_DIRS.filter((d) => d.includes(onlyArg));
 if (onlyArg && DIRS.length === 0) {
   console.error(`--only ${onlyArg} matched no directory. Known: ${ALL_DIRS.join(", ")}`);
   process.exit(1);

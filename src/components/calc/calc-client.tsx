@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
 import { type SearchableOption } from "@/components/explorer/searchable-select";
 import { Select } from "@/components/select";
@@ -22,6 +22,7 @@ import {
 import { isExhibitionGame, ALL_SEASONS, SEASON_CEIL } from "@/lib/seasons";
 import { resolveQuery, searchKeysFor, normName, type ParsedQuery, type ResolvedQuery } from "@/lib/query-parse";
 import { attachGameBox, type GameBoxFile } from "@/lib/game-box";
+import { dataUrl } from "@/lib/data-url";
 import {
   quadFor,
   ratingKey,
@@ -105,7 +106,7 @@ const GROUP_HUES: Record<string, string> = {
 /**
  * The sheet's own grouping — a display concern, deliberately NOT the shared
  * `group` strings in game-filters/game-box (those still feed the team/coach
- * "Find a game" modal). The Four Factors groups are dissolved into the
+ * "Find a game" modal). The rate-stat groups are dissolved into the
  * sections each stat actually belongs to, and offensive shooting lives under
  * Scoring; the defensive rates get a section of their own.
  */
@@ -154,7 +155,6 @@ function rangeFor(key: string): { min: number; max: number; step: number } {
     case "pace":             return { min: 55, max: 90, step: 0.5 };
     case "ortg":
     case "drtg":             return { min: 60, max: 150, step: 1 };
-    case "game_score":       return { min: 0, max: 150, step: 1 };
     case "largest_lead":
     case "largest_lead_opp": return { min: 0, max: 50, step: 1 };
     case "h1_margin":
@@ -176,7 +176,7 @@ function rangeFor(key: string): { min: number; max: number; step: number } {
 const PICK_DEFAULTS: Record<string, number> = {
   fg3_pct: 0.4, fg2_pct: 0.5, ft_pct: 0.75, efg_pct: 0.5, ts_pct: 0.55, efg_pct_def: 0.45,
   ff_efg: 0.5, ff_efg_def: 0.45, ff_ftr: 0.3, ff_ftr_def: 0.25, ff_tov: 0.15, ff_tov_def: 0.18, ff_orb: 0.3, ff_orb_def: 0.25,
-  opp_rank: 25, pts_scored: 80, pts_against: 70, ortg: 110, drtg: 100, game_score: 50,
+  opp_rank: 25, pts_scored: 80, pts_against: 70, ortg: 110, drtg: 100,
   poss: 70, pace: 70, largest_lead: 10, largest_lead_opp: 10,
   ast: 15, stl: 8, blk: 5, fouls: 20,
 };
@@ -333,7 +333,7 @@ export function CalcClient({
           fetch(`/data/team-ratings-${y}.json`)
             .then((r) => (r.ok ? (r.json() as Promise<TeamRatingsFile>) : null))
             .catch(() => null),
-          // Per-game team box from CBBD (four factors, ratings, halftime
+          // Per-game team box from CBBD (rate stats, ratings, halftime
           // margin, fouls...). ~1.5 MB/season columnar. Optional: a missing
           // file just leaves those fields null.
           fetch(`/data/game-box-by-year/${y}.json`)
@@ -1298,6 +1298,7 @@ export function CalcClient({
                             <Td>
                               <span className="inline-flex items-center gap-2">
                                 <TeamLogo name={g.team_name} size={20} />
+                                {typeof g.ap_rank === "number" && <RankBadge rank={g.ap_rank} />}
                                 {typeof g.seed === "number" && <SeedBadge seed={g.seed} />}
                                 <span className="hidden sm:inline font-medium text-ink">{g.team_name}</span>
                               </span>
@@ -1314,6 +1315,7 @@ export function CalcClient({
                                     {g.is_neutral ? "N" : g.is_home ? "vs" : "@"}
                                   </span>
                                   <TeamLogo name={g.opp_team_market} size={20} />
+                                  {typeof g.opp_ap_rank === "number" && <RankBadge rank={g.opp_ap_rank} />}
                                   {typeof g.opp_seed === "number" && <SeedBadge seed={g.opp_seed} />}
                                   <span className="hidden sm:inline">{g.opp_team_market}</span>
                                   {typeof g.round === "string" && g.round && (
@@ -1425,14 +1427,39 @@ export function CalcClient({
   );
 }
 
+/** One player's line as shipped by scripts/export-game-players-json.mjs. */
+type BoxPlayer = {
+  id: number | null;
+  name: string;
+  pos: string | null;
+  starter: boolean;
+  min: number | null;
+  pts: number | null;
+  fgm: number | null; fga: number | null;
+  fg3m: number | null; fg3a: number | null;
+  ftm: number | null; fta: number | null;
+  oreb: number | null; reb: number | null;
+  ast: number | null; stl: number | null; blk: number | null;
+  tov: number | null; pf: number | null;
+  usage: number | null; ts: number | null;
+  ortg: number | null; drtg: number | null;
+};
+type BoxTeam = { team: string; logName: string; players: BoxPlayer[] };
+type GamePlayersFile = { teams: BoxTeam[] };
+
+/** The two sides get one colour each, used by every ring and bar below. */
+const SIDE_A = "var(--coral)";
+const SIDE_B = "#3e7cb1";
+
 /**
- * Team box score for one game, both sides compared stat-by-stat. Opened by
+ * Box score for one game — team comparison and both line-ups. Opened by
  * double-clicking a matching-games row or clicking its score.
  *
- * TEAM stats only, deliberately: everything here is already in the browser
- * (the game's two log rows + the CBBD sidecar). Individual player box scores
- * need a per-game player index that the export doesn't produce yet — R2 keys
- * player data by player-season — so that's an export change, not a UI one.
+ * Team stats come from data already in the browser (the game's two log rows
+ * plus the CBBD sidecar). PLAYER stats are ~260k rows per season, so they are
+ * fetched per game from public/data/game-players/<season>/<gameKey>.json —
+ * an R2-served directory (see src/lib/data-url.ts), lazily, only when the
+ * Player Stats tab is first opened.
  */
 function GameBoxModal({
   game,
@@ -1444,6 +1471,15 @@ function GameBoxModal({
   opp: GameLog | null;
   onClose: () => void;
 }) {
+  const [tab, setTab] = useState<"team" | "players">("team");
+  const [players, setPlayers] = useState<GamePlayersFile | null>(null);
+  const [playersErr, setPlayersErr] = useState(false);
+  // A ref, not state, guards the one-shot fetch: setting a "loading" flag
+  // synchronously inside the effect is the cascading-render pattern React
+  // warns about. Loading is derived below instead.
+  const fetchStarted = useRef(false);
+  const playersLoading = !players && !playersErr;
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -1451,6 +1487,20 @@ function GameBoxModal({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Fetch once, on first visit to the Player Stats tab. Staying on Team Stats
+  // never touches the network.
+  useEffect(() => {
+    if (tab !== "players" || fetchStarted.current) return;
+    fetchStarted.current = true;
+    let cancelled = false;
+    const key = gameKey(game.cbba_game_id);
+    fetch(dataUrl(`/data/game-players/${game.year}/${key}.json`))
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((j: GamePlayersFile) => { if (!cancelled) setPlayers(j); })
+      .catch(() => { if (!cancelled) setPlayersErr(true); });
+    return () => { cancelled = true; };
+  }, [tab, game.cbba_game_id, game.year]);
 
   const num = (r: GameLog | null, k: string): number | null => {
     const v = r?.[k];
@@ -1460,49 +1510,40 @@ function GameBoxModal({
     const v = r?.[k];
     return typeof v === "string" && v ? v : null;
   };
-  /** "24-62" made-attempted, the way a box score reads it. */
-  const madeAtt = (r: GameLog | null, m: string, a: string): string | null => {
-    const mm = num(r, m), aa = num(r, a);
-    return mm === null || aa === null ? null : `${mm}-${aa}`;
-  };
 
-  // Per-side rows. `lower` marks stats where less is better, for highlighting.
-  // `raw` rows are already-formatted strings (made-attempted) and skip the
-  // better/worse comparison — "24-62 vs 27-63" has no single winner.
-  const ROWS: Array<{ key: string; label: string; lower?: boolean; raw?: boolean }> = [
-    { key: "fg", label: "FG", raw: true },
-    { key: "fg3", label: "3PT", raw: true },
-    { key: "ft", label: "FT", raw: true },
-    { key: "efg_pct", label: "eFG%" },
-    { key: "ts_pct", label: "TS%" },
-    { key: "fg3_pct", label: "3P%" },
-    { key: "ft_pct", label: "FT%" },
-    { key: "ortg", label: "ORtg" },
-    { key: "reb", label: "Rebounds" },
-    { key: "oreb", label: "Off. rebounds" },
-    { key: "ast", label: "Assists" },
-    { key: "tov", label: "Turnovers", lower: true },
-    { key: "stl", label: "Steals" },
-    { key: "blk", label: "Blocks" },
-    { key: "fouls", label: "Fouls", lower: true },
-    { key: "largest_lead", label: "Largest lead" },
-    { key: "game_score", label: "Game Score" },
-  ];
-
-  const rawValue = (r: GameLog | null, key: string): string | null =>
-    key === "fg" ? madeAtt(r, "fgm", "fga")
-    : key === "fg3" ? madeAtt(r, "fg3m", "fg3a")
-    : key === "ft" ? madeAtt(r, "ftm", "fta")
-    : null;
-
-  const venueLabel = game.is_neutral ? "Neutral site" : game.is_home ? `at ${game.team_name}` : `at ${game.opp_team_market ?? "opponent"}`;
-  // CBBD's whole-number possession count, not the game logs' `poss` — that one
-  // is a formula estimate (FGA − OREB + TOV + 0.475·FTA) and lands on 71.9,
-  // which reads as nonsense for a single game.
-  const poss = num(game, "poss_box");
-  const pace = num(game, "pace");
   const round = str(game, "round");
   const tourneyName = str(game, "tourney_name");
+  const poss = num(game, "poss_box");
+  const pace = num(game, "pace");
+  const oppName = game.opp_team_market ?? "Non-D1 opponent";
+
+  // Shooting splits, each rendered as a ring: made/attempted outside, the
+  // percentage inside. Derived from made-attempted rather than a stored rate
+  // so the ring and the fraction beside it can never disagree.
+  const SHOOTING = [
+    { label: "Field goals", m: "fgm", a: "fga" },
+    { label: "3 pointers", m: "fg3m", a: "fg3a" },
+    { label: "Free throws", m: "ftm", a: "fta" },
+  ];
+  // Counting stats as split bars. `lower` marks where less is better, which
+  // only affects which side is called out, never the bar geometry.
+  const COUNTS: Array<{ label: string; key: string; lower?: boolean; major?: boolean }> = [
+    { label: "Rebounds", key: "reb", major: true },
+    { label: "Offensive rebounds", key: "oreb" },
+    { label: "Assists", key: "ast", major: true },
+    { label: "Turnovers", key: "tov", lower: true },
+    { label: "Steals", key: "stl" },
+    { label: "Blocks", key: "blk" },
+    { label: "Personal fouls", key: "fouls", lower: true },
+    { label: "Largest lead", key: "largest_lead" },
+  ];
+  // Where the points came from. Raw totals, not the differentials the game
+  // logs carry — a differential can't be drawn as a two-sided comparison.
+  const SCORING: Array<{ label: string; key: string }> = [
+    { label: "Fast break points", key: "fbpts" },
+    { label: "Points off turnovers", key: "pot" },
+    { label: "Points in the paint", key: "pitp" },
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1510,114 +1551,431 @@ function GameBoxModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Box score: ${game.team_name} ${game.pts_scored ?? ""}, ${game.opp_team_market ?? "opponent"} ${game.pts_against ?? ""}`}
-        className="bta-modal-in relative w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-xl border border-hairline bg-card shadow-xl"
+        aria-label={`Box score: ${game.team_name} ${game.pts_scored ?? ""}, ${oppName} ${game.pts_against ?? ""}`}
+        className="bta-modal-in relative w-full max-w-4xl max-h-[88vh] overflow-y-auto rounded-xl border border-hairline bg-card shadow-xl"
       >
-        <div className="p-4 sm:p-5 border-b border-hairline">
-          <div className="flex items-center gap-2 text-xs text-ink-muted flex-wrap">
+        {/* Header band — the score is the hero. Date/venue/round sit small in
+            the top-left gutter rather than centred beneath it, where they
+            competed with the scoreline for attention. */}
+        <div className="relative bg-paper-deep/50 border-b border-hairline px-4 sm:px-6 pt-2.5 pb-4">
+          <div className="flex items-center gap-1.5 text-[0.7rem] text-ink-muted pr-8 mb-1">
             <span className="tabular">{fmtGameDate(game.game_date)}</span>
-            <span aria-hidden>·</span>
-            <span>{venueLabel}</span>
-            {round ? (
-              // The round is the headline for a tournament game — "NCAA ·
-              // Sweet 16" says more than a generic Tourney chip.
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-coral/10 border border-coral/30 text-coral font-semibold">
-                {tourneyName ? `${tourneyName} · ${round}` : round}
-              </span>
-            ) : (
-              num(game, "tourney") === 1 && <ConditionChip>Tourney</ConditionChip>
+            {game.is_neutral && <><span aria-hidden>·</span><span>Neutral</span></>}
+            {num(game, "conf_game") === 1 && !round && <><span aria-hidden>·</span><span>Conf</span></>}
+            {round && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="font-semibold text-coral">{tourneyName ? `${tourneyName} · ${round}` : round}</span>
+              </>
             )}
-            {num(game, "conf_game") === 1 && <ConditionChip>Conf</ConditionChip>}
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close box score"
-              className="ml-auto w-6 h-6 inline-flex items-center justify-center rounded text-base leading-none text-ink-muted hover:text-coral hover:bg-paper-deep transition-colors"
-            >
-              ×
-            </button>
           </div>
-          {/* Score lines — winner carries the accent. */}
-          {[
-            { name: game.team_name, pts: game.pts_scored, won: !!game.won, seed: num(game, "seed") },
-            { name: game.opp_team_market ?? "Non-D1 opponent", pts: game.pts_against, won: !game.won, seed: num(game, "opp_seed") },
-          ].map((side) => (
-            <div key={side.name} className="mt-3 flex items-center gap-3">
-              <TeamLogo name={side.name} size={28} />
-              {side.seed !== null && <SeedBadge seed={side.seed} />}
-              <span className={`text-lg ${side.won ? "font-semibold text-ink" : "text-ink-soft"}`}>{side.name}</span>
-              <span
-                className={`ml-auto font-display text-3xl tabular leading-none ${side.won ? "text-coral" : "text-ink-muted"}`}
-              >
-                {side.pts ?? "—"}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close box score"
+            className="absolute right-3 top-3 w-7 h-7 inline-flex items-center justify-center rounded text-base leading-none text-ink-muted hover:text-coral hover:bg-card transition-colors"
+          >
+            ×
+          </button>
+
+          <div className="flex items-center justify-center gap-4 sm:gap-6 flex-wrap pr-8">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`truncate ${game.won ? "font-semibold text-ink" : "text-ink-soft"}`}>
+                {game.team_name}
               </span>
-              <span
-                className={`inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold ${
-                  side.won ? "bg-coral text-white" : "bg-ink/10 text-ink-soft"
-                }`}
-              >
-                {side.won ? "W" : "L"}
+              {num(game, "ap_rank") !== null && <RankBadge rank={num(game, "ap_rank")!} />}
+              {num(game, "seed") !== null && <SeedBadge seed={num(game, "seed")!} />}
+              <TeamLogo name={game.team_name} size={34} />
+            </div>
+
+            <div className="text-center shrink-0">
+              <div className="font-display text-3xl sm:text-4xl tabular leading-none whitespace-nowrap">
+                <span className={game.won ? "text-ink" : "text-ink-muted"}>{game.pts_scored ?? "—"}</span>
+                <span className="text-ink-muted/50 mx-1.5">-</span>
+                <span className={!game.won ? "text-ink" : "text-ink-muted"}>{game.pts_against ?? "—"}</span>
+              </div>
+              <div className="mt-1 text-[0.65rem] uppercase tracking-widest text-ink-muted font-medium">Final</div>
+            </div>
+
+            <div className="flex items-center gap-2 min-w-0">
+              <TeamLogo name={oppName} size={34} />
+              {num(game, "opp_seed") !== null && <SeedBadge seed={num(game, "opp_seed")!} />}
+              {num(game, "opp_ap_rank") !== null && <RankBadge rank={num(game, "opp_ap_rank")!} />}
+              <span className={`truncate ${!game.won ? "font-semibold text-ink" : "text-ink-soft"}`}>
+                {/* "@" carries the venue the way a schedule line does. */}
+                {game.is_neutral ? "" : game.is_home ? "" : "@ "}{oppName}
               </span>
             </div>
+          </div>
+
+        </div>
+
+        {/* Tabs */}
+        <div className="sticky top-0 z-10 bg-card border-b border-hairline flex">
+          {(["team", "players"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              aria-pressed={tab === t}
+              className={`flex-1 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
+                tab === t ? "border-coral text-ink" : "border-transparent text-ink-muted hover:text-ink"
+              }`}
+            >
+              {t === "team" ? "Team Stats" : "Player Stats"}
+            </button>
           ))}
         </div>
 
-        <div className="p-4 sm:p-5">
-          {opp ? (
-            <>
-              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-4 text-sm">
-                <span className="text-xs uppercase tracking-widest text-ink-muted font-medium truncate">{game.team_name}</span>
-                <span />
-                <span className="text-xs uppercase tracking-widest text-ink-muted font-medium text-right truncate">{game.opp_team_market}</span>
-                {ROWS.map((row) => {
-                  if (row.raw) {
-                    const a = rawValue(game, row.key);
-                    const b = rawValue(opp, row.key);
-                    if (a === null && b === null) return null;
+        {tab === "team" ? (
+          <div className="p-4 sm:p-6">
+            {opp ? (
+              <div className="grid gap-6 lg:grid-cols-2">
+                {/* Shooting — rings */}
+                <div className="space-y-4">
+                  {SHOOTING.map((row) => {
+                    const am = num(game, row.m), aa = num(game, row.a);
+                    const bm = num(opp, row.m), ba = num(opp, row.a);
+                    if (am === null && bm === null) return null;
                     return (
-                      <div key={row.key} className="contents">
-                        <span className="py-1.5 tabular border-t border-hairline/60 text-ink">{a ?? "—"}</span>
-                        <span className="py-1.5 text-xs text-ink-muted text-center whitespace-nowrap border-t border-hairline/60">{row.label}</span>
-                        <span className="py-1.5 tabular text-right border-t border-hairline/60 text-ink">{b ?? "—"}</span>
+                      <div key={row.label} className="flex items-center gap-3">
+                        <span className="w-14 text-sm tabular text-ink text-right shrink-0">
+                          {am === null ? "—" : `${am}/${aa}`}
+                        </span>
+                        <PctRing made={am} att={aa} color={SIDE_A} />
+                        <span className="flex-1 text-center text-xs text-ink-muted px-1">{row.label}</span>
+                        <PctRing made={bm} att={ba} color={SIDE_B} />
+                        <span className="w-14 text-sm tabular text-ink shrink-0">
+                          {bm === null ? "—" : `${bm}/${ba}`}
+                        </span>
                       </div>
                     );
-                  }
-                  const a = num(game, row.key);
-                  const b = num(opp, row.key);
-                  if (a === null && b === null) return null;
-                  const aBetter = a !== null && b !== null && a !== b && (row.lower ? a < b : a > b);
-                  const bBetter = a !== null && b !== null && a !== b && (row.lower ? b < a : b > a);
-                  return (
-                    <div key={row.key} className="contents">
-                      <span className={`py-1.5 tabular border-t border-hairline/60 ${aBetter ? "text-coral font-semibold" : "text-ink"}`}>
-                        {a === null ? "—" : formatStat(a, row.key)}
-                      </span>
-                      <span className="py-1.5 text-xs text-ink-muted text-center whitespace-nowrap border-t border-hairline/60">{row.label}</span>
-                      <span className={`py-1.5 tabular text-right border-t border-hairline/60 ${bBetter ? "text-coral font-semibold" : "text-ink"}`}>
-                        {b === null ? "—" : formatStat(b, row.key)}
-                      </span>
+                  })}
+                  {/* Scoring breakdown — where the points actually came from,
+                      which the shooting splits above don't answer. */}
+                  <div className="pt-3 border-t border-hairline space-y-3">
+                    {SCORING.map((row) => {
+                      const a = num(game, row.key);
+                      const b = num(opp, row.key);
+                      if (a === null && b === null) return null;
+                      return <SplitBar key={row.label} label={row.label} a={a} b={b} />;
+                    })}
+                  </div>
+
+                  <div className="pt-3 border-t border-hairline grid grid-cols-3 gap-2 text-center">
+                    {[
+                      { label: "ORtg", a: num(game, "ortg"), b: num(opp, "ortg") },
+                      { label: "DRtg", a: num(game, "drtg"), b: num(opp, "drtg") },
+                      { label: "1st half", a: num(game, "h1_margin"), b: null, margin: true },
+                    ].map((m) => (
+                      <div key={m.label}>
+                        <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium mb-1">{m.label}</div>
+                        {m.margin ? (
+                          <div className="text-lg tabular text-ink">
+                            {m.a === null ? "—" : (m.a > 0 ? `+${m.a}` : m.a)}
+                          </div>
+                        ) : (
+                          <div className="text-sm tabular">
+                            <span style={{ color: SIDE_A }} className="font-semibold">{m.a === null ? "—" : formatStat(m.a, "ortg")}</span>
+                            <span className="text-ink-muted/50 mx-1">/</span>
+                            <span style={{ color: SIDE_B }} className="font-semibold">{m.b === null ? "—" : formatStat(m.b, "ortg")}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {(poss !== null || pace !== null) && (
+                    <div className="pt-1 flex justify-center gap-6 text-xs text-ink-muted tabular">
+                      {poss !== null && <span>Possessions {poss}</span>}
+                      {pace !== null && <span>Pace {formatStat(pace, "pace")}</span>}
                     </div>
+                  )}
+                </div>
+
+                {/* Counting stats — split bars */}
+                <div className="space-y-3">
+                  {COUNTS.map((row) => {
+                    const a = num(game, row.key);
+                    const b = num(opp, row.key);
+                    if (a === null && b === null) return null;
+                    return (
+                      <SplitBar
+                        key={row.label}
+                        label={row.label}
+                        a={a}
+                        b={b}
+                        lower={row.lower}
+                        major={row.major}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-ink-muted text-center py-6">
+                No opponent stat line — non-D1 opponents don&apos;t carry a full box in our data.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="p-3 sm:p-4">
+            {playersLoading && (
+              <p className="py-10 text-center text-sm text-ink-muted">Loading box score…</p>
+            )}
+            {playersErr && (
+              <p className="py-10 text-center text-sm text-ink-muted">
+                No player box score available for this game.
+              </p>
+            )}
+            {players && <PlayerBoxPanel file={players} />}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Shooting percentage as a ring. The arc is the percentage; the number sits
+ * inside it. Null attempts render an empty track rather than a 0% ring, which
+ * would read as "shot and missed everything".
+ */
+function PctRing({ made, att, color }: { made: number | null; att: number | null; color: string }) {
+  const pct = made === null || !att ? null : made / att;
+  const R = 15;
+  const C = 2 * Math.PI * R;
+  return (
+    <span className="relative inline-flex items-center justify-center shrink-0" style={{ width: 40, height: 40 }}>
+      <svg width={40} height={40} viewBox="0 0 40 40" aria-hidden className="-rotate-90">
+        <circle cx={20} cy={20} r={R} fill="none" stroke="currentColor" className="text-hairline" strokeWidth={3.5} />
+        {pct !== null && (
+          <circle
+            cx={20} cy={20} r={R} fill="none" stroke={color} strokeWidth={3.5} strokeLinecap="round"
+            strokeDasharray={`${pct * C} ${C}`}
+          />
+        )}
+      </svg>
+      <span className="absolute text-[11px] font-semibold tabular text-ink">
+        {pct === null ? "—" : `${Math.round(pct * 100)}%`}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * One counting stat as a single proportional bar: each side's share of the
+ * combined total. The winning side is called out in its own colour — for
+ * `lower` stats (turnovers, fouls) that is the SMALLER number.
+ */
+function SplitBar({
+  label, a, b, lower, major,
+}: {
+  label: string; a: number | null; b: number | null; lower?: boolean; major?: boolean;
+}) {
+  const av = a ?? 0, bv = b ?? 0;
+  const total = av + bv;
+  // A 0-0 row would divide by zero; show an even, inert bar instead.
+  const aShare = total > 0 ? av / total : 0.5;
+  const aWins = a !== null && b !== null && a !== b && (lower ? a < b : a > b);
+  const bWins = a !== null && b !== null && a !== b && (lower ? b < a : b > a);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <span className={`text-sm tabular ${aWins ? "font-semibold" : "text-ink-soft"}`} style={aWins ? { color: SIDE_A } : undefined}>
+          {a ?? "—"}
+        </span>
+        <span className={`text-xs text-center ${major ? "text-ink font-medium" : "text-ink-muted"}`}>{label}</span>
+        <span className={`text-sm tabular ${bWins ? "font-semibold" : "text-ink-soft"}`} style={bWins ? { color: SIDE_B } : undefined}>
+          {b ?? "—"}
+        </span>
+      </div>
+      <div className="flex h-1.5 rounded-full overflow-hidden bg-hairline">
+        <div
+          className="transition-[width] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
+          style={{ width: `${aShare * 100}%`, background: SIDE_A, opacity: aWins ? 1 : 0.55 }}
+        />
+        <div
+          className="flex-1 transition-[width] duration-500"
+          style={{ background: SIDE_B, opacity: bWins ? 1 : 0.55 }}
+        />
+      </div>
+    </div>
+  );
+}
+
+type SortKey = "min" | "pts" | "reb" | "ast" | "stl" | "blk" | "pf" | "tov" | "oreb" | "dreb" | "fga" | "fg3a" | "fta";
+
+/**
+ * Both line-ups, with a team selector and sortable columns. Defaults to
+ * points descending, which is how anyone scanning a box score starts.
+ */
+function PlayerBoxPanel({ file }: { file: GamePlayersFile }) {
+  const teams = file.teams;
+  // null = show both, otherwise the index of the single team shown.
+  const [only, setOnly] = useState<number | null>(null);
+  const [sort, setSort] = useState<SortKey>("pts");
+  const [desc, setDesc] = useState(true);
+
+  const shown = only === null ? teams : [teams[only]!];
+
+  return (
+    <div>
+      {teams.length > 1 && (
+        <div className="flex items-center gap-1 mb-3 p-1 rounded-lg bg-paper-deep border border-hairline">
+          {[0, null, 1].map((sel, i) => {
+            const active = only === sel;
+            return (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setOnly(sel)}
+                aria-pressed={active}
+                className={`flex-1 py-1.5 rounded-md inline-flex items-center justify-center gap-1.5 text-sm transition-colors ${
+                  active ? "bg-card shadow-sm text-ink" : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                {sel === null ? (
+                  <>
+                    <TeamLogo name={teams[0]!.logName || teams[0]!.team} size={18} />
+                    <span className="text-ink-muted">+</span>
+                    <TeamLogo name={teams[1]!.logName || teams[1]!.team} size={18} />
+                  </>
+                ) : (
+                  <>
+                    <TeamLogo name={teams[sel]!.logName || teams[sel]!.team} size={18} />
+                    <span className="hidden sm:inline truncate">{teams[sel]!.team}</span>
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="space-y-4">
+        {shown.map((t) => (
+          <PlayerBoxTable
+            key={t.team}
+            team={t}
+            sort={sort}
+            desc={desc}
+            onSort={(k) => {
+              if (k === sort) setDesc((d) => !d);
+              else { setSort(k); setDesc(true); }
+            }}
+          />
+        ))}
+      </div>
+
+      <p className="mt-3 flex items-center gap-1.5 text-xs text-ink-muted">
+        <span className="w-1.5 h-1.5 rounded-full bg-coral" aria-hidden />
+        Starters
+      </p>
+    </div>
+  );
+}
+
+/** One team's line-up. Players who didn't play are listed beneath the table. */
+function PlayerBoxTable({
+  team, sort, desc, onSort,
+}: {
+  team: BoxTeam;
+  sort: SortKey;
+  desc: boolean;
+  onSort: (k: SortKey) => void;
+}) {
+  const dreb = (p: BoxPlayer) => (p.reb === null || p.oreb === null ? null : p.reb - p.oreb);
+  const valueOf = (p: BoxPlayer, k: SortKey): number => {
+    if (k === "dreb") return dreb(p) ?? -1;
+    return (p[k] as number | null) ?? -1;
+  };
+
+  const played = team.players.filter((p) => (p.min ?? 0) > 0);
+  const dnp = team.players.filter((p) => (p.min ?? 0) <= 0);
+  const rows = [...played].sort((a, b) => {
+    const d = valueOf(b, sort) - valueOf(a, sort);
+    return desc ? d : -d;
+  });
+
+  const COLS: Array<{ k: SortKey; label: string }> = [
+    { k: "min", label: "MIN" },
+    { k: "pts", label: "PTS" },
+    { k: "reb", label: "REB" },
+    { k: "ast", label: "AST" },
+    { k: "stl", label: "STL" },
+    { k: "blk", label: "BLK" },
+    { k: "pf", label: "PF" },
+    { k: "tov", label: "TOV" },
+    { k: "oreb", label: "OREB" },
+    { k: "dreb", label: "DREB" },
+  ];
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-1.5 px-1">
+        <TeamLogo name={team.logName || team.team} size={20} />
+        <span className="text-xs uppercase tracking-widest text-ink font-bold">{team.team}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="border-b border-hairline text-left">
+            <tr>
+              <Th>Player</Th>
+              {COLS.map((c) => (
+                <th key={c.k} className="px-2 py-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => onSort(c.k)}
+                    className={`text-xs uppercase tracking-widest font-medium transition-colors ${
+                      sort === c.k ? "text-coral" : "text-ink-muted hover:text-ink"
+                    }`}
+                  >
+                    {c.label}
+                    {sort === c.k && <span aria-hidden>{desc ? " ▾" : " ▴"}</span>}
+                  </button>
+                </th>
+              ))}
+              <Th align="right">FG</Th>
+              <Th align="right">3PT</Th>
+              <Th align="right">FT</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p) => (
+              <tr key={p.id ?? p.name} className="border-b border-hairline/60 hover:bg-paper-deep/40 transition-colors">
+                <Td className="whitespace-nowrap">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${p.starter ? "bg-coral" : "bg-transparent"}`}
+                      aria-label={p.starter ? "Starter" : undefined}
+                    />
+                    <span className="font-medium text-ink">{p.name}</span>
+                    {p.pos && <span className="text-xs text-ink-muted">{p.pos}</span>}
+                  </span>
+                </Td>
+                {COLS.map((c) => {
+                  const v = c.k === "dreb" ? dreb(p) : (p[c.k] as number | null);
+                  return (
+                    <Td key={c.k} align="right" className={`tabular ${c.k === "pts" ? "font-semibold text-ink" : "text-ink-soft"}`}>
+                      {v ?? "—"}
+                    </Td>
                   );
                 })}
-              </div>
-              <div className="mt-3 pt-2 border-t border-hairline flex flex-wrap gap-x-6 gap-y-1 text-xs text-ink-muted tabular">
-                {poss !== null && <span>Possessions {poss}</span>}
-                {pace !== null && <span>Pace {formatStat(pace, "pace")}</span>}
-                <span
-                  className="cursor-help border-b border-dotted border-hairline"
-                  title="Hollinger Game Score — a single-number summary of a box-score line, scaled roughly like points. The team figure is the sum of its players'."
-                >
-                  What&apos;s Game Score?
-                </span>
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-ink-muted">
-              No opponent stat line — non-D1 opponents don&apos;t carry a full box in our data.
-            </p>
-          )}
-        </div>
+                <Td align="right" className="tabular text-ink-soft whitespace-nowrap">{p.fgm === null ? "—" : `${p.fgm}/${p.fga}`}</Td>
+                <Td align="right" className="tabular text-ink-soft whitespace-nowrap">{p.fg3m === null ? "—" : `${p.fg3m}/${p.fg3a}`}</Td>
+                <Td align="right" className="tabular text-ink-soft whitespace-nowrap">{p.ftm === null ? "—" : `${p.ftm}/${p.fta}`}</Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
+      {dnp.length > 0 && (
+        <p className="mt-1.5 px-1 text-xs text-ink-muted">
+          <span className="uppercase tracking-wide font-medium">DNP</span> {dnp.map((p) => p.name).join(", ")}
+        </p>
+      )}
     </div>
   );
 }
@@ -1847,6 +2205,19 @@ function PagerButton({
  * NCAA/NIT seed. Only ~1% of rows carry one, and that's the point — a game
  * with no seed simply renders nothing rather than a placeholder.
  */
+/**
+ * AP rank AS OF THE GAME, not end of season — so a December upset shows the
+ * number the loser actually carried that night. ~7% of rows have one (25
+ * ranked teams out of ~364); the rest render nothing.
+ */
+function RankBadge({ rank }: { rank: number }) {
+  return (
+    <span title={`AP No. ${rank} at the time of this game`} className="text-[11px] font-bold text-coral tabular">
+      #{rank}
+    </span>
+  );
+}
+
 function SeedBadge({ seed }: { seed: number }) {
   return (
     <span

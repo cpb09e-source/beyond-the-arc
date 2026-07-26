@@ -129,6 +129,12 @@ function extract(r, rankAt = null) {
     tov: int(t.turnovers?.total),
     oreb: int(t.rebounds?.offensive),
     reb: int(t.rebounds?.total),
+    // Raw totals for the box-score modal. The game logs carry only the
+    // DIFFERENTIALS of these (fbpts_diff, pitp_diff), which can't be shown as
+    // a two-sided comparison.
+    fbpts: int(t.points?.fastBreak),
+    pitp: int(t.points?.inPaint),
+    pot: int(t.points?.offTurnovers),
     seed: int(r.teamSeed),
     opp_seed: int(r.opponentSeed),
     tourney_name: r.tournament || null,

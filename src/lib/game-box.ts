@@ -30,16 +30,16 @@ export type GameBoxFile = {
 
 /** Every box-derived key, and how it should be labelled/grouped in the UI. */
 export const BOX_FIELDS = [
-  // Four factors — offense
-  { key: "ff_efg",       label: "eFG% (FF)",     group: "Four Factors" },
-  { key: "ff_ftr",       label: "FT Rate",       group: "Four Factors" },
-  { key: "ff_tov",       label: "TOV%",          group: "Four Factors", lower: true },
-  { key: "ff_orb",       label: "OREB%",         group: "Four Factors" },
-  // Four factors — defense (what the opponent managed)
-  { key: "ff_efg_def",   label: "Opp eFG% (FF)", group: "Four Factors (def)", lower: true },
-  { key: "ff_ftr_def",   label: "Opp FT Rate",   group: "Four Factors (def)", lower: true },
-  { key: "ff_tov_def",   label: "Opp TOV%",      group: "Four Factors (def)" },
-  { key: "ff_orb_def",   label: "Opp OREB%",     group: "Four Factors (def)", lower: true },
+  // Rate stats — offense
+  { key: "ff_efg",       label: "eFG% (box)",     group: "Rates" },
+  { key: "ff_ftr",       label: "FT Rate",       group: "Rates" },
+  { key: "ff_tov",       label: "TOV%",          group: "Rates", lower: true },
+  { key: "ff_orb",       label: "OREB%",         group: "Rates" },
+  // Rate stats — defense (what the opponent managed)
+  { key: "ff_efg_def",   label: "Opp eFG% (box)", group: "Opponent Rates", lower: true },
+  { key: "ff_ftr_def",   label: "Opp FT Rate",   group: "Opponent Rates", lower: true },
+  { key: "ff_tov_def",   label: "Opp TOV%",      group: "Opponent Rates" },
+  { key: "ff_orb_def",   label: "Opp OREB%",     group: "Opponent Rates", lower: true },
   // Efficiency
   { key: "ortg",         label: "ORtg",          group: "Efficiency" },
   { key: "drtg",         label: "DRtg",          group: "Efficiency", lower: true },
@@ -84,7 +84,7 @@ export type BoxFieldKey = (typeof BOX_FIELDS)[number]["key"];
 export const BOX_DISPLAY_FIELDS = [
   "poss_box", "fgm", "fga", "fg3m", "fg3a", "ftm", "fta",
   "tov", "oreb", "reb", "seed", "opp_seed", "tourney_name", "round",
-  "ap_rank", "opp_ap_rank",
+  "ap_rank", "opp_ap_rank", "fbpts", "pitp", "pot",
 ] as const;
 
 /**
