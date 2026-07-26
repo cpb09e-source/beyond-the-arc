@@ -20,7 +20,8 @@
     "scrape:nba-draftees": "node scripts/scrape-nba-draftees.mjs",
     "scrape:nba-players": "node scripts/scrape-nba-players.mjs",
     "scrape:tournament-games": "node scripts/scrape-tournament-games.mjs",
-    "scrape:tournament-boxscores": "node scripts/scrape-tournament-boxscores.mjs"
+    "scrape:tournament-boxscores": "node scripts/scrape-tournament-boxscores.mjs",
+    "dev:netlify": "netlify dev"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

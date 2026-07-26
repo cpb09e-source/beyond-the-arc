@@ -283,6 +283,15 @@ export function CalcClient({
         body: JSON.stringify({ query: q }),
       });
       const body = await res.json().catch(() => ({}));
+      // A 404 here means the route isn't being served at all, which in practice
+      // means `next dev` — the site is a static export, so /api/parse-query only
+      // exists as a Netlify Function. Say that instead of "Parser error (404)",
+      // which reads like the parser is broken when nothing is wrong with it.
+      if (res.status === 404) {
+        throw new Error(
+          "Ask isn't available under `next dev` — it runs as a Netlify Function. Use `npm run dev:netlify`. The filters below work either way.",
+        );
+      }
       if (!res.ok) throw new Error(body?.error || `Parser error (${res.status})`);
 
       const resolved = resolveQuery(body as ParsedQuery, {

@@ -32,6 +32,21 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
+# `npm run dev` is plain `next dev`, which serves the pages but knows nothing
+# about netlify/functions — /api/parse-query 404s there, which looks like the
+# ask box is broken when it is only unreachable. `npm run dev:netlify` runs
+# next dev behind Netlify's proxy so the functions and the injected env vars
+# are present too. Pinned explicitly rather than left to framework detection,
+# which otherwise tries the production build command.
+[dev]
+  command = "next dev"
+  framework = "#custom"
+  targetPort = 3000
+  # Not Netlify's default 8888 — a system service (ipfsvc) already listens
+  # there on this machine and can't be evicted, so the dev proxy never binds.
+  port = 8899
+  autoLaunch = false
+
 [build.environment]
   NODE_VERSION = "20"
   # Skip Next telemetry to keep build logs clean
