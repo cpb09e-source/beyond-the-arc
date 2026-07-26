@@ -63,7 +63,7 @@ export const BOX_FIELDS = [
   // Yes/no flags. Exposed as 0/1 because the condition row is a numeric
   // comparator — "Conf Game = 1" is conference games only, "= 0" is
   // non-conference. The UI renders these as Any/Yes/No toggles.
-  { key: "conf_game",    label: "Conf Game (1=yes)",   group: "Context" },
+  { key: "conf_game",    label: "Conference Game (1=yes)",   group: "Context" },
   { key: "tourney",      label: "NCAA Tournament (1=yes)", group: "Context" },
   { key: "postseason",   label: "NCAA/NIT (1=yes)",     group: "Context" },
 ] as const;
@@ -85,6 +85,7 @@ export const BOX_DISPLAY_FIELDS = [
   "poss_box", "fgm", "fga", "fg3m", "fg3a", "ftm", "fta",
   "tov", "oreb", "reb", "seed", "opp_seed", "tourney_name", "round",
   "ap_rank", "opp_ap_rank", "fbpts", "pitp", "pot",
+  "h1_pts", "h2_pts", "ot_pts",
 ] as const;
 
 /**

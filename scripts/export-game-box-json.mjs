@@ -135,6 +135,15 @@ function extract(r, rankAt = null) {
     fbpts: int(t.points?.fastBreak),
     pitp: int(t.points?.inPaint),
     pot: int(t.points?.offTurnovers),
+    // Half-by-half points for the linescore. The existing h1_margin/h2_margin
+    // are DIFFERENCES, which can't reconstruct either team's actual halves.
+    // Anything past the second period is overtime, summed — a 3OT game would
+    // otherwise need an unknown number of columns.
+    h1_pts: int(t.points?.byPeriod?.[0]),
+    h2_pts: int(t.points?.byPeriod?.[1]),
+    ot_pts: Array.isArray(t.points?.byPeriod) && t.points.byPeriod.length > 2
+      ? int(t.points.byPeriod.slice(2).reduce((s, v) => s + (typeof v === "number" ? v : 0), 0))
+      : null,
     seed: int(r.teamSeed),
     opp_seed: int(r.opponentSeed),
     tourney_name: r.tournament || null,
