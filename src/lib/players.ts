@@ -94,6 +94,12 @@ export type PlayerSummary = {
   // script's PlayerAdvancedAggregate). Null when the player has no CBB
   // game-log coverage for the season (~5% of historical seasons).
   tov_pg: number | null;        // turnovers per game
+  /**
+   * Turnover rate — TOV / (FGA + 0.44·FTA + TOV): the share of possessions a
+   * player USES that he ends with a turnover. Usage-adjusted, so unlike
+   * tov_pg it does not simply punish whoever handles the ball most.
+   */
+  tov_pct: number | null;
   usage_pct: number | null;     // usage rate (fraction, e.g. 0.305 = 30.5%)
   /**
    * Individual offensive-minus-defensive rating per 100 possessions.
@@ -180,6 +186,7 @@ export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
   { key: "orpg",    label: "OREB",  desc: "Offensive rebounds per game",                                       group: "offense", format: "num1", field: "orb_pg" },
   { key: "drpg",    label: "DREB",  desc: "Defensive rebounds per game (RPG − OREB)",                          group: "offense", format: "num1", field: "drb_pg" },
   { key: "tov_pg",  label: "TOV",   desc: "Turnovers per game (lower is better)",                              group: "offense", format: "num1", field: "tov_pg" },
+  { key: "tov_pct", label: "TOV%",  desc: "Turnover rate — share of possessions used that end in a turnover (lower is better)", group: "offense", format: "pct1", field: "tov_pct" },
   { key: "usg_pct", label: "USG%",  desc: "Usage rate — fraction of team possessions ending with this player",  group: "offense", format: "pct1", field: "usage_pct" },
 
   // ── Shooting ─────────────────────────────────────────────
@@ -241,7 +248,7 @@ export type PlayerListSpec = {
   minGames: number;
   filters: PlayerStatFilter[]; // stat threshold filters (AND-combined)
   sortBy: "bta_ind_ortg" | "pir" | "pts" | "reb" | "ast" | "fg_pct" | "fg3_pct" | "ts_pct" | "games" | "name"
-    | "epm" | "off_epm" | "def_epm" | "min" | "usage" | "orb" | "drb" | "tov" | "stl" | "blk" | "hkm";
+    | "epm" | "off_epm" | "def_epm" | "min" | "usage" | "orb" | "drb" | "tov" | "tov_pct" | "stl" | "blk" | "hkm";
   sortDir: "asc" | "desc";
   limit: number;
 };
@@ -256,7 +263,10 @@ export const DEFAULT_PLAYER_SPEC: PlayerListSpec = {
   filters: [],
   sortBy: "epm",
   sortDir: "desc",
-  limit: 100,
+  // 50 a page. The table now sizes itself to the viewport rather than a
+  // fixed 1250px box, so a page of 50 fills the screen and the pager is
+  // reachable without scrolling a second, nested scrollbar.
+  limit: 50,
 };
 
 // Apply a single stat filter to a PlayerSummary. Returns true if the player

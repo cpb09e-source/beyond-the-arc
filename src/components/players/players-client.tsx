@@ -57,7 +57,7 @@ const GRID_COLS: GridCol[] = [
   { label: "DRB", field: "drb_pg", fmt: "num1", pct: "drb_pg", sortKey: "drb" },
   { label: "RPG", field: "reb_pg", fmt: "num1", pct: "reb_pg", sortKey: "reb" },
   { label: "AST", field: "ast_pg", fmt: "num1", pct: "ast_pg", sortKey: "ast" },
-  { label: "TOV", field: "tov_pg", fmt: "num1", pct: "tov_pg", sortKey: "tov" },
+  { label: "TOV%", field: "tov_pct", fmt: "pct1", pct: "tov_pct", sortKey: "tov_pct" },
   { label: "STL", field: "stl_pg", fmt: "num1", pct: "stl_pg", sortKey: "stl" },
   { label: "BLK", field: "blk_pg", fmt: "num1", pct: "blk_pg", sortKey: "blk" },
   { label: "HKM", field: "hkm_pct", fmt: "pct100", pct: "hkm_pct", sortKey: "hkm" },
@@ -153,7 +153,7 @@ function transformPlayer(raw: RawPlayer): PlayerSummary {
   // Advanced aggregates from CBB Analytics player_game_stats — pre-baked
   // into the JSON by scripts/export-static-data.mts. Null when the player
   // has no game-log coverage for the season.
-  const adv = (raw as RawPlayer & { advanced_stats?: { tov_pg: number | null; usage_pct: number | null; net_rtg: number | null } | null }).advanced_stats ?? null;
+  const adv = (raw as RawPlayer & { advanced_stats?: { tov_pg: number | null; tov_pct: number | null; usage_pct: number | null; net_rtg: number | null } | null }).advanced_stats ?? null;
 
   const games = stats?.games ?? null;
   const pts_pg = asNum(fromEnd(row, PLAYER_COLS.pts_pg_offset));
@@ -227,6 +227,7 @@ function transformPlayer(raw: RawPlayer): PlayerSummary {
     fta_rate,
     orb_pg,
     tov_pg: adv?.tov_pg ?? null,
+    tov_pct: adv?.tov_pct ?? null,
     usage_pct: adv?.usage_pct ?? null,
     net_rtg: adv?.net_rtg ?? null,
     // AST/TOV ratio. Null when TOV is missing or zero (avoids inf/NaN).
@@ -439,7 +440,7 @@ function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummar
     name: "name",
     epm: "epm", off_epm: "off_epm", def_epm: "def_epm",
     min: "min_pg", usage: "usage_pct", orb: "orb_pg", drb: "drb_pg",
-    tov: "tov_pg", stl: "stl_pg", blk: "blk_pg", hkm: "hkm_pct",
+    tov: "tov_pg", tov_pct: "tov_pct", stl: "stl_pg", blk: "blk_pg", hkm: "hkm_pct",
   };
   const key = sortKeyMap[spec.sortBy];
   const dir = spec.sortDir === "asc" ? 1 : -1;
@@ -461,13 +462,13 @@ function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummar
 const PCT_KEYS = [
   "bta_ind_ortg", "pir", "fg_pct", "fg3_pct", "ts_pct",
   "epm", "off_epm", "def_epm", "usage_pct", "pts_pg",
-  "orb_pg", "drb_pg", "reb_pg", "ast_pg", "tov_pg", "stl_pg", "blk_pg", "hkm_pct",
+  "orb_pg", "drb_pg", "reb_pg", "ast_pg", "tov_pg", "tov_pct", "stl_pg", "blk_pg", "hkm_pct",
   // Filterable extras that can appear as dynamic columns:
   "efg_pct", "fg2_pct", "ft_pct", "fta_rate", "ast_to_tov", "porpag", "min_pg",
 ] as const;
 type PctKey = (typeof PCT_KEYS)[number];
 type PctMaps = Record<PctKey, Map<number, number>>;
-const INVERTED_PCT = new Set<PctKey>(["tov_pg"]);
+const INVERTED_PCT = new Set<PctKey>(["tov_pg", "tov_pct"]);
 
 // Per-season percentile rank for each chip-bearing stat. Computed across the
 // eligible D-I pool (post-baseline, pre-filter) so chips remain meaningful
@@ -935,7 +936,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         <div className="relative">
         <div
           ref={gridScrollRef}
-          className="overflow-auto overscroll-x-contain max-h-312.5 players-scroll cursor-grab"
+          className="overflow-auto overscroll-x-contain max-h-[calc(100vh-3rem)] players-scroll cursor-grab"
           onPointerDown={onGridPointerDown}
           onPointerMove={onGridPointerMove}
           onPointerUp={onGridPointerEnd}

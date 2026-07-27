@@ -150,6 +150,12 @@ type PlayerAdvancedAggregate = {
   games: number;
   min_pg: number | null;
   tov_pg: number | null;
+  /**
+   * Turnover RATE — TOV / (FGA + 0.44·FTA + TOV), summed over the season rather
+   * than averaged per game. Usage-adjusted, so it doesn't simply rank whoever
+   * handles the ball most; it's what the players grid shows under Handle.
+   */
+  tov_pct: number | null;
   usage_pct: number | null;
   net_rtg: number | null;
   game_score_pg: number | null;

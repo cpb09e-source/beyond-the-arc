@@ -260,6 +260,7 @@ const RANGE_GROUPS: RangeGroup[] = [
       { key: "ppg",    label: "Points per game",        min: 0, max: 40, step: 0.5 },
       { key: "apg",    label: "Assists per game",       min: 0, max: 14, step: 0.5 },
       { key: "tov_pg", label: "Turnovers per game",     min: 0, max: 7,  step: 0.1 },
+      { key: "tov_pct", label: "Turnover rate",          min: 0, max: 40, step: 0.5, pct: true },
       { key: "pir",    label: "PIR",                    min: 0, max: 40, step: 0.5 },
     ],
   },

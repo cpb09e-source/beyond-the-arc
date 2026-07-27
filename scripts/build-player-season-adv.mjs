@@ -101,12 +101,20 @@ for (const season of SEASONS) {
       matched++;
       let a = agg.get(bartId);
       if (!a) {
-        a = { games: 0, min: 0, tov: 0, tovN: 0, usg: 0, usgN: 0, net: 0, netMin: 0, gs: 0, gsN: 0 };
+        a = { games: 0, min: 0, tov: 0, tovN: 0, usg: 0, usgN: 0, net: 0, netMin: 0, gs: 0, gsN: 0, toTov: 0, toFga: 0, toFta: 0 };
         agg.set(bartId, a);
       }
       a.games++;
       if (typeof p.minutes === "number") a.min += p.minutes;
       if (typeof p.turnovers === "number") { a.tov += p.turnovers; a.tovN++; }
+      // Season totals for turnover RATE. Summed rather than averaged per game:
+      // TOV% is a ratio of totals, and averaging per-game ratios would weight a
+      // 4-minute appearance the same as a 38-minute one.
+      if (typeof p.turnovers === "number" && typeof p.fieldGoals?.attempted === "number" && typeof p.freeThrows?.attempted === "number") {
+        a.toTov += p.turnovers;
+        a.toFga += p.fieldGoals.attempted;
+        a.toFta += p.freeThrows.attempted;
+      }
       // CBBD sends usage as 0-100; the site stores rates 0-1.
       if (typeof p.usage === "number") { a.usg += p.usage / 100; a.usgN++; }
       // MINUTES-WEIGHTED, unlike the others. An individual offensive/defensive
@@ -138,6 +146,16 @@ for (const season of SEASONS) {
       games: a.games,
       min_pg: r1(a.games > 0 ? a.min / a.games : null),
       tov_pg: r3(a.tovN > 0 ? a.tov / a.tovN : null),
+      // Turnover rate: share of the possessions a player USES that he ends with
+      // a turnover — TOV / (FGA + 0.44·FTA + TOV), the standard formulation.
+      // Unlike tov_pg this is usage-adjusted, so a high-minute primary handler
+      // is no longer punished for simply touching the ball more.
+      // Guarded on a real denominator: a player who never attempted a shot or a
+      // free throw has no possessions to have wasted, so the answer is "no
+      // data", not 100%.
+      tov_pct: r3(a.toFga + 0.44 * a.toFta + a.toTov > 0
+        ? a.toTov / (a.toFga + 0.44 * a.toFta + a.toTov)
+        : null),
       usage_pct: r3(a.usgN > 0 ? a.usg / a.usgN : null),
       // Minutes-weighting fixes the average but can't rescue a player-season
       // whose entire sample IS one short cameo — all the weight sits on it, so

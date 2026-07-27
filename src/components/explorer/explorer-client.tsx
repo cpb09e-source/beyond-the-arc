@@ -359,7 +359,13 @@ export function ExplorerClient({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Vertical bound is what makes the `sticky top-0 / top-6` header rows
+            below actually stick. Without a height the wrapper never scrolls
+            vertically — and since `overflow-x: auto` forces `overflow-y` to
+            `auto` as well, it still counts as this table's scroll container, so
+            the headers had nothing to stick to and simply scrolled off with the
+            page. Sizing it to the viewport gives them a scrollport. */}
+        <div className="overflow-auto overscroll-x-contain max-h-[calc(100vh-3rem)]">
           <table className="w-full text-sm border-separate border-spacing-0">
             <thead>
               {/* Group-label band — sits ABOVE the column-header row in its own
