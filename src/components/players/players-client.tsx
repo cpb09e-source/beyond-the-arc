@@ -78,9 +78,14 @@ const GRID_FIELDS = new Set(GRID_COLS.map((c) => c.field));
 // cells share it so the row reads as a single band, not two colors. Opaque
 // (mixed into --card) so the frozen columns still hide the scrolled content.
 const ROW_HOVER = "group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))]";
-// EPM band resting tint — a subtle dusty rose/mauve wash sets the headline
-// metric group apart from the warm coral palette and the green percentile chips.
-const EPM_BAND_TINT = "bg-[color-mix(in_oklab,#B06A8C_10%,transparent)]";
+// EPM band resting tint — marks the headline metric group. This used to be a
+// hardcoded dusty rose, picked to sit apart from a warm coral accent; with the
+// accent now azure that reason is gone and the rose just clashed. It reads off
+// the accent token now, same as FF_BAND_TINT on the teams table, so the two
+// leaderboards mark their headline group the same way and neither can drift
+// when the accent changes again. A little heavier than the teams table's 3%
+// because EPM is three columns, not seven, and needs the extra weight to read.
+const EPM_BAND_TINT = "bg-[color-mix(in_oklab,var(--coral)_5%,transparent)]";
 
 function fmtGrid(v: number | null, fmt: GridFmt): string {
   if (v === null || v === undefined) return "—";
@@ -838,7 +843,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       {/* Headline ledger — coral accent rule, ring + shadow, big display
           title. Mirrors /coaches "Head coaches" and /teams "By season" cards
           so the look reads consistently across the site. */}
-      <div id="players-leaderboard" className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-4 scroll-mt-4 -mx-6 lg:mx-0">
+      <div id="players-leaderboard" className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-6 scroll-mt-6 -mx-6 lg:mx-0">
         {/* Compact D&3-style toolbar: search + count + compare on the left,
             sort/order/show on the right — one row, table starts below. */}
         <div className="px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 flex items-center justify-between gap-3 flex-wrap">

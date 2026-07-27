@@ -11,7 +11,7 @@ export default async function PlayersOverviewPage() {
 
   return (
     <>
-      <section className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-4 pb-8 lg:pt-5 lg:pb-10">
+      <section className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-7 pb-8 lg:pt-9 lg:pb-10">
         <Suspense fallback={<div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-10 text-center text-ink-muted">Loading players…</div>}>
           <PlayersClient confsByYear={confsByYear} />
         </Suspense>

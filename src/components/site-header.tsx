@@ -40,7 +40,13 @@ export function SiteHeader() {
 
   return (
     <header className="bg-paper/80 backdrop-blur supports-[backdrop-filter]:bg-paper/60 relative z-40">
-      <div className="mx-auto max-w-[88rem] px-6 lg:px-10 h-16 flex items-center justify-between">
+      {/* 108rem matches the widest page container on the site (the teams and
+          players tables), so the logo and search line up with the table's edges
+          instead of floating inside them. Same width on every route — narrower
+          pages just leave more air, which beats the nav shifting as you
+          navigate. Only visible above 1408px; below that every container is
+          viewport-width anyway. */}
+      <div className="mx-auto max-w-[108rem] px-6 lg:px-10 h-16 flex items-center justify-between">
         <Link
           href="/"
           className="flex items-center group shrink-0"

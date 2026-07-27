@@ -34,8 +34,8 @@ export function TeamLineups({ teamName, year }: { teamName: string; year: number
     <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
       <div className="h-1 w-full bg-gradient-to-r from-[color:var(--accent,#ed5a4f)] via-[color:var(--accent,#ed5a4f)] to-transparent" />
       <div className="px-5 lg:px-7 py-5 border-b border-hairline bg-paper-deep/30">
-        <div className="text-[0.6rem] uppercase tracking-[0.18em] text-[color:var(--accent,#c8553d)] font-bold mb-1.5 flex items-center gap-2">
-          <span className="h-px w-6 bg-[color:var(--accent,#c8553d)]" />
+        <div className="text-[0.6rem] uppercase tracking-[0.18em] text-[color:var(--accent,#0c6bd6)] font-bold mb-1.5 flex items-center gap-2">
+          <span className="h-px w-6 bg-[color:var(--accent,#0c6bd6)]" />
           Five-man units
         </div>
         <h2 className="font-display text-2xl lg:text-3xl text-ink leading-none tracking-tight">Top Lineups</h2>
