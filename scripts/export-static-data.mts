@@ -263,57 +263,68 @@ async function main() {
     byName.get(k)!.push(t);
   }
 
-  console.log("\n🏀 Exporting game logs (per year)…");
-  await ensureDir(path.join(OUT, "game-logs-by-year"));
+  console.log("\n🏀 Reading game logs (per year) for the four-factor record…");
   let totalLogs = 0;
-  // (team_id, year) → games where REB Diff + FBP Diff + 3PM Diff are all > 0.
+  // (team NAME, year) → games where REB Diff + FBP Diff + 3PM Diff are all > 0.
   // Powers the "When all three positive" badge on the team page Four Factors card.
+  //
+  // KEYED ON NAME, NOT team_id. The logs now carry CBBD team ids while
+  // teams-all.json carries Supabase ids — two different id spaces that happen to
+  // both be small integers, so keying on the number silently matched nothing and
+  // every team's record came back null. Names are the one identifier both sides
+  // share, and build-game-logs-cbbd.mjs already resolves them to Bart spellings.
   type FFRecord = { wins: number; losses: number; games: number };
   const fourFactorByTeamYear = new Map<string, FFRecord>();
   for (const year of YEARS) {
     const logs = await fetchGameLogsForYear(year) as Array<{
-      team_id: number;
-      teams: { name?: string; conference?: string | null } | Array<{ name?: string; conference?: string | null }>;
+      team_name: string;
       reb_diff?: number | null;
       fbpts_diff?: number | null;
       fg3_made_diff?: number | null;
       won?: boolean;
     }>;
     // Aggregate the four-factor record per team for this season.
-    const perTeam = new Map<number, FFRecord>();
+    const perTeam = new Map<string, FFRecord>();
     for (const l of logs) {
       const reb = l.reb_diff ?? null;
       const fbp = l.fbpts_diff ?? null;
       const tp = l.fg3_made_diff ?? null;
+      // fbpts_diff is null for any game whose arena didn't track the split, so
+      // pre-2023 seasons legitimately contribute far fewer qualifying games.
       if (reb === null || fbp === null || tp === null) continue;
       if (!(reb > 0 && fbp > 0 && tp > 0)) continue;
-      const rec = perTeam.get(l.team_id) ?? { wins: 0, losses: 0, games: 0 };
+      if (!l.team_name) continue;
+      const rec = perTeam.get(l.team_name) ?? { wins: 0, losses: 0, games: 0 };
       rec.games += 1;
       if (l.won) rec.wins += 1; else rec.losses += 1;
-      perTeam.set(l.team_id, rec);
+      perTeam.set(l.team_name, rec);
     }
-    for (const [tid, rec] of perTeam.entries()) {
-      fourFactorByTeamYear.set(`${tid}|${year}`, rec);
+    for (const [name, rec] of perTeam.entries()) {
+      fourFactorByTeamYear.set(`${name}|${year}`, rec);
     }
 
     // Flatten team join → top-level team_name / team_conference so the client
     // doesn't have to walk the nested array.
-    const flat = logs.map((l) => {
-      const t = Array.isArray(l.teams) ? l.teams[0] : l.teams;
-      const { teams: _drop, ...rest } = l;
-      void _drop;
-      return { ...rest, team_name: overrideTeamName(t?.name ?? "—"), team_conference: t?.conference ?? null };
-    });
-    await fs.writeFile(path.join(OUT, "game-logs-by-year", `${year}.json`), JSON.stringify(flat));
-    console.log(`   ${year}: ${flat.length} game-perspective rows, ${perTeam.size} teams with 4F-record`);
-    totalLogs += flat.length;
+    // DO NOT WRITE game-logs-by-year HERE. build-game-logs-cbbd.mjs owns those
+    // files; this loop only reads them to compute the four-factor record.
+    //
+    // There used to be a write-back that flattened a Supabase `teams` join onto
+    // each row. When the query was replaced with a file read, the flattening
+    // survived — and since the rows no longer carry a `teams` property, it
+    // rewrote `team_name` as `t?.name ?? "—"` for EVERY row of EVERY season.
+    // 11,433 rows in 2014, one distinct team name: an em dash. Re-exporting
+    // silently destroyed the file it had just read.
+    console.log(`   ${year}: ${logs.length} game-perspective rows, ${perTeam.size} teams with 4F-record`);
+    totalLogs += logs.length;
   }
   console.log(`   total: ${totalLogs} game logs`);
 
   // Attach four-factor record to each team-season row, then write the team
   // JSONs (waited until now so the record is included in the per-team payload).
   for (const t of teams as Array<typeof teams[number] & { four_factor_record?: FFRecord | null }>) {
-    t.four_factor_record = fourFactorByTeamYear.get(`${t.id}|${t.year}`) ?? null;
+    // `t.name` has already had overrideTeamName applied, which is the same
+    // spelling build-game-logs-cbbd.mjs writes into team_name.
+    t.four_factor_record = fourFactorByTeamYear.get(`${t.name}|${t.year}`) ?? null;
   }
   // Load the coach snapshot (one-shot file committed to repo by
   // `npm run snapshot:coaches`). Keys are Bart raw names → apply overrideTeamName
