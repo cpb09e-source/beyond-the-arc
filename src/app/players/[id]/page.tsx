@@ -6,6 +6,8 @@ import { PlayerPhoto } from "@/components/player-photo";
 import { CareerTable } from "@/components/players/career-table";
 import { PlayerOverview, type PlayerOverviewOption } from "@/components/players/player-overview";
 import { PlayerShotChart } from "@/components/players/player-shot-chart";
+import { RankRings } from "@/components/players/rank-rings";
+import { cn } from "@/lib/utils";
 
 export async function generateStaticParams() {
   // Only emit profile pages for ranked players. Unranked players (didn't
@@ -128,6 +130,14 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
     if (b) positionByYear[String(s.year)] = b;
   }
 
+  // Ranks for the season the hero shows. Falls back to the newest ranked season
+  // so a player whose latest year missed the eligibility floor still gets rings
+  // rather than a hole where they were.
+  const heroRanks =
+    ranks?.seasonRanks.find((r) => r.year === current.year) ??
+    ranks?.seasonRanks.slice().sort((a, b) => b.year - a.year)[0] ??
+    null;
+
   const row = current.raw_row;
   const stats = {
     pts: fromEnd(row, 3),
@@ -142,95 +152,83 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
 
   return (
     <>
-      <section className="border-b border-hairline">
-        <div className="mx-auto max-w-7xl px-5 sm:px-6 lg:px-10 pt-8 sm:pt-10 pb-10 sm:pb-12">
-          <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium mb-3">
-            <span className="h-px w-8 bg-coral" />
-            <span>Player · {seasonLabel(current.year)}</span>
+      {/* Dossier hero — scouting-file split. Photo + vitals ride a deep-paper
+          column; name and the per-game bar take the open side. The vitals that
+          used to run inline as "Illinois · Fr · 6-6 · Lenexa" become a ruled
+          mini-table, which is scannable and stops the meta line from wrapping
+          into three rows on narrow screens. Stacks to one column below md. */}
+      <section className="mx-auto max-w-7xl px-0 sm:px-6 lg:px-10 pt-5 sm:pt-8 pb-8 sm:pb-10">
+        {/* Warm off-white rather than pure card white — the flat #fff panel read
+            as a hole punched in the paper. Still lifts off the page background
+            because it's a step lighter than --paper-deep, plus the border/ring. */}
+        <div className="bg-[color-mix(in_oklab,var(--card)_55%,var(--paper-deep))] border-y sm:border border-ink/10 sm:rounded-xl shadow-md overflow-hidden ring-0 sm:ring-1 ring-ink/5 grid grid-cols-1 md:grid-cols-[17rem_minmax(0,1fr)]">
+          {/* Vitals column */}
+          <div className="relative bg-paper-deep border-b md:border-b-0 md:border-r border-hairline px-6 py-6 flex flex-col items-center gap-5">
+            <span className="absolute top-3 right-4 text-[0.55rem] uppercase tracking-[0.2em] text-ink-muted font-bold tabular">
+              {seasonLabel(current.year)}
+            </span>
+            <PlayerPhoto bartPlayerId={bartId} name={stats.name ?? `Player ${bartId}`} size={132} />
+            <dl className="w-full text-xs">
+              <VitalRow label="Team">
+                <Link
+                  href={`/teams/${teamSlug(transfer ? transfer.from : current.team_name)}`}
+                  className="inline-flex items-center gap-1.5 hover:text-coral transition-colors min-w-0"
+                >
+                  <TeamLogo name={transfer ? transfer.from : current.team_name} size={16} />
+                  <span className="truncate">{transfer ? transfer.from : current.team_name}</span>
+                </Link>
+              </VitalRow>
+              <VitalRow label="Class">{current.class ?? "—"}</VitalRow>
+              <VitalRow label="Height">{stats.height ?? "—"}</VitalRow>
+              {stats.hometown && <VitalRow label="From">{stats.hometown}</VitalRow>}
+            </dl>
           </div>
-          {/* Hero row — photo + name | stats banner. On lg+ the stats sit
-              to the right of the name (ml-auto). Below lg the banner
-              wraps to a full-width row below the name (flex-wrap). The
-              banner scale is tuned smaller when inline so it doesn't
-              fight the player-name h1 for visual weight. */}
-          <div className="flex items-end gap-y-6 sm:gap-y-10 gap-x-6 sm:gap-x-8 lg:gap-x-12 flex-wrap">
-            {/* Photo + name cluster */}
-            <div className="flex items-start sm:items-end gap-4 sm:gap-6 lg:gap-10 min-w-0">
-              {/* Two renders so we can scale the photo across breakpoints without
-                  fighting PlayerPhoto's inline width/height styles. */}
-              <PlayerPhoto bartPlayerId={bartId} name={stats.name ?? `Player ${bartId}`} size={72} className="sm:hidden" />
-              <PlayerPhoto bartPlayerId={bartId} name={stats.name ?? `Player ${bartId}`} size={120} className="hidden sm:inline-flex" />
+
+          {/* Name + per-game bar */}
+          <div className="px-6 sm:px-8 lg:px-10 py-7 sm:py-8 flex flex-col justify-center min-w-0">
+            <div className="flex items-start justify-between gap-6">
               <div className="min-w-0">
-                <h1 className="font-display text-3xl sm:text-5xl md:text-6xl tracking-tight text-ink leading-[1.05] sm:leading-none break-words">
+                <div className="flex items-center gap-3 text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-2.5">
+                  <span className="h-px w-6 bg-coral" />
+                  <span>Player · {seasonLabel(current.year)}</span>
+                </div>
+                <h1 className="font-display text-3xl sm:text-5xl lg:text-6xl tracking-tight text-ink leading-[1.05] sm:leading-none break-words">
                   {stats.name ?? `Player ${bartId}`}
                 </h1>
-                <div className="mt-3 sm:mt-4 flex flex-wrap items-center gap-x-3 sm:gap-x-5 gap-y-1.5 text-ink-soft text-sm sm:text-base">
-                  <Link
-                    href={`/teams/${teamSlug(transfer ? transfer.from : current.team_name)}`}
-                    className="inline-flex items-center gap-2 hover:text-coral transition-colors"
-                    title={transfer ? `${transfer.from} → ${transfer.to}` : undefined}
-                  >
-                    <TeamLogo name={transfer ? transfer.from : current.team_name} size={24} />
-                    <span>{transfer ? transfer.from : current.team_name}</span>
-                  </Link>
-                  <span className="text-ink-muted">·</span>
-                  <span>{current.class ?? "—"}</span>
-                  <span className="text-ink-muted">·</span>
-                  <span>{stats.height ?? "—"}</span>
-                  {stats.hometown && (
-                    <>
-                      <span className="text-ink-muted">·</span>
-                      <span className="text-ink-muted">{stats.hometown}</span>
-                    </>
-                  )}
-                </div>
-
-                {/* Transferred-to banner — shown when a portal commit exists. */}
-                {transfer && (
-                  <div className="mt-3 inline-flex items-center gap-2 sm:gap-3 px-3 py-1.5 rounded-md bg-coral/10 border border-coral/30">
-                    <span className="text-[0.6rem] uppercase tracking-widest text-coral font-bold whitespace-nowrap">
-                      Transfer →
-                    </span>
-                    <Link
-                      href={`/teams/${teamSlug(transfer.to)}`}
-                      className="inline-flex items-center gap-2 group min-w-0"
-                    >
-                      <TeamLogo name={transfer.to} size={22} />
-                      <span className="text-ink font-medium group-hover:text-coral transition-colors truncate">
-                        {transfer.to}
-                      </span>
-                    </Link>
-                  </div>
-                )}
               </div>
+              {/* Leaderboard rings, top right of the card. Server-rendered off
+                  the hero's own season rather than the Overview's picker — the
+                  hero has no year control, so they'd have nothing to track. */}
+              {heroRanks && (
+                <div className="hidden sm:block shrink-0">
+                  <RankRings season={heroRanks} size={74} />
+                </div>
+              )}
             </div>
 
-            {/* Stat banner — inline on lg+, wraps below on smaller screens.
-                Scale is tuned down vs the standalone version so it sits
-                next to the player-name h1 without competing. */}
-            <div className="w-full lg:w-auto lg:ml-auto">
-              <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-3 sm:mb-4 flex items-center gap-2">
-                <span className="h-px w-6 bg-coral" />
-                Per game
+            {/* Transferred-to banner — shown when a portal commit exists. */}
+            {transfer && (
+              <div className="mt-3 inline-flex self-start items-center gap-2 sm:gap-3 px-3 py-1.5 rounded-md bg-coral/10 border border-coral/30">
+                <span className="text-[0.6rem] uppercase tracking-widest text-coral font-bold whitespace-nowrap">
+                  Transfer →
+                </span>
+                <Link href={`/teams/${teamSlug(transfer.to)}`} className="inline-flex items-center gap-2 group min-w-0">
+                  <TeamLogo name={transfer.to} size={22} />
+                  <span className="text-ink font-medium group-hover:text-coral transition-colors truncate">
+                    {transfer.to}
+                  </span>
+                </Link>
               </div>
-              <div className="flex items-end gap-x-6 sm:gap-x-8 lg:gap-x-10 gap-y-4 flex-wrap">
-                {/* Lede — points per game */}
-                <div>
-                  <div className="font-display text-ink tabular leading-[0.9] tracking-[-0.04em] text-[clamp(2.75rem,5vw,4rem)]">
-                    {fmtNum(stats.pts, 1)}
-                  </div>
-                  <div className="mt-2 text-[0.6rem] sm:text-[0.65rem] uppercase tracking-[0.18em] text-ink-muted font-medium">
-                    Points
-                  </div>
-                </div>
+            )}
 
-                {/* Supporting — rebounds / assists / steals / blocks. */}
-                <div className="flex items-end gap-x-5 sm:gap-x-7 lg:gap-x-9 gap-y-4 flex-wrap">
-                  <SecondaryStat label="Rebounds" value={fmtNum(stats.reb, 1)} />
-                  <SecondaryStat label="Assists"  value={fmtNum(stats.ast, 1)} />
-                  <SecondaryStat label="Steals"   value={fmtNum(stats.stl, 1)} />
-                  <SecondaryStat label="Blocks"   value={fmtNum(stats.blk, 1)} />
-                </div>
+            <div className="mt-6 sm:mt-7 pt-5 border-t border-hairline">
+              <div className="text-[0.55rem] uppercase tracking-[0.2em] text-ink-muted font-semibold mb-3">Per game</div>
+              <div className="flex items-end gap-x-7 sm:gap-x-9 lg:gap-x-11 gap-y-5 flex-wrap">
+                <PerGameStat label="Points"   value={fmtNum(stats.pts, 1)} lead />
+                <PerGameStat label="Rebounds" value={fmtNum(stats.reb, 1)} />
+                <PerGameStat label="Assists"  value={fmtNum(stats.ast, 1)} />
+                <PerGameStat label="Steals"   value={fmtNum(stats.stl, 1)} />
+                <PerGameStat label="Blocks"   value={fmtNum(stats.blk, 1)} />
               </div>
             </div>
           </div>
@@ -281,10 +279,26 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
  * Sized one step below the lede PPG so the eye picks up the hero number
  * first and reads the supporting stats as a single subordinate cluster.
  */
-function SecondaryStat({ label, value }: { label: string; value: string }) {
+/** One row of the dossier vitals table. */
+function VitalRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5 border-b border-hairline last:border-b-0">
+      <dt className="text-[0.55rem] uppercase tracking-[0.16em] text-ink-muted font-semibold shrink-0">{label}</dt>
+      <dd className="text-ink-soft text-right min-w-0 truncate">{children}</dd>
+    </div>
+  );
+}
+
+/** Per-game figure. `lead` marks points, which carries the accent + extra size. */
+function PerGameStat({ label, value, lead }: { label: string; value: string; lead?: boolean }) {
   return (
     <div>
-      <div className="font-display text-ink tabular text-2xl sm:text-3xl lg:text-4xl leading-none tracking-[-0.02em]">
+      <div
+        className={cn(
+          "font-display tabular leading-none tracking-[-0.03em]",
+          lead ? "text-coral text-[clamp(2.5rem,4.5vw,3.5rem)]" : "text-ink text-2xl sm:text-3xl lg:text-4xl",
+        )}
+      >
         {value}
       </div>
       <div className="mt-2 text-[0.55rem] sm:text-[0.6rem] uppercase tracking-[0.18em] text-ink-muted font-medium">
