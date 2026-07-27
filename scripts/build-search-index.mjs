@@ -87,11 +87,31 @@ for (const [team, c] of Object.entries(espn)) {
   const cur = coachLatest.get(c.name);
   if (!cur || LATEST_YEAR > cur.year) coachLatest.set(c.name, { team, year: LATEST_YEAR });
 }
-const coachEntries = [...coachLatest.entries()]
-  .map(([name, info]) => ({
+// Dedupe by SLUG, not just name. The two sources can spell one person two
+// ways ("Donte Jackson" in SR, "Donte' Jackson" on ESPN) — distinct map keys
+// above, but identical slugs, so the dialog rendered two rows with the same
+// React key pointing at the same /coaches/ page. On collision keep the SR
+// spelling (history is the preferred source everywhere else in lib/coaches)
+// and let either row's active flag win.
+const bySlug = new Map();
+for (const [name, info] of coachLatest.entries()) {
+  const s = slug(name);
+  const cur = bySlug.get(s);
+  if (!cur) {
+    bySlug.set(s, { name, info });
+  } else {
+    const active = Math.max(cur.info.year, info.year);
+    // SR names come without the apostrophe; prefer the plain-ASCII one for
+    // consistency with the coach page's own header, keep the freshest year.
+    const keep = cur.name.length <= name.length ? cur.name : name;
+    bySlug.set(s, { name: keep, info: { team: info.year >= cur.info.year ? info.team : cur.info.team, year: active } });
+  }
+}
+const coachEntries = [...bySlug.entries()]
+  .map(([s, { name, info }]) => ({
     t: "c",
     n: name,
-    s: slug(name),
+    s,
     tm: info.team,
     a: info.year === LATEST_YEAR ? 1 : 0, // active flag
   }))

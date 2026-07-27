@@ -519,11 +519,31 @@ async function main() {
       if (!cur || LATEST_YEAR > cur.year) coachLatest.set(c.name, { team: overrideTeamName(team), year: LATEST_YEAR });
     }
   } catch {}
-  const searchCoaches = [...coachLatest.entries()]
-    .map(([name, info]) => ({
+  // Dedupe by SLUG — the sources can spell one coach two ways ("Donte
+  // Jackson" / "Donte' Jackson") that collide after slugging, which shipped
+  // duplicate React keys in the search dialog. Keep the shorter (SR/ASCII)
+  // spelling and the freshest team/year. Mirrors build-search-index.mjs.
+  const coachBySlug = new Map<string, { name: string; info: CoachLatest }>();
+  for (const [name, info] of coachLatest.entries()) {
+    const s = slug(name);
+    const cur = coachBySlug.get(s);
+    if (!cur) {
+      coachBySlug.set(s, { name, info });
+    } else {
+      coachBySlug.set(s, {
+        name: cur.name.length <= name.length ? cur.name : name,
+        info: {
+          team: info.year >= cur.info.year ? info.team : cur.info.team,
+          year: Math.max(cur.info.year, info.year),
+        },
+      });
+    }
+  }
+  const searchCoaches = [...coachBySlug.entries()]
+    .map(([s, { name, info }]) => ({
       t: "c" as const,
       n: name,
-      s: slug(name),
+      s,
       tm: info.team,
       a: info.year === LATEST_YEAR ? 1 : 0,
     }))

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
@@ -11,7 +11,10 @@ import { PlayerPhoto } from "@/components/player-photo";
 type TeamEntry = { t: "t"; n: string; s: string; c: string | null };
 type CoachEntry = { t: "c"; n: string; s: string; tm: string; a: 0 | 1 };
 type PlayerEntry = { t: "p"; n: string; b: number; tm: string; y: number };
-type Entry = TeamEntry | CoachEntry | PlayerEntry;
+// `l` is stamped client-side after fetch: the entry's name lowercased once,
+// so the per-keystroke scan doesn't allocate 26k fresh strings via
+// toLowerCase() every time. (Not in the wire format — it would double it.)
+type Entry = (TeamEntry | CoachEntry | PlayerEntry) & { l?: string };
 
 function urlFor(e: Entry): string {
   if (e.t === "t") return `/teams/${e.s}/`;
@@ -88,43 +91,52 @@ export function SearchDialog() {
     if (!open || index || loadErr) return;
     fetch("/data/search-index.json")
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((arr: Entry[]) => setIndex(arr))
+      // Stamp the lowercased name once, at load — the scan runs per keystroke
+      // and toLowerCase() per entry was 26k throwaway strings each time.
+      .then((arr: Entry[]) => { for (const e of arr) e.l = e.n.toLowerCase(); setIndex(arr); })
       .catch((e) => setLoadErr(e.message));
   }, [open, index, loadErr]);
 
+  // The list renders against a DEFERRED copy of the query. The keystroke's own
+  // commit then contains only the input echo (sub-ms) and the result list
+  // re-renders in a separate, interruptible pass — a burst of fast keystrokes
+  // skips the intermediate lists instead of committing every one. Same
+  // ownership lesson as the filter-drawer sliders: never make the echo of the
+  // user's own action wait on the expensive work it triggers.
+  const deferredQuery = useDeferredValue(query);
   const { teams, coaches, players } = useMemo(() => {
     if (!index) return { teams: [] as TeamEntry[], coaches: [] as CoachEntry[], players: [] as PlayerEntry[] };
-    const q = query.trim().toLowerCase();
+    const q = deferredQuery.trim().toLowerCase();
     if (!q) return { teams: [], coaches: [], players: [] };
     const teams: TeamEntry[] = [];
     const coaches: CoachEntry[] = [];
     const players: PlayerEntry[] = [];
     for (const e of index) {
-      if (!e.n.toLowerCase().includes(q)) continue;
+      if (!(e.l ?? e.n.toLowerCase()).includes(q)) continue;
       if (e.t === "t" && teams.length < 6) teams.push(e);
       else if (e.t === "c" && coaches.length < 8) coaches.push(e);
       else if (e.t === "p" && players.length < 12) players.push(e);
       if (teams.length >= 6 && coaches.length >= 8 && players.length >= 12) break;
     }
     return { teams, coaches, players };
-  }, [index, query]);
+  }, [index, deferredQuery]);
 
   const flat: Entry[] = useMemo(() => [...teams, ...coaches, ...players], [teams, coaches, players]);
 
-  // Clamp active index when results shrink.
-  useEffect(() => {
-    setActiveIdx((i) => Math.max(0, Math.min(i, flat.length - 1)));
-  }, [flat.length]);
+  // Clamp at render time, not in an effect — the effect version committed the
+  // out-of-range index first and re-rendered to fix it, doubling the work on
+  // exactly the keystrokes that shrink the list.
+  const cursor = Math.max(0, Math.min(activeIdx, flat.length - 1));
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIdx((i) => Math.min(i + 1, flat.length - 1));
+      setActiveIdx(Math.min(cursor + 1, flat.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActiveIdx((i) => Math.max(i - 1, 0));
+      setActiveIdx(Math.max(cursor - 1, 0));
     } else if (e.key === "Enter") {
-      const pick = flat[activeIdx];
+      const pick = flat[cursor];
       if (pick) { router.push(urlFor(pick)); setOpen(false); }
     }
   }
@@ -191,7 +203,7 @@ export function SearchDialog() {
                     <GroupLabel>Teams</GroupLabel>
                   )}
                   {teams.map((e) => {
-                    const isActive = flat[activeIdx] === e;
+                    const isActive = flat[cursor] === e;
                     return (
                       <Row key={`t-${e.s}`} active={isActive} onClick={() => pick(e)}>
                         <TeamLogo name={e.n} size={20} />
@@ -205,7 +217,7 @@ export function SearchDialog() {
                     <GroupLabel>Coaches</GroupLabel>
                   )}
                   {coaches.map((e) => {
-                    const isActive = flat[activeIdx] === e;
+                    const isActive = flat[cursor] === e;
                     return (
                       <Row key={`c-${e.s}`} active={isActive} onClick={() => pick(e)}>
                         <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-paper-deep text-[0.55rem] uppercase tracking-widest font-medium text-ink-muted">
@@ -224,7 +236,7 @@ export function SearchDialog() {
                     <GroupLabel>Players</GroupLabel>
                   )}
                   {players.map((e) => {
-                    const isActive = flat[activeIdx] === e;
+                    const isActive = flat[cursor] === e;
                     return (
                       <Row key={`p-${e.b}`} active={isActive} onClick={() => pick(e)}>
                         <PlayerPhoto bartPlayerId={e.b} name={e.n} size={24} />
