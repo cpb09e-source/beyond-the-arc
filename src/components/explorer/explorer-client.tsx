@@ -307,7 +307,10 @@ export function ExplorerClient({
             product from the players table it sits beside in the nav. The page
             heading lives in the page shell now, not inside the data card. */}
         <div className="px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2.5 min-w-0">
+          {/* Wraps on narrow screens. Without it the row is one unbreakable
+              line and "View Conference Rankings", which is whitespace-nowrap,
+              ran ~95px past the right edge of a 390px viewport. */}
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2 min-w-0">
             {/* Desktop search */}
             <div className="relative hidden lg:block">
               <SearchGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" />
@@ -356,14 +359,21 @@ export function ExplorerClient({
               <button
                 type="button"
                 onClick={() => setShowRankings(true)}
-                className="text-xs text-coral hover:underline whitespace-nowrap"
+                className="text-xs text-coral hover:underline whitespace-nowrap inline-flex items-center min-h-11 sm:min-h-0 py-2 sm:py-0"
               >
                 View Conference Rankings →
               </button>
             )}
           </div>
 
-          <div className="relative flex items-center gap-2 lg:gap-3 min-w-0">
+          {/* w-full on mobile, matching /players. The sliding mobile search
+              panel below is `w-full` of THIS box and parks itself at
+              translate-x-105%; when the box was only as wide as its buttons,
+              105% of that landed the "closed" panel back inside the card, so a
+              second magnifier and a stray "Done" sat visible in the toolbar.
+              Full-width pushes it past the card edge, where the card's
+              overflow-hidden clips it. */}
+          <div className="relative flex items-center gap-2 lg:gap-3 w-full sm:w-auto justify-end min-w-0">
             {/* No sort-by / order selects. Sorting happens by clicking a column
                 header, which is how /players works — two controls doing a job
                 the table header already does was part of what made these pages

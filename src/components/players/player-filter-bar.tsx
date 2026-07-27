@@ -10,6 +10,7 @@ import {
 } from "@/components/filters/range-row";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
+import { ScopeCollapse, scopeSummary } from "@/components/filters/scope-collapse";
 import { MultiYearSelect } from "@/components/explorer/multi-year-select";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
 import { type SearchableOption } from "@/components/explorer/searchable-select";
@@ -168,11 +169,21 @@ export function PlayerFilterBar({
     });
   }, [conferences]);
 
+  // Collapsed-state read of the current scope, same shape as the teams bar.
+  const summary = scopeSummary([
+    { label: "seasons", values: draft.years.map(seasonLabel) },
+    { label: "teams", values: draft.teams },
+    { label: "conferences", values: draft.conf.map(confDisplay) },
+    { label: "classes", values: draft.cls },
+    { label: "positions", values: draft.pos },
+  ]);
+
   return (
     // Slim quick-filter bar — no card container. Quick scope selects on the
-    // left, Reset/Submit on the right. (The Filters range drawer now lives
-    // inside the table toolbar via <PlayerStatFilters/>.)
-    <div className={cn("relative flex flex-wrap items-end gap-2 mb-3", pending && "opacity-70")}>
+    // left, Reset/Submit on the right. Collapsed behind a toggle below `md`
+    // (see ScopeCollapse). (The Filters range drawer now lives inside the table
+    // toolbar via <PlayerStatFilters/>.)
+    <ScopeCollapse summary={summary} pending={pending}>
       {/* Quick scope selects — each labeled so a "3 selected" pill reads clearly */}
       <QuickField label="Seasons">
         <MultiYearSelect years={draft.years} onChange={(years) => patch({ years })} className="w-32" />
@@ -214,8 +225,14 @@ export function PlayerFilterBar({
         </button>
         <button type="button" onClick={reset} className="h-9 px-3 text-sm text-ink-muted hover:text-ink">Reset</button>
       </div>
-    </div>
+    </ScopeCollapse>
   );
+}
+
+// "25-26". Matches the teams filter bar's local copy so the two collapsed
+// scope summaries read identically.
+function seasonLabel(y: number): string {
+  return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
 }
 
 function QuickField({ label, children }: { label: string; children: React.ReactNode }) {

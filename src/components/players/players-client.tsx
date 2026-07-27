@@ -841,7 +841,12 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               )}
             </div>
             {/* Filters button (stat builder) — between search and Compare. */}
-            <div className="hidden lg:block"><PlayerStatFilters previewCount={previewCount} /></div>
+            {/* Unwrapped, same as the teams table renders TeamStatFilters. It
+                used to sit in a `hidden lg:block`, which meant the stat drawer —
+                the only way to filter by EPM, usage, TS% — did not exist at all
+                on a phone. The drawer itself is a full-screen sheet on mobile,
+                so there was nothing to hide it for. */}
+            <PlayerStatFilters previewCount={previewCount} />
             <button
               type="button"
               onClick={() => setCompareOpen(true)}
@@ -1267,7 +1272,7 @@ function CopyName({ name }: { name: string }) {
         });
       }}
       className={cn(
-        "shrink-0 inline-flex items-center justify-center w-4.5 h-4.5 rounded cursor-pointer text-ink-muted/60 hover:text-coral transition-colors",
+        "relative shrink-0 inline-flex items-center justify-center w-4.5 h-4.5 rounded cursor-pointer text-ink-muted/60 hover:text-coral transition-colors before:absolute before:-inset-3 before:content-['']",
         copied && "text-coral",
       )}
     >

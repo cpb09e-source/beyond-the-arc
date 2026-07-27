@@ -9,12 +9,12 @@ import {
   parseSpec,
   specToParams,
 } from "@/lib/team-filters";
-import { cn } from "@/lib/utils";
 import { type SearchableOption } from "./searchable-select";
 import { SearchableMultiSelect } from "./searchable-multi-select";
 import { MultiYearSelect } from "./multi-year-select";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
+import { ScopeCollapse, scopeSummary } from "@/components/filters/scope-collapse";
 
 const CONF_GROUP_LABELS = { power: "Power Conferences", midmajor: "Mid-Majors" } as const;
 
@@ -109,12 +109,18 @@ export function FilterBar({
     });
   }, [conferences]);
 
+  // Collapsed-state read of the current scope. Seasons always shows; team and
+  // conference only when they're actually narrowing something.
+  const summary = scopeSummary([
+    { label: "seasons", values: draft.years.map(seasonLabel) },
+    { label: "teams", values: draft.teams },
+    { label: "conferences", values: draft.conf.map(confDisplay) },
+  ]);
+
   return (
-    // Slim scope bar, no card — same shape as PlayerFilterBar. The bordered
-    // panel and its mobile collapse toggle are gone: /players puts scope selects
-    // on a bare row and hides stat filters behind a button, and matching that is
-    // the point of this pass.
-    <div className={cn("relative flex flex-wrap items-end gap-2 mb-3", pending && "opacity-70")}>
+    // Slim scope bar, no card — same shape as PlayerFilterBar. Collapsed behind
+    // a toggle below `md` (see ScopeCollapse); identical to before above it.
+    <ScopeCollapse summary={summary} pending={pending}>
       <div className="flex flex-wrap items-end gap-2">
         {/* Widths are pinned to the same values PlayerFilterBar uses (w-32 /
             w-52 / w-44). Left unset these selects sized themselves to their
@@ -167,8 +173,7 @@ export function FilterBar({
         </button>
         <button type="button" onClick={reset} className="h-9 px-3 text-sm text-ink-muted hover:text-ink">Reset</button>
       </div>
-
-    </div>
+    </ScopeCollapse>
   );
 }
 
