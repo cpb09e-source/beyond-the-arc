@@ -15,7 +15,7 @@ import {
   type StatFilter,
 } from "@/lib/team-filters";
 import { Select } from "@/components/select";
-import { FilterBar } from "@/components/explorer/filter-bar";
+import { FilterBar, ConferenceRankingsModal } from "@/components/explorer/filter-bar";
 import { TeamStatFilters } from "@/components/explorer/team-stat-filters";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { CompareTeamsModal } from "@/components/explorer/compare-teams-modal";
@@ -112,6 +112,7 @@ export function ExplorerClient({
   tourneyFinishByTeamYear: Record<string, string>;
 }) {
   const [compareOpen, setCompareOpen] = useState(false);
+  const [showRankings, setShowRankings] = useState(false);
   const router = useRouter();
   const [, startTransition] = useTransition();
   const search = useSearchParams();
@@ -237,7 +238,7 @@ export function ExplorerClient({
 
   return (
     <>
-      <FilterBar conferences={conferences} teams={teamNames} conferenceRankings={conferenceRankings} years={[latestYear]} />
+      <FilterBar conferences={conferences} teams={teamNames} />
 
       {/* Same card shell as the /players leaderboard, down to the edge-to-edge
           treatment on mobile and the rounded card + ring on desktop. */}
@@ -293,6 +294,16 @@ export function ExplorerClient({
               <span className="text-ink font-medium">{rows.length.toLocaleString()}</span>
               {count > rows.length && <> of {count.toLocaleString()}</>} teams
             </span>
+
+            {conferenceRankings.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowRankings(true)}
+                className="text-xs text-coral hover:underline whitespace-nowrap"
+              >
+                View Conference Rankings →
+              </button>
+            )}
           </div>
 
           <div className="relative flex items-center gap-2 lg:gap-3 min-w-0">
@@ -523,6 +534,14 @@ export function ExplorerClient({
         coachByTeamYear={coachByTeamYear}
         tourneyFinishByTeamYear={tourneyFinishByTeamYear}
       />
+
+      {showRankings && (
+        <ConferenceRankingsModal
+          rankings={conferenceRankings}
+          years={[latestYear]}
+          onClose={() => setShowRankings(false)}
+        />
+      )}
     </>
   );
 }

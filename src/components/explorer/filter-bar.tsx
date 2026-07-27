@@ -31,13 +31,9 @@ export type ConferenceRanking = { conference: string; avg_a_net: number; teams: 
 export function FilterBar({
   conferences,
   teams,
-  conferenceRankings = [],
-  years = [],
 }: {
   conferences: string[];
   teams: string[];
-  conferenceRankings?: ConferenceRanking[];
-  years?: number[];
 }) {
   const router = useRouter();
   const search = useSearchParams();
@@ -58,7 +54,6 @@ export function FilterBar({
     teams: urlSpec.teams,
     filters: urlSpec.filters,
   });
-  const [showRankings, setShowRankings] = useState(false);
 
   // Re-sync draft when the URL changes from outside (browser nav, sort click
   // doesn't affect these fields but the dep is safe). Cheap because state
@@ -145,37 +140,21 @@ export function FilterBar({
         </Field>
 
         <Field label="Conference">
-          <div className="flex items-center gap-3">
-            <SearchableMultiSelect
-              value={draft.conf}
-              options={confOptions}
-              onChange={(conf) => patch({ conf })}
-              placeholder="Type to filter…"
-              emptyLabel="All"
-              ariaLabel="Conferences"
-              groupLabels={CONF_GROUP_LABELS}
-              className="w-44"
-            />
-            {conferenceRankings.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowRankings(true)}
-                className="text-xs text-coral hover:underline whitespace-nowrap"
-              >
-                View Conference Rankings →
-              </button>
-            )}
-          </div>
+          {/* The Conference Rankings link used to sit here. It reads as a
+              property of the result set, not of the scope controls, so it
+              moved next to the row count in the table toolbar. */}
+          <SearchableMultiSelect
+            value={draft.conf}
+            options={confOptions}
+            onChange={(conf) => patch({ conf })}
+            placeholder="Type to filter…"
+            emptyLabel="All"
+            ariaLabel="Conferences"
+            groupLabels={CONF_GROUP_LABELS}
+            className="w-44"
+          />
         </Field>
       </div>
-
-      {showRankings && (
-        <ConferenceRankingsModal
-          rankings={conferenceRankings}
-          years={years}
-          onClose={() => setShowRankings(false)}
-        />
-      )}
 
       <div className="flex items-center gap-2">
         <button
@@ -234,7 +213,7 @@ function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
 }
 
-function ConferenceRankingsModal({
+export function ConferenceRankingsModal({
   rankings, years, onClose,
 }: {
   rankings: ConferenceRanking[];
