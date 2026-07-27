@@ -350,13 +350,15 @@ for (const [key, a] of totals) {
     pitp_games: a.inPaint.n,
     potov_games: a.offTurnovers.n,
     pts_diff: a.pts - a.o_pts,
-    // Null rather than 0 unless EVERY game in the season had PBP coverage —
-    // a partial sum would read as a real (small) differential.
-    // Second-chance points are reconstructed from play-by-play, whose coverage
-    // is far thinner than the box archive in the older seasons (~52% of 2014
-    // games), so the season total demands full coverage and the per-game figure
-    // carries the rest.
-    scp_diff: a.scpGames === a.games ? a.scp - a.o_scp : null,
+    // Same 90% floor and extrapolation as every other split total. This used
+    // to demand a.scpGames === a.games exactly, which is a far harsher rule
+    // than it looks: one game CBBD has no play-by-play for nulls the whole
+    // season. After the 2024/25 archive backfill the game logs carry scp on
+    // 98% of rows and 98-100% of teams clear 90% coverage, yet exact equality
+    // still published scp_diff for only 71% of 2024 and 49% of 2025
+    // team-seasons. Nothing about second-chance points justifies a stricter
+    // rule than fast-break or points-in-paint get.
+    scp_diff: splitTotal({ n: a.scpGames, own: a.scp, opp: a.o_scp }, a.games),
     scp_diff_pg: splitPerGame({ n: a.scpGames, own: a.scp, opp: a.o_scp }, a.games),
     scp_games: a.scpGames,
 
