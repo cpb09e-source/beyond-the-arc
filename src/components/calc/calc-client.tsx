@@ -706,7 +706,7 @@ export function CalcClient({
             onChange={(e) => setAsk(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); runAsk(); } }}
             placeholder="Roy Williams games where UNC had more fast break points and shot more 3s than their opponent"
-            className="flex-1 min-w-0 h-10 px-3 rounded border border-hairline bg-card text-ink text-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-coral/40"
+            className="flex-1 min-w-0 h-10 px-3 rounded border border-hairline bg-card text-ink text-base sm:text-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-coral/40"
           />
           <button
             type="button"
@@ -1253,7 +1253,7 @@ export function CalcClient({
                         onChange={(e) => { setTeamFilter(e.target.value); setPage(0); }}
                         placeholder="Search team…"
                         aria-label="Search matching games by team"
-                        className="h-9 w-full sm:w-60 pl-9 pr-8 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+                        className="h-9 w-full sm:w-60 pl-9 pr-8 rounded-md border border-ink/15 bg-card text-ink text-base sm:text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
                       />
                       {teamFilter && (
                         <button
@@ -1584,7 +1584,7 @@ function StatTile({
               onPatch({ value: pct ? n / 100 : n });
             }}
             aria-label={`${label} value`}
-            className={`w-14 h-6 px-1 rounded border text-right text-sm tabular bg-transparent focus:outline-none focus:ring-1 focus:ring-coral/40 transition-colors ${
+            className={`w-16 h-8 sm:w-14 sm:h-6 px-1 rounded border text-right text-base sm:text-sm tabular bg-transparent focus:outline-none focus:ring-1 focus:ring-coral/40 transition-colors ${
               active ? "border-hairline bg-card text-ink" : "border-transparent hover:border-hairline text-ink-muted"
             }`}
           />
@@ -1812,7 +1812,7 @@ function ChipSearchMulti({
           }}
           placeholder={placeholder}
           aria-label={label}
-          className="h-9 w-full px-3 rounded-md border border-hairline bg-card text-ink text-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-coral/40"
+          className="h-9 w-full px-3 rounded-md border border-hairline bg-card text-ink text-base sm:text-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-coral/40"
         />
         {matches.length > 0 && (
           <ul className="bta-pop-in absolute z-20 mt-1 w-full rounded-md border border-hairline bg-popover shadow-md overflow-hidden" role="listbox">

@@ -81,7 +81,10 @@ export function StatInfo({ definition }: { definition: string }) {
           onClick={(e) => { e.preventDefault(); setOpen((o) => !o); }}
           aria-label="Stat definition"
           aria-expanded={open}
-          className="relative inline-flex items-center justify-center w-4 h-4 text-[0.7rem] leading-none font-bold rounded-full border border-ink-muted text-ink-muted hover:text-coral hover:border-coral transition-colors before:absolute before:-inset-2.5 before:content-['']"
+          // The glyph stays 16px; the ::before is the touch target. -inset-3.5
+          // makes that 16 + 2x14 = 44px, the Apple/WCAG minimum, without
+          // changing anything visible or reflowing the label it sits beside.
+          className="relative inline-flex items-center justify-center w-4 h-4 text-[0.7rem] leading-none font-bold rounded-full border border-ink-muted text-ink-muted hover:text-coral hover:border-coral transition-colors before:absolute before:-inset-3.5 before:content-['']"
         >
           i
         </button>

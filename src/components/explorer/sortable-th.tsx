@@ -57,8 +57,14 @@ export function SortableTh({
   const href = `${basePath}?${next.toString()}`;
 
   const arrow = isActive ? (currentDir === "asc" ? "↑" : "↓") : "";
+  // Padding lives on the LINK, not the cell. With it on the <th>, the anchor's
+  // `w-full h-full` filled only the content box, so the tappable area was the
+  // 16px-tall text and the surrounding padding did nothing — a third of the
+  // 44px touch target guideline, on every sortable column of every table.
+  // Moving it inside makes the whole cell tappable, and the extra vertical
+  // padding below `sm` takes a phone tap from 16px to 40px.
   const baseClasses =
-    "px-3 py-2 text-xs uppercase tracking-widest font-medium select-none cursor-pointer transition-colors";
+    "p-0 text-xs uppercase tracking-widest font-medium select-none cursor-pointer transition-colors";
   const variantClasses =
     variant === "cbb"
       ? "text-right border-l border-coral/30 hover:bg-coral/5"
@@ -75,7 +81,7 @@ export function SortableTh({
       <Link
         href={href}
         scroll={false}
-        className="block w-full h-full"
+        className="block w-full h-full px-3 py-3 sm:py-2"
         prefetch={false}
       >
         <span className={cn("inline-flex items-center gap-1", align === "left" ? "justify-start" : "justify-end")}>

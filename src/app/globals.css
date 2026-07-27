@@ -231,6 +231,31 @@ body {
   .bta-burger span { transition: none; }
 }
 
+/* Mobile legibility floor.
+ *
+ * The design leans on small tracked type, which reads fine on a desktop
+ * monitor but lands at 9.6–10.4px on a phone — under every legibility
+ * guideline, and measurably hard to read at arm's length. These three
+ * arbitrary sizes carry actual content (portal class lists, coach award runs,
+ * team meta lines), so below `sm` they lift to 11px.
+ *
+ * Deliberately NOT included: text-[0.5rem], text-[0.55rem] and text-[0.58rem].
+ * Those are the rank-ring interiors and the table band captions — micro-labels
+ * sized to fit boxes that were measured to the pixel, where "OVERALL" already
+ * came within a hair of its ring stroke. Growing them breaks the layout to fix
+ * a word nobody reads as prose.
+ */
+@media (max-width: 639px) {
+  .text-\[0\.6rem\],
+  .text-\[0\.62rem\],
+  .text-\[0\.65rem\],
+  .text-\[0\.66rem\],
+  .text-\[0\.68rem\],
+  .text-\[0\.7rem\] {
+    font-size: 0.6875rem; /* 11px */
+  }
+}
+
 /* Court-line divider — for section breaks */
 .court-divider {
   height: 1px;

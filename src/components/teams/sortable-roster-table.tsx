@@ -21,7 +21,6 @@ type RosterEntry = {
   fg3_pct: number | null;
   ft_pct: number | null;
   pir: number | null;
-  bta_portg: number | null;
   epm: number | null;
   ts_pct: number | null;
   usg_pct: number | null;
@@ -33,7 +32,6 @@ type RosterEntry = {
   // null on a newcomer = unranked ("UR"). Undefined for non-newcomers.
   rsci?: number | null;
   pcts?: {
-    bta_portg?: number | null;
     pir?: number | null;
     pts?: number | null;
     reb?: number | null;
@@ -242,12 +240,12 @@ function ThSort({
 }) {
   return (
     <th className={cn(
-      "px-2 sm:px-3 py-2 text-xs uppercase tracking-widest font-medium select-none cursor-pointer hover:bg-paper-deep/90 transition-colors",
+      "p-0 text-xs uppercase tracking-widest font-medium select-none cursor-pointer hover:bg-paper-deep/90 transition-colors",
       wrap ? "whitespace-normal" : "whitespace-nowrap",
       align === "right" && "text-right",
       active ? "text-ink" : "text-ink-muted",
     )}>
-      <button type="button" onClick={onClick} className={cn("inline-flex items-center gap-1", align === "right" && "justify-end w-full")}>
+      <button type="button" onClick={onClick} className={cn("inline-flex items-center gap-1 w-full px-2 sm:px-3 py-3 sm:py-2", align === "right" && "justify-end")}>
         <span className={wrap ? "leading-tight text-center" : undefined}>{label}</span>
         {active && <span className="text-coral text-[0.65rem] leading-none">{dir === "asc" ? "↑" : "↓"}</span>}
       </button>

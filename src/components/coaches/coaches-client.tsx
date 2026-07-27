@@ -589,12 +589,12 @@ function ThSort({
 }) {
   return (
     <th className={cn(
-      "px-2 sm:px-3 py-2 text-xs uppercase tracking-widest font-medium whitespace-nowrap select-none cursor-pointer hover:bg-paper-deep/60 transition-colors",
+      "p-0 text-xs uppercase tracking-widest font-medium whitespace-nowrap select-none cursor-pointer hover:bg-paper-deep/60 transition-colors",
       align === "right" && "text-right",
       active ? "text-ink" : "text-ink-muted",
       className,
     )}>
-      <button type="button" onClick={onClick} className={cn("inline-flex items-center gap-1", align === "right" && "justify-end w-full")}>
+      <button type="button" onClick={onClick} className={cn("inline-flex items-center gap-1 w-full px-2 sm:px-3 py-3 sm:py-2", align === "right" && "justify-end")}>
         <span>{label}</span>
         {active && <span className="text-coral text-[0.65rem] leading-none">{dir === "asc" ? "↑" : "↓"}</span>}
       </button>

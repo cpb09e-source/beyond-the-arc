@@ -66,7 +66,7 @@ export function TransferClassesPanel({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="w-full flex items-center justify-between gap-2 xl:cursor-default"
+        className="w-full flex items-center justify-between gap-2 min-h-11 xl:min-h-0 xl:cursor-default"
       >
         <h3 className="font-display text-lg text-ink">{title}</h3>
         <ChevronDown className={cn("w-4 h-4 text-ink-muted transition-transform xl:hidden", open && "rotate-180")} aria-hidden />

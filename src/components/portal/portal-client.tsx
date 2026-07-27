@@ -154,7 +154,7 @@ export function PortalClient({
           type="button"
           onClick={() => setFilterOpen((o) => !o)}
           aria-expanded={filterOpen}
-          className="w-full flex items-center justify-between gap-2 lg:hidden"
+          className="w-full flex items-center justify-between gap-2 min-h-11 lg:hidden"
         >
           <span className="inline-flex items-center gap-2 text-sm font-medium text-ink">
             <SlidersHorizontal className="w-4 h-4 text-ink-muted" /> Filters
@@ -495,8 +495,8 @@ function ThSort({
   label: string; active: boolean; dir: "asc" | "desc"; onClick: () => void; align?: "left" | "right"; className?: string;
 }) {
   return (
-    <th className={`px-3 py-2 text-xs uppercase tracking-widest font-medium whitespace-nowrap select-none cursor-pointer hover:bg-paper-deep/60 transition-colors ${align === "right" ? "text-right" : ""} ${active ? "text-ink" : "text-ink-muted"} ${className}`}>
-      <button type="button" onClick={onClick} className={`inline-flex items-center gap-1 ${align === "right" ? "justify-end w-full" : ""}`}>
+    <th className={`p-0 text-xs uppercase tracking-widest font-medium whitespace-nowrap select-none cursor-pointer hover:bg-paper-deep/60 transition-colors ${align === "right" ? "text-right" : ""} ${active ? "text-ink" : "text-ink-muted"} ${className}`}>
+      <button type="button" onClick={onClick} className={`inline-flex items-center gap-1 w-full px-3 py-3 sm:py-2 ${align === "right" ? "justify-end" : ""}`}>
         <span>{label}</span>
         {active && <span className="text-coral text-[0.65rem] leading-none">{dir === "asc" ? "↑" : "↓"}</span>}
       </button>
