@@ -269,11 +269,77 @@ function GameRow({ game, teamName }: { game: TourneyGame; teamName: string }) {
   );
 }
 
-// Loose school-name match: strip non-alphanumerics, compare case-insensitively.
-// Bracket-page names (e.g. "Mount St. Mary's") may diverge slightly from Bart's.
+/**
+ * Match a Sports-Reference bracket school name against a Bart team name.
+ *
+ * THIS DECIDES WHO WON. `teamIsWinner` is computed by matching the coach's team
+ * against the game's winner, so a false negative doesn't just mis-label a name —
+ * it flips the whole row. Every UConn tournament game on every UConn coach page
+ * rendered as a LOSS to "UConn", including the 2024 title game, because the
+ * bracket data says "UConn" and Bart says "Connecticut" and a bare
+ * strip-punctuation compare can never equate those.
+ *
+ * Three passes, cheapest first. Measured against all 233 school names in
+ * tournament-games.json: a bare compare left 54 unmatched, normalization plus
+ * the shared alias table plus a parenthetical retry left 7, and the explicit map
+ * below covers those.
+ */
 function sameSchool(a: string, b: string): boolean {
-  return norm(a) === norm(b);
+  const ka = schoolKeys(a);
+  return schoolKeys(b).some((k) => ka.includes(k));
 }
+
+/**
+ * Sports-Reference abbreviations with no algorithmic route to Bart's spelling.
+ * Only genuine abbreviations belong here — anything normalization can reach
+ * should be left to `norm`.
+ */
+const SR_SCHOOL_ALIASES: Record<string, string> = {
+  "UNC": "North Carolina",
+  "Pitt": "Pittsburgh",
+  "UMass": "Massachusetts",
+  "UConn": "Connecticut",
+  "Ole Miss": "Mississippi",
+  "ETSU": "East Tennessee St.",
+  "FDU": "Fairleigh Dickinson",
+  "Loyola (IL)": "Loyola Chicago",
+  "College of Charleston": "Charleston",
+  "California Baptist": "Cal Baptist",
+  "Grambling": "Grambling St.",
+  "McNeese": "McNeese St.",
+  "Omaha": "Nebraska Omaha",
+  "Texas A&M-Corpus Christi": "Texas A&M Corpus Chris",
+};
+
+/**
+ * Candidate keys for one school name — a parenthetical qualifier is tried BOTH
+ * ways, which is the whole reason this returns a list.
+ *
+ * Bart drops the parentheses but keeps the qualifier for "Miami (FL)" →
+ * "Miami FL", and drops the qualifier entirely for "Albany (NY)" → "Albany".
+ * Picking either rule alone breaks the other, and picking "always strip the
+ * qualifier" collapses Miami (FL) and Miami (OH) onto the same key — two real
+ * schools that have both been in the same bracket.
+ */
+function schoolKeys(s: string): string[] {
+  const aliased = SR_SCHOOL_ALIASES[s.trim()] ?? s;
+  const keys = new Set<string>();
+  keys.add(norm(aliased));                                   // "Miami (FL)" -> miamifl
+  keys.add(norm(aliased.replace(/\s*\([^)]*\)\s*$/, "")));    // "Albany (NY)" -> albany
+  keys.delete("");
+  return [...keys];
+}
+
+/**
+ * Folds "St." and "State" onto one token — the single biggest divergence
+ * between the two vocabularies ("Michigan State" vs "Michigan St."). Parentheses
+ * are dropped but their CONTENTS are kept; schoolKeys() supplies the
+ * qualifier-removed variant separately.
+ */
 function norm(s: string): string {
-  return s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "");
+  return s
+    .toLowerCase()
+    .normalize("NFKD").replace(/[̀-ͯ]/g, "")
+    .replace(/\bst\.?\b/g, "state")
+    .replace(/[^a-z0-9]+/g, "");
 }

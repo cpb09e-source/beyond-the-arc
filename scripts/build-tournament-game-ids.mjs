@@ -34,11 +34,24 @@ const BOX_DIR = path.join(ROOT, "public/data/tournament-box");
 const OUT = path.join(ROOT, "public/data/tournament-game-ids.json");
 const VERBOSE = process.argv.includes("--verbose");
 
-/** Our log rows for a season, indexed by (date | normalized team | points). */
+/**
+ * Our log rows for a season, indexed by (date | normalized team | points).
+ *
+ * Returns nothing unless the season ALSO has a game-box sidecar. A mapped game
+ * makes the coach pages open the shared modal, and that modal renders team and
+ * player panels out of the sidecars — so mapping a season we only have logs for
+ * produces a box score with an empty Team Stats and an empty Player Stats.
+ *
+ * 2021 is exactly that case: the COVID season is excluded site-wide, so it has
+ * game logs but no game-box-by-year file and no player box at all. Mapping its
+ * 62 tournament games swapped a working Sports-Reference box score for an empty
+ * shell. Better to leave those on the old modal, which has real scraped data.
+ */
 function logIndex(season) {
   const fp = path.join(ROOT, `public/data/game-logs-by-year/${season}.json`);
+  const boxFp = path.join(ROOT, `public/data/game-box-by-year/${season}.json`);
   const idx = new Map();
-  if (!fs.existsSync(fp)) return idx;
+  if (!fs.existsSync(fp) || !fs.existsSync(boxFp)) return idx;
   for (const g of JSON.parse(fs.readFileSync(fp, "utf8"))) {
     if (!g.game_date || !g.team_name || typeof g.pts_scored !== "number") continue;
     idx.set(`${g.game_date}|${norm(g.team_name)}|${g.pts_scored}`, g.game_id);
@@ -123,7 +136,7 @@ for (const year of years) {
       unmatched.push(`${year}/${slug}  ${date}  ${teams.map((t) => `${t.name} ${t.score}`).join(" vs ")}`);
     }
   }
-  console.log(`${year}: ${hit}/${files.length} matched${idx.size === 0 ? "  (no game log for this season)" : ""}`);
+  console.log(`${year}: ${hit}/${files.length} matched${idx.size === 0 ? "  (skipped - no game log or no box sidecar)" : ""}`);
 }
 
 fs.writeFileSync(OUT, JSON.stringify(out));
