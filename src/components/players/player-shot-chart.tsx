@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { dataUrl } from "@/lib/data-url";
 import { StatInfo } from "@/components/players/stat-info";
 import {
-  ShotProfileFallbackCard, ZoneBars, ProfileMinis, useShotProfile, seasonLabel,
+  ShotProfileFallbackCard, ProfileMinis, useShotProfile, seasonLabel,
 } from "@/components/players/player-shot-impact";
 
 /**
@@ -88,11 +88,14 @@ export function PlayerShotChart({
   bartPlayerId,
   years,
   positionByYear,
+  suppressFallback,
 }: {
   bartPlayerId: number;
   years: number[];
   /** Season → position bucket, from the player file's Bart role note. */
   positionByYear?: Record<string, Bucket>;
+  /** Set when the Player Overview already shows zone splits (Shot Diet). */
+  suppressFallback?: boolean;
 }) {
   const [data, setData] = useState<ShotsFile | "none" | null>(null);
   const [base, setBase] = useState<Baselines | null>(null);
@@ -148,7 +151,11 @@ export function PlayerShotChart({
   if (data === null) return null;
   // No located shots at all → the old profile-only card, minus nothing the
   // page used to show (the Impact block is retired everywhere).
-  if (data === "none") return <ShotProfileFallbackCard bartPlayerId={bartPlayerId} years={years} />;
+  if (data === "none") {
+    return suppressFallback
+      ? null
+      : <ShotProfileFallbackCard bartPlayerId={bartPlayerId} years={years} />;
+  }
 
   const yrs = Object.keys(data.seasons).map(Number).sort((a, b) => b - a);
 
@@ -242,18 +249,14 @@ export function PlayerShotChart({
             </div>
           </div>
 
-          {/* Shot diet band — season splits for the same year the charts show. */}
-          <div className="mt-7 pt-6 border-t border-hairline">
-            <div className="text-[0.62rem] uppercase tracking-[0.18em] text-ink-muted font-semibold mb-4">Shot diet · FG% by zone</div>
-            {profile ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 items-start">
-                <ZoneBars s={profile} />
-                <ProfileMinis s={profile} />
-              </div>
-            ) : (
-              <p className="text-sm text-ink-muted">No zone splits for this season.</p>
-            )}
-          </div>
+          {/* Zone splits used to sit here; they're a Shot Diet panel in the
+              Player Overview now. What's left is the context that belongs to
+              the shooting story rather than to the ranked-stat grid. */}
+          {profile && (
+            <div className="mt-7 pt-6 border-t border-hairline">
+              <ProfileMinis s={profile} />
+            </div>
+          )}
         </div>
 
         {/* Filters band */}

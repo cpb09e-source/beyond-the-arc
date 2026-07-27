@@ -6,6 +6,7 @@ import { Select } from "@/components/select";
 import { cn } from "@/lib/utils";
 import type { PlayerRanksSeason } from "@/lib/static-data";
 import { PlayerStatsGrid } from "./player-stats-grid";
+import { useShotProfile } from "./player-shot-impact";
 import { bucketLabel, seasonLabel } from "./where-they-rank";
 
 /**
@@ -22,10 +23,19 @@ export type PlayerOverviewOption = {
   ranks: PlayerRanksSeason;
 };
 
-export function PlayerOverview({ options }: { options: PlayerOverviewOption[] }) {
+export function PlayerOverview({
+  options,
+  bartPlayerId,
+}: {
+  options: PlayerOverviewOption[];
+  bartPlayerId: number;
+}) {
   // options arrive newest-first; default selection is the latest year.
   const [selectedYear, setSelectedYear] = useState<number>(options[0]?.year ?? 0);
   const selected = options.find((o) => o.year === selectedYear) ?? options[0];
+  // Zone splits for the Shot Diet panel. Hook order has to stay stable, so this
+  // runs before the early return and takes null when there's no season.
+  const shooting = useShotProfile(bartPlayerId, selected?.year ?? null);
   if (!selected) return null;
 
   return (
@@ -55,7 +65,7 @@ export function PlayerOverview({ options }: { options: PlayerOverviewOption[] })
         </span>
       </div>
       <div className="p-5 lg:p-6">
-        <PlayerStatsGrid season={selected.ranks} />
+        <PlayerStatsGrid season={selected.ranks} shooting={shooting} />
       </div>
     </>
   );

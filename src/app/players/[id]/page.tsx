@@ -251,18 +251,20 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
               </div>
               <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Player Overview</h2>
             </div>
-            <PlayerOverview options={overviewOptions} />
+            <PlayerOverview options={overviewOptions} bartPlayerId={bartId} />
           </div>
         </section>
       )}
 
-      {/* Shooting section: hexbin shot chart with the zone-profile stats in
-          its right rail (2024+ seasons); players without located shots get
-          the profile-only fallback card instead. */}
+      {/* Shooting section: the two hexbin courts (2024+ seasons). Players with
+          no located shots fall back to a zone-splits card — but only when the
+          Player Overview isn't already carrying those splits in its Shot Diet
+          panel, or they'd appear twice on the same page. */}
       <PlayerShotChart
         bartPlayerId={bartId}
         years={player.seasons.map((s) => s.year)}
         positionByYear={positionByYear}
+        suppressFallback={overviewOptions.length > 0}
       />
 
       <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8 mb-20">

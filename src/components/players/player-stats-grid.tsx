@@ -1,6 +1,7 @@
 import type { PlayerRanksSeason } from "@/lib/static-data";
 import { STAT_META, fmtValue, type StatFormat } from "./where-they-rank";
 import { StatInfo } from "./stat-info";
+import type { Shooting } from "./player-shot-impact";
 import { pctColor, pctBg } from "@/components/percentile-chip";
 // pctBgStrong/pctColorLight variants (below) are kept for the shot-profile card;
 // the Player Overview tiles use the players-table chip ramp (pctBg/pctColor).
@@ -117,12 +118,93 @@ const STAT_DEFS: Record<string, string> = {
   tpar: "3-Point Attempt Rate — 3PA / FGA. The share of shot attempts that came from beyond the arc.",
 };
 
-export function PlayerStatsGrid({ season }: { season: PlayerRanksSeason }) {
+export function PlayerStatsGrid({
+  season,
+  shooting,
+}: {
+  season: PlayerRanksSeason;
+  /** Zone splits for the same year, when we have them. Drives Shot Diet. */
+  shooting?: Shooting | null;
+}) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 lg:gap-x-8 gap-y-8 px-2 sm:px-5 lg:px-8 pt-1 pb-5 sm:py-6 lg:py-7">
+    // Four panels at lg+, two at md. Shot Diet is the narrow one on the end —
+    // three zones, not a wall of tiles — so it doesn't need an equal share.
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 lg:gap-x-8 gap-y-8 px-2 sm:px-5 lg:px-8 pt-1 pb-5 sm:py-6 lg:py-7">
       {PANELS.map((p) => (
         <StatPanel key={p.title} title={p.title} keys={p.keys} season={season} />
       ))}
+      {shooting && <ShotDietPanel s={shooting} />}
+    </div>
+  );
+}
+
+/**
+ * Shot Diet — the zone splits that used to sit under the shot chart, moved up
+ * beside the other stat panels.
+ *
+ * Three layers per zone instead of the usual two, because a zone's FG% is
+ * meaningless without knowing how much the player actually shoots there: a
+ * 60% rim rate reads very differently at 15% of attempts than at 40%. So the
+ * headline is FG%, the percentile gauge ranks that FG% within the position
+ * cohort, and the share of attempts rides underneath as context.
+ */
+function ShotDietPanel({ s }: { s: Shooting }) {
+  const zones = [
+    { key: "Rim", pct: s.rim_pct, rate: s.rim_rate, ptile: s.rim_ptile },
+    { key: "Mid", pct: s.mid_pct, rate: s.mid_rate, ptile: s.mid_ptile },
+    { key: "3PT", pct: s.tp_pct, rate: s.tp_rate, ptile: s.tp_ptile },
+  ].filter((z) => z.pct != null || z.rate != null);
+
+  if (zones.length === 0) return null;
+  return (
+    <div>
+      <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-3 flex items-center gap-2">
+        <span className="h-px w-6 bg-coral" />
+        Shot Diet
+      </div>
+      <div className="grid grid-cols-3 md:grid-cols-2 lg:grid-cols-1 gap-2">
+        {zones.map((z) => (
+          <ZoneTile key={z.key} label={z.key} pct={z.pct} rate={z.rate} ptile={z.ptile} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ZoneTile({
+  label, pct, rate, ptile,
+}: {
+  label: string;
+  pct: number | null;
+  rate: number | null;
+  ptile: number | null;
+}) {
+  // Same percentile ramp as StatTile so the panel reads as part of the grid.
+  const p = ptile ?? 50;
+  const tileStyle: React.CSSProperties = {
+    "--tile-bg-light": ptile == null ? "transparent" : pctBg(p),
+    "--tile-bg-dark": ptile == null ? "transparent" : pctBg(p),
+    "--tile-color-light": pctColor(p),
+    "--tile-color-dark": pctColor(p),
+  } as React.CSSProperties;
+  const f1 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 1 }));
+  return (
+    <div
+      className="stat-tile relative rounded-lg border border-hairline/40 px-2.5 py-2 overflow-hidden transition-shadow hover:shadow-sm min-h-[5.25rem] flex flex-col"
+      style={tileStyle}
+    >
+      <div className="text-[0.65rem] uppercase tracking-[0.14em] text-ink font-bold mb-1 truncate">{label}</div>
+      <div className="flex items-end justify-between gap-1 flex-1">
+        <span className="min-w-0">
+          <span className="font-display text-xl lg:text-2xl text-ink tabular leading-none tracking-[-0.02em] block">
+            {f1(pct)}%
+          </span>
+          <span className="text-[0.58rem] uppercase tracking-[0.1em] text-ink-muted tabular block mt-1">
+            {f1(rate)}% of shots
+          </span>
+        </span>
+        {ptile != null && <PercentileGauge pct={ptile} />}
+      </div>
     </div>
   );
 }
