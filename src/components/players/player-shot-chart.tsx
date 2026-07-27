@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { hexbin as d3hexbin } from "d3-hexbin";
 import { cn } from "@/lib/utils";
 import { dataUrl } from "@/lib/data-url";
@@ -9,17 +9,20 @@ import {
 } from "@/components/players/player-shot-impact";
 
 /**
- * Player-page "Shot Chart" card — hexbin favorite-spots view over CBBD shot
- * locations (public/data/shots/<bartId>.json, seasons 2024+ only; see
- * scripts/build-player-shots.mjs for the tuple layout), with the shot-profile
- * zone stats (rim/mid/3PT diet + FG%) in the right rail and the shot filters
- * in a band below the court.
+ * Player-page "Shot Chart" card — two views of the same filtered shot set,
+ * side by side over CBBD shot locations (public/data/shots/<bartId>.json,
+ * seasons 2024+; see scripts/build-player-shots.mjs for the tuple layout):
  *
- * Rendering follows the perthirtysix.com treatment: a fixed dark half-court
- * (both themes — it's a data canvas, not a surface), one accent hue, and
- * per-hex OPACITY encoding shot frequency, so favorite spots glow and one-off
- * attempts fade into the floor. Hexagon geometry comes from d3-hexbin;
- * everything is plain SVG in court units (tenths of feet).
+ *   LEFT  — volume. Where the shots come from, hex darkness = attempts.
+ *   RIGHT — accuracy vs the player's OWN position group. Hex size = attempts,
+ *           hex colour = FG% above/below what D-I guards (or forwards, or
+ *           centres) shoot from that same spot. Comparing a centre's rim rate
+ *           to "D-I average" flatters him by ~10 points; comparing him to other
+ *           centres is the only version of this chart that says anything.
+ *
+ * The court is a light, grainy canvas in both themes — it's a data surface,
+ * not a page surface. Colour means exactly one thing per chart: attempts on
+ * the left, accuracy on the right, so the two never compete.
  *
  * Players with no shot file (careers ending before 2024) fall back to the
  * profile-only card so the zone stats never disappear from the page.
@@ -30,6 +33,13 @@ const CX = 0, CY = 1, MADE = 2, TYPE = 3, IS3 = 4, WON = 5, LOC = 6;
 
 type ShotRow = number[];
 type ShotsFile = { bart_player_id: number; seasons: Record<string, ShotRow[]> };
+type Bucket = "G" | "F" | "C";
+type Baselines = {
+  r: number;
+  seasons: Record<string, Record<Bucket, Record<string, [number, number]>>>;
+};
+
+const BUCKET_LABEL: Record<Bucket, string> = { G: "guards", F: "forwards", C: "centers" };
 
 // Rim center in court units — distance derives from this.
 const RIM_X = 250, RIM_Y = 52.5;
@@ -73,8 +83,18 @@ function applyFilters(rows: ShotRow[], f: Filters): ShotRow[] {
   });
 }
 
-export function PlayerShotChart({ bartPlayerId, years }: { bartPlayerId: number; years: number[] }) {
+export function PlayerShotChart({
+  bartPlayerId,
+  years,
+  positionByYear,
+}: {
+  bartPlayerId: number;
+  years: number[];
+  /** Season → position bucket, from the player file's Bart role note. */
+  positionByYear?: Record<string, Bucket>;
+}) {
   const [data, setData] = useState<ShotsFile | "none" | null>(null);
+  const [base, setBase] = useState<Baselines | null>(null);
   const [year, setYear] = useState<number | null>(null);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
 
@@ -93,7 +113,18 @@ export function PlayerShotChart({ bartPlayerId, years }: { bartPlayerId: number;
     return () => { cancelled = true; };
   }, [bartPlayerId]);
 
-  // Zone splits for the chart's season, shown in the right rail.
+  // League baselines are one small shared file (~56 KB) — fetched alongside,
+  // and the right-hand chart simply sits out if it never arrives.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(dataUrl("/data/shot-baselines.json"))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: Baselines | null) => { if (!cancelled) setBase(j); })
+      .catch(() => { if (!cancelled) setBase(null); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Zone splits for the chart's season, shown in the band below.
   const profile = useShotProfile(bartPlayerId, data && data !== "none" ? year : null);
 
   const rows = useMemo(() => {
@@ -102,6 +133,16 @@ export function PlayerShotChart({ bartPlayerId, years }: { bartPlayerId: number;
   }, [data, year]);
 
   const shown = useMemo(() => applyFilters(rows, filters), [rows, filters]);
+  // The accuracy chart needs both makes and misses to have a percentage at
+  // all, so it ignores the make/miss toggles and honours every other filter.
+  const outcomeFiltered = !filters.make || !filters.miss;
+  const forAccuracy = useMemo(
+    () => (outcomeFiltered ? applyFilters(rows, { ...filters, make: true, miss: true }) : shown),
+    [rows, filters, outcomeFiltered, shown],
+  );
+
+  const bucket = year !== null ? positionByYear?.[String(year)] : undefined;
+  const cells = base && year !== null && bucket ? base.seasons[String(year)]?.[bucket] : undefined;
 
   if (data === null) return null;
   // No located shots at all → the old profile-only card, minus nothing the
@@ -138,35 +179,69 @@ export function PlayerShotChart({ bartPlayerId, years }: { bartPlayerId: number;
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8 px-5 lg:px-7 py-6">
-          {/* Court */}
-          <div className="lg:col-span-3">
-            <CourtChart shots={shown} />
-            <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-              <p className="text-sm text-ink tabular">
+        <div className="px-5 lg:px-7 py-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-7 lg:gap-8">
+            {/* ---- Volume ---- */}
+            <div>
+              <PanelHead title="Shot volume" sub="Where the attempts come from" />
+              <VolumeChart shots={shown} />
+              <VolumeLegend />
+              <p className="mt-2.5 text-sm text-ink tabular">
                 <span className="font-bold">{fgm} / {shown.length}</span>
                 <span className="text-ink-muted"> FG ({pct(fgm, shown.length)})</span>
                 <span className="text-ink-muted mx-2">·</span>
                 <span className="font-bold">{tpm} / {tpa.length}</span>
                 <span className="text-ink-muted"> 3PT ({pct(tpm, tpa.length)})</span>
               </p>
-              {shown.length !== rows.length && (
-                <p className="text-xs text-ink-muted tabular">{shown.length.toLocaleString()} of {rows.length.toLocaleString()} charted shots</p>
+              <p className="mt-1 text-xs text-ink-muted">
+                Darker hexes = more attempts from that spot. Shots without a tracked
+                location aren&apos;t plotted; free throws excluded.
+                {shown.length !== rows.length && (
+                  <> Showing {shown.length.toLocaleString()} of {rows.length.toLocaleString()} charted shots.</>
+                )}
+              </p>
+            </div>
+
+            {/* ---- Accuracy vs position ---- */}
+            <div>
+              <PanelHead
+                title="Accuracy vs position"
+                sub={bucket ? `Against D-I ${BUCKET_LABEL[bucket]}` : "Against the same position group"}
+              />
+              {cells ? (
+                <>
+                  <AccuracyChart shots={forAccuracy} cells={cells} r={base!.r} />
+                  <AccuracyLegend label={bucket ? BUCKET_LABEL[bucket] : "position"} />
+                  <ExpectedLine shots={forAccuracy} cells={cells} r={base!.r} label={bucket ? BUCKET_LABEL[bucket] : "position"} />
+                  {/* One interpolated string, not text nodes around a {} —
+                      JSX ate the space either side of the label otherwise. */}
+                  <p className="mt-1 text-xs text-ink-muted">
+                    {`Hex size = attempts, colour = FG% above or below what D-I ${
+                      bucket ? BUCKET_LABEL[bucket] : "players at this position"
+                    } shoot from that spot. Rates are pulled toward the baseline in proportion to how few attempts back them, so a lone make doesn't read as a hot zone.`}
+                    {outcomeFiltered && " The make/miss filter is ignored here — a percentage needs both."}
+                  </p>
+                </>
+              ) : (
+                <div className="rounded-lg border border-dashed border-ink/15 bg-paper-deep/20 px-5 py-10 text-center">
+                  <p className="text-sm text-ink-muted">
+                    {base === null
+                      ? "League baselines unavailable."
+                      : "No position on file for this season, so there's no cohort to compare against."}
+                  </p>
+                </div>
               )}
             </div>
-            <p className="mt-1 text-xs text-ink-muted">
-              Brighter hexes = more attempts from that spot. Shots without a tracked location aren&apos;t plotted; free throws excluded.
-            </p>
           </div>
 
-          {/* Shot profile rail — season splits for the same year the chart shows. */}
-          <div className="lg:col-span-2 lg:border-l lg:border-hairline lg:pl-8">
+          {/* Shot diet band — season splits for the same year the charts show. */}
+          <div className="mt-7 pt-6 border-t border-hairline">
             <div className="text-[0.62rem] uppercase tracking-[0.18em] text-ink-muted font-semibold mb-4">Shot diet · FG% by zone</div>
             {profile ? (
-              <>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 items-start">
                 <ZoneBars s={profile} />
-                <div className="mt-5"><ProfileMinis s={profile} /></div>
-              </>
+                <ProfileMinis s={profile} />
+              </div>
             ) : (
               <p className="text-sm text-ink-muted">No zone splits for this season.</p>
             )}
@@ -241,63 +316,256 @@ const THREE_R = 221.5, CORNER_X = 33.5;
 // Where the corner line meets the arc: sqrt(r² − (250−33.5)²) below the rim.
 const CORNER_Y = RIM_Y + Math.sqrt(THREE_R * THREE_R - (RIM_X - CORNER_X) * (RIM_X - CORNER_X));
 
-const HEX_FILL = "#e8794e"; // brand coral tuned brighter for the dark floor
-const COURT_BG = "#1f2937";
-const LINE = "rgba(255,255,255,0.22)";
+// Light, grainy canvas. The court used to be a navy slab, which forced every
+// mark to be a glow on darkness; on warm paper the same marks read as ink and
+// the line work stops fighting the shots.
+const COURT_BG = "#e8e3d8";
+const LINE = "rgba(26,34,56,0.30)";
 
-function CourtChart({ shots }: { shots: ShotRow[] }) {
+// Volume ramp — pale sand through to deep brick. Warm on purpose: heat means
+// "how often" here, and the only other colour on the card (accuracy) is the
+// site's green/red, so the two encodings can't be confused for each other.
+const VOL_RAMP: [number, number, number][] = [
+  [0xf2, 0xe3, 0xcd],
+  [0xe2, 0x82, 0x4a],
+  [0x9c, 0x2f, 0x1d],
+];
+// Accuracy diverging scale — the site's --bad / --good with a paper midpoint.
+const COLD: [number, number, number] = [0xb9, 0x4c, 0x4c];
+const NEUTRAL: [number, number, number] = [0xf4, 0xf1, 0xe8];
+const WARM: [number, number, number] = [0x3f, 0x7d, 0x55];
+
+const mix = (a: [number, number, number], b: [number, number, number], t: number) =>
+  `rgb(${Math.round(a[0] + (b[0] - a[0]) * t)},${Math.round(a[1] + (b[1] - a[1]) * t)},${Math.round(a[2] + (b[2] - a[2]) * t)})`;
+
+function volColor(t: number): string {
+  const c = Math.max(0, Math.min(1, t));
+  return c < 0.5 ? mix(VOL_RAMP[0]!, VOL_RAMP[1]!, c * 2) : mix(VOL_RAMP[1]!, VOL_RAMP[2]!, (c - 0.5) * 2);
+}
+function diffColor(d: number): string {
+  // Domain ±10 percentage points, matching how these charts are read elsewhere.
+  const t = Math.max(-1, Math.min(1, d / 0.1));
+  return t < 0 ? mix(NEUTRAL, COLD, -t) : mix(NEUTRAL, WARM, t);
+}
+
+/** Shared court frame: grainy floor, then children (the marks), then line work. */
+function Court({ children, label }: { children: React.ReactNode; label: string }) {
+  // useId keeps the filter unique — two of these render side by side, and a
+  // duplicated id would make both courts share one (or neither) grain.
+  const uid = useId().replace(/:/g, "");
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto rounded-lg" role="img" aria-label={label}>
+      <defs>
+        {/* TV-static floor. fractalNoise + full desaturation gives grey grain;
+            the rect's low opacity keeps it a texture rather than a pattern. */}
+        <filter id={`grain-${uid}`} x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch" />
+          <feColorMatrix type="saturate" values="0" />
+        </filter>
+        <clipPath id={`clip-${uid}`}><rect width={W} height={H} rx={8} /></clipPath>
+      </defs>
+
+      <g clipPath={`url(#clip-${uid})`}>
+        <rect width={W} height={H} fill={COURT_BG} />
+        <rect width={W} height={H} filter={`url(#grain-${uid})`} opacity={0.22} />
+        {/* Marks sit under the line work so the court stays legible. */}
+        {children}
+        <g stroke={LINE} strokeWidth={2} fill="none">
+          {/* Lane + free-throw circle */}
+          <rect x={RIM_X - 60} y={0} width={120} height={190} />
+          <circle cx={RIM_X} cy={190} r={60} />
+          {/* Backboard + rim + restricted arc */}
+          <line x1={RIM_X - 30} y1={40} x2={RIM_X + 30} y2={40} strokeWidth={3} />
+          <circle cx={RIM_X} cy={RIM_Y} r={7.5} />
+          <path d={`M ${RIM_X - 40} ${RIM_Y} A 40 40 0 0 0 ${RIM_X + 40} ${RIM_Y}`} />
+          {/* Three-point line: corner segments + arc */}
+          <line x1={CORNER_X} y1={0} x2={CORNER_X} y2={CORNER_Y} />
+          <line x1={W - CORNER_X} y1={0} x2={W - CORNER_X} y2={CORNER_Y} />
+          <path d={`M ${CORNER_X} ${CORNER_Y} A ${THREE_R} ${THREE_R} 0 0 0 ${W - CORNER_X} ${CORNER_Y}`} />
+        </g>
+      </g>
+      <rect width={W} height={H} rx={8} fill="none" stroke="rgba(26,34,56,0.14)" />
+    </svg>
+  );
+}
+
+const VOL_R = 9;
+
+function VolumeChart({ shots }: { shots: ShotRow[] }) {
   const bins = useMemo(() => {
     const gen = d3hexbin<ShotRow>()
       .x((s) => s[CX]).y((s) => s[CY])
-      .radius(9)
+      .radius(VOL_R)
       .extent([[0, 0], [W, H]]);
     return gen(shots);
   }, [shots]);
 
-  // Opacity ramp: linear in bin count against a cap well below the max, so a
+  // Ramp is linear in bin count against a cap well below the max, so a
   // player's top handful of spots all saturate (that's what makes favorite
   // zones read as zones instead of a single hottest hex).
   const cap = useMemo(() => {
     const max = bins.reduce((m, b) => Math.max(m, b.length), 0);
-    return Math.max(3, max * 0.4);
+    return Math.max(3, max * 0.35);
   }, [bins]);
 
-  const hexPath = useMemo(() => d3hexbin().radius(9).hexagon(), []);
+  const hexPath = useMemo(() => d3hexbin().radius(VOL_R).hexagon(), []);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto rounded-lg" role="img" aria-label="Shot chart">
-      <rect width={W} height={H} rx={8} fill={COURT_BG} />
+    <Court label="Shot volume by court location">
+      {bins.map((b) => (
+        <path
+          key={`${Math.round(b.x)}-${Math.round(b.y)}`}
+          d={hexPath}
+          transform={`translate(${b.x},${b.y})`}
+          fill={volColor(b.length / cap)}
+        >
+          <title>{`${b.length} shot${b.length === 1 ? "" : "s"} · ${b.reduce((n, s) => n + s[MADE], 0)} made`}</title>
+        </path>
+      ))}
+    </Court>
+  );
+}
 
-      {/* Shots go under the line work so the court stays legible. */}
-      <g>
-        {bins.map((b) => (
+/**
+ * Shrinkage constant, in attempts — the strength of a Beta prior centred on
+ * the league baseline. Without it the chart's loudest cells are its emptiest
+ * ones: 2-for-2 from the corner would paint bright green.
+ *
+ * Sized from the spread it's meant to model rather than picked by eye. Player
+ * FG% from a given spot scatters around the baseline with sd ≈ 0.08, so for
+ * p ≈ 0.35 the matching prior strength is p(1−p)/σ² − 1 ≈ 25 attempts. An
+ * earlier value of 8 was far too weak — it still let 2-for-2 saturate, which
+ * is the exact failure the shrinkage exists to prevent.
+ */
+const SHRINK_K = 25;
+
+/** Per-hex shrunk difference vs baseline, plus the raw counts for the tooltip. */
+function accuracyBins(shots: ShotRow[], cells: Record<string, [number, number]>, r: number) {
+  const gen = d3hexbin<ShotRow>().x((s) => s[CX]).y((s) => s[CY]).radius(r).extent([[0, 0], [W, H]]);
+  return gen(shots).map((b) => {
+    const key = `${Math.round(b.x)},${Math.round(b.y)}`;
+    const cell = cells[key];
+    const made = b.reduce((n, s) => n + s[MADE], 0);
+    const att = b.length;
+    const baseRate = cell && cell[1] > 0 ? cell[0] / cell[1] : null;
+    // (made − expected) / (att + K): equals the raw difference as att grows,
+    // and collapses toward zero when it doesn't.
+    const diff = baseRate === null ? null : (made - att * baseRate) / (att + SHRINK_K);
+    return { x: b.x, y: b.y, made, att, baseRate, diff };
+  });
+}
+
+function AccuracyChart({ shots, cells, r }: { shots: ShotRow[]; cells: Record<string, [number, number]>; r: number }) {
+  const bins = useMemo(() => accuracyBins(shots, cells, r), [shots, cells, r]);
+  const maxAtt = useMemo(() => bins.reduce((m, b) => Math.max(m, b.att), 0), [bins]);
+  const gen = useMemo(() => d3hexbin().radius(r), [r]);
+
+  return (
+    <Court label="Shooting accuracy versus position-group average">
+      {bins.map((b) => {
+        // Area ∝ attempts (so radius ∝ √attempts), floored so a single attempt
+        // is still a visible dot rather than a rounding error.
+        const t = maxAtt > 0 ? Math.sqrt(b.att / maxAtt) : 0;
+        const rr = r * (0.3 + 0.7 * t);
+        const pctTxt = b.att > 0 ? ((100 * b.made) / b.att).toFixed(0) : "—";
+        const baseTxt = b.baseRate === null ? "—" : (100 * b.baseRate).toFixed(0);
+        return (
           <path
             key={`${Math.round(b.x)}-${Math.round(b.y)}`}
-            d={hexPath}
+            d={gen.hexagon(rr)}
             transform={`translate(${b.x},${b.y})`}
-            fill={HEX_FILL}
-            opacity={Math.min(1, 0.14 + b.length / cap)}
+            fill={b.diff === null ? "rgba(26,34,56,0.06)" : diffColor(b.diff)}
+            stroke="rgba(26,34,56,0.18)"
+            strokeWidth={0.6}
           >
-            <title>{`${b.length} shot${b.length === 1 ? "" : "s"} · ${b.reduce((n, s) => n + s[MADE], 0)} made`}</title>
+            <title>
+              {`${b.made}/${b.att} (${pctTxt}%) · baseline ${baseTxt}%`}
+            </title>
           </path>
-        ))}
-      </g>
+        );
+      })}
+    </Court>
+  );
+}
 
-      {/* Line work */}
-      <g stroke={LINE} strokeWidth={2} fill="none">
-        {/* Lane + free-throw circle */}
-        <rect x={RIM_X - 60} y={0} width={120} height={190} />
-        <circle cx={RIM_X} cy={190} r={60} />
-        {/* Backboard + rim + restricted arc */}
-        <line x1={RIM_X - 30} y1={40} x2={RIM_X + 30} y2={40} strokeWidth={3} />
-        <circle cx={RIM_X} cy={RIM_Y} r={7.5} />
-        <path d={`M ${RIM_X - 40} ${RIM_Y} A 40 40 0 0 0 ${RIM_X + 40} ${RIM_Y}`} />
-        {/* Three-point line: corner segments + arc */}
-        <line x1={CORNER_X} y1={0} x2={CORNER_X} y2={CORNER_Y} />
-        <line x1={W - CORNER_X} y1={0} x2={W - CORNER_X} y2={CORNER_Y} />
-        <path d={`M ${CORNER_X} ${CORNER_Y} A ${THREE_R} ${THREE_R} 0 0 0 ${W - CORNER_X} ${CORNER_Y}`} />
-      </g>
-    </svg>
+/**
+ * Shot-quality line: what the player's own attempt mix would yield at their
+ * position group's rates, next to what it actually yielded. This is the one
+ * number that survives the per-hex noise — it aggregates every attempt.
+ */
+function ExpectedLine({
+  shots, cells, r, label,
+}: {
+  shots: ShotRow[]; cells: Record<string, [number, number]>; r: number; label: string;
+}) {
+  const { att, made, exp } = useMemo(() => {
+    let att = 0, made = 0, exp = 0;
+    for (const b of accuracyBins(shots, cells, r)) {
+      if (b.baseRate === null) continue;
+      att += b.att; made += b.made; exp += b.att * b.baseRate;
+    }
+    return { att, made, exp };
+  }, [shots, cells, r]);
+
+  if (att === 0) return null;
+  const actual = (100 * made) / att;
+  const expected = (100 * exp) / att;
+  const d = actual - expected;
+  const sign = d >= 0 ? "+" : "−";
+  return (
+    <p className="mt-2.5 text-sm text-ink tabular">
+      <span className="font-bold">{actual.toFixed(1)}%</span>
+      <span className="text-ink-muted"> actual vs </span>
+      <span className="font-bold">{expected.toFixed(1)}%</span>
+      <span className="text-ink-muted"> expected for D-I {label} on these shots </span>
+      <span className={cn("font-bold", d >= 0 ? "text-good" : "text-bad")}>
+        {sign}{Math.abs(d).toFixed(1)}
+      </span>
+    </p>
+  );
+}
+
+/* --------------------------------- legends --------------------------------- */
+
+function PanelHead({ title, sub }: { title: string; sub: string }) {
+  return (
+    <div className="mb-3">
+      <h3 className="text-sm font-semibold text-ink leading-tight">{title}</h3>
+      <p className="text-[0.7rem] text-ink-muted uppercase tracking-[0.12em] mt-0.5">{sub}</p>
+    </div>
+  );
+}
+
+function Swatches({ colors }: { colors: string[] }) {
+  return (
+    <div className="flex h-2.5 flex-1 min-w-24 overflow-hidden rounded-sm">
+      {colors.map((c, i) => <span key={i} className="flex-1" style={{ background: c }} />)}
+    </div>
+  );
+}
+
+function VolumeLegend() {
+  const steps = Array.from({ length: 9 }, (_, i) => volColor(i / 8));
+  return (
+    <div className="mt-2.5 flex items-center gap-2.5 text-[0.62rem] uppercase tracking-widest text-ink-muted">
+      <span className="shrink-0">Fewer</span>
+      <Swatches colors={steps} />
+      <span className="shrink-0">More attempts</span>
+    </div>
+  );
+}
+
+function AccuracyLegend({ label }: { label: string }) {
+  const steps = Array.from({ length: 11 }, (_, i) => diffColor((i / 10) * 0.2 - 0.1));
+  return (
+    <div className="mt-2.5">
+      <div className="flex items-center gap-2.5 text-[0.62rem] uppercase tracking-widest text-ink-muted">
+        <span className="shrink-0 tabular">−10</span>
+        <Swatches colors={steps} />
+        <span className="shrink-0 tabular">+10</span>
+      </div>
+      <div className="mt-1 text-[0.62rem] text-ink-muted text-center">FG% vs D-I {label} from the same spot</div>
+    </div>
   );
 }
 

@@ -63,6 +63,17 @@ function teamSlug(name: string): string {
   return name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+// Bart's per-season role note (raw_row[64]) → the G/F/C bucket the rest of the
+// site ranks by. Mirrors scripts/compute-player-ranks.mts and
+// scripts/build-shot-baselines.mjs — all three must agree or a player gets
+// compared against a cohort he isn't in.
+const POSITION_BUCKET: Record<string, "G" | "F" | "C"> = {
+  "Pure PG": "G", "Scoring PG": "G", "Combo G": "G", "Wing G": "G",
+  "Wing F": "F", "Stretch 4": "F",
+  "G/F": "G", "F/G": "F", "C/F": "C",
+  "PF/C": "C", "C": "C",
+};
+
 // raw_row column positions — see scripts/sync-bart.mts
 function fromEnd(row: Array<string | number | null> | null, offset: number): number | null {
   if (!row || row.length <= offset) return null;
@@ -106,6 +117,16 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         })
         .filter((x): x is PlayerOverviewOption => x !== null)
     : [];
+
+  // Season → position bucket, from Bart's per-season role note. Feeds the shot
+  // chart's "vs position" court, which needs a cohort to compare against; same
+  // mapping compute-player-ranks.mts uses for percentiles.
+  const positionByYear: Record<string, "G" | "F" | "C"> = {};
+  for (const s of player.seasons) {
+    const note = (Array.isArray(s.raw_row) ? s.raw_row[64] : null) ?? s.notes;
+    const b = typeof note === "string" ? POSITION_BUCKET[note] : undefined;
+    if (b) positionByYear[String(s.year)] = b;
+  }
 
   const row = current.raw_row;
   const stats = {
@@ -238,7 +259,11 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       {/* Shooting section: hexbin shot chart with the zone-profile stats in
           its right rail (2024+ seasons); players without located shots get
           the profile-only fallback card instead. */}
-      <PlayerShotChart bartPlayerId={bartId} years={player.seasons.map((s) => s.year)} />
+      <PlayerShotChart
+        bartPlayerId={bartId}
+        years={player.seasons.map((s) => s.year)}
+        positionByYear={positionByYear}
+      />
 
       <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8 mb-20">
         {/* Career ledger — heavier chrome than other cards on the page so this
