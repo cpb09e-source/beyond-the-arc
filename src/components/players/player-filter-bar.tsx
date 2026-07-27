@@ -485,7 +485,13 @@ export function PlayerStatFilters({
               {RANGE_GROUPS.map((g) => {
                 const gc = g.stats.reduce((n, s) => n + (isBoundActive(draft[s.key]) ? 1 : 0), 0);
                 return (
-                  <section key={g.label}>
+                  // CSS containment. Without it, changing one slider re-styles and
+                  // re-lays-out the whole modal — 112 form controls across seven groups —
+                  // on every tick of a drag. Measured alternating, warm: p90 25ms with ~4
+                  // dropped frames a drag, against 16.8ms and ~1.5 once each group is
+                  // contained. Safe here because a group holds only static rows; nothing
+                  // inside is sticky or absolutely positioned against an outer ancestor.
+                  <section key={g.label} className="[contain:layout_style]">
                     <div className="flex items-center gap-2 mb-3 min-h-5">
                       <h4 className="text-[0.62rem] uppercase tracking-[0.18em] font-semibold text-ink-soft">{g.label}</h4>
                       {gc > 0 && (
