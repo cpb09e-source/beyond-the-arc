@@ -10,17 +10,25 @@
  * 2024-02-10 archived one. 2026 was ingested with the fallback and sits at
  * 99.4%.
  *
- * WHAT IT DOES: for each ET date, diff the games our game logs say were played
- * against the games present in plays-<date>.json.gz, fetch each missing game
- * individually via /plays/game/{id}, and merge into the same date file. All
- * downstream PBP consumers (shot charts, second-chance, lineups) read those
- * files, so they all benefit.
+ * WHAT IT DOES: diff the games our game logs say were played against every
+ * gameId present anywhere in the season's plays archive, fetch each missing
+ * game individually via /plays/game/{id}, and write it into the file for its
+ * ET date. All downstream PBP consumers (shot charts, second-chance, lineups)
+ * glob the whole season directory and de-duplicate on play id, so they all
+ * benefit and none of them care which file a game landed in.
+ *
+ * THE DIFF IS SEASON-WIDE, NOT PER-DATE, AND THAT MATTERS. The archive's file
+ * stamps are the ingest's REQUEST date, which sits one day ahead of our ET
+ * game_date for every game (checked: 6,517 of 6,517 in 2024 are off by exactly
+ * +1). A per-date diff therefore matches nothing — it reported 0 of 6,243 games
+ * present for 2024 when 3,394 were actually there, and would have re-fetched
+ * every one of them, doubling the archive.
  *
  * Idempotent and resumable by construction: every run re-diffs the live
- * archive, so a partially-repaired date just has fewer missing games next
- * time. No state file, no skip markers. Games CBBD genuinely has no plays for
- * come back as empty arrays and would be re-requested every run — accepted
- * cost, it's a handful of calls.
+ * archive, so an interrupted run just has fewer missing games next time. No
+ * state file, no skip markers. Games CBBD genuinely has no plays for come back
+ * as empty arrays and would be re-requested every run — accepted cost, it's a
+ * handful of calls.
  *
  * Usage: node scripts/cbbd-repair-plays.mjs --season 2024 [--dry]
  */
@@ -91,18 +99,21 @@ for (const g of logs) {
 const dir = path.join(ROOT, "data/cbbd", String(SEASON));
 fs.mkdirSync(dir, { recursive: true });
 
-// ---- diff every date ----
-const work = []; // { date, fp, missing: number[], existingCount }
+// ---- what the archive already holds, across every file in the season ----
+const have = new Set();
+for (const f of fs.readdirSync(dir).filter((n) => /^plays-\d{8}\.json\.gz$/.test(n))) {
+  for (const p of readGz(path.join(dir, f))) have.add(p.gameId);
+}
+
+// ---- diff ----
+const work = []; // { date, fp, missing: number[] }
 let totalExpected = 0, totalPresent = 0;
 for (const [date, expected] of [...expectedByDate].sort()) {
-  const stamp = date.replaceAll("-", "");
-  const fp = path.join(dir, `plays-${stamp}.json.gz`);
-  const existing = fs.existsSync(fp) ? readGz(fp) : [];
-  const have = new Set(existing.map((p) => p.gameId));
+  const fp = path.join(dir, `plays-${date.replaceAll("-", "")}.json.gz`);
   const missing = [...expected].filter((id) => !have.has(id));
   totalExpected += expected.size;
   totalPresent += expected.size - missing.length;
-  if (missing.length > 0) work.push({ date, fp, missing, existingCount: existing.length });
+  if (missing.length > 0) work.push({ date, fp, missing });
 }
 
 const totalMissing = work.reduce((s, w) => s + w.missing.length, 0);
