@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState } from "react";
 
 /**
  * The dual-thumb stat range control, shared by the /players and team-explorer
@@ -95,9 +95,28 @@ export const RangeRow = memo(function RangeRow({
   );
 });
 
-// Dual-thumb slider over one stat. Sitting a thumb at its extreme clears that
-// bound (→ null), so a full-width slider emits no filter. See .bta-range in
-// globals.css for the thumb styling + pointer-events trick.
+/**
+ * Dual-thumb slider over one stat. Sitting a thumb at its extreme clears that
+ * bound (→ null), so a full-width slider emits no filter. See .bta-range in
+ * globals.css for the thumb styling + pointer-events trick.
+ *
+ * WHY THE THUMB IS NOT A CONTROLLED VALUE MID-DRAG
+ *
+ * These inputs used to be plain controlled inputs: every mouse move ran
+ * input → setBound → the whole drawer re-renders → React writes `value` back.
+ * The thumb's position was therefore owned by React, and could never be further
+ * along than the last committed render — so on a fast drag the cursor visibly
+ * pulled ahead and the thumb caught up behind it.
+ *
+ * Now the DOM owns the thumb while you're dragging. `drag` holds the live
+ * value, it is seeded straight from the input event, and the parent is told on
+ * the SAME event — but the thumb no longer waits on that round trip to paint.
+ * On release `drag` clears and the props take over again, so the committed
+ * state stays the single source of truth everywhere outside the gesture.
+ *
+ * The filled track between the thumbs reads the same live values, so it tracks
+ * the thumb rather than trailing it.
+ */
 function RangeDual({
   st,
   lo,
@@ -110,23 +129,41 @@ function RangeDual({
   onChange: (lo: number | null, hi: number | null) => void;
 }) {
   const { min, max, step } = st;
-  const effLo = lo ?? min;
-  const effHi = hi ?? max;
+  // Live override while a thumb is held; null when the gesture is over.
+  const [drag, setDrag] = useState<{ lo: number; hi: number } | null>(null);
+
+  const propLo = lo ?? min;
+  const propHi = hi ?? max;
+  const effLo = drag ? drag.lo : propLo;
+  const effHi = drag ? drag.hi : propHi;
+
   const span = max - min || 1;
   const leftPct = ((effLo - min) / span) * 100;
   const rightPct = ((max - effHi) / span) * 100;
+  const endDrag = () => setDrag(null);
+
   return (
     <div className="relative h-4 mx-1.5">
       <div className="absolute top-1/2 -translate-y-1/2 inset-x-0 h-1 rounded-full bg-ink/12" />
       <div className="absolute top-1/2 -translate-y-1/2 h-1 rounded-full bg-coral" style={{ left: `${leftPct}%`, right: `${rightPct}%` }} />
       <input
         type="range" min={min} max={max} step={step} value={effLo}
-        onChange={(e) => { const n = Number(e.target.value); onChange(n <= min ? null : Math.min(n, effHi), hi); }}
+        onChange={(e) => {
+          const n = Math.min(Number(e.target.value), effHi);
+          setDrag({ lo: n, hi: effHi });
+          onChange(n <= min ? null : n, hi);
+        }}
+        onPointerUp={endDrag} onPointerCancel={endDrag} onBlur={endDrag}
         className="bta-range z-30" aria-label={`${st.label} minimum slider`}
       />
       <input
         type="range" min={min} max={max} step={step} value={effHi}
-        onChange={(e) => { const n = Number(e.target.value); onChange(lo, n >= max ? null : Math.max(n, effLo)); }}
+        onChange={(e) => {
+          const n = Math.max(Number(e.target.value), effLo);
+          setDrag({ lo: effLo, hi: n });
+          onChange(lo, n >= max ? null : n);
+        }}
+        onPointerUp={endDrag} onPointerCancel={endDrag} onBlur={endDrag}
         className="bta-range z-20" aria-label={`${st.label} maximum slider`}
       />
     </div>
