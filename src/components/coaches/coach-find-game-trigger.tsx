@@ -23,8 +23,8 @@ export function CoachFindGameTrigger({
   accentOnPrimary,
 }: {
   coachName: string;
-  /** Every (team_id, team name, year) pair the coach has been on the bench for. */
-  teamYears: Array<{ teamId: number; teamName: string; year: number }>;
+  /** Every (team name, year) pair the coach has been on the bench for. */
+  teamYears: Array<{ teamName: string; year: number }>;
   /** Default year to populate in the modal — usually the coach's most recent. */
   defaultYear: number;
   /** Hex color (e.g. "#0051BA") for the current team. Falls back to coral. */
@@ -34,9 +34,12 @@ export function CoachFindGameTrigger({
 }) {
   const [open, setOpen] = useState(false);
 
-  // Build a Set of "team_id|year" keys for O(1) per-game membership checks.
+  // Build a Set of "team name|year" keys for O(1) per-game membership checks.
+  // Keyed on name, not teamId: game_logs.team_id lives in CBBD's id space
+  // while teamId here comes from teams-all (bart's), so the id form matched
+  // nothing and the modal opened onto an empty result set.
   const teamYearKeys = useMemo(
-    () => new Set(teamYears.map((p) => `${p.teamId}|${p.year}`)),
+    () => new Set(teamYears.map((p) => `${p.teamName}|${p.year}`)),
     [teamYears],
   );
 
@@ -78,7 +81,7 @@ export function CoachFindGameTrigger({
       </button>
       {open && (
         <FindGameModal
-          matchGame={(g) => teamYearKeys.has(`${g.team_id}|${g.year}`)}
+          matchGame={(g) => teamYearKeys.has(`${g.team_name}|${g.year}`)}
           displayName={coachName}
           defaultYear={defaultYear}
           teamOptions={teamOptions}

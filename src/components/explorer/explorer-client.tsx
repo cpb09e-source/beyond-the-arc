@@ -86,6 +86,18 @@ const SHOOTING_COLS: TeamCol[] = [
 ];
 
 const ALL_COLS = [...RATING_COLS, ...FOUR_FACTOR_COLS, ...SHOOTING_COLS];
+// Index where each column group starts. Group boundaries were being matched by
+// column label ("REB"), which only found the first of the three and silently
+// missed the shooting boundary — so the four-factor tint ran to the end of the
+// table. Deriving them from the group lengths keeps the header rule, the
+// column rule and the tint on the same boundaries when a column is added.
+const GROUP_STARTS = new Set([
+  0,
+  RATING_COLS.length,
+  RATING_COLS.length + FOUR_FACTOR_COLS.length,
+]);
+const FF_START = RATING_COLS.length;
+const FF_END = RATING_COLS.length + FOUR_FACTOR_COLS.length;
 
 /** One opaque hover fill so the frozen and scrolling halves read as one row. */
 const ROW_HOVER = "group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))]";
@@ -417,7 +429,7 @@ export function ExplorerClient({
                     idleArrows
                     className={cn(
                       "sticky top-6 z-30 bg-paper-deep border-b border-hairline",
-                      i === 0 || c.label === "REB" ? "border-l border-hairline" : "",
+                      GROUP_STARTS.has(i) && "border-l border-hairline",
                     )}
                   />
                 ))}
@@ -463,14 +475,14 @@ export function ExplorerClient({
                       const cell = r as unknown as Record<string, number | null>;
                       const total = cell[c.total as string] ?? null;
                       const perGame = c.perGame ? cell[c.perGame as string] ?? null : null;
-                      const isFF = ci >= RATING_COLS.length;
+                      const isFF = ci >= FF_START && ci < FF_END;
                       return (
                         <td
                           key={c.label}
                           className={cn(
                             "px-2 py-1 text-right tabular whitespace-nowrap transition-colors",
                             isFF && FF_BAND_TINT,
-                            (ci === 0 || c.label === "REB") && "border-l border-hairline",
+                            GROUP_STARTS.has(ci) && "border-l border-hairline",
                             ROW_HOVER,
                           )}
                         >

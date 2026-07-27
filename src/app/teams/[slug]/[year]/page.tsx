@@ -143,7 +143,13 @@ export default async function TeamSeasonPage({
     roundByDate.set(tg.date, SHORT_ROUND[tg.round] ?? tg.round);
   }
   const scheduleGames = allGames
-    .filter((g) => g.team_id === current.id)
+    // Join on name, NOT id. The CBBD migration re-keyed game_logs.team_id to
+    // CBBD's ids while team/*.json kept the bart id (Florida: 87 vs 3228), so
+    // `g.team_id === current.id` matched nothing and the ticker silently
+    // rendered as absent rather than broken. Names are exact across both
+    // exports — checked all 2,158 team-seasons, zero unmatched. Same rule
+    // find-game-trigger already follows.
+    .filter((g) => g.team_name === team.name)
     .sort((a, b) => (a.game_date ?? "").localeCompare(b.game_date ?? ""))
     .map((g) => {
       const round = g.game_date ? roundByDate.get(g.game_date) : undefined;

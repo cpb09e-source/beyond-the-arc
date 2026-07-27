@@ -80,7 +80,9 @@ export default async function TeamPage({ params }: { params: Promise<{ slug: str
     roundByDate.set(tg.date, SHORT_ROUND[tg.round] ?? tg.round);
   }
   const scheduleGames = allGames
-    .filter((g) => g.team_id === current.id)
+    // Name join — see the note on the [year] route. game_logs.team_id is CBBD's
+    // id space; team/*.json carries the bart id, so they never match.
+    .filter((g) => g.team_name === team.name)
     .sort((a, b) => (a.game_date ?? "").localeCompare(b.game_date ?? ""))
     .map((g) => {
       const round = g.game_date ? roundByDate.get(g.game_date) : undefined;

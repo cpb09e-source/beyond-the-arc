@@ -86,7 +86,10 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
   // coach-scoped Find-a-Game modal (to filter games to just this coach's
   // tenure). One sweep through readAllTeams handles both.
   const allTeams = await readAllTeams();
-  const coachTeamYears: Array<{ team: string; teamSlug: string; year: number; teamId: number }> = [];
+  // No teamId here on purpose. It used to carry teams-all's bart id, which
+  // nothing downstream can join against — game_logs is keyed by CBBD's ids —
+  // and keeping a dead id around is how the modal came to match on it.
+  const coachTeamYears: Array<{ team: string; teamSlug: string; year: number }> = [];
   for (const s of profile.by_year) {
     const teamRow = allTeams.find((t) => t.name === s.team && t.year === s.year);
     if (!teamRow) continue;
@@ -94,15 +97,13 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
       team: s.team,
       teamSlug: teamRow.name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
       year: s.year,
-      teamId: teamRow.id,
     });
   }
 
   // March Madness resume — every NCAA tournament game the coach has been on
-  // the bench for, ordered chronologically. We resolve each (team, year) →
-  // team_id, then cross-reference the year's game-logs by date so the modal
-  // has the full GameLog (with game_id for the box score) rather than
-  // the slimmer TourneyGame shape.
+  // the bench for, ordered chronologically. We cross-reference the year's
+  // game-logs by (team name, date) so the modal has the full GameLog (with
+  // game_id for the box score) rather than the slimmer TourneyGame shape.
   let marchGames: GameLog[] = [];
   {
     // Newest season leftmost — the coach's most recent tournament run reads
@@ -116,15 +117,15 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
       for (const season of seededSeasons) {
         const tGames = gamesForSeason(season.team, season.year);
         if (tGames.length === 0) continue;
-        const teamRow = allTeams.find(
-          (t) => t.name === season.team && t.year === season.year,
-        );
-        if (!teamRow) continue;
         const yearGameLogs = await readGameLogsForYear(season.year);
         for (const tg of tGames) {
           if (!tg.date) continue;
+          // Match on team name, not id: game_logs.team_id is CBBD's id space
+          // and teams-all carries the bart id, so an id join finds nothing and
+          // the resume ticker just renders empty. Names agree exactly across
+          // both exports.
           const match = yearGameLogs.find(
-            (gl) => gl.team_id === teamRow.id && gl.game_date === tg.date,
+            (gl) => gl.team_name === season.team && gl.game_date === tg.date,
           );
           if (match) {
             marchGames.push({
@@ -234,7 +235,7 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
                 {showFindBtn && (
                   <CoachFindGameTrigger
                     coachName={profile.name}
-                    teamYears={coachTeamYears.map((s) => ({ teamId: s.teamId, teamName: s.team, year: s.year }))}
+                    teamYears={coachTeamYears.map((s) => ({ teamName: s.team, year: s.year }))}
                     defaultYear={profile.current_year ?? LATEST_YEAR}
                     accentColor={tc?.primary ?? null}
                     accentOnPrimary={tc?.onPrimary ?? null}
