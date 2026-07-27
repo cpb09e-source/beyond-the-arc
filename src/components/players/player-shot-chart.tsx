@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { hexbin as d3hexbin } from "d3-hexbin";
 import { cn } from "@/lib/utils";
 import { dataUrl } from "@/lib/data-url";
+import { StatInfo } from "@/components/players/stat-info";
 import {
   ShotProfileFallbackCard, ZoneBars, ProfileMinis, useShotProfile, seasonLabel,
 } from "@/components/players/player-shot-impact";
@@ -183,7 +184,11 @@ export function PlayerShotChart({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-7 lg:gap-8">
             {/* ---- Volume ---- */}
             <div>
-              <PanelHead title="Shot volume" sub="Where the attempts come from" />
+              <PanelHead
+                title="Shot Volume"
+                sub="Where the attempts come from"
+                info="Darker hexes = more attempts from that spot. Shots without a tracked location aren't plotted; free throws excluded."
+              />
               <VolumeChart shots={shown} />
               <VolumeLegend />
               <p className="mt-2.5 text-sm text-ink tabular">
@@ -193,34 +198,33 @@ export function PlayerShotChart({
                 <span className="font-bold">{tpm} / {tpa.length}</span>
                 <span className="text-ink-muted"> 3PT ({pct(tpm, tpa.length)})</span>
               </p>
-              <p className="mt-1 text-xs text-ink-muted">
-                Darker hexes = more attempts from that spot. Shots without a tracked
-                location aren&apos;t plotted; free throws excluded.
-                {shown.length !== rows.length && (
-                  <> Showing {shown.length.toLocaleString()} of {rows.length.toLocaleString()} charted shots.</>
-                )}
-              </p>
+              {/* Only the filtered-subset note survives here — the standing
+                  caveats (untracked locations, no free throws) moved into the
+                  card's info popover so the courts sit closer together. */}
+              {shown.length !== rows.length && (
+                <p className="mt-1 text-xs text-ink-muted tabular">
+                  Showing {shown.length.toLocaleString()} of {rows.length.toLocaleString()} charted shots.
+                </p>
+              )}
             </div>
 
             {/* ---- Accuracy vs position ---- */}
             <div>
               <PanelHead
-                title="Accuracy vs position"
+                title="Accuracy vs Position"
                 sub={bucket ? `Against D-I ${BUCKET_LABEL[bucket]}` : "Against the same position group"}
+                info={
+                  `Hex size = attempts, colour = FG% above or below what D-I ${
+                    bucket ? BUCKET_LABEL[bucket] : "players at this position"
+                  } shoot from that spot. Rates are pulled toward the baseline in proportion to how few attempts back them, so a lone make doesn't read as a hot zone.` +
+                  (outcomeFiltered ? " The make/miss filter is ignored here — a percentage needs both." : "")
+                }
               />
               {cells ? (
                 <>
                   <AccuracyChart shots={forAccuracy} cells={cells} r={base!.r} />
                   <AccuracyLegend label={bucket ? BUCKET_LABEL[bucket] : "position"} />
                   <ExpectedLine shots={forAccuracy} cells={cells} r={base!.r} label={bucket ? BUCKET_LABEL[bucket] : "position"} />
-                  {/* One interpolated string, not text nodes around a {} —
-                      JSX ate the space either side of the label otherwise. */}
-                  <p className="mt-1 text-xs text-ink-muted">
-                    {`Hex size = attempts, colour = FG% above or below what D-I ${
-                      bucket ? BUCKET_LABEL[bucket] : "players at this position"
-                    } shoot from that spot. Rates are pulled toward the baseline in proportion to how few attempts back them, so a lone make doesn't read as a hot zone.`}
-                    {outcomeFiltered && " The make/miss filter is ignored here — a percentage needs both."}
-                  </p>
                 </>
               ) : (
                 <div className="rounded-lg border border-dashed border-ink/15 bg-paper-deep/20 px-5 py-10 text-center">
@@ -251,8 +255,11 @@ export function PlayerShotChart({
         {/* Filters band */}
         <div className="px-5 lg:px-7 py-5 border-t border-hairline bg-paper-deep/20">
           <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
+            {/* Tip-ins (TYPE 3) have no chip: they're 2% of all attempts, so
+                the control was clutter. They stay ON permanently — they're
+                field goals and belong in the totals, same as any putback. */}
             <ChipGroup label="Shot types">
-              {(["Jump shots", "Layups", "Dunks", "Tip-ins"] as const).map((label, i) => (
+              {(["Jump shots", "Layups", "Dunks"] as const).map((label, i) => (
                 <Chip
                   key={label} label={label} on={filters.types[i]}
                   toggle={() => setFilters((f) => {
@@ -568,10 +575,13 @@ function ExpectedLine({
 
 /* --------------------------------- legends --------------------------------- */
 
-function PanelHead({ title, sub }: { title: string; sub: string }) {
+function PanelHead({ title, sub, info }: { title: string; sub: string; info?: string }) {
   return (
     <div className="mb-3">
-      <h3 className="text-sm font-semibold text-ink leading-tight">{title}</h3>
+      <div className="flex items-center gap-1.5">
+        <h3 className="text-sm font-semibold text-ink leading-tight">{title}</h3>
+        {info && <StatInfo definition={info} />}
+      </div>
       <p className="text-[0.7rem] text-ink-muted uppercase tracking-[0.12em] mt-0.5">{sub}</p>
     </div>
   );
