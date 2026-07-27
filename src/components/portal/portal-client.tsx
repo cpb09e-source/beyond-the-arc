@@ -39,13 +39,15 @@ export type PortalEntry = {
   spg: number | null;
   bpg: number | null;
   pir: number | null;
-  bta_portg: number | null;
+  // Joined server-side in app/portal/page.tsx — real play-by-play fit first,
+  // box estimate as fallback. Not in portal.json itself.
+  epm: number | null;
   stars: 0 | 1 | 2 | 3 | 4 | 5;
 };
 
 type SortKey =
   | "name" | "stars" | "date" | "committed" | "from" | "to"
-  | "mpg" | "ppg" | "rpg" | "apg" | "bta_portg";
+  | "mpg" | "ppg" | "rpg" | "apg" | "epm";
 
 export function PortalClient({
   entries, transferClasses,
@@ -64,7 +66,7 @@ export function PortalClient({
   const [page, setPage] = useState<number>(1);
   const [query, setQuery] = useState("");
   const [schoolQuery, setSchoolQuery] = useState("");
-  const [sortBy, setSortBy] = useState<SortKey>("bta_portg");
+  const [sortBy, setSortBy] = useState<SortKey>("epm");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [openClass, setOpenClass] = useState<TransferClassRow | null>(null);
 
@@ -115,7 +117,7 @@ export function PortalClient({
         case "ppg":          return e.ppg;
         case "rpg":          return e.rpg;
         case "apg":          return e.apg;
-        case "bta_portg":    return e.bta_portg;
+        case "epm":          return e.epm;
       }
     };
     return [...filtered].sort((a, b) => {
@@ -246,7 +248,7 @@ export function PortalClient({
                 <ThSort label="To"     active={sortBy==="to"}   dir={sortDir} onClick={() => toggleSort("to","asc")}   align="left" />
                 <ThSort label="ENT" active={sortBy==="date"} dir={sortDir} onClick={() => toggleSort("date","desc")} align="left" />
                 <ThSort label="COM" active={sortBy==="committed"} dir={sortDir} onClick={() => toggleSort("committed","desc")} align="left" />
-                <ThSort label="BTA PRTG" active={sortBy==="bta_portg"} dir={sortDir} onClick={() => toggleSort("bta_portg","desc")} />
+                <ThSort label="EPM" active={sortBy==="epm"} dir={sortDir} onClick={() => toggleSort("epm","desc")} />
                 <ThSort label="MPG" active={sortBy==="mpg"} dir={sortDir} onClick={() => toggleSort("mpg","desc")} />
                 <ThSort label="PPG" active={sortBy==="ppg"} dir={sortDir} onClick={() => toggleSort("ppg","desc")} />
                 <ThSort label="RPG" active={sortBy==="rpg"} dir={sortDir} onClick={() => toggleSort("rpg","desc")} />
@@ -285,7 +287,7 @@ export function PortalClient({
                     </Td>
                     <Td className="text-ink-muted tabular text-xs whitespace-nowrap">{fmtDate(e.date_entered)}</Td>
                     <Td className="text-ink-muted tabular text-xs whitespace-nowrap">{e.team_to ? fmtDate(e.date_updated) : "—"}</Td>
-                    <Td className="text-right tabular font-medium">{fmt1(e.bta_portg)}</Td>
+                    <Td className="text-right tabular font-medium">{fmtEpm(e.epm)}</Td>
                     <Td className="text-right tabular">{fmt1(e.mpg)}</Td>
                     <Td className="text-right tabular">{fmt1(e.ppg)}</Td>
                     <Td className="text-right tabular">{fmt1(e.rpg)}</Td>
@@ -327,10 +329,13 @@ export function PortalClient({
   );
 }
 
-function nz(v: number | null): string { return v === null || v === undefined ? "—" : String(v); }
 function fmt1(v: number | null): string {
   if (v === null || v === undefined) return "—";
   return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+function fmtEpm(v: number | null): string {
+  if (v === null || v === undefined) return "—";
+  return (v >= 0 ? "+" : "") + v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 function fmtDate(s: string | null): string {
   if (!s) return "—";

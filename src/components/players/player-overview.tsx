@@ -39,19 +39,19 @@ export function PlayerOverview({
 
   return (
     <>
-      {/* Card heading with the leaderboard rings docked to its right — the
+      {/* Card heading with the leaderboard rings on the row beneath it — the
           rings track the year picker, which is why the heading lives in this
           client component rather than the page shell. The striped "Where they
           stack up" band they used to occupy is gone per Colin. */}
-      <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
-        <div>
-          <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
-            <span className="h-px w-6 bg-coral" />
-            Full-season stats
-          </div>
-          <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Player Overview</h2>
+      <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30">
+        <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
+          <span className="h-px w-6 bg-coral" />
+          Full-season stats
         </div>
-        <RankRings season={selected.ranks} />
+        <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Player Overview</h2>
+        <div className="mt-5">
+          <RankRings season={selected.ranks} />
+        </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 lg:px-6 py-3 border-b border-hairline bg-paper/50">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -142,7 +142,7 @@ function RankRing({
   /** Secondary cells (overall / mid-major) run the lighter accent. */
   soft?: boolean;
 }) {
-  const size = 92, stroke = 6;
+  const size = 78, stroke = 5;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const fill = Math.max(0, Math.min(100, pct ?? 0));
@@ -158,7 +158,7 @@ function RankRing({
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-          <span className="font-display text-2xl text-ink tabular tabular-nums tracking-tighter">
+          <span className="font-display text-xl text-ink tabular tabular-nums tracking-tighter">
             <span className="text-[0.6em] align-top opacity-60 mr-px">#</span>{n}
           </span>
           <span className="mt-1 text-[0.5rem] uppercase tracking-[0.16em] font-bold text-ink-muted">{label}</span>
