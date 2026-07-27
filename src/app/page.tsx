@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import { ExplorerClient } from "@/components/explorer/explorer-client";
 import { readAllTeams, readConfRecordsByTeam } from "@/lib/static-data";
 import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches";
-import { ThemeToggle } from "@/components/theme-toggle";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -76,14 +75,6 @@ export default async function HomePage() {
 
   return (
     <>
-      <section className="hidden md:block">
-        <div className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-10 pb-2">
-          <div className="flex items-center justify-end gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
-            <ThemeToggle />
-          </div>
-        </div>
-      </section>
-
       {/* Same padding rhythm as /players so the two tables sit at the same
           height on the page. */}
       <section className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-4 pb-8 lg:pt-5 lg:pb-10">

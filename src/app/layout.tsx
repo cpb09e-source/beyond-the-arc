@@ -65,16 +65,13 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${moneta.variable} h-full antialiased`}
     >
       <head>
-        {/* Pre-hydration theme apply: read localStorage and set
-            data-theme on <html> BEFORE first paint so dark-mode users
-            don't flash a frame of light-mode tokens. With no saved
-            preference, mobile (<768px) defaults to dark. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html:
-              "(function(){try{var t=localStorage.getItem('bta-theme');var d=t==='dark'||(!t&&window.matchMedia&&window.matchMedia('(max-width:767px)').matches);if(d)document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();",
-          }}
-        />
+        {/* Dark mode is off for now. The palette lives on in globals.css
+            under [data-theme="dark"] and ThemeToggle still exists, so turning
+            it back on means restoring this script and re-mounting the control.
+            Nothing sets data-theme any more — which matters, because this
+            script used to default EVERY phone (<768px) to dark, and a stored
+            'bta-theme=dark' would otherwise strand a returning visitor in a
+            palette with no control left to leave it. */}
       </head>
       <body className="min-h-full flex flex-col bg-paper text-ink">
         <SiteHeader />

@@ -3,7 +3,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { PortalClient, type PortalEntry } from "@/components/portal/portal-client";
 import type { TransferClassRow } from "@/components/portal/transfer-classes";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 type PortalFile = {
   competition_id: number;
@@ -30,14 +29,6 @@ export default async function PortalPage() {
 
   return (
     <>
-      <section className="hidden md:block">
-        <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-10 pb-2">
-          <div className="flex items-center justify-end gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
-            <ThemeToggle />
-          </div>
-        </div>
-      </section>
-
       <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-4 lg:pt-5 pb-4">
         {data === null ? (
           <div className="bg-card border border-hairline rounded-lg p-10 text-center text-ink-muted">

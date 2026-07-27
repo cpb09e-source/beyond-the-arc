@@ -2,7 +2,6 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { CalcClient } from "@/components/calc/calc-client";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 // Mirror src/lib/coaches.ts TEAM_NAME_OVERRIDES so the (team, year) coach
 // lookup keys match the team_name strings that appear in game logs.
@@ -48,12 +47,9 @@ export default async function CalcPage() {
     <>
       <section>
         <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-10 pb-2">
-          <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium mb-4">
-            <div className="flex items-center gap-3">
-              <span className="h-px w-8 bg-coral" />
-              <span>The win calculator</span>
-            </div>
-            <ThemeToggle className="hidden md:inline-flex" />
+          <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium mb-4">
+            <span className="h-px w-8 bg-coral" />
+            <span>The win calculator</span>
           </div>
         </div>
       </section>

@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { CoachesClient } from "@/components/coaches/coaches-client";
 import { loadCoachIndex, type CoachIndexRow } from "@/lib/coaches";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 export type CoachRow = CoachIndexRow;
 
@@ -26,14 +25,6 @@ export default async function CoachesPage() {
 
   return (
     <>
-      <section className="hidden md:block">
-        <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-10 pb-2">
-          <div className="flex items-center justify-end gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
-            <ThemeToggle />
-          </div>
-        </div>
-      </section>
-
       <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-4 lg:pt-5 pb-4">
         {rows.length === 0 ? (
           <div className="bg-card border border-hairline rounded-lg p-10 text-center text-ink-muted">
