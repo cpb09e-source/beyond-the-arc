@@ -57,26 +57,43 @@ const PLAYER_DIR = path.resolve("public/data/player");
 const OUT_DIR = path.resolve("public/data/player-ranks");
 const DATA_DIR = path.resolve("public/data");
 
-// ---------- Box EPM ----------
-// Estimated plus-minus, already computed per season by compute-box-epm.py and
-// written to box-epm-<year>.json keyed by bart player id. Loaded once up front
-// so the stat read below is a map lookup rather than a file hit per player.
+// ---------- EPM ----------
+// Same precedence as readImpactForYear() in src/lib/static-data.ts: the real
+// play-by-play fit (epm-<year>.json, 2025+) wins, and the estimated box-score
+// fit (box-epm-<year>.json, all years) fills the gaps.
+//
+// This ordering is not optional. The players explorer already reads EPM
+// through readImpactForYear, so loading only box-epm here would put two
+// different EPMs for one player-season on the site — Jaden Bradley 2026 is
+// 5.79 by the play-by-play fit and 4.95 by the box estimate.
 const epmByYear = new Map<number, Map<number, number>>();
 async function loadEpm(): Promise<void> {
-  const files = (await fs.readdir(DATA_DIR)).filter((f) => /^box-epm-\d{4}\.json$/.test(f));
-  for (const f of files) {
-    const year = Number(f.slice("box-epm-".length, -".json".length));
-    const j = JSON.parse(await fs.readFile(path.join(DATA_DIR, f), "utf8")) as {
+  const files = await fs.readdir(DATA_DIR);
+  const readInto = async (file: string, year: number, fillOnly: boolean) => {
+    const j = JSON.parse(await fs.readFile(path.join(DATA_DIR, file), "utf8")) as {
       players: Record<string, { epm: number | null }>;
     };
-    const m = new Map<number, number>();
+    let m = epmByYear.get(year);
+    if (!m) { m = new Map<number, number>(); epmByYear.set(year, m); }
     for (const [id, v] of Object.entries(j.players ?? {})) {
-      if (typeof v?.epm === "number" && Number.isFinite(v.epm)) m.set(Number(id), v.epm);
+      if (typeof v?.epm !== "number" || !Number.isFinite(v.epm)) continue;
+      const key = Number(id);
+      if (fillOnly && m.has(key)) continue;
+      m.set(key, v.epm);
     }
-    epmByYear.set(year, m);
+  };
+  let real = 0;
+  for (const f of files.filter((f) => /^epm-\d{4}\.json$/.test(f))) {
+    const year = Number(f.slice("epm-".length, -".json".length));
+    await readInto(f, year, false);
+    real++;
+  }
+  for (const f of files.filter((f) => /^box-epm-\d{4}\.json$/.test(f))) {
+    const year = Number(f.slice("box-epm-".length, -".json".length));
+    await readInto(f, year, true);
   }
   const total = [...epmByYear.values()].reduce((n, m) => n + m.size, 0);
-  console.log(`   box EPM: ${epmByYear.size} seasons, ${total.toLocaleString()} player-seasons`);
+  console.log(`   EPM: ${epmByYear.size} seasons (${real} play-by-play, rest estimated), ${total.toLocaleString()} player-seasons`);
 }
 
 // ---------- Position bucket mapping ----------
