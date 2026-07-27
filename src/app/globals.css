@@ -161,6 +161,19 @@ body {
   font-feature-settings: "tnum" 1;
 }
 
+/* Navbar search opening: the pill swaps to an input in the same slot, and
+ * this makes the swap read as the control sliding wider instead of popping.
+ * Width animates from roughly the pill's footprint to the input's. */
+@keyframes bta-search-grow {
+  from { width: 7rem; opacity: 0.4; }
+}
+.bta-search-grow {
+  animation: bta-search-grow 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .bta-search-grow { animation: none; }
+}
+
 /* Court-line divider — for section breaks */
 .court-divider {
   height: 1px;

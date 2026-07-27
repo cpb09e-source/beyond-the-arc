@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { Menu, X, Search } from "lucide-react";
 import { SearchDialog } from "@/components/search/search-dialog";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -39,14 +38,18 @@ export function SiteHeader() {
   }, [open]);
 
   return (
-    <header className="bg-paper/80 backdrop-blur supports-[backdrop-filter]:bg-paper/60 relative z-40">
+    // z-50: must clear the tables' sticky header cells (z-40), which
+    // otherwise paint over the search dropdown — same z, later in the DOM.
+    // Body-portaled modals still win: equal-or-higher z AND later DOM order.
+    <header className="bg-paper/80 backdrop-blur supports-[backdrop-filter]:bg-paper/60 relative z-50">
       {/* 108rem matches the widest page container on the site (the teams and
           players tables), so the logo and search line up with the table's edges
           instead of floating inside them. Same width on every route — narrower
           pages just leave more air, which beats the nav shifting as you
           navigate. Only visible above 1408px; below that every container is
-          viewport-width anyway. */}
-      <div className="mx-auto max-w-[108rem] px-6 lg:px-10 h-16 flex items-center justify-between">
+          viewport-width anyway.
+          `relative` anchors the search dropdown panel to this container. */}
+      <div className="relative mx-auto max-w-[108rem] px-6 lg:px-10 h-16 flex items-center justify-between">
         <Link
           href="/"
           className="flex items-center group shrink-0"
@@ -152,12 +155,6 @@ export function SiteHeader() {
                 </Link>
               );
             })}
-            <div className="mt-3 pt-3 border-t border-hairline flex items-center justify-between">
-              <span className="text-[0.75rem] uppercase tracking-[0.18em] font-medium text-ink-muted">
-                Theme
-              </span>
-              <ThemeToggle />
-            </div>
           </nav>
         </div>
       )}
