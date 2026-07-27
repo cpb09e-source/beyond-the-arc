@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { dataUrl } from "@/lib/data-url";
 import { StatInfo } from "@/components/players/stat-info";
 import {
-  ShotProfileFallbackCard, ProfileMinis, useShotProfile, seasonLabel,
+  ShotProfileFallbackCard, useShotProfile, seasonLabel,
 } from "@/components/players/player-shot-impact";
 
 /**
@@ -173,7 +173,14 @@ export function PlayerShotChart({
             <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
               <span className="h-px w-6 bg-coral" />{year !== null && seasonLabel(year)} · shot profile &amp; locations
             </div>
-            <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Shot Chart</h2>
+            <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
+              Shot Chart
+              {profile?.tracked != null && (
+                <span className="font-sans text-sm lg:text-base font-normal text-ink-muted tracking-normal ml-2 tabular">
+                  ({profile.tracked.toLocaleString()} tracked shots)
+                </span>
+              )}
+            </h2>
           </div>
           {yrs.length > 1 && (
             <select
@@ -188,6 +195,15 @@ export function PlayerShotChart({
         </div>
 
         <div className="px-5 lg:px-7 py-6">
+          {/* Distance sits above the courts rather than down in the chip band:
+              it's the one control that reshapes what both charts are OF, so it
+              reads as a lens on them rather than another toggle. */}
+          <div className="mb-6 max-w-xs">
+            <DistanceSlider
+              lo={filters.distLo} hi={filters.distHi}
+              onChange={(lo, hi) => setFilters((f) => ({ ...f, distLo: lo, distHi: hi }))}
+            />
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-7 lg:gap-8">
             {/* ---- Volume ---- */}
             <div>
@@ -249,14 +265,9 @@ export function PlayerShotChart({
             </div>
           </div>
 
-          {/* Zone splits used to sit here; they're a Shot Diet panel in the
-              Player Overview now. What's left is the context that belongs to
-              the shooting story rather than to the ranked-stat grid. */}
-          {profile && (
-            <div className="mt-7 pt-6 border-t border-hairline">
-              <ProfileMinis s={profile} />
-            </div>
-          )}
+          {/* Zone splits, assisted rate and FT rate all used to sit here. They
+              live in the Player Overview now — Shot Diet and Shooting — so the
+              card is only the two courts and their controls. */}
         </div>
 
         {/* Filters band */}
@@ -294,13 +305,6 @@ export function PlayerShotChart({
               <Chip label="Away" on={filters.away} toggle={() => setFilters((f) => ({ ...f, away: !f.away }))} />
               <Chip label="Neutral" on={filters.neutral} toggle={() => setFilters((f) => ({ ...f, neutral: !f.neutral }))} />
             </ChipGroup>
-
-            <div className="min-w-56 flex-1 max-w-xs">
-              <DistanceSlider
-                lo={filters.distLo} hi={filters.distHi}
-                onChange={(lo, hi) => setFilters((f) => ({ ...f, distLo: lo, distHi: hi }))}
-              />
-            </div>
 
             <button
               type="button"

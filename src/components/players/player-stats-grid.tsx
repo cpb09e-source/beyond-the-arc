@@ -155,29 +155,41 @@ function ShotDietPanel({ s }: { s: Shooting }) {
     { key: "3PT", pct: s.tp_pct, rate: s.tp_rate, ptile: s.tp_ptile },
   ].filter((z) => z.pct != null || z.rate != null);
 
-  if (zones.length === 0) return null;
+  if (zones.length === 0 && s.asst == null) return null;
   return (
     <div>
       <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-3 flex items-center gap-2">
         <span className="h-px w-6 bg-coral" />
         Shot Diet
       </div>
-      <div className="grid grid-cols-3 md:grid-cols-2 lg:grid-cols-1 gap-2">
+      {/* Same track count as every other panel so all four columns render
+          identical tile widths. Four entries fill it as a clean 2×2 at md+. */}
+      <div className="grid grid-cols-3 md:grid-cols-2 gap-2">
         {zones.map((z) => (
           <ZoneTile key={z.key} label={z.key} pct={z.pct} rate={z.rate} ptile={z.ptile} />
         ))}
+        {s.asst != null && (
+          // No gauge and no tint on purpose. Assisted rate is a role
+          // descriptor, not a graded stat — a centre at 80% assisted is
+          // ordinary and a point guard at 80% is not, so ranking it inside one
+          // cohort would assert a verdict the number doesn't carry. The
+          // sub-line says which direction means what instead.
+          <ZoneTile label="Assisted" pct={s.asst} sub="lower = self-created" ptile={null} rate={null} />
+        )}
       </div>
     </div>
   );
 }
 
 function ZoneTile({
-  label, pct, rate, ptile,
+  label, pct, rate, ptile, sub,
 }: {
   label: string;
   pct: number | null;
   rate: number | null;
   ptile: number | null;
+  /** Replaces the "x% of shots" sub-line (used by the Assisted tile). */
+  sub?: string;
 }) {
   // Same percentile ramp as StatTile so the panel reads as part of the grid.
   const p = ptile ?? 50;
@@ -194,16 +206,18 @@ function ZoneTile({
       style={tileStyle}
     >
       <div className="text-[0.65rem] uppercase tracking-[0.14em] text-ink font-bold mb-1 truncate">{label}</div>
+      {/* Value + gauge on one row, exactly like StatTile, then the third layer
+          on its own full-width line underneath. Nesting it beside the value
+          left it competing with the gauge for a quarter-column and it clipped
+          to "33.5% of sho…". Normal case for the same width reason. */}
       <div className="flex items-end justify-between gap-1 flex-1">
-        <span className="min-w-0">
-          <span className="font-display text-xl lg:text-2xl text-ink tabular leading-none tracking-[-0.02em] block">
-            {f1(pct)}%
-          </span>
-          <span className="text-[0.58rem] uppercase tracking-[0.1em] text-ink-muted tabular block mt-1">
-            {f1(rate)}% of shots
-          </span>
+        <span className="font-display text-xl lg:text-2xl text-ink tabular leading-none tracking-[-0.02em]">
+          {f1(pct)}%
         </span>
         {ptile != null && <PercentileGauge pct={ptile} />}
+      </div>
+      <div className="text-[0.6rem] text-ink-muted tabular mt-1.5 truncate">
+        {sub ?? `${f1(rate)}% of shots`}
       </div>
     </div>
   );
