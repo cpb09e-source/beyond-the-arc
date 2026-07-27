@@ -290,6 +290,7 @@ for (const [key, a] of totals) {
     ts_pct: r3(ts),
     efg_pct: r3(efg),
     fg3_pct: r3(rate(a.fg3m, a.fg3a)),
+    ft_pct: r3(rate(a.ftm, a.fta)),
     fg3a_rate: r3(rate(a.fg3a, a.fga)),
     fta_rate: r3(rate(a.fta, a.fga)),
     orb_pct: r3(orbPct),

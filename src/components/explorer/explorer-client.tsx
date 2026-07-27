@@ -11,7 +11,6 @@ import {
   type TeamRow,
 } from "@/lib/team-filters";
 import { FilterBar } from "@/components/explorer/filter-bar";
-import { SortControls } from "@/components/explorer/sort-controls";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { CompareTeamsModal } from "@/components/explorer/compare-teams-modal";
 import { TeamLogo } from "@/components/team-logo";
@@ -51,16 +50,18 @@ type TeamCol = {
   sortKey: string;
   /** Sorting ascending is the "good" direction (defensive rating, turnovers). */
   lowerBetter?: boolean;
-  fmt: "num1" | "signed";
+  fmt: "num1" | "signed" | "pct1";
   title: string;
 };
 
+// Labels drop the "a" prefix — the band caption says "(ADJUSTED)" once, which
+// is less noisy than repeating it on every column head.
 const RATING_COLS: TeamCol[] = [
-  { label: "aNET",  total: "a_net",   pct: "a_net",   sortKey: "a_net",   fmt: "num1", title: "Schedule-adjusted net rating — points per 100 possessions vs an average D-I opponent on a neutral floor" },
-  { label: "aORTG", total: "a_ortg",  pct: "a_ortg",  sortKey: "a_ortg",  fmt: "num1", title: "Schedule-adjusted offensive rating — points scored per 100 possessions" },
-  { label: "aDRTG", total: "a_drtg",  pct: "a_drtg",  sortKey: "a_drtg",  fmt: "num1", lowerBetter: true, title: "Schedule-adjusted defensive rating — points allowed per 100 possessions (lower is better)" },
-  { label: "SOS",   total: "adj_sos", pct: "adj_sos", sortKey: "adj_sos", fmt: "num1", title: "Strength of schedule — average opponent adjusted net rating" },
-  { label: "PACE",  total: "cbb_pace", pct: "cbb_pace", sortKey: "cbb_pace", fmt: "num1", title: "Possessions per game" },
+  { label: "NET",  total: "a_net",   pct: "a_net",   sortKey: "a_net",   fmt: "num1", title: "Schedule-adjusted net rating — points per 100 possessions vs an average D-I opponent on a neutral floor" },
+  { label: "ORTG", total: "a_ortg",  pct: "a_ortg",  sortKey: "a_ortg",  fmt: "num1", title: "Schedule-adjusted offensive rating — points scored per 100 possessions" },
+  { label: "DRTG", total: "a_drtg",  pct: "a_drtg",  sortKey: "a_drtg",  fmt: "num1", lowerBetter: true, title: "Schedule-adjusted defensive rating — points allowed per 100 possessions (lower is better)" },
+  { label: "SOS",  total: "adj_sos", pct: "adj_sos", sortKey: "adj_sos", fmt: "num1", title: "Strength of schedule — average opponent adjusted net rating" },
+  { label: "PACE", total: "cbb_pace", pct: "cbb_pace", sortKey: "cbb_pace", fmt: "num1", title: "Possessions per game" },
 ];
 
 const FOUR_FACTOR_COLS: TeamCol[] = [
@@ -70,7 +71,15 @@ const FOUR_FACTOR_COLS: TeamCol[] = [
   { label: "TOV",  total: "tov_diff_ct",  perGame: "tov_diff_pg",   pct: "tov_diff_pg",   sortKey: "tov_diff_ct",  fmt: "signed", lowerBetter: true, title: "Turnovers − opponent turnovers (negative is good)" },
 ];
 
-const ALL_COLS = [...RATING_COLS, ...FOUR_FACTOR_COLS];
+const SHOOTING_COLS: TeamCol[] = [
+  { label: "eFG%",  total: "cbb_efg",     pct: "cbb_efg",     sortKey: "cbb_efg",     fmt: "pct1", title: "Effective field-goal % — (FGM + 0.5 × 3PM) / FGA" },
+  { label: "3P%",   total: "cbb_fg3",     pct: "cbb_fg3",     sortKey: "cbb_fg3",     fmt: "pct1", title: "3-point %" },
+  { label: "3PA Rate",  total: "cbb_fg3rate", pct: "cbb_fg3rate", sortKey: "cbb_fg3rate", fmt: "pct1", title: "3-point attempt rate — 3PA / FGA, how much of the offense comes from deep" },
+  { label: "FT%",   total: "cbb_ft",      pct: "cbb_ft",      sortKey: "cbb_ft",      fmt: "pct1", title: "Free-throw %" },
+  { label: "FTA Rate",  total: "cbb_ftarate", pct: "cbb_ftarate", sortKey: "cbb_ftarate", fmt: "pct1", title: "Free-throw attempt rate — FTA / FGA, how often the team gets to the line" },
+];
+
+const ALL_COLS = [...RATING_COLS, ...FOUR_FACTOR_COLS, ...SHOOTING_COLS];
 
 /** One opaque hover fill so the frozen and scrolling halves read as one row. */
 const ROW_HOVER = "group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))]";
@@ -79,6 +88,7 @@ const FF_BAND_TINT = "bg-[color-mix(in_oklab,var(--coral)_3%,transparent)]";
 
 function fmtColValue(v: number | null | undefined, fmt: TeamCol["fmt"]): string {
   if (v === null || v === undefined) return "—";
+  if (fmt === "pct1") return (v * 100).toFixed(1) + "%";
   if (fmt === "signed") return (v > 0 ? "+" : "") + v.toLocaleString("en-US", { maximumFractionDigits: 0 });
   return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
@@ -173,20 +183,20 @@ export function ExplorerClient({
 
   // Conference rankings — locked to the most-recent season available, regardless
   // of the explorer's current year selection. Drops the worst 2 teams in each
-  // conference before averaging BTA RTG (filters out cellar dwellers so the
+  // conference before averaging aNET (filters out cellar dwellers so the
   // ranking reflects the conference's competitive core).
   const latestYear = useMemo(() => Math.max(...allTeams.map((t) => t.year)), [allTeams]);
   const conferenceRankings = useMemo(() => {
     // limit: -1 disables the explorer's default top-50 cap. Without this, we'd
-    // only see teams that crack the national top-50 BTA RTG, hiding most of
+    // only see teams that crack the national top-50 aNET, hiding most of
     // each mid-major conference and inflating the averages.
     const scopedSpec = { ...parseSpec({}), years: [latestYear], limit: -1 };
     const { rows: scoped } = processTeams(allTeams, scopedSpec);
     const byConf = new Map<string, number[]>();
     for (const r of scoped) {
-      if (!r.team_conference || r.bta_rtg === null) continue;
+      if (!r.team_conference || r.a_net === null) continue;
       const arr = byConf.get(r.team_conference) ?? [];
-      arr.push(r.bta_rtg);
+      arr.push(r.a_net);
       byConf.set(r.team_conference, arr);
     }
     return Array.from(byConf.entries())
@@ -204,79 +214,70 @@ export function ExplorerClient({
     <>
       <FilterBar conferences={conferences} teams={teamNames} conferenceRankings={conferenceRankings} years={[latestYear]} />
 
-      {/* Headline-ledger treatment matches /coaches and /players. */}
-      <div id="teams-table" className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-6 scroll-mt-4 -mx-6 lg:mx-0">
-        {/* Top accent rule. */}
-        <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
-        <div className="px-4 lg:px-7 pt-5 pb-1 lg:pt-6 lg:pb-4 bg-paper-deep/30 flex items-end justify-between gap-4 flex-wrap">
-          <div>
-            <div className="flex items-baseline gap-4 flex-wrap">
-              <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
-                Teams
-              </h2>
-              <button
-                type="button"
-                onClick={() => setCompareOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-coral/40 bg-coral/[0.06] text-coral text-[0.65rem] uppercase tracking-widest font-bold hover:bg-coral/10 hover:border-coral/60 transition-colors"
-              >
-                <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                  <path d="M16 3h5v5" />
-                  <path d="M8 21H3v-5" />
-                  <path d="M21 3l-7 7" />
-                  <path d="M3 21l7-7" />
-                </svg>
-                Compare Teams
-              </button>
-            </div>
-            <div className="mt-2 text-sm text-ink-muted">
-              <span className="font-display text-xl text-ink tabular leading-none">{rows.length.toLocaleString()}</span>
-              {count > rows.length && (
-                <span className="text-ink-muted"> of {count.toLocaleString()}</span>
-              )}{" "}
-              teams
-              {count > rows.length && (
-                <span className="text-ink-muted hidden md:inline"> · showing first {rows.length}</span>
+      {/* Same card shell as the /players leaderboard, down to the edge-to-edge
+          treatment on mobile and the rounded card + ring on desktop. */}
+      <div id="teams-table" className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-4 scroll-mt-4 -mx-6 lg:mx-0">
+        {/* Compact toolbar, matching /players: search + compare on the left,
+            sort/order/show on the right, one row, table starts immediately
+            below. Replaces a "headline ledger" (accent rule, display-font
+            <h2>Teams</h2>, big count) that made this page read as a different
+            product from the players table it sits beside in the nav. The page
+            heading lives in the page shell now, not inside the data card. */}
+        <div className="px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {/* Desktop search */}
+            <div className="relative hidden lg:block">
+              <SearchGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" />
+              <input
+                type="search"
+                value={tableSearch}
+                onChange={(e) => setTableSearch(e.target.value)}
+                placeholder="Search team"
+                aria-label="Search teams in table"
+                className="h-8 w-56 pl-8 pr-8 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+              />
+              {tableSearch && (
+                <button
+                  type="button"
+                  onClick={() => setTableSearch("")}
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-base leading-none w-5 h-5 inline-flex items-center justify-center rounded hover:bg-paper-deep"
+                >
+                  ×
+                </button>
               )}
             </div>
-          </div>
-          <div className="relative flex items-end gap-2 lg:gap-3 w-full lg:w-auto">
-            {/* Desktop search — full input with label (hidden on mobile) */}
-            <label className="hidden lg:flex flex-col gap-1">
-              <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Search</span>
-              <div className="relative">
-                <SearchGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none" />
-                <input
-                  type="search"
-                  value={tableSearch}
-                  onChange={(e) => setTableSearch(e.target.value)}
-                  placeholder="Search team…"
-                  aria-label="Search teams in table"
-                  className="h-9 w-52 pl-8 pr-8 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
-                />
-                {tableSearch && (
-                  <button
-                    type="button"
-                    onClick={() => setTableSearch("")}
-                    aria-label="Clear search"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-base leading-none w-5 h-5 inline-flex items-center justify-center rounded hover:bg-paper-deep"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            </label>
 
-            {/* Sort by / Order / Show — shares the mobile line with the search icon */}
-            <div className="flex-1 lg:flex-initial min-w-0">
-              <SortControls />
-            </div>
+            <button
+              type="button"
+              onClick={() => setCompareOpen(true)}
+              title="Compare teams"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-coral/40 bg-coral/6 text-coral text-[0.6rem] uppercase tracking-widest font-bold hover:bg-coral/10 hover:border-coral/60 transition-colors whitespace-nowrap"
+            >
+              <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M16 3h5v5" /><path d="M8 21H3v-5" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" />
+              </svg>
+              Compare
+            </button>
+
+            <span className="text-xs text-ink-muted whitespace-nowrap tabular">
+              <span className="text-ink font-medium">{rows.length.toLocaleString()}</span>
+              {count > rows.length && <> of {count.toLocaleString()}</>} teams
+            </span>
+          </div>
+
+          <div className="relative flex items-center gap-2 lg:gap-3 min-w-0">
+            {/* No sort-by / order selects. Sorting happens by clicking a column
+                header, which is how /players works — two controls doing a job
+                the table header already does was part of what made these pages
+                feel unrelated. */}
 
             {/* Mobile search icon */}
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
               aria-label="Search teams"
-              className="lg:hidden shrink-0 h-9 w-9 inline-flex items-center justify-center rounded-md border border-ink/15 bg-card text-ink-muted hover:text-ink hover:border-ink/25 shadow-sm transition-colors"
+              className="lg:hidden shrink-0 h-8 w-8 inline-flex items-center justify-center rounded-md border border-ink/15 bg-card text-ink-muted hover:text-ink hover:border-ink/25 shadow-sm transition-colors"
             >
               <SearchGlass className="w-4 h-4" />
             </button>
@@ -300,14 +301,14 @@ export function ExplorerClient({
                   onChange={(e) => setTableSearch(e.target.value)}
                   placeholder="Search team…"
                   aria-label="Search teams in table"
-                  className="h-9 w-full pl-8 pr-3 rounded-md border border-ink/15 bg-card text-ink text-base placeholder:text-ink-muted shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40"
+                  className="h-8 w-full pl-8 pr-3 rounded-md border border-ink/15 bg-card text-ink text-base placeholder:text-ink-muted shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40"
                 />
               </div>
               <button
                 type="button"
                 onClick={() => { setSearchOpen(false); setTableSearch(""); }}
                 aria-label="Close search"
-                className="shrink-0 h-9 px-2.5 text-sm font-medium text-coral hover:text-ink"
+                className="shrink-0 h-8 px-2.5 text-sm font-medium text-coral hover:text-ink"
               >
                 Done
               </button>
@@ -329,10 +330,13 @@ export function ExplorerClient({
                 <th className="sticky top-0 left-12 z-40 bg-paper-deep h-6 p-0" />
                 <th colSpan={multiYear ? 3 : 2} className="sticky top-0 z-30 bg-paper-deep h-6 p-0" />
                 <th colSpan={RATING_COLS.length} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-ink-muted text-center border-l border-hairline align-middle">
-                  Ratings
+                  Ratings <span className="text-ink-muted/70">(ADJUSTED)</span>
                 </th>
                 <th colSpan={FOUR_FACTOR_COLS.length} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-coral text-center border-l border-hairline align-middle">
                   Four Factors
+                </th>
+                <th colSpan={SHOOTING_COLS.length} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-ink-muted text-center border-l border-hairline align-middle">
+                  Shooting
                 </th>
               </tr>
               <tr>
@@ -411,17 +415,27 @@ export function ExplorerClient({
                           )}
                         >
                           <span className="inline-flex flex-col items-end gap-0.5 leading-tight">
-                            <span className={cn(c.label === "aNET" && "font-semibold text-ink")}>
-                              {fmtColValue(total, c.fmt)}
-                            </span>
-                            {/* Per-game beneath the total, so a differential answers
-                                "how big overall" and "how big per night" at once.
-                                Where the total is unavailable (fast break on older
-                                seasons) the per-game figure still carries the column. */}
-                            {c.perGame && perGame !== null && (
-                              <span className="text-[0.6rem] text-ink-muted">
-                                {(perGame > 0 ? "+" : "") + perGame.toFixed(1)}/g
+                            {/* Season total is the value. When it's unavailable —
+                                fast break before 2023, where too few games tracked
+                                the split to total honestly — fall back to the
+                                per-game figure rather than an empty dash. It keeps
+                                its "/g" so the two are never confused: a bare
+                                number in a totals column that silently switched
+                                units would be worse than the dash it replaced. */}
+                            {total !== null ? (
+                              <span className={cn(c.label === "NET" && "font-semibold text-ink")}>
+                                {fmtColValue(total, c.fmt)}
                               </span>
+                            ) : c.perGame && perGame !== null ? (
+                              <span
+                                className="text-ink-soft"
+                                title="Season total unavailable — too few games tracked this split. Showing the per-game average over the games that did."
+                              >
+                                {(perGame > 0 ? "+" : "") + perGame.toFixed(1)}
+                                <span className="text-[0.6rem] text-ink-muted">/g</span>
+                              </span>
+                            ) : (
+                              <span className="text-ink-muted">—</span>
                             )}
                             <PercentileChip pct={r.pct[c.pct] ?? null} />
                           </span>

@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { SlidersHorizontal, ChevronDown } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import {
   FILTER_COLUMNS,
   GROUP_LABEL,
@@ -81,8 +81,6 @@ export function FilterBar({
     filters: urlSpec.filters,
   });
   const [showRankings, setShowRankings] = useState(false);
-  // Collapsed by default on mobile to save vertical space; always open on lg+.
-  const [open, setOpen] = useState(false);
 
   // Re-sync draft when the URL changes from outside (browser nav, sort click
   // doesn't affect these fields but the dep is safe). Cheap because state
@@ -104,7 +102,7 @@ export function FilterBar({
   function addFilter() {
     setDraft((d) => ({
       ...d,
-      filters: [...d.filters, { stat: "bta_rtg", op: "gt", value: 0 }],
+      filters: [...d.filters, { stat: "a_net", op: "gt", value: 0 }],
     }));
   }
   function removeFilter(i: number) {
@@ -151,26 +149,12 @@ export function FilterBar({
   }, [conferences]);
 
   return (
-    <div className={cn("bg-paper-deep/25 border border-hairline border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-sm -mx-6 lg:mx-0", pending && "opacity-70")}>
-      {/* Mobile collapse toggle — hidden on desktop where the bar is always open */}
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className={cn(
-          "lg:hidden w-full flex items-center justify-between px-4 py-3.5",
-          open && "border-b border-hairline",
-        )}
-      >
-        <span className="flex items-center gap-2 text-xs uppercase tracking-widest text-ink-muted font-semibold">
-          <SlidersHorizontal size={15} /> Filters &amp; scope
-        </span>
-        <ChevronDown size={18} className={cn("text-ink-muted transition-transform", open && "rotate-180")} />
-      </button>
-
-      <div className={cn(open ? "block" : "hidden", "lg:block")}>
-      {/* Top row — primary scope */}
-      <div className="flex flex-wrap items-end gap-3 p-4 lg:p-5 border-b border-hairline">
+    // Slim scope bar, no card — same shape as PlayerFilterBar. The bordered
+    // panel and its mobile collapse toggle are gone: /players puts scope selects
+    // on a bare row and hides stat filters behind a button, and matching that is
+    // the point of this pass.
+    <div className={cn("relative flex flex-wrap items-end gap-2 mb-3", pending && "opacity-70")}>
+      <div className="flex flex-wrap items-end gap-2">
         <Field label="Seasons">
           <MultiYearSelect
             years={draft.years}
@@ -221,8 +205,8 @@ export function FilterBar({
         />
       )}
 
-      {/* Stat filter rows */}
-      <div className="p-4 lg:p-5 space-y-2">
+      <FilterPopover activeCount={draft.filters.length} dirty={dirty}>
+      <div className="space-y-2">
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">
             Filters
@@ -304,7 +288,76 @@ export function FilterBar({
           </div>
         </div>
       </div>
-      </div>
+      </FilterPopover>
+    </div>
+  );
+}
+
+/**
+ * Popover housing the stat-filter rows.
+ *
+ * A trigger showing the active-filter count and a panel that opens beneath it.
+ * Absolutely positioned so opening it never reflows the table, and it closes on
+ * Escape or an outside click.
+ *
+ * These rows used to sit permanently expanded inside a bordered card, which is
+ * what made this page a tall panel while /players was a single slim row. Same
+ * affordance as the Filters drawer there.
+ */
+function FilterPopover({
+  activeCount,
+  dirty,
+  children,
+}: {
+  activeCount: number;
+  dirty: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const onDown = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      {/* Spacer matches the <Field> labels beside it so the button baseline
+          lines up with the selects. */}
+      <span className="block text-[0.6rem] uppercase tracking-widest text-transparent select-none mb-1" aria-hidden>Filters</span>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className={cn(
+          "h-9 inline-flex items-center gap-1.5 px-3 rounded-md border text-sm shadow-sm transition-colors",
+          activeCount > 0 || dirty
+            ? "border-coral/50 bg-coral/6 text-coral"
+            : "border-ink/15 bg-card text-ink hover:border-ink/25",
+        )}
+      >
+        <SlidersHorizontal size={14} />
+        Filters
+        {activeCount > 0 && (
+          <span className="ml-0.5 inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-coral text-white text-[0.6rem] font-bold tabular">
+            {activeCount}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-2 z-50 w-[min(46rem,calc(100vw-3rem))] max-h-[70vh] overflow-y-auto bg-card border border-ink/15 rounded-xl shadow-xl ring-1 ring-ink/5 p-4">
+          {children}
+        </div>
+      )}
     </div>
   );
 }

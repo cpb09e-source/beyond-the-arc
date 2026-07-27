@@ -88,7 +88,9 @@ const ROWS: Row[] = [
   { key: "tourney", label: "Tournament finish", dir: "depth", value: (_t, ctx) => ctx.tourneyFinish, format: fmtTourney },
 
   // ── Ratings ─────────────────────────────────────────
-  { section: "Ratings", key: "bta_rtg", label: "BTA RTG", dir: "higher", value: (t) => t.bta_rtg, format: fmtNum1, pctKey: "bta_rtg" },
+  { section: "Ratings", key: "a_net",  label: "NET",  dir: "higher", value: (t) => t.a_net,  format: fmtNum1, pctKey: "a_net" },
+  { section: "Ratings", key: "a_ortg", label: "ORTG", dir: "higher", value: (t) => t.a_ortg, format: fmtNum1, pctKey: "a_ortg" },
+  { section: "Ratings", key: "a_drtg", label: "DRTG", dir: "lower",  value: (t) => t.a_drtg, format: fmtNum1, pctKey: "a_drtg" },
   { key: "bta_net", label: "Adj Net Rtg", dir: "higher", value: (t) => t.bta_net, format: fmtNum1Signed, pctKey: "bta_net" },
   { key: "bta_ortg", label: "Adj ORtg", dir: "higher", value: (t) => t.bta_ortg, format: fmtNum1, pctKey: "bta_ortg" },
   { key: "bta_drtg", label: "Adj DRtg", dir: "lower", value: (t) => t.bta_drtg, format: fmtNum1, pctKey: "bta_drtg" },
@@ -205,7 +207,7 @@ export function CompareTeamsModal({
           conf: [],
           teams: [],
           filters: [],
-          sortBy: "bta_rtg",
+          sortBy: "a_net",
           sortDir: "desc",
           limit: -1,
         };

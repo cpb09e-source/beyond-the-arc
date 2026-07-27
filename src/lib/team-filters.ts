@@ -31,11 +31,7 @@ export type TeamStatColumn = {
 // without exposing it in the user-facing filter UI.
 export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   // ── Overall ──────────────────────────────────────────────
-  { key: "rank",       source: "trank",   dbColumn: "rank",    label: "BTA RTG",     desc: "Bart's overall ranking (we surface BTA RTG score elsewhere; this is the per-season rank position)", format: "rank", group: "overall", hideInFilter: true },
-  { key: "bta_rtg",    source: "derived", dbColumn: "",        label: "BTA RTG",     desc: "Weighted z-score composite (Bart adj ORtg/DRtg + CBBD adj ORtg/DRtg + SoS), scaled ×40. ~0 = average D-I team, +75 = elite, +100 = generational.", format: "num1", group: "overall" },
-  { key: "bta_net",    source: "derived", dbColumn: "",        label: "Adj Net Rtg", desc: "Adj ORtg − Adj DRtg. Point differential per 100 possessions vs an average D-I opponent on a neutral floor.",                                                                                                              format: "num1", group: "overall" },
-  { key: "bta_ortg",   source: "derived", dbColumn: "",        label: "Adj ORtg",    desc: "Average of Bart adj ORtg and CBBD adj ORtg",                                                                                                                                                                                       format: "num1", group: "overall" },
-  { key: "bta_drtg",   source: "derived", dbColumn: "",        label: "Adj DRtg",    desc: "Average of Bart adj DRtg and CBBD adj DRtg",                                                                                                                                                                                       format: "num1", group: "overall" },
+  { key: "rank",       source: "trank",   dbColumn: "rank",    label: "Rank",     desc: "Bart's overall ranking (we surface BTA RTG score elsewhere; this is the per-season rank position)", format: "rank", group: "overall", hideInFilter: true },
   // Our own schedule-adjusted ratings (scripts/build-adjusted-ratings.mjs).
   // These are the D&T-style headline set and replace BTA RTG as the default.
   { key: "a_net",      source: "cbbd", dbColumn: "a_net",   label: "aNET",   desc: "Schedule-adjusted net rating — points per 100 possessions vs an average D-I opponent on a neutral floor", format: "num1", group: "overall" },
@@ -54,6 +50,7 @@ export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   { key: "cbb_ts",       source: "cbbd", dbColumn: "ts_pct",     label: "TS%",        desc: "True shooting %",                  format: "pct1", group: "scoring" },
   { key: "cbb_efg",      source: "cbbd", dbColumn: "efg_pct",    label: "eFG%",       desc: "Effective FG%",                    format: "pct1", group: "scoring" },
   { key: "cbb_fg3",      source: "cbbd", dbColumn: "fg3_pct",    label: "3P%",        desc: "3-point %",                        format: "pct1", group: "scoring" },
+  { key: "cbb_ft",       source: "cbbd", dbColumn: "ft_pct",     label: "FT%",        desc: "Free-throw %",                     format: "pct1", group: "scoring" },
   { key: "cbb_fg3rate",  source: "cbbd", dbColumn: "fg3a_rate",  label: "3PA Rate",   desc: "3PA / FGA (3-point reliance)",      format: "pct1", group: "scoring" },
   { key: "cbb_ftarate",  source: "cbbd", dbColumn: "fta_rate",   label: "FTA Rate",   desc: "Free-throws attempted / FGA",      format: "pct1", group: "scoring" },
   { key: "cbb_orb",      source: "cbbd", dbColumn: "orb_pct",    label: "OREB%",      desc: "Offensive rebound %",              format: "pct1", group: "scoring" },
@@ -294,6 +291,7 @@ export type TeamRow = {
   cbb_orb: number | null;
   cbb_ftarate: number | null;
   cbb_fg3: number | null;
+  cbb_ft: number | null;
   cbb_fg3rate: number | null;
   cbb_ast: number | null;
   cbb_efg_def: number | null;
@@ -446,6 +444,7 @@ export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { r
       cbb_orb: cbb?.orb_pct ?? null,
       cbb_ftarate: cbb?.fta_rate ?? null,
       cbb_fg3: cbb?.fg3_pct ?? null,
+      cbb_ft: cbb?.ft_pct ?? null,
       cbb_fg3rate: cbb?.fg3a_rate ?? null,
       cbb_ast: cbb?.ast_pct ?? null,
       cbb_efg_def: cbb?.efg_pct_def ?? null,
@@ -593,14 +592,13 @@ function diff(a: number | null | undefined, b: number | null | undefined): numbe
 // `higherBetter: false` flips the sort so "lower is better" stats (Adj DRtg,
 // Opp eFG%) get green chips at low values.
 const PERCENTILE_STATS: Array<{ key: keyof TeamRow; higherBetter: boolean }> = [
-  { key: "bta_rtg",     higherBetter: true },
-  { key: "bta_net",     higherBetter: true },
-  { key: "bta_ortg",    higherBetter: true },
-  { key: "bta_drtg",    higherBetter: false },
   { key: "adjt",        higherBetter: true },
   { key: "cbb_ts",      higherBetter: true },
   { key: "cbb_efg",     higherBetter: true },
   { key: "cbb_fg3",     higherBetter: true },
+  { key: "cbb_ft",      higherBetter: true },
+  { key: "cbb_fg3rate", higherBetter: true },
+  { key: "cbb_ftarate", higherBetter: true },
   { key: "cbb_efg_def", higherBetter: false },
   // Four Factors columns in the Team Explorer table — positive diffs are good
   // for everything except turnovers (more TOVs than the opponent = bad).

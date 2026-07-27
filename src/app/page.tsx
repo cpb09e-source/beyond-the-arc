@@ -77,15 +77,17 @@ export default async function HomePage() {
   return (
     <>
       <section className="hidden md:block">
-        <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-10 pb-2">
+        <div className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-10 pb-2">
           <div className="flex items-center justify-end gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium">
             <ThemeToggle />
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-4 pb-8">
-        <Suspense fallback={<div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-10 text-center text-ink-muted">Loading explorer…</div>}>
+      {/* Same padding rhythm as /players so the two tables sit at the same
+          height on the page. */}
+      <section className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-4 pb-8 lg:pt-5 lg:pb-10">
+        <Suspense fallback={<div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-10 text-center text-ink-muted">Loading teams…</div>}>
           <ExplorerClient
             allTeams={allTeams}
             confsByYear={confsByYear}
@@ -95,16 +97,21 @@ export default async function HomePage() {
         </Suspense>
       </section>
 
-      <div className="mx-auto max-w-[88rem] px-6 lg:px-10 my-4">
+      <div className="mx-auto max-w-[108rem] px-6 lg:px-10 my-4">
         <div className="court-divider" />
       </div>
 
-      <section className="mx-auto max-w-[88rem] px-6 lg:px-10">
+      {/* Explains the HEADLINE column. This used to describe BTA RTG, which is
+          no longer what the table leads with — a footnote defining a metric the
+          reader can't see is worse than no footnote. */}
+      <section className="mx-auto max-w-[108rem] px-6 lg:px-10 pb-10">
         <p className="text-sm text-ink-muted max-w-2xl leading-relaxed">
-          <span className="text-ink">BTA RTG</span> is our weighted z-score
-          composite of both adjusted offensive and defensive ratings, SoS,
-          standardized within the seasons you have selected and scaled. ~0 = an
-          average D-I team, +75 = elite, +100 = a generational season.
+          <span className="text-ink">aNET</span> is our schedule-adjusted net
+          rating — points per 100 possessions against an average D-I opponent on
+          a neutral floor. Offense and defense are solved together across every
+          game of the season, so beating a good defense counts for more than
+          beating a bad one. <span className="text-ink">SOS</span> is the average
+          adjusted net rating of the opponents faced.
         </p>
       </section>
     </>
