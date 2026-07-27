@@ -47,12 +47,23 @@ const rate = (num, den) => (den > 0 && Number.isFinite(num) ? num / den : null);
 /** Coverage a split needs before its SHARE is worth reporting. */
 const SHARE_MIN_COVERAGE = 0.5;
 /**
- * Coverage a split needs before its season TOTAL is reported. Not 1.0: a single
- * game dropped for an unrelated reason (a corrupt row rejected by trackedSplit)
- * shouldn't blank a whole season, but anything below this is a partial sum
- * masquerading as a total.
+ * Coverage a split needs before its season TOTAL is reported.
+ *
+ * Set by measurement, not taste. 2026 has ~99% coverage, so its totals are
+ * effectively ground truth; simulating thinner coverage on it and extrapolating
+ * back gives the error you would ship at that coverage:
+ *
+ *   coverage   median error   estimates with the WRONG SIGN
+ *      44%          34                    16%
+ *      60%          26                    13%
+ *      75%          18                    11%
+ *      90%          10                     6%
+ *
+ * A typical season fast-break differential is about ±62, so at 44% the error is
+ * more than half the signal and one team in six would be shown winning a battle
+ * it lost. At 90% the estimate is close enough to be worth having.
  */
-const TOTAL_MIN_COVERAGE = 0.95;
+const TOTAL_MIN_COVERAGE = 0.90;
 
 /** Split share (e.g. fast-break points / points scored) over tracked games. */
 function splitShare(b, games) {
@@ -60,10 +71,20 @@ function splitShare(b, games) {
   return r3(rate(b.own, b.pts));
 }
 
-/** Season split differential, or null when coverage is too thin to total up. */
+/**
+ * Season split differential, scaled to the full season, or null when coverage is
+ * too thin to be worth estimating.
+ *
+ * EXTRAPOLATED, NOT SUMMED. Returning the raw sum over tracked games would
+ * systematically UNDERCOUNT — a team with 92% coverage would show ~92% of its
+ * real differential, and the shortfall would vary team to team, which is exactly
+ * the kind of quiet bias that makes a leaderboard wrong in a way nobody notices.
+ * Scaling the per-tracked-game rate up to the games actually played is unbiased.
+ * Above the coverage floor the two barely differ; below it, neither is offered.
+ */
 function splitTotal(b, games) {
-  if (games === 0 || b.n / games < TOTAL_MIN_COVERAGE) return null;
-  return b.own - b.opp;
+  if (games === 0 || b.n === 0 || b.n / games < TOTAL_MIN_COVERAGE) return null;
+  return Math.round(((b.own - b.opp) / b.n) * games);
 }
 
 /**
@@ -299,6 +320,17 @@ for (const [key, a] of totals) {
     drb_diff: a.drb - a.o_drb,
     reb_diff: a.reb - a.o_reb,
     tov_diff_ct: a.tov - a.o_tov,
+
+    // ---- BTA's Four Factors, per game ----
+    // REB / 3PM / FBP / TOV differential. These come from the box and so have
+    // full coverage as season totals, but they are ALSO published per-game
+    // because the fourth factor (fast break) only exists per-game — CBBD's
+    // untracked-split problem means its season total is honest on ~1,200 of
+    // 4,631 team-seasons. Showing "+416 REB" beside "+1.82 FBP" in one group
+    // would be incoherent, so the group is uniformly per-game.
+    reb_diff_pg: a.games > 0 ? r2((a.reb - a.o_reb) / a.games) : null,
+    fg3m_diff_pg: a.games > 0 ? r2((a.fg3m - a.o_fg3m) / a.games) : null,
+    tov_diff_pg: a.games > 0 ? r2((a.tov - a.o_tov) / a.games) : null,
     // Season TOTALS, so they are only emitted at effectively full coverage. A
     // partial sum is not a smaller version of the real differential — it is a
     // different quantity — and these feed BTA's Four Factors (REB / 3PM / FBP /

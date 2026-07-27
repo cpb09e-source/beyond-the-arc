@@ -8,6 +8,7 @@ import {
   parseSpec,
   processTeams,
   type RawTeamSeason,
+  type TeamRow,
 } from "@/lib/team-filters";
 import { FilterBar } from "@/components/explorer/filter-bar";
 import { SortControls } from "@/components/explorer/sort-controls";
@@ -18,14 +19,6 @@ import { TourneyBadge } from "@/components/tourney-badge";
 import { PercentileChip } from "@/components/percentile-chip";
 import { confDisplay } from "@/lib/conf-display";
 
-function fmtNum(x: number | null, digits = 1): string {
-  if (x === null || x === undefined) return "—";
-  return x.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
-}
-function fmtPct(x: number | null): string {
-  if (x === null || x === undefined) return "—";
-  return (x * 100).toLocaleString("en-US", { maximumFractionDigits: 1 }) + "%";
-}
 function teamSlug(name: string): string {
   return name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
@@ -33,30 +26,63 @@ function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
 }
 
-function btaColor(v: number | null): string {
-  if (v === null) return "text-ink-muted";
-  if (v >= 75) return "text-coral font-medium";
-  if (v >= 40) return "text-coral/80";
-  if (v >= 10) return "text-ink";
-  if (v <= -75) return "text-ink/40";
-  if (v <= -40) return "text-ink-muted";
-  return "text-ink-soft";
+/**
+ * The default column set, in display order.
+ *
+ * Deliberately mirrors the /players grid: one entry per column, a band label
+ * spanning a group, a percentile chip under every value. Same shape, same
+ * visual language, so moving between the two pages feels like one product.
+ *
+ * `total` is the hero value and `perGame` the small figure beneath it. Only the
+ * Four Factors carry both — a rating is already a rate, but a differential reads
+ * naturally either way, and seeing "+416" with "10.95/g" under it answers both
+ * "how big was the edge" and "how big per night" at once.
+ *
+ * CHIPS RANK ON THE PER-GAME VALUE. Fast-break totals exist for ~1,500
+ * team-seasons but the per-game figure for ~3,800, so ranking on the total would
+ * place a team against a biased slice of its own era instead of the whole era.
+ */
+type TeamCol = {
+  label: string;
+  total: keyof TeamRow;
+  perGame?: keyof TeamRow;
+  /** Key into `row.pct` — the percentile the chip renders. */
+  pct: string;
+  sortKey: string;
+  /** Sorting ascending is the "good" direction (defensive rating, turnovers). */
+  lowerBetter?: boolean;
+  fmt: "num1" | "signed";
+  title: string;
+};
+
+const RATING_COLS: TeamCol[] = [
+  { label: "aNET",  total: "a_net",   pct: "a_net",   sortKey: "a_net",   fmt: "num1", title: "Schedule-adjusted net rating — points per 100 possessions vs an average D-I opponent on a neutral floor" },
+  { label: "aORTG", total: "a_ortg",  pct: "a_ortg",  sortKey: "a_ortg",  fmt: "num1", title: "Schedule-adjusted offensive rating — points scored per 100 possessions" },
+  { label: "aDRTG", total: "a_drtg",  pct: "a_drtg",  sortKey: "a_drtg",  fmt: "num1", lowerBetter: true, title: "Schedule-adjusted defensive rating — points allowed per 100 possessions (lower is better)" },
+  { label: "SOS",   total: "adj_sos", pct: "adj_sos", sortKey: "adj_sos", fmt: "num1", title: "Strength of schedule — average opponent adjusted net rating" },
+  { label: "PACE",  total: "cbb_pace", pct: "cbb_pace", sortKey: "cbb_pace", fmt: "num1", title: "Possessions per game" },
+];
+
+const FOUR_FACTOR_COLS: TeamCol[] = [
+  { label: "REB",  total: "reb_diff_ct",  perGame: "reb_diff_pg",   pct: "reb_diff_pg",   sortKey: "reb_diff_ct",  fmt: "signed", title: "Rebounds − opponent rebounds" },
+  { label: "3PM",  total: "fg3m_diff_ct", perGame: "fg3m_diff_pg",  pct: "fg3m_diff_pg",  sortKey: "fg3m_diff_ct", fmt: "signed", title: "3-pointers made − allowed" },
+  { label: "FBP",  total: "fbpts_diff",   perGame: "fbpts_diff_pg", pct: "fbpts_diff_pg", sortKey: "fbpts_diff",   fmt: "signed", title: "Fast-break points − allowed. The season total needs 90% of games to have tracked the split, so it is blank on older seasons where the per-game figure still stands." },
+  { label: "TOV",  total: "tov_diff_ct",  perGame: "tov_diff_pg",   pct: "tov_diff_pg",   sortKey: "tov_diff_ct",  fmt: "signed", lowerBetter: true, title: "Turnovers − opponent turnovers (negative is good)" },
+];
+
+const ALL_COLS = [...RATING_COLS, ...FOUR_FACTOR_COLS];
+
+/** One opaque hover fill so the frozen and scrolling halves read as one row. */
+const ROW_HOVER = "group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))]";
+/** Resting tint marking the Four Factors band, mirroring the EPM band on /players. */
+const FF_BAND_TINT = "bg-[color-mix(in_oklab,var(--coral)_3%,transparent)]";
+
+function fmtColValue(v: number | null | undefined, fmt: TeamCol["fmt"]): string {
+  if (v === null || v === undefined) return "—";
+  if (fmt === "signed") return (v > 0 ? "+" : "") + v.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
-function ValueWithPct({ value, pct, format }: { value: number | null; pct: number | null; format: "num1" | "pct1" | "num1signed" | "num0signed" }) {
-  let display = "—";
-  if (value !== null && value !== undefined) {
-    if (format === "pct1") display = (value * 100).toFixed(1) + "%";
-    else if (format === "num1signed") display = (value > 0 ? "+" : "") + value.toFixed(1);
-    else if (format === "num0signed") display = (value > 0 ? "+" : "") + value.toFixed(0);
-    else display = value.toFixed(1);
-  }
-  return (
-    <span className="inline-flex items-baseline justify-end gap-1.5">
-      <span>{display}</span>
-      <PercentileChip pct={pct} />
-    </span>
-  );
-}
+
 
 export function ExplorerClient({
   allTeams,
@@ -290,51 +316,67 @@ export function ExplorerClient({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm border-separate border-spacing-0">
             <thead>
               {/* Group-label band — sits ABOVE the column-header row in its own
                   lighter strip so the "Four Factors" caption reads as a section
                   label, not another header. Stays inside <thead> so it stays
                   aligned with the four columns it labels. */}
-              <tr className="bg-paper-deep/30">
-                <th colSpan={multiYear ? 9 : 8} className="px-3 py-1" />
-                <th colSpan={4} className="px-3 py-1 text-[0.65rem] uppercase tracking-[0.18em] text-coral font-bold text-center">
+              {/* Band row — group captions only, no borders, sticky above the
+                  header row. Same two-tier treatment as /players. */}
+              <tr>
+                <th className="sticky top-0 left-0 z-40 w-12 bg-paper-deep h-6 p-0" />
+                <th className="sticky top-0 left-12 z-40 bg-paper-deep h-6 p-0" />
+                <th colSpan={multiYear ? 3 : 2} className="sticky top-0 z-30 bg-paper-deep h-6 p-0" />
+                <th colSpan={RATING_COLS.length} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-ink-muted text-center border-l border-hairline align-middle">
+                  Ratings
+                </th>
+                <th colSpan={FOUR_FACTOR_COLS.length} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-coral text-center border-l border-hairline align-middle">
                   Four Factors
                 </th>
               </tr>
-              <tr className="border-y border-hairline text-left bg-paper-deep/70">
-                <Th className="w-12 text-center">#</Th>
-                <Th>Team</Th>
-                <Th className="w-16 hidden sm:table-cell">Conf</Th>
-                {multiYear && <Th className="w-16">Season</Th>}
-                <Th className="w-20">Record</Th>
-                <SortableTh statKey="bta_rtg"   label="BTA RTG"  title="Weighted z-score composite ×40" defaultDir="desc" />
-                <SortableTh statKey="bta_net"   label="Adj Net"  title="Adj ORtg − Adj DRtg. Points per 100 possessions vs an average D-I opponent" defaultDir="desc" />
-                <SortableTh statKey="bta_ortg"  label="Adj ORtg" title="Average of Bart adj ORtg and CBB adj ORtg" defaultDir="desc" />
-                <SortableTh statKey="bta_drtg"  label="Adj DRtg" title="Average of Bart adj DRtg and CBB adj DRtg (lower = better)" defaultDir="asc" />
-                <SortableThCbb statKey="reb_diff_ct"  label="REB Diff" title="Total rebounds − opponent rebounds (season total)" defaultDir="desc" />
-                <SortableThCbb statKey="fg3m_diff_ct" label="3PM Diff" title="3-pointers made − allowed (season total)" defaultDir="desc" />
-                <SortableThCbb statKey="fbpts_diff"   label="FBP Diff" title="Fast-break points − allowed (season total)" defaultDir="desc" />
-                <SortableThCbb statKey="tov_diff_ct"  label="TOV Diff" title="Turnovers committed − opponent turnovers (negative = good)" defaultDir="asc" />
+              <tr>
+                <th className="sticky top-6 left-0 z-40 w-12 bg-paper-deep border-b border-hairline px-2 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
+                <th className="sticky top-6 left-12 z-40 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Team</th>
+                <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle hidden sm:table-cell">Conf</th>
+                {multiYear && <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Season</th>}
+                <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Record</th>
+                {ALL_COLS.map((c, i) => (
+                  <SortableTh
+                    key={c.label}
+                    statKey={c.sortKey}
+                    label={c.label}
+                    title={c.title}
+                    defaultDir={c.lowerBetter ? "asc" : "desc"}
+                    basePath="/"
+                    defaultSort="a_net"
+                    idleArrows
+                    className={cn(
+                      "sticky top-6 z-30 bg-paper-deep border-b border-hairline",
+                      i === 0 || c.label === "REB" ? "border-l border-hairline" : "",
+                    )}
+                  />
+                ))}
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={multiYear ? 13 : 12} className="px-4 py-12 text-center text-ink-muted">
+                  <td colSpan={(multiYear ? 5 : 4) + ALL_COLS.length} className="px-4 py-12 text-center text-ink-muted">
                     No teams match these filters.
                   </td>
                 </tr>
               ) : (
-                rows.map((r, i) => (
-                  <tr
-                    key={`${r.team_id}-${r.team_year}`}
-                    className={`transition-colors hover:bg-coral/5 ${i % 2 === 0 ? "bg-paper/70" : "bg-transparent"}`}
-                  >
-                    <Td className="text-center text-ink-muted tabular">
+                rows.map((r, i) => {
+                  // Opaque zebra so the frozen columns can share it and still
+                  // hide the scrolled content behind them.
+                  const zebra = i % 2 === 0 ? "bg-paper" : "bg-card";
+                  return (
+                  <tr key={`${r.team_id}-${r.team_year}`} className={cn("group", zebra)}>
+                    <td className={cn("sticky left-0 z-20 w-12 px-2 py-2 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
                       {(spec.limit === -1 ? 0 : (pageSafe - 1) * spec.limit) + i + 1}
-                    </Td>
-                    <Td>
+                    </td>
+                    <td className={cn("sticky left-12 z-20 px-3 py-2 transition-colors", zebra, ROW_HOVER)}>
                       <Link
                         href={`/teams/${teamSlug(r.team_name)}/${r.team_year}`}
                         className="inline-flex items-center gap-2.5 group"
@@ -346,22 +388,49 @@ export function ExplorerClient({
                         </span>
                         <TourneyBadge teamName={r.team_name} year={r.team_year} />
                       </Link>
-                    </Td>
-                    <Td className="text-ink-muted hidden sm:table-cell">{confDisplay(r.team_conference)}</Td>
-                    {multiYear && <Td className="text-ink-muted tabular">{seasonLabel(r.team_year)}</Td>}
-                    <Td className="tabular text-ink-muted">{r.record ?? "—"}</Td>
-                    <Td className={`text-right tabular ${btaColor(r.bta_rtg)}`}>
-                      <ValueWithPct value={r.bta_rtg} pct={r.pct.bta_rtg ?? null} format="num1" />
-                    </Td>
-                    <Td className="text-right tabular"><ValueWithPct value={r.bta_net}  pct={r.pct.bta_net ?? null}  format="num1" /></Td>
-                    <Td className="text-right tabular"><ValueWithPct value={r.bta_ortg} pct={r.pct.bta_ortg ?? null} format="num1" /></Td>
-                    <Td className="text-right tabular"><ValueWithPct value={r.bta_drtg} pct={r.pct.bta_drtg ?? null} format="num1" /></Td>
-                    <CbbTd><ValueWithPct value={r.reb_diff_ct}  pct={r.pct.reb_diff_ct ?? null}  format="num0signed" /></CbbTd>
-                    <CbbTd><ValueWithPct value={r.fg3m_diff_ct} pct={r.pct.fg3m_diff_ct ?? null} format="num0signed" /></CbbTd>
-                    <CbbTd><ValueWithPct value={r.fbpts_diff}   pct={r.pct.fbpts_diff ?? null}   format="num0signed" /></CbbTd>
-                    <CbbTd><ValueWithPct value={r.tov_diff_ct}  pct={r.pct.tov_diff_ct ?? null}  format="num0signed" /></CbbTd>
+                    </td>
+                    <td className={cn("px-3 py-2 text-ink-muted hidden sm:table-cell transition-colors", ROW_HOVER)}>{confDisplay(r.team_conference)}</td>
+                    {multiYear && <td className={cn("px-3 py-2 text-ink-muted tabular transition-colors", ROW_HOVER)}>{seasonLabel(r.team_year)}</td>}
+                    <td className={cn("px-3 py-2 tabular text-ink-muted transition-colors", ROW_HOVER)}>{r.record ?? "—"}</td>
+                    {ALL_COLS.map((c, ci) => {
+                      // TeamRow has no index signature, and the column model
+                      // addresses it by key — a narrow cast here beats widening
+                      // the type and losing field-name checking everywhere else.
+                      const cell = r as unknown as Record<string, number | null>;
+                      const total = cell[c.total as string] ?? null;
+                      const perGame = c.perGame ? cell[c.perGame as string] ?? null : null;
+                      const isFF = ci >= RATING_COLS.length;
+                      return (
+                        <td
+                          key={c.label}
+                          className={cn(
+                            "px-2 py-1.5 text-right tabular whitespace-nowrap transition-colors",
+                            isFF && FF_BAND_TINT,
+                            (ci === 0 || c.label === "REB") && "border-l border-hairline",
+                            ROW_HOVER,
+                          )}
+                        >
+                          <span className="inline-flex flex-col items-end gap-0.5 leading-tight">
+                            <span className={cn(c.label === "aNET" && "font-semibold text-ink")}>
+                              {fmtColValue(total, c.fmt)}
+                            </span>
+                            {/* Per-game beneath the total, so a differential answers
+                                "how big overall" and "how big per night" at once.
+                                Where the total is unavailable (fast break on older
+                                seasons) the per-game figure still carries the column. */}
+                            {c.perGame && perGame !== null && (
+                              <span className="text-[0.6rem] text-ink-muted">
+                                {(perGame > 0 ? "+" : "") + perGame.toFixed(1)}/g
+                              </span>
+                            )}
+                            <PercentileChip pct={r.pct[c.pct] ?? null} />
+                          </span>
+                        </td>
+                      );
+                    })}
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -395,12 +464,6 @@ export function ExplorerClient({
   );
 }
 
-function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <th className={`px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium ${className}`}>{children}</th>;
-}
-function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-3 py-2.5 ${className}`}>{children}</td>;
-}
 function SearchGlass({ className }: { className?: string }) {
   return (
     <svg
@@ -481,10 +544,4 @@ function paginationItems(page: number, totalPages: number): Array<number | "…"
     prev = n;
   }
   return out;
-}
-function CbbTd({ children }: { children: React.ReactNode }) {
-  return <td className="px-3 py-2.5 text-right tabular border-l border-coral/15">{children}</td>;
-}
-function SortableThCbb(props: React.ComponentProps<typeof SortableTh>) {
-  return <SortableTh {...props} variant="cbb" defaultDir={props.defaultDir ?? "desc"} />;
 }

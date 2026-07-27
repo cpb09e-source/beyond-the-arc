@@ -36,6 +36,12 @@ export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   { key: "bta_net",    source: "derived", dbColumn: "",        label: "Adj Net Rtg", desc: "Adj ORtg − Adj DRtg. Point differential per 100 possessions vs an average D-I opponent on a neutral floor.",                                                                                                              format: "num1", group: "overall" },
   { key: "bta_ortg",   source: "derived", dbColumn: "",        label: "Adj ORtg",    desc: "Average of Bart adj ORtg and CBBD adj ORtg",                                                                                                                                                                                       format: "num1", group: "overall" },
   { key: "bta_drtg",   source: "derived", dbColumn: "",        label: "Adj DRtg",    desc: "Average of Bart adj DRtg and CBBD adj DRtg",                                                                                                                                                                                       format: "num1", group: "overall" },
+  // Our own schedule-adjusted ratings (scripts/build-adjusted-ratings.mjs).
+  // These are the D&T-style headline set and replace BTA RTG as the default.
+  { key: "a_net",      source: "cbbd", dbColumn: "a_net",   label: "aNET",   desc: "Schedule-adjusted net rating — points per 100 possessions vs an average D-I opponent on a neutral floor", format: "num1", group: "overall" },
+  { key: "a_ortg",     source: "cbbd", dbColumn: "a_ortg",  label: "aORTG",  desc: "Schedule-adjusted offensive rating — points scored per 100 possessions", format: "num1", group: "overall" },
+  { key: "a_drtg",     source: "cbbd", dbColumn: "a_drtg",  label: "aDRTG",  desc: "Schedule-adjusted defensive rating — points allowed per 100 possessions (lower is better)", format: "num1", group: "overall" },
+  { key: "adj_sos",    source: "cbbd", dbColumn: "sos",     label: "SOS",    desc: "Strength of schedule — average opponent adjusted net rating", format: "num1", group: "overall" },
   { key: "adjt",       source: "trank",   dbColumn: "adjt",    label: "Adj Tempo",   desc: "Adjusted possessions / 40 min",                                                                                                                                                                                                   format: "num1", group: "overall" },
   { key: "wins",       source: "trank",   dbColumn: "wins",    label: "Wins",        desc: "Season wins",                                                                                                                                                                                                                     format: "num1", group: "overall" },
   { key: "losses",     source: "trank",   dbColumn: "losses",  label: "Losses",      desc: "Season losses",                                                                                                                                                                                                                   format: "num1", group: "overall" },
@@ -88,7 +94,13 @@ export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   // valid at partial coverage and reaches ~3,800 — and it is the fairer
   // comparison regardless, since a season total quietly rewards whoever played
   // more games.
+  // BTA's Four Factors, uniformly per game. REB/3PM/TOV have full coverage as
+  // season totals, but the fourth (fast break) does not, and mixing "+416 REB"
+  // with "+1.82 FBP" in one group reads as an error.
+  { key: "reb_diff_pg",    source: "cbbd", dbColumn: "reb_diff_pg",    label: "REB Diff/G",       desc: "Rebounds − opponent rebounds, per game",       format: "num2", group: "diffs" },
+  { key: "fg3m_diff_pg",   source: "cbbd", dbColumn: "fg3m_diff_pg",   label: "3PM Diff/G",       desc: "3-pointers made − allowed, per game",          format: "num2", group: "diffs" },
   { key: "fbpts_diff_pg",  source: "cbbd", dbColumn: "fbpts_diff_pg",  label: "FBP Diff/G",       desc: "Fast-break points − allowed, per game",        format: "num2", group: "diffs" },
+  { key: "tov_diff_pg",    source: "cbbd", dbColumn: "tov_diff_pg",    label: "TOV Diff/G",       desc: "Turnovers − opponent turnovers, per game (negative = good)", format: "num2", group: "diffs" },
   { key: "pitp_diff_pg",   source: "cbbd", dbColumn: "pitp_diff_pg",   label: "Paint Pts Diff/G", desc: "Points in the paint − allowed, per game",      format: "num2", group: "diffs" },
   { key: "potov_diff_pg",  source: "cbbd", dbColumn: "potov_diff_pg",  label: "Pts off TO Diff/G", desc: "Points off turnovers − allowed, per game",    format: "num2", group: "diffs" },
   { key: "scp_diff_pg",    source: "cbbd", dbColumn: "scp_diff_pg",    label: "2nd-Chance Diff/G", desc: "Second-chance points − allowed, per game",    format: "num2", group: "diffs" },
@@ -140,7 +152,9 @@ export const DEFAULT_SPEC: TeamFilterSpec = {
   conf: [],
   teams: [],
   filters: [],
-  sortBy: "bta_rtg",
+  // aNET is the headline: our own schedule-adjusted net rating, full coverage
+  // on all 4,631 team-seasons, and auditable from the game logs.
+  sortBy: "a_net",
   sortDir: "desc",
   limit: 50,
 };
@@ -320,6 +334,19 @@ export type TeamRow = {
   pitp_diff_pg: number | null;
   potov_diff_pg: number | null;
   scp_diff_pg: number | null;
+  /** BTA's Four Factors, per game — the values the explorer's chips rank on. */
+  reb_diff_pg: number | null;
+  fg3m_diff_pg: number | null;
+  tov_diff_pg: number | null;
+  /**
+   * Our own schedule-adjusted ratings. Distinct from `bta_*`, which average two
+   * providers' adjusted numbers, and from `sos`, which is Bart's own strength of
+   * schedule on a different scale — hence `adj_sos` rather than reusing the name.
+   */
+  a_net: number | null;
+  a_ortg: number | null;
+  a_drtg: number | null;
+  adj_sos: number | null;
   pts_diff: number | null;
   scp_diff: number | null;
   potov_diff: number | null;
@@ -451,6 +478,13 @@ export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { r
       scp_diff: cbb?.scp_diff ?? null,
       potov_diff: cbb?.potov_diff ?? null,
       fbpts_diff_pg: cbb?.fbpts_diff_pg ?? null,
+      a_net: cbb?.a_net ?? null,
+      a_ortg: cbb?.a_ortg ?? null,
+      a_drtg: cbb?.a_drtg ?? null,
+      adj_sos: cbb?.sos ?? null,
+      reb_diff_pg: cbb?.reb_diff_pg ?? null,
+      fg3m_diff_pg: cbb?.fg3m_diff_pg ?? null,
+      tov_diff_pg: cbb?.tov_diff_pg ?? null,
       pitp_diff_pg: cbb?.pitp_diff_pg ?? null,
       potov_diff_pg: cbb?.potov_diff_pg ?? null,
       scp_diff_pg: cbb?.scp_diff_pg ?? null,
@@ -569,11 +603,25 @@ const PERCENTILE_STATS: Array<{ key: keyof TeamRow; higherBetter: boolean }> = [
   { key: "cbb_fg3",     higherBetter: true },
   { key: "cbb_efg_def", higherBetter: false },
   // Four Factors columns in the Team Explorer table — positive diffs are good
-  // for everything except tov_diff_ct (more TOVs than the opponent = bad).
+  // for everything except turnovers (more TOVs than the opponent = bad).
   { key: "reb_diff_ct",  higherBetter: true },
   { key: "fg3m_diff_ct", higherBetter: true },
   { key: "fbpts_diff",   higherBetter: true },
   { key: "tov_diff_ct",  higherBetter: false },
+  // The per-game variants carry the chips, because they are the values with
+  // full coverage — a percentile computed over the ~1,500 team-seasons that
+  // have a fast-break TOTAL would rank a team against a biased subset of its
+  // own era rather than against the era.
+  { key: "reb_diff_pg",   higherBetter: true },
+  { key: "fg3m_diff_pg",  higherBetter: true },
+  { key: "fbpts_diff_pg", higherBetter: true },
+  { key: "tov_diff_pg",   higherBetter: false },
+  // The schedule-adjusted ratings, which replace BTA RTG as the headline set.
+  { key: "a_net",   higherBetter: true },
+  { key: "a_ortg",  higherBetter: true },
+  { key: "a_drtg",  higherBetter: false },
+  { key: "adj_sos", higherBetter: true },
+  { key: "cbb_pace", higherBetter: true },
 ];
 
 function attachPercentiles(rows: TeamRow[]) {

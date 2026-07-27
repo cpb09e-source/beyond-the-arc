@@ -22,7 +22,7 @@ export function SortableTh({
   className = "",
   variant = "default",
   basePath = "/",
-  defaultSort = "bta_rtg",
+  defaultSort = "a_net",
   align = "right",
   nowrap = true,
   idleArrows = false,
