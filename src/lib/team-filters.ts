@@ -153,7 +153,9 @@ export const DEFAULT_SPEC: TeamFilterSpec = {
   // on all 4,631 team-seasons, and auditable from the game logs.
   sortBy: "a_net",
   sortDir: "desc",
-  limit: 50,
+  // 100 by default, matching /players. 50 cut the table off inside the top
+  // quarter of D-I, so the first thing most visitors did was change it.
+  limit: 100,
 };
 
 export const LIMIT_OPTIONS = [50, 100, 250, 500, -1] as const;

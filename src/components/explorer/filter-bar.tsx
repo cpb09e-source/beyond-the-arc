@@ -1,44 +1,22 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { SlidersHorizontal } from "lucide-react";
 import {
-  FILTER_COLUMNS,
-  GROUP_LABEL,
-  type Comparator,
   type StatFilter,
   type TeamFilterSpec,
-  type TeamStatKey,
   parseSpec,
   specToParams,
 } from "@/lib/team-filters";
 import { cn } from "@/lib/utils";
-import { SearchableSelect, type SearchableOption } from "./searchable-select";
+import { type SearchableOption } from "./searchable-select";
 import { SearchableMultiSelect } from "./searchable-multi-select";
 import { MultiYearSelect } from "./multi-year-select";
-import { Select } from "@/components/select";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 
 const CONF_GROUP_LABELS = { power: "Power Conferences", midmajor: "Mid-Majors" } as const;
-
-const OPS: { value: Comparator; label: string }[] = [
-  { value: "gt", label: ">" },
-  { value: "gte", label: "≥" },
-  { value: "lt", label: "<" },
-  { value: "lte", label: "≤" },
-];
-
-// Build the option list for the stat picker once. Order matters — groups
-// render in the order they first appear.
-const STAT_OPTIONS: SearchableOption[] = FILTER_COLUMNS.map((c) => ({
-  value: c.key,
-  label: c.label,
-  group: c.group,
-  desc: c.desc,
-}));
 
 // Defaults applied by the Reset button (matches the empty-URL spec).
 const DEFAULT_DRAFT: Pick<TeamFilterSpec, "years" | "conf" | "teams" | "filters"> = {
@@ -48,7 +26,7 @@ const DEFAULT_DRAFT: Pick<TeamFilterSpec, "years" | "conf" | "teams" | "filters"
   filters: [],
 };
 
-export type ConferenceRanking = { conference: string; avg_bta_rtg: number; teams: number; contributing: number };
+export type ConferenceRanking = { conference: string; avg_a_net: number; teams: number; contributing: number };
 
 export function FilterBar({
   conferences,
@@ -93,21 +71,9 @@ export function FilterBar({
   function patch(next: Partial<typeof draft>) {
     setDraft((d) => ({ ...d, ...next }));
   }
-  function patchFilter(i: number, p: Partial<StatFilter>) {
-    setDraft((d) => ({
-      ...d,
-      filters: d.filters.map((f, j) => (j === i ? { ...f, ...p } : f)),
-    }));
-  }
-  function addFilter() {
-    setDraft((d) => ({
-      ...d,
-      filters: [...d.filters, { stat: "a_net", op: "gt", value: 0 }],
-    }));
-  }
-  function removeFilter(i: number) {
-    setDraft((d) => ({ ...d, filters: d.filters.filter((_, j) => j !== i) }));
-  }
+  // NOTE: this bar no longer edits stat filters — TeamStatFilters owns them
+  // now — but it still carries `draft.filters` through untouched so pressing
+  // Submit here can't wipe filters the drawer set.
 
   function submit() {
     // Preserve sort/limit from the URL; only overwrite the draft-controlled fields.
@@ -155,10 +121,14 @@ export function FilterBar({
     // the point of this pass.
     <div className={cn("relative flex flex-wrap items-end gap-2 mb-3", pending && "opacity-70")}>
       <div className="flex flex-wrap items-end gap-2">
+        {/* Widths are pinned to the same values PlayerFilterBar uses (w-32 /
+            w-52 / w-44). Left unset these selects sized themselves to their
+            content, so the two pages' scope rows never lined up. */}
         <Field label="Seasons">
           <MultiYearSelect
             years={draft.years}
             onChange={(years) => patch({ years })}
+            className="w-32"
           />
         </Field>
 
@@ -168,8 +138,9 @@ export function FilterBar({
             options={teamOptions}
             onChange={(teams) => patch({ teams })}
             placeholder="Type to filter…"
-            emptyLabel="All teams"
+            emptyLabel="All"
             ariaLabel="Teams"
+            className="w-52"
           />
         </Field>
 
@@ -180,9 +151,10 @@ export function FilterBar({
               options={confOptions}
               onChange={(conf) => patch({ conf })}
               placeholder="Type to filter…"
-              emptyLabel="All conferences"
+              emptyLabel="All"
               ariaLabel="Conferences"
               groupLabels={CONF_GROUP_LABELS}
+              className="w-44"
             />
             {conferenceRankings.length > 0 && (
               <button
@@ -205,159 +177,18 @@ export function FilterBar({
         />
       )}
 
-      <FilterPopover activeCount={draft.filters.length} dirty={dirty}>
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">
-            Filters
-          </span>
-          <span className="text-xs text-ink-muted">
-            (nothing applies until you press Submit)
-          </span>
-        </div>
-
-        {draft.filters.map((f, i) => (
-          <div key={i} className="flex items-center gap-2 sm:gap-4 flex-nowrap">
-            {/* "Where" / "And" label is conversational filler on a narrow
-                screen — hide it under sm so the stat select gets the room. */}
-            <span className="hidden sm:inline text-sm text-ink-muted w-10 shrink-0">
-              {i === 0 ? "Where" : "And"}
-            </span>
-            <SearchableSelect
-              value={f.stat}
-              options={STAT_OPTIONS}
-              groupLabels={GROUP_LABEL}
-              onChange={(v) => patchFilter(i, { stat: v as TeamStatKey })}
-              ariaLabel="Filter stat"
-              className="flex-1 min-w-0 sm:flex-initial sm:min-w-44"
-            />
-            <Select
-              value={f.op}
-              onChange={(v) => patchFilter(i, { op: v as Comparator })}
-              className="w-14 sm:w-16 shrink-0"
-            >
-              {OPS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </Select>
-            <input
-              type="number"
-              step="any"
-              value={f.value}
-              onChange={(e) => patchFilter(i, { value: Number(e.target.value) })}
-              className="h-10 w-16 sm:w-28 px-2 rounded-md border border-ink/15 bg-card text-ink text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 shrink-0"
-            />
-            <button
-              type="button"
-              onClick={() => removeFilter(i)}
-              className="text-base text-ink-muted hover:text-coral px-1.5 shrink-0"
-              aria-label="Remove filter"
-            >
-              ×
-            </button>
-          </div>
-        ))}
-
-        <div className="flex items-center gap-3 pt-3 border-t border-hairline mt-3">
-          <button
-            type="button"
-            onClick={addFilter}
-            className="text-sm font-medium text-coral hover:text-ink"
-          >
-            + Add filter
-          </button>
-          {dirty && (
-            <span className="text-xs text-ink-muted">unsaved changes</span>
-          )}
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              onClick={reset}
-              className="text-sm text-ink-muted hover:text-ink px-3 py-2"
-            >
-              Reset
-            </button>
-            <button
-              type="button"
-              onClick={submit}
-              disabled={!dirty}
-              className="text-sm font-medium bg-coral text-white px-5 py-2 rounded hover:bg-coral-soft disabled:opacity-40 transition-colors"
-            >
-              Submit
-            </button>
-          </div>
-        </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={submit}
+          disabled={!dirty}
+          className="h-9 text-sm font-medium bg-coral text-white px-5 rounded-md hover:bg-coral-soft disabled:opacity-40 transition-colors"
+        >
+          Submit
+        </button>
+        <button type="button" onClick={reset} className="h-9 px-3 text-sm text-ink-muted hover:text-ink">Reset</button>
       </div>
-      </FilterPopover>
-    </div>
-  );
-}
 
-/**
- * Popover housing the stat-filter rows.
- *
- * A trigger showing the active-filter count and a panel that opens beneath it.
- * Absolutely positioned so opening it never reflows the table, and it closes on
- * Escape or an outside click.
- *
- * These rows used to sit permanently expanded inside a bordered card, which is
- * what made this page a tall panel while /players was a single slim row. Same
- * affordance as the Filters drawer there.
- */
-function FilterPopover({
-  activeCount,
-  dirty,
-  children,
-}: {
-  activeCount: number;
-  dirty: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    const onDown = (e: PointerEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    document.addEventListener("pointerdown", onDown);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("pointerdown", onDown);
-    };
-  }, [open]);
-
-  return (
-    <div ref={ref} className="relative">
-      {/* Spacer matches the <Field> labels beside it so the button baseline
-          lines up with the selects. */}
-      <span className="block text-[0.6rem] uppercase tracking-widest text-transparent select-none mb-1" aria-hidden>Filters</span>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className={cn(
-          "h-9 inline-flex items-center gap-1.5 px-3 rounded-md border text-sm shadow-sm transition-colors",
-          activeCount > 0 || dirty
-            ? "border-coral/50 bg-coral/6 text-coral"
-            : "border-ink/15 bg-card text-ink hover:border-ink/25",
-        )}
-      >
-        <SlidersHorizontal size={14} />
-        Filters
-        {activeCount > 0 && (
-          <span className="ml-0.5 inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-coral text-white text-[0.6rem] font-bold tabular">
-            {activeCount}
-          </span>
-        )}
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full mt-2 z-50 w-[min(46rem,calc(100vw-3rem))] max-h-[70vh] overflow-y-auto bg-card border border-ink/15 rounded-xl shadow-xl ring-1 ring-ink/5 p-4">
-          {children}
-        </div>
-      )}
     </div>
   );
 }
@@ -441,9 +272,9 @@ function ConferenceRankingsModal({
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-hairline">
           <div>
             <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Conference rankings</div>
-            <div className="font-display text-2xl text-ink leading-tight">Beyond the Arc Rating by Conference</div>
+            <div className="font-display text-2xl text-ink leading-tight">Average aNET by Conference</div>
             <div className="text-xs text-ink-muted mt-1">
-              {years[0] ? `${seasonLabel(years[0])} season` : ""}
+              {years[0] ? `${seasonLabel(years[0])} season` : ""} · mean aNET of each league&rsquo;s teams, excluding its two worst
             </div>
           </div>
           <button
@@ -475,9 +306,14 @@ function ConferenceRankingsModal({
                           <span className="font-display text-base text-ink-muted tabular w-6 text-center">{rank}</span>
                           <span className="flex-1 min-w-0">
                             <span className="font-medium text-ink text-sm">{confDisplay(r.conference)}</span>
+                            {/* How many teams actually fed the average, so the
+                                two-worst exclusion isn't invisible. */}
+                            <span className="text-ink-muted text-xs ml-1.5 tabular" title={`${r.contributing} of ${r.teams} teams counted`}>
+                              {r.contributing}/{r.teams}
+                            </span>
                           </span>
-                          <span className={`font-display text-lg tabular ${r.avg_bta_rtg >= 0 ? "text-coral" : "text-ink-muted"}`}>
-                            {r.avg_bta_rtg > 0 ? "+" : ""}{r.avg_bta_rtg.toFixed(1)}
+                          <span className={`font-display text-lg tabular ${r.avg_a_net >= 0 ? "text-coral" : "text-ink-muted"}`}>
+                            {r.avg_a_net > 0 ? "+" : ""}{r.avg_a_net.toFixed(1)}
                           </span>
                         </li>
                       );

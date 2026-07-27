@@ -1,16 +1,22 @@
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useMemo, useState, useEffect, useRef, useCallback, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
   parseSpec,
   processTeams,
+  specToParams,
+  LIMIT_OPTIONS,
+  limitLabel,
   type RawTeamSeason,
   type TeamRow,
+  type StatFilter,
 } from "@/lib/team-filters";
+import { Select } from "@/components/select";
 import { FilterBar } from "@/components/explorer/filter-bar";
+import { TeamStatFilters } from "@/components/explorer/team-stat-filters";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { CompareTeamsModal } from "@/components/explorer/compare-teams-modal";
 import { TeamLogo } from "@/components/team-logo";
@@ -106,6 +112,8 @@ export function ExplorerClient({
   tourneyFinishByTeamYear: Record<string, string>;
 }) {
   const [compareOpen, setCompareOpen] = useState(false);
+  const router = useRouter();
+  const [, startTransition] = useTransition();
   const search = useSearchParams();
   const params = useMemo(() => {
     const obj: Record<string, string> = {};
@@ -181,6 +189,15 @@ export function ExplorerClient({
   useEffect(() => { setPage(1); }, [spec, tableSearch]);
   const multiYear = spec.years.length > 1;
 
+  // Live "N teams" for the filter drawer's footer: run the current scope
+  // against a candidate filter set without touching the URL. limit:-1 so the
+  // count is the real total rather than the visible page.
+  const previewCount = useCallback(
+    (filters: StatFilter[]) =>
+      processTeams(allTeams, { ...spec, filters, limit: -1 }).rows.length,
+    [allTeams, spec],
+  );
+
   // Conference rankings — locked to the most-recent season available, regardless
   // of the explorer's current year selection. Drops the worst 2 teams in each
   // conference before averaging aNET (filters out cellar dwellers so the
@@ -199,15 +216,23 @@ export function ExplorerClient({
       arr.push(r.a_net);
       byConf.set(r.team_conference, arr);
     }
+    // Mean aNET of each conference's teams, EXCLUDING its two worst — the
+    // measure of a league's competitive core rather than its cellar.
+    //
+    // Worth knowing when reading the table: because the drop is a fixed count
+    // rather than a share, it removes a quarter of an 8-team league and only a
+    // ninth of an 18-team one, so it lifts small conferences more than large
+    // ones. The modal shows how many teams actually fed each average so that
+    // isn't hidden.
     return Array.from(byConf.entries())
       .map(([conference, values]) => {
         const sorted = [...values].sort((a, b) => b - a);
         const kept = sorted.slice(0, Math.max(0, sorted.length - 2));
         const avg = kept.length > 0 ? kept.reduce((s, v) => s + v, 0) / kept.length : null;
-        return { conference, avg_bta_rtg: avg, teams: values.length, contributing: kept.length };
+        return { conference, avg_a_net: avg, teams: values.length, contributing: kept.length };
       })
-      .filter((r): r is { conference: string; avg_bta_rtg: number; teams: number; contributing: number } => r.avg_bta_rtg !== null)
-      .sort((a, b) => b.avg_bta_rtg - a.avg_bta_rtg);
+      .filter((r): r is { conference: string; avg_a_net: number; teams: number; contributing: number } => r.avg_a_net !== null)
+      .sort((a, b) => b.avg_a_net - a.avg_a_net);
   }, [allTeams, latestYear]);
 
   return (
@@ -248,6 +273,10 @@ export function ExplorerClient({
               )}
             </div>
 
+            {/* Filters sits left of Compare, the same slot the drawer occupies
+                on /players (immediately right of the search box). */}
+            <TeamStatFilters previewCount={previewCount} />
+
             <button
               type="button"
               onClick={() => setCompareOpen(true)}
@@ -270,7 +299,21 @@ export function ExplorerClient({
             {/* No sort-by / order selects. Sorting happens by clicking a column
                 header, which is how /players works — two controls doing a job
                 the table header already does was part of what made these pages
-                feel unrelated. */}
+                feel unrelated. Only the row-count select remains, same position
+                and shape as the one on /players. */}
+            <span className="hidden sm:inline text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Show</span>
+            <Select
+              value={String(spec.limit)}
+              onChange={(v) => {
+                const p = specToParams({ ...spec, limit: Number(v) }).toString();
+                startTransition(() => router.replace(p ? `/?${p}` : "/", { scroll: false }));
+              }}
+              ariaLabel="Result count"
+              compact
+              className="w-16 lg:w-18"
+            >
+              {LIMIT_OPTIONS.map((n) => <option key={n} value={n}>{limitLabel(n)}</option>)}
+            </Select>
 
             {/* Mobile search icon */}
             <button
