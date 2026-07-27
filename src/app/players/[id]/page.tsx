@@ -151,13 +151,17 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   };
 
   return (
-    <>
+    // pb-20 lives on the wrapper rather than on the last section: which section
+    // IS last depends on the player (the shot charts render only where we have
+    // located shots), so pinning the page's bottom gutter to any one of them
+    // left some profiles ending flush against the footer.
+    <div className="pb-20">
       {/* Dossier hero — scouting-file split. Photo + vitals ride a deep-paper
           column; name and the per-game bar take the open side. The vitals that
           used to run inline as "Illinois · Fr · 6-6 · Lenexa" become a ruled
           mini-table, which is scannable and stops the meta line from wrapping
           into three rows on narrow screens. Stacks to one column below md. */}
-      <section className="mx-auto max-w-7xl px-0 sm:px-6 lg:px-10 pt-5 sm:pt-8 pb-8 sm:pb-10">
+      <section className="mx-auto max-w-7xl px-0 sm:px-6 lg:px-10 pt-5 sm:pt-8 pb-5 sm:pb-6">
         {/* Warm off-white rather than pure card white — the flat #fff panel read
             as a hole punched in the paper. Still lifts off the page background
             because it's a step lighter than --paper-deep, plus the border/ring. */}
@@ -235,8 +239,27 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         </div>
       </section>
 
+      {/* No margin of its own — the gap to the hero is the hero section's own
+          bottom padding and nothing else, which keeps it tighter (24px) than
+          the 32px between the cards below. The hero and the career ledger read
+          as one block: vitals, then the record those vitals belong to. */}
+      <section className="mx-auto max-w-7xl px-6 lg:px-10">
+        {/* Career ledger — heavier chrome than other cards on the page so this
+            anchors the profile as the canonical record. CareerTable owns its
+            own header (season count + View toggle) so the dropdown sits
+            next to the count instead of in a separate band below.
+
+            Sits directly under the hero: the year-by-year record is what most
+            readers come to a player page for, and it reads as the continuation
+            of the vitals. Player Overview follows as the single-season detail. */}
+        <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
+          <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
+          <CareerTable seasons={player.seasons} bartPlayerId={bartId} playerName={stats.name ?? `Player ${bartId}`} />
+        </div>
+      </section>
+
       {overviewOptions.length > 0 && (
-        <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-0 lg:mt-10">
+        <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8">
           {/* Player Overview — ledger card matching /coaches season-by-season.
               Inner component supplies the team/year picker band + grid.
               Full-bleed edge-to-edge on mobile; framed card on lg+. */}
@@ -259,18 +282,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         positionByYear={positionByYear}
         suppressFallback={overviewOptions.length > 0}
       />
-
-      <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8 mb-20">
-        {/* Career ledger — heavier chrome than other cards on the page so this
-            anchors the profile as the canonical record. CareerTable owns its
-            own header (season count + View toggle) so the dropdown sits
-            next to the count instead of in a separate band below. */}
-        <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
-          <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
-          <CareerTable seasons={player.seasons} bartPlayerId={bartId} playerName={stats.name ?? `Player ${bartId}`} />
-        </div>
-      </section>
-    </>
+    </div>
   );
 }
 
