@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useState } from "react";
+import { memo } from "react";
 
 /**
  * The dual-thumb stat range control, shared by the /players and team-explorer
@@ -34,30 +34,6 @@ export function isBoundActive(b: Bound | undefined): boolean {
 
 export function roundNice(n: number): number {
   return Math.round(n * 1000) / 1000;
-}
-
-/**
- * Value that only updates once `ms` have passed without a change.
- *
- * Both filter drawers use this for the live "N matches" total, and the reason
- * is measured rather than theoretical. That count runs the page's whole
- * pipeline — for teams, processTeams reshapes all 6,689 team-seasons from raw
- * before it filters — which costs ~22ms. Under useDeferredValue that work is
- * merely deprioritised, not skipped: it still lands inside the same frame and
- * still blocks paint, so a drag ran at ~28ms/tick (~35fps) while the
- * synchronous render it was competing with only needed 4.7ms.
- *
- * Debouncing removes it from the drag path entirely — the thumb tracks at the
- * cost of the cheap render, and the total lands shortly after you stop moving,
- * which is the only moment anyone reads it.
- */
-export function useDebouncedValue<T>(value: T, ms = 120): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const id = setTimeout(() => setDebounced(value), ms);
-    return () => clearTimeout(id);
-  }, [value, ms]);
-  return debounced;
 }
 
 // One stat: label + min/max number boxes + dual-thumb slider. Memoized so a

@@ -401,12 +401,18 @@ export type RawTeamSeason = {
   } | null | Array<unknown>;
 };
 
-export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { rows: TeamRow[]; count: number } {
+/**
+ * Shape one year-cohort into fully-decorated TeamRows: derived columns, BTA
+ * RTG, percentile chips. Everything here depends ONLY on (rawAll, years) —
+ * never on the conference, team, stat, sort or limit parts of the spec — which
+ * is what makes the result cacheable across a filter drag.
+ */
+function buildCohortRows(rawAll: RawTeamSeason[], years: number[]): TeamRow[] {
   // Year is the only pre-filter applied before BTA RTG is computed — we want
   // every team-season to keep the SAME BTA RTG regardless of which conference
   // or stat filters are active. So z-score within the full year cohort, then
   // apply conf + stat filters as display-only filters below.
-  const yearSet = new Set(spec.years);
+  const yearSet = new Set(years);
   const cohort = rawAll.filter((r) => yearSet.has(r.year));
 
   // Shape rows + average-based derived columns
@@ -515,17 +521,6 @@ export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { r
     for (const yearRows of rowsByYear.values()) attachBtaRtg(yearRows);
   }
 
-  // Display filters (conf + raw stats + derived stats). All applied AFTER
-  // attachBtaRtg so the rating doesn't shift when the user narrows the view.
-  function passes(r: TeamRow, f: StatFilter): boolean {
-    const key = f.stat as keyof TeamRow;
-    const v = r[key] as number | null;
-    if (v === null) return false;
-    if (f.op === "gt") return v > f.value;
-    if (f.op === "gte") return v >= f.value;
-    if (f.op === "lt") return v < f.value;
-    return v <= f.value;
-  }
   // Percentiles are computed across the FULL year cohort (every D-I team in
   // that season), not the filtered view — so a team's percentile chips don't
   // shift when the user narrows by conference, team, or stat filter. Multi-
@@ -533,6 +528,61 @@ export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { r
   // 2024-Duke is measured against 2024 peers, not 2026.
   attachPercentiles(allRows);
 
+  return allRows;
+}
+
+/**
+ * Cache of shaped cohorts, keyed first on the raw array's identity and then on
+ * the year selection.
+ *
+ * WHY: buildCohortRows reshapes every team-season from raw — ~6,689 of them for
+ * an all-years view — and costs ~22ms. processTeams used to redo all of it on
+ * every call, including the calls that only wanted a COUNT for the filter
+ * drawer's footer, so dragging a slider re-derived the entire league on each
+ * tick. Nothing it computes depends on the filters, so it is pure waste.
+ *
+ * A WeakMap on `rawAll` means the entry disappears with the data it was built
+ * from; the inner map is capped because a user sweeping the season picker could
+ * otherwise accumulate one cohort per combination they touch.
+ */
+const MAX_CACHED_COHORTS = 8;
+const cohortCache = new WeakMap<RawTeamSeason[], Map<string, TeamRow[]>>();
+
+function cachedCohortRows(rawAll: RawTeamSeason[], years: number[]): TeamRow[] {
+  const key = [...years].sort((a, b) => a - b).join(",");
+  let byYears = cohortCache.get(rawAll);
+  if (!byYears) {
+    byYears = new Map();
+    cohortCache.set(rawAll, byYears);
+  }
+  const hit = byYears.get(key);
+  if (hit) return hit;
+  const rows = buildCohortRows(rawAll, years);
+  // Evict oldest-inserted first — Map preserves insertion order.
+  if (byYears.size >= MAX_CACHED_COHORTS) {
+    const oldest = byYears.keys().next().value;
+    if (oldest !== undefined) byYears.delete(oldest);
+  }
+  byYears.set(key, rows);
+  return rows;
+}
+
+/** Does one row satisfy one stat filter? */
+function passes(r: TeamRow, f: StatFilter): boolean {
+  const key = f.stat as keyof TeamRow;
+  const v = r[key] as number | null;
+  if (v === null) return false;
+  if (f.op === "gt") return v > f.value;
+  if (f.op === "gte") return v >= f.value;
+  if (f.op === "lt") return v < f.value;
+  return v <= f.value;
+}
+
+export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { rows: TeamRow[]; count: number } {
+  const allRows = cachedCohortRows(rawAll, spec.years);
+
+  // Display filters (conf + raw stats + derived stats). All applied AFTER
+  // BTA RTG and percentiles so neither shifts when the user narrows the view.
   let displaySet = allRows;
   if (spec.conf.length) {
     const confSet = new Set(spec.conf);
@@ -554,6 +604,11 @@ export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { r
     if (!col || col.source !== "derived") continue;
     filtered = filtered.filter((r) => passes(r, f));
   }
+
+  // Array#sort mutates. When no filter narrowed anything, `filtered` is still
+  // the cached cohort array itself, and sorting it in place would reorder the
+  // cache under every other caller. Copy first in that case.
+  if (filtered === allRows) filtered = filtered.slice();
 
   const sortCol = COLUMN_BY_KEY.get(spec.sortBy);
   if (sortCol) {
