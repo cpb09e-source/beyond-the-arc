@@ -7,14 +7,21 @@ import { PlayerPhoto } from "@/components/player-photo";
 import { cn } from "@/lib/utils";
 
 // Compact-keyed entries from /data/search-index.json (kept short to shrink the
-// wire payload — see scripts/build-search-index.mjs for the writer).
-type TeamEntry = { t: "t"; n: string; s: string; c: string | null };
+// wire payload — see scripts/build-search-index.mjs for the writer). Teams may
+// carry `k`: colloquial aliases ("uconn", "ole miss") that also match.
+type TeamEntry = { t: "t"; n: string; s: string; c: string | null; k?: string };
 type CoachEntry = { t: "c"; n: string; s: string; tm: string; a: 0 | 1 };
 type PlayerEntry = { t: "p"; n: string; b: number; tm: string; y: number };
-// `l` is stamped client-side after fetch: the entry's name lowercased once,
-// so the per-keystroke scan doesn't allocate 26k fresh strings via
-// toLowerCase() every time. (Not in the wire format — it would double it.)
-type Entry = (TeamEntry | CoachEntry | PlayerEntry) & { l?: string };
+// `l` and `d` are stamped client-side after fetch: the name lowercased, and
+// lowercased with punctuation stripped — so the per-keystroke scan allocates
+// nothing, and "st johns" still finds "St. John's" ("ajahni" → "A'Jahni").
+// (Not in the wire format — it would double the payload.)
+type Entry = (TeamEntry | CoachEntry | PlayerEntry) & { l?: string; d?: string };
+
+// Lowercase + drop everything that isn't a letter, digit, or space.
+function stripPunct(s: string): string {
+  return s.replace(/[^a-z0-9 ]+/g, "");
+}
 
 function urlFor(e: Entry): string {
   if (e.t === "t") return `/teams/${e.s}/`;
@@ -112,9 +119,18 @@ export function SearchDialog() {
     if (!open || index || loadErr) return;
     fetch("/data/search-index.json")
       .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      // Stamp the lowercased name once, at load — the scan runs per keystroke
-      // and toLowerCase() per entry was 26k throwaway strings each time.
-      .then((arr: Entry[]) => { for (const e of arr) e.l = e.n.toLowerCase(); setIndex(arr); })
+      // Stamp the lowercased + punctuation-stripped names once, at load — the
+      // scan runs per keystroke and per-entry toLowerCase() was 26k throwaway
+      // strings each time. `d` only exists where it differs, so the common
+      // case stays one string per entry.
+      .then((arr: Entry[]) => {
+        for (const e of arr) {
+          e.l = e.n.toLowerCase();
+          const d = stripPunct(e.l);
+          if (d !== e.l) e.d = d;
+        }
+        setIndex(arr);
+      })
       .catch((e) => setLoadErr(e.message));
   }, [open, index, loadErr]);
 
@@ -123,37 +139,45 @@ export function SearchDialog() {
   // re-renders in a separate, interruptible pass — a burst of fast keystrokes
   // skips the intermediate lists instead of committing every one.
   const deferredQuery = useDeferredValue(query);
+  // Players lead: they're what gets searched most, so they take the first
+  // (widest) column and the first stop for the keyboard cursor.
   const cols: Col[] = useMemo(() => {
     const empty: Col[] = [
+      { key: "p", label: "Players", items: [], total: 0 },
       { key: "t", label: "Teams", items: [], total: 0 },
       { key: "c", label: "Coaches", items: [], total: 0 },
-      { key: "p", label: "Players", items: [], total: 0 },
     ];
     if (!index) return empty;
     const q = deferredQuery.trim().toLowerCase();
     if (!q) return empty;
-    // Rank within each column: name-start match, then word-start, then bare
-    // substring. Without this, "ja" surfaces "A.J. Jacobson" over anyone
-    // actually named Ja— purely because the index is alphabetical. Buckets are
-    // capped at the column budget (only that many can ever be shown); totals
-    // count everything. Full scan, no early break — the header line shows TRUE
-    // match counts, and the whole pass is ~1ms over 26k entries.
-    const caps = { t: MAX_T, c: MAX_C, p: MAX_P } as const;
+    const qd = stripPunct(q);
+    // Rank within each column: name-start match (aliases count as one — the
+    // colloquial name IS the name to whoever typed it), then word-start, then
+    // bare substring. Without this, "ja" surfaces "A.J. Jacobson" over anyone
+    // actually named Ja— purely because the index is alphabetical. Punctuation
+    // -stripped fallback lets "st johns" find "St. John's". Buckets are capped
+    // at the column budget (only that many can ever be shown); totals count
+    // everything. Full scan, no early break — the header line shows TRUE match
+    // counts, and the whole pass is ~1ms over 26k entries.
+    const caps = { p: MAX_P, t: MAX_T, c: MAX_C } as const;
     const buckets: Record<"t" | "c" | "p", [Entry[], Entry[], Entry[]]> = {
       t: [[], [], []], c: [[], [], []], p: [[], [], []],
     };
+    const colFor = { p: empty[0]!, t: empty[1]!, c: empty[2]! };
     for (const e of index) {
       const l = e.l ?? e.n.toLowerCase();
-      const at = l.indexOf(q);
+      let at = l.indexOf(q);
+      let hay = l;
+      if (at < 0 && e.t === "t" && e.k && e.k.includes(q)) { at = 0; hay = ""; }
+      if (at < 0 && e.d && qd) { at = e.d.indexOf(qd); hay = e.d; }
       if (at < 0) continue;
-      const col = empty[e.t === "t" ? 0 : e.t === "c" ? 1 : 2]!;
-      col.total++;
-      const rank = at === 0 ? 0 : /[^a-z0-9]/.test(l[at - 1]!) ? 1 : 2;
+      colFor[e.t].total++;
+      const rank = at === 0 ? 0 : /[^a-z0-9]/.test(hay[at - 1]!) ? 1 : 2;
       const b = buckets[e.t][rank];
       if (b.length < caps[e.t]) b.push(e);
     }
-    for (const [key, i] of [["t", 0], ["c", 1], ["p", 2]] as const) {
-      empty[i]!.items = buckets[key].flat().slice(0, caps[key]);
+    for (const key of ["p", "t", "c"] as const) {
+      colFor[key].items = buckets[key].flat().slice(0, caps[key]);
     }
     return empty;
   }, [index, deferredQuery]);
@@ -210,40 +234,52 @@ export function SearchDialog() {
     value: query,
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value),
     onKeyDown,
-    placeholder: "Search teams, coaches, players…",
+    placeholder: "Search",
     "aria-label": "Search teams, coaches, and players",
   };
+  // Soft azure-on-paper fill shared by the resting pill and the live input, so
+  // opening reads as the same control waking up rather than a swap.
+  const pillBg = "bg-[color-mix(in_oklab,var(--coral)_5%,var(--paper-deep))]";
 
   return (
     // The wrapper spans both the navbar slot and the dropped panel so the
     // click-away check has one root to test against.
     <div ref={rootRef} className="contents">
-      {/* Navbar slot: pill when closed, inline input when open. Same position,
-          same height — the input just slides wider (bta-search-grow). */}
+      {/* Navbar slot: a search-field-shaped pill when closed (glass, muted
+          "Search", the shortcut riding inside the field), the real input when
+          open. Same slot, same shape — it just slides wider (bta-search-grow). */}
       {!open ? (
         <button
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Open search"
           aria-expanded={false}
-          className="hidden md:inline-flex items-center gap-2 text-xs uppercase tracking-widest text-coral hover:text-coral-soft hover:border-coral/40 font-medium border border-hairline rounded px-3 py-1.5 transition-colors"
+          className={cn(
+            "hidden md:inline-flex items-center gap-2.5 h-9 w-44 lg:w-52 pl-3.5 pr-2 rounded-full border border-ink/10 hover:border-ink/25 transition-colors",
+            pillBg,
+          )}
         >
-          <kbd className="hidden lg:inline-flex items-center gap-1 text-[0.65rem] text-ink-muted font-mono normal-case">
-            <span>⌘</span><span>K</span>
-          </kbd>
-          Search
+          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 text-ink-muted shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+            <circle cx={11} cy={11} r={7} /><line x1={20} y1={20} x2={16.65} y2={16.65} />
+          </svg>
+          <span className="text-sm text-ink-muted">Search</span>
+          <kbd className="ml-auto hidden lg:inline-flex items-center text-[0.62rem] text-ink-muted font-mono bg-paper border border-hairline rounded-full px-2 py-0.5">⌘K</kbd>
         </button>
       ) : (
         <div className="hidden md:flex items-center relative">
-          <svg viewBox="0 0 24 24" className="absolute left-2.5 w-3.5 h-3.5 text-ink-muted pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+          <svg viewBox="0 0 24 24" className="absolute left-3.5 w-3.5 h-3.5 text-ink-muted pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
             <circle cx={11} cy={11} r={7} /><line x1={20} y1={20} x2={16.65} y2={16.65} />
           </svg>
           <input
             ref={inputRef}
             {...inputProps}
             aria-expanded
-            className="bta-search-grow h-8 w-64 lg:w-80 pl-8 pr-3 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40"
+            className={cn(
+              "bta-search-grow h-9 w-72 lg:w-96 pl-9 pr-12 rounded-full border border-ink/10 text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40",
+              pillBg,
+            )}
           />
+          <kbd className="absolute right-3 text-[0.62rem] text-ink-muted font-mono bg-paper border border-hairline rounded-full px-2 py-0.5 pointer-events-none">esc</kbd>
         </div>
       )}
 
@@ -252,7 +288,8 @@ export function SearchDialog() {
       {open && (
         <div
           aria-label="Search results"
-          className="absolute top-16 inset-x-0 md:inset-x-auto md:right-6 lg:right-10 md:w-[56rem] md:max-w-[calc(100vw-3rem)] z-50 bg-card border border-hairline md:rounded-b-lg shadow-xl overflow-hidden"
+          // bg-paper, not bg-card: full white glared against the cream page.
+          className="absolute top-16 inset-x-0 md:inset-x-auto md:top-[4.25rem] md:right-6 lg:right-16 md:w-[56rem] md:max-w-[calc(100vw-3rem)] z-50 bg-paper border border-hairline md:rounded-lg shadow-xl overflow-hidden"
         >
           {/* Mobile gets its own input row (the navbar has no room for an
               inline one) with the heavy ink baseline from the box-score look. */}
@@ -284,7 +321,7 @@ export function SearchDialog() {
           ) : totalShown === 0 ? (
             <div className="px-5 py-10 text-center text-ink-muted text-sm">No matches for &ldquo;{deferredQuery}&rdquo;</div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1.15fr] max-h-[70vh] overflow-y-auto">
+            <div className="grid grid-cols-1 md:grid-cols-[1.15fr_1fr_1fr] max-h-[70vh] overflow-y-auto">
               {cols.map((col, ci) => (
                 <div key={col.key} className={cn(ci > 0 && "md:border-l border-t md:border-t-0 border-hairline")}>
                   <div className="flex items-baseline gap-2 px-4 py-2 bg-paper-deep border-b border-hairline text-[0.58rem] uppercase tracking-[0.15em] font-bold text-ink-muted sticky top-0">
@@ -305,9 +342,10 @@ export function SearchDialog() {
                           className={cn(
                             "w-full text-left flex items-center gap-2.5 px-4 py-1.5 text-sm",
                             // Zebra + the explorer table's active treatment:
-                            // azure wash with an inset rail.
-                            ri % 2 === 1 && !active && "bg-paper-deep/45",
-                            active && "bg-[color-mix(in_oklab,var(--coral)_9%,var(--card))] shadow-[inset_2px_0_0_var(--coral)]",
+                            // azure wash with an inset rail. Mixed into paper,
+                            // matching the panel ground.
+                            ri % 2 === 1 && !active && "bg-paper-deep/60",
+                            active && "bg-[color-mix(in_oklab,var(--coral)_9%,var(--paper))] shadow-[inset_2px_0_0_var(--coral)]",
                           )}
                         >
                           {e.t === "t" && <TeamLogo name={e.n} size={20} />}

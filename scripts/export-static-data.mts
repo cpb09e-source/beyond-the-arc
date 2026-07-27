@@ -36,6 +36,8 @@ const OUT = path.resolve("public/data");
 // export and the fast portal-only export apply the same rewrites (CBB and
 // Bart sometimes use different names for the same school).
 import { overrideTeamName } from "../src/lib/team-overrides.ts";
+// @ts-expect-error — plain .mjs helper shared with build-search-index.mjs
+import { aliasKeywords } from "./lib/team-aliases.mjs";
 // Data floor: 2013-14 season (year 2014) — first year with reliable
 // possession/efficiency data. Mirrors ALL_YEARS + clampYear in the app.
 // A re-export with this floor regenerates every per-entity file (profiles,
@@ -472,7 +474,19 @@ async function main() {
     if (!cur || t.year > cur.year) searchTeamByName.set(t.name, { name: t.name, year: t.year, conf: t.conference });
   }
   const searchTeams = [...searchTeamByName.values()]
-    .map((t) => ({ t: "t" as const, n: t.name, s: slug(t.name), c: t.conference ?? null }))
+    .map((t) => {
+      const k = aliasKeywords(t.name);
+      return {
+        t: "t" as const,
+        n: t.name,
+        s: slug(t.name),
+        // `t.conf` — this read `t.conference` (never set on the map value) for
+        // a while, silently nulling every team's conference in the dialog.
+        c: t.conf ?? null,
+        // Colloquial aliases ("uconn", "ole miss") the dialog also matches on.
+        ...(k ? { k } : {}),
+      };
+    })
     .sort((a, b) => a.n.localeCompare(b.n));
   const latestByBart = new Map<number, { name: string; year: number; team: string; bartId: number }>();
   for (const [bartId, seasons] of playersByBartId.entries()) {

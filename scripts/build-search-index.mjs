@@ -15,6 +15,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { aliasKeywords } from "./lib/team-aliases.mjs";
 
 const ROOT = path.resolve("public/data");
 const OUT = path.join(ROOT, "search-index.json");
@@ -36,7 +37,17 @@ for (const t of teamsAll) {
   if (!cur || t.year > cur.year) byName.set(t.name, { name: t.name, year: t.year, conf: t.conference });
 }
 const teamEntries = [...byName.values()]
-  .map((t) => ({ t: "t", n: t.name, s: slug(t.name), c: t.conference ?? null }))
+  .map((t) => ({
+    t: "t",
+    n: t.name,
+    s: slug(t.name),
+    // NB: `t.conf`, matching the map literal above. This read `t.conference`
+    // (a field the map value never had) for a while, which silently nulled the
+    // conference on every one of the 370 team rows in the dialog.
+    c: t.conf ?? null,
+    // Colloquial aliases ("uconn", "ole miss") the dialog also matches on.
+    ...(aliasKeywords(t.name) ? { k: aliasKeywords(t.name) } : {}),
+  }))
   .sort((a, b) => a.n.localeCompare(b.n));
 
 // ---- PLAYERS (one entry per bart_player_id; use latest season's team/year) ----

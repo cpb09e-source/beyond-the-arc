@@ -47,9 +47,11 @@ export function SiteHeader() {
           instead of floating inside them. Same width on every route — narrower
           pages just leave more air, which beats the nav shifting as you
           navigate. Only visible above 1408px; below that every container is
-          viewport-width anyway.
+          viewport-width anyway. lg:px-16 (vs the pages' lg:px-10) pulls the
+          chrome in ~24px from the table edges on each side — per Colin, the
+          header sits a touch narrower than the content under it.
           `relative` anchors the search dropdown panel to this container. */}
-      <div className="relative mx-auto max-w-[108rem] px-6 lg:px-10 h-16 flex items-center justify-between">
+      <div className="relative mx-auto max-w-[108rem] px-6 lg:px-16 h-16 flex items-center justify-between">
         <Link
           href="/"
           className="flex items-center group shrink-0"

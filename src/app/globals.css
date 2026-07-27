@@ -165,7 +165,7 @@ body {
  * this makes the swap read as the control sliding wider instead of popping.
  * Width animates from roughly the pill's footprint to the input's. */
 @keyframes bta-search-grow {
-  from { width: 7rem; opacity: 0.4; }
+  from { width: 11rem; opacity: 0.4; }
 }
 .bta-search-grow {
   animation: bta-search-grow 0.22s cubic-bezier(0.16, 1, 0.3, 1);
