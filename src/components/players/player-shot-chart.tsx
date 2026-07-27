@@ -222,9 +222,13 @@ export function PlayerShotChart({
               />
               {cells ? (
                 <>
-                  <AccuracyChart shots={forAccuracy} cells={cells} r={base!.r} />
+                  <AccuracyChart
+                    shots={forAccuracy}
+                    cells={cells}
+                    r={base!.r}
+                    label={bucket ? BUCKET_LABEL[bucket] : "position"}
+                  />
                   <AccuracyLegend label={bucket ? BUCKET_LABEL[bucket] : "position"} />
-                  <ExpectedLine shots={forAccuracy} cells={cells} r={base!.r} label={bucket ? BUCKET_LABEL[bucket] : "position"} />
                 </>
               ) : (
                 <div className="rounded-lg border border-dashed border-ink/15 bg-paper-deep/20 px-5 py-10 text-center">
@@ -355,14 +359,14 @@ const HOT_HEX = "#bd2f24";
 /**
  * Half-width of the colour scale, in percentage points of FG%.
  *
- * Measured, not guessed. Across 600 qualifying 2026 players (54,300 hex cells)
- * the shrunk difference lands at |1.6| points median, |4.1| at p90, |5.0| at
- * p95. An earlier ±10 domain therefore left the typical cell using 16% of the
- * scale — which is exactly why the chart read as washed out. At ±5 the median
- * cell shows a third of full saturation and the top ~5% clip, which is what a
- * diverging map is supposed to do.
+ * Measured, not guessed, and re-measured whenever the bin radius moves — a
+ * coarser grid puts more attempts behind each cell, which survives shrinkage
+ * and widens the spread. At the current r=22, across 600 qualifying 2026
+ * players (38,050 cells), the shrunk difference is |1.9| points at the median,
+ * |4.7| at p90, |5.8| at p95. An early ±10 domain left the typical cell using
+ * 16% of the scale, which is exactly why the court first read as washed out.
  */
-const DIFF_DOMAIN = 0.05;
+const DIFF_DOMAIN = 0.06;
 /**
  * Slight gamma on the ramp, lifting mid-range cells further out of the paper.
  * Safe to apply because the legend is drawn by this same function over evenly
@@ -491,7 +495,11 @@ function accuracyBins(shots: ShotRow[], cells: Record<string, [number, number]>,
   });
 }
 
-function AccuracyChart({ shots, cells, r }: { shots: ShotRow[]; cells: Record<string, [number, number]>; r: number }) {
+function AccuracyChart({
+  shots, cells, r, label,
+}: {
+  shots: ShotRow[]; cells: Record<string, [number, number]>; r: number; label: string;
+}) {
   const bins = useMemo(() => accuracyBins(shots, cells, r), [shots, cells, r]);
   // Size reference is the 90th percentile of attempts, NOT the maximum. Nearly
   // every player has one rim cell many times bigger than anything else; scaling
@@ -504,72 +512,110 @@ function AccuracyChart({ shots, cells, r }: { shots: ShotRow[]; cells: Record<st
     return Math.max(1, sorted[Math.floor(sorted.length * 0.9)] ?? 1);
   }, [bins]);
   const gen = useMemo(() => d3hexbin().radius(r), [r]);
+  const [hover, setHover] = useState<number | null>(null);
+  const active = hover === null ? null : bins[hover] ?? null;
 
   return (
-    <Court label="Shooting accuracy versus position-group average">
-      {bins.map((b) => {
-        // Area ∝ attempts (so radius ∝ √attempts), with a floor so a single
-        // attempt is still a visible cell rather than a rounding error.
-        const t = Math.min(1, Math.sqrt(b.att / refAtt));
-        const rr = r * (0.5 + 0.5 * t);
-        const pctTxt = b.att > 0 ? ((100 * b.made) / b.att).toFixed(0) : "—";
-        const baseTxt = b.baseRate === null ? "—" : (100 * b.baseRate).toFixed(0);
-        return (
-          <path
-            key={`${Math.round(b.x)}-${Math.round(b.y)}`}
-            d={gen.hexagon(rr)}
-            transform={`translate(${b.x},${b.y})`}
-            fill={b.diff === null ? "rgba(26,34,56,0.06)" : diffColor(b.diff)}
-            stroke="rgba(26,34,56,0.18)"
-            strokeWidth={0.6}
-          >
-            <title>
-              {`${b.made}/${b.att} (${pctTxt}%) · baseline ${baseTxt}%`}
-            </title>
-          </path>
-        );
-      })}
-    </Court>
+    <div className="relative" onMouseLeave={() => setHover(null)}>
+      <Court label="Shooting accuracy versus position-group average">
+        {bins.map((b, i) => {
+          // Area ∝ attempts (so radius ∝ √attempts), with a floor so a single
+          // attempt is still a visible cell rather than a rounding error.
+          const t = Math.min(1, Math.sqrt(b.att / refAtt));
+          const rr = r * (0.5 + 0.5 * t);
+          const on = hover === i;
+          return (
+            <path
+              key={`${Math.round(b.x)}-${Math.round(b.y)}`}
+              d={gen.hexagon(rr)}
+              transform={`translate(${b.x},${b.y})`}
+              fill={b.diff === null ? "rgba(26,34,56,0.06)" : diffColor(b.diff)}
+              // Hover lifts the OUTLINE, never the fill — the fill is the datum
+              // and has to stay honest with the legend under the cursor.
+              stroke={on ? "rgba(26,34,56,0.85)" : "rgba(26,34,56,0.18)"}
+              strokeWidth={on ? 1.6 : 0.6}
+              onMouseEnter={() => setHover(i)}
+              role="img"
+              // aria-label, not <title>: <title> also fires the browser's own
+              // tooltip, which would race the styled one.
+              aria-label={hexSummary(b, label)}
+            />
+          );
+        })}
+      </Court>
+      {active && <HexTooltip b={active} label={label} />}
+    </div>
   );
 }
 
-/**
- * Shot-quality line: what the player's own attempt mix would yield at their
- * position group's rates, next to what it actually yielded. This is the one
- * number that survives the per-hex noise — it aggregates every attempt.
- */
-function ExpectedLine({
-  shots, cells, r, label,
-}: {
-  shots: ShotRow[]; cells: Record<string, [number, number]>; r: number; label: string;
-}) {
-  const { att, made, exp } = useMemo(() => {
-    let att = 0, made = 0, exp = 0;
-    for (const b of accuracyBins(shots, cells, r)) {
-      if (b.baseRate === null) continue;
-      att += b.att; made += b.made; exp += b.att * b.baseRate;
-    }
-    return { att, made, exp };
-  }, [shots, cells, r]);
+type HexBin = ReturnType<typeof accuracyBins>[number];
 
-  if (att === 0) return null;
-  const actual = (100 * made) / att;
-  const expected = (100 * exp) / att;
-  const d = actual - expected;
-  const sign = d >= 0 ? "+" : "−";
+const pct1 = (v: number) => (100 * v).toFixed(1) + "%";
+const signed = (v: number) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
+
+function hexSummary(b: HexBin, label: string): string {
+  const own = `${b.made} of ${b.att} (${pct1(b.made / b.att)})`;
+  return b.baseRate === null
+    ? `${own}, no baseline here`
+    : `${own} versus D-I ${label} at ${pct1(b.baseRate)}`;
+}
+
+/**
+ * Styled hover card for one cell, replacing the browser's default tooltip.
+ *
+ * Positioned in percentages of the court box so it tracks the hex at any
+ * container width, and flipped near the edges so it can't leave the card.
+ *
+ * Shows the RAW difference as the headline figure and the stabilized one in a
+ * footnote. The raw number is what a reader expects from "3 / 4", but the
+ * shaded one is what the colour encodes — printing only the raw figure would
+ * leave the tooltip contradicting the hex it's describing.
+ */
+function HexTooltip({ b, label }: { b: HexBin; label: string }) {
+  const leftPct = (b.x / W) * 100;
+  const topPct = (b.y / H) * 100;
+  const below = topPct < 34;
+  const xAlign = leftPct < 24 ? "0%" : leftPct > 76 ? "-100%" : "-50%";
+  const accent = b.diff === null ? "var(--ink-muted)" : b.diff >= 0 ? HOT_HEX : COLD_HEX;
+  const raw = b.baseRate === null ? null : 100 * (b.made / b.att - b.baseRate);
+  const ft = Math.round(Math.hypot(b.x - RIM_X, b.y - RIM_Y) / 10);
+
   return (
-    <p className="mt-2.5 text-sm text-ink tabular">
-      <span className="font-bold">{actual.toFixed(1)}%</span>
-      <span className="text-ink-muted"> actual vs </span>
-      <span className="font-bold">{expected.toFixed(1)}%</span>
-      <span className="text-ink-muted"> expected for D-I {label} on these shots </span>
-      {/* Tinted off the chart's own poles, not --good/--bad: on this card red
-          is the hot end, and a green "+2.7" beside a red-is-good court would
-          have the two halves arguing. */}
-      <span className="font-bold" style={{ color: d >= 0 ? HOT_HEX : COLD_HEX }}>
-        {sign}{Math.abs(d).toFixed(1)}
-      </span>
-    </p>
+    <div
+      role="tooltip"
+      className="pointer-events-none absolute z-20 w-52 rounded-md border border-hairline bg-paper shadow-lg overflow-hidden"
+      style={{
+        left: `${leftPct}%`,
+        top: `${topPct}%`,
+        transform: `translate(${xAlign}, ${below ? "14px" : "calc(-100% - 14px)"})`,
+      }}
+    >
+      <div className="h-1 w-full" style={{ background: accent }} />
+      <div className="px-3 py-2">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-lg font-bold text-ink tabular leading-none">{pct1(b.made / b.att)}</span>
+          <span className="text-[0.7rem] text-ink-muted tabular">{b.made} / {b.att}</span>
+          <span className="ml-auto text-[0.62rem] uppercase tracking-widest text-ink-muted tabular">{ft} ft</span>
+        </div>
+        {b.baseRate === null ? (
+          <p className="mt-1.5 text-[0.7rem] text-ink-muted">No league baseline for this spot.</p>
+        ) : (
+          <>
+            <div className="mt-1.5 flex items-baseline justify-between gap-2 text-[0.7rem]">
+              <span className="text-ink-muted">D-I {label} here</span>
+              <span className="text-ink-soft tabular font-medium">{pct1(b.baseRate)}</span>
+            </div>
+            <div className="mt-0.5 flex items-baseline justify-between gap-2 text-[0.7rem]">
+              <span className="text-ink-muted">Difference</span>
+              <span className="tabular font-bold" style={{ color: accent }}>{signed(raw!)}</span>
+            </div>
+            <div className="mt-1.5 pt-1.5 border-t border-hairline text-[0.62rem] text-ink-muted leading-snug">
+              Shaded {signed(100 * b.diff!)} — pulled toward the baseline for {b.att} attempt{b.att === 1 ? "" : "s"}.
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

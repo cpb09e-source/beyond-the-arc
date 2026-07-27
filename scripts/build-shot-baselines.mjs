@@ -9,10 +9,15 @@
  * Output: public/data/shot-baselines.json
  *   { r, seasons: { "2026": { G: { "247,53": [made, att] }, F: {…}, C: {…} } } }
  *
- * Binned on a COARSER hex grid than the volume chart (r=15 vs r=9). A single
+ * Binned on a COARSER hex grid than the volume chart (r=22 vs r=9). A single
  * player takes ~450 shots a season; at r=9 that's 2-3 attempts per cell, which
  * is not a shooting percentage, it's noise. The client shrinks toward this
  * baseline on top of that — see player-shot-chart.tsx.
+ *
+ * r was 15 first. At that size a typical player still only put ~4 attempts in
+ * a cell and the court read as scattered confetti; 22 groups the floor into
+ * regions you can actually name ("left elbow", "top of the key") and roughly
+ * doubles the attempts behind each one.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -22,8 +27,8 @@ const ROOT = path.resolve("public/data");
 const SHOTS = path.join(ROOT, "shots");
 const OUT = path.join(ROOT, "shot-baselines.json");
 
-// Must match player-shot-chart.tsx.
-const R = 15;
+// The client reads this back off the file, so the two can't disagree.
+const R = 22;
 const W = 500, H = 400;
 const CX = 0, CY = 1, MADE = 2;
 
@@ -84,8 +89,8 @@ for (const [key, arr] of points) {
   (seasons[yStr] ??= {});
   const cells = {};
   for (const b of gen(arr)) {
-    // Rounded centre as the cell key. Lattice spacing at r=15 is 13.0 in x and
-    // 22.5 in y, so rounding to whole units can't collide two centres.
+    // Rounded centre as the cell key. Lattice spacing at r=22 is 38.1 in x and
+    // 33.0 in y, so rounding to whole units can't collide two centres.
     cells[`${Math.round(b.x)},${Math.round(b.y)}`] = [b.reduce((n, s) => n + s[MADE], 0), b.length];
   }
   seasons[yStr][bucket] = cells;
