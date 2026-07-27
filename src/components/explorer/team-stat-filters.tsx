@@ -1,11 +1,11 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  RangeRow, isBoundActive, roundNice,
+  RangeRow, isBoundActive, roundNice, useDebouncedValue,
   type RangeStat, type RangeState,
 } from "@/components/filters/range-row";
 import {
@@ -180,12 +180,12 @@ export function TeamStatFilters({
 
   const draftFilters = useMemo(() => rangesToFilters(draft), [draft]);
   const dirty = !sameFilterSet(draftFilters, urlSpec.filters);
-  // Deferred so dragging a slider stays smooth — the count catches up at low
-  // priority once the drag settles instead of re-running on every pointermove.
-  const deferredFilters = useDeferredValue(draftFilters);
+  // Debounced, not deferred — see useDebouncedValue. Deferring left the
+  // pipeline running inside the drag frame and cost ~22ms a tick.
+  const previewFilters = useDebouncedValue(draftFilters);
   const matches = useMemo(
-    () => (previewCount ? previewCount(deferredFilters) : null),
-    [previewCount, deferredFilters],
+    () => (previewCount ? previewCount(previewFilters) : null),
+    [previewCount, previewFilters],
   );
 
   const activeDraft = ALL_RANGE_STATS.reduce((n, s) => n + (isBoundActive(draft[s.key]) ? 1 : 0), 0);
@@ -224,7 +224,7 @@ export function TeamStatFilters({
             aria-hidden
           />
           <div
-            className="bta-modal-in relative z-10 w-full max-w-176 max-h-[85vh] bg-paper rounded-2xl shadow-2xl ring-1 ring-ink/10 flex flex-col overflow-hidden"
+            className="bta-modal-in relative z-10 w-full max-w-176 lg:max-w-256 max-h-[85vh] bg-paper rounded-2xl shadow-2xl ring-1 ring-ink/10 flex flex-col overflow-hidden"
             role="dialog"
             aria-modal="true"
             aria-label="Stat filters"
@@ -265,7 +265,7 @@ export function TeamStatFilters({
                         <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-coral/15 text-coral text-[0.58rem] font-bold tabular">{gc}</span>
                       )}
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
                       {g.stats.map((st) => (
                         <RangeRow
                           key={st.key}
