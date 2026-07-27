@@ -30,6 +30,7 @@ import {
   PutObjectCommand,
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
+import { CACHE_CONTROL } from "./lib/r2-cache.mjs";
 
 dotenvConfig({ path: ".env.local" });
 
@@ -140,6 +141,11 @@ async function uploadOne(localPath) {
   const localMd5 = md5Hex(buf);
 
   // Skip if R2 already has this exact bytes (ETag == md5 for non-multipart PUTs).
+  //
+  // NOTE: this compares CONTENT only, so a re-sync will NOT repair metadata on
+  // objects whose bytes are unchanged. Changing CACHE_CONTROL therefore needs
+  // scripts/backfill-r2-cache-headers.mjs, which rewrites headers in place via
+  // CopyObject. Re-running this script is not a substitute.
   try {
     const head = await client.send(
       new HeadObjectCommand({ Bucket: R2_BUCKET, Key: key }),
@@ -166,7 +172,9 @@ async function uploadOne(localPath) {
         Key: key,
         Body: buf,
         ContentType: "application/json",
-        CacheControl: "public, max-age=31536000, immutable",
+        // See lib/r2-cache.mjs — deliberately NOT immutable; these keys are
+        // stable paths whose content changes on every data rebuild.
+        CacheControl: CACHE_CONTROL,
       }),
     );
     uploaded++;
