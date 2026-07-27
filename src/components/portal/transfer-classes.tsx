@@ -13,7 +13,9 @@ export type TCPlayer = {
   cbba_player_id: number;
   bart_player_id: number | null;
   name: string;
-  bta_portg: number | null;
+  // Portal Value Score — EPM scaled by role. See scripts/rescore-portal.mjs.
+  pvs: number | null;
+  epm: number | null;
   stars: 0 | 1 | 2 | 3 | 4 | 5;
   counter_team: string | null;   // OUT: where they went. IN: where they came from.
   counter_conf: string | null;
@@ -143,7 +145,7 @@ export function TransferClassModal({ row, onClose }: { row: TransferClassRow; on
           </Link>
           <div className="flex items-baseline gap-3">
             <div className="text-right">
-              <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Net BTA PRTG</div>
+              <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Net value</div>
               <div className={`font-display text-3xl tabular ${row.net >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
                 {row.net > 0 ? "+" : ""}{row.net.toFixed(1)}
               </div>
@@ -176,13 +178,13 @@ function PlayerList({
   accent: string;
   players: TCPlayer[];
 }) {
-  const totalPortg = players.reduce((s, p) => s + (p.bta_portg ?? 0), 0);
+  const totalPvs = players.reduce((s, p) => s + (p.pvs ?? 0), 0);
   return (
     <div className="p-5">
       <div className="flex items-baseline justify-between mb-3">
         <span className={`text-xs uppercase tracking-widest font-medium ${accent}`}>{kicker}</span>
         <span className="text-[0.65rem] text-ink-muted">
-          {players.length} {players.length === 1 ? "player" : "players"} · {totalPortg > 0 ? "+" : ""}{totalPortg.toFixed(1)} total
+          {players.length} {players.length === 1 ? "player" : "players"} · {totalPvs > 0 ? "+" : ""}{totalPvs.toFixed(1)} total
         </span>
       </div>
       {players.length === 0 ? (
@@ -211,8 +213,8 @@ function PlayerList({
                   ) : null}
                 </div>
               </div>
-              <span className={`font-medium tabular text-sm ${(p.bta_portg ?? 0) >= 0 ? "text-ink" : "text-rose-700"}`}>
-                {p.bta_portg === null ? "—" : `${p.bta_portg > 0 ? "+" : ""}${p.bta_portg.toFixed(1)}`}
+              <span className={`font-medium tabular text-sm ${(p.pvs ?? 0) >= 0 ? "text-ink" : "text-rose-700"}`}>
+                {p.pvs === null ? "—" : `${p.pvs > 0 ? "+" : ""}${p.pvs.toFixed(1)}`}
               </span>
             </li>
           ))}
