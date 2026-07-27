@@ -65,11 +65,11 @@ export function SeasonPreview({ teamName }: { teamName: string }) {
     from: p.from ?? null,
     rsci: p.rsci, // undefined for official-added newcomers → no recruit chip; number|null for recruits
     pts: p.pts, reb: p.reb, ast: p.ast,
-    fg3_pct: p.fg3, ft_pct: p.ft, pir: p.pir, bta_portg: p.prtg,
+    fg3_pct: p.fg3, ft_pct: p.ft, pir: p.pir,
     // Upcoming season — no play-by-play EPM / shot data yet.
     epm: null, ts_pct: null, usg_pct: null,
     pcts: {
-      bta_portg: p.prtgP, pir: p.pirP, pts: p.ptsP, reb: p.rebP,
+      pir: p.pirP, pts: p.ptsP, reb: p.rebP,
       ast: p.astP, fg3_pct: p.fg3P, ft_pct: p.ftP,
     },
   }));

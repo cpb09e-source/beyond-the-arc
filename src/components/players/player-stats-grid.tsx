@@ -109,7 +109,6 @@ const PANELS: Array<{ title: string; keys: string[] }> = [
 
 const STAT_DEFS: Record<string, string> = {
   pir: "Performance Index Rating — EuroLeague's per-game shorthand: PTS + REB + AST + STL + BLK − missed FG − missed FT.",
-  bta_portg: "Beyond the Arc Production Rating. Blends PIR, ORTG into a single z-score, then adjusts for conference tier and team strength.",
   epm: "Estimated Plus-Minus — points per 100 possessions the player adds over an average D-I player, estimated from the box score and calibrated against RAPM.",
   hkm_pct: "Hakeem Percentage — BLK% + STL%. Named after Hakeem Olajuwon.",
   efg_pct: "Effective Field Goal % — adjusts FG% so a 3-pointer counts 1.5× a 2-pointer.",

@@ -86,7 +86,7 @@ export type StaticTeamSeasonRow = {
    *  Populated by scripts/embed-roster-ranks.mjs. Lets the team dossier
    *  render chips inline without any extra file reads at build time. */
   roster_ranks?: Record<number, {
-    bta_portg?: number; pir?: number;
+    pir?: number;
     pts?: number; reb?: number; ast?: number;
     fg3_pct?: number; ft_pct?: number;
   }>;
@@ -203,9 +203,9 @@ export type PlayerRanksSeason = {
   year: number;
   bucket: "G" | "F" | "C";
   cohortSize: number;
-  // Headline BTA PRTG leaderboard position for the player's bucket and across
-  // all eligible D-I players in the same season. Null when the player has no
-  // bta_portg value (rare — usually only when PIR + PORPAG are both missing).
+  // Headline EPM leaderboard position for the player's bucket and across all
+  // eligible D-I players in the same season. Null when the player has no epm
+  // value for that year.
   rank: number | null;
   rankOverall: number | null;
   cohortOverall: number | null;

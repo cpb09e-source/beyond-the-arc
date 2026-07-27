@@ -39,7 +39,9 @@ export const STAT_META: Record<string, StatMeta> = {
   tpar:    { label: "3PAr",    format: "pct" },
   porpag:  { label: "PORPAG", format: "num" },
   pir:       { label: "PIR",      format: "num" },
-  bta_portg: { label: "BTA PRTG", format: "num" },
+  // BTA PRTG used to sit here alongside EPM. Two composite impact ratings in
+  // the same best/worst list said the same thing twice and disagreed with each
+  // other; EPM is the one the whole site ranks on now.
   epm:       { label: "EPM",      format: "num" },
 };
 

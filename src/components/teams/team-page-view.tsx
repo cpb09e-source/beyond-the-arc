@@ -18,7 +18,6 @@ import { FindGameTrigger } from "@/components/teams/find-game-trigger";
 import { TourneyTimeline } from "@/components/teams/tourney-timeline";
 import { PlayerHeadshotStrip } from "@/components/teams/player-headshot-strip";
 import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog } from "@/lib/static-data";
-import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier, teamStrengthMultiplier, powerConfSub500Multiplier, BTA_DEF_WEIGHT, btaDefScore } from "@/lib/conf-tiers";
 import { confDisplay } from "@/lib/conf-display";
 import { getTeamColors } from "@/lib/team-colors";
 
@@ -65,7 +64,6 @@ export type RosterEntry = {
   fg3_pct: number | null;
   ft_pct: number | null;
   pir: number | null;
-  bta_portg: number | null;
   epm: number | null;
   ts_pct: number | null;
   usg_pct: number | null;
@@ -73,7 +71,6 @@ export type RosterEntry = {
    *  stat the player didn't clear the rank cohort threshold for. Empty for
    *  players without a rank file at all. */
   pcts?: {
-    bta_portg?: number | null;
     pir?: number | null;
     pts?: number | null;
     reb?: number | null;
@@ -106,7 +103,6 @@ export function attachRosterRanks(
       ...p,
       pcts: {
         ...p.pcts, // keep EPM / TS% / USG% percentiles set in buildRoster
-        bta_portg: r.bta_portg ?? null,
         pir:       r.pir       ?? null,
         pts:       r.pts       ?? null,
         reb:       r.reb       ?? null,
@@ -118,162 +114,35 @@ export function attachRosterRanks(
   });
 }
 
-// Cache PIR + BTA PRTG per (year, player.id) across team-page generations.
+// Cache PIR per (year, player.id) across team-page generations.
 // Computed once per year from the full D-I cohort the first time any team
 // page that year is built; reused for the other ~365 teams that share the
 // same cohort.
-const yearMetricsCache = new Map<number, Map<number, { pir: number | null; bta_portg: number | null }>>();
-
-// Position bucket mapping — mirrors src/components/players/players-client.tsx
-// and scripts/compute-player-ranks.mts. Keep in sync.
-const BUCKET_BY_NOTE: Record<string, "G" | "F" | "C"> = {
-  "Pure PG": "G", "Scoring PG": "G", "Combo G": "G", "Wing G": "G",
-  "Wing F": "F", "Stretch 4": "F",
-  // Height-derived dual-eligibility notes for 2008-09 (see derive-positions.mts).
-  "G/F": "G", "F/G": "F", "C/F": "C",
-  "PF/C": "C", "C": "C",
-};
-
-// Volume-shooter penalty — mirrors players-client.tsx. Punishes high-PPG /
-// low-efficiency scorers (worst-of TS%-pctile and eFG%-pctile within
-// position bucket, so the Jahmir Young archetype — propped up by 90% FT
-// shooting on a 25-pctile eFG — gets caught). Caps at −10 BTA points.
-// Applied AFTER multipliers so schedule bonuses don't amplify it.
-function volumeShooterPenalty(ppg: number | null, effPositionPctile: number | null): number {
-  if (ppg == null || effPositionPctile == null) return 0;
-  const ppgFactor = Math.max(0, Math.min(1, (ppg - 12) / 8));
-  const effFactor = Math.max(0, Math.min(1, (45 - effPositionPctile) / 35));
-  return -10 * ppgFactor * effFactor;
-}
+const yearMetricsCache = new Map<number, Map<number, { pir: number | null }>>();
 
 function computeYearMetrics(players: StaticPlayerRow[], year: number) {
   const cached = yearMetricsCache.get(year);
   if (cached) return cached;
 
-  type Mid = {
-    id: number;
-    pir: number | null;
-    porpag: number | null;
-    conference: string | null;
-    team_name: string | null;
-    eligible: boolean;          // loose 8/10/3 floor — gates BTA PRTG calc
-    strict: boolean;            // 18/18/5 floor — gates efficiency cohort
-    def: number;                // per-game defensive index (additive z-tilt)
-    ppg: number | null;
-    ts: number | null;          // 0..100 (Bart's TS column at row[8])
-    eFg: number | null;         // 0..100 (Bart's eFG column at row[7])
-    bucket: "G" | "F" | "C" | null;
-  };
-  const mids: Mid[] = players.map((p) => {
+  // This used to z-score the entire D-I cohort for the year (PIR / PORPAG /
+  // defensive index), apply six conference and team-strength multipliers and a
+  // volume-shooter penalty — all to produce BTA PRTG. The roster table never
+  // rendered it: its impact column is EPM, and has been for a while. Removing
+  // the dead metric leaves PIR, which is a plain per-row formula needing no
+  // cohort statistics at all, so the whole cohort pass goes with it.
+  const out = new Map<number, { pir: number | null }>();
+  for (const p of players) {
     const row = p.player_bart_stats?.raw_row ?? null;
-    const games = p.player_bart_stats?.games ?? null;
-    const mins = pctFromIdx(row, 54);
     const pts = fromEnd(row, 3);
     const reb = fromEnd(row, 7);
     const ast = fromEnd(row, 6);
     const stl = fromEnd(row, 5);
     const blk = fromEnd(row, 4);
-    const missedFg = pctFromIdx(row, 52);
-    const missedFt = pctFromIdx(row, 44);
-    const porpag = pctFromIdx(row, 28);
-    const team = Array.isArray(p.teams) ? p.teams[0] : p.teams;
-    const conference = team?.conference ?? null;
-    const team_name = team?.name ?? null;
-    const eligible = (games ?? 0) >= 8 && (pts ?? 0) >= 3.5;
-    // Stricter "real contributor" floor for the efficiency-cohort ranking.
-    // Mirrors scripts/compute-player-ranks.mts so the penalty's "below 40th
-    // pctile" reads the same as the profile's SHOOTING percentile chips.
-    const strict = (games ?? 0) >= 18 && (mins ?? 0) >= 20 && (pts ?? 0) >= 5.3;
-    const pir = (pts !== null && reb !== null && ast !== null && stl !== null && blk !== null)
-      ? pts + reb + ast + stl + blk - (missedFg ?? 0) - (missedFt ?? 0)
-      : null;
-    const ts = pctFromIdx(row, 8);
-    const eFg = pctFromIdx(row, 7);
-    const note = p.player_bart_stats?.notes ?? null;
-    const bucket = note ? (BUCKET_BY_NOTE[note] ?? null) : null;
-    const def = btaDefScore(blk, stl, reb);
-    return { id: p.id, pir, porpag, conference, team_name, eligible, strict, def, ppg: pts, ts, eFg, bucket };
-  });
-
-  const pirVals: number[] = [];
-  const porVals: number[] = [];
-  const defVals: number[] = [];
-  for (const m of mids) {
-    if (!m.eligible) continue;
-    if (typeof m.pir === "number") pirVals.push(m.pir);
-    if (typeof m.porpag === "number") porVals.push(m.porpag);
-    defVals.push(m.def);
-  }
-  const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
-  const sd = (a: number[], mu: number) => Math.sqrt(a.reduce((s, v) => s + (v - mu) ** 2, 0) / a.length);
-  const pMu = pirVals.length ? mean(pirVals) : 0;
-  const pSd = pirVals.length ? sd(pirVals, pMu) : 0;
-  const oMu = porVals.length ? mean(porVals) : 0;
-  const oSd = porVals.length ? sd(porVals, oMu) : 0;
-  const dMu = defVals.length ? mean(defVals) : 0;
-  const dSd = defVals.length ? sd(defVals, dMu) : 0;
-
-  // Per-(position bucket) efficiency percentile: worst-of(TS% pctile,
-  // eFG% pctile). Ranking cohort is the STRICT pool (18g/18mpg/5ppg) so
-  // percentiles match the profile's SHOOTING chips. Non-strict players
-  // (8/10/3 ≤ X < 18/18/5) still get a percentile via binary search into
-  // the strict cohort's sorted distribution — so a 20-PPG / 15-game
-  // scorer doesn't escape the penalty just because of low GP.
-  const effByPos = new Map<number, number>();
-  for (const bucket of ["G", "F", "C"] as const) {
-    const inBucket = mids.filter((m) => m.eligible && m.bucket === bucket);
-    const strictInBucket = inBucket.filter((m) => m.strict);
-    function rankerFor(metric: (m: Mid) => number | null): (v: number) => number | null {
-      const sorted = strictInBucket
-        .map(metric)
-        .filter((v): v is number => typeof v === "number")
-        .sort((a, b) => a - b);
-      const n = sorted.length;
-      if (n < 2) return () => null;
-      return (v: number) => {
-        let lo = 0, hi = n;
-        while (lo < hi) {
-          const mid = (lo + hi) >> 1;
-          if (sorted[mid]! < v) lo = mid + 1;
-          else hi = mid;
-        }
-        return Math.max(0, Math.min(100, Math.round((lo / (n - 1)) * 100)));
-      };
-    }
-    const tsRanker = rankerFor((m) => m.ts);
-    const fgRanker = rankerFor((m) => m.eFg);
-    for (const m of inBucket) {
-      const t = typeof m.ts === "number" ? tsRanker(m.ts) : null;
-      const f = typeof m.eFg === "number" ? fgRanker(m.eFg) : null;
-      if (t == null && f == null) continue;
-      effByPos.set(m.id, t == null ? f! : f == null ? t : Math.min(t, f));
-    }
-  }
-
-  const out = new Map<number, { pir: number | null; bta_portg: number | null }>();
-  for (const m of mids) {
-    let bta: number | null = null;
-    if (m.eligible) {
-      const zs: number[] = [];
-      if (typeof m.pir === "number" && pSd > 0) zs.push(((m.pir - pMu) / pSd) * 0.69);
-      if (typeof m.porpag === "number" && oSd > 0) zs.push((m.porpag - oMu) / oSd);
-      if (zs.length > 0) {
-        // Offensive blend + additive defensive tilt (see conf-tiers btaDefScore).
-        const off = zs.reduce((s, v) => s + v, 0) / zs.length;
-        const zDef = dSd > 0 ? (m.def - dMu) / dSd : 0;
-        const raw = (off + BTA_DEF_WEIGHT * zDef) * 20;
-        const base =
-          raw
-          * confMultiplier(m.conference)
-          * topTeamMultiplier(m.team_name)
-          * top5Tier1Multiplier(m.team_name)
-          * top3InConfMultiplier(m.team_name)
-          * teamStrengthMultiplier(m.team_name)
-          * powerConfSub500Multiplier(m.team_name);
-        bta = base + volumeShooterPenalty(m.ppg, effByPos.get(m.id) ?? null);
-      }
-    }
-    out.set(m.id, { pir: m.pir, bta_portg: bta });
+    const pir =
+      pts !== null && reb !== null && ast !== null && stl !== null && blk !== null
+        ? pts + reb + ast + stl + blk - (pctFromIdx(row, 52) ?? 0) - (pctFromIdx(row, 44) ?? 0)
+        : null;
+    out.set(p.id, { pir });
   }
   yearMetricsCache.set(year, out);
   return out;
@@ -343,7 +212,6 @@ export function buildRoster(
         fg3_pct: pctFromIdx(row, 21),
         ft_pct: pctFromIdx(row, 15),
         pir: m?.pir ?? null,
-        bta_portg: m?.bta_portg ?? null,
         epm: epmById.get(p.id) ?? null,
         ts_pct: tsById.get(p.id) ?? null,
         usg_pct: usgById.get(p.id) ?? null,

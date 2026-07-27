@@ -40,18 +40,13 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { computeCohortStats, volumeShooterPenalty, type PlayerSeason, type CohortStats } from "./lib/bta-prtg.mts";
-import {
-  confMultiplier,
-  topTeamMultiplier,
-  top5Tier1Multiplier,
-  top3InConfMultiplier,
-  teamStrengthMultiplier,
-  powerConfSub500Multiplier,
-  POWER_CONFS,
-  BTA_DEF_WEIGHT,
-  btaDefScore,
-} from "../src/lib/conf-tiers.ts";
+// Only the cohort-eligibility helpers are still needed here. The conference /
+// top-team multipliers and the defensive tilt existed solely to build BTA PRTG,
+// which this script no longer ranks — EPM arrives pre-computed from the RAPM
+// fit, already adjusted for teammates and opponents, so none of that scaffolding
+// applies to it.
+import { computeCohortStats, type PlayerSeason, type CohortStats } from "./lib/bta-prtg.mts";
+import { POWER_CONFS } from "../src/lib/conf-tiers.ts";
 
 const PLAYER_DIR = path.resolve("public/data/player");
 const OUT_DIR = path.resolve("public/data/player-ranks");
@@ -140,47 +135,9 @@ function pirFor(row: RawRow): number | null {
   const missedFt = fromStart(row, 44) ?? 0;
   return pts + reb + ast + stl + blk - missedFg - missedFt;
 }
-// PORPAG — Bart Torvik's Points Over Replacement Per Adjusted Game (idx 28).
-// Second component of the BTA PRTG z-blend, paired with PIR.
-function porpagOf(row: RawRow): number | null { return fromStart(row, 28); }
-// Defensive index for the additive defensive z-tilt — mirrors defScoreOfRow in
-// scripts/lib/bta-prtg.mts (blk + steals + a slice of defensive glass).
-function defScoreOf(row: RawRow): number {
-  return btaDefScore(fromEnd(row, 4), fromEnd(row, 5), fromEnd(row, 7));
-}
-
-// BTA PRTG for a single season — uses year cohort stats + conf/team multipliers,
-// then adds the volume-shooter penalty (TS% percentile vs position bucket).
-// Matches the formula in scripts/lib/bta-prtg.mts :: productionFor.
-function btaPortgFor(bartId: number, season: PlayerSeason, stats: CohortStats | undefined): number | null {
-  if (!stats) return null;
-  const row = season.raw_row as RawRow;
-  const pir = pirFor(row);
-  const porpag = porpagOf(row);
-  const zs: number[] = [];
-  if (typeof pir === "number" && stats.pirSd > 0) zs.push(((pir - stats.pirMean) / stats.pirSd) * 0.69);
-  if (typeof porpag === "number" && stats.porSd > 0) zs.push((porpag - stats.porMean) / stats.porSd);
-  if (zs.length === 0) return null;
-  // Offensive blend + additive defensive tilt (see bta-prtg.mts).
-  const off = zs.reduce((s, v) => s + v, 0) / zs.length;
-  const zDef = stats.defSd > 0 ? (defScoreOf(row) - stats.defMean) / stats.defSd : 0;
-  const raw = (off + BTA_DEF_WEIGHT * zDef) * 20;
-  const base = raw
-    * confMultiplier(season.team_conference)
-    * topTeamMultiplier(season.team_name)
-    * top5Tier1Multiplier(season.team_name)
-    * top3InConfMultiplier(season.team_name)
-    * teamStrengthMultiplier(season.team_name)
-    * powerConfSub500Multiplier(season.team_name);
-  const ppg = fromEnd(row, 3);
-  return base + volumeShooterPenalty(ppg, stats.effPositionPctile.get(bartId) ?? null);
-}
-
 // ---------- Stat list ----------
 // `read` receives bartId + the eligible season + that year's cohort stats.
-// Most reads only need the season; bta_portg uses bartId to look up the
-// player's TS-by-position percentile from the cohort stats for the
-// volume-shooter penalty.
+// Most reads only need the season.
 type StatDef = {
   key: string;
   label: string;
@@ -235,9 +192,15 @@ const STATS: StatDef[] = [
   // Box EPM — estimated plus-minus, joined by (year, bartId). Not every
   // eligible player has one; a null just leaves the tile out.
   { key: "epm",     label: "EPM",        read: (bartId, s) => epmByYear.get(s.year)?.get(bartId) ?? null, better: "high" },
-  // Derived ratings — PIR per game and BTA PRTG (cohort-z-scored production).
+  // Derived rating — PIR per game.
+  //
+  // BTA PRTG used to be ranked here too. It was a second composite impact
+  // rating sitting next to EPM in the same best/worst list, saying the same
+  // thing in different units and disagreeing about the answer. EPM is what the
+  // rings, the leaderboard, the stat tiles and the portal all rank on now, so
+  // the second one is gone rather than relabelled — relabelling a PRTG value
+  // "EPM" would have put a number under a name that doesn't produce it.
   { key: "pir",       label: "PIR",      read: (_bartId, s) => pirFor(s.raw_row as RawRow),               better: "high" },
-  { key: "bta_portg", label: "BTA PRTG", read: (bartId, s, yearStats) => btaPortgFor(bartId, s, yearStats), better: "high" },
 ];
 
 // ---------- Cohort eligibility ----------
@@ -360,15 +323,22 @@ async function main() {
   //   - rank overall across all eligible D-I players (#5 overall)
   //   - rank within non-power-conference cohort (#2 mid-major) — only
   //     populated for players whose own conference is NOT a power league
-  // All three are sorted by BTA PRTG desc. Players without a bta_portg
-  // for the year are excluded (their season ranks just won't carry these
-  // fields). POWER_CONFS lives in src/lib/conf-tiers.ts.
-  console.log("\n📊 computing BTA PRTG ranks (bucket + overall + mid-major)…");
+  // All three are sorted by EPM desc. Players without an epm for the year are
+  // excluded (their season ranks just won't carry these fields). POWER_CONFS
+  // lives in src/lib/conf-tiers.ts.
+  //
+  // These used to sort by BTA PRTG, which put the player page's headline rings
+  // in direct conflict with the /players leaderboard: the table sorts on EPM,
+  // so Chet Holmgren's 2021-22 showed "#1" there and "#29 overall" on his own
+  // page (97th percentile PRTG vs 100th percentile EPM). EPM is the site's
+  // headline impact metric everywhere else now — the stat tiles, the transfer
+  // portal's PVS — and the rings were the last holdout.
+  console.log("\n📊 computing EPM ranks (bucket + overall + mid-major)…");
   type RatingEntry = { bartId: number; bucket: "G" | "F" | "C"; rating: number; conf: string | null };
   const ratingsByYear = new Map<number, RatingEntry[]>();
   for (const [bartId, byYear] of playerRanks) {
     for (const [year, info] of byYear) {
-      const rating = info.stats.bta_portg?.value;
+      const rating = info.stats.epm?.value;
       if (typeof rating !== "number") continue;
       if (!ratingsByYear.has(year)) ratingsByYear.set(year, []);
       ratingsByYear.get(year)!.push({

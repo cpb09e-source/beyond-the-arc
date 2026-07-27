@@ -1,7 +1,7 @@
 import type { PlayerRanksSeason } from "@/lib/static-data";
 
 /**
- * BTA PRTG leaderboard rings — one per rank dimension (bucket / overall /
+ * EPM leaderboard rings — one per rank dimension (bucket / overall /
  * mid-major when non-power).
  *
  * Lives in its own module because it renders in the player-page hero, which is
@@ -26,7 +26,7 @@ export function RankRings({ season, size }: { season: PlayerRanksSeason; size?: 
       <RankRing
         n={season.rank}
         denom={season.cohortSize}
-        pct={season.stats.bta_portg?.percentile ?? null}
+        pct={season.stats.epm?.percentile ?? null}
         label={bucketSingular(season.bucket)}
         size={size}
       />
