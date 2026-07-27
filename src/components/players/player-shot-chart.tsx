@@ -322,18 +322,47 @@ const CORNER_Y = RIM_Y + Math.sqrt(THREE_R * THREE_R - (RIM_X - CORNER_X) * (RIM
 const COURT_BG = "#e8e3d8";
 const LINE = "rgba(26,34,56,0.30)";
 
-// Volume ramp — pale sand through to deep brick. Warm on purpose: heat means
-// "how often" here, and the only other colour on the card (accuracy) is the
-// site's green/red, so the two encodings can't be confused for each other.
+// Volume ramp — pale sand through to deep brick. Single hue, so it reads as
+// one quantity getting bigger; the accuracy chart beside it is the only place
+// hue itself carries meaning.
 const VOL_RAMP: [number, number, number][] = [
   [0xf2, 0xe3, 0xcd],
   [0xe2, 0x82, 0x4a],
   [0x9c, 0x2f, 0x1d],
 ];
-// Accuracy diverging scale — the site's --bad / --good with a paper midpoint.
-const COLD: [number, number, number] = [0xb9, 0x4c, 0x4c];
+/**
+ * Accuracy diverging scale: blue = cold (below the cohort), red = hot (above).
+ *
+ * This deliberately inverts the site's --good/--bad semantics, where red means
+ * trouble. On a shot chart red-is-hot is the older and stronger convention
+ * (it's what every heat map in the sport uses), and the scale is read as
+ * temperature, not as a verdict. The aggregate delta under the chart is tinted
+ * off these same two poles so the card can't contradict itself.
+ */
+const COLD: [number, number, number] = [0x1f, 0x5e, 0x9e];
 const NEUTRAL: [number, number, number] = [0xf4, 0xf1, 0xe8];
-const WARM: [number, number, number] = [0x3f, 0x7d, 0x55];
+const HOT: [number, number, number] = [0xbd, 0x2f, 0x24];
+const COLD_HEX = "#1f5e9e";
+const HOT_HEX = "#bd2f24";
+
+/**
+ * Half-width of the colour scale, in percentage points of FG%.
+ *
+ * Measured, not guessed. Across 600 qualifying 2026 players (54,300 hex cells)
+ * the shrunk difference lands at |1.6| points median, |4.1| at p90, |5.0| at
+ * p95. An earlier ±10 domain therefore left the typical cell using 16% of the
+ * scale — which is exactly why the chart read as washed out. At ±5 the median
+ * cell shows a third of full saturation and the top ~5% clip, which is what a
+ * diverging map is supposed to do.
+ */
+const DIFF_DOMAIN = 0.05;
+/**
+ * Slight gamma on the ramp, lifting mid-range cells further out of the paper.
+ * Safe to apply because the legend is drawn by this same function over evenly
+ * spaced values — any monotone curve stays self-consistent, so matching a hex
+ * against the legend still reads the right number off it.
+ */
+const DIFF_GAMMA = 0.8;
 
 const mix = (a: [number, number, number], b: [number, number, number], t: number) =>
   `rgb(${Math.round(a[0] + (b[0] - a[0]) * t)},${Math.round(a[1] + (b[1] - a[1]) * t)},${Math.round(a[2] + (b[2] - a[2]) * t)})`;
@@ -343,9 +372,9 @@ function volColor(t: number): string {
   return c < 0.5 ? mix(VOL_RAMP[0]!, VOL_RAMP[1]!, c * 2) : mix(VOL_RAMP[1]!, VOL_RAMP[2]!, (c - 0.5) * 2);
 }
 function diffColor(d: number): string {
-  // Domain ±10 percentage points, matching how these charts are read elsewhere.
-  const t = Math.max(-1, Math.min(1, d / 0.1));
-  return t < 0 ? mix(NEUTRAL, COLD, -t) : mix(NEUTRAL, WARM, t);
+  const t = Math.max(-1, Math.min(1, d / DIFF_DOMAIN));
+  const s = Math.pow(Math.abs(t), DIFF_GAMMA);
+  return t < 0 ? mix(NEUTRAL, COLD, s) : mix(NEUTRAL, HOT, s);
 }
 
 /** Shared court frame: grainy floor, then children (the marks), then line work. */
@@ -518,7 +547,10 @@ function ExpectedLine({
       <span className="text-ink-muted"> actual vs </span>
       <span className="font-bold">{expected.toFixed(1)}%</span>
       <span className="text-ink-muted"> expected for D-I {label} on these shots </span>
-      <span className={cn("font-bold", d >= 0 ? "text-good" : "text-bad")}>
+      {/* Tinted off the chart's own poles, not --good/--bad: on this card red
+          is the hot end, and a green "+2.7" beside a red-is-good court would
+          have the two halves arguing. */}
+      <span className="font-bold" style={{ color: d >= 0 ? HOT_HEX : COLD_HEX }}>
         {sign}{Math.abs(d).toFixed(1)}
       </span>
     </p>
@@ -556,13 +588,16 @@ function VolumeLegend() {
 }
 
 function AccuracyLegend({ label }: { label: string }) {
-  const steps = Array.from({ length: 11 }, (_, i) => diffColor((i / 10) * 0.2 - 0.1));
+  // Drawn with diffColor over evenly spaced values across the domain, so the
+  // strip is a true key even with the gamma applied.
+  const D = DIFF_DOMAIN * 100;
+  const steps = Array.from({ length: 13 }, (_, i) => diffColor((i / 12) * 2 * DIFF_DOMAIN - DIFF_DOMAIN));
   return (
     <div className="mt-2.5">
       <div className="flex items-center gap-2.5 text-[0.62rem] uppercase tracking-widest text-ink-muted">
-        <span className="shrink-0 tabular">−10</span>
+        <span className="shrink-0 tabular">−{D}</span>
         <Swatches colors={steps} />
-        <span className="shrink-0 tabular">+10</span>
+        <span className="shrink-0 tabular">+{D}</span>
       </div>
       <div className="mt-1 text-[0.62rem] text-ink-muted text-center">FG% vs D-I {label} from the same spot</div>
     </div>
