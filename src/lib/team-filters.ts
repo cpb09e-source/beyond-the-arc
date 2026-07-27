@@ -81,10 +81,23 @@ export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   { key: "drb_diff_ct",  source: "cbbd", dbColumn: "drb_diff",       label: "DREB Diff",    desc: "Defensive rebounds − opp DREB",              format: "num1", group: "diffs" },
   { key: "reb_diff_ct",  source: "cbbd", dbColumn: "reb_diff",       label: "REB Diff",     desc: "Total rebounds − opp REB",                   format: "num1", group: "diffs" },
   { key: "tov_diff_ct",  source: "cbbd", dbColumn: "tov_diff_ct",    label: "TOV Diff",     desc: "Turnovers − opp TOV (negative = good)",      format: "num1", group: "diffs" },
-  { key: "fbpts_diff",   source: "cbbd", dbColumn: "fbpts_diff",     label: "FBP Diff",     desc: "Fast-break points − allowed",                format: "num1", group: "diffs" },
-  { key: "pitp_diff",    source: "cbbd", dbColumn: "pitp_diff",      label: "Paint Pts Diff", desc: "Points in the paint − allowed",            format: "num1", group: "diffs" },
+  // PER-GAME first: these are the ones with broad coverage. CBBD reports an
+  // untracked point split as 0 rather than null on 30-57% of pre-2024 games, so
+  // a SEASON TOTAL can only be honestly reported for ~1,200 of 4,631
+  // team-seasons. The per-game average over the games that were tracked is
+  // valid at partial coverage and reaches ~3,800 — and it is the fairer
+  // comparison regardless, since a season total quietly rewards whoever played
+  // more games.
+  { key: "fbpts_diff_pg",  source: "cbbd", dbColumn: "fbpts_diff_pg",  label: "FBP Diff/G",       desc: "Fast-break points − allowed, per game",        format: "num2", group: "diffs" },
+  { key: "pitp_diff_pg",   source: "cbbd", dbColumn: "pitp_diff_pg",   label: "Paint Pts Diff/G", desc: "Points in the paint − allowed, per game",      format: "num2", group: "diffs" },
+  { key: "potov_diff_pg",  source: "cbbd", dbColumn: "potov_diff_pg",  label: "Pts off TO Diff/G", desc: "Points off turnovers − allowed, per game",    format: "num2", group: "diffs" },
+  { key: "scp_diff_pg",    source: "cbbd", dbColumn: "scp_diff_pg",    label: "2nd-Chance Diff/G", desc: "Second-chance points − allowed, per game",    format: "num2", group: "diffs" },
+  // Season totals. Kept because they're the natural reading for a recent season,
+  // but they go blank on most pre-2023 seasons — by design, not by accident.
+  { key: "fbpts_diff",   source: "cbbd", dbColumn: "fbpts_diff",     label: "FBP Diff",     desc: "Fast-break points − allowed (season total; blank when the split wasn't tracked for enough games)",                format: "num1", group: "diffs" },
+  { key: "pitp_diff",    source: "cbbd", dbColumn: "pitp_diff",      label: "Paint Pts Diff", desc: "Points in the paint − allowed (season total)",            format: "num1", group: "diffs" },
   { key: "pts_diff",     source: "cbbd", dbColumn: "pts_diff",       label: "Pts Diff",     desc: "Total points scored − allowed (season)",     format: "num1", group: "diffs" },
-  { key: "scp_diff",     source: "cbbd", dbColumn: "scp_diff",       label: "2nd-Chance Diff", desc: "Second-chance points − allowed",          format: "num1", group: "diffs" },
+  { key: "scp_diff",     source: "cbbd", dbColumn: "scp_diff",       label: "2nd-Chance Diff", desc: "Second-chance points − allowed (season total; reconstructed from play-by-play, so blank unless every game has PBP)",          format: "num1", group: "diffs" },
 
   // ── Misc (pace, raw net) ─────────────────────────────────
   { key: "cbb_pace",     source: "cbbd", dbColumn: "pace",     label: "Pace",       desc: "Possessions per game",         format: "num1", group: "misc" },
@@ -297,6 +310,16 @@ export type TeamRow = {
   tov_diff_ct: number | null;
   fbpts_diff: number | null;
   pitp_diff: number | null;
+  /**
+   * Per-tracked-game split differentials. Prefer these over the season totals
+   * above: CBBD reports an untracked split as 0 rather than null on a third of
+   * pre-2024 games, so the totals are only honest on ~1,200 of 4,631
+   * team-seasons while these reach ~3,800.
+   */
+  fbpts_diff_pg: number | null;
+  pitp_diff_pg: number | null;
+  potov_diff_pg: number | null;
+  scp_diff_pg: number | null;
   pts_diff: number | null;
   scp_diff: number | null;
   potov_diff: number | null;
@@ -427,6 +450,10 @@ export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { r
       pts_diff: cbb?.pts_diff ?? null,
       scp_diff: cbb?.scp_diff ?? null,
       potov_diff: cbb?.potov_diff ?? null,
+      fbpts_diff_pg: cbb?.fbpts_diff_pg ?? null,
+      pitp_diff_pg: cbb?.pitp_diff_pg ?? null,
+      potov_diff_pg: cbb?.potov_diff_pg ?? null,
+      scp_diff_pg: cbb?.scp_diff_pg ?? null,
       bta_ortg,
       bta_drtg,
       bta_net: (bta_ortg !== null && bta_drtg !== null) ? bta_ortg - bta_drtg : null,
@@ -598,10 +625,16 @@ function attachBtaRtg(rows: TeamRow[]) {
   // Small-weight diff tells — ORTG side
   const orbDiff   = meanStd((r) => r.orb_diff_ct);
   const fg3mDiff  = meanStd((r) => r.fg3m_diff_ct);
-  const fbptsDiff = meanStd((r) => r.fbpts_diff);
+  // PER-GAME, not the season total. The total is null for most pre-2023
+  // team-seasons (CBBD reports untracked splits as 0), so keying the composite
+  // off it meant BTA RTG quietly used a different set of inputs depending on
+  // the era — a 2016 team scored on 7 components where a 2026 team scored on 9.
+  // The per-game variant covers ~3,800 team-seasons instead of ~1,200 and is
+  // already scale-free, which is what a z-score wants.
+  const fbptsDiff = meanStd((r) => r.fbpts_diff_pg);
   // Small-weight diff tells — DRTG side
   const rebDiff   = meanStd((r) => r.reb_diff_ct);
-  const potovDiff = meanStd((r) => r.potov_diff);
+  const potovDiff = meanStd((r) => r.potov_diff_pg);
 
   for (const r of rows) {
     let weightedSum = 0;
@@ -618,10 +651,10 @@ function attachBtaRtg(rows: TeamRow[]) {
     // ORTG-side small-weight tells (+z = bigger advantage = better)
     if (orbDiff   && typeof r.orb_diff_ct  === "number") add((r.orb_diff_ct  - orbDiff.mean)   / orbDiff.std,   0.25);
     if (fg3mDiff  && typeof r.fg3m_diff_ct === "number") add((r.fg3m_diff_ct - fg3mDiff.mean)  / fg3mDiff.std,  0.25);
-    if (fbptsDiff && typeof r.fbpts_diff   === "number") add((r.fbpts_diff   - fbptsDiff.mean) / fbptsDiff.std, 0.25);
+    if (fbptsDiff && typeof r.fbpts_diff_pg === "number") add((r.fbpts_diff_pg - fbptsDiff.mean) / fbptsDiff.std, 0.25);
     // DRTG-side small-weight tells (+z = bigger advantage = better)
     if (rebDiff   && typeof r.reb_diff_ct === "number") add((r.reb_diff_ct - rebDiff.mean)   / rebDiff.std,   0.25);
-    if (potovDiff && typeof r.potov_diff  === "number") add((r.potov_diff  - potovDiff.mean) / potovDiff.std, 0.25);
+    if (potovDiff && typeof r.potov_diff_pg === "number") add((r.potov_diff_pg - potovDiff.mean) / potovDiff.std, 0.25);
     r.bta_rtg = totalWeight === 0 ? null : (weightedSum / totalWeight) * 40;
   }
 }

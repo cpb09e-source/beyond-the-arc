@@ -66,6 +66,25 @@ function splitTotal(b, games) {
   return b.own - b.opp;
 }
 
+/**
+ * Split differential PER TRACKED GAME.
+ *
+ * A season total is only meaningful at near-complete coverage — a partial sum
+ * isn't a smaller version of the real number, it's a different quantity — which
+ * left fbpts_diff on 1,194 of 4,631 team-seasons and scp_diff on 302, because
+ * CBBD's play-by-play reaches only ~52% of 2014 games and untracked splits come
+ * back as 0 for a third of pre-2024 games.
+ *
+ * An average over the games we DO have is a valid estimate at partial coverage,
+ * and it is the better comparison anyway: teams play different numbers of games,
+ * so a season total quietly rewards the team that went deeper into March. Same
+ * 50% floor as the shares — below that the sample is too thin to rank on.
+ */
+function splitPerGame(b, games) {
+  if (games === 0 || b.n === 0 || b.n / games < SHARE_MIN_COVERAGE) return null;
+  return r2((b.own - b.opp) / b.n);
+}
+
 /** CBBD adjusted ratings for a season, keyed by Bart team name. */
 function adjustedRatings(season) {
   const fp = path.join(ROOT, "data/cbbd", String(season), "ratings-adjusted.json.gz");
@@ -288,13 +307,25 @@ for (const [key, a] of totals) {
     fbpts_diff: splitTotal(a.fastBreak, a.games),
     pitp_diff: splitTotal(a.inPaint, a.games),
     potov_diff: splitTotal(a.offTurnovers, a.games),
+    // Per-tracked-game averages. These are the ones with broad coverage — the
+    // season totals above go null on most pre-2023 seasons because the split
+    // simply wasn't recorded for enough games to total up.
+    fbpts_diff_pg: splitPerGame(a.fastBreak, a.games),
+    pitp_diff_pg: splitPerGame(a.inPaint, a.games),
+    potov_diff_pg: splitPerGame(a.offTurnovers, a.games),
     fbpts_games: a.fastBreak.n,
     pitp_games: a.inPaint.n,
     potov_games: a.offTurnovers.n,
     pts_diff: a.pts - a.o_pts,
     // Null rather than 0 unless EVERY game in the season had PBP coverage —
     // a partial sum would read as a real (small) differential.
+    // Second-chance points are reconstructed from play-by-play, whose coverage
+    // is far thinner than the box archive in the older seasons (~52% of 2014
+    // games), so the season total demands full coverage and the per-game figure
+    // carries the rest.
     scp_diff: a.scpGames === a.games ? a.scp - a.o_scp : null,
+    scp_diff_pg: splitPerGame({ n: a.scpGames, own: a.scp, opp: a.o_scp }, a.games),
+    scp_games: a.scpGames,
 
     // ---- misc ----
     pace: r1(rate(a.poss, a.games)),

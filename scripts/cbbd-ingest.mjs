@@ -132,6 +132,62 @@ const seasonOf = (date) => {
   return m >= 8 ? y + 1 : y;
 };
 
+/** US Eastern calendar date for a UTC timestamp — the bucket our archive uses. */
+const ET_FMT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+});
+const etDateOf = (iso) => ET_FMT.format(new Date(iso));
+const shiftDay = (ymd, days) =>
+  new Date(new Date(`${ymd}T12:00:00Z`).getTime() + days * 86400000).toISOString().slice(0, 10);
+
+/**
+ * Per-game fallback for a date `/plays/date` refuses to serve.
+ *
+ * CBBD's backend 504s on the biggest slates — the first Saturday of most months
+ * — after about two minutes. Confirmed server-side, not a client timeout: a
+ * direct request with a 150s budget still came back 504. Retrying the same call
+ * therefore cannot work, and ~5 dates per season were simply missing because of
+ * it. That matters most in-season, where the failures land on exactly the
+ * busiest nights.
+ *
+ * So: ask which games were played, then pull each game's plays individually.
+ * ~130 small requests instead of one enormous one.
+ *
+ * THE DATE WINDOW IS DELIBERATELY WIDE. `/games` filters on the UTC start time,
+ * so a single-day range misses almost the entire slate — a 7pm ET tip is already
+ * tomorrow in UTC. Measured on 2026-02-14: a one-day range returned 9 games,
+ * NONE of which were actually played that ET date, while a ±2-day window
+ * returned 230 games of which 132 were. So pull wide, then filter on the ET date.
+ */
+async function ingestDateByGame(date) {
+  const games = await get("/games", {
+    startDateRange: shiftDay(date, -2),
+    endDateRange: shiftDay(date, 2),
+  });
+  await sleep(PAUSE_MS);
+  if (!Array.isArray(games)) return null;
+
+  const onDate = games.filter((g) => g.startDate && etDateOf(g.startDate) === date);
+  if (onDate.length === 0) return [];
+
+  console.log(`\n    ↳ per-game fallback: ${onDate.length} games on ${date}`);
+  const plays = [];
+  let failed = 0;
+  for (const g of onDate) {
+    try {
+      const p = await get(`/plays/game/${g.id}`);
+      if (Array.isArray(p)) plays.push(...p);
+    } catch {
+      failed++;
+    }
+    await sleep(PAUSE_MS);
+  }
+  if (failed) console.log(`    ↳ ${failed} of ${onDate.length} games still failed`);
+  // All-or-nothing: a partial day written to the archive would be indistinguishable
+  // from a complete one on the next run, and resume would skip it forever.
+  return failed > 0 && plays.length === 0 ? null : plays;
+}
+
 async function ingestDate(date) {
   const season = seasonOf(date);
   const dir = path.join(OUT_ROOT, String(season));
@@ -143,8 +199,20 @@ async function ingestDate(date) {
   // 1. Every play in the slate (carries onFloor + participants + shotInfo).
   // utcOffset pins the date bucket to ET so a 7pm tip doesn't also appear in
   // the next UTC day's pull (stint builder dedupes by gameId regardless).
-  const plays = await get("/plays/date", { date, utcOffset: -5 });
-  await sleep(PAUSE_MS);
+  let plays;
+  let viaFallback = false;
+  try {
+    plays = await get("/plays/date", { date, utcOffset: -5 });
+    await sleep(PAUSE_MS);
+  } catch (e) {
+    // Only the whole-slate call is worth falling back on; a per-game failure
+    // below is already handled inside ingestDateByGame.
+    console.error(`\n  ! ${date}: ${e.message}`);
+    plays = await ingestDateByGame(date);
+    viaFallback = true;
+    if (plays === null) throw new Error(`${date}: /plays/date failed and the per-game fallback got nothing`);
+  }
+
   if (!Array.isArray(plays) || plays.length === 0) {
     // Off day — write an empty marker so resume skips it.
     writeGz(playsFp, []);
@@ -152,7 +220,7 @@ async function ingestDate(date) {
   }
   writeGz(playsFp, plays);
   const gameIds = new Set(plays.map((p) => p.gameId));
-  return { date, games: gameIds.size, plays: plays.length };
+  return { date, games: gameIds.size, plays: plays.length, viaFallback };
 }
 
 // Box scores pull in date-range chunks (fewer calls than per-date).
