@@ -174,6 +174,63 @@ body {
   .bta-search-grow { animation: none; }
 }
 
+/* Mobile nav burger → X.
+ *
+ * The bars hinge from their LEFT ends rather than pivoting about their centres,
+ * so opening swings the top and bottom bars out into a big corner-to-corner X
+ * instead of collapsing them into a small centred one, while the middle bar
+ * wipes away to zero width. (Ported from uiverse.io/Cevorob/good-wolverine-51,
+ * scaled from its 40x30 box to 20x16 so it sits at the same visual weight as
+ * the 20px search glass beside it, and recoloured to currentColor so it follows
+ * --ink through the light/dark themes.)
+ *
+ * Geometry: each bar is the full 20px width and keeps that length through the
+ * rotation, so at 45° it reaches 14.1px in x and y from its pivot — the X reads
+ * as the box's two diagonals. The 2px nudge right and the half-bar-height drop
+ * on the bottom bar are what land the two crossings on the same point.
+ */
+.bta-burger {
+  position: relative;
+  width: 20px;
+  height: 16px;
+}
+.bta-burger span {
+  display: block;
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  border-radius: 9px;
+  background: currentColor;
+  opacity: 1;
+  transform-origin: left center;
+  transform: rotate(0deg);
+  transition: transform 0.25s ease-in-out, top 0.25s ease-in-out,
+              left 0.25s ease-in-out, width 0.25s ease-in-out,
+              opacity 0.25s ease-in-out;
+}
+.bta-burger span:nth-of-type(1) { top: 0; }
+.bta-burger span:nth-of-type(2) { top: 50%; transform: translateY(-50%); }
+.bta-burger span:nth-of-type(3) { top: 100%; transform: translateY(-100%); }
+
+.bta-burger[data-open="true"] span:nth-of-type(1) {
+  top: 0;
+  left: 2px;
+  transform: rotate(45deg);
+}
+.bta-burger[data-open="true"] span:nth-of-type(2) {
+  width: 0;
+  opacity: 0;
+}
+.bta-burger[data-open="true"] span:nth-of-type(3) {
+  top: 15px;
+  left: 2px;
+  transform: rotate(-45deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .bta-burger span { transition: none; }
+}
+
 /* Court-line divider — for section breaks */
 .court-divider {
   height: 1px;

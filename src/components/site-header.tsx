@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Menu, X, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { SearchDialog } from "@/components/search/search-dialog";
 import { cn } from "@/lib/utils";
 
@@ -123,7 +123,13 @@ export function SiteHeader() {
             aria-expanded={open}
             aria-controls="mobile-nav"
           >
-            {open ? <X size={20} /> : <Menu size={20} />}
+            {/* Three bars that morph into an X — see .bta-burger in globals.css.
+                A real <button> driven by React state rather than the source
+                component's hidden-checkbox trick, so aria-expanded /
+                aria-controls stay honest. */}
+            <span className="bta-burger" data-open={open} aria-hidden>
+              <span /><span /><span />
+            </span>
           </button>
         </div>
       </div>
