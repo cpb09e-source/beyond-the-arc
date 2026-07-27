@@ -95,7 +95,7 @@ export function pctColorDark(pct: number): string {
 const PANELS: Array<{ title: string; keys: string[] }> = [
   {
     title: "Box Score",
-    keys: ["pts_pg", "reb_pg", "ast_pg", "stl_pg", "blk_pg", "fta_pg", "pir", "bta_portg"],
+    keys: ["pts_pg", "reb_pg", "ast_pg", "stl_pg", "blk_pg", "fta_pg", "pir", "epm"],
   },
   {
     title: "Shooting",
@@ -110,6 +110,7 @@ const PANELS: Array<{ title: string; keys: string[] }> = [
 const STAT_DEFS: Record<string, string> = {
   pir: "Performance Index Rating — EuroLeague's per-game shorthand: PTS + REB + AST + STL + BLK − missed FG − missed FT.",
   bta_portg: "Beyond the Arc Production Rating. Blends PIR, ORTG into a single z-score, then adjusts for conference tier and team strength.",
+  epm: "Estimated Plus-Minus — points per 100 possessions the player adds over an average D-I player, estimated from the box score and calibrated against RAPM.",
   hkm_pct: "Hakeem Percentage — BLK% + STL%. Named after Hakeem Olajuwon.",
   efg_pct: "Effective Field Goal % — adjusts FG% so a 3-pointer counts 1.5× a 2-pointer.",
   ts_pct: "True Shooting % — points per scoring attempt, weighting 2s, 3s, and free throws together.",

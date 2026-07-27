@@ -55,6 +55,29 @@ import {
 
 const PLAYER_DIR = path.resolve("public/data/player");
 const OUT_DIR = path.resolve("public/data/player-ranks");
+const DATA_DIR = path.resolve("public/data");
+
+// ---------- Box EPM ----------
+// Estimated plus-minus, already computed per season by compute-box-epm.py and
+// written to box-epm-<year>.json keyed by bart player id. Loaded once up front
+// so the stat read below is a map lookup rather than a file hit per player.
+const epmByYear = new Map<number, Map<number, number>>();
+async function loadEpm(): Promise<void> {
+  const files = (await fs.readdir(DATA_DIR)).filter((f) => /^box-epm-\d{4}\.json$/.test(f));
+  for (const f of files) {
+    const year = Number(f.slice("box-epm-".length, -".json".length));
+    const j = JSON.parse(await fs.readFile(path.join(DATA_DIR, f), "utf8")) as {
+      players: Record<string, { epm: number | null }>;
+    };
+    const m = new Map<number, number>();
+    for (const [id, v] of Object.entries(j.players ?? {})) {
+      if (typeof v?.epm === "number" && Number.isFinite(v.epm)) m.set(Number(id), v.epm);
+    }
+    epmByYear.set(year, m);
+  }
+  const total = [...epmByYear.values()].reduce((n, m) => n + m.size, 0);
+  console.log(`   box EPM: ${epmByYear.size} seasons, ${total.toLocaleString()} player-seasons`);
+}
 
 // ---------- Position bucket mapping ----------
 const BUCKET_BY_NOTE: Record<string, "G" | "F" | "C"> = {
@@ -192,6 +215,9 @@ const STATS: StatDef[] = [
       return fga > 0 && fg3a != null ? fg3a / fga : null;
     }, better: "high" },
   { key: "porpag",  label: "PORPAG",     read: (_bartId, s) => num((s.raw_row as RawRow)?.[28]), better: "high" },
+  // Box EPM — estimated plus-minus, joined by (year, bartId). Not every
+  // eligible player has one; a null just leaves the tile out.
+  { key: "epm",     label: "EPM",        read: (bartId, s) => epmByYear.get(s.year)?.get(bartId) ?? null, better: "high" },
   // Derived ratings — PIR per game and BTA PRTG (cohort-z-scored production).
   { key: "pir",       label: "PIR",      read: (_bartId, s) => pirFor(s.raw_row as RawRow),               better: "high" },
   { key: "bta_portg", label: "BTA PRTG", read: (bartId, s, yearStats) => btaPortgFor(bartId, s, yearStats), better: "high" },
@@ -224,6 +250,9 @@ function bucketFor(season: PlayerSeason): "G" | "F" | "C" | null {
 // ---------- Main ----------
 async function main() {
   await fs.mkdir(OUT_DIR, { recursive: true });
+
+  console.log("📂 loading box EPM…");
+  await loadEpm();
 
   console.log("📂 scanning player files…");
   const playerFiles = await fs.readdir(PLAYER_DIR);

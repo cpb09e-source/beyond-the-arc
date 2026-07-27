@@ -40,6 +40,7 @@ export const STAT_META: Record<string, StatMeta> = {
   porpag:  { label: "PORPAG", format: "num" },
   pir:       { label: "PIR",      format: "num" },
   bta_portg: { label: "BTA PRTG", format: "num" },
+  epm:       { label: "EPM",      format: "num" },
 };
 
 export function fmtValue(v: number | null, format: StatFormat): string {
