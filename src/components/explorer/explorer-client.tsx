@@ -365,7 +365,7 @@ export function ExplorerClient({
             `auto` as well, it still counts as this table's scroll container, so
             the headers had nothing to stick to and simply scrolled off with the
             page. Sizing it to the viewport gives them a scrollport. */}
-        <div className="overflow-auto overscroll-x-contain max-h-[calc(100vh-3rem)]">
+        <div className="overflow-auto overscroll-x-contain max-h-[calc(100vh-1.5rem)]">
           <table className="w-full text-sm border-separate border-spacing-0">
             <thead>
               {/* Group-label band — sits ABOVE the column-header row in its own
@@ -426,10 +426,10 @@ export function ExplorerClient({
                   const zebra = i % 2 === 0 ? "bg-paper" : "bg-card";
                   return (
                   <tr key={`${r.team_id}-${r.team_year}`} className={cn("group", zebra)}>
-                    <td className={cn("sticky left-0 z-20 w-12 px-2 py-2 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
+                    <td className={cn("sticky left-0 z-20 w-12 px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
                       {(spec.limit === -1 ? 0 : (pageSafe - 1) * spec.limit) + i + 1}
                     </td>
-                    <td className={cn("sticky left-12 z-20 px-3 py-2 transition-colors", zebra, ROW_HOVER)}>
+                    <td className={cn("sticky left-12 z-20 px-3 py-1 transition-colors", zebra, ROW_HOVER)}>
                       <Link
                         href={`/teams/${teamSlug(r.team_name)}/${r.team_year}`}
                         className="inline-flex items-center gap-2.5 group"
@@ -442,9 +442,9 @@ export function ExplorerClient({
                         <TourneyBadge teamName={r.team_name} year={r.team_year} />
                       </Link>
                     </td>
-                    <td className={cn("px-3 py-2 text-ink-muted hidden sm:table-cell transition-colors", ROW_HOVER)}>{confDisplay(r.team_conference)}</td>
-                    {multiYear && <td className={cn("px-3 py-2 text-ink-muted tabular transition-colors", ROW_HOVER)}>{seasonLabel(r.team_year)}</td>}
-                    <td className={cn("px-3 py-2 tabular text-ink-muted transition-colors", ROW_HOVER)}>{r.record ?? "—"}</td>
+                    <td className={cn("px-3 py-1 text-ink-muted hidden sm:table-cell transition-colors", ROW_HOVER)}>{confDisplay(r.team_conference)}</td>
+                    {multiYear && <td className={cn("px-3 py-1 text-ink-muted tabular transition-colors", ROW_HOVER)}>{seasonLabel(r.team_year)}</td>}
+                    <td className={cn("px-3 py-1 tabular text-ink-muted transition-colors", ROW_HOVER)}>{r.record ?? "—"}</td>
                     {ALL_COLS.map((c, ci) => {
                       // TeamRow has no index signature, and the column model
                       // addresses it by key — a narrow cast here beats widening
@@ -457,7 +457,7 @@ export function ExplorerClient({
                         <td
                           key={c.label}
                           className={cn(
-                            "px-2 py-1.5 text-right tabular whitespace-nowrap transition-colors",
+                            "px-2 py-1 text-right tabular whitespace-nowrap transition-colors",
                             isFF && FF_BAND_TINT,
                             (ci === 0 || c.label === "REB") && "border-l border-hairline",
                             ROW_HOVER,

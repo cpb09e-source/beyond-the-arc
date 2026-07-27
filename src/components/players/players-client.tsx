@@ -936,7 +936,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         <div className="relative">
         <div
           ref={gridScrollRef}
-          className="overflow-auto overscroll-x-contain max-h-[calc(100vh-3rem)] players-scroll cursor-grab"
+          className="overflow-auto overscroll-x-contain max-h-[calc(100vh-1.5rem)] players-scroll cursor-grab"
           onPointerDown={onGridPointerDown}
           onPointerMove={onGridPointerMove}
           onPointerUp={onGridPointerEnd}
@@ -1006,11 +1006,11 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                   return (
                   <tr key={p.id} className={cn("group", zebra)}>
                     {/* RK — rank within the CURRENT sort */}
-                    <td className={cn("sticky left-0 z-20 px-2 py-2 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
+                    <td className={cn("sticky left-0 z-20 px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
                       {(pageSafe - 1) * spec.limit + i + 1}
                     </td>
                     {/* Player — photo + name + team/class/height meta */}
-                    <td style={playerLeft} className={cn("sticky z-20 px-3 py-2 transition-colors", zebra, ROW_HOVER)}>
+                    <td style={playerLeft} className={cn("sticky z-20 px-3 py-1 transition-colors", zebra, ROW_HOVER)}>
                       <span className="flex items-center gap-2.5 min-w-44">
                         <PlayerPhoto bartPlayerId={p.bart_player_id} name={p.name} size={28} />
                         <span className="min-w-0">
@@ -1040,7 +1040,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                         <td
                           key={c.label}
                           className={cn(
-                            "px-2 py-1.5 text-right tabular whitespace-nowrap transition-colors",
+                            "px-2 py-1 text-right tabular whitespace-nowrap transition-colors",
                             c.band && EPM_BAND_TINT,
                             ROW_HOVER,
                           )}

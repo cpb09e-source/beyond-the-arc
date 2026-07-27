@@ -45,7 +45,7 @@ export function PercentileChip({
   return (
     <span
       className={cn(
-        "text-xs font-medium tabular inline-flex items-center justify-center min-w-7 px-1.5 py-1 rounded-none leading-none",
+        "text-xs font-medium tabular inline-flex items-center justify-center min-w-7 px-1.5 py-0.5 rounded-none leading-none",
         className,
       )}
       style={{ color: pctColor(pct), background: pctBg(pct) }}
