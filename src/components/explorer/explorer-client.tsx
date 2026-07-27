@@ -25,6 +25,8 @@ import { TeamLogo } from "@/components/team-logo";
 import { TourneyBadge } from "@/components/tourney-badge";
 import { PercentileChip } from "@/components/percentile-chip";
 import { confDisplay } from "@/lib/conf-display";
+import { useDragPan } from "@/lib/use-drag-pan";
+import { useMeasuredWidth } from "@/lib/use-measured-width";
 
 function teamSlug(name: string): string {
   return name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -179,6 +181,13 @@ export function ExplorerClient({
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchPanelRef = useRef<HTMLDivElement>(null);
+  // Click-and-drag panning over the stat columns, same gesture as /players.
+  const gridScrollRef = useRef<HTMLDivElement>(null);
+  const panHandlers = useDragPan(gridScrollRef);
+  // The # column is sized by content, not by its `w-12` (see useMeasuredWidth),
+  // so the Team column's sticky offset is measured off it rather than assumed.
+  const [rankThRef, rankW] = useMeasuredWidth<HTMLTableCellElement>(48);
+  const teamLeft = { left: `${rankW}px` };
   // Focus the input on open WITHOUT letting the browser scroll it into view
   // (that scroll-jump is what reads as a "flash" of the table on mobile).
   useEffect(() => {
@@ -424,7 +433,11 @@ export function ExplorerClient({
             `auto` as well, it still counts as this table's scroll container, so
             the headers had nothing to stick to and simply scrolled off with the
             page. Sizing it to the viewport gives them a scrollport. */}
-        <div className="overflow-auto overscroll-x-contain max-h-[calc(100vh-1.5rem)]">
+        <div
+          ref={gridScrollRef}
+          className="overflow-auto overscroll-x-contain max-h-[calc(100vh-1.5rem)] cursor-grab"
+          {...panHandlers}
+        >
           <table className="w-full text-sm border-separate border-spacing-0">
             <thead>
               {/* Group-label band — sits ABOVE the column-header row in its own
@@ -435,7 +448,7 @@ export function ExplorerClient({
                   header row. Same two-tier treatment as /players. */}
               <tr>
                 <th className="sticky top-0 left-0 z-40 w-12 bg-paper-deep h-6 p-0" />
-                <th className="sticky top-0 left-12 z-40 bg-paper-deep h-6 p-0" />
+                <th style={teamLeft} className="sticky top-0 z-40 bg-paper-deep h-6 p-0" />
                 <th colSpan={multiYear ? 3 : 2} className="sticky top-0 z-30 bg-paper-deep h-6 p-0" />
                 {P > 0 && (
                   <th colSpan={P} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-coral text-center border-l border-hairline align-middle">
@@ -453,8 +466,8 @@ export function ExplorerClient({
                 </th>
               </tr>
               <tr>
-                <th className="sticky top-6 left-0 z-40 w-12 bg-paper-deep border-b border-hairline px-2 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
-                <th className="sticky top-6 left-12 z-40 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Team</th>
+                <th ref={rankThRef} className="sticky top-6 left-0 z-40 w-12 bg-paper-deep border-b border-hairline px-2 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
+                <th style={teamLeft} className="sticky top-6 z-40 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Team</th>
                 <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle hidden sm:table-cell">Conf</th>
                 {multiYear && <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Season</th>}
                 <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Record</th>
@@ -496,7 +509,7 @@ export function ExplorerClient({
                     <td className={cn("sticky left-0 z-20 w-12 px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
                       {(spec.limit === -1 ? 0 : (pageSafe - 1) * spec.limit) + i + 1}
                     </td>
-                    <td className={cn("sticky left-12 z-20 px-3 py-1 transition-colors", zebra, ROW_HOVER)}>
+                    <td style={teamLeft} className={cn("sticky z-20 px-3 py-1 transition-colors", zebra, ROW_HOVER)}>
                       <Link
                         href={`/teams/${teamSlug(r.team_name)}/${r.team_year}`}
                         className="inline-flex items-center gap-2.5 group"

@@ -23,6 +23,8 @@ import {
   type PlayerSummary,
 } from "@/lib/players";
 import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier, teamStrengthMultiplier, powerConfSub500Multiplier, BTA_DEF_WEIGHT, btaDefScore } from "@/lib/conf-tiers";
+import { useDragPan } from "@/lib/use-drag-pan";
+import { useMeasuredWidth } from "@/lib/use-measured-width";
 
 const LIMIT_OPTIONS = [50, 100, 250, 500];
 
@@ -549,56 +551,12 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   // these table cells), so we measure its real width and drive the Player
   // column's sticky `left` off it — the pinned position then exactly equals the
   // natural flow position (no gap, no 1px shimmy when panning).
-  const rkThRef = useRef<HTMLTableCellElement>(null);
-  const [rkW, setRkW] = useState(40);
-  useEffect(() => {
-    const measure = () => { const w = rkThRef.current?.getBoundingClientRect().width; if (w) setRkW(w); };
-    measure();
-    const ro = new ResizeObserver(measure);
-    if (rkThRef.current) ro.observe(rkThRef.current);
-    window.addEventListener("resize", measure);
-    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
-  }, []);
+  const [rkThRef, rkW] = useMeasuredWidth<HTMLTableCellElement>(40);
   const playerLeft = { left: `${rkW}px` };
 
   // Click-and-drag panning over the stat columns (MPG → HKM): grab anywhere in
-  // the data area and drag left/right. A 4px threshold keeps plain clicks
-  // (links, copy buttons, sort headers) working; interactive elements and the
-  // sticky RK/Player cells never start a pan.
-  const pan = useRef<{ x: number; left: number; active: boolean } | null>(null);
-  const onGridPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return;
-    const t = e.target as HTMLElement;
-    if (t.closest("a,button,input,select,[data-no-pan]")) return;
-    pan.current = { x: e.clientX, left: gridScrollRef.current?.scrollLeft ?? 0, active: false };
-  };
-  const onGridPointerMove = (e: React.PointerEvent) => {
-    const el = gridScrollRef.current;
-    if (!pan.current || !el) return;
-    const dx = e.clientX - pan.current.x;
-    if (!pan.current.active && Math.abs(dx) < 4) return;
-    if (!pan.current.active) {
-      pan.current.active = true;
-      el.setPointerCapture(e.pointerId);
-      el.classList.add("select-none", "cursor-grabbing");
-    }
-    // Clamp to valid range so dragging past an edge can't push scrollLeft out of
-    // bounds (which momentarily shifts the sticky RK/Player cells → the glitchy
-    // truncation).
-    const max = el.scrollWidth - el.clientWidth;
-    // Round to whole pixels — a fractional scrollLeft leaves the sticky RK/Player
-    // cells snapped to integers while the scrolled content sits sub-pixel, which
-    // reads as a 1px shimmy on the frozen columns.
-    el.scrollLeft = Math.round(Math.min(max, Math.max(0, pan.current.left - dx)));
-  };
-  const onGridPointerEnd = (e: React.PointerEvent) => {
-    const el = gridScrollRef.current;
-    if (pan.current?.active && el) {
-      el.releasePointerCapture?.(e.pointerId);
-      el.classList.remove("select-none", "cursor-grabbing");
-    }
-    pan.current = null;
-  };
+  // the data area and drag left/right.
+  const panHandlers = useDragPan(gridScrollRef);
   useEffect(() => {
     if (searchOpen) searchInputRef.current?.focus({ preventScroll: true });
   }, [searchOpen]);
@@ -960,10 +918,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         <div
           ref={gridScrollRef}
           className="overflow-auto overscroll-x-contain max-h-[calc(100vh-1.5rem)] players-scroll cursor-grab"
-          onPointerDown={onGridPointerDown}
-          onPointerMove={onGridPointerMove}
-          onPointerUp={onGridPointerEnd}
-          onPointerCancel={onGridPointerEnd}
+          {...panHandlers}
         >
           <table className="w-full text-sm border-separate border-spacing-0">
             <thead>
