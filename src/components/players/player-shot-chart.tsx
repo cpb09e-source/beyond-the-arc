@@ -486,16 +486,25 @@ function accuracyBins(shots: ShotRow[], cells: Record<string, [number, number]>,
 
 function AccuracyChart({ shots, cells, r }: { shots: ShotRow[]; cells: Record<string, [number, number]>; r: number }) {
   const bins = useMemo(() => accuracyBins(shots, cells, r), [shots, cells, r]);
-  const maxAtt = useMemo(() => bins.reduce((m, b) => Math.max(m, b.att), 0), [bins]);
+  // Size reference is the 90th percentile of attempts, NOT the maximum. Nearly
+  // every player has one rim cell many times bigger than anything else; scaling
+  // against it squeezed the entire rest of the court into dots with visible gaps
+  // between them, which read as the two courts being on different grids. Cells
+  // above p90 just clamp to full size.
+  const refAtt = useMemo(() => {
+    if (bins.length === 0) return 1;
+    const sorted = bins.map((b) => b.att).sort((a, z) => a - z);
+    return Math.max(1, sorted[Math.floor(sorted.length * 0.9)] ?? 1);
+  }, [bins]);
   const gen = useMemo(() => d3hexbin().radius(r), [r]);
 
   return (
     <Court label="Shooting accuracy versus position-group average">
       {bins.map((b) => {
-        // Area ∝ attempts (so radius ∝ √attempts), floored so a single attempt
-        // is still a visible dot rather than a rounding error.
-        const t = maxAtt > 0 ? Math.sqrt(b.att / maxAtt) : 0;
-        const rr = r * (0.3 + 0.7 * t);
+        // Area ∝ attempts (so radius ∝ √attempts), with a floor so a single
+        // attempt is still a visible cell rather than a rounding error.
+        const t = Math.min(1, Math.sqrt(b.att / refAtt));
+        const rr = r * (0.5 + 0.5 * t);
         const pctTxt = b.att > 0 ? ((100 * b.made) / b.att).toFixed(0) : "—";
         const baseTxt = b.baseRate === null ? "—" : (100 * b.baseRate).toFixed(0);
         return (
