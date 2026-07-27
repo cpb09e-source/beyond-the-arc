@@ -37,6 +37,11 @@
  *        node scripts/build-player-season-adv.mjs
  *        node scripts/export-game-box-json.mjs 2027
  *        node scripts/export-game-players-json.mjs --season 2027
+ *        node scripts/build-second-chance.mjs --season 2027   (before game-logs;
+ *            the log build reads its sidecar for scp_diff)
+ *        node scripts/build-tournament-game-ids.mjs           (after the March
+ *            box scrape — maps SR slugs onto our ids so the coach pages open
+ *            the shared box modal instead of the fallback)
  *
  *     D. LINEUPS / EPM (needs onFloor, so 2024+ only)
  *        node scripts/cbbd-build-stints.mjs --season 2027

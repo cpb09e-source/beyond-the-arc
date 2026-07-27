@@ -23,7 +23,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
-import { type GameLog } from "@/lib/game-filters";
+import { loadGamesForYear, type GameLog } from "@/lib/game-filters";
+import { attachGameBox, loadGameBox } from "@/lib/game-box";
 import { dataUrl } from "@/lib/data-url";
 import { getTeamColors } from "@/lib/team-colors";
 import { gameKey } from "@/lib/quad";
@@ -769,4 +770,57 @@ export function Th({ children, align = "left" }: { children: React.ReactNode; al
 }
 export function Td({ children, align = "left", className = "" }: { children: React.ReactNode; align?: "left" | "right"; className?: string }) {
   return <td className={`px-3 py-2.5 ${align === "right" ? "text-right" : ""} ${className}`}>{children}</td>;
+}
+
+/**
+ * Open the box score knowing only WHICH game it is.
+ *
+ * GameBoxModal needs both perspectives of a game, because the logs store one row
+ * per team and every two-sided comparison inside it needs the pair. Most callers
+ * don't hold that pair: a team page has its own schedule, and a coach page has
+ * nothing but a game id. This resolves it from the season log.
+ *
+ * loadGamesForYear() and loadGameBox() are both module-cached and shared with
+ * /calc, so a user who has already touched the calculator pays nothing here.
+ *
+ * Renders null until resolved, and on failure — a game with no row (a non-D1
+ * matchup, or a season we don't carry) simply doesn't open rather than showing
+ * an error card. Callers that need a fallback should check for the id first.
+ */
+export function GameBoxModalById({
+  gameId,
+  season,
+  onClose,
+}: {
+  /** Log id, "<cbbdGameId>-<cbbdTeamId>" — or just the numeric game prefix. */
+  gameId: string;
+  season: number;
+  onClose: () => void;
+}) {
+  const [rows, setRows] = useState<{ own: GameLog; opp: GameLog | null } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const key = gameKey(gameId);
+    if (!key) return;
+
+    Promise.all([loadGamesForYear(season), loadGameBox(season)])
+      .then(([logs, box]) => {
+        if (cancelled) return;
+        const pair = logs.filter((r) => gameKey(r.game_id) === key);
+        // Prefer the exact perspective asked for; fall back to either side,
+        // since a caller may only know the numeric game prefix.
+        const own = pair.find((r) => r.game_id === gameId) ?? pair[0];
+        if (!own) return;
+        const opp = pair.find((r) => r.game_id !== own.game_id) ?? null;
+        const withBox = attachGameBox(opp ? [own, opp] : [own], box);
+        setRows({ own: withBox[0]!, opp: withBox[1] ?? null });
+      })
+      .catch(() => { /* leave unresolved — the modal just doesn't open */ });
+
+    return () => { cancelled = true; };
+  }, [gameId, season]);
+
+  if (!rows) return null;
+  return <GameBoxModal game={rows.own} opp={rows.opp} onClose={onClose} />;
 }
