@@ -244,13 +244,8 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
               Full-bleed edge-to-edge on mobile; framed card on lg+. */}
           <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
             <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
-            <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30">
-              <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
-                <span className="h-px w-6 bg-coral" />
-                Full-season stats
-              </div>
-              <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Player Overview</h2>
-            </div>
+            {/* Heading lives inside the client component now: the rank rings
+                sit to its right and have to track the year picker. */}
             <PlayerOverview options={overviewOptions} bartPlayerId={bartId} />
           </div>
         </section>
