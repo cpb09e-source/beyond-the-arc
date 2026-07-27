@@ -1,51 +1,76 @@
-import { Trophy } from "lucide-react";
 import { tourneyBadge } from "@/data/tournament-results";
 import { cn } from "@/lib/utils";
 
 /**
- * Visual marker for tournament accomplishments. Renders a small trophy for the
- * national champion and a coral "F4" pill for the other Final Four teams.
- * Returns null when the team didn't make the Final Four that season.
+ * Visual marker for tournament accomplishments — a hardwood chip reading
+ * "Champion" or "Final Four". Returns null when the team didn't reach the
+ * Final Four that season.
+ *
+ * WHAT THIS REPLACED, and why: the champion used to be a filled circle holding
+ * a trophy glyph while everyone else got a saturated coral "F4" pill. Two
+ * unrelated visual languages for one idea, and the circle's amber was
+ * Tailwind's stock `amber-500` — a colour that appeared nowhere else in the
+ * palette. Now both honours share a shape, a type treatment and the site's own
+ * `--court` hardwood token; only the fill separates them. Ink-on-tint rather
+ * than white-on-saturated keeps the chip from outshouting the team name it sits
+ * beside, which matters on a table where three of the top four rows can carry
+ * one.
+ *
+ * The two tiers are deliberately distinguished by FILL, not hue, so the pair
+ * still reads correctly for anyone who can't separate the two browns.
  */
+
+// Shared geometry + type. Small caps, tight, sized to sit on one line of table
+// text without changing the row's height.
+//
+// Deliberately built from Tailwind's standard scale (px-1.5, py-0.5, rounded,
+// tracking-widest) rather than one-off arbitrary values. Bespoke lengths like
+// `h-[1.15rem]` are generated only if the scanner has seen this exact file, so
+// they silently no-op after a stale rescan — which is precisely how the first
+// cut of this chip rendered at half height with no padding. Scale utilities are
+// already present in the stylesheet, so they cannot fail that way, and the chip
+// now grows from its own padding instead of a fixed height.
+const CHIP =
+  "inline-flex items-center px-1.5 py-0.5 rounded border " +
+  "text-[0.6rem] font-bold uppercase tracking-widest leading-none whitespace-nowrap align-middle";
+
 export function TourneyBadge({
   teamName,
   year,
-  size = 14,
   className,
 }: {
   teamName: string;
   year: number;
-  size?: number;
   className?: string;
 }) {
   const kind = tourneyBadge(teamName, year);
   if (!kind) return null;
 
-  if (kind === "champion") {
-    return (
-      <span
-        className={cn(
-          "inline-flex items-center justify-center rounded-full bg-amber-500 text-white shadow-sm",
-          className,
-        )}
-        style={{ width: size + 8, height: size + 8 }}
-        title={`${year - 1}-${String(year).slice(-2)} national champion`}
-        aria-label="National champion"
-      >
-        <Trophy size={size} strokeWidth={2.5} fill="currentColor" fillOpacity={0.3} />
-      </span>
-    );
-  }
+  const season = `${year - 1}-${String(year).slice(-2)}`;
+  const champion = kind === "champion";
+
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-center rounded px-1.5 py-0.5 bg-coral text-white text-[0.7rem] font-display font-bold leading-none tabular tracking-wide shadow-sm",
+        CHIP,
+        // Colours come from the registered --court token with opacity
+        // modifiers, the way every other border on the site is written
+        // (border-coral/40, border-ink/15). An arbitrary
+        // `border-[color-mix(...)]` does NOT work here with or without a
+        // `color:` hint — it never produces a rule, so the chip silently fell
+        // back to the global `* { border-color: var(--border) }` hairline while
+        // the matching bg and text mixes applied fine.
+        champion
+          ? // Filled: the title is the louder of the two.
+            "bg-court/25 border-court/70 text-court-ink"
+          : // Outlined: same chip, no fill. Text is ink softened toward the
+            // hardwood so it reads as kin to the champion chip, not a grey pill.
+            "bg-transparent border-court/55 text-ink-soft",
         className,
       )}
-      title={`${year - 1}-${String(year).slice(-2)} Final Four`}
-      aria-label="Final Four"
+      title={champion ? `${season} national champion` : `${season} Final Four`}
     >
-      F4
+      {champion ? "Champion" : "Final Four"}
     </span>
   );
 }

@@ -15,6 +15,7 @@
   --coral: #c8553d;          /* basketball-leather accent */
   --coral-soft: #e08a76;     /* hover/secondary accent */
   --court: #d4a574;          /* hardwood accent (subtle dividers) */
+  --court-ink: #8a6224;      /* hardwood dark enough to set text on a court tint */
   --good: #4a7c59;           /* chart positive — forest green */
   --bad: #b94c4c;            /* chart negative — muted red */
 
@@ -60,6 +61,7 @@
   --coral: #d96450;          /* accent — touch brighter on dark */
   --coral-soft: #e8896f;
   --court: #b88a52;
+  --court-ink: #d9ae6e;      /* lighter than --court here — it sets text on a dark tint */
   --good: #6da57a;
   --bad: #d96868;
 
@@ -101,6 +103,7 @@
   --color-coral: var(--coral);
   --color-coral-soft: var(--coral-soft);
   --color-court: var(--court);
+  --color-court-ink: var(--court-ink);
   --color-good: var(--good);
   --color-bad: var(--bad);
   --color-hairline: var(--hairline);
@@ -114,8 +117,19 @@
   --radius-lg: var(--radius);
 }
 
-* {
-  border-color: var(--border);
+/* Default border colour for bare `border` utilities.
+ *
+ * MUST stay inside @layer base. Tailwind v4 emits its utilities into
+ * @layer utilities, and unlayered CSS outranks every layered rule regardless of
+ * specificity — so while this block sat outside a layer it silently overrode
+ * EVERY border colour utility on the site. border-coral/40, border-ink/15 and
+ * the focus:border-coral/40 rings all computed to this hairline; the bug was
+ * invisible only because the fallback is a plausible colour. Found it when a
+ * hardwood-bordered chip kept rendering with a beige edge. */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
 }
 
 body {
