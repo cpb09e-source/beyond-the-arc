@@ -340,10 +340,10 @@ export type GameLog = {
   team_id: number;
   team_name: string | null;
   opp_team_market: string | null;
-  // CBB Analytics game ID — string in the game-logs format
-  // "<numeric>-<team_id>-game-<bool>". The leading numeric prefix is the
-  // shared game ID across both teams' game-log rows and matches the
-  // team-games/<year>/<numeric>.json box-score file.
+  // Game id in the log format "<cbbdGameId>-<cbbdTeamId>". The leading numeric
+  // prefix is shared by both teams' rows for the same game, and is the key for
+  // the per-game sidecars (game-box-by-year, game-players/). Use gameKey() to
+  // take that prefix rather than splitting on "-" ad hoc.
   game_id?: string | null;
   is_home: boolean | null;
   is_neutral: boolean | null;

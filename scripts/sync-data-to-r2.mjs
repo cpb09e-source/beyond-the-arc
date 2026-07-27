@@ -54,7 +54,6 @@ for (const [k, v] of Object.entries({
 
 // Match dirs to the R2 mirror — same prefixes the dataUrl() helper expects.
 const ALL_DIRS = [
-  "public/data/team-games",
   "public/data/player-games",
   "public/data/player",
   "public/data/player-ranks",

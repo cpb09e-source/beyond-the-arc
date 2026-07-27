@@ -15,7 +15,6 @@ import path from "node:path";
 
 const OUT = "out";
 const DIRS = [
-  "data/team-games",
   "data/player-games",
   "data/player",
   "data/player-ranks",

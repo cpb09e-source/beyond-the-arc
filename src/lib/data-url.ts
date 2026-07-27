@@ -19,7 +19,6 @@
 // Dirs whose contents live on R2. Match the prefix exactly. Anything not in
 // this list stays on /public and ignores NEXT_PUBLIC_DATA_BASE.
 const R2_DIRS = [
-  "/data/team-games/",
   "/data/player-games/",
   "/data/player/",
   "/data/player-ranks/",

@@ -27,7 +27,6 @@ const ROOT = process.cwd();
 const OUT = path.join(ROOT, "out");
 
 const STRIP_DIRS = [
-  "data/team-games",
   "data/player-games",
   "data/player",
   "data/player-ranks",

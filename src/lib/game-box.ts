@@ -28,6 +28,28 @@ export type GameBoxFile = {
   rows: Record<string, Array<number | string | null>>;
 };
 
+/**
+ * Module-scoped cache for /data/game-box-by-year/<season>.json, mirroring
+ * loadGamesForYear() in game-filters.ts.
+ *
+ * Both /calc and the team-page box score need this file now that they render
+ * the same modal, and a season's sidecar is ~2 MB — fetching it twice because
+ * the user opened a box score from two different surfaces would be pure waste.
+ * A failed fetch resolves to null (not a rejection) so callers can treat "no
+ * sidecar" the same as "sidecar has no row for this game": box fields stay
+ * undefined and the modal renders what it has.
+ */
+const boxCache = new Map<number, Promise<GameBoxFile | null>>();
+export function loadGameBox(season: number): Promise<GameBoxFile | null> {
+  const hit = boxCache.get(season);
+  if (hit) return hit;
+  const p = fetch(`/data/game-box-by-year/${season}.json`)
+    .then((r) => (r.ok ? (r.json() as Promise<GameBoxFile>) : null))
+    .catch(() => null);
+  boxCache.set(season, p);
+  return p;
+}
+
 /** Every box-derived key, and how it should be labelled/grouped in the UI. */
 export const BOX_FIELDS = [
   // Rate stats — offense
