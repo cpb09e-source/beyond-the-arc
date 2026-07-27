@@ -207,6 +207,9 @@ export function CompareTeamsModal({
           conf: [],
           teams: [],
           filters: [],
+          // Pinned columns are a table-display concern; this spec only exists to
+          // pull a full-year cohort for the SOS rank lookup.
+          cols: [],
           sortBy: "a_net",
           sortDir: "desc",
           limit: -1,

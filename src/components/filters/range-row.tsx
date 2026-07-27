@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
+import { cn } from "@/lib/utils";
 
 /**
  * The dual-thumb stat range control, shared by the /players and team-explorer
@@ -43,11 +44,21 @@ export const RangeRow = memo(function RangeRow({
   lo,
   hi,
   setBound,
+  pinned,
+  onTogglePin,
 }: {
   st: RangeStat;
   lo: number | null;
   hi: number | null;
   setBound: (key: string, lo: number | null, hi: number | null) => void;
+  /**
+   * When onTogglePin is supplied the label becomes a toggle that adds the stat
+   * to the table as a column. Pinning is independent of the range: a reader can
+   * pin a stat to look at it without narrowing anything, which is the whole
+   * point — the old drawer could only answer "which teams", never "show me this".
+   */
+  pinned?: boolean;
+  onTogglePin?: (key: string) => void;
 }) {
   const onChange = (lo: number | null, hi: number | null) => setBound(st.key, lo, hi);
   const clamp = (n: number) => Math.min(Math.max(n, st.min), st.max);
@@ -72,10 +83,41 @@ export const RangeRow = memo(function RangeRow({
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-2">
-        <span className="text-sm text-ink truncate">
-          {st.label}
-          {st.pct && <span className="text-ink-muted"> %</span>}
-        </span>
+        {onTogglePin ? (
+          <button
+            type="button"
+            onClick={() => onTogglePin(st.key)}
+            aria-pressed={!!pinned}
+            title={pinned ? `Remove ${st.label} column` : `Show ${st.label} as a column`}
+            className={cn(
+              "group/pin inline-flex items-center gap-1.5 min-w-0 text-sm rounded transition-colors text-left",
+              pinned ? "text-coral font-medium" : "text-ink hover:text-coral",
+            )}
+          >
+            {/* Checkbox, not an icon-on-hover: the affordance has to be visible
+                before the pointer arrives or nobody discovers it. */}
+            <span
+              aria-hidden
+              className={cn(
+                "shrink-0 w-3.5 h-3.5 rounded-[3px] border inline-flex items-center justify-center text-[0.6rem] leading-none transition-colors",
+                pinned
+                  ? "bg-coral border-coral text-white"
+                  : "border-ink/25 group-hover/pin:border-coral/60",
+              )}
+            >
+              {pinned ? "✓" : ""}
+            </span>
+            <span className="truncate">
+              {st.label}
+              {st.pct && <span className={pinned ? "text-coral/70" : "text-ink-muted"}> %</span>}
+            </span>
+          </button>
+        ) : (
+          <span className="text-sm text-ink truncate">
+            {st.label}
+            {st.pct && <span className="text-ink-muted"> %</span>}
+          </span>
+        )}
         <div className="flex items-center gap-1.5 shrink-0">
           <input
             type="number" inputMode="decimal" min={st.min} max={st.max} step={st.step}

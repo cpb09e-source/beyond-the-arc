@@ -158,7 +158,14 @@ export function TeamStatFilters({
   const urlSpec: TeamFilterSpec = useMemo(() => parseSpec(params), [params]);
 
   const [draft, setDraft] = useState<RangeState>(() => filtersToRanges(urlSpec.filters));
-  useEffect(() => { setDraft(filtersToRanges(urlSpec.filters)); /* eslint-disable-next-line */ }, [search]);
+  // Pinned columns, kept as an ordered list so the table renders them in the
+  // order they were picked rather than in RANGE_GROUPS order.
+  const [pins, setPins] = useState<string[]>(() => urlSpec.cols);
+  useEffect(() => {
+    setDraft(filtersToRanges(urlSpec.filters));
+    setPins(urlSpec.cols);
+    /* eslint-disable-next-line */
+  }, [search]);
 
   // Lock body scroll + wire Escape while the drawer is open.
   useEffect(() => {
@@ -172,14 +179,30 @@ export function TeamStatFilters({
 
   // Stable so memoized RangeRows don't re-render on every drag tick.
   const setBound = useCallback(
-    (key: string, lo: number | null, hi: number | null) =>
-      setDraft((d) => ({ ...d, [key]: { lo, hi } })),
+    (key: string, lo: number | null, hi: number | null) => {
+      setDraft((d) => ({ ...d, [key]: { lo, hi } }));
+      // Narrowing a stat auto-pins it as a column. Filtering on something you
+      // then can't see in the table is the worst version of this drawer —
+      // you'd have a list of teams and no way to check why they qualified.
+      // Untick still works; the tick just stops being a separate chore.
+      if (lo !== null || hi !== null) {
+        setPins((p) => (p.includes(key) ? p : [...p, key]));
+      }
+    },
     [],
   );
-  const clearAll = () => setDraft({});
+  const togglePin = useCallback(
+    (key: string) => setPins((p) => (p.includes(key) ? p.filter((k) => k !== key) : [...p, key])),
+    [],
+  );
+  const clearAll = () => { setDraft({}); setPins([]); };
 
   const draftFilters = useMemo(() => rangesToFilters(draft), [draft]);
-  const dirty = !sameFilterSet(draftFilters, urlSpec.filters);
+  const samePins =
+    pins.length === urlSpec.cols.length && pins.every((k, i) => k === urlSpec.cols[i]);
+  // Submit enables on EITHER change — pinning a column with no bounds set is a
+  // legitimate submit, and gating on filters alone left the button dead.
+  const dirty = !sameFilterSet(draftFilters, urlSpec.filters) || !samePins;
   // The match total is computed inline on every change, so it tracks the
   // thumb rather than trailing it. That is only affordable because
   // processTeams/applySpec now reuse a cached, fully-shaped cohort instead of
@@ -198,7 +221,7 @@ export function TeamStatFilters({
   const activeCommitted = ALL_RANGE_STATS.reduce((n, s) => n + (isBoundActive(committed[s.key]) ? 1 : 0), 0);
 
   const submit = () => {
-    const p = specToParams({ ...urlSpec, filters: draftFilters }).toString();
+    const p = specToParams({ ...urlSpec, filters: draftFilters, cols: pins as TeamStatKey[] }).toString();
     startTransition(() => router.replace(p ? `/?${p}` : "/", { scroll: false }));
     setOpen(false);
   };
@@ -247,7 +270,9 @@ export function TeamStatFilters({
                     <button type="button" onClick={clearAll} className="text-xs text-ink-muted hover:text-coral transition-colors">Clear all</button>
                   )}
                 </div>
-                <p className="mt-1.5 text-xs text-ink-muted leading-snug">Drag a slider or type a min / max, then Submit.</p>
+                <p className="mt-1.5 text-xs text-ink-muted leading-snug">
+                  Tick a stat name to add it as a column, and/or drag a slider to narrow the field. Then Submit.
+                </p>
               </div>
               <button
                 type="button"
@@ -284,6 +309,8 @@ export function TeamStatFilters({
                           lo={draft[st.key]?.lo ?? null}
                           hi={draft[st.key]?.hi ?? null}
                           setBound={setBound}
+                          pinned={pins.includes(st.key)}
+                          onTogglePin={togglePin}
                         />
                       ))}
                     </div>

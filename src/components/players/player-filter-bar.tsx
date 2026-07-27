@@ -17,6 +17,7 @@ import {
   DEFAULT_PLAYER_SPEC,
   parsePlayerSpec,
   playerSpecToParams,
+  playerStatColumn,
   type PlayerListSpec,
   type PlayerStatFilter,
 } from "@/lib/players";
@@ -312,6 +313,19 @@ const RANGE_GROUPS: RangeGroup[] = [
 const ALL_RANGE_STATS: RangeStat[] = RANGE_GROUPS.flatMap((g) => g.stats);
 const RANGE_BY_KEY = new Map(ALL_RANGE_STATS.map((s) => [s.key, s]));
 
+/**
+ * Can this stat become a table column?
+ *
+ * The shot-profile stats (rim%, assisted%, shot rates) are `filterOnly` — they
+ * exist in the filter drawer but have no grid representation, so offering a
+ * tick-box on them would promise a column that never appears. They stay
+ * filterable; they just don't get the affordance.
+ */
+function pinnable(key: string): boolean {
+  const c = playerStatColumn(key);
+  return !!c && !c.filterOnly;
+}
+
 // URL filters → per-stat {lo, hi} in display units.
 function filtersToRanges(filters: PlayerStatFilter[]): RangeState {
   const out: RangeState = {};
@@ -373,7 +387,13 @@ export function PlayerStatFilters({
   const urlSpec: PlayerListSpec = parsePlayerSpec(params);
 
   const [draft, setDraft] = useState<RangeState>(() => filtersToRanges(urlSpec.filters));
-  useEffect(() => { setDraft(filtersToRanges(urlSpec.filters)); /* eslint-disable-next-line */ }, [search]);
+  // Pinned columns, ordered so the table renders them in pick order.
+  const [pins, setPins] = useState<string[]>(() => urlSpec.cols);
+  useEffect(() => {
+    setDraft(filtersToRanges(urlSpec.filters));
+    setPins(urlSpec.cols);
+    /* eslint-disable-next-line */
+  }, [search]);
 
   // Lock body scroll + wire Escape while the drawer is open.
   useEffect(() => {
@@ -388,14 +408,28 @@ export function PlayerStatFilters({
   // Stable so memoized RangeRows don't re-render on every drag tick — only the
   // row whose lo/hi actually changed reconciles.
   const setBound = useCallback(
-    (key: string, lo: number | null, hi: number | null) =>
-      setDraft((d) => ({ ...d, [key]: { lo, hi } })),
+    (key: string, lo: number | null, hi: number | null) => {
+      setDraft((d) => ({ ...d, [key]: { lo, hi } }));
+      // Narrowing a stat auto-pins it as a column, same rule as the team
+      // explorer. The table used to infer its extra columns from the filter
+      // list alone; now that inference is explicit state the reader can undo.
+      if (lo !== null || hi !== null) {
+        setPins((pp) => (pp.includes(key) ? pp : [...pp, key]));
+      }
+    },
     [],
   );
-  const clearAll = () => setDraft({});
+  const togglePin = useCallback(
+    (key: string) => setPins((pp) => (pp.includes(key) ? pp.filter((k) => k !== key) : [...pp, key])),
+    [],
+  );
+  const clearAll = () => { setDraft({}); setPins([]); };
 
   const draftFilters = useMemo(() => rangesToFilters(draft), [draft]);
-  const dirty = !sameFilterSet(draftFilters, urlSpec.filters);
+  const samePins = pins.length === urlSpec.cols.length && pins.every((k, i) => k === urlSpec.cols[i]);
+  // Submit enables on EITHER change — ticking a column with no bounds set is a
+  // legitimate submit.
+  const dirty = !sameFilterSet(draftFilters, urlSpec.filters) || !samePins;
   // The match total is computed inline on every change, so it tracks the
   // thumb rather than trailing it. That is only affordable because
   // processTeams/applySpec now reuse a cached, fully-shaped cohort instead of
@@ -415,7 +449,7 @@ export function PlayerStatFilters({
   const activeCommitted = ALL_RANGE_STATS.reduce((n, s) => n + (isBoundActive(committed[s.key]) ? 1 : 0), 0);
 
   const submit = () => {
-    const p = playerSpecToParams({ ...urlSpec, filters: draftFilters }).toString();
+    const p = playerSpecToParams({ ...urlSpec, filters: draftFilters, cols: pins }).toString();
     startTransition(() => router.replace(p ? `/players?${p}` : "/players", { scroll: false }));
     setOpen(false);
   };
@@ -468,7 +502,9 @@ export function PlayerStatFilters({
                     <button type="button" onClick={clearAll} className="text-xs text-ink-muted hover:text-coral transition-colors">Clear all</button>
                   )}
                 </div>
-                <p className="mt-1.5 text-xs text-ink-muted leading-snug">Drag a slider or type a min / max, then Submit.</p>
+                <p className="mt-1.5 text-xs text-ink-muted leading-snug">
+                  Tick a stat name to add it as a column, and/or drag a slider to narrow the field. Then Submit.
+                </p>
               </div>
               <button
                 type="button"
@@ -506,6 +542,8 @@ export function PlayerStatFilters({
                           lo={draft[st.key]?.lo ?? null}
                           hi={draft[st.key]?.hi ?? null}
                           setBound={setBound}
+                          pinned={pins.includes(st.key)}
+                          onTogglePin={pinnable(st.key) ? togglePin : undefined}
                         />
                       ))}
                     </div>

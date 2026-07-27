@@ -247,6 +247,12 @@ export type PlayerListSpec = {
   pos: ("G" | "F" | "C")[];    // empty = all positions; bucket derived from Bart's position note
   minGames: number;
   filters: PlayerStatFilter[]; // stat threshold filters (AND-combined)
+  /**
+   * Stats pinned as leading columns, in pick order. Independent of `filters`:
+   * a reader can show a stat without narrowing on it. Setting a range auto-pins
+   * the stat, which is what the table used to infer from `filters` alone.
+   */
+  cols: string[];
   sortBy: "bta_ind_ortg" | "pir" | "pts" | "reb" | "ast" | "fg_pct" | "fg3_pct" | "ts_pct" | "games" | "name"
     | "epm" | "off_epm" | "def_epm" | "min" | "usage" | "orb" | "drb" | "tov" | "tov_pct" | "stl" | "blk" | "hkm";
   sortDir: "asc" | "desc";
@@ -261,6 +267,7 @@ export const DEFAULT_PLAYER_SPEC: PlayerListSpec = {
   pos: [],
   minGames: 10,
   filters: [],
+  cols: [],
   sortBy: "epm",
   sortDir: "desc",
   // 50 a page. The table now sizes itself to the viewport rather than a
@@ -351,6 +358,20 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
     "epm", "off_epm", "def_epm", "min", "usage", "orb", "drb", "tov", "stl", "blk", "hkm"];
   const sortBy = validSorts.includes(sortRaw as PlayerListSpec["sortBy"]) ? (sortRaw as PlayerListSpec["sortBy"]) : DEFAULT_PLAYER_SPEC.sortBy;
   const sortDirRaw = get("order");
+  // Pinned columns. Unknown keys are dropped rather than trusted — this comes
+  // straight off the query string — and filterOnly stats are refused because
+  // they have no grid representation.
+  const colsRaw = get("cols");
+  const cols = colsRaw
+    ? colsRaw
+        .split(",")
+        .map((s) => s.trim())
+        .filter((k) => {
+          const c = PLAYER_STAT_COLUMN_BY_KEY.get(k);
+          return !!c && !c.filterOnly;
+        })
+        .filter((k, i, a) => a.indexOf(k) === i)
+    : [];
   return {
     years,
     conf,
@@ -359,6 +380,7 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
     pos,
     minGames: Number.isFinite(minG) && minG >= 0 ? minG : DEFAULT_PLAYER_SPEC.minGames,
     filters,
+    cols,
     sortBy,
     sortDir: sortDirRaw === "asc" || sortDirRaw === "desc" ? sortDirRaw : DEFAULT_PLAYER_SPEC.sortDir,
     limit: Number.isFinite(limitRaw) && limitRaw > 0 && limitRaw <= 1000 ? limitRaw : DEFAULT_PLAYER_SPEC.limit,
@@ -381,6 +403,7 @@ export function playerSpecToParams(spec: PlayerListSpec): URLSearchParams {
   if (spec.pos.length) p.set("pos", spec.pos.join(","));
   if (spec.minGames !== DEFAULT_PLAYER_SPEC.minGames) p.set("ming", String(spec.minGames));
   spec.filters.forEach((f, i) => p.set(`f${i}`, `${f.stat}.${f.op}.${f.value}`));
+  if (spec.cols.length) p.set("cols", spec.cols.join(","));
   if (spec.sortBy !== DEFAULT_PLAYER_SPEC.sortBy) p.set("sort", spec.sortBy);
   if (spec.sortDir !== DEFAULT_PLAYER_SPEC.sortDir) p.set("order", spec.sortDir);
   if (spec.limit !== DEFAULT_PLAYER_SPEC.limit) p.set("limit", String(spec.limit));

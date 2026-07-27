@@ -817,13 +817,29 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   // Any stat the user filters on that ISN'T a default grid column gets
   // prepended as its own column (before MPG) so the numbers driving the
   // filter are visible. Label/format come from PLAYER_STAT_COLUMNS.
+  /**
+   * Leading columns the reader pinned in the filter drawer.
+   *
+   * This used to be inferred from `spec.filters` — narrowing a stat implicitly
+   * added its column. That inference is now explicit state (`spec.cols`), which
+   * the drawer also sets automatically whenever a range is applied, so the old
+   * behaviour survives while a stat can additionally be shown WITHOUT being
+   * filtered on. `spec.filters` is still read as a fallback so bookmarked URLs
+   * from before the change keep their columns.
+   */
   const dynamicCols: GridCol[] = useMemo(() => {
     const seen = new Set<string>();
     const out: GridCol[] = [];
-    for (const f of spec.filters) {
-      const col = PLAYER_STAT_COLUMNS.find((c) => c.key === f.stat);
+    const add = (key: string, allowDuplicate: boolean) => {
+      const col = PLAYER_STAT_COLUMNS.find((c) => c.key === key);
       // filterOnly stats (shooting profile) never become grid columns.
-      if (!col || col.filterOnly || GRID_FIELDS.has(col.field) || seen.has(col.field as string)) continue;
+      if (!col || col.filterOnly || seen.has(col.field as string)) return;
+      // An EXPLICIT tick renders even when the stat is already a default
+      // column — same rule as the team explorer, and without it ticking
+      // something like PPG would appear to do nothing at all. The legacy
+      // filter-inferred path keeps skipping duplicates so old bookmarks don't
+      // suddenly grow a second copy of a column they already had.
+      if (!allowDuplicate && GRID_FIELDS.has(col.field)) return;
       seen.add(col.field as string);
       out.push({
         label: col.label,
@@ -832,9 +848,11 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         fmt: col.field === "games" ? "int" : col.format === "pct1" ? "pct1" : "num1",
         pct: (PCT_KEYS as readonly string[]).includes(col.field as string) ? (col.field as PctKey) : null,
       });
-    }
+    };
+    for (const key of spec.cols) add(key, true);
+    for (const f of spec.filters) add(f.stat, false);
     return out;
-  }, [spec.filters]);
+  }, [spec.cols, spec.filters]);
 
   return (
     <>
@@ -956,7 +974,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                 <th style={playerLeft} className="sticky top-0 z-40 bg-paper-deep h-6 p-0" />
                 {dynamicCols.length > 0 && (
                   <th colSpan={dynamicCols.length} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-ink-muted text-center border-l border-hairline align-middle">
-                    Filtered
+                    Your columns
                   </th>
                 )}
                 {GRID_BANDS.map((b) => (
@@ -976,11 +994,14 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               <tr>
                 <th ref={rkThRef} className="sticky top-6 left-0 z-40 bg-paper-deep border-b border-hairline px-2 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">RK</th>
                 <th style={playerLeft} className="sticky top-6 z-40 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Player</th>
-                {[...dynamicCols, ...GRID_COLS].map((c) =>
+                {[...dynamicCols, ...GRID_COLS].map((c, i) =>
                   c.sortKey ? (
-                    <SortableTh key={c.label} statKey={c.sortKey} label={c.label} basePath="/players" defaultSort="epm" idleArrows className="sticky top-6 z-30 bg-paper-deep border-b border-hairline" />
+                    // Index-qualified: a pinned stat that is also a default
+                    // column renders twice on purpose, so the label alone is
+                    // not a unique key.
+                    <SortableTh key={`${c.field}-${i}`} statKey={c.sortKey} label={c.label} basePath="/players" defaultSort="epm" idleArrows className="sticky top-6 z-30 bg-paper-deep border-b border-hairline" />
                   ) : (
-                    <th key={c.label} className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-2 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-right whitespace-nowrap align-middle">
+                    <th key={`${c.field}-${i}`} className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-2 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-right whitespace-nowrap align-middle">
                       {c.label}
                     </th>
                   ),
@@ -1039,11 +1060,11 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                         </span>
                       </span>
                     </td>
-                    {[...dynamicCols, ...GRID_COLS].map((c) => {
+                    {[...dynamicCols, ...GRID_COLS].map((c, ci) => {
                       const v = p[c.field] as number | null;
                       return (
                         <td
-                          key={c.label}
+                          key={`${c.field}-${ci}`}
                           className={cn(
                             "px-2 py-1 text-right tabular whitespace-nowrap transition-colors",
                             c.band && EPM_BAND_TINT,

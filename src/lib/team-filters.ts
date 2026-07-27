@@ -134,6 +134,13 @@ export type TeamFilterSpec = {
   conf: string[];               // empty = all conferences
   teams: string[];              // empty = all teams
   filters: StatFilter[];
+  /**
+   * Stats pinned as leading columns, in the order the reader picked them. They
+   * render to the LEFT of NET, ahead of the default column set. Independent of
+   * `filters`: a stat can be pinned without being bounded (the reader just wants
+   * to see it) or bounded without being pinned.
+   */
+  cols: TeamStatKey[];
   sortBy: TeamStatKey;
   sortDir: "asc" | "desc";
   limit: number;                // -1 = show all
@@ -149,6 +156,7 @@ export const DEFAULT_SPEC: TeamFilterSpec = {
   conf: [],
   teams: [],
   filters: [],
+  cols: [],
   // aNET is the headline: our own schedule-adjusted net rating, full coverage
   // on all 4,631 team-seasons, and auditable from the game logs.
   sortBy: "a_net",
@@ -189,6 +197,7 @@ export function specToParams(spec: TeamFilterSpec): URLSearchParams {
   if (spec.conf.length) p.set("conf", spec.conf.join(","));
   if (spec.teams.length) p.set("team", spec.teams.join(","));
   spec.filters.forEach((f, i) => p.set(`f${i}`, `${f.stat}.${f.op}.${f.value}`));
+  if (spec.cols.length) p.set("cols", spec.cols.join(","));
   if (spec.sortBy !== DEFAULT_SPEC.sortBy) p.set("sort", spec.sortBy);
   if (spec.sortDir !== DEFAULT_SPEC.sortDir) p.set("order", spec.sortDir);
   if (spec.limit !== DEFAULT_SPEC.limit) p.set("limit", String(spec.limit));
@@ -250,11 +259,20 @@ export function parseSpec(searchParams: Record<string, string | string[] | undef
   const teamRaw = get("team");
   const teams = teamRaw ? teamRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
+  // Pinned columns. Unknown keys are dropped rather than trusted — this comes
+  // straight off the query string. Deduped so a hand-edited URL can't render
+  // the same column twice.
+  const colsRaw = get("cols");
+  const cols: TeamStatKey[] = colsRaw
+    ? colsRaw.split(",").map((s) => s.trim()).filter(isStatKey).filter((k, i, a) => a.indexOf(k) === i)
+    : [];
+
   return {
     years,
     conf,
     teams,
     filters,
+    cols,
     sortBy: isStatKey(sortBy) ? sortBy : DEFAULT_SPEC.sortBy,
     sortDir: sortDir === "asc" || sortDir === "desc" ? sortDir : DEFAULT_SPEC.sortDir,
     limit: limit === -1 ? -1 : (Number.isFinite(limit) && limit > 0 && limit <= 5000 ? limit : DEFAULT_SPEC.limit),
@@ -677,7 +695,36 @@ const PERCENTILE_STATS: Array<{ key: keyof TeamRow; higherBetter: boolean }> = [
   { key: "a_drtg",  higherBetter: false },
   { key: "adj_sos", higherBetter: true },
   { key: "cbb_pace", higherBetter: true },
+  // Everything else the filter drawer can PIN as a column. A pinned column
+  // renders the same value + chip treatment as a default one, so any stat that
+  // can be pinned needs a percentile or it lands in the table visibly
+  // half-dressed. Cost is ~12 more sorts over a cohort that's built once and
+  // cached, so it never touches the drag path.
+  { key: "cbb_fg3_def", higherBetter: false },
+  { key: "cbb_tov_def", higherBetter: true },   // forcing more is good
+  { key: "cbb_orb_def", higherBetter: false },  // allowing fewer is good
+  { key: "cbb_orb",     higherBetter: true },
+  { key: "cbb_tov",     higherBetter: false },
+  { key: "cbb_ast",     higherBetter: true },
+  { key: "wins",        higherBetter: true },
+  { key: "losses",      higherBetter: false },
+  { key: "wab",         higherBetter: true },
+  { key: "pts_diff",    higherBetter: true },
+  { key: "pitp_diff",   higherBetter: true },
+  { key: "scp_diff",    higherBetter: true },
 ];
+
+const LOWER_BETTER = new Set(
+  PERCENTILE_STATS.filter((s) => !s.higherBetter).map((s) => s.key as string),
+);
+/**
+ * Whether ascending is the "good" direction for a stat — the single source the
+ * explorer's pinned columns read for their default sort direction and chip
+ * polarity, so a pinned aDRTG behaves like the built-in aDRTG column.
+ */
+export function isLowerBetter(key: string): boolean {
+  return LOWER_BETTER.has(key);
+}
 
 function attachPercentiles(rows: TeamRow[]) {
   const byYear = new Map<number, TeamRow[]>();

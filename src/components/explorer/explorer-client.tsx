@@ -10,6 +10,8 @@ import {
   specToParams,
   LIMIT_OPTIONS,
   limitLabel,
+  isLowerBetter,
+  TEAM_STAT_COLUMNS,
   type RawTeamSeason,
   type TeamRow,
   type StatFilter,
@@ -85,19 +87,34 @@ const SHOOTING_COLS: TeamCol[] = [
   { label: "FTA Rate",  total: "cbb_ftarate", pct: "cbb_ftarate", sortKey: "cbb_ftarate", fmt: "pct1", title: "Free-throw attempt rate — FTA / FGA, how often the team gets to the line" },
 ];
 
-const ALL_COLS = [...RATING_COLS, ...FOUR_FACTOR_COLS, ...SHOOTING_COLS];
-// Index where each column group starts. Group boundaries were being matched by
-// column label ("REB"), which only found the first of the three and silently
-// missed the shooting boundary — so the four-factor tint ran to the end of the
-// table. Deriving them from the group lengths keeps the header rule, the
-// column rule and the tint on the same boundaries when a column is added.
-const GROUP_STARTS = new Set([
-  0,
-  RATING_COLS.length,
-  RATING_COLS.length + FOUR_FACTOR_COLS.length,
-]);
-const FF_START = RATING_COLS.length;
-const FF_END = RATING_COLS.length + FOUR_FACTOR_COLS.length;
+const DEFAULT_COLS = [...RATING_COLS, ...FOUR_FACTOR_COLS, ...SHOOTING_COLS];
+const DEFAULT_COL_BY_KEY = new Map(DEFAULT_COLS.map((c) => [c.total as string, c]));
+
+/**
+ * Build a renderable column for a stat the reader pinned in the filter drawer.
+ *
+ * When the stat is already a default column we reuse that definition verbatim,
+ * so a pinned REB Diff arrives with its per-game sub-figure and its chip keyed
+ * to reb_diff_pg — a hand-rolled copy would quietly drop both. Everything else
+ * is synthesised from the shared TEAM_STAT_COLUMNS metadata.
+ */
+function pinnedColumn(key: string): TeamCol | null {
+  const reuse = DEFAULT_COL_BY_KEY.get(key);
+  if (reuse) return reuse;
+  const meta = TEAM_STAT_COLUMNS.find((c) => c.key === key);
+  if (!meta) return null;
+  const fmt: TeamCol["fmt"] =
+    meta.format === "pct1" ? "pct1" : meta.group === "diffs" ? "signed" : "num1";
+  return {
+    label: meta.label,
+    total: key as keyof TeamRow,
+    pct: key,
+    sortKey: key,
+    lowerBetter: isLowerBetter(key),
+    fmt,
+    title: meta.desc,
+  };
+}
 
 /** One opaque hover fill so the frozen and scrolling halves read as one row. */
 const ROW_HOVER = "group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))]";
@@ -201,6 +218,25 @@ export function ExplorerClient({
   // Reset to page 1 when the result set changes (filters, sort, search, limit).
   useEffect(() => { setPage(1); }, [spec, tableSearch]);
   const multiYear = spec.years.length > 1;
+
+  // Pinned columns lead the table, then the default set. A pinned stat that is
+  // ALSO a default column deliberately renders twice — Colin's call: the copy on
+  // the left is the one you asked to see, and the original stays put so the
+  // Ratings / Four Factors / Shooting bands don't develop holes.
+  const pinnedCols = useMemo(
+    () => spec.cols.map(pinnedColumn).filter((c): c is TeamCol => c !== null),
+    [spec.cols],
+  );
+  const cols = useMemo(() => [...pinnedCols, ...DEFAULT_COLS], [pinnedCols]);
+  // Group boundaries shift with the pin count, so they're derived per render
+  // rather than being module constants.
+  const P = pinnedCols.length;
+  const groupStarts = useMemo(
+    () => new Set([0, P, P + RATING_COLS.length, P + RATING_COLS.length + FOUR_FACTOR_COLS.length]),
+    [P],
+  );
+  const ffStart = P + RATING_COLS.length;
+  const ffEnd = ffStart + FOUR_FACTOR_COLS.length;
 
   // Live "N teams" for the filter drawer's footer: run the current scope
   // against a candidate filter set without touching the URL. limit:-1 so the
@@ -401,6 +437,11 @@ export function ExplorerClient({
                 <th className="sticky top-0 left-0 z-40 w-12 bg-paper-deep h-6 p-0" />
                 <th className="sticky top-0 left-12 z-40 bg-paper-deep h-6 p-0" />
                 <th colSpan={multiYear ? 3 : 2} className="sticky top-0 z-30 bg-paper-deep h-6 p-0" />
+                {P > 0 && (
+                  <th colSpan={P} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-coral text-center border-l border-hairline align-middle">
+                    Your columns
+                  </th>
+                )}
                 <th colSpan={RATING_COLS.length} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-ink-muted text-center border-l border-hairline align-middle">
                   Ratings <span className="text-ink-muted/70">(ADJUSTED)</span>
                 </th>
@@ -417,9 +458,12 @@ export function ExplorerClient({
                 <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle hidden sm:table-cell">Conf</th>
                 {multiYear && <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Season</th>}
                 <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Record</th>
-                {ALL_COLS.map((c, i) => (
+                {cols.map((c, i) => (
                   <SortableTh
-                    key={c.label}
+                    // Index-qualified: a pinned stat that is also a default
+                    // column appears twice on purpose, so the label alone is not
+                    // unique and React was warning once per duplicated cell.
+                    key={`${c.sortKey}-${i}`}
                     statKey={c.sortKey}
                     label={c.label}
                     title={c.title}
@@ -429,7 +473,7 @@ export function ExplorerClient({
                     idleArrows
                     className={cn(
                       "sticky top-6 z-30 bg-paper-deep border-b border-hairline",
-                      GROUP_STARTS.has(i) && "border-l border-hairline",
+                      groupStarts.has(i) && "border-l border-hairline",
                     )}
                   />
                 ))}
@@ -438,7 +482,7 @@ export function ExplorerClient({
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={(multiYear ? 5 : 4) + ALL_COLS.length} className="px-4 py-12 text-center text-ink-muted">
+                  <td colSpan={(multiYear ? 5 : 4) + cols.length} className="px-4 py-12 text-center text-ink-muted">
                     No teams match these filters.
                   </td>
                 </tr>
@@ -468,21 +512,21 @@ export function ExplorerClient({
                     <td className={cn("px-3 py-1 text-ink-muted hidden sm:table-cell transition-colors", ROW_HOVER)}>{confDisplay(r.team_conference)}</td>
                     {multiYear && <td className={cn("px-3 py-1 text-ink-muted tabular transition-colors", ROW_HOVER)}>{seasonLabel(r.team_year)}</td>}
                     <td className={cn("px-3 py-1 tabular text-ink-muted transition-colors", ROW_HOVER)}>{r.record ?? "—"}</td>
-                    {ALL_COLS.map((c, ci) => {
+                    {cols.map((c, ci) => {
                       // TeamRow has no index signature, and the column model
                       // addresses it by key — a narrow cast here beats widening
                       // the type and losing field-name checking everywhere else.
                       const cell = r as unknown as Record<string, number | null>;
                       const total = cell[c.total as string] ?? null;
                       const perGame = c.perGame ? cell[c.perGame as string] ?? null : null;
-                      const isFF = ci >= FF_START && ci < FF_END;
+                      const isFF = ci >= ffStart && ci < ffEnd;
                       return (
                         <td
-                          key={c.label}
+                          key={`${c.sortKey}-${ci}`}
                           className={cn(
                             "px-2 py-1 text-right tabular whitespace-nowrap transition-colors",
                             isFF && FF_BAND_TINT,
-                            GROUP_STARTS.has(ci) && "border-l border-hairline",
+                            groupStarts.has(ci) && "border-l border-hairline",
                             ROW_HOVER,
                           )}
                         >
