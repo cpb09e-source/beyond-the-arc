@@ -164,12 +164,19 @@ export const CALC_STAT_OPTIONS: StatOption[] = [
   // couldn't isolate March Madness from the NIT, which made it more confusing
   // than useful. The data still ships in the sidecar (attachGameBox), so an
   // NCAA-only filter can come back once the export distinguishes the two.
-  ...BOX_FIELDS.filter((f) => f.key !== "postseason").map((f) => ({
-    key: f.key as keyof GameLog,
-    label: f.label,
-    group: f.group,
-    ...("lower" in f && f.lower ? { defaultDir: "lt" as const } : {}),
-  })),
+  // Skip any BOX_FIELDS entry STAT_OPTIONS already covers. The two lists were
+  // written independently and overlap on ft_att_diff, ast_diff, stl_diff and
+  // blk_diff, so spreading both put each of those in the picker TWICE and React
+  // logged a duplicate-key error on every /calc render. STAT_OPTIONS wins: its
+  // copy is the curated one that carries the right defaultDir.
+  ...BOX_FIELDS
+    .filter((f) => f.key !== "postseason" && !STAT_OPTIONS.some((s) => s.key === f.key))
+    .map((f) => ({
+      key: f.key as keyof GameLog,
+      label: f.label,
+      group: f.group,
+      ...("lower" in f && f.lower ? { defaultDir: "lt" as const } : {}),
+    })),
 ];
 
 export const OPS: Array<{ value: Op; label: string }> = [
