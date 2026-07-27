@@ -255,7 +255,7 @@ export function SearchDialog() {
           aria-label="Open search"
           aria-expanded={false}
           className={cn(
-            "hidden md:inline-flex items-center gap-2.5 h-9 w-44 lg:w-52 pl-3.5 pr-2 rounded-full border border-ink/10 hover:border-ink/25 transition-colors",
+            "hidden md:inline-flex items-center gap-2.5 h-9 w-44 lg:w-52 pl-3.5 pr-2 rounded-md border border-ink/10 hover:border-ink/25 transition-colors",
             pillBg,
           )}
         >
@@ -263,7 +263,7 @@ export function SearchDialog() {
             <circle cx={11} cy={11} r={7} /><line x1={20} y1={20} x2={16.65} y2={16.65} />
           </svg>
           <span className="text-sm text-ink-muted">Search</span>
-          <kbd className="ml-auto hidden lg:inline-flex items-center text-[0.62rem] text-ink-muted font-mono bg-paper border border-hairline rounded-full px-2 py-0.5">⌘K</kbd>
+          <kbd className="ml-auto hidden lg:inline-flex items-center text-[0.62rem] text-ink-muted font-mono bg-paper border border-hairline rounded px-2 py-0.5">⌘K</kbd>
         </button>
       ) : (
         <div className="hidden md:flex items-center relative">
@@ -275,11 +275,11 @@ export function SearchDialog() {
             {...inputProps}
             aria-expanded
             className={cn(
-              "bta-search-grow h-9 w-72 lg:w-96 pl-9 pr-12 rounded-full border border-ink/10 text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40",
+              "bta-search-grow h-9 w-72 lg:w-96 pl-9 pr-12 rounded-md border border-ink/10 text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40",
               pillBg,
             )}
           />
-          <kbd className="absolute right-3 text-[0.62rem] text-ink-muted font-mono bg-paper border border-hairline rounded-full px-2 py-0.5 pointer-events-none">esc</kbd>
+          <kbd className="absolute right-3 text-[0.62rem] text-ink-muted font-mono bg-paper border border-hairline rounded px-2 py-0.5 pointer-events-none">esc</kbd>
         </div>
       )}
 
