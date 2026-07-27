@@ -175,16 +175,30 @@ export function PlayerShotChart({
             </div>
             <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
               Shot Chart
-              {/* Both counts ride here: the season's tracked total, and — only
-                  once a filter narrows it — how much of the charted set is on
-                  screen. Keeping them together means the caption under the
-                  court doesn't appear and disappear as you toggle chips. */}
+              {/* Three counts can be in play and they are NOT the same number:
+                    profile.tracked — every shot the season's play-by-play has
+                                      for this player (from shooting-<year>.json)
+                    rows.length     — those that carry x/y and can be plotted
+                                      (from shots/<id>.json)
+                    shown.length    — what survives the chip + distance filters
+                  Location coverage is a per-game property of the source feed,
+                  and in the weaker seasons it is brutal: league-wide 2021-22
+                  only 49.7% of shots have coordinates, and Kansas' whole roster
+                  that year sits near 11%. Quoting "418 tracked shots" over a
+                  court holding 47 read as a plotting bug, so when the two
+                  diverge the headline now says so outright. */}
               <span className="font-sans text-sm lg:text-base font-normal text-ink-muted tracking-normal ml-2.5 tabular">
-                {profile?.tracked != null && <>{profile.tracked.toLocaleString()} tracked shots</>}
+                {profile?.tracked != null && rows.length < profile.tracked ? (
+                  <span title={`Only shots with a tracked court location can be plotted. ${(profile.tracked - rows.length).toLocaleString()} of this season's ${profile.tracked.toLocaleString()} shots have no location in the play-by-play feed.`}>
+                    {rows.length.toLocaleString()} of {profile.tracked.toLocaleString()} shots located
+                  </span>
+                ) : profile?.tracked != null ? (
+                  <>{profile.tracked.toLocaleString()} tracked shots</>
+                ) : null}
                 {shown.length !== rows.length && (
                   <>
                     {profile?.tracked != null && " · "}
-                    showing {shown.length.toLocaleString()} of {rows.length.toLocaleString()} charted
+                    showing {shown.length.toLocaleString()}
                   </>
                 )}
               </span>
