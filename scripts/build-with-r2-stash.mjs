@@ -32,6 +32,12 @@ const STRIP_DIRS = [
   "data/player-ranks",
   "data/tournament-box",
   "data/team",
+  // These two were R2-served but missing from this list (present in
+  // strip-r2-mirrored-from-out.mjs) — game-players since it shipped, shots
+  // since 2026-07. Harmless while absent (just re-uploaded dead weight), but
+  // the lists are supposed to mirror R2_DIRS in src/lib/data-url.ts exactly.
+  "data/game-players",
+  "data/shots",
 ];
 
 async function main() {

@@ -27,6 +27,9 @@ const R2_DIRS = [
   // Per-game player box scores for the Win Calculator modal — ~6.3k files per
   // season, fetched one at a time when a game is opened.
   "/data/game-players/",
+  // Per-player shot locations for the player-page shot chart — ~4.7k files
+  // per season of coverage, fetched one at a time.
+  "/data/shots/",
 ] as const;
 
 export function dataUrl(path: string): string {

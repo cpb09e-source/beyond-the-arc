@@ -60,6 +60,7 @@ const ALL_DIRS = [
   "public/data/tournament-box",
   "public/data/team",
   "public/data/game-players",
+  "public/data/shots",
 ];
 
 /**

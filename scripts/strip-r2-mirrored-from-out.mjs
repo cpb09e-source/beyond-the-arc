@@ -21,6 +21,7 @@ const DIRS = [
   "data/tournament-box",
   "data/team",
   "data/game-players",
+  "data/shots",
 ];
 
 let removed = 0;
