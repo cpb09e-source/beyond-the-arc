@@ -21,9 +21,17 @@
  * excluded. Shots without coordinates are excluded (this file feeds a shot
  * chart; a shot that can't be plotted has nothing to contribute).
  *
- * SEASONS 2024+ ONLY. Location coverage measured on real slates: 2026 93%,
- * 2025 99%, 2024 93%, but 2023 drops to ~71% — a chart missing 3 of every 10
- * attempts visibly under-plots, so pre-2024 is deliberately left out.
+ * SEASONS 2022+. The bar is location coverage: a chart missing a large share of
+ * attempts visibly under-plots, so a season only ships if most of its shots
+ * carry coordinates.
+ *
+ * Originally gated at 2024+ on a reading of ~71% for 2023. That measurement
+ * predated the plays backfill, and re-measuring the current archive puts 2023
+ * at 89.4% — HIGHER than 2024's 86.5%, which was already shipping. Coverage by
+ * season now: 2019 27.8%, 2020 68.0%, 2022 83.3%, 2023 89.4%, 2024 86.5%,
+ * 2025 98.8%, 2026 90.9%. (2021 is the COVID season and is excluded site-wide.)
+ * 2022 and 2023 both sit at or above a season already in production, so they're
+ * in; 2020 and earlier stay out.
  *
  * Joins reuse the exact machinery of build-player-games-cbbd.mjs:
  *   shooter → bart id  via (normalized TEAM_MAP name | normalized player name)
@@ -45,7 +53,7 @@ import { norm } from "./lib/cbbd-join.mjs";
 
 const ROOT = process.cwd();
 const OUT_DIR = path.join(ROOT, "public/data/shots");
-const SEASONS = [2024, 2025, 2026];
+const SEASONS = [2022, 2023, 2024, 2025, 2026];
 
 const args = process.argv.slice(2);
 const oneSeason = args.includes("--season") ? Number(args[args.indexOf("--season") + 1]) : null;

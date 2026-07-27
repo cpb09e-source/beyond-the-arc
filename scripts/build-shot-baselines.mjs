@@ -41,8 +41,9 @@ const BUCKET_BY_NOTE = {
   "PF/C": "C", "C": "C",
 };
 
-// Seasons the shots pipeline covers (build-player-shots.mjs writes 2024+).
-const SEASONS = [2024, 2025, 2026];
+// Must match SEASONS in build-player-shots.mjs. A season with shot files but no
+// baseline renders the volume court and an empty accuracy court beside it.
+const SEASONS = [2022, 2023, 2024, 2025, 2026];
 
 // ---- bart_player_id → bucket, per season ----
 const bucketBySeason = new Map(); // year → Map(bartId → "G"|"F"|"C")
