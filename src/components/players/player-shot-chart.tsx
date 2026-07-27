@@ -175,11 +175,19 @@ export function PlayerShotChart({
             </div>
             <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
               Shot Chart
-              {profile?.tracked != null && (
-                <span className="font-sans text-sm lg:text-base font-normal text-ink-muted tracking-normal ml-2 tabular">
-                  ({profile.tracked.toLocaleString()} tracked shots)
-                </span>
-              )}
+              {/* Both counts ride here: the season's tracked total, and — only
+                  once a filter narrows it — how much of the charted set is on
+                  screen. Keeping them together means the caption under the
+                  court doesn't appear and disappear as you toggle chips. */}
+              <span className="font-sans text-sm lg:text-base font-normal text-ink-muted tracking-normal ml-2.5 tabular">
+                {profile?.tracked != null && <>{profile.tracked.toLocaleString()} tracked shots</>}
+                {shown.length !== rows.length && (
+                  <>
+                    {profile?.tracked != null && " · "}
+                    showing {shown.length.toLocaleString()} of {rows.length.toLocaleString()} charted
+                  </>
+                )}
+              </span>
             </h2>
           </div>
           {yrs.length > 1 && (
@@ -198,7 +206,7 @@ export function PlayerShotChart({
           {/* Distance sits above the courts rather than down in the chip band:
               it's the one control that reshapes what both charts are OF, so it
               reads as a lens on them rather than another toggle. */}
-          <div className="mb-6 max-w-xs">
+          <div className="mb-6 max-w-md">
             <DistanceSlider
               lo={filters.distLo} hi={filters.distHi}
               onChange={(lo, hi) => setFilters((f) => ({ ...f, distLo: lo, distHi: hi }))}
@@ -221,14 +229,6 @@ export function PlayerShotChart({
                 <span className="font-bold">{tpm} / {tpa.length}</span>
                 <span className="text-ink-muted"> 3PT ({pct(tpm, tpa.length)})</span>
               </p>
-              {/* Only the filtered-subset note survives here — the standing
-                  caveats (untracked locations, no free throws) moved into the
-                  card's info popover so the courts sit closer together. */}
-              {shown.length !== rows.length && (
-                <p className="mt-1 text-xs text-ink-muted tabular">
-                  Showing {shown.length.toLocaleString()} of {rows.length.toLocaleString()} charted shots.
-                </p>
-              )}
             </div>
 
             {/* ---- Accuracy vs position ---- */}
