@@ -54,7 +54,17 @@ export type StaticTeamSeasonRow = {
     wab: number | null; sos: number | null;
     ncsos: number | null; consos: number | null;
   };
-  team_cbba_stats: {
+  /**
+   * Season aggregates summed from the CBBD box archive by
+   * scripts/build-team-season-stats.mjs. Replaced `team_cbba_stats`.
+   *
+   * `pace_adj` is gone (Bart's `adjt` in team_trank_stats is the same concept
+   * from a source we already carry), as are the raw fg3_*_def counts that only
+   * existed so the client could divide them into an opponent 3P% — that is now
+   * computed from season totals at build time.
+   */
+  team_season_stats: {
+    games?: number | null;
     efg_pct: number | null; ts_pct: number | null;
     tov_pct: number | null; orb_pct: number | null;
     fta_rate: number | null; fg3_pct: number | null;
@@ -64,11 +74,13 @@ export type StaticTeamSeasonRow = {
     ortg: number | null; drtg: number | null;
     net_rtg: number | null; ortg_adj: number | null;
     drtg_adj: number | null; net_rtg_adj: number | null;
-    pace: number | null; pace_adj: number | null;
-    fbpts_pct: number | null; pitp_pct: number | null;
+    pace: number | null;
+    fbpts_pct: number | null; pitp_pct: number | null; pot_pct?: number | null;
     fg3_made_diff?: number | null; orb_diff_ct?: number | null;
     reb_diff?: number | null; fbpts_diff?: number | null;
     potov_diff?: number | null;
+    /** Games in which each point split was actually tracked — see trackedSplit. */
+    fbpts_games?: number | null; pitp_games?: number | null; potov_games?: number | null;
   } | null;
   /** Pre-computed roster percentile chips, keyed by bart_player_id.
    *  Populated by scripts/embed-roster-ranks.mjs. Lets the team dossier
@@ -332,7 +344,7 @@ export type GameLog = {
   // "<numeric>-<team_id>-game-<bool>". The leading numeric prefix is the
   // shared game ID across both teams' game-log rows and matches the
   // team-games/<year>/<numeric>.json box-score file.
-  cbba_game_id?: string | null;
+  game_id?: string | null;
   is_home: boolean | null;
   is_neutral: boolean | null;
   won: boolean | null;

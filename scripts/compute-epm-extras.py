@@ -97,15 +97,26 @@ def main():
                         continue
                     b = off[pid]; b[0] += oPts; b[1] += oPoss; b[2] += dPts; b[3] += dPoss
 
-    # eWins from epm.csv
+    # eWins from epm.csv — OPTIONAL.
+    #
+    # Only eWins needs EPM; on/off and the lineup ratings come entirely from
+    # stints.csv.gz. Requiring epm.csv meant a season could not have lineups
+    # until the whole ridge-RAPM pipeline had been run for it, which is why 2024
+    # had play-by-play and stints on disk but no lineups. When epm.csv is absent
+    # the eWins column is left blank and everything else is produced normally.
     ewins = {}
     epm_meta = {}
-    with open(d / "epm.csv", newline="", encoding="utf-8") as f:
-        for r in csv.DictReader(f):
-            pid = r["playerId"]
-            poss = float(r["poss"]); epm = float(r["epm"])
-            ewins[pid] = round((epm / 100.0) * poss / PTS_PER_WIN, 2)
-            epm_meta[pid] = {"name": r["name"], "team": r["team"]}
+    epm_path = d / "epm.csv"
+    if epm_path.exists():
+        with open(epm_path, newline="", encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                pid = r["playerId"]
+                poss = float(r["poss"]); epm = float(r["epm"])
+                ewins[pid] = round((epm / 100.0) * poss / PTS_PER_WIN, 2)
+                epm_meta[pid] = {"name": r["name"], "team": r["team"]}
+    else:
+        # Plain ASCII: the Windows console codepage mangles an em-dash here.
+        print(f"  (no epm.csv for {args.season} - eWins left blank; on/off + lineups unaffected)")
 
     def net(acc):
         oPts, oPoss, dPts, dPoss = acc

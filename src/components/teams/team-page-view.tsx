@@ -395,7 +395,7 @@ export function TeamPageView({
   };
 
   const currentTrank = current.team_trank_stats;
-  const currentCbb = current.team_cbba_stats;
+  const currentCbb = current.team_season_stats;
   // Newest season first — team.seasons already comes that way from the export.
   const chronological = [...team.seasons];
 

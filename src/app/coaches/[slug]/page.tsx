@@ -101,7 +101,7 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
   // March Madness resume — every NCAA tournament game the coach has been on
   // the bench for, ordered chronologically. We resolve each (team, year) →
   // team_id, then cross-reference the year's game-logs by date so the modal
-  // has the full GameLog (with cbba_game_id for the box score) rather than
+  // has the full GameLog (with game_id for the box score) rather than
   // the slimmer TourneyGame shape.
   let marchGames: GameLog[] = [];
   {

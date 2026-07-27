@@ -399,7 +399,7 @@ function ResultsView({
       {/* Game list */}
       <ul className="divide-y divide-hairline/60">
         {results.games.map((g, i) => (
-          <li key={`${g.cbba_game_id}-${i}`} className="flex items-center gap-3 py-2.5">
+          <li key={`${g.game_id}-${i}`} className="flex items-center gap-3 py-2.5">
             <span className="text-xs tabular text-ink-muted w-20 shrink-0">
               {fmtDate(g.game_date)}
             </span>

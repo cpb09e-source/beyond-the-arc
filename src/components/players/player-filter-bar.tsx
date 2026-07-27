@@ -306,7 +306,7 @@ const RANGE_GROUPS: RangeGroup[] = [
   {
     label: "Playmaking",
     stats: [
-      { key: "pm_pg",   label: "Plus / minus",          min: -20, max: 20, step: 0.5 },
+      { key: "net_rtg", label: "Net rating",            min: -60, max: 60, step: 1 },
       { key: "ast_tov", label: "Assist : turnover",     min: 0,   max: 8,  step: 0.1 },
     ],
   },

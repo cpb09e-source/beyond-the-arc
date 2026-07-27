@@ -212,7 +212,7 @@ function seasonSummary(years: number[]): string {
  * Attach opponent rank + quadrant to one season's rows.
  *
  * The opponent is found by pairing rows on the shared numeric prefix of
- * cbba_game_id rather than by matching opp_team_market, which is a third name
+ * game_id rather than by matching opp_team_market, which is a third name
  * space. A game with no paired row is a non-D1 opponent (~5% of rows) and gets
  * a null rank, which quadFor() maps to Q4 — matching how the committee treats
  * non-D1 games.
@@ -223,14 +223,14 @@ function enrichWithQuad(rows: GameLog[], ratings: TeamRatingsFile | null): GameL
 
   const byGame = new Map<string, GameLog[]>();
   for (const r of rows) {
-    const k = gameKey(r.cbba_game_id);
+    const k = gameKey(r.game_id);
     const arr = byGame.get(k);
     if (arr) arr.push(r);
     else byGame.set(k, [r]);
   }
 
   return rows.map((r) => {
-    const pair = byGame.get(gameKey(r.cbba_game_id));
+    const pair = byGame.get(gameKey(r.game_id));
     const opp = pair && pair.length > 1 ? pair.find((x) => x !== r) : undefined;
     const oppRank = opp ? rankByTeam.get(ratingKey(opp.team_name)) ?? null : null;
     // No paired row means the opponent isn't a D1 team in our data.
@@ -1290,7 +1290,7 @@ export function CalcClient({
                       <tbody>
                         {visibleSample.rows.map((g) => (
                           <tr
-                            key={g.cbba_game_id + "-" + g.team_id}
+                            key={g.game_id + "-" + g.team_id}
                             onDoubleClick={() => setBoxGame(g)}
                             title="Double-click for the box score"
                             className="border-b border-hairline/60 hover:bg-paper-deep/40 transition-colors cursor-pointer select-none"
@@ -1418,7 +1418,7 @@ export function CalcClient({
           game={boxGame}
           opp={
             games.find(
-              (x) => x !== boxGame && gameKey(x.cbba_game_id) === gameKey(boxGame.cbba_game_id),
+              (x) => x !== boxGame && gameKey(x.game_id) === gameKey(boxGame.game_id),
             ) ?? null
           }
           onClose={() => setBoxGame(null)}
@@ -1564,13 +1564,13 @@ function GameBoxModal({
     if (tab !== "players" || fetchStarted.current) return;
     fetchStarted.current = true;
     let cancelled = false;
-    const key = gameKey(game.cbba_game_id);
+    const key = gameKey(game.game_id);
     fetch(dataUrl(`/data/game-players/${game.year}/${key}.json`))
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((j: GamePlayersFile) => { if (!cancelled) setPlayers(j); })
       .catch(() => { if (!cancelled) setPlayersErr(true); });
     return () => { cancelled = true; };
-  }, [tab, game.cbba_game_id, game.year]);
+  }, [tab, game.game_id, game.year]);
 
   const num = (r: GameLog | null, k: string): number | null => {
     const v = r?.[k];

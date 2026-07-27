@@ -4,12 +4,13 @@
  *
  * Stats come from two sources, joined on team_id:
  *   - team_trank_stats  (Bart Torvik T-Rank)
- *   - team_cbba_stats   (CBB Analytics season aggregates)
+ *   - team_season_stats   (CBBD box-score season aggregates, built offline by
+ *                          scripts/build-team-season-stats.mjs)
  */
 
 import { ALL_SEASONS, clampSeason } from "@/lib/seasons";
 
-export type StatSource = "trank" | "cbba" | "derived";
+export type StatSource = "trank" | "cbbd" | "derived";
 
 export type StatGroup = "overall" | "scoring" | "defense" | "diffs" | "misc";
 
@@ -31,10 +32,10 @@ export type TeamStatColumn = {
 export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   // ── Overall ──────────────────────────────────────────────
   { key: "rank",       source: "trank",   dbColumn: "rank",    label: "BTA RTG",     desc: "Bart's overall ranking (we surface BTA RTG score elsewhere; this is the per-season rank position)", format: "rank", group: "overall", hideInFilter: true },
-  { key: "bta_rtg",    source: "derived", dbColumn: "",        label: "BTA RTG",     desc: "Weighted z-score composite (Bart adj ORtg/DRtg + CBB adj ORtg/DRtg + SoS), scaled ×40. ~0 = average D-I team, +75 = elite, +100 = generational.", format: "num1", group: "overall" },
+  { key: "bta_rtg",    source: "derived", dbColumn: "",        label: "BTA RTG",     desc: "Weighted z-score composite (Bart adj ORtg/DRtg + CBBD adj ORtg/DRtg + SoS), scaled ×40. ~0 = average D-I team, +75 = elite, +100 = generational.", format: "num1", group: "overall" },
   { key: "bta_net",    source: "derived", dbColumn: "",        label: "Adj Net Rtg", desc: "Adj ORtg − Adj DRtg. Point differential per 100 possessions vs an average D-I opponent on a neutral floor.",                                                                                                              format: "num1", group: "overall" },
-  { key: "bta_ortg",   source: "derived", dbColumn: "",        label: "Adj ORtg",    desc: "Average of Bart adj ORtg and CBB adj ORtg",                                                                                                                                                                                       format: "num1", group: "overall" },
-  { key: "bta_drtg",   source: "derived", dbColumn: "",        label: "Adj DRtg",    desc: "Average of Bart adj DRtg and CBB adj DRtg",                                                                                                                                                                                       format: "num1", group: "overall" },
+  { key: "bta_ortg",   source: "derived", dbColumn: "",        label: "Adj ORtg",    desc: "Average of Bart adj ORtg and CBBD adj ORtg",                                                                                                                                                                                       format: "num1", group: "overall" },
+  { key: "bta_drtg",   source: "derived", dbColumn: "",        label: "Adj DRtg",    desc: "Average of Bart adj DRtg and CBBD adj DRtg",                                                                                                                                                                                       format: "num1", group: "overall" },
   { key: "adjt",       source: "trank",   dbColumn: "adjt",    label: "Adj Tempo",   desc: "Adjusted possessions / 40 min",                                                                                                                                                                                                   format: "num1", group: "overall" },
   { key: "wins",       source: "trank",   dbColumn: "wins",    label: "Wins",        desc: "Season wins",                                                                                                                                                                                                                     format: "num1", group: "overall" },
   { key: "losses",     source: "trank",   dbColumn: "losses",  label: "Losses",      desc: "Season losses",                                                                                                                                                                                                                   format: "num1", group: "overall" },
@@ -44,24 +45,24 @@ export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   { key: "consos",     source: "trank",   dbColumn: "consos",  label: "Conf SoS",    desc: "Conference SoS",                                                                                                                                                                                                                  format: "pct1", group: "overall" },
 
   // ── Scoring (offense) ────────────────────────────────────
-  { key: "cbb_ts",       source: "cbba", dbColumn: "ts_pct",     label: "TS%",        desc: "True shooting %",                  format: "pct1", group: "scoring" },
-  { key: "cbb_efg",      source: "cbba", dbColumn: "efg_pct",    label: "eFG%",       desc: "Effective FG%",                    format: "pct1", group: "scoring" },
-  { key: "cbb_fg3",      source: "cbba", dbColumn: "fg3_pct",    label: "3P%",        desc: "3-point %",                        format: "pct1", group: "scoring" },
-  { key: "cbb_fg3rate",  source: "cbba", dbColumn: "fg3a_rate",  label: "3PA Rate",   desc: "3PA / FGA (3-point reliance)",      format: "pct1", group: "scoring" },
-  { key: "cbb_ftarate",  source: "cbba", dbColumn: "fta_rate",   label: "FTA Rate",   desc: "Free-throws attempted / FGA",      format: "pct1", group: "scoring" },
-  { key: "cbb_orb",      source: "cbba", dbColumn: "orb_pct",    label: "OREB%",      desc: "Offensive rebound %",              format: "pct1", group: "scoring" },
-  { key: "cbb_tov",      source: "cbba", dbColumn: "tov_pct",    label: "TOV%",       desc: "Turnover %",                       format: "pct1", group: "scoring" },
-  { key: "cbb_ast",      source: "cbba", dbColumn: "ast_pct",    label: "AST%",       desc: "% of made FGs assisted",            format: "pct1", group: "scoring" },
-  { key: "cbb_fbpts",    source: "cbba", dbColumn: "fbpts_pct",  label: "FB Pts %",   desc: "Fast-break points / total pts",     format: "pct1", group: "scoring" },
-  { key: "cbb_pitp",     source: "cbba", dbColumn: "pitp_pct",   label: "Paint Pts %", desc: "Paint points / total pts",          format: "pct1", group: "scoring" },
-  { key: "cbb_ortg",     source: "cbba", dbColumn: "ortg",       label: "ORtg (raw)",  desc: "CBB raw offensive rating",         format: "num1", group: "scoring" },
+  { key: "cbb_ts",       source: "cbbd", dbColumn: "ts_pct",     label: "TS%",        desc: "True shooting %",                  format: "pct1", group: "scoring" },
+  { key: "cbb_efg",      source: "cbbd", dbColumn: "efg_pct",    label: "eFG%",       desc: "Effective FG%",                    format: "pct1", group: "scoring" },
+  { key: "cbb_fg3",      source: "cbbd", dbColumn: "fg3_pct",    label: "3P%",        desc: "3-point %",                        format: "pct1", group: "scoring" },
+  { key: "cbb_fg3rate",  source: "cbbd", dbColumn: "fg3a_rate",  label: "3PA Rate",   desc: "3PA / FGA (3-point reliance)",      format: "pct1", group: "scoring" },
+  { key: "cbb_ftarate",  source: "cbbd", dbColumn: "fta_rate",   label: "FTA Rate",   desc: "Free-throws attempted / FGA",      format: "pct1", group: "scoring" },
+  { key: "cbb_orb",      source: "cbbd", dbColumn: "orb_pct",    label: "OREB%",      desc: "Offensive rebound %",              format: "pct1", group: "scoring" },
+  { key: "cbb_tov",      source: "cbbd", dbColumn: "tov_pct",    label: "TOV%",       desc: "Turnover %",                       format: "pct1", group: "scoring" },
+  { key: "cbb_ast",      source: "cbbd", dbColumn: "ast_pct",    label: "AST%",       desc: "% of made FGs assisted",            format: "pct1", group: "scoring" },
+  { key: "cbb_fbpts",    source: "cbbd", dbColumn: "fbpts_pct",  label: "FB Pts %",   desc: "Fast-break points / total pts",     format: "pct1", group: "scoring" },
+  { key: "cbb_pitp",     source: "cbbd", dbColumn: "pitp_pct",   label: "Paint Pts %", desc: "Paint points / total pts",          format: "pct1", group: "scoring" },
+  { key: "cbb_ortg",     source: "cbbd", dbColumn: "ortg",       label: "ORtg (raw)",  desc: "Raw offensive rating (points per 100 possessions)",         format: "num1", group: "scoring" },
 
   // ── Defense (allowed) ────────────────────────────────────
-  { key: "cbb_efg_def", source: "cbba", dbColumn: "efg_pct_def", label: "Opp eFG%",   desc: "Opponent eFG%",                 format: "pct1", group: "defense" },
-  { key: "cbb_tov_def", source: "cbba", dbColumn: "tov_pct_def", label: "Opp TOV%",   desc: "Opponent TOV% (forced)",        format: "pct1", group: "defense" },
-  { key: "cbb_orb_def", source: "cbba", dbColumn: "orb_pct_def", label: "Opp OREB%",  desc: "Opponent OREB% (allowed)",      format: "pct1", group: "defense" },
-  { key: "cbb_fg3_def", source: "cbba", dbColumn: "fg3_pct_def", label: "Opp 3P%",    desc: "Opponent 3-point %",            format: "pct1", group: "defense" },
-  { key: "cbb_drtg",    source: "cbba", dbColumn: "drtg",        label: "DRtg (raw)", desc: "CBB raw defensive rating",      format: "num1", group: "defense" },
+  { key: "cbb_efg_def", source: "cbbd", dbColumn: "efg_pct_def", label: "Opp eFG%",   desc: "Opponent eFG%",                 format: "pct1", group: "defense" },
+  { key: "cbb_tov_def", source: "cbbd", dbColumn: "tov_pct_def", label: "Opp TOV%",   desc: "Opponent TOV% (forced)",        format: "pct1", group: "defense" },
+  { key: "cbb_orb_def", source: "cbbd", dbColumn: "orb_pct_def", label: "Opp OREB%",  desc: "Opponent OREB% (allowed)",      format: "pct1", group: "defense" },
+  { key: "cbb_fg3_def", source: "cbbd", dbColumn: "fg3_pct_def", label: "Opp 3P%",    desc: "Opponent 3-point %",            format: "pct1", group: "defense" },
+  { key: "cbb_drtg",    source: "cbbd", dbColumn: "drtg",        label: "DRtg (raw)", desc: "Raw defensive rating (points allowed per 100 possessions)",      format: "num1", group: "defense" },
 
   // ── Differentials (you vs opponent) ──────────────────────
   // Percentage-point diffs
@@ -71,24 +72,23 @@ export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   { key: "fg3_diff",   source: "derived", dbColumn: "", label: "3P% Diff",     desc: "3P% − Opp 3P% (computed from raw 3PT counts)",             format: "pct1", group: "diffs" },
   { key: "fta_diff",   source: "derived", dbColumn: "", label: "FTA% Diff",    desc: "FTA Rate − Opp FTA Rate (free-throw drawing edge)",        format: "pct1", group: "diffs" },
   // Count diffs (CBB ready-made; populated after migration 003 + sync)
-  { key: "fg3m_diff_ct", source: "cbba", dbColumn: "fg3_made_diff",  label: "3PM Diff",     desc: "3-pointers made − allowed (season total)",   format: "num1", group: "diffs" },
-  { key: "fg3a_diff_ct", source: "cbba", dbColumn: "fg3_att_diff",   label: "3PA Diff",     desc: "3-point attempts − allowed",                 format: "num1", group: "diffs" },
-  { key: "fg2m_diff_ct", source: "cbba", dbColumn: "fg2_made_diff",  label: "2PM Diff",     desc: "2-pointers made − allowed",                  format: "num1", group: "diffs" },
-  { key: "fgm_diff_ct",  source: "cbba", dbColumn: "fg_made_diff",   label: "FGM Diff",     desc: "Field goals made − allowed",                 format: "num1", group: "diffs" },
-  { key: "ftm_diff_ct",  source: "cbba", dbColumn: "ft_made_diff",   label: "FTM Diff",     desc: "Free throws made − allowed",                 format: "num1", group: "diffs" },
-  { key: "orb_diff_ct",  source: "cbba", dbColumn: "orb_diff_ct",    label: "OREB Diff",    desc: "Offensive rebounds − opp OREB",              format: "num1", group: "diffs" },
-  { key: "drb_diff_ct",  source: "cbba", dbColumn: "drb_diff",       label: "DREB Diff",    desc: "Defensive rebounds − opp DREB",              format: "num1", group: "diffs" },
-  { key: "reb_diff_ct",  source: "cbba", dbColumn: "reb_diff",       label: "REB Diff",     desc: "Total rebounds − opp REB",                   format: "num1", group: "diffs" },
-  { key: "tov_diff_ct",  source: "cbba", dbColumn: "tov_diff_ct",    label: "TOV Diff",     desc: "Turnovers − opp TOV (negative = good)",      format: "num1", group: "diffs" },
-  { key: "fbpts_diff",   source: "cbba", dbColumn: "fbpts_diff",     label: "FBP Diff",     desc: "Fast-break points − allowed",                format: "num1", group: "diffs" },
-  { key: "pitp_diff",    source: "cbba", dbColumn: "pitp_diff",      label: "Paint Pts Diff", desc: "Points in the paint − allowed",            format: "num1", group: "diffs" },
-  { key: "pts_diff",     source: "cbba", dbColumn: "pts_diff",       label: "Pts Diff",     desc: "Total points scored − allowed (season)",     format: "num1", group: "diffs" },
-  { key: "scp_diff",     source: "cbba", dbColumn: "scp_diff",       label: "2nd-Chance Diff", desc: "Second-chance points − allowed",          format: "num1", group: "diffs" },
+  { key: "fg3m_diff_ct", source: "cbbd", dbColumn: "fg3_made_diff",  label: "3PM Diff",     desc: "3-pointers made − allowed (season total)",   format: "num1", group: "diffs" },
+  { key: "fg3a_diff_ct", source: "cbbd", dbColumn: "fg3_att_diff",   label: "3PA Diff",     desc: "3-point attempts − allowed",                 format: "num1", group: "diffs" },
+  { key: "fg2m_diff_ct", source: "cbbd", dbColumn: "fg2_made_diff",  label: "2PM Diff",     desc: "2-pointers made − allowed",                  format: "num1", group: "diffs" },
+  { key: "fgm_diff_ct",  source: "cbbd", dbColumn: "fg_made_diff",   label: "FGM Diff",     desc: "Field goals made − allowed",                 format: "num1", group: "diffs" },
+  { key: "ftm_diff_ct",  source: "cbbd", dbColumn: "ft_made_diff",   label: "FTM Diff",     desc: "Free throws made − allowed",                 format: "num1", group: "diffs" },
+  { key: "orb_diff_ct",  source: "cbbd", dbColumn: "orb_diff_ct",    label: "OREB Diff",    desc: "Offensive rebounds − opp OREB",              format: "num1", group: "diffs" },
+  { key: "drb_diff_ct",  source: "cbbd", dbColumn: "drb_diff",       label: "DREB Diff",    desc: "Defensive rebounds − opp DREB",              format: "num1", group: "diffs" },
+  { key: "reb_diff_ct",  source: "cbbd", dbColumn: "reb_diff",       label: "REB Diff",     desc: "Total rebounds − opp REB",                   format: "num1", group: "diffs" },
+  { key: "tov_diff_ct",  source: "cbbd", dbColumn: "tov_diff_ct",    label: "TOV Diff",     desc: "Turnovers − opp TOV (negative = good)",      format: "num1", group: "diffs" },
+  { key: "fbpts_diff",   source: "cbbd", dbColumn: "fbpts_diff",     label: "FBP Diff",     desc: "Fast-break points − allowed",                format: "num1", group: "diffs" },
+  { key: "pitp_diff",    source: "cbbd", dbColumn: "pitp_diff",      label: "Paint Pts Diff", desc: "Points in the paint − allowed",            format: "num1", group: "diffs" },
+  { key: "pts_diff",     source: "cbbd", dbColumn: "pts_diff",       label: "Pts Diff",     desc: "Total points scored − allowed (season)",     format: "num1", group: "diffs" },
+  { key: "scp_diff",     source: "cbbd", dbColumn: "scp_diff",       label: "2nd-Chance Diff", desc: "Second-chance points − allowed",          format: "num1", group: "diffs" },
 
   // ── Misc (pace, raw net) ─────────────────────────────────
-  { key: "cbb_pace",     source: "cbba", dbColumn: "pace",     label: "Pace",       desc: "CBB raw pace",         format: "num1", group: "misc" },
-  { key: "cbb_pace_adj", source: "cbba", dbColumn: "pace_adj", label: "Pace (adj)", desc: "CBB adjusted pace",    format: "num1", group: "misc" },
-  { key: "cbb_net",      source: "cbba", dbColumn: "net_rtg",  label: "Net (raw)",  desc: "CBB raw net rating",   format: "num1", group: "misc" },
+  { key: "cbb_pace",     source: "cbbd", dbColumn: "pace",     label: "Pace",       desc: "Possessions per game",         format: "num1", group: "misc" },
+  { key: "cbb_net",      source: "cbbd", dbColumn: "net_rtg",  label: "Net (raw)",  desc: "Raw net rating (ORtg − DRtg)",   format: "num1", group: "misc" },
 ];
 
 export const GROUP_LABEL: Record<StatGroup, string> = {
@@ -239,7 +239,7 @@ export function parseSpec(searchParams: Record<string, string | string[] | undef
 // PostgREST can't join sibling tables directly — pivot from `teams` and pull
 // both stat tables through it via the FK each one has to teams(id).
 function foreignTable(col: TeamStatColumn): string {
-  return col.source === "trank" ? "team_trank_stats" : "team_cbba_stats";
+  return col.source === "trank" ? "team_trank_stats" : "team_season_stats";
 }
 
 export type TeamRow = {
@@ -280,15 +280,12 @@ export type TeamRow = {
   cbb_drtg_adj: number | null;
   cbb_net_adj: number | null;
   cbb_pace: number | null;
-  cbb_pace_adj: number | null;
   cbb_fbpts: number | null;
   cbb_pitp: number | null;
-  // CBB raw counts
+  // Raw counts
   fg3_made: number | null;
   fg3_attempts: number | null;
-  fg3_made_def: number | null;
-  fg3_attempts_def: number | null;
-  // CBB ready-made count diffs
+  // Season count diffs
   fg3m_diff_ct: number | null;
   fg3a_diff_ct: number | null;
   fg2m_diff_ct: number | null;
@@ -334,7 +331,7 @@ export type RawTeamSeason = {
     wab: number | null; sos: number | null;
     ncsos: number | null; consos: number | null;
   } | Array<unknown>;
-  team_cbba_stats: {
+  team_season_stats: {
     efg_pct: number | null; ts_pct: number | null;
     tov_pct: number | null; orb_pct: number | null;
     fta_rate: number | null; fg3_pct: number | null;
@@ -344,7 +341,7 @@ export type RawTeamSeason = {
     ortg: number | null; drtg: number | null;
     net_rtg: number | null; ortg_adj: number | null;
     drtg_adj: number | null; net_rtg_adj: number | null;
-    pace: number | null; pace_adj: number | null;
+    pace: number | null;
     fbpts_pct: number | null; pitp_pct: number | null;
     // count-diff fields (migration 003 + 006). Loosely typed because the
     // export reads them via index access and the rest of this file casts.
@@ -365,19 +362,19 @@ export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { r
   // Shape rows + average-based derived columns
   const allRows: TeamRow[] = cohort.map((r) => {
     const trank = (Array.isArray(r.team_trank_stats) ? null : r.team_trank_stats) as Record<string, number | string | null> | null;
-    const cbb = (Array.isArray(r.team_cbba_stats) || !r.team_cbba_stats ? null : r.team_cbba_stats) as Record<string, number | null> | null;
+    const cbb = (Array.isArray(r.team_season_stats) || !r.team_season_stats ? null : r.team_season_stats) as Record<string, number | null> | null;
     const adjoe = (trank?.adjoe as number | null) ?? null;
     const adjde = (trank?.adjde as number | null) ?? null;
     const cbbOAdj = cbb?.ortg_adj ?? null;
     const cbbDAdj = cbb?.drtg_adj ?? null;
     const bta_ortg = avgIfPresent([adjoe, cbbOAdj]);
     const bta_drtg = avgIfPresent([adjde, cbbDAdj]);
-    const fg3a_def_raw = cbb?.fg3_attempts_def ?? null;
-    const fg3m_def_raw = cbb?.fg3_made_def ?? null;
-    const fg3_pct_def_derived =
-      typeof fg3a_def_raw === "number" && fg3a_def_raw > 0 && typeof fg3m_def_raw === "number"
-        ? fg3m_def_raw / fg3a_def_raw
-        : null;
+    // Opponent 3P% is now computed at build time from summed season counts
+    // (scripts/build-team-season-stats.mjs), so there is nothing to derive here.
+    // The old source didn't pre-compute it, which is why raw fg3_made_def /
+    // fg3_attempts_def counts used to be carried on every row just to divide
+    // them client-side.
+    const fg3_pct_def = cbb?.fg3_pct_def ?? null;
     return {
       team_id: r.id,
       team_name: r.name,
@@ -404,7 +401,7 @@ export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { r
       cbb_efg_def: cbb?.efg_pct_def ?? null,
       cbb_tov_def: cbb?.tov_pct_def ?? null,
       cbb_orb_def: cbb?.orb_pct_def ?? null,
-      cbb_fg3_def: cbb?.fg3_pct_def ?? fg3_pct_def_derived,
+      cbb_fg3_def: fg3_pct_def,
       cbb_ortg: cbb?.ortg ?? null,
       cbb_drtg: cbb?.drtg ?? null,
       cbb_net: cbb?.net_rtg ?? null,
@@ -412,13 +409,10 @@ export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { r
       cbb_drtg_adj: cbbDAdj,
       cbb_net_adj: cbb?.net_rtg_adj ?? null,
       cbb_pace: cbb?.pace ?? null,
-      cbb_pace_adj: cbb?.pace_adj ?? null,
       cbb_fbpts: cbb?.fbpts_pct ?? null,
       cbb_pitp: cbb?.pitp_pct ?? null,
       fg3_made: cbb?.fg3_made ?? null,
       fg3_attempts: cbb?.fg3_attempts ?? null,
-      fg3_made_def: cbb?.fg3_made_def ?? null,
-      fg3_attempts_def: cbb?.fg3_attempts_def ?? null,
       fg3m_diff_ct: cbb?.fg3_made_diff ?? null,
       fg3a_diff_ct: cbb?.fg3_att_diff ?? null,
       fg2m_diff_ct: cbb?.fg2_made_diff ?? null,
@@ -440,7 +434,7 @@ export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { r
       efg_diff: diff(cbb?.efg_pct ?? null, cbb?.efg_pct_def ?? null),
       tov_diff: diff(cbb?.tov_pct_def ?? null, cbb?.tov_pct ?? null),
       orb_diff: diff(cbb?.orb_pct ?? null, cbb?.orb_pct_def ?? null),
-      fg3_diff: diff(cbb?.fg3_pct ?? null, fg3_pct_def_derived),
+      fg3_diff: diff(cbb?.fg3_pct ?? null, fg3_pct_def),
       fta_diff: diff(cbb?.fta_rate ?? null, cbb?.fta_rate_def ?? null),
       pct: {},
     };

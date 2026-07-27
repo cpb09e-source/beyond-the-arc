@@ -9,7 +9,7 @@ type SortKey = "date" | "pir" | "pts" | "fg" | "fg3" | "ft" | "reb" | "ast" | "t
 type GameRow = {
   year: number;
   game_date: string | null;
-  cbba_game_id: number;
+  game_id: number;
   opp_team_market: string | null;
   is_home: boolean | null;
   is_neutral: boolean | null;
@@ -219,7 +219,7 @@ export function SeasonGamesModal({
                   const venue = g.is_neutral ? "N" : g.is_home ? "vs" : "@";
                   const p = pir(g);
                   return (
-                    <tr key={g.cbba_game_id} className="border-b border-hairline/60 hover:bg-paper-deep/30">
+                    <tr key={g.game_id} className="border-b border-hairline/60 hover:bg-paper-deep/30">
                       <Td className="text-ink-muted tabular whitespace-nowrap">
                         <span className="sm:hidden">{shortDate(g.game_date)}</span>
                         <span className="hidden sm:inline">{g.game_date ?? "—"}</span>

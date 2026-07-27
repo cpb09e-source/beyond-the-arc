@@ -64,7 +64,7 @@ function normTeamForIndex(s: string): string {
  * BoxscoreModal: dim overlay, centered card, header with date eyebrow,
  * team-flanked score line, per-player box-score tables for both teams.
  *
- * Data path: `/data/team-games/<year>/<cbba_game_id>.json` (built by
+ * Data path: `/data/team-games/<year>/<game_id>.json` (built by
  * `scripts/build-team-game-boxscores.mjs` from per-player game logs). Falls
  * back to a lightweight summary view if the file isn't on disk for that game.
  */
@@ -89,14 +89,14 @@ type TeamBox = {
   totals: Record<string, number>;
 };
 type BoxScore = {
-  cbba_game_id: number;
+  game_id: number;
   year: number;
   game_date: string;
   is_neutral: boolean | null;
   teams: TeamBox[];
 };
 
-// Parse the leading numeric prefix from game-logs cbba_game_id strings
+// Parse the leading numeric prefix from game-logs game_id strings
 // (which look like "2829159-103757-game-true"). Returns null if unparseable.
 function extractCbbaId(id: string | null | undefined): number | null {
   if (!id) return null;
@@ -142,7 +142,7 @@ export function ScheduleGameModal({
 
   // Lazy-fetch the per-game box score on open.
   useEffect(() => {
-    const cbba = extractCbbaId(game.cbba_game_id);
+    const cbba = extractCbbaId(game.game_id);
     const yearMatch = game.game_date?.match(/^(\d{4})-/);
     const dateYear = yearMatch ? parseInt(yearMatch[1]!, 10) : null;
     // Schedule files in `game-logs-by-year/<year>.json` use the **season**
@@ -170,7 +170,7 @@ export function ScheduleGameModal({
       if (!cancelled) setErr("Box score not available for this game");
     })();
     return () => { cancelled = true; };
-  }, [game.cbba_game_id, game.game_date]);
+  }, [game.game_id, game.game_date]);
 
   const venue = game.is_neutral ? "Neutral" : game.is_home ? "Home" : "Away";
   const dateStr = fmtDate(game.game_date);

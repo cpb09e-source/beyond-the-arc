@@ -8,11 +8,56 @@
  *      — Netlify uploads just the changed file (~30s). No site rebuild.
  *
  * IN-SEASON MODE (auto-detected once Bart's 2027 game feed has rows):
- *   Not wired yet — requires "graduating" 2027 into the main pipeline
- *   (YEARS arrays, year clamps, ranks cohort). The script detects the season
- *   has started, refreshes the preview as usual, and prints a loud reminder.
- *   When we wire it: sync:bart YEARS=2027 → export:data → compute-player-ranks
- *   → prune-search-index → build 32-0 index → sync:r2 → build → deploy.
+ *   Still not wired — it needs 2027 "graduated" into the app first (YEARS
+ *   arrays, season clamps, ranks cohort). The script detects the season has
+ *   started, refreshes the preview, and prints a loud reminder.
+ *
+ *   THE ORDER MATTERS, and it changed completely when the CBB Analytics
+ *   dependency was removed (docs/data-sources.md). Everything below the ingest
+ *   is a local derivation over the archive, so the chain has to run in
+ *   dependency order or a downstream step reads a stale file:
+ *
+ *     A. INGEST (network)
+ *        node scripts/cbbd-ingest.mjs --season 2027            plays + box
+ *        node scripts/pull-team-box-v2.mjs --season 2027        cap-aware team box
+ *        node scripts/pull-player-box-v2.mjs --season 2027      cap-aware player box
+ *        node scripts/pull-rankings.mjs                        AP polls
+ *        node scripts/pull-adjusted-ratings.mjs                CBBD adj ratings
+ *        node scripts/pull-shooting-splits.mjs                 shooting profile
+ *
+ *     B. JOIN TABLE — run BEFORE anything that resolves a team name. New/renamed
+ *        programs appear here first; a missing id silently drops a team's games.
+ *        node scripts/build-cbbd-team-map.mjs
+ *
+ *     C. DERIVE (each reads the previous step's output)
+ *        node scripts/build-game-logs-cbbd.mjs --season 2027    <- the keystone
+ *        node scripts/build-adjusted-ratings.mjs --season 2027
+ *        node scripts/build-team-season-stats.mjs               reads both above
+ *        node scripts/build-shot-distribution.mjs --season 2027
+ *        node scripts/build-player-season-adv.mjs
+ *        node scripts/export-game-box-json.mjs 2027
+ *        node scripts/export-game-players-json.mjs --season 2027
+ *
+ *     D. LINEUPS / EPM (needs onFloor, so 2024+ only)
+ *        node scripts/cbbd-build-stints.mjs --season 2027
+ *        python scripts/compute-epm.py --season 2027
+ *        python scripts/compute-epm-extras.py --season 2027     on/off + lineups
+ *        node scripts/export-epm-json.mjs
+ *        node scripts/export-lineups-json.mjs --from 2027 --to 2027
+ *
+ *     E. BART + PUBLISH
+ *        YEARS=2027 npm run sync:bart
+ *        npm run export:data                                    reads C's files
+ *        npx tsx scripts/compute-player-ranks.mts
+ *        node scripts/prune-search-index.mjs
+ *        node scripts/build-thirty-two-zero-index.mjs
+ *        npm run sync:r2
+ *        node scripts/build-with-r2-stash.mjs
+ *        netlify deploy --prod --dir=out --no-build
+ *
+ *   NOTE ON export:data: it no longer generates game logs or team stats — it
+ *   READS the files step C wrote and will throw if they are missing. That is
+ *   deliberate; it fails loudly rather than publishing a season of nulls.
  *
  * Schedule daily via Windows Task Scheduler, STARTING 2026-11-01 (season opens):
  *   schtasks /Create /TN "BTA Daily Refresh" /SC DAILY /SD 11/01/2026 /ST 07:00 /F /TR ^

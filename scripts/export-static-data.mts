@@ -19,13 +19,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { config as loadEnv } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
-import {
-  POWER_CONFS,
-  computeCohortStats,
-  productionFor as productionForShared,
-  starsForPrtg,
-  type PlayerSeason,
-} from "./lib/bta-prtg.mts";
 
 loadEnv({ path: ".env.local" });
 
@@ -68,7 +61,12 @@ async function ensureDir(p: string) {
 
 // ---------- queries ----------
 async function fetchAllTeamSeasons() {
-  // Paginate all team-seasons joined to trank + cbba stats.
+  // Paginate all team-seasons joined to their Bart (trank) stats.
+  //
+  // The `team_cbba_stats` join is gone. Those 32 stats now come from
+  // public/data/team-season-stats.json, aggregated out of the CBBD box archive
+  // by scripts/build-team-season-stats.mjs and attached below as
+  // `team_season_stats`. See docs/data-sources.md.
   const all: unknown[] = [];
   let from = 0;
   while (true) {
@@ -79,18 +77,6 @@ async function fetchAllTeamSeasons() {
         id, name, conference, year,
         team_trank_stats!inner (
           rank, record, wins, losses, adjoe, adjde, adjt, wab, sos, ncsos, consos
-        ),
-        team_cbba_stats (
-          efg_pct, ts_pct, tov_pct, orb_pct, fta_rate,
-          fg3_pct, fg3a_rate, ast_pct,
-          efg_pct_def, tov_pct_def, orb_pct_def, fg3_pct_def,
-          ortg, drtg, net_rtg, ortg_adj, drtg_adj, net_rtg_adj,
-          pace, pace_adj, fbpts_pct, pitp_pct,
-          fg3_made, fg3_attempts, fg3_made_def, fg3_attempts_def,
-          fg3_made_diff, fg3_att_diff, fg2_made_diff, fg2_att_diff,
-          fg_made_diff, ft_made_diff, ft_att_diff,
-          reb_diff, orb_diff_ct, drb_diff, tov_diff_ct,
-          fbpts_diff, pitp_diff, pts_diff, scp_diff, potov_diff
         )
         `
       )
@@ -104,164 +90,101 @@ async function fetchAllTeamSeasons() {
   return all;
 }
 
-async function fetchGameLogsForYear(year: number) {
-  // Paginate game_logs for a year, joining team name + conference so the
-  // /calc page can render rows without an extra lookup.
-  const all: unknown[] = [];
-  let from = 0;
-  while (true) {
-    const { data, error } = await sb
-      .from("game_logs")
-      .select(
-        `
-        cbba_game_id, year, game_date, team_id, opp_team_market,
-        is_home, is_neutral, won, pts_scored, pts_against, pts_diff,
-        poss, pace,
-        fg3_made_diff, fg3_att_diff, fg2_made_diff, fg_made_diff,
-        ft_made_diff, ft_att_diff, reb_diff, orb_diff, drb_diff, tov_diff,
-        ast_diff, stl_diff, blk_diff, fbpts_diff, pitp_diff, scp_diff,
-        fg3_pct, fg2_pct, ft_pct, efg_pct, ts_pct,
-        fg3_pct_def, efg_pct_def,
-        teams!team_id!inner ( name, conference )
-        `
-      )
-      .eq("year", year)
-      .range(from, from + 999);
-    if (error) throw new Error(`game_logs ${year}: ${error.message}`);
-    if (!data || data.length === 0) break;
-    all.push(...data);
-    if (data.length < 1000) break;
-    from += 1000;
+/**
+ * The CBBD-derived season aggregates, keyed "<team>|<year>". Built offline so
+ * `npm run export:data` stays a pure read of things already on disk plus
+ * Supabase's Bart tables — no API calls, no expiring tokens.
+ */
+async function loadTeamSeasonStats(): Promise<Record<string, Record<string, number | null>>> {
+  const fp = path.join(OUT, "team-season-stats.json");
+  try {
+    return JSON.parse(await fs.readFile(fp, "utf8"));
+  } catch {
+    throw new Error(
+      `Missing ${fp}. Run \`node scripts/build-team-season-stats.mjs\` first — ` +
+      `team stats no longer come from Supabase.`,
+    );
   }
-  return all;
 }
 
-// ---------- Advanced player stats (Supabase: player_game_stats + player_on_off_stats) ----------
-// Aggregates per-game box scores into per-season averages so the player
-// explorer can offer TOV / USG% / +/- filters without the client having to
-// load 1.5M raw rows.
+/**
+ * Per-game logs for a season.
+ *
+ * READS the file, no longer WRITES it. game-logs-by-year/<year>.json is built
+ * from the CBBD box archive by scripts/build-game-logs-cbbd.mjs, which already
+ * resolves Bart team names and per-season conferences. This export consumes it
+ * only to compute the four-factor record carried on each team-season row.
+ */
+async function fetchGameLogsForYear(year: number) {
+  const fp = path.join(OUT, "game-logs-by-year", `${year}.json`);
+  try {
+    return JSON.parse(await fs.readFile(fp, "utf8")) as unknown[];
+  } catch {
+    throw new Error(
+      `Missing ${fp} — run \`node scripts/build-game-logs-cbbd.mjs\` first. ` +
+      `Game logs no longer come from Supabase.`,
+    );
+  }
+}
+
+// ---------- Advanced player stats (CBBD player box, aggregated offline) ----------
+// Attached to each row in players-by-year/<year>.json under `advanced_stats`.
 //
-// Output shape (attached to each row in players-by-year/<year>.json under
-// `advanced_stats`):
-//   tov_pg, usage_pct, plus_minus_pg, mins_pct, is_qualified
+// Built by scripts/build-player-season-adv.mjs from the CBBD player box archive.
+// This replaces two Supabase tables sourced from CBB Analytics
+// (player_game_stats, player_on_off_stats) — see docs/data-sources.md.
 //
-// NOTE: net_onoff / ortg_onoff / drtg_onoff are pulled from
-// player_on_off_stats and held in memory for internal analysis, but are
-// NOT serialized to the public JSONs — those are proprietary CBB
-// Analytics derived metrics whose redistribution is restricted by their
-// ToS. Re-enable only after written permission. (See `mins_pct` /
-// `is_qualified` — those are minutes-share quality flags, not derived
-// analytics, and remain in the output.)
+// FIELD CHANGES vs the CBB Analytics version:
+//   - tov_pg, usage_pct: unchanged in meaning. Verified against the old values
+//     at a median absolute difference of 0.0002 and 0.0023 respectively.
+//   - plus_minus_pg: REMOVED. On-court plus/minus needs lineup data, and CBBD's
+//     play-by-play has no onFloor and no substitution events before 2024, so it
+//     is unrecoverable for 2014-2023 from any source we have.
+//   - net_rtg: NEW, and deliberately not a rename of plus_minus_pg. It is
+//     CBBD's individual offensive-minus-defensive rating per 100 possessions,
+//     a different statistic.
+//   - mins_pct / is_qualified: REMOVED. They came from the on/off table and no
+//     UI surface read them.
+//   - min_pg, game_score_pg: NEW, free from the same aggregation.
 type PlayerAdvancedAggregate = {
+  games: number;
+  min_pg: number | null;
   tov_pg: number | null;
   usage_pct: number | null;
-  plus_minus_pg: number | null;
-  mins_pct: number | null;
-  is_qualified: boolean | null;
+  net_rtg: number | null;
+  game_score_pg: number | null;
+  // NOT on/off. That already ships via epm-<year>.json (export-epm-json.mjs
+  // reads on_off + ewins out of epm-extras.csv), and the players grid merges it
+  // from there. Duplicating it here would give one field two sources that could
+  // silently disagree.
 };
 
-async function fetchPlayerGameAggregates(): Promise<Map<string, { tov_pg: number | null; usage_pct: number | null; plus_minus_pg: number | null }>> {
-  console.log("   loading player_game_stats (per-year paginated to avoid statement timeouts)…");
-  const agg = new Map<string, { games: number; tovSum: number; tovN: number; usgSum: number; usgN: number; pmSum: number; pmN: number }>();
-  // Per-year pagination uses idx_pgs_bart_year (year as second key) — keeps
-  // each scan within Supabase's statement-timeout budget. A single full-table
-  // pagination times out around the 650k-row mark.
-  for (const year of YEARS) {
-    let from = 0;
-    let yearRows = 0;
-    while (true) {
-      const { data, error } = await sb
-        .from("player_game_stats")
-        .select("bart_player_id, year, tov, usage_pct, plus_minus")
-        .eq("year", year)
-        .not("bart_player_id", "is", null)
-        .range(from, from + 999);
-      if (error) throw new Error(`player_game_stats ${year}: ${error.message}`);
-      if (!data || data.length === 0) break;
-      for (const r of data as Array<{ bart_player_id: number | null; year: number; tov: number | null; usage_pct: number | null; plus_minus: number | null }>) {
-        if (r.bart_player_id == null) continue;
-        const k = `${r.bart_player_id}|${r.year}`;
-        const cur = agg.get(k) ?? { games: 0, tovSum: 0, tovN: 0, usgSum: 0, usgN: 0, pmSum: 0, pmN: 0 };
-        cur.games += 1;
-        if (typeof r.tov === "number") { cur.tovSum += r.tov; cur.tovN += 1; }
-        if (typeof r.usage_pct === "number") { cur.usgSum += r.usage_pct; cur.usgN += 1; }
-        if (typeof r.plus_minus === "number") { cur.pmSum += r.plus_minus; cur.pmN += 1; }
-        agg.set(k, cur);
-      }
-      yearRows += data.length;
-      if (data.length < 1000) break;
-      from += 1000;
-    }
-    console.log(`     ${year}: ${yearRows.toLocaleString()} rows`);
+/**
+ * Load the offline CBBD aggregation, keyed "<bartId>|<year>".
+ *
+ * This used to be two paginated Supabase scans over ~1.5M CBB Analytics rows
+ * that had to be chunked per year to stay inside the statement timeout. It is
+ * now one file read.
+ */
+async function loadPlayerAdvanced(): Promise<Record<string, PlayerAdvancedAggregate>> {
+  const fp = path.join(OUT, "player-season-adv.json");
+  try {
+    return JSON.parse(await fs.readFile(fp, "utf8"));
+  } catch {
+    throw new Error(
+      `Missing ${fp} — run \`node scripts/build-player-season-adv.mjs\` first. ` +
+      `Advanced player stats no longer come from Supabase.`,
+    );
   }
-  console.log(`   done. ${agg.size.toLocaleString()} player-seasons aggregated.`);
-  // Reduce to per-game averages.
-  const out = new Map<string, { tov_pg: number | null; usage_pct: number | null; plus_minus_pg: number | null }>();
-  for (const [k, v] of agg) {
-    out.set(k, {
-      tov_pg: v.tovN > 0 ? v.tovSum / v.tovN : null,
-      usage_pct: v.usgN > 0 ? v.usgSum / v.usgN : null,
-      plus_minus_pg: v.pmN > 0 ? v.pmSum / v.pmN : null,
-    });
-  }
-  return out;
-}
-
-async function fetchPlayerOnOff(): Promise<Map<string, { net_onoff: number | null; ortg_onoff: number | null; drtg_onoff: number | null; mins_pct: number | null; is_qualified: boolean | null }>> {
-  console.log("   loading player_on_off_stats (per-year paginated)…");
-  const map = new Map<string, { net_onoff: number | null; ortg_onoff: number | null; drtg_onoff: number | null; mins_pct: number | null; is_qualified: boolean | null }>();
-  for (const year of YEARS) {
-    let from = 0;
-    let yearRows = 0;
-    while (true) {
-      const { data, error } = await sb
-        .from("player_on_off_stats")
-        .select("bart_player_id, year, net_onoff, ortg_onoff, drtg_onoff, mins_pct, is_qualified")
-        .eq("year", year)
-        .not("bart_player_id", "is", null)
-        .range(from, from + 999);
-      if (error) throw new Error(`player_on_off_stats ${year}: ${error.message}`);
-      if (!data || data.length === 0) break;
-      for (const r of data as Array<{ bart_player_id: number | null; year: number; net_onoff: number | null; ortg_onoff: number | null; drtg_onoff: number | null; mins_pct: number | null; is_qualified: boolean | null }>) {
-        if (r.bart_player_id == null) continue;
-        map.set(`${r.bart_player_id}|${r.year}`, {
-          net_onoff: r.net_onoff,
-          ortg_onoff: r.ortg_onoff,
-          drtg_onoff: r.drtg_onoff,
-          mins_pct: r.mins_pct,
-          is_qualified: r.is_qualified,
-        });
-      }
-      yearRows += data.length;
-      if (data.length < 1000) break;
-      from += 1000;
-    }
-    console.log(`     ${year}: ${yearRows.toLocaleString()} rows`);
-  }
-  console.log(`   done. ${map.size.toLocaleString()} player-seasons with on/off data.`);
-  return map;
 }
 
 function buildAdvancedAggregate(
   bartId: number | null,
   year: number,
-  gameAgg: Map<string, { tov_pg: number | null; usage_pct: number | null; plus_minus_pg: number | null }>,
-  onOff: Map<string, { net_onoff: number | null; ortg_onoff: number | null; drtg_onoff: number | null; mins_pct: number | null; is_qualified: boolean | null }>,
+  adv: Record<string, PlayerAdvancedAggregate>,
 ): PlayerAdvancedAggregate | null {
   if (bartId == null) return null;
-  const k = `${bartId}|${year}`;
-  const g = gameAgg.get(k) ?? null;
-  const o = onOff.get(k) ?? null;
-  if (!g && !o) return null;
-  // Intentionally NOT emitting net_onoff / ortg_onoff / drtg_onoff —
-  // proprietary CBB Analytics outputs. See PlayerAdvancedAggregate doc.
-  return {
-    tov_pg: g?.tov_pg ?? null,
-    usage_pct: g?.usage_pct ?? null,
-    plus_minus_pg: g?.plus_minus_pg ?? null,
-    mins_pct: o?.mins_pct ?? null,
-    is_qualified: o?.is_qualified ?? null,
-  };
+  return adv[`${bartId}|${year}`] ?? null;
 }
 
 async function fetchAllPlayers(year: number) {
@@ -305,13 +228,24 @@ async function main() {
     conference: string | null;
     year: number;
     team_trank_stats: unknown;
-    team_cbba_stats: unknown;
+    team_season_stats: unknown;
     bta_rtg?: number | null;
   }>;
   // Apply display-name overrides up front so byName / slugs / search index all
   // see the new name. Database stays untouched.
   for (const t of teams) t.name = overrideTeamName(t.name);
-  console.log(`   ${teams.length} team-season rows`);
+
+  // Attach the CBBD-derived season aggregates. Keyed on the OVERRIDDEN name,
+  // because build-team-season-stats.mjs resolves teams through the same
+  // CBBD↔Bart map and teams-all.json, which already carry the display name.
+  const seasonStats = await loadTeamSeasonStats();
+  let withSeasonStats = 0;
+  for (const t of teams) {
+    const hit = seasonStats[`${t.name}|${t.year}`] ?? null;
+    t.team_season_stats = hit;
+    if (hit) withSeasonStats++;
+  }
+  console.log(`   ${teams.length} team-season rows (${withSeasonStats} with CBBD season stats)`);
 
   // Pre-compute BTA RTG (weighted z-composite ×40) per team-season, using
   // each season's own cohort as the z reference. Same formula as the explorer.
@@ -413,9 +347,9 @@ async function main() {
   }
   console.log(`   ${teamSlugCount} per-team JSON files written (with four-factor record + ${coachByTeam.size > 0 ? "coach" : "no coach"})`);
 
-  console.log("\n📊 Loading advanced player aggregates (player_game_stats + player_on_off_stats)…");
-  const playerGameAgg = await fetchPlayerGameAggregates();
-  const playerOnOff = await fetchPlayerOnOff();
+  console.log("\n📊 Loading advanced player aggregates (CBBD player box)…");
+  const playerAdvanced = await loadPlayerAdvanced();
+  console.log(`   ${Object.keys(playerAdvanced).length.toLocaleString()} player-seasons`);
 
   console.log("\n👥 Exporting players (per year)…");
   let totalPlayers = 0;
@@ -440,7 +374,7 @@ async function main() {
     // to each player. Players without coverage just get `advanced_stats: null`.
     const enriched = players.map((p) => ({
       ...p,
-      advanced_stats: buildAdvancedAggregate(p.bart_player_id, year, playerGameAgg, playerOnOff),
+      advanced_stats: buildAdvancedAggregate(p.bart_player_id, year, playerAdvanced),
     }));
     let withAdv = 0;
     for (const p of enriched) if (p.advanced_stats !== null) withAdv++;
@@ -469,9 +403,9 @@ async function main() {
   }
   console.log(`   total: ${totalPlayers} player-season rows`);
 
-  // Per-year cohort PIR/PORPAG mean+sd over the eligible D-I pool — used by
-  // productionFor() to z-score and average. Formula lives in scripts/lib/bta-prtg.mts.
-  const yearCohortStats = computeCohortStats(playersByBartId as Map<number, PlayerSeason[]>);
+  // (The per-year PIR/PORPAG cohort stats used to be computed here for the
+  // portal's BTA PRTG. The portal moved to its own scripts — see below — so
+  // computeCohortStats now lives only in refresh-portal / export-portal-only.)
 
   console.log("\n🧑 Per-player JSON files…");
   let playerFileCount = 0;
@@ -482,358 +416,26 @@ async function main() {
   }
   console.log(`   ${playerFileCount} per-player JSON files`);
 
-  // Per-player game-log files. One JSON per player (matched OR unmatched
-  // to a Bart profile), all years concatenated, sorted newest game first.
-  // Fed by both the "Career → click season" modal on the player profile
-  // (matched only) and the team-game box-score builder (uses both).
+  // Per-player game logs are NOT written here any more.
   //
-  // File naming:
-  //   <bartId>.json       — player has a bart_player_id mapped from CBB
-  //   cbb_<cbbaId>.json   — unmatched player (e.g. RJ Barrett, whose CBB
-  //                         row had no bart join). The box-score builder
-  //                         needs these so high-profile NBA-bound guys
-  //                         show up in their team's box.
-  console.log("\n🎯 Per-player game logs…");
-
-  // team_id → team_name lookup so we can embed team_name in each game row
-  // (the build-team-game-boxscores step uses this to group players by team
-  // without needing a player-profile round-trip).
-  const teamNameById = new Map<number, string>();
-  {
-    let from = 0;
-    while (true) {
-      const { data } = await sb.from("teams").select("id, name").range(from, from + 999);
-      if (!data || data.length === 0) break;
-      for (const t of data) teamNameById.set(t.id, t.name);
-      if (data.length < 1000) break;
-      from += 1000;
-    }
-  }
-  console.log(`   ${teamNameById.size} teams indexed for team_name embed`);
-
-  type PgsRow = {
-    id: number;
-    bart_player_id: number | null;
-    cbba_player_id: number;
-    full_name: string;
-    team_id: number;
-    year: number;
-    game_date: string | null;
-    cbba_game_id: number;
-    opp_team_market: string | null;
-    is_home: boolean | null;
-    is_neutral: boolean | null;
-    won: boolean | null;
-    is_starter: boolean | null;
-    mins: number | null;
-    pts_scored: number | null;
-    fgm: number | null; fga: number | null;
-    fgm3: number | null; fga3: number | null;
-    ftm: number | null; fta: number | null;
-    reb: number | null; orb: number | null; drb: number | null;
-    ast: number | null; stl: number | null; blk: number | null;
-    tov: number | null; pf: number | null;
-    plus_minus: number | null;
-    fg_pct: number | null; fg3_pct: number | null;
-    ft_pct: number | null; efg_pct: number | null;
-    ts_pct: number | null; usage_pct: number | null;
-  };
-  // String-keyed: "<bartId>" or "cbb_<cbbaId>"
-  const gamesByKey = new Map<string, { bartId: number | null; cbbaId: number; name: string; rows: PgsRow[] }>();
-  let lastId = 0;
-  let pgsTotal = 0;
-  let unmatchedRows = 0;
-  // Keyset pagination on `id`. OFFSET pagination timed out at ~1.5M rows
-  // because Postgres has to skip every prior row each page. With keyset we
-  // ride the primary-key index and each page is O(1) regardless of position.
-  while (true) {
-    const { data, error } = await sb
-      .from("player_game_stats")
-      .select("id, bart_player_id, cbba_player_id, full_name, team_id, year, game_date, cbba_game_id, opp_team_market, is_home, is_neutral, won, is_starter, mins, pts_scored, fgm, fga, fgm3, fga3, ftm, fta, reb, orb, drb, ast, stl, blk, tov, pf, plus_minus, fg_pct, fg3_pct, ft_pct, efg_pct, ts_pct, usage_pct")
-      .gt("id", lastId)
-      .order("id", { ascending: true })
-      .limit(1000);
-    if (error) throw new Error(`player_game_stats: ${error.message}`);
-    if (!data || data.length === 0) break;
-    for (const r of data as PgsRow[]) {
-      const key = r.bart_player_id !== null ? String(r.bart_player_id) : `cbb_${r.cbba_player_id}`;
-      if (r.bart_player_id === null) unmatchedRows++;
-      if (!gamesByKey.has(key)) {
-        gamesByKey.set(key, { bartId: r.bart_player_id, cbbaId: r.cbba_player_id, name: r.full_name, rows: [] });
-      }
-      gamesByKey.get(key)!.rows.push(r);
-    }
-    pgsTotal += data.length;
-    lastId = data[data.length - 1]!.id;
-    if (data.length < 1000) break;
-  }
-  console.log(`   ${pgsTotal.toLocaleString()} total game-player rows (${unmatchedRows.toLocaleString()} unmatched, now included)`);
-  console.log(`   ${gamesByKey.size} distinct player files to write`);
-
-  let pgFileCount = 0;
-  let unmatchedFileCount = 0;
-  for (const [key, info] of gamesByKey.entries()) {
-    info.rows.sort((a, b) => (b.game_date ?? "").localeCompare(a.game_date ?? ""));
-    // Embed team_name per row; drop redundant DB-only fields. For matched
-    // (bart) files we also strip cbba_player_id + full_name to keep payload
-    // small (the player profile already has those); for unmatched (cbb_)
-    // files the full_name + cbba_player_id live at the top-level body.
-    const slim = info.rows.map((r) => {
-      const { id: _i, bart_player_id: _b, cbba_player_id: _c, team_id, full_name: _f, ...rest } = r;
-      void _i; void _b; void _c; void _f;
-      return { ...rest, team_name: teamNameById.get(team_id) ?? null };
-    });
-    const body: Record<string, unknown> =
-      info.bartId !== null
-        ? { bart_player_id: info.bartId, games: slim }
-        : { cbba_player_id: info.cbbaId, full_name: info.name, games: slim };
-    await fs.writeFile(
-      path.join(OUT, "player-games", `${key}.json`),
-      JSON.stringify(body),
-    );
-    pgFileCount++;
-    if (info.bartId === null) unmatchedFileCount++;
-  }
-  console.log(`   ${pgFileCount} per-player game-log JSON files (${unmatchedFileCount} cbb_-keyed)`);
+  // scripts/build-player-games-cbbd.mjs owns public/data/player-games/ now. This
+  // block used to keyset-paginate ~1.59M rows out of the CBB Analytics
+  //  table (OFFSET paging timed out past ~1.5M rows, hence the
+  // keyset walk) and write one file per player, including cbb_<cbbaId>.json files
+  // for players it could not join to Bart. Those unmatched files were unreachable
+  // from the UI — every entry point goes through a bart_player_id — so the CBBD
+  // rebuild writes bart-keyed files only. See docs/data-sources.md.
 
   // ---------- Transfer portal ----------
-  // Pull current-competition portal entries from CBB and enrich each with the
-  // player's most-recent Bart season (PPG/RPG/APG/PIR/etc.) so the UI can
-  // sort by production. Powers /portal.
-  console.log("\n🌀 Transfer portal…");
-  try {
-    const CURRENT_COMP_ID = 41097; // 2025-26 MALE D-I
-    const fs_node = await import("node:fs");
-    const os_node = await import("node:os");
-    const path_node = await import("node:path");
-    const cfgPath = path_node.join(os_node.homedir(), ".config", "cbb-analytics-pp-cli", "config.toml");
-    const tokenMatch = fs_node.readFileSync(cfgPath, "utf8").match(/^analytics_token\s*=\s*['"]([^'"]+)['"]/m);
-    const TOKEN = tokenMatch?.[1];
-    if (!TOKEN) throw new Error("CBB token missing");
-
-    const res = await fetch(
-      `https://api.cbbanalytics.com/api/gs/vc-transfer-portal?competitionId=${CURRENT_COMP_ID}`,
-      { headers: { "x-auth-token": TOKEN, origin: "https://cbbanalytics.com", accept: "application/json" } },
-    );
-    if (!res.ok) throw new Error(`portal HTTP ${res.status}`);
-    type PortalRaw = {
-      playerId: number; firstName?: string; lastName?: string;
-      status?: string; eligibilityYear?: string;
-      divisionId?: number; divisionIdFrom?: number; divisionIdTo?: number | null;
-      createdWhen?: string; updatedWhen?: string;
-      teamIdFrom?: number | null; teamMarketFrom?: string | null; conferenceShortNameFrom?: string | null;
-      teamIdTo?: number | null;   teamMarketTo?: string | null;   conferenceShortNameTo?: string | null;
-    };
-    const raw = (await res.json()) as PortalRaw[];
-    console.log(`   ${raw.length.toLocaleString()} portal rows from CBB`);
-
-    // cbba_player_id → bart_player_id (built from player_game_stats matches)
-    const bartByCbba = new Map<number, number>();
-    let mf = 0;
-    while (true) {
-      const { data } = await sb
-        .from("player_game_stats")
-        .select("cbba_player_id, bart_player_id")
-        .not("bart_player_id", "is", null)
-        .order("id", { ascending: true })
-        .range(mf, mf + 999);
-      if (!data || data.length === 0) break;
-      for (const r of data as { cbba_player_id: number; bart_player_id: number }[]) {
-        if (!bartByCbba.has(r.cbba_player_id)) bartByCbba.set(r.cbba_player_id, r.bart_player_id);
-      }
-      if (data.length < 1000) break;
-      mf += 1000;
-    }
-    console.log(`   cbba→bart map: ${bartByCbba.size.toLocaleString()} entries`);
-
-    // productionFor + cohort math live in scripts/lib/bta-prtg.mts so both the
-    // full export and the fast portal-only export apply the same formula.
-    const productionFor = (bartId: number) =>
-      productionForShared(bartId, playersByBartId as Map<number, PlayerSeason[]>, yearCohortStats);
-    function eligPretty(e: string | undefined): string {
-      if (!e) return "—";
-      return e.replace(/^COLLEGE_/, "").replace(/_/g, " ").toLowerCase()
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-    }
-
-    const enriched = raw.map((p) => {
-      const bartId = bartByCbba.get(p.playerId) ?? null;
-      const prod = bartId !== null ? productionFor(bartId) : null;
-      return {
-        cbba_player_id: p.playerId,
-        bart_player_id: bartId,
-        name: `${p.firstName ?? ""} ${p.lastName ?? ""}`.trim(),
-        eligibility: eligPretty(p.eligibilityYear),
-        status: p.status ?? "Unknown",
-        division: p.divisionId ?? null,
-        division_from: p.divisionIdFrom ?? null,
-        division_to: p.divisionIdTo ?? null,
-        date_entered: p.createdWhen ?? null,
-        date_updated: p.updatedWhen ?? null,
-        team_from: overrideTeamName(p.teamMarketFrom ?? null),
-        conf_from: p.conferenceShortNameFrom ?? null,
-        team_to: overrideTeamName(p.teamMarketTo ?? null),
-        conf_to: p.conferenceShortNameTo ?? null,
-        ...(prod ?? {
-          last_year: null, last_team: null, last_conf: null,
-          gp: null, mpg: null, ppg: null, rpg: null, apg: null, spg: null, bpg: null,
-          pir: null, bta_portg: null,
-        }),
-        stars: 0 as 0 | 1 | 2 | 3 | 4 | 5,
-      };
-    });
-
-    // Star buckets: fixed BTA PRTG cutoffs (see starsForPrtg in lib/bta-prtg.mts).
-    // Eligibility baseline (GP ≥ 10, MPG ≥ 12, PPG ≥ 4) still applies — players
-    // below the baseline stay at 0 stars even if their PRTG would qualify.
-    const eligibleForStars = enriched.filter(
-      (e) => typeof e.bta_portg === "number"
-        && (e.gp ?? 0) >= 10
-        && (e.mpg ?? 0) >= 12
-        && (e.ppg ?? 0) >= 4
-    );
-    for (const e of eligibleForStars) e.stars = starsForPrtg(e.bta_portg as number);
-
-    // Transfer-class rankings. Score each school by Net BTA PORTG:
-    //   (sum of BTA PORTG of players who committed TO the school)
-    //   − (sum of BTA PORTG of players who committed AWAY from the school).
-    // Only Committed moves with both endpoints populated and a non-null
-    // bta_portg count — that naturally drops graduating / withdrawn entries.
-    type TCPlayer = {
-      cbba_player_id: number;
-      bart_player_id: number | null;
-      name: string;
-      bta_portg: number | null;
-      stars: 0 | 1 | 2 | 3 | 4 | 5;
-      counter_team: string | null;     // OUT: where they went · IN: where from
-      counter_conf: string | null;
-    };
-    type TransferClassRow = {
-      school: string;
-      conference: string | null;
-      net: number;
-      in_count: number;
-      out_count: number;
-      in_players: TCPlayer[];
-      out_players: TCPlayer[];
-    };
-    // school name (normalized) → latest-year Bart conference
-    function tcNorm(s: string) { return s.toLowerCase().replace(/[^a-z0-9]+/g, "").trim(); }
-    const confBySchool = new Map<string, string | null>();
-    {
-      const latestByName = new Map<string, { year: number; conf: string | null; name: string }>();
-      for (const t of teams) {
-        const cur = latestByName.get(t.name);
-        if (!cur || t.year > cur.year) latestByName.set(t.name, { year: t.year, conf: t.conference, name: t.name });
-      }
-      for (const v of latestByName.values()) confBySchool.set(tcNorm(v.name), v.conf);
-    }
-    function confFor(name: string | null): string | null {
-      if (!name) return null;
-      return confBySchool.get(tcNorm(name)) ?? null;
-    }
-
-    // Aggregate commits per school.
-    const perSchool = new Map<string, {
-      school: string;
-      conference: string | null;
-      in_players: TCPlayer[];
-      out_players: TCPlayer[];
-    }>();
-    function getBucket(name: string) {
-      let b = perSchool.get(name);
-      if (!b) {
-        b = { school: name, conference: confFor(name), in_players: [], out_players: [] };
-        perSchool.set(name, b);
-      }
-      return b;
-    }
-    for (const e of enriched) {
-      // CBB's `status` field uses "Transferred" (committed elsewhere) / "Active"
-      // (in portal, undecided) / "Withdrew" (returned to original team). For
-      // transfer-class scoring:
-      //   - Transferred → counts as OUT for old school AND IN for new school
-      //   - Active (uncommitted) → counts as OUT only (school has lost them
-      //     from the roster as of now; they're sitting in the portal)
-      //   - Withdrew → skip (they came back, no net movement)
-      if (!e.team_from) continue;
-      if (typeof e.bta_portg !== "number") continue;
-      // Skip 0/1-star moves: they shouldn't move the needle on a school's
-      // transfer-class ranking (think walk-ons, end-of-bench depth pieces).
-      if (e.stars < 2) continue;
-      const isCommitted = e.team_to !== null;
-      const isActive = e.status === "Active";
-      if (!isCommitted && !isActive) continue; // Withdrew or unknown — skip
-      const player: TCPlayer = {
-        cbba_player_id: e.cbba_player_id,
-        bart_player_id: e.bart_player_id,
-        name: e.name,
-        bta_portg: e.bta_portg,
-        stars: e.stars,
-        counter_team: null,
-        counter_conf: null,
-      };
-      // OUT from e.team_from. Counterpart = destination (or null if still in portal).
-      const outBucket = getBucket(e.team_from);
-      outBucket.out_players.push({ ...player, counter_team: e.team_to, counter_conf: e.conf_to });
-      // IN to e.team_to only if they've committed somewhere.
-      if (isCommitted) {
-        const inBucket = getBucket(e.team_to!);
-        inBucket.in_players.push({ ...player, counter_team: e.team_from, counter_conf: e.conf_from });
-      }
-    }
-    // Flat star bonuses applied symmetrically: +8 per 5★ and +5 per 4★. So a
-    // school that signs a 5★ gets +8 added to net; a school that LOSES a 5★
-    // gets -8 from net. Keeps the model balanced — sign-ups can't compensate
-    // for symmetric losses without doing the work to retain.
-    function classBonus(players: TCPlayer[]): number {
-      let bonus = 0;
-      for (const p of players) {
-        if (p.stars === 5) bonus += 8;
-        else if (p.stars === 4) bonus += 5;
-      }
-      return bonus;
-    }
-    const allRows: TransferClassRow[] = [];
-    for (const b of perSchool.values()) {
-      const sumIn = b.in_players.reduce((s, p) => s + (p.bta_portg ?? 0), 0);
-      const sumOut = b.out_players.reduce((s, p) => s + (p.bta_portg ?? 0), 0);
-      const inBonus = classBonus(b.in_players);
-      const outBonus = classBonus(b.out_players);
-      // Sort each list by BTA PORTG desc for popup display.
-      b.in_players.sort((a, c) => (c.bta_portg ?? 0) - (a.bta_portg ?? 0));
-      b.out_players.sort((a, c) => (c.bta_portg ?? 0) - (a.bta_portg ?? 0));
-      allRows.push({
-        school: b.school,
-        conference: b.conference,
-        net: (sumIn + inBonus) - (sumOut + outBonus),
-        in_count: b.in_players.length,
-        out_count: b.out_players.length,
-        in_players: b.in_players,
-        out_players: b.out_players,
-      });
-    }
-    const top_overall = [...allRows].sort((a, c) => c.net - a.net).slice(0, 10);
-    const worst_power = allRows
-      .filter((r) => r.conference && POWER_CONFS.has(r.conference))
-      .sort((a, c) => a.net - c.net)
-      .slice(0, 10);
-    // Keyed lookup so the portal table can open the same transfer-class modal
-    // for any school logo (not just the 20 in top/worst sidebars).
-    const by_school: Record<string, TransferClassRow> = {};
-    for (const r of allRows) by_school[r.school] = r;
-
-    await fs.writeFile(path.join(OUT, "portal.json"), JSON.stringify({
-      competition_id: CURRENT_COMP_ID,
-      generated_at: new Date().toISOString(),
-      entries: enriched,
-      transfer_classes: { top_overall, worst_power, by_school },
-    }));
-    const matched = enriched.filter((e) => e.bart_player_id !== null).length;
-    console.log(`   ${enriched.length.toLocaleString()} portal entries · ${matched.toLocaleString()} matched to Bart · ${eligibleForStars.length.toLocaleString()} pass baseline · ${allRows.length} schools ranked`);
-  } catch (e) {
-    console.log(`   ⚠ portal export failed: ${(e as Error).message} — /portal will show empty state`);
-  }
+  // NOT EXPORTED HERE ANY MORE. portal.json is owned by two other scripts:
+  //   scripts/refresh-portal.mts   — rebuilds entries from On3's public feed
+  //   scripts/export-portal-only.mts — re-aggregates BTA PRTG / transfer classes
+  //
+  // This block used to fetch CBB Analytics' `vc-transfer-portal` endpoint with
+  // a scraped session token that expired every ~30 days. That source is gone —
+  // see docs/data-sources.md. Leaving the export here would have silently
+  // overwritten the On3-sourced portal.json with an empty state on every run
+  // once the token lapsed.
 
   console.log("\n🏷  Conferences per year…");
   const confsByYear: Record<number, string[]> = {};
@@ -939,7 +541,7 @@ type Row = {
   id: number;
   year: number;
   team_trank_stats: unknown;
-  team_cbba_stats: unknown;
+  team_season_stats: unknown;
   bta_rtg?: number | null;
   bta_rank?: number | null;
   national_ranks?: {
@@ -982,7 +584,7 @@ const RANKABLE: RankableDef[] = [
 function pickStatValue(r: Row, def: RankableDef): number | null {
   const blob = def.source === "trank"
     ? (Array.isArray(r.team_trank_stats) ? null : r.team_trank_stats as Record<string, number | null> | null)
-    : (Array.isArray(r.team_cbba_stats) || !r.team_cbba_stats ? null : r.team_cbba_stats as Record<string, number | null>);
+    : (Array.isArray(r.team_season_stats) || !r.team_season_stats ? null : r.team_season_stats as Record<string, number | null>);
   const v = blob?.[def.key];
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
@@ -1042,7 +644,7 @@ function attachBtaRtgToExport(rows: Row[]) {
   for (const cohort of byYear.values()) {
     const pick = (r: Row, src: "trank" | "cbb", col: string): number | null => {
       const t = Array.isArray(r.team_trank_stats) ? null : r.team_trank_stats as Record<string, number | null> | null;
-      const c = Array.isArray(r.team_cbba_stats) || !r.team_cbba_stats ? null : r.team_cbba_stats as Record<string, number | null>;
+      const c = Array.isArray(r.team_season_stats) || !r.team_season_stats ? null : r.team_season_stats as Record<string, number | null>;
       const v = src === "trank" ? t?.[col] : c?.[col];
       return typeof v === "number" ? v : null;
     };

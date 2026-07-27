@@ -95,7 +95,17 @@ export type PlayerSummary = {
   // game-log coverage for the season (~5% of historical seasons).
   tov_pg: number | null;        // turnovers per game
   usage_pct: number | null;     // usage rate (fraction, e.g. 0.305 = 30.5%)
-  plus_minus_pg: number | null; // average plus-minus per game
+  /**
+   * Individual offensive-minus-defensive rating per 100 possessions.
+   *
+   * This replaced `plus_minus_pg`, and is NOT the same statistic. On-court
+   * plus/minus needs to know who was on the floor; CBBD's play-by-play carries
+   * no lineup data and no substitution events before 2024, so team point
+   * differential while a player was on the court is unrecoverable for
+   * 2014-2023. Rather than relabel a different number as "+/-", the column is
+   * honest about what it is.
+   */
+  net_rtg: number | null;
   ast_to_tov: number | null;    // assist-to-turnover ratio (ast_pg / tov_pg)
   drb_pg: number | null;        // defensive rebounds per game (reb − orb)
   hkm_pct: number | null;       // Hakeem % = BLK% + STL% (Bart raw cols 22+23)
@@ -159,7 +169,8 @@ export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
 
   // ── Advanced ─────────────────────────────────────────────
   { key: "pir",      label: "PIR",      desc: "EuroLeague Performance Index Rating (per game, minus TOV)",                              group: "advanced", format: "num1", field: "pir" },
-  { key: "pm_pg",    label: "+/-",      desc: "Average plus-minus per game (team point differential while on the court)",              group: "advanced", format: "num1", field: "plus_minus_pg" },
+  { key: "net_rtg",  label: "Net Rtg",  desc: "Individual offensive rating minus defensive rating, per 100 possessions",               group: "advanced", format: "num1", field: "net_rtg" },
+  { key: "on_off",   label: "On/Off",   desc: "Team net rating with this player on the floor minus with them off it, per 100 possessions. 2024 onward only — earlier seasons have no lineup data.", group: "advanced", format: "num1", field: "on_off" },
   { key: "ast_tov",  label: "AST/TOV",  desc: "Assist-to-turnover ratio (assists per game ÷ turnovers per game)",                       group: "advanced", format: "num2", field: "ast_to_tov" },
 
   // ── Offense ──────────────────────────────────────────────

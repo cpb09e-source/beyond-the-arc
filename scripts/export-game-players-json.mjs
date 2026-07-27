@@ -17,7 +17,7 @@
  * deploy upload ever sees them. Adding ~132k files to out/ would otherwise
  * re-create the deploy timeout R2 exists to solve.
  *
- * KEYED BY gameKey, NOT cbba_game_id: our game ids are "<num>-<side>", one per
+ * KEYED BY gameKey, NOT game_id: our game ids are "<num>-<side>", one per
  * team perspective. The modal wants both line-ups at once, so files are keyed
  * on the shared numeric prefix and hold both teams.
  *
@@ -36,10 +36,11 @@ const SEASONS = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2022, 2023, 2024, 202
 const args = process.argv.slice(2);
 const oneSeason = args.includes("--season") ? Number(args[args.indexOf("--season") + 1]) : null;
 
-// The join is IMPORTED, not re-derived. An earlier version of this file wrote
-// its own normalizer without the alias map and joined 92.5% of 2026 where the
-// team export joined 100% — a local bug that looked like missing upstream data.
-import { buildIndexes, findBoxRow, gameKey } from "./lib/cbbd-join.mjs";
+// gameKey() splits the shared numeric prefix off a game_id; both perspectives
+// of a game write into the same file. The fuzzy (date | team-name) matcher that
+// used to live here is gone: the logs are built from this same CBBD archive now,
+// so `game_id` is "<cbbdGameId>-<cbbdTeamId>" and the join is a Map lookup.
+import { gameKey } from "./lib/cbbd-join.mjs";
 
 const int = (v) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null);
 const n1 = (v) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
@@ -123,20 +124,19 @@ function run(season) {
   }
   const logs = JSON.parse(fs.readFileSync(logPath, "utf8"));
 
-  const indexes = buildIndexes(boxRows);
+  const byId = new Map();
+  for (const r of boxRows) byId.set(`${r.gameId}-${r.teamId}`, r);
 
   // gameKey -> { teams: [...] }. Both perspectives of a game write into the
   // same file; the second one fills in the other team's line-up.
   const files = new Map();
-  let matched = 0, miss = 0, exhib = 0;
+  let matched = 0, miss = 0;
 
   for (const g of logs) {
-    if (g.game_date && g.game_date < `${season - 1}-11-01`) { exhib++; continue; }
-    if (!g.game_date || !g.team_name || !g.cbba_game_id) { miss++; continue; }
-    const hit = findBoxRow(g, indexes);
+    const hit = g.game_id ? byId.get(g.game_id) : null;
     if (!hit || !Array.isArray(hit.players)) { miss++; continue; }
 
-    const key = gameKey(g.cbba_game_id);
+    const key = gameKey(g.game_id);
     if (!key) { miss++; continue; }
     let file = files.get(key);
     if (!file) { file = { teams: [] }; files.set(key, file); }
@@ -160,11 +160,10 @@ function run(season) {
     bytes += json.length;
   }
 
-  const eligible = logs.length - exhib;
   console.log(
-    `${season}: ${String(matched).padStart(6)}/${String(eligible).padStart(6)} rows joined ` +
-    `(${((100 * matched) / eligible).toFixed(1)}%)  files=${files.size}  ` +
-    `miss=${miss} exhib-skipped=${exhib}  -> ${(bytes / 1024 / 1024).toFixed(1)} MB`,
+    `${season}: ${String(matched).padStart(6)}/${String(logs.length).padStart(6)} rows joined ` +
+    `(${((100 * matched) / logs.length).toFixed(1)}%)  files=${files.size}  ` +
+    `miss=${miss}  -> ${(bytes / 1024 / 1024).toFixed(1)} MB`,
   );
 }
 

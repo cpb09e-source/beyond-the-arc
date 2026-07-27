@@ -3,7 +3,7 @@
  * export-game-box-json.mjs — joins CBBD's per-game TEAM box (/games/teams,
  * pulled by scripts/pull-team-box.mjs into data/cbbd/<year>/box-teams-*.json.gz)
  * onto our own game logs, and emits a per-season sidecar keyed by
- * `cbba_game_id`.
+ * `game_id`.
  *
  *   Out: public/data/game-box-by-year/<season>.json
  *
@@ -12,17 +12,15 @@
  * any of this. Widening those files would tax every consumer to benefit one.
  * /calc fetches the sidecar on top of the base log.
  *
- * JOIN: CBBD's `gameId` and our `cbba_game_id` are different ID spaces, so we
- * match on (calendar date, team). Two wrinkles handled below:
- *   1. CBBD `startDate` is UTC; a 9pm PT tip is the *next* UTC day. We convert
- *      to the US Eastern calendar date, which is what our logs key on, then
- *      allow a +/-1 day window for the stragglers.
- *   2. Team names are Bart-style in our logs ("Ohio St.") and CBBD-style in the
- *      box ("Ohio State"). Reuses the alias table + normalizer from
- *      src/lib/quad.ts so there is one canonical mapping in the codebase.
+ * JOIN: exact, by id. The game logs are now built from this same box archive
+ * (scripts/build-game-logs-cbbd.mjs) and their `game_id` is
+ * "<cbbdGameId>-<cbbdTeamId>", so a game resolves with a Map lookup.
  *
- * Unmatched rows are expected and fine: our logs include ~480 October
- * exhibition rows per season that CBBD's box does not cover.
+ * This used to be a (US Eastern calendar date, normalized team name) match with
+ * a +/-1 day window and an alias table, because the logs came from CB
+ * Analytics and the two providers disagreed about both dates and spellings.
+ * That machinery is gone along with the provider — as is the ~480-rows-per-season
+ * miss count it produced from October exhibitions the box didn't cover.
  *
  * Run: node scripts/export-game-box-json.mjs [season...]
  */
@@ -41,7 +39,7 @@ const EXCLUDED = new Set([2021]); // COVID season, skipped site-wide
 // ---------- team-name bridge + date join (shared with the player export) ----
 // Imported rather than defined here so both sidecars resolve a game the same
 // way; see scripts/lib/cbbd-join.mjs for what went wrong when they didn't.
-import { buildIndexes, findBoxRow, norm, etDate } from "./lib/cbbd-join.mjs";
+import { norm, etDate } from "./lib/cbbd-join.mjs";
 
 // ---------- field extraction ----------
 const n1 = (v) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
@@ -299,20 +297,23 @@ function run(season) {
     return;
   }
 
-  const indexes = buildIndexes(boxRows);
+  // DIRECT ID LOOKUP, NOT A FUZZY JOIN. The game logs are themselves built from
+  // this same box archive now (scripts/build-game-logs-cbbd.mjs), and their
+  // game_id is literally "<cbbdGameId>-<cbbdTeamId>". The old (ET date | team
+  // name) matcher existed only because the logs came from a different provider
+  // with different spellings; keeping it would reintroduce ±1-day fallbacks and
+  // alias-map drift for a join that is now exact by construction.
+  const byId = new Map();
+  for (const r of boxRows) byId.set(`${r.gameId}-${r.teamId}`, r);
   const rankAt = buildRankIndex(season, boxRows);
 
   const out = {};
-  let matched = 0, miss = 0, exhib = 0;
+  let matched = 0, miss = 0;
   for (const g of logs) {
-    // Preseason exhibitions are excluded site-wide (see src/lib/seasons.ts) and
-    // CBBD's box carries none of them, so skip rather than count as a miss.
-    if (g.game_date && g.game_date < `${season - 1}-11-01`) { exhib++; continue; }
-    if (!g.game_date || !g.team_name || !g.cbba_game_id) { miss++; continue; }
-    const hit = findBoxRow(g, indexes);
+    const hit = g.game_id ? byId.get(g.game_id) : null;
     if (!hit) { miss++; continue; }
     matched++;
-    out[g.cbba_game_id] = extract(hit, rankAt);
+    out[g.game_id] = extract(hit, rankAt);
   }
 
   // Columnar on purpose. Object-per-row repeats ~27 key names 11k times, which
@@ -327,11 +328,9 @@ function run(season) {
   const dst = path.join(OUT_DIR, `${season}.json`);
   fs.writeFileSync(dst, JSON.stringify({ season, fields: FIELDS, rows }));
   const kb = (fs.statSync(dst).size / 1024).toFixed(0);
-  const eligible = logs.length - exhib;
   console.log(
-    `${season}: ${String(matched).padStart(6)}/${String(eligible).padStart(6)} eligible rows ` +
-    `(${((100 * matched) / eligible).toFixed(1)}%)  ` +
-    `miss=${miss} exhib-skipped=${exhib}  -> ${kb} KB`,
+    `${season}: ${String(matched).padStart(6)}/${String(logs.length).padStart(6)} log rows ` +
+    `(${((100 * matched) / logs.length).toFixed(1)}%)  miss=${miss}  -> ${kb} KB`,
   );
 }
 

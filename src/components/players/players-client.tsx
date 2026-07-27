@@ -153,7 +153,7 @@ function transformPlayer(raw: RawPlayer): PlayerSummary {
   // Advanced aggregates from CBB Analytics player_game_stats — pre-baked
   // into the JSON by scripts/export-static-data.mts. Null when the player
   // has no game-log coverage for the season.
-  const adv = (raw as RawPlayer & { advanced_stats?: { tov_pg: number | null; usage_pct: number | null; plus_minus_pg: number | null } | null }).advanced_stats ?? null;
+  const adv = (raw as RawPlayer & { advanced_stats?: { tov_pg: number | null; usage_pct: number | null; net_rtg: number | null } | null }).advanced_stats ?? null;
 
   const games = stats?.games ?? null;
   const pts_pg = asNum(fromEnd(row, PLAYER_COLS.pts_pg_offset));
@@ -228,7 +228,7 @@ function transformPlayer(raw: RawPlayer): PlayerSummary {
     orb_pg,
     tov_pg: adv?.tov_pg ?? null,
     usage_pct: adv?.usage_pct ?? null,
-    plus_minus_pg: adv?.plus_minus_pg ?? null,
+    net_rtg: adv?.net_rtg ?? null,
     // AST/TOV ratio. Null when TOV is missing or zero (avoids inf/NaN).
     ast_to_tov: ast_pg !== null && adv?.tov_pg != null && adv.tov_pg > 0
       ? ast_pg / adv.tov_pg
@@ -463,7 +463,7 @@ const PCT_KEYS = [
   "epm", "off_epm", "def_epm", "usage_pct", "pts_pg",
   "orb_pg", "drb_pg", "reb_pg", "ast_pg", "tov_pg", "stl_pg", "blk_pg", "hkm_pct",
   // Filterable extras that can appear as dynamic columns:
-  "efg_pct", "fg2_pct", "ft_pct", "fta_rate", "ast_to_tov", "porpag", "min_pg", "plus_minus_pg",
+  "efg_pct", "fg2_pct", "ft_pct", "fta_rate", "ast_to_tov", "porpag", "min_pg",
 ] as const;
 type PctKey = (typeof PCT_KEYS)[number];
 type PctMaps = Record<PctKey, Map<number, number>>;
@@ -823,7 +823,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         label: col.label,
         field: col.field,
         // games + plus/minus display as whole numbers.
-        fmt: col.field === "games" || col.field === "plus_minus_pg" ? "int" : col.format === "pct1" ? "pct1" : "num1",
+        fmt: col.field === "games" ? "int" : col.format === "pct1" ? "pct1" : "num1",
         pct: (PCT_KEYS as readonly string[]).includes(col.field as string) ? (col.field as PctKey) : null,
       });
     }

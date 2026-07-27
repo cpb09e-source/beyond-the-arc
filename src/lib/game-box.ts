@@ -3,7 +3,7 @@
  * logs by scripts/export-game-box-json.mjs.
  *
  *   public/data/game-box-by-year/<season>.json
- *   { season, fields: string[], rows: { [cbba_game_id]: (number|null)[] } }
+ *   { season, fields: string[], rows: { [game_id]: (number|null)[] } }
  *
  * Stored columnar (positional arrays + one shared field list) rather than as
  * objects: repeating 27 key names across ~11k rows was 4.6 MB/season vs 1.5 MB
@@ -100,7 +100,7 @@ export function attachGameBox(rows: GameLog[], box: GameBoxFile | null): GameLog
   const keys: string[] = [...BOX_FIELDS.map((f) => f.key), ...BOX_DISPLAY_FIELDS];
 
   return rows.map((r) => {
-    const vals = r.cbba_game_id ? box.rows[r.cbba_game_id] : undefined;
+    const vals = r.game_id ? box.rows[r.game_id] : undefined;
     if (!vals) return r;
     const out: Record<string, number | string | null> = {};
     for (const key of keys) {

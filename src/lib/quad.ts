@@ -123,7 +123,7 @@ export function buildRankMap(file: TeamRatingsFile): Map<string, number> {
 }
 
 /**
- * The numeric prefix of `cbba_game_id` ("2736013-103902-game-true") is shared
+ * The numeric prefix of `game_id` ("2736013-103902-game-true") is shared
  * by both teams' rows for the same game. Pairing on it is far more reliable
  * than matching `opp_team_market`, which is a third name space (~781 distinct
  * values in 2026, including non-D1 opponents that never appear as team_name).

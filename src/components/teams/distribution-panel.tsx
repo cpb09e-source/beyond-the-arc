@@ -53,12 +53,12 @@ function buildRanks(
   defs: StatDef[],
 ): DistributionRank[] {
   return defs.map((stat) => {
-    const cStats = current.team_cbba_stats as unknown as Record<string, number | null> | null;
+    const cStats = current.team_season_stats as unknown as Record<string, number | null> | null;
     const value = cStats?.[stat.key] ?? null;
 
     const allVals = cohort
       .map((t) => {
-        const ts = t.team_cbba_stats as unknown as Record<string, number | null> | null;
+        const ts = t.team_season_stats as unknown as Record<string, number | null> | null;
         return ts?.[stat.key] ?? null;
       })
       .filter((v): v is number => typeof v === "number");

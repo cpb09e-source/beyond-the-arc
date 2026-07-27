@@ -11,13 +11,15 @@
 import { BOX_FIELDS } from "@/lib/game-box";
 
 export type GameLog = {
-  cbba_game_id: string;
+  game_id: string;
   year: number;
   game_date: string | null;
   team_id: number;
   team_name: string;
   team_conference: string | null;
   opp_team_market: string | null;
+  /** Bart conference code of the opponent; null when the opponent isn't D-I. */
+  opp_conference: string | null;
   is_home: boolean | null;
   is_neutral: boolean | null;
   won: boolean;
@@ -26,11 +28,18 @@ export type GameLog = {
   pts_diff: number | null;
   poss: number | null;
   pace: number | null;
+  // ---- count differentials, all own − opponent ----
+  // The sign is NOT normalized per stat: "tov_diff < 0" means fewer turnovers
+  // than the opponent (good), and "pf_diff < 0" fewer fouls. Every condition,
+  // saved query and doc on the site is written against that reading.
   fg3_made_diff: number | null;
   fg3_att_diff: number | null;
   fg2_made_diff: number | null;
+  fg2_att_diff: number | null;
   fg_made_diff: number | null;
+  fg_att_diff: number | null;
   ft_made_diff: number | null;
+  ft_att_diff: number | null;
   reb_diff: number | null;
   orb_diff: number | null;
   drb_diff: number | null;
@@ -38,18 +47,25 @@ export type GameLog = {
   ast_diff: number | null;
   stl_diff: number | null;
   blk_diff: number | null;
+  pf_diff: number | null;
   fbpts_diff: number | null;
   pitp_diff: number | null;
+  pot_diff: number | null;
+  /**
+   * Second-chance points differential. The only stat with no CBBD box
+   * equivalent — derived from play-by-play possession reconstruction, so it is
+   * null for any season whose PBP hasn't been ingested.
+   */
   scp_diff: number | null;
   fg3_pct: number | null;
   fg2_pct: number | null;
   ft_pct: number | null;
   efg_pct: number | null;
   ts_pct: number | null;
-  // Opponent shooting — the only defensive rate the game logs actually carry.
-  // (fg3_pct_def exists as a key in the JSON but is null in every season, so
-  // it is deliberately NOT surfaced as a filter — see STAT_OPTIONS note.)
+  // ---- opponent shooting ----
+  fg3_pct_def: number | null;
   efg_pct_def: number | null;
+  ts_pct_def: number | null;
   // ---- enriched client-side, NOT present in the raw JSON ----
   // Attached by /calc from team-ratings-<year>.json (see src/lib/quad.ts).
   // Anything consuming raw game logs without that enrichment will see these
@@ -83,14 +99,16 @@ export type StatOption = {
  * IMPORTANT — only list keys that are actually populated. `matches()` returns
  * false for a non-number, so a column that is null in the data silently yields
  * "0 games", which reads to a user as "this never happened" rather than "we
- * don't have this stat". Four options were removed in July 2026 for exactly
- * that reason — ast_diff, stl_diff, blk_diff and ft_att_diff are null in 100%
- * of rows across every season (2014-2026). CBBD's /games/teams box carries real
- * assists/steals/blocks/FTA, so they can come back once that source is joined
- * into the export.
+ * don't have this stat".
  *
- * Same rule killed fg3_pct_def (null everywhere); efg_pct_def is real and is
- * the one defensive rate we can offer today.
+ * ast_diff / stl_diff / blk_diff / ft_att_diff / fg3_pct_def were pulled in
+ * July 2026 because the old CBB Analytics game logs left them null in 100% of
+ * rows. The logs are now built from CBBD's /games/teams box, which carries all
+ * five, so they are back — verified populated on 12,049/12,051 rows for 2026.
+ *
+ * scp_diff is the one option here that can still be null for a whole season: it
+ * has no box equivalent and is reconstructed from play-by-play, which is only
+ * ingested for the seasons listed in scripts/build-second-chance.mjs.
  */
 export const STAT_OPTIONS: StatOption[] = [
   // Scoring
@@ -99,16 +117,24 @@ export const STAT_OPTIONS: StatOption[] = [
   { key: "pts_against",     label: "Pts Allowed",     group: "Scoring", defaultDir: "lt" },
   // Diff stats
   { key: "fg_made_diff",    label: "FGM Diff",        group: "Differentials" },
+  { key: "fg_att_diff",     label: "FGA Diff",        group: "Differentials" },
   { key: "fg3_made_diff",   label: "3PM Diff",        group: "Differentials" },
   { key: "fg3_att_diff",    label: "3PA Diff",        group: "Differentials" },
   { key: "fg2_made_diff",   label: "2PM Diff",        group: "Differentials" },
+  { key: "fg2_att_diff",    label: "2PA Diff",        group: "Differentials" },
   { key: "ft_made_diff",    label: "FTM Diff",        group: "Differentials" },
+  { key: "ft_att_diff",     label: "FTA Diff",        group: "Differentials" },
   { key: "reb_diff",        label: "REB Diff",        group: "Differentials" },
   { key: "orb_diff",        label: "OREB Diff",       group: "Differentials" },
   { key: "drb_diff",        label: "DREB Diff",       group: "Differentials" },
   { key: "tov_diff",        label: "TOV Diff",        group: "Differentials", defaultDir: "lt" },
+  { key: "ast_diff",        label: "AST Diff",        group: "Differentials" },
+  { key: "stl_diff",        label: "STL Diff",        group: "Differentials" },
+  { key: "blk_diff",        label: "BLK Diff",        group: "Differentials" },
+  { key: "pf_diff",         label: "Fouls Diff",      group: "Differentials", defaultDir: "lt" },
   { key: "fbpts_diff",      label: "FB Pts Diff",     group: "Differentials" },
   { key: "pitp_diff",       label: "Paint Pts Diff",  group: "Differentials" },
+  { key: "pot_diff",        label: "Pts off TO Diff", group: "Differentials" },
   { key: "scp_diff",        label: "2nd-Chance Diff", group: "Differentials" },
   // Shooting (offense)
   { key: "fg3_pct",         label: "3P%",   group: "Shooting (off)" },
@@ -118,6 +144,8 @@ export const STAT_OPTIONS: StatOption[] = [
   { key: "ts_pct",          label: "TS%",   group: "Shooting (off)" },
   // Shooting (defense)
   { key: "efg_pct_def",     label: "Opp eFG%", group: "Shooting (def)", defaultDir: "lt" },
+  { key: "fg3_pct_def",     label: "Opp 3P%",  group: "Shooting (def)", defaultDir: "lt" },
+  { key: "ts_pct_def",      label: "Opp TS%",  group: "Shooting (def)", defaultDir: "lt" },
   // Pace
   { key: "poss",            label: "Possessions", group: "Pace" },
   { key: "pace",            label: "Pace",        group: "Pace" },

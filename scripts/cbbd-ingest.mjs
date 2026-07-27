@@ -42,6 +42,18 @@ const SEASON_WINDOWS = {
   2026: ["2025-11-03", "2026-04-07"],
   2027: ["2026-11-02", "2027-04-06"],
 };
+// Seasons before 2024 were never play-by-play ingested (we only archived the
+// box endpoints). Nov 1 → Apr 9 brackets every season's opening night and
+// title game with margin, so a generated window is safe for the backfill.
+// NOTE: CBBD serves plays back to 2014, but `onFloor` is empty and there are
+// no substitution events before 2024 — lineups/RAPM are impossible pre-2024.
+// The backfill exists for possession reconstruction (second-chance points),
+// which only needs the Offensive Rebound + scoring events, both present.
+function windowFor(season) {
+  if (SEASON_WINDOWS[season]) return SEASON_WINDOWS[season];
+  if (season >= 2014 && season <= 2023) return [`${season - 1}-11-01`, `${season}-04-09`];
+  return [];
+}
 const PAUSE_MS = Number(process.env.CBBD_PAUSE_MS) || 1100; // courtesy gap; raise via env to avoid 502s on big historical slates
 
 // ---- env ----
@@ -62,6 +74,12 @@ const args = process.argv.slice(2);
 const flag = (n) => args.includes(`--${n}`);
 const opt = (n) => { const i = args.indexOf(`--${n}`); return i > -1 ? args[i + 1] : null; };
 const FORCE = flag("force"), DRY = flag("dry");
+// --plays-only skips the box-score range pulls. The 2014-2023 seasons already
+// have their box archived as `box-teams-full.json.gz` / `box-players-full.json.gz`
+// (pulled by pull-team-box-v2 / pull-player-box-v2, which handle the silent
+// row caps those endpoints have). Re-pulling here would write a second copy
+// under range-stamped names AND silently truncate at the cap. Plays only.
+const PLAYS_ONLY = flag("plays-only");
 
 function* dateRange(from, to) {
   const d = new Date(`${from}T12:00:00Z`), end = new Date(`${to}T12:00:00Z`);
@@ -165,7 +183,7 @@ async function main() {
   let from = opt("from"), to = opt("to");
   const one = opt("date"), season = opt("season");
   if (one) { from = one; to = one; }
-  else if (season) { [from, to] = SEASON_WINDOWS[Number(season)] ?? []; }
+  else if (season) { [from, to] = windowFor(Number(season)) ?? []; }
   if (!from || !to) {
     console.error("usage: --date YYYY-MM-DD | --from A --to B | --season 2026");
     process.exit(1);
@@ -186,7 +204,7 @@ async function main() {
     }
   }
   // Box in ~2-week chunks.
-  const dates = [...dateRange(from, to)];
+  const dates = PLAYS_ONLY ? [] : [...dateRange(from, to)];
   for (let i = 0; i < dates.length; i += 14) {
     const a = dates[i], b = dates[Math.min(i + 13, dates.length - 1)];
     try { await ingestBoxRange(a, b); } catch (e) { console.error(`  ✗ box ${a}..${b}: ${e.message}`); }
