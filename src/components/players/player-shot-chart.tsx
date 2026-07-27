@@ -4,21 +4,25 @@ import { useEffect, useMemo, useState } from "react";
 import { hexbin as d3hexbin } from "d3-hexbin";
 import { cn } from "@/lib/utils";
 import { dataUrl } from "@/lib/data-url";
+import {
+  ShotProfileFallbackCard, ZoneBars, ProfileMinis, useShotProfile, seasonLabel,
+} from "@/components/players/player-shot-impact";
 
 /**
- * Player-page shot chart — hexbin "favorite spots" view over CBBD shot
+ * Player-page "Shot Chart" card — hexbin favorite-spots view over CBBD shot
  * locations (public/data/shots/<bartId>.json, seasons 2024+ only; see
- * scripts/build-player-shots.mjs for the tuple layout).
+ * scripts/build-player-shots.mjs for the tuple layout), with the shot-profile
+ * zone stats (rim/mid/3PT diet + FG%) in the right rail and the shot filters
+ * in a band below the court.
  *
  * Rendering follows the perthirtysix.com treatment: a fixed dark half-court
  * (both themes — it's a data canvas, not a surface), one accent hue, and
- * per-hex OPACITY encoding shot frequency, so favorite spots glow and
- * one-off attempts fade into the floor. Hexagon geometry comes from
- * d3-hexbin; everything is plain SVG in court units (tenths of feet,
- * 500 × 470 = the 50ft width × 47ft half-court).
+ * per-hex OPACITY encoding shot frequency, so favorite spots glow and one-off
+ * attempts fade into the floor. Hexagon geometry comes from d3-hexbin;
+ * everything is plain SVG in court units (tenths of feet).
  *
- * Self-hiding: fetches on mount, renders nothing until data arrives and
- * nothing at all when the player has no shot file (pre-2024 careers).
+ * Players with no shot file (careers ending before 2024) fall back to the
+ * profile-only card so the zone stats never disappear from the page.
  */
 
 // Tuple positions in the shots file. Positions are tenths of feet.
@@ -48,8 +52,6 @@ const DEFAULT_FILTERS: Filters = {
   distLo: null, distHi: null,
 };
 
-function seasonLabel(y: number) { return `${y - 1}-${String(y).slice(-2)}`; }
-
 const dist = (s: ShotRow) => Math.hypot(s[CX] - RIM_X, s[CY] - RIM_Y) / 10;
 
 function applyFilters(rows: ShotRow[], f: Filters): ShotRow[] {
@@ -71,10 +73,9 @@ function applyFilters(rows: ShotRow[], f: Filters): ShotRow[] {
   });
 }
 
-export function PlayerShotChart({ bartPlayerId }: { bartPlayerId: number }) {
+export function PlayerShotChart({ bartPlayerId, years }: { bartPlayerId: number; years: number[] }) {
   const [data, setData] = useState<ShotsFile | "none" | null>(null);
   const [year, setYear] = useState<number | null>(null);
-  const [mode, setMode] = useState<"spots" | "makemiss">("spots");
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
 
   useEffect(() => {
@@ -83,14 +84,17 @@ export function PlayerShotChart({ bartPlayerId }: { bartPlayerId: number }) {
       .then((r) => (r.ok ? r.json() : null))
       .then((j: ShotsFile | null) => {
         if (cancelled) return;
-        const years = j ? Object.keys(j.seasons).map(Number).sort((a, b) => b - a) : [];
-        if (!j || years.length === 0) { setData("none"); return; }
+        const yrs = j ? Object.keys(j.seasons).map(Number).sort((a, b) => b - a) : [];
+        if (!j || yrs.length === 0) { setData("none"); return; }
         setData(j);
-        setYear(years[0]);
+        setYear(yrs[0]);
       })
       .catch(() => { if (!cancelled) setData("none"); });
     return () => { cancelled = true; };
   }, [bartPlayerId]);
+
+  // Zone splits for the chart's season, shown in the right rail.
+  const profile = useShotProfile(bartPlayerId, data && data !== "none" ? year : null);
 
   const rows = useMemo(() => {
     if (!data || data === "none" || year === null) return [];
@@ -99,8 +103,12 @@ export function PlayerShotChart({ bartPlayerId }: { bartPlayerId: number }) {
 
   const shown = useMemo(() => applyFilters(rows, filters), [rows, filters]);
 
-  if (data === "none" || data === null) return null;
-  const years = Object.keys(data.seasons).map(Number).sort((a, b) => b - a);
+  if (data === null) return null;
+  // No located shots at all → the old profile-only card, minus nothing the
+  // page used to show (the Impact block is retired everywhere).
+  if (data === "none") return <ShotProfileFallbackCard bartPlayerId={bartPlayerId} years={years} />;
+
+  const yrs = Object.keys(data.seasons).map(Number).sort((a, b) => b - a);
 
   const fgm = shown.reduce((n, s) => n + s[MADE], 0);
   const tpa = shown.filter((s) => s[IS3] === 1);
@@ -114,43 +122,26 @@ export function PlayerShotChart({ bartPlayerId }: { bartPlayerId: number }) {
         <div className="px-5 lg:px-7 py-5 border-b border-hairline bg-paper-deep/30 flex flex-wrap items-end justify-between gap-3">
           <div>
             <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
-              <span className="h-px w-6 bg-coral" />{year !== null && seasonLabel(year)} · shot locations
+              <span className="h-px w-6 bg-coral" />{year !== null && seasonLabel(year)} · shot profile &amp; locations
             </div>
             <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Shot Chart</h2>
           </div>
-          <div className="flex items-center gap-2">
-            {years.length > 1 && (
-              <select
-                value={year ?? undefined}
-                onChange={(e) => setYear(Number(e.target.value))}
-                className="h-9 px-2.5 rounded-md border border-ink/15 bg-card text-ink text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40"
-                aria-label="Season"
-              >
-                {years.map((y) => <option key={y} value={y}>{seasonLabel(y)}</option>)}
-              </select>
-            )}
-            {/* Mode tabs — same two views perthirtysix leads with. */}
-            <div className="inline-flex rounded-md border border-ink/15 overflow-hidden shadow-sm" role="tablist" aria-label="Chart mode">
-              {([["spots", "Favorite Spots"], ["makemiss", "Make / Miss"]] as const).map(([k, label]) => (
-                <button
-                  key={k} type="button" role="tab" aria-selected={mode === k}
-                  onClick={() => setMode(k)}
-                  className={cn(
-                    "h-9 px-3 text-xs font-medium transition-colors",
-                    mode === k ? "bg-coral text-white" : "bg-card text-ink-soft hover:text-ink",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
+          {yrs.length > 1 && (
+            <select
+              value={year ?? undefined}
+              onChange={(e) => setYear(Number(e.target.value))}
+              className="h-9 px-2.5 rounded-md border border-ink/15 bg-card text-ink text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40"
+              aria-label="Season"
+            >
+              {yrs.map((y) => <option key={y} value={y}>{seasonLabel(y)}</option>)}
+            </select>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8 px-5 lg:px-7 py-6">
           {/* Court */}
           <div className="lg:col-span-3">
-            <CourtChart shots={shown} mode={mode} />
+            <CourtChart shots={shown} />
             <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
               <p className="text-sm text-ink tabular">
                 <span className="font-bold">{fgm} / {shown.length}</span>
@@ -164,60 +155,71 @@ export function PlayerShotChart({ bartPlayerId }: { bartPlayerId: number }) {
               )}
             </div>
             <p className="mt-1 text-xs text-ink-muted">
-              {mode === "spots"
-                ? "Brighter hexes = more attempts from that spot."
-                : "Filled = make · outlined = miss."}{" "}
-              Shots without a tracked location aren&apos;t plotted; free throws excluded.
+              Brighter hexes = more attempts from that spot. Shots without a tracked location aren&apos;t plotted; free throws excluded.
             </p>
           </div>
 
-          {/* Filters */}
+          {/* Shot profile rail — season splits for the same year the chart shows. */}
           <div className="lg:col-span-2 lg:border-l lg:border-hairline lg:pl-8">
-            <div className="text-[0.62rem] uppercase tracking-[0.18em] text-ink-muted font-semibold mb-4">Shot filters</div>
-            <div className="space-y-4">
-              <ChipGroup label="Shot types">
-                {(["Jump shots", "Layups", "Dunks", "Tip-ins"] as const).map((label, i) => (
-                  <Chip
-                    key={label} label={label} on={filters.types[i]}
-                    toggle={() => setFilters((f) => {
-                      const types = [...f.types] as Filters["types"];
-                      types[i] = !types[i];
-                      return { ...f, types };
-                    })}
-                  />
-                ))}
-              </ChipGroup>
-              <ChipGroup label="Point values">
-                <Chip label="2PT" on={filters.pts2} toggle={() => setFilters((f) => ({ ...f, pts2: !f.pts2 }))} />
-                <Chip label="3PT" on={filters.pts3} toggle={() => setFilters((f) => ({ ...f, pts3: !f.pts3 }))} />
-              </ChipGroup>
-              <ChipGroup label="Shot outcomes">
-                <Chip label="Make" on={filters.make} toggle={() => setFilters((f) => ({ ...f, make: !f.make }))} />
-                <Chip label="Miss" on={filters.miss} toggle={() => setFilters((f) => ({ ...f, miss: !f.miss }))} />
-              </ChipGroup>
-              <ChipGroup label="Game outcomes">
-                <Chip label="Win" on={filters.win} toggle={() => setFilters((f) => ({ ...f, win: !f.win }))} />
-                <Chip label="Loss" on={filters.loss} toggle={() => setFilters((f) => ({ ...f, loss: !f.loss }))} />
-              </ChipGroup>
-              <ChipGroup label="Game locations">
-                <Chip label="Home" on={filters.home} toggle={() => setFilters((f) => ({ ...f, home: !f.home }))} />
-                <Chip label="Away" on={filters.away} toggle={() => setFilters((f) => ({ ...f, away: !f.away }))} />
-                <Chip label="Neutral" on={filters.neutral} toggle={() => setFilters((f) => ({ ...f, neutral: !f.neutral }))} />
-              </ChipGroup>
+            <div className="text-[0.62rem] uppercase tracking-[0.18em] text-ink-muted font-semibold mb-4">Shot diet · FG% by zone</div>
+            {profile ? (
+              <>
+                <ZoneBars s={profile} />
+                <div className="mt-5"><ProfileMinis s={profile} /></div>
+              </>
+            ) : (
+              <p className="text-sm text-ink-muted">No zone splits for this season.</p>
+            )}
+          </div>
+        </div>
 
+        {/* Filters band */}
+        <div className="px-5 lg:px-7 py-5 border-t border-hairline bg-paper-deep/20">
+          <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
+            <ChipGroup label="Shot types">
+              {(["Jump shots", "Layups", "Dunks", "Tip-ins"] as const).map((label, i) => (
+                <Chip
+                  key={label} label={label} on={filters.types[i]}
+                  toggle={() => setFilters((f) => {
+                    const types = [...f.types] as Filters["types"];
+                    types[i] = !types[i];
+                    return { ...f, types };
+                  })}
+                />
+              ))}
+            </ChipGroup>
+            <ChipGroup label="Point values">
+              <Chip label="2PT" on={filters.pts2} toggle={() => setFilters((f) => ({ ...f, pts2: !f.pts2 }))} />
+              <Chip label="3PT" on={filters.pts3} toggle={() => setFilters((f) => ({ ...f, pts3: !f.pts3 }))} />
+            </ChipGroup>
+            <ChipGroup label="Shot outcomes">
+              <Chip label="Make" on={filters.make} toggle={() => setFilters((f) => ({ ...f, make: !f.make }))} />
+              <Chip label="Miss" on={filters.miss} toggle={() => setFilters((f) => ({ ...f, miss: !f.miss }))} />
+            </ChipGroup>
+            <ChipGroup label="Game outcomes">
+              <Chip label="Win" on={filters.win} toggle={() => setFilters((f) => ({ ...f, win: !f.win }))} />
+              <Chip label="Loss" on={filters.loss} toggle={() => setFilters((f) => ({ ...f, loss: !f.loss }))} />
+            </ChipGroup>
+            <ChipGroup label="Game locations">
+              <Chip label="Home" on={filters.home} toggle={() => setFilters((f) => ({ ...f, home: !f.home }))} />
+              <Chip label="Away" on={filters.away} toggle={() => setFilters((f) => ({ ...f, away: !f.away }))} />
+              <Chip label="Neutral" on={filters.neutral} toggle={() => setFilters((f) => ({ ...f, neutral: !f.neutral }))} />
+            </ChipGroup>
+
+            <div className="min-w-56 flex-1 max-w-xs">
               <DistanceSlider
                 lo={filters.distLo} hi={filters.distHi}
                 onChange={(lo, hi) => setFilters((f) => ({ ...f, distLo: lo, distHi: hi }))}
               />
-
-              <button
-                type="button"
-                onClick={() => setFilters(DEFAULT_FILTERS)}
-                className="text-xs text-ink-muted hover:text-coral transition-colors underline underline-offset-2"
-              >
-                Reset filters
-              </button>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setFilters(DEFAULT_FILTERS)}
+              className="h-8 text-xs text-ink-muted hover:text-coral transition-colors underline underline-offset-2 ml-auto"
+            >
+              Reset filters
+            </button>
           </div>
         </div>
       </div>
@@ -243,15 +245,14 @@ const HEX_FILL = "#e8794e"; // brand coral tuned brighter for the dark floor
 const COURT_BG = "#1f2937";
 const LINE = "rgba(255,255,255,0.22)";
 
-function CourtChart({ shots, mode }: { shots: ShotRow[]; mode: "spots" | "makemiss" }) {
+function CourtChart({ shots }: { shots: ShotRow[] }) {
   const bins = useMemo(() => {
-    if (mode !== "spots") return [];
     const gen = d3hexbin<ShotRow>()
       .x((s) => s[CX]).y((s) => s[CY])
       .radius(9)
       .extent([[0, 0], [W, H]]);
     return gen(shots);
-  }, [shots, mode]);
+  }, [shots]);
 
   // Opacity ramp: linear in bin count against a cap well below the max, so a
   // player's top handful of spots all saturate (that's what makes favorite
@@ -268,34 +269,19 @@ function CourtChart({ shots, mode }: { shots: ShotRow[]; mode: "spots" | "makemi
       <rect width={W} height={H} rx={8} fill={COURT_BG} />
 
       {/* Shots go under the line work so the court stays legible. */}
-      {mode === "spots" ? (
-        <g>
-          {bins.map((b) => (
-            <path
-              key={`${Math.round(b.x)}-${Math.round(b.y)}`}
-              d={hexPath}
-              transform={`translate(${b.x},${b.y})`}
-              fill={HEX_FILL}
-              opacity={Math.min(1, 0.14 + b.length / cap)}
-            >
-              <title>{`${b.length} shot${b.length === 1 ? "" : "s"} · ${b.reduce((n, s) => n + s[MADE], 0)} made`}</title>
-            </path>
-          ))}
-        </g>
-      ) : (
-        <g>
-          {shots.filter((s) => s[MADE] === 0).map((s, i) => (
-            <circle key={`m${i}`} cx={s[CX]} cy={s[CY]} r={4} fill="none" stroke="#94a3b8" strokeWidth={1.4} opacity={0.55}>
-              <title>{`Miss · ${dist(s).toFixed(0)} ft`}</title>
-            </circle>
-          ))}
-          {shots.filter((s) => s[MADE] === 1).map((s, i) => (
-            <circle key={`k${i}`} cx={s[CX]} cy={s[CY]} r={4.5} fill={HEX_FILL} opacity={0.9}>
-              <title>{`Make · ${dist(s).toFixed(0)} ft`}</title>
-            </circle>
-          ))}
-        </g>
-      )}
+      <g>
+        {bins.map((b) => (
+          <path
+            key={`${Math.round(b.x)}-${Math.round(b.y)}`}
+            d={hexPath}
+            transform={`translate(${b.x},${b.y})`}
+            fill={HEX_FILL}
+            opacity={Math.min(1, 0.14 + b.length / cap)}
+          >
+            <title>{`${b.length} shot${b.length === 1 ? "" : "s"} · ${b.reduce((n, s) => n + s[MADE], 0)} made`}</title>
+          </path>
+        ))}
+      </g>
 
       {/* Line work */}
       <g stroke={LINE} strokeWidth={2} fill="none">

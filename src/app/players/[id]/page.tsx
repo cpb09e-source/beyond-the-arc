@@ -5,7 +5,6 @@ import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayer
 import { PlayerPhoto } from "@/components/player-photo";
 import { CareerTable } from "@/components/players/career-table";
 import { PlayerOverview, type PlayerOverviewOption } from "@/components/players/player-overview";
-import { PlayerShotImpact } from "@/components/players/player-shot-impact";
 import { PlayerShotChart } from "@/components/players/player-shot-chart";
 
 export async function generateStaticParams() {
@@ -236,11 +235,10 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         </section>
       )}
 
-      <PlayerShotImpact bartPlayerId={bartId} years={player.seasons.map((s) => s.year)} />
-
-      {/* Hexbin shot chart — self-hides for players with no located shots
-          (data exists for 2024+ seasons only). */}
-      <PlayerShotChart bartPlayerId={bartId} />
+      {/* Shooting section: hexbin shot chart with the zone-profile stats in
+          its right rail (2024+ seasons); players without located shots get
+          the profile-only fallback card instead. */}
+      <PlayerShotChart bartPlayerId={bartId} years={player.seasons.map((s) => s.year)} />
 
       <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8 mb-20">
         {/* Career ledger — heavier chrome than other cards on the page so this
