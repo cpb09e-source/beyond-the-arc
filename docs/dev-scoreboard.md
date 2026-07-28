@@ -135,9 +135,22 @@ Two things follow, both already handled:
   died, and then holds port 3000 against the restart) and starts it again. A
   crash costs a few seconds instead of the session.
 
-If it becomes constant, `netlify-cli` is worth updating — 27.x is out and this
-box is on 26.0.1. Until then, plain `next dev` on port 3000 has no proxy in it
-at all and is the better place to work on anything that isn't function-backed.
+**Upgrading the CLI does not fix it.** Measured across 26.0.1 → 27.0.1 on the
+same test: 16.3 → 14.3 MB per small request, 27.1 → 28.5 MB per large one.
+Noise. Don't spend time on it again.
+
+**Why it started mattering on 28 July 2026 and never before.** Until the
+site-wide score ticker landed (`7f5e5842b7`), the only function on the site was
+`parse-query`, used on one page and only when you type a question — so almost
+nothing went through the proxy and `next dev` on port 3000 was enough for
+nearly all work. The ticker put an `/api/scoreboard` call on *every page load*,
+and the scoreboard, ticker and game pages are exactly the surfaces that cannot
+be worked on without the proxy. Traffic through the leak went from roughly zero
+to every navigation. The leak is old; the exposure is new.
+
+Which points at the practical mitigation: **plain `next dev` on port 3000 has
+no proxy in it at all** and is the right place to work on anything that isn't
+function-backed.
 
 **A function returns 500 or the connection resets, but curl says 200** — both
 the ticker and the game page retry once before showing anything, which absorbs
