@@ -124,7 +124,12 @@ export type StandingRow = {
 
 export type GameBundle = {
   game: GameHead;
-  teamStats: { home: TeamStats | null; away: TeamStats | null; pace: number | null; gameMinutes: number | null };
+  teamStats: {
+    home: TeamStats | null; away: TeamStats | null;
+    pace: number | null; gameMinutes: number | null;
+    /** Each side's season average pace entering this game. */
+    seasonPace?: { home: number | null; away: number | null };
+  };
   players: { home: BoxPlayer[]; away: BoxPlayer[] };
   plays: Play[];
   broadcasts: { broadcastType: string; broadcastName: string }[];

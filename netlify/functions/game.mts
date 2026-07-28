@@ -88,6 +88,32 @@ const scheduleCache = new Map<string, Cached<Row[]>>();
 const standingsCache = new Map<string, Cached<Row[]>>();
 let rankCache: { season: number; at: number; rows: Row[] } | null = null;
 
+/**
+ * A team's season pace entering a date: the mean of its completed games.
+ *
+ * Taken "entering this game" rather than across the whole season, matching the
+ * records and standings on the same page. A February game should be read
+ * against how the team had played to that point, not against a figure that
+ * includes March.
+ *
+ * /games/teams carries pace per game, one call for the team's whole season.
+ * Cached alongside the schedules.
+ */
+async function seasonPace(key: string, season: number, team: string, before: string): Promise<number | null> {
+  const k = `pace|${season}|${team}`;
+  const hit = scheduleCache.get(k);
+  let rows = hit && Date.now() - hit.at < SCHEDULE_TTL_MS ? hit.value : null;
+  if (!rows) {
+    rows = await soft(cbbd(`/games/teams?season=${season}&team=${q(team)}`, key));
+    scheduleCache.set(k, { at: Date.now(), value: rows });
+  }
+  const paces = rows
+    .filter((r) => typeof r.pace === "number" && typeof r.startDate === "string" && r.startDate < before)
+    .map((r) => r.pace as number);
+  if (paces.length === 0) return null;
+  return Math.round((paces.reduce((s, x) => s + x, 0) / paces.length) * 10) / 10;
+}
+
 /** A team's full season schedule. One call, 40ish rows — well under the cap. */
 async function schedule(key: string, season: number, team: string, currentSeason: number): Promise<Row[]> {
   const k = `${season}|${team}`;
@@ -241,11 +267,13 @@ const handler = async (req: Request, _ctx: Context) => {
     // Context. Memoised separately (see the header) so a live refresh does not
     // re-buy the last three seasons of schedule every minute.
     const confs = [...new Set([g.homeConference, g.awayConference].filter(Boolean))] as string[];
-    const [homeSched, awaySched, ...confTables] = await Promise.all([
+    const [homeSched, awaySched, homePace, awayPace, ...confTables] = await Promise.all([
       Promise.all([season, season - 1, season - 2].map((s) => schedule(key, s, home, season))).then((x) => x.flat()),
       Promise.all([season, season - 1, season - 2].map((s) => schedule(key, s, away, season))).then((x) => x.flat()),
+      seasonPace(key, season, home, g.startDate),
+      seasonPace(key, season, away, g.startDate),
       ...confs.map((c) => standings(key, season, c, g.startDate)),
-    ]);
+    ]) as [Row[], Row[], number | null, number | null, ...Row[][]];
 
     const tr = teamRows.find((r) => r.gameId === id) ?? null;
     const homeStats = tr ? (tr.isHome ? tr.teamStats : tr.opponentStats) : null;
@@ -344,6 +372,8 @@ const handler = async (req: Request, _ctx: Context) => {
       teamStats: {
         home: homeStats ?? null, away: awayStats ?? null,
         pace: tr ? num(tr.pace) : null, gameMinutes: tr ? num(tr.gameMinutes) : null,
+        /** Each side's season average entering this game, for context on the above. */
+        seasonPace: { home: homePace, away: awayPace },
       },
       players: {
         home: homeBox.find((r) => r.gameId === id)?.players ?? [],

@@ -297,16 +297,46 @@ function TeamStatsPanel({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }
         {rows.map((r) => <StatRowView key={r.label} r={r} hc={hc} ac={ac} />)}
       </div>
       {/* Pace belongs to the game, not to a team — both sides face the same
-          number of possessions — so it reads as one figure rather than as a
-          contest with itself. */}
+          number of possessions — so the figure sits in the middle rather than
+          being staged as a contest with itself.
+          
+          Each side's season average flanks it, because the number only means
+          something against how these teams usually play: 64 is a grind for one
+          pair and a track meet for another. */}
       {b.teamStats.pace !== null && (
-        <div className="mt-3 pt-3 border-t border-hairline flex items-baseline justify-center gap-2">
-          <span className="text-[0.62rem] uppercase tracking-[0.12em] font-bold text-ink-muted">Pace</span>
-          <span className="text-lg tabular font-bold text-ink">{n1(b.teamStats.pace)}</span>
-          <span className="text-[0.62rem] text-ink-muted">possessions each</span>
+        <div className="mt-3 pt-3 border-t border-hairline grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <SeasonPace value={b.teamStats.seasonPace?.away ?? null} game={b.teamStats.pace} color={ac} align="left" />
+          <div className="text-center">
+            <p className="text-[0.55rem] uppercase tracking-[0.14em] font-bold text-ink-muted">Pace</p>
+            <p className="text-xl tabular font-bold text-ink leading-none mt-0.5">{n1(b.teamStats.pace)}</p>
+            <p className="text-[0.55rem] text-ink-muted mt-0.5">possessions each</p>
+          </div>
+          <SeasonPace value={b.teamStats.seasonPace?.home ?? null} game={b.teamStats.pace} color={hc} align="right" />
         </div>
       )}
     </Panel>
+  );
+}
+
+/**
+ * One side's season pace beside the game's, with the gap called out. Says
+ * whether a team played its own game or got dragged into someone else's.
+ */
+function SeasonPace({
+  value, game, color, align,
+}: { value: number | null; game: number; color: string; align: "left" | "right" }) {
+  if (value === null) return <span />;
+  const delta = Math.round((game - value) * 10) / 10;
+  return (
+    <div className={align === "right" ? "text-right" : ""}>
+      <p className="text-sm tabular font-semibold" style={{ color: readableInk(color) }}>{n1(value)}</p>
+      <p className="text-[0.55rem] text-ink-muted leading-tight">
+        season avg
+        {delta !== 0 && (
+          <span className="tabular"> · {delta > 0 ? "+" : ""}{n1(delta)} here</span>
+        )}
+      </p>
+    </div>
   );
 }
 
