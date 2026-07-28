@@ -48,7 +48,12 @@ export function SiteHeader() {
     // z-50: must clear the tables' sticky header cells (z-40), which
     // otherwise paint over the search dropdown — same z, later in the DOM.
     // Body-portaled modals still win: equal-or-higher z AND later DOM order.
-    <header className="bg-paper/80 backdrop-blur supports-[backdrop-filter]:bg-paper/60 relative z-50">
+    // NO BAR. The header carries no background of its own — it sits on the
+    // page's own paper and the nav trough below is the only filled shape in the
+    // row. Safe because this header is `relative`, not sticky: it scrolls away
+    // with the page, so nothing ever passes under it needing to be masked. (The
+    // wash and blur it used to carry existed for a stickiness it never had.)
+    <header className="relative z-50">
       {/* 108rem matches the widest page container on the site (the teams and
           players tables), so the logo and search line up with the table's edges
           instead of floating inside them. Same width on every route — narrower
@@ -79,16 +84,26 @@ export function SiteHeader() {
           />
         </Link>
 
-        {/* Desktop nav — small-caps tracked, coral baseline underline marks
-            the current page. The underline scales from 0 → 100% on hover for
-            non-active links (40% width tease) and stays full-width on the
-            active link. Mirrors the kicker-rule motif used across the site. */}
+        {/* Desktop nav as a SEGMENTED CONTROL: the links sit in a recessed
+            translucent trough, and the current page is a raised paper chip
+            inside it.
+
+            This replaced a coral baseline underline that grew on hover. The
+            underline is still the site's motif everywhere else — section
+            kickers, the active tab on the game page — but in the header it was
+            a one-pixel line asked to carry the "you are here" signal across a
+            row of seven near-identical labels, and a filled shape does that at
+            a glance where a hairline does not. It also gives the row a single
+            object to be, rather than seven loose words floating in a bar.
+
+            The trough is the only filled surface in the header; the bar itself
+            has no background at all now. */}
         {/* The inline nav starts at lg, not md. Seven items plus the wordmark and
             the search box need about 990px; at the md breakpoint the row was
             941px wide in a 768px viewport and pushed the whole page sideways —
             with six items it was already 820px, so this predates the scoreboard
             link and was only ever hidden by nobody sitting at exactly 768. */}
-        <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
+        <nav className="hidden lg:flex items-center gap-0.5 rounded-lg bg-ink/6 p-1 backdrop-blur-sm">
           {NAV.map((item) => {
             const active = isCurrent(pathname, item.href);
             return (
@@ -100,20 +115,17 @@ export function SiteHeader() {
                   // Nowrap plus a tighter tier at lg: seven labels on one
                   // line need the room, and "Transfer Portal" breaking across
                   // two lines in a nav bar reads as a layout accident.
-                  "group relative whitespace-nowrap py-2 text-[0.7rem] uppercase font-medium transition-colors",
+                  "relative whitespace-nowrap rounded-md py-1.5 text-[0.7rem] uppercase font-medium transition-colors",
                   "px-2 tracking-[0.1em] xl:px-3 xl:tracking-[0.18em]",
-                  active ? "text-ink" : "text-ink-muted hover:text-ink",
+                  active
+                    // The current page is a RAISED chip inside the recessed
+                    // trough — the segmented-control read, where the shapes
+                    // themselves say which one you are on.
+                    ? "bg-paper text-ink shadow-sm ring-1 ring-ink/5"
+                    : "text-ink-muted hover:text-ink hover:bg-paper/60",
                 )}
               >
                 {item.label}
-                <span
-                  aria-hidden
-                  className={cn(
-                    "pointer-events-none absolute left-2 right-2 xl:left-3 xl:right-3 bottom-1 h-px bg-coral origin-center",
-                    "transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
-                    active ? "scale-x-100" : "scale-x-0 group-hover:scale-x-[0.4]",
-                  )}
-                />
               </Link>
             );
           })}
