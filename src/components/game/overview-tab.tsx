@@ -42,7 +42,7 @@ export function OverviewTab({ b, hc, ac, onOpenBox }: { b: GameBundle; hc: strin
       <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3 items-start">
         <Leaders b={b} hc={hc} ac={ac} photos={photos} onOpenBox={onOpenBox} />
         <TeamStatsPanel b={b} hc={hc} ac={ac} />
-        <Standings b={b} />
+        <Standings b={b} hc={hc} ac={ac} />
       </div>
 
       <GameInfo b={b} />
@@ -306,7 +306,10 @@ function StatRowView({ r, hc, ac }: { r: StatRow; hc: string; ac: string }) {
     <div className="py-2.5">
       <div className="grid grid-cols-[1fr_auto_1fr] items-baseline gap-3">
         <div className="min-w-0">
-          <span className={cn("text-lg tabular font-bold", lead === "a" ? "text-ink" : "text-ink-muted")}>
+          {/* The number wears its school's colour and the trailing side is
+              dimmed rather than greyed, so the row still reads as two teams
+              instead of one winner and one neutral figure. */}
+          <span className="text-lg tabular font-bold" style={{ color: ac, opacity: lead === "h" ? 0.5 : 1 }}>
             {n1(r.a)}{r.unit}
           </span>
           {r.aNote && <span className="text-[0.62rem] tabular text-ink-muted ml-1.5">({r.aNote})</span>}
@@ -314,7 +317,7 @@ function StatRowView({ r, hc, ac }: { r: StatRow; hc: string; ac: string }) {
         <span className="w-24 text-center text-[0.68rem] font-bold text-ink leading-tight">{r.label}</span>
         <div className="min-w-0 text-right">
           {r.hNote && <span className="text-[0.62rem] tabular text-ink-muted mr-1.5">({r.hNote})</span>}
-          <span className={cn("text-lg tabular font-bold", lead === "h" ? "text-ink" : "text-ink-muted")}>
+          <span className="text-lg tabular font-bold" style={{ color: hc, opacity: lead === "a" ? 0.5 : 1 }}>
             {n1(r.h)}{r.unit}
           </span>
         </div>
@@ -392,40 +395,56 @@ function Strip({ title, note, children }: { title: string; note?: string; childr
  * schedule" distinguishable at the same glance.
  */
 function ResumeStrip({
-  rows, emptyLabel, markFor,
+  rows, emptyLabel, markFor, tone,
 }: {
   rows: ScheduleRow[];
   emptyLabel: string;
   /** Which school's mark the cell wears. Defaults to the opponent. */
   markFor?: (r: ScheduleRow) => string;
+  tone?: "result" | "neutral";
 }) {
   if (rows.length === 0) return <p className="text-sm text-ink-muted">{emptyLabel}</p>;
   return (
     <div className="flex gap-1.5">
-      {rows.map((r) => <ResumeCell key={r.id} r={r} mark={markFor ? markFor(r) : r.opponent} />)}
+      {rows.map((r) => (
+        <ResumeCell key={r.id} r={r} mark={markFor ? markFor(r) : r.opponent} tone={tone} />
+      ))}
     </div>
   );
 }
 
-function ResumeCell({ r, mark }: { r: ScheduleRow; mark: string }) {
+function ResumeCell({
+  r, mark, tone = "result",
+}: {
+  r: ScheduleRow; mark: string;
+  /** "result" washes the cell green or red for a win or loss. "neutral" does
+   *  not — used where the badge itself already says who won. */
+  tone?: "result" | "neutral";
+}) {
   const won = r.won;
   const where = r.neutral ? "vs" : r.isHome ? "vs" : "at";
+  const plain = tone === "neutral";
   return (
     <div
       title={`${shortDate(r.date)} ${where} ${r.opponent} · ${won ? "W" : "L"} ${r.us}-${r.them}`}
       className={cn(
         "flex-1 min-w-0 flex flex-col items-center gap-1 rounded-lg px-1.5 pt-1.5 pb-1 ring-1",
-        won === true && "bg-emerald-100/60 ring-emerald-300/60",
-        won === false && "bg-rose-100/50 ring-rose-300/50",
-        won === null && "bg-paper-deep ring-hairline",
+        plain && "bg-paper-deep/50 ring-hairline",
+        !plain && won === true && "bg-emerald-100/60 ring-emerald-300/60",
+        !plain && won === false && "bg-rose-100/50 ring-rose-300/50",
+        !plain && won === null && "bg-paper-deep ring-hairline",
       )}
     >
-      <span className={cn(
-        "text-[0.55rem] uppercase tracking-[0.1em] font-bold leading-none",
-        won === true ? "text-emerald-700" : won === false ? "text-rose-700" : "text-ink-muted",
-      )}>
-        {won === null ? "–" : won ? "W" : "L"}
-      </span>
+      {plain ? (
+        <span className="text-[0.5rem] uppercase tracking-[0.1em] font-bold text-ink-muted leading-none">Won</span>
+      ) : (
+        <span className={cn(
+          "text-[0.55rem] uppercase tracking-[0.1em] font-bold leading-none",
+          won === true ? "text-emerald-700" : won === false ? "text-rose-700" : "text-ink-muted",
+        )}>
+          {won === null ? "–" : won ? "W" : "L"}
+        </span>
+      )}
       <TeamLogo name={mark} size={22} />
       <span className="text-[0.62rem] tabular font-semibold text-ink leading-none">{r.us}-{r.them}</span>
       <span className="text-[0.5rem] tabular text-ink-muted leading-none">
@@ -448,14 +467,15 @@ function HeadToHead({ b }: { b: GameBundle }) {
   const w = b.h2h.filter((r) => r.won).length;
   return (
     <Strip title="Head to head" note={b.h2h.length ? `${g.home.team} ${w}-${b.h2h.length - w}` : undefined}>
-      {/* Each cell wears the WINNER's mark rather than the opponent's. Rows are
-          stored from the home team's side, so an unlabelled row of five
-          identical opponent logos left the reader to work out who the W and L
-          belonged to. The winning school's badge answers it directly. */}
+      {/* Each cell wears the WINNER's mark and nothing else — no green/red
+          wash and no W/L letter. Both were stated from the home team's side,
+          which made a red cell under the visiting school's badge ambiguous
+          about whose result it was. The winning badge says it once. */}
       <ResumeStrip
         rows={b.h2h}
         emptyLabel="First meeting in our records."
         markFor={(r) => (r.won ? g.home.team : r.opponent)}
+        tone="neutral"
       />
     </Strip>
   );
@@ -463,20 +483,33 @@ function HeadToHead({ b }: { b: GameBundle }) {
 
 /* ------------------------------- standings ------------------------------- */
 
-function Standings({ b, className }: { b: GameBundle; className?: string }) {
+function Standings({
+  b, hc, ac, className,
+}: { b: GameBundle; hc: string; ac: string; className?: string }) {
   const g = b.game;
   const confs = Object.keys(b.standings);
   if (confs.length === 0) return null;
-  const highlight = new Set([g.home.team, g.away.team]);
+  // An in-conference game has ONE table, and it is the table both teams are
+  // actually racing in — so it runs at full length rather than through a
+  // scrolling window. A non-conference game shows two, and those stay capped
+  // so one panel doesn't run to forty rows.
+  const single = confs.length === 1;
+  const colorOf = (team: string) =>
+    team === g.home.team ? hc : team === g.away.team ? ac : null;
+
   return (
-    <Panel title={confs.length === 1 ? `${confs[0]} standings` : "Standings"} note="Entering this game" className={className}>
+    <Panel
+      title={single ? `${confs[0]} standings` : "Standings"}
+      note="Entering this game"
+      className={className}
+    >
       <div className="space-y-4">
         {confs.map((c) => (
           <div key={c}>
-            {confs.length > 1 && (
+            {!single && (
               <p className="text-[0.58rem] uppercase tracking-[0.12em] font-bold text-ink-muted mb-1">{c}</p>
             )}
-            <StandingsTable rows={b.standings[c]!} highlight={highlight} />
+            <StandingsTable rows={b.standings[c]!} colorOf={colorOf} capped={!single} />
           </div>
         ))}
       </div>
@@ -484,9 +517,15 @@ function Standings({ b, className }: { b: GameBundle; className?: string }) {
   );
 }
 
-function StandingsTable({ rows, highlight }: { rows: StandingRow[]; highlight: Set<string> }) {
+function StandingsTable({
+  rows, colorOf, capped,
+}: {
+  rows: StandingRow[];
+  colorOf: (team: string) => string | null;
+  capped: boolean;
+}) {
   return (
-    <div className="max-h-64 overflow-y-auto -mx-1 px-1">
+    <div className={cn("-mx-1 px-1", capped && "max-h-64 overflow-y-auto")}>
       <table className="w-full text-[0.72rem] tabular">
         <thead className="sticky top-0 bg-card">
           <tr className="text-[0.52rem] uppercase tracking-[0.1em] text-ink-muted">
@@ -497,14 +536,26 @@ function StandingsTable({ rows, highlight }: { rows: StandingRow[]; highlight: S
         </thead>
         <tbody>
           {rows.map((r, i) => {
-            const on = highlight.has(r.team);
+            // The two teams in this game are tinted in their OWN colours
+            // rather than a shared accent, so which row is which reads without
+            // going back to the name.
+            const c = colorOf(r.team);
             return (
-              <tr key={r.team} className={cn("border-t border-hairline/50", on && "bg-coral/8")}>
+              <tr
+                key={r.team}
+                className="border-t border-hairline/50"
+                style={c ? { background: `${c}14` } : undefined}
+              >
                 <td className="py-1 pr-2">
                   <span className="text-ink-muted mr-1.5">{i + 1}</span>
-                  <span className={on ? "text-ink font-semibold" : "text-ink-soft"}>{r.team}</span>
+                  <span className={c ? "font-semibold" : "text-ink-soft"} style={c ? { color: c } : undefined}>
+                    {r.team}
+                  </span>
                 </td>
-                <td className={cn("text-right", on ? "text-ink font-semibold" : "text-ink-soft")}>{r.cw}-{r.cl}</td>
+                <td className={cn("text-right", !c && "text-ink-soft")}
+                  style={c ? { color: c, fontWeight: 600 } : undefined}>
+                  {r.cw}-{r.cl}
+                </td>
                 <td className="text-right text-ink-muted">{r.w}-{r.l}</td>
               </tr>
             );
