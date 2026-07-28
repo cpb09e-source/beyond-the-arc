@@ -60,15 +60,20 @@ export function OverviewTab({ b, hc, ac, onOpenBox }: { b: GameBundle; hc: strin
 /* --------------------------------- shell --------------------------------- */
 
 function Panel({
-  title, note, children, className,
-}: { title: string; note?: string; children: React.ReactNode; className?: string }) {
+  title, note, children, className, flush,
+}: {
+  title: string; note?: string; children: React.ReactNode; className?: string;
+  /** Drop the body padding, for panels whose rows carry their own and need to
+   *  run edge to edge — a tinted row inset by 16px reads as a chip. */
+  flush?: boolean;
+}) {
   return (
     <section className={cn("rounded-xl border border-hairline bg-card overflow-hidden flex flex-col", className)}>
       <div className="px-4 py-2.5 border-b border-hairline bg-paper-deep/30 flex items-baseline gap-2">
         <h2 className="text-[0.6rem] uppercase tracking-[0.18em] font-bold text-ink">{title}</h2>
         {note && <span className="text-[0.6rem] text-ink-muted ml-auto">{note}</span>}
       </div>
-      <div className="p-4 flex-1">{children}</div>
+      <div className={cn("flex-1", !flush && "p-4")}>{children}</div>
     </section>
   );
 }
@@ -94,105 +99,127 @@ function best(players: BoxPlayer[], pick: (p: BoxPlayer) => number | null): BoxP
   return topV <= 0 ? null : top;
 }
 
+const LEADER_CATS: {
+  label: string;
+  pick: (p: BoxPlayer) => number | null;
+  detail: (p: BoxPlayer) => string;
+}[] = [
+  {
+    label: "Points",
+    pick: (p) => p.points,
+    detail: (p) => `${p.fieldGoals.made}/${p.fieldGoals.attempted} FG, ${p.freeThrows.made}/${p.freeThrows.attempted} FT`,
+  },
+  {
+    label: "Rebounds",
+    pick: (p) => p.rebounds.total,
+    detail: (p) => `${p.rebounds.defensive} DREB, ${p.rebounds.offensive} OREB`,
+  },
+  {
+    label: "Assists",
+    pick: (p) => p.assists,
+    detail: (p) => `${p.turnovers} TO, ${p.minutes} MIN`,
+  },
+];
+
 /**
- * Game leaders, both sides in ONE card.
+ * Game leaders as a ledger: six rows, read top to bottom, grouped under a stat
+ * heading. The shape of every box score ever printed.
  *
- * Two separate leader panels spent a full column each to say the same three
- * things, and the comparison they exist to support — who was the best player
- * in this game — was left for the reader to make across a gap. Facing the two
- * teams across a shared stat label makes it one glance and costs one panel
- * instead of two.
+ * This replaced a MIRRORED layout — the two teams facing each other across a
+ * centre label — and the mirror turned out to cost more than it bought. Two
+ * photos, two names and two stat lines had to fit either side of a 96px label
+ * column inside a 27rem panel, so both names ran as "C. Boozer" and both detail
+ * lines sat at 0.65rem. Stacked, each player gets the panel's full width, the
+ * names are spelled out, and the three numbers land in one column the eye can
+ * run straight down.
+ *
+ * The category winner carries a wash of its own team's colour rather than a
+ * badge or a bold weight, so which side won each of the three is a glance at
+ * the left edge instead of a comparison across a gap.
  */
 function Leaders({
   b, hc, ac, photos, onOpenBox,
 }: {
   b: GameBundle; hc: string; ac: string; photos: PhotoIndex; onOpenBox?: () => void;
 }) {
-  const rows: [string, (p: BoxPlayer) => number | null, (p: BoxPlayer) => string][] = [
-    ["Points", (p) => p.points,
-      (p) => `${p.fieldGoals.made}/${p.fieldGoals.attempted} FG, ${p.freeThrows.made}/${p.freeThrows.attempted} FT`],
-    ["Rebounds", (p) => p.rebounds.total,
-      (p) => `${p.rebounds.defensive} DREB, ${p.rebounds.offensive} OREB`],
-    ["Assists", (p) => p.assists,
-      (p) => `${p.turnovers} TO, ${p.minutes} MIN`],
-  ];
   return (
-    <Panel title="Game leaders">
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 pb-3 border-b border-hairline">
-        <div className="flex items-center gap-2">
-          <TeamLogo name={b.game.away.team} size={24} />
-          <span className="text-[0.68rem] uppercase tracking-[0.1em] font-bold text-ink truncate">{b.game.away.team}</span>
-        </div>
-        <span className="w-24" aria-hidden />
-        <div className="flex items-center gap-2 justify-end">
-          <span className="text-[0.68rem] uppercase tracking-[0.1em] font-bold text-ink truncate">{b.game.home.team}</span>
-          <TeamLogo name={b.game.home.team} size={24} />
-        </div>
-      </div>
-      <div className="divide-y divide-hairline/60">
-        {rows.map(([label, pick, detail]) => (
-          <div key={label} className="grid grid-cols-[1fr_auto_1fr] items-start gap-3 py-3.5">
-            <LeaderSide p={best(b.players.away, pick)} pick={pick} detail={detail} color={ac} photos={photos} align="left" />
-            <span className="w-24 pt-4 text-center text-[0.68rem] font-bold text-ink leading-tight">{label}</span>
-            <LeaderSide p={best(b.players.home, pick)} pick={pick} detail={detail} color={hc} photos={photos} align="right" />
-          </div>
-        ))}
+    <Panel title="Game leaders" flush>
+      <div>
+        {LEADER_CATS.map((c) => {
+          const a = best(b.players.away, c.pick);
+          const h = best(b.players.home, c.pick);
+          const av = a ? c.pick(a) ?? 0 : 0;
+          const hv = h ? c.pick(h) ?? 0 : 0;
+          return (
+            <div key={c.label}>
+              <p className="px-4 pt-3 pb-1 text-[0.55rem] uppercase tracking-widest font-bold text-ink-muted">
+                {c.label}
+              </p>
+              {/* A tie tints BOTH rows: 11 rebounds each is two players who led
+                  the game, and picking one of them on a tiebreak would be
+                  inventing a result the game didn't produce. */}
+              <LeaderRow p={a} c={c} team={b.game.away.team} color={ac} photos={photos} won={av >= hv} />
+              <LeaderRow p={h} c={c} team={b.game.home.team} color={hc} photos={photos} won={hv >= av} />
+            </div>
+          );
+        })}
       </div>
       {onOpenBox && (
-        <button
-          type="button"
-          onClick={onOpenBox}
-          className="mt-3 pt-3 border-t border-hairline w-full text-center text-[0.72rem] font-medium text-coral hover:underline"
-        >
-          Full box score
-        </button>
+        <div className="px-4 py-3 border-t border-hairline">
+          <button
+            type="button"
+            onClick={onOpenBox}
+            className="w-full text-center text-[0.72rem] font-medium text-coral hover:underline"
+          >
+            Full box score
+          </button>
+        </div>
       )}
     </Panel>
   );
 }
 
 /**
- * One side of a leader row: headshot, the number, then name and detail beneath.
+ * One leader: headshot, team mark, name, the supporting line, then the number.
  *
  * The photo resolves through the season's name index — CBBD gives us a name
  * and its own athlete id, neither of which is the id our images are keyed by
  * (see src/lib/player-photo-index.ts). A miss falls back to the monogram
  * PlayerPhoto already draws, so a player we cannot resolve degrades quietly.
  */
-function LeaderSide({
-  p, pick, detail, color, photos, align,
+function LeaderRow({
+  p, c, team, color, photos, won,
 }: {
   p: BoxPlayer | null;
-  pick: (p: BoxPlayer) => number | null;
-  detail: (p: BoxPlayer) => string;
+  c: (typeof LEADER_CATS)[number];
+  team: string;
   color: string;
   photos: PhotoIndex;
-  align: "left" | "right";
+  won: boolean;
 }) {
-  if (!p) return <span className={cn("text-sm text-ink-muted", align === "right" && "text-right block")}>—</span>;
-  const bartId = lookupId(photos, p.name);
+  if (!p) return null;
   return (
-    <div className={cn("min-w-0", align === "right" && "text-right")}>
-      <div className={cn("flex items-center gap-2.5", align === "right" && "flex-row-reverse")}>
-        <PlayerPhoto bartPlayerId={bartId} name={p.name} size={44} className="rounded-full shrink-0" />
-        <span className="text-3xl font-semibold tabular leading-none" style={{ color: readableInk(color) }}>{pick(p)}</span>
+    <div
+      className="flex items-center gap-3 px-4 py-2 border-t border-hairline/50"
+      style={won ? { background: `${color}12` } : undefined}
+    >
+      <PlayerPhoto bartPlayerId={lookupId(photos, p.name)} name={p.name} size={38} className="rounded-full shrink-0" />
+      <TeamLogo name={team} size={18} />
+      <div className="min-w-0 flex-1">
+        <p className={cn("text-[0.82rem] truncate leading-tight", won ? "text-ink font-semibold" : "text-ink-soft")}>
+          {p.name}
+          {p.position && <span className="text-ink-muted font-normal ml-1.5 text-[0.7rem]">{p.position}</span>}
+        </p>
+        <p className="text-[0.65rem] tabular text-ink-muted leading-tight">{c.detail(p)}</p>
       </div>
-      <p className="mt-1.5 text-[0.78rem] text-ink font-medium truncate leading-tight">
-        {shortName(p.name)}
-        {p.position && <span className="text-ink-muted font-normal ml-1.5">{p.position}</span>}
-      </p>
-      <p className="text-[0.65rem] tabular text-ink-muted leading-tight">{detail(p)}</p>
+      <span
+        className="text-2xl font-bold tabular leading-none shrink-0"
+        style={{ color: won ? readableInk(color) : "var(--ink-muted)" }}
+      >
+        {c.pick(p)}
+      </span>
     </div>
   );
-}
-
-/** "Cameron Boozer" → "C. Boozer". Keeps a long name on one line beside a
- *  44px photo without an ellipsis eating the surname, which is the half that
- *  identifies the player. */
-function shortName(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length < 2) return name;
-  return `${parts[0]![0]}. ${parts.slice(1).join(" ")}`;
 }
 
 /* ------------------------------- game info ------------------------------- */
