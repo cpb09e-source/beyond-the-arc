@@ -41,7 +41,10 @@ export function OverviewTab({ b, hc, ac, onOpenBox }: { b: GameBundle; hc: strin
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3 items-start">
-        <Leaders b={b} hc={hc} ac={ac} photos={photos} onOpenBox={onOpenBox} />
+        <div className="space-y-5">
+          <Leaders b={b} hc={hc} ac={ac} photos={photos} onOpenBox={onOpenBox} />
+          <FourFactors b={b} hc={hc} ac={ac} />
+        </div>
         <TeamStatsPanel b={b} hc={hc} ac={ac} />
         <Standings b={b} hc={hc} ac={ac} />
       </div>
@@ -206,7 +209,6 @@ function GameInfo({ b }: { b: GameBundle }) {
     ["Television", tv || null],
     ["Line", line],
     ["Total", ou !== null ? `${ou} · ${total > ou ? "over" : "under"} at ${total}` : null],
-    ["Pace", b.teamStats.pace !== null ? `${b.teamStats.pace} poss` : null],
   ];
   // Laid out as an inline strip rather than a label/value table: as a table it
   // was a narrow column of text beside an empty half-page.
@@ -251,9 +253,20 @@ function TeamStatsPanel({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }
     { label: "Rebounds", a: a.rebounds.total, h: h.rebounds.total,
       aNote: `${a.rebounds.offensive} off`, hNote: `${h.rebounds.offensive} off` },
     { label: "Assists", a: a.assists, h: h.assists },
-    { label: "Turnovers", a: a.turnovers.total, h: h.turnovers.total },
+    { label: "Turnovers", a: a.turnovers.total, h: h.turnovers.total, lowerIsBetter: true },
     { label: "Points in the Paint", a: a.points.inPaint, h: h.points.inPaint },
+    { label: "Fast-break Points", a: a.points.fastBreak, h: h.points.fastBreak },
     { label: "Effective FG%", a: a.fourFactors.effectiveFieldGoalPct, h: h.fourFactors.effectiveFieldGoalPct, unit: "%" },
+    // Rate stats, both denominated in field-goal attempts, which is what makes
+    // them comparable between teams that played at different speeds.
+    { label: "3PA Rate", a: rate(a.threePointFieldGoals.attempted, a.fieldGoals.attempted),
+      h: rate(h.threePointFieldGoals.attempted, h.fieldGoals.attempted), unit: "%" },
+    { label: "FTA Rate", a: a.fourFactors.freeThrowRate, h: h.fourFactors.freeThrowRate, unit: "%" },
+    // A team's defensive rating IS its opponent's offensive rating: the same
+    // possessions scored from the other end. Showing both makes each side's
+    // row readable on its own without mentally mirroring the one above.
+    { label: "Offensive Rating", a: a.rating, h: h.rating },
+    { label: "Defensive Rating", a: h.rating, h: a.rating, lowerIsBetter: true },
     { label: "Largest Lead", a: a.points.largestLead, h: h.points.largestLead },
   ];
   if (led) rows.push({ label: "Percent Led", a: led.away, h: led.home, unit: "%" });
@@ -276,6 +289,16 @@ function TeamStatsPanel({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }
       <div className="divide-y divide-hairline/50">
         {rows.map((r) => <StatRowView key={r.label} r={r} hc={hc} ac={ac} />)}
       </div>
+      {/* Pace belongs to the game, not to a team — both sides face the same
+          number of possessions — so it reads as one figure rather than as a
+          contest with itself. */}
+      {b.teamStats.pace !== null && (
+        <div className="mt-3 pt-3 border-t border-hairline flex items-baseline justify-center gap-2">
+          <span className="text-[0.62rem] uppercase tracking-[0.12em] font-bold text-ink-muted">Pace</span>
+          <span className="text-lg tabular font-bold text-ink">{n1(b.teamStats.pace)}</span>
+          <span className="text-[0.62rem] text-ink-muted">possessions each</span>
+        </div>
+      )}
     </Panel>
   );
 }
@@ -283,7 +306,14 @@ function TeamStatsPanel({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }
 type StatRow = {
   label: string; a: number; h: number; unit?: string;
   aNote?: string; hNote?: string;
+  /** Turnovers and defensive rating are won by the SMALLER number. */
+  lowerIsBetter?: boolean;
 };
+
+/** A percentage of attempts, e.g. 3PA rate. Guards the zero-attempt game. */
+function rate(part: number, whole: number): number {
+  return whole > 0 ? (part / whole) * 100 : 0;
+}
 
 /**
  * One stat, both sides.
@@ -302,7 +332,8 @@ function StatRowView({ r, hc, ac }: { r: StatRow; hc: string; ac: string }) {
   // show two empty tracks rather than two full ones.
   const aw = tot > 0 ? (r.a / tot) * 100 : 0;
   const hw = tot > 0 ? (r.h / tot) * 100 : 0;
-  const lead = r.a === r.h ? null : r.a > r.h ? "a" : "h";
+  const better = r.lowerIsBetter ? (x: number, y: number) => x < y : (x: number, y: number) => x > y;
+  const lead = r.a === r.h ? null : better(r.a, r.h) ? "a" : "h";
   return (
     <div className="py-2.5">
       <div className="grid grid-cols-[1fr_auto_1fr] items-baseline gap-3">
@@ -364,6 +395,121 @@ function percentLed(b: GameBundle): { home: number; away: number } | null {
   }
   if (total <= 0) return null;
   return { home: Math.round((home / total) * 100), away: Math.round((away / total) * 100) };
+}
+
+/* ------------------------------ four factors ------------------------------ */
+
+/**
+ * The four factors, as this site defines them — the same set the team pages
+ * rank against D-I: rebound differential, offensive rebound rate, fast-break
+ * differential, and three-point differential. NOT Dean Oliver's four; ours are
+ * the ones our own model leans on.
+ *
+ * Three of them are differentials, so one team's figure is the negative of the
+ * other's and each is won outright. Offensive rebound rate is the exception:
+ * both sides have their own, and both can be good.
+ *
+ * THE TIEBREAK. Split two apiece and the game gets decided on FTA rate — which
+ * is deliberately NOT one of the four. Getting to the line is the closest
+ * thing to a fifth factor, and leaving a 2-2 unresolved would waste the panel.
+ */
+function FourFactors({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
+  const h = b.teamStats.home, a = b.teamStats.away;
+  if (!h || !a) return null;
+
+  const rebDiff = a.rebounds.total - h.rebounds.total;
+  const fbpDiff = a.points.fastBreak - h.points.fastBreak;
+  const tpmDiff = a.threePointFieldGoals.made - h.threePointFieldGoals.made;
+
+  const factors: Factor[] = [
+    { key: "reb", label: "REB Diff", sub: "total rebounds vs allowed", a: rebDiff, h: -rebDiff, diff: true },
+    { key: "orb", label: "OREB %", sub: "offensive rebound rate",
+      a: a.fourFactors.offensiveReboundPct, h: h.fourFactors.offensiveReboundPct, unit: "%" },
+    { key: "fbp", label: "FBP Diff", sub: "fast-break points vs allowed", a: fbpDiff, h: -fbpDiff, diff: true },
+    { key: "tpm", label: "3PM Diff", sub: "3-pointers made vs allowed", a: tpmDiff, h: -tpmDiff, diff: true },
+  ];
+
+  const aWins = factors.filter((f) => f.a > f.h).length;
+  const hWins = factors.filter((f) => f.h > f.a).length;
+  const ftaA = a.fourFactors.freeThrowRate, ftaH = h.fourFactors.freeThrowRate;
+  const split = aWins === hWins;
+  const winner = !split
+    ? (aWins > hWins ? "a" : "h")
+    : ftaA === ftaH ? null : ftaA > ftaH ? "a" : "h";
+
+  const name = winner === "a" ? b.game.away.team : winner === "h" ? b.game.home.team : null;
+  const won = winner === "a" ? b.game.away.winner : winner === "h" ? b.game.home.winner : null;
+
+  return (
+    <Panel title="Four factors" note="This game">
+      <div className="divide-y divide-hairline/50">
+        {factors.map((f) => <FactorRow key={f.key} f={f} b={b} hc={hc} ac={ac} />)}
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-hairline">
+        {name ? (
+          <div className="flex items-center gap-2.5">
+            <TeamLogo name={name} size={26} />
+            <div className="min-w-0">
+              <p className="text-[0.82rem] text-ink leading-tight">
+                <span className="font-semibold" style={{ color: readableInk(winner === "a" ? ac : hc) }}>{name}</span>
+                {" won the four factors "}
+                <span className="tabular font-semibold">{Math.max(aWins, hWins)}–{Math.min(aWins, hWins)}</span>
+              </p>
+              <p className="text-[0.65rem] text-ink-muted leading-tight mt-0.5">
+                {split
+                  ? `Split two apiece; FTA rate broke it, ${n1(Math.max(ftaA, ftaH))}% to ${n1(Math.min(ftaA, ftaH))}%.`
+                  : won === false
+                  ? "And lost the game."
+                  : won === true
+                  ? "And won the game."
+                  : ""}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <p className="text-[0.82rem] text-ink-muted">Dead even, FTA rate included.</p>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+type Factor = {
+  key: string; label: string; sub: string;
+  a: number; h: number; unit?: string;
+  /** A differential: one side's figure is the negative of the other's. */
+  diff?: boolean;
+};
+
+function FactorRow({ f, b, hc, ac }: { f: Factor; b: GameBundle; hc: string; ac: string }) {
+  const winner = f.a === f.h ? null : f.a > f.h ? "a" : "h";
+  const team = winner === "a" ? b.game.away.team : winner === "h" ? b.game.home.team : null;
+  const color = winner === "a" ? ac : hc;
+  const show = (v: number) => (f.diff && v > 0 ? `+${n1(v)}` : `${n1(v)}${f.unit ?? ""}`);
+  return (
+    <div className="flex items-center gap-3 py-2.5">
+      <div className="min-w-0 flex-1">
+        <p className="text-[0.78rem] font-medium text-ink leading-tight">{f.label}</p>
+        <p className="text-[0.62rem] text-ink-muted leading-tight">{f.sub}</p>
+      </div>
+      <div className="flex items-baseline gap-2 tabular shrink-0">
+        <span className="text-[0.82rem] font-semibold" style={{ color: readableInk(ac), opacity: winner === "h" ? 0.5 : 1 }}>
+          {show(f.a)}
+        </span>
+        <span className="text-ink-muted/50 text-[0.7rem]">/</span>
+        <span className="text-[0.82rem] font-semibold" style={{ color: readableInk(hc), opacity: winner === "a" ? 0.5 : 1 }}>
+          {show(f.h)}
+        </span>
+      </div>
+      {/* The winner's mark rather than a tick: it says WHO without a legend. */}
+      <span className="w-6 flex justify-center shrink-0">
+        {team ? <TeamLogo name={team} size={20} /> : <span className="text-ink-muted/40 text-xs">–</span>}
+      </span>
+      <span className="w-1 self-stretch rounded-full shrink-0"
+        style={{ background: winner ? color : "transparent" }} aria-hidden />
+    </div>
+  );
 }
 
 /* ------------------------- form + head to head ---------------------------- */
