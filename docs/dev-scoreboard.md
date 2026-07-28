@@ -33,6 +33,26 @@ The game page needs the date because CBBD's per-game endpoints ignore a
 so the id alone finds nothing. That is also why the links the scoreboard builds
 carry both.
 
+## Demo mode
+
+`SCOREBOARD_MODE` in `src/lib/flags.ts` is `"demo"` until the season is close.
+In demo mode the ticker, `/scoreboard` and `/game` read two baked static files
+instead of the function:
+
+```
+public/data/demo-slate.json    128 games, 65 KB   the ticker AND /scoreboard
+public/data/demo-game.json     one bundle, 100 KB  every game link opens this
+```
+
+No function call, no CBBD quota, no polling, and one shared fetch between the
+two surfaces. Rebuild them with `node scripts/build-demo-slate.mjs` — it runs
+the real handlers, so the baked files are the exact shape the live path
+returns.
+
+**To go live:** set `SCOREBOARD_MODE` to `"live"`, set `DEMO_DATE` to `null` in
+`netlify/functions/scoreboard.mts`, and delete the two demo files.
+`npx tsx scripts/check-schedule.mts` says when CBBD has a schedule to serve.
+
 ## See the LIVE states at any hour
 
 Games are live for about four hours a night. To work on the pulsing clock, the
@@ -53,9 +73,17 @@ so a reload gives you the same picture rather than reshuffling underneath you.
 The ticker picks the parameter up from the page URL, so the rail simulates
 alongside the page it is on.
 
-**It cannot fire in production.** The flag is gated on `NETLIFY_DEV`, which the
-Netlify CLI sets locally and which is never set in a deployed function. A live
-request carrying `?sim=live` gets the real slate.
+**It cannot fire in production.** On the live path the flag is gated on
+`NETLIFY_DEV`, which the Netlify CLI sets locally and which is never set in a
+deployed function. In demo mode the same transform runs on the client, gated on
+the hostname being `localhost` or `127.0.0.1`. Either way a deployed request
+carrying `?sim=live` gets the ordinary slate.
+
+Do NOT reach for `process.env.NODE_ENV` for that client-side gate. `process` is
+not a browser global, and where the bundler does not inline the expression the
+reference throws inside the fetch chain — which shows up as the scoreboard
+stuck on "Loading…" and the ticker rendering nothing, with a clean console and
+a 200 on the data file. It costs a while to find.
 
 ## Out of season
 
