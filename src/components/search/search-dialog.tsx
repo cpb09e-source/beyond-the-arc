@@ -395,7 +395,8 @@ function Row({
           {initials(e.n)}
         </span>
       )}
-      {e.t === "p" && <PlayerPhoto bartPlayerId={e.b} name={e.n} size={22} />}
+      {/* eager: a lazy image loses the race against typing — see PlayerPhoto. */}
+      {e.t === "p" && <PlayerPhoto bartPlayerId={e.b} name={e.n} size={22} eager />}
       <span className="text-ink text-sm truncate">{e.n}</span>
       <span className="ml-auto text-ink-muted text-[0.7rem] tabular whitespace-nowrap flex items-center gap-1.5 shrink-0">
         {e.t === "t" && (e.c ?? "")}

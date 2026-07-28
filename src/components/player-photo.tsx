@@ -25,11 +25,23 @@ export function PlayerPhoto({
   name,
   size = 48,
   className,
+  eager = false,
 }: {
   bartPlayerId: number | null;
   name: string;
   size?: number;
   className?: string;
+  /**
+   * Load immediately instead of lazily.
+   *
+   * For a photo that appears and disappears as fast as the reader types — a
+   * search result — `loading="lazy"` loses the race. The row is created on one
+   * keystroke and replaced on the next, and a lazy image has to wait for layout
+   * and an intersection check before the request even starts, so the face
+   * arrives after the row it belonged to has gone. Search rows are eight at
+   * most and about 7 KB each; there is nothing to defer.
+   */
+  eager?: boolean;
 }) {
   // The fetch script writes both <id>.webp (full 600x436) and
   // <id>-sm.webp (240x174 face-cropped). Size-conditional swap:
@@ -52,7 +64,9 @@ export function PlayerPhoto({
         alt={`${name} headshot`}
         width={size}
         height={size}
-        loading="lazy"
+        loading={eager ? "eager" : "lazy"}
+        decoding={eager ? "sync" : "async"}
+        fetchPriority={eager ? "high" : undefined}
         onError={() => setErrored(true)}
         className={cn(
           "inline-block object-cover object-top rounded-full bg-paper-deep shrink-0 max-w-none",
