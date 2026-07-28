@@ -34,6 +34,24 @@ import type { Context } from "@netlify/functions";
 
 const API = "https://api.collegebasketballdata.com";
 
+/**
+ * ⚠ TEMPORARY PREVIEW PIN — DELETE BEFORE THE SEASON STARTS.
+ *
+ * Set to an ISO date, the feed pretends that day is "today" whenever no
+ * explicit ?date= is given. Set to null, everything behaves normally: live feed
+ * first, then a walk back for the most recent completed slate.
+ *
+ * It exists because we are building this in July. CBBD's live /scoreboard is
+ * live-ONLY and returns [] out of season, and the fallback walk finds nothing
+ * either, so both the ticker and the page correctly render nothing at all —
+ * which makes them impossible to look at. Saturday 7 Feb 2026 is the fullest
+ * slate of that month: 155 games, 17 of them power-conference, a mix of finals
+ * and blowouts and one-possession games.
+ *
+ * Setting this back to null is the only step needed to go live.
+ */
+const DEMO_DATE: string | null = "2026-02-07";
+
 /** Edge cache lifetime. See the quota arithmetic in the header comment. */
 const REFRESH_SECONDS = 60;
 /** How long the edge may serve a stale slate while refetching behind it. */
@@ -227,7 +245,7 @@ export default async (req: Request, _context: Context) => {
   // day picker asks for, and the only way to exercise a populated slate out of
   // season. Anything unparseable falls through to "today".
   const params = new URL(req.url).searchParams;
-  const raw = params.get("date");
+  const raw = params.get("date") ?? DEMO_DATE; // see DEMO_DATE — remove for live
   const anchor = raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T23:59:59Z`) : undefined;
   const season = Number(params.get("season")) || currentSeason(anchor);
   try {
