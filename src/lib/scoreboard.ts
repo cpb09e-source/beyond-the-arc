@@ -13,6 +13,8 @@ export type ScoreTeam = {
   points: number | null;
   winner: boolean | null;
   seed: number | null;
+  /** AP Top 25 position in the poll current as of the slate, else null. */
+  rank: number | null;
 };
 
 export type ScoreGame = {
@@ -47,6 +49,11 @@ export const EMPTY_SLATE: Slate = { source: "recent", date: null, games: [], fet
  * Polling faster than the cache would just re-serve the same bytes.
  */
 export const POLL_MS = 60_000;
+
+/** A game with at least one AP Top 25 side — what leads both surfaces. */
+export function isRanked(g: ScoreGame): boolean {
+  return g.home.rank !== null || g.away.rank !== null;
+}
 
 export function isLive(g: ScoreGame): boolean {
   return g.status === "in_progress";

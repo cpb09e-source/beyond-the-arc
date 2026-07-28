@@ -65,12 +65,22 @@ const STALE_SECONDS = 300;
  */
 const FALLBACK_DAYS = 2;
 
+type Side = {
+  team: string;
+  conference: string | null;
+  points: number | null;
+  winner: boolean | null;
+  seed: number | null;
+  /** AP Top 25 position in the poll current as of this slate, else null. */
+  rank: number | null;
+};
+
 type Game = {
   id: number;
   startDate: string;
   status: string;
-  home: { team: string; conference: string | null; points: number | null; winner: boolean | null; seed: number | null };
-  away: { team: string; conference: string | null; points: number | null; winner: boolean | null; seed: number | null };
+  home: Side;
+  away: Side;
   neutralSite: boolean;
   conferenceGame: boolean;
   venue: string | null;
@@ -136,6 +146,7 @@ function normalise(r: Record<string, unknown>): Game | null {
       points: num(r.homePoints),
       winner: typeof r.homeWinner === "boolean" ? r.homeWinner : null,
       seed: num(r.homeSeed),
+      rank: null,
     },
     away: {
       team: away,
@@ -143,6 +154,7 @@ function normalise(r: Record<string, unknown>): Game | null {
       points: num(r.awayPoints),
       winner: typeof r.awayWinner === "boolean" ? r.awayWinner : null,
       seed: num(r.awaySeed),
+      rank: null,
     },
     neutralSite: r.neutralSite === true,
     conferenceGame: r.conferenceGame === true,
@@ -150,6 +162,71 @@ function normalise(r: Record<string, unknown>): Game | null {
     period: num(r.period),
     clock: str(r.clock),
   };
+}
+
+/**
+ * AP Top 25 for the poll in effect on a given date, as team name → ranking.
+ *
+ * Cached in module scope for six hours. The polls only move once a week, and
+ * this would otherwise DOUBLE the CBBD calls the scoreboard makes — the whole
+ * quota argument in the header comment assumes one call per refresh, and two
+ * would push a season past the budget. A warm Netlify container reuses this
+ * across invocations; a cold start pays for one extra call.
+ *
+ * One request covers the entire season (~1,600 rows, both polls), so there is
+ * nothing to gain from asking per week.
+ *
+ * AP over the Coaches Poll because the AP is what a scoreboard means by "#4" —
+ * it is the poll broadcasts and tickers quote.
+ */
+const RANK_TTL_MS = 6 * 60 * 60 * 1000;
+type RankRow = { pollType?: string; pollDate?: string; team?: string; ranking?: number };
+let rankCache: { season: number; at: number; rows: RankRow[] } | null = null;
+
+async function rankingsForDate(key: string, season: number, onDate: string): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  try {
+    if (!rankCache || rankCache.season !== season || Date.now() - rankCache.at > RANK_TTL_MS) {
+      const rows = (await cbbd(`/rankings?season=${season}`, key)) as RankRow[];
+      rankCache = { season, at: Date.now(), rows };
+    }
+    const ap = rankCache.rows.filter((r) => r.pollType === "AP Top 25" && r.pollDate);
+    if (ap.length === 0) return out;
+    // The poll in effect is the most recent one published on or before the
+    // slate. Using the newest poll outright would rank a January game by a
+    // March ballot — the same "ranked at the time" trap pull-rankings.mjs
+    // documents for the Win Calculator.
+    const cutoff = `${onDate}T23:59:59.999Z`;
+    let best = "";
+    for (const r of ap) if (r.pollDate! <= cutoff && r.pollDate! > best) best = r.pollDate!;
+    if (!best) return out;
+    for (const r of ap) {
+      if (r.pollDate === best && r.team && typeof r.ranking === "number") out.set(r.team, r.ranking);
+    }
+  } catch {
+    // Ranks are decoration. A rankings outage must not take the scores down.
+  }
+  return out;
+}
+
+/**
+ * Ranked games lead, best matchup first: a top-5 vs top-10 outranks a #2 vs
+ * unranked. Everything else keeps tip order. This is the order the ticker and
+ * the page both render, so "the games that matter" are what you see without
+ * scrolling.
+ */
+function rankKey(g: Game): number {
+  const a = g.home.rank ?? 999;
+  const b = g.away.rank ?? 999;
+  if (a === 999 && b === 999) return 9999;
+  return Math.min(a, b) * 100 + Math.max(a, b);
+}
+function orderGames(games: Game[]): Game[] {
+  return games.slice().sort((x, y) => {
+    const dk = rankKey(x) - rankKey(y);
+    if (dk !== 0) return dk;
+    return x.startDate.localeCompare(y.startDate);
+  });
 }
 
 async function cbbd(path: string, key: string): Promise<unknown[]> {
@@ -175,7 +252,13 @@ async function resolveSlate(key: string, season: number, anchor?: Date): Promise
   if (live.length > 0) {
     const games = live.map((r) => normalise(r as Record<string, unknown>)).filter((g): g is Game => g !== null);
     if (games.length > 0) {
-      return { source: "live", date: games[0]!.startDate.slice(0, 10) || iso(now), games, fetchedAt: now.toISOString() };
+      const date = easternDate(games[0]!.startDate) ?? iso(now);
+      const ranks = await rankingsForDate(key, season, date);
+      for (const g of games) {
+        g.home.rank = ranks.get(g.home.team) ?? null;
+        g.away.rank = ranks.get(g.away.team) ?? null;
+      }
+      return { source: "live", date, games: orderGames(games), fetchedAt: now.toISOString() };
     }
   }
   // Nothing live. Walk back a day at a time and return the first Eastern day
@@ -208,8 +291,12 @@ async function resolveSlate(key: string, season: number, anchor?: Date): Promise
       : null;
     const games = day ? byDate.get(day) : undefined;
     if (games && games.length > 0) {
-      games.sort((a, b) => a.startDate.localeCompare(b.startDate));
-      return { source: "recent", date: day, games, fetchedAt: now.toISOString() };
+      const ranks = await rankingsForDate(key, season, day!);
+      for (const g of games) {
+        g.home.rank = ranks.get(g.home.team) ?? null;
+        g.away.rank = ranks.get(g.away.team) ?? null;
+      }
+      return { source: "recent", date: day, games: orderGames(games), fetchedAt: now.toISOString() };
     }
   }
   return { source: "recent", date: null, games: [], fetchedAt: now.toISOString() };

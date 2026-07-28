@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
+import { useDragPan } from "@/lib/use-drag-pan";
 import {
   EMPTY_SLATE, POLL_MS, fetchSlate, isFinal, isLive, slateIsSettled, tipLabel,
   type ScoreGame, type Slate,
@@ -28,6 +29,9 @@ import {
 export function ScoreTicker() {
   const [slate, setSlate] = useState<Slate>(EMPTY_SLATE);
   const railRef = useRef<HTMLDivElement>(null);
+  // Same click-and-drag gesture as the teams and players tables, so the rail
+  // behaves the way every other horizontally scrolling surface here does.
+  const panHandlers = useDragPan(railRef);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,12 +73,12 @@ export function ScoreTicker() {
 
   return (
     <div className="border-b border-hairline bg-paper-deep/40">
-      <div className="relative mx-auto max-w-[108rem] flex items-stretch">
+      <div className="relative flex items-stretch">
         {/* Label rail — sticky at the left edge so you always know what the
             numbers are, even mid-scroll. */}
         <Link
           href="/scoreboard"
-          className="shrink-0 z-10 flex items-center gap-1.5 pl-6 lg:pl-16 pr-3 bg-paper-deep/40 backdrop-blur-sm border-r border-hairline text-[0.6rem] uppercase tracking-[0.14em] font-bold text-ink-muted hover:text-coral transition-colors"
+          className="shrink-0 z-10 flex items-center gap-1.5 pl-4 lg:pl-6 pr-3 bg-paper-deep/40 backdrop-blur-sm border-r border-hairline text-[0.6rem] uppercase tracking-[0.14em] font-bold text-ink-muted hover:text-coral transition-colors"
         >
           {liveCount > 0 ? (
             <>
@@ -93,7 +97,8 @@ export function ScoreTicker() {
             games run off the right edge as an affordance that there are more. */}
         <div
           ref={railRef}
-          className="flex-1 min-w-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex-1 min-w-0 overflow-x-auto overscroll-x-contain cursor-grab [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          {...panHandlers}
         >
           <div className="flex items-stretch w-max">
             {slate.games.map((g) => <TickerGame key={g.id} g={g} />)}
@@ -116,8 +121,8 @@ function TickerGame({ g }: { g: ScoreGame }) {
   return (
     <div className="shrink-0 flex items-center gap-2.5 px-3.5 py-1.5 border-r border-hairline/60 last:border-r-0">
       <div className="flex flex-col gap-0.5 leading-none">
-        <TickerSide name={g.away.team} pts={g.away.points} won={final && g.away.winner === true} seed={g.away.seed} />
-        <TickerSide name={g.home.team} pts={g.home.points} won={final && g.home.winner === true} seed={g.home.seed} />
+        <TickerSide side={g.away} won={final && g.away.winner === true} />
+        <TickerSide side={g.home} won={final && g.home.winner === true} />
       </div>
       <div className="shrink-0 w-11 text-[0.55rem] uppercase tracking-[0.1em] font-semibold tabular">
         {live ? (
@@ -135,16 +140,23 @@ function TickerGame({ g }: { g: ScoreGame }) {
   );
 }
 
-function TickerSide({ name, pts, won, seed }: { name: string; pts: number | null; won: boolean; seed: number | null }) {
+function TickerSide({ side, won }: { side: ScoreGame["home"]; won: boolean }) {
   return (
     <div className="flex items-center gap-1.5 whitespace-nowrap">
-      <TeamLogo name={name} size={14} />
-      {seed != null && <span className="text-[0.5rem] text-ink-muted tabular w-2.5 text-right">{seed}</span>}
+      <TeamLogo name={side.team} size={14} />
+      {/* AP rank ahead of the name, the way a broadcast ticker writes it.
+          Tournament seed only shows when there is no poll rank — in March both
+          exist and two small numbers next to one team read as a score. */}
+      {side.rank != null ? (
+        <span className="text-[0.55rem] font-bold text-coral tabular">{side.rank}</span>
+      ) : side.seed != null ? (
+        <span className="text-[0.5rem] text-ink-muted tabular">{side.seed}</span>
+      ) : null}
       <span className={cn("text-[0.68rem] max-w-28 truncate", won ? "text-ink font-semibold" : "text-ink-soft")}>
-        {name}
+        {side.team}
       </span>
       <span className={cn("text-[0.68rem] tabular ml-auto pl-1.5", won ? "text-ink font-bold" : "text-ink-muted")}>
-        {pts ?? "—"}
+        {side.points ?? "—"}
       </span>
     </div>
   );

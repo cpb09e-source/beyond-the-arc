@@ -7,7 +7,7 @@ import { TeamLogo } from "@/components/team-logo";
 import { confDisplay } from "@/lib/conf-display";
 import { cn } from "@/lib/utils";
 import {
-  EMPTY_SLATE, POLL_MS, dateLabel, fetchSlate, isFinal, isLive, slateIsSettled, tipLabel,
+  EMPTY_SLATE, POLL_MS, dateLabel, fetchSlate, isFinal, isLive, isRanked, slateIsSettled, tipLabel,
   type ScoreGame, type Slate,
 } from "@/lib/scoreboard";
 
@@ -81,6 +81,10 @@ export function ScoreboardClient() {
       a[0] === "Non-conference" ? 1 : b[0] === "Non-conference" ? -1 : a[0].localeCompare(b[0]));
   }, [slate.games]);
 
+  // Games with an AP Top 25 side, in the order the function ranked them (best
+  // matchup first). They ALSO stay in their conference group below — a reader
+  // scanning the Big Ten should not find a hole where the ranked game was.
+  const ranked = useMemo(() => slate.games.filter(isRanked), [slate.games]);
   const liveCount = slate.games.filter(isLive).length;
 
   return (
@@ -107,13 +111,26 @@ export function ScoreboardClient() {
           </p>
         </div>
 
-        {/* Day stepper — always available, see `shown` above. */}
-        <div className="flex items-center gap-1.5">
-          <DayButton label="‹ Prev" onClick={() => setPinned(shiftDay(shown, -1))} />
-          {pinned && <DayButton label="Latest" onClick={() => setPinned(null)} accent />}
-          <DayButton label="Next ›" onClick={() => setPinned(shiftDay(shown, 1))} />
-        </div>
+        {/* Jump straight to a date. A native date input is deliberate: it gives
+            the platform's own calendar, keyboard entry, and localisation for
+            free, and on a phone it opens the OS picker — all things a
+            hand-rolled calendar would have to reimplement worse. */}
+        <label className="flex items-center gap-2 text-xs text-ink-muted">
+          <span className="uppercase tracking-[0.12em] font-semibold">Jump to</span>
+          <input
+            type="date"
+            value={shown}
+            onChange={(e) => e.target.value && setPinned(e.target.value)}
+            aria-label="Choose a date"
+            className="h-9 px-2.5 rounded-md border border-ink/15 bg-card text-ink text-base sm:text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40"
+          />
+        </label>
       </div>
+
+      {/* Week strip: the shown day centred, three either side, arrows stepping a
+          week at a time. Gives the whole week at a glance and makes "the night
+          before" one tap instead of a round trip through the picker. */}
+      <WeekStrip shown={shown} onPick={setPinned} />
 
       {!loading && slate.games.length === 0 && (
         <div className="bg-card border border-ink/10 rounded-xl px-6 py-12 text-center">
@@ -123,6 +140,19 @@ export function ScoreboardClient() {
             <Link href="/" className="text-coral hover:underline">team explorer</Link> in the meantime.
           </p>
         </div>
+      )}
+
+      {ranked.length > 0 && (
+        <section className="mb-8">
+          <h2 className="text-[0.62rem] uppercase tracking-[0.16em] font-bold text-coral mb-2.5 flex items-center gap-2">
+            Top 25
+            <span className="h-px flex-1 bg-coral/25" />
+            <span className="text-coral/70 font-medium tabular">{ranked.length}</span>
+          </h2>
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+            {ranked.map((g) => <GameCard key={`r-${g.id}`} g={g} />)}
+          </div>
+        </section>
       )}
 
       <div className="space-y-7">
@@ -143,21 +173,70 @@ export function ScoreboardClient() {
   );
 }
 
-function DayButton({ label, onClick, accent }: { label: string; onClick: () => void; accent?: boolean }) {
+/**
+ * Seven days with `shown` in the middle, arrows stepping a whole week.
+ *
+ * Centred rather than trailing so both directions are always one tap: during
+ * the season you move backwards to last night and forwards to check a
+ * scheduled slate, and a strip that only looked back would make half of that a
+ * trip through the date picker.
+ */
+function WeekStrip({ shown, onPick }: { shown: string; onPick: (d: string) => void }) {
+  const days = [-3, -2, -1, 0, 1, 2, 3].map((n) => shiftDay(shown, n));
+  const today = todayEastern();
+  return (
+    <div className="flex items-stretch gap-1 mb-6">
+      <StripArrow label="Previous week" onClick={() => onPick(shiftDay(shown, -7))}>‹</StripArrow>
+      <div className="flex-1 grid grid-cols-7 gap-1">
+        {days.map((d) => {
+          const active = d === shown;
+          return (
+            <button
+              key={d}
+              type="button"
+              onClick={() => onPick(d)}
+              aria-current={active ? "date" : undefined}
+              className={cn(
+                "flex flex-col items-center justify-center gap-0.5 rounded-md border py-2 transition-colors min-h-14",
+                active
+                  ? "border-coral bg-coral/8 text-ink"
+                  : "border-ink/10 text-ink-muted hover:border-ink/25 hover:text-ink",
+              )}
+            >
+              <span className="text-[0.55rem] uppercase tracking-[0.12em] font-semibold">{dowLabel(d)}</span>
+              <span className={cn("text-sm tabular leading-none", active && "font-bold")}>{dayNum(d)}</span>
+              {/* A quiet marker for the real today, so a reader three weeks deep
+                  in February still knows where the present is. */}
+              {d === today && <span className="h-1 w-1 rounded-full bg-coral" aria-label="today" />}
+            </button>
+          );
+        })}
+      </div>
+      <StripArrow label="Next week" onClick={() => onPick(shiftDay(shown, 7))}>›</StripArrow>
+    </div>
+  );
+}
+
+function StripArrow({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={cn(
-        "min-h-11 sm:min-h-0 px-3 py-2 rounded-md border text-xs font-medium transition-colors",
-        accent
-          ? "border-coral/40 bg-coral/6 text-coral hover:bg-coral/10"
-          : "border-ink/15 text-ink-muted hover:text-ink hover:border-ink/25",
-      )}
+      aria-label={label}
+      title={label}
+      className="shrink-0 w-9 rounded-md border border-ink/10 text-ink-muted hover:text-coral hover:border-coral/40 transition-colors text-lg leading-none"
     >
-      {label}
+      {children}
     </button>
   );
+}
+
+const DOW = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short" });
+function dowLabel(d: string): string {
+  return DOW.format(new Date(`${d}T12:00:00Z`));
+}
+function dayNum(d: string): string {
+  return String(Number(d.slice(8, 10)));
 }
 
 function GameCard({ g }: { g: ScoreGame }) {
@@ -191,7 +270,12 @@ function TeamRow({ t, final }: { t: ScoreGame["home"]; final: boolean }) {
   return (
     <div className="flex items-center gap-2 py-1">
       <TeamLogo name={t.team} size={20} />
-      {t.seed != null && <span className="text-[0.6rem] text-ink-muted tabular w-3 text-right">{t.seed}</span>}
+      {/* Poll rank wins over tournament seed when both exist — see the ticker. */}
+      {t.rank != null ? (
+        <span className="text-[0.62rem] font-bold text-coral tabular">{t.rank}</span>
+      ) : t.seed != null ? (
+        <span className="text-[0.6rem] text-ink-muted tabular">{t.seed}</span>
+      ) : null}
       <Link
         href={`/teams/${teamSlug(t.team)}`}
         className={cn("min-w-0 truncate text-sm hover:text-coral transition-colors", won ? "text-ink font-semibold" : "text-ink-soft")}
