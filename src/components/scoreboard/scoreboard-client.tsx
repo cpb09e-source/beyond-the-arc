@@ -397,10 +397,13 @@ function TeamRow({ t, final, halves, at }: { t: ScoreGame["home"]; final: boolea
             {t.periods[i] ?? "—"}
           </span>
         ))}
-        {/* The total in the display face, which is where this product puts a
-            number that is the answer rather than a supporting figure. */}
+        {/* The total in the SAME face as the half scores beside it, one size up
+            and bold. The display face draws `1` as a bare stem with no flag or
+            foot, so 81 set in it reads "8I" directly above a 38 and a 43 that
+            are set in the sans — two typefaces disagreeing about what a digit
+            looks like, inside one row of numbers. */}
         <span className={cn(
-          "text-right font-display tabular text-lg leading-none",
+          "text-right tabular text-lg font-bold leading-none",
           halves > 0 ? "w-10" : "w-auto pl-2",
           won ? "text-ink" : "text-ink-muted",
         )}>

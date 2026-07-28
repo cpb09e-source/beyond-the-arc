@@ -639,9 +639,12 @@ function ResumeStrip({
   tone?: "result" | "neutral";
 }) {
   if (rows.length === 0) return <p className="text-sm text-ink-muted">{emptyLabel}</p>;
+  // MOST RECENT FIRST. The rows arrive oldest-to-newest, which is how a season
+  // is stored but not how form is read: "what have they done lately" is a
+  // question about the left-hand end of the strip, where the eye starts.
   return (
     <div className="flex gap-1.5">
-      {rows.map((r) => (
+      {[...rows].reverse().map((r) => (
         <ResumeCell key={r.id} r={r} mark={markFor ? markFor(r) : r.opponent} tone={tone} />
       ))}
     </div>

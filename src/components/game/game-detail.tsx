@@ -48,7 +48,7 @@ export function GameDetail({ b }: { b: GameBundle }) {
 
   return (
     <div className="pb-20">
-      <ScoreHeader b={b} records={records} />
+      <ScoreHeader b={b} records={records} hc={hc} ac={ac} />
 
       <nav className="sticky top-0 z-30 border-b border-hairline bg-paper/95 backdrop-blur">
         <div className="mx-auto max-w-[92rem] px-5 lg:px-10">

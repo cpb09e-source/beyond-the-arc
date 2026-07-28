@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
+import { readableInk } from "@/lib/team-colors";
 import { cn } from "@/lib/utils";
 import {
-  isFinal, isLive, longDate, periodHeadings, periodLabel, tipLabel, lineLabel,
+  isFinal, isLive, longDate, periodHeadings, periodLabel, tipLabel,
   type GameBundle, type GameSide,
 } from "./types";
 
@@ -13,120 +14,194 @@ import {
  * them — it is the one thing a reader came for, and having it move or vanish
  * when you switch to the play-by-play is the fastest way to lose your place.
  *
- * Laid out as a ledger — team rows, period columns, total on the right — for
- * the same reason the scoreboard cards are: it is the shape a box score has
- * had for a century, and two stacked rows never read as two separate games
- * the way a left/right split can.
+ * The two totals are pulled to the MIDDLE so they sit side by side, because the
+ * question the page answers is "by how much", and that is a comparison the eye
+ * should not have to carry across a header's full width the way a ledger row
+ * makes it. Teams open outward from the numbers; the status column is the
+ * hinge. The line score sits centred underneath, where it is detail rather than
+ * headline.
  *
- * THREE STATES. Scheduled shows the tip time and no columns, because empty
- * period cells look like a game where nobody scored. Live shows the clock, a
- * pulsing marker and only the periods actually played. Final shows everything
- * plus the winner.
+ * Venue, attendance, television and the betting line are deliberately NOT here.
+ * They live in Game Info on the Overview tab, and printing them twice made the
+ * header carry a paragraph of small grey text under a poster-scale score.
+ *
+ * THREE STATES. Scheduled drops the numbers entirely and puts the tip time in
+ * the middle, because a pair of 7xl em-dashes reads as a game nobody scored in.
+ * Live shows the clock, a pulsing marker and only the periods actually played.
+ * Final shows everything, with the loser dimmed.
  */
-export function ScoreHeader({ b, records }: { b: GameBundle; records?: { home: string; away: string } }) {
+export function ScoreHeader({
+  b, records, hc, ac,
+}: {
+  b: GameBundle;
+  records?: { home: string; away: string };
+  /** Home and away display colours, already de-conflicted by `sideColors`. */
+  hc: string; ac: string;
+}) {
   const g = b.game;
-  const live = isLive(g), final = isFinal(g);
-  const cols = Math.max(g.home.periods.length, g.away.periods.length);
-  const heads = periodHeadings(cols);
-  const line = lineLabel(b);
-
-  const venue = [g.venue, [g.city, g.state].filter(Boolean).join(", ")].filter(Boolean).join(", ");
-  const tv = b.broadcasts.find((x) => x.broadcastType === "TV")?.broadcastName;
-  const meta = [
-    venue || null,
-    g.attendance ? `${g.attendance.toLocaleString()} in the building` : null,
-    tv,
-    line ? `Line ${line}` : null,
-  ].filter(Boolean);
+  const final = isFinal(g);
+  const started = g.away.points != null || g.home.points != null;
 
   return (
     <header className="border-b border-hairline bg-card">
-      <div className="mx-auto max-w-[92rem] px-5 lg:px-10 pt-5 pb-4">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.62rem] uppercase tracking-[0.16em] font-bold text-ink-muted">
-          <span>{g.conferenceGame && g.home.conference ? g.home.conference : g.neutralSite ? "Neutral site" : "Non-conference"}</span>
-          <span aria-hidden>·</span>
-          <span>{longDate(g.startDate)}</span>
-          {live ? (
-            <span className="ml-auto inline-flex items-center gap-1.5 text-coral">
-              <span className="relative flex h-1.5 w-1.5" aria-hidden>
-                <span className="absolute inline-flex h-full w-full rounded-full bg-coral opacity-75 motion-safe:animate-ping" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-coral" />
-              </span>
-              {g.clock ?? "Live"}{g.period != null && ` · ${periodLabel(g.period)}`}
-            </span>
-          ) : (
-            <span className="ml-auto">{final ? "Final" : tipLabel(g.startDate)}</span>
-          )}
+      <div className="mx-auto max-w-[92rem] px-5 lg:px-10 pt-5 pb-6">
+        <p className="text-center text-[0.6rem] uppercase tracking-[0.22em] font-bold text-ink-muted">
+          {g.conferenceGame && g.home.conference
+            ? g.home.conference
+            : g.neutralSite ? "Neutral site" : "Non-conference"}
+          {" · "}
+          {longDate(g.startDate)}
+        </p>
+
+        <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-5 lg:gap-8">
+          <TeamBlock side={g.away} record={records?.away} align="right" final={final} />
+
+          <div className="flex items-center gap-3 sm:gap-5 lg:gap-7">
+            {started && <Num v={g.away.points} dim={final && g.away.winner === false} color={ac} />}
+            <div className="text-center min-w-14 sm:min-w-18">
+              <Status b={b} />
+            </div>
+            {started && <Num v={g.home.points} dim={final && g.home.winner === false} color={hc} />}
+          </div>
+
+          <TeamBlock side={g.home} record={records?.home} align="left" final={final}
+            at={!g.neutralSite} />
         </div>
 
-        <table className="w-full mt-3">
-          <thead>
-            <tr className="text-[0.55rem] uppercase tracking-[0.12em] font-bold text-ink-muted">
-              <th className="text-left" />
-              {heads.map((h) => <th key={h} className="w-9 sm:w-11 text-right pb-1 font-bold">{h}</th>)}
-              <th className="w-12 sm:w-16 text-right pb-1 font-bold">T</th>
-            </tr>
-          </thead>
-          <tbody>
-            <TeamRow side={g.away} periods={g.away.periods} cols={cols} record={records?.away} final={final} />
-            <TeamRow side={g.home} periods={g.home.periods} cols={cols} record={records?.home} final={final}
-              at={!g.neutralSite} />
-          </tbody>
-        </table>
-
-        {meta.length > 0 && (
-          <p className="mt-3 text-[0.68rem] text-ink-muted">{meta.join(" · ")}</p>
-        )}
+        <LineScore b={b} />
       </div>
     </header>
   );
 }
 
-function TeamRow({
-  side, periods, cols, record, final, at = false,
+/** FINAL, a live clock, or a tip time. */
+function Status({ b }: { b: GameBundle }) {
+  const g = b.game;
+  if (isLive(g)) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-coral text-[0.62rem] uppercase tracking-[0.16em] font-bold">
+        <span className="relative flex h-1.5 w-1.5" aria-hidden>
+          <span className="absolute inline-flex h-full w-full rounded-full bg-coral opacity-75 motion-safe:animate-ping" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-coral" />
+        </span>
+        {g.clock ?? "Live"}
+        {g.period != null && <span className="block text-ink-muted font-semibold">{periodLabel(g.period)}</span>}
+      </span>
+    );
+  }
+  if (isFinal(g)) {
+    return <span className="text-[0.62rem] uppercase tracking-[0.16em] font-bold text-ink-muted">Final</span>;
+  }
+  // Scheduled: this IS the middle of the header, so it carries more weight than
+  // the one-line status a played game needs.
+  return (
+    <span className="block text-base sm:text-lg font-semibold tabular text-ink whitespace-nowrap">
+      {tipLabel(g.startDate)}
+    </span>
+  );
+}
+
+/**
+ * A total, in the sans face rather than the display one.
+ *
+ * The display face draws `1` as a bare stem with no flag or foot, which at
+ * poster scale turns 81 into "8I" and 11 into "||". At 24px it is a quirk; at
+ * 96px it is a misprint. Weight and tabular figures carry the emphasis instead.
+ */
+function Num({ v, dim, color }: { v: number | null; dim: boolean; color: string }) {
+  return (
+    <span
+      className="text-5xl sm:text-6xl lg:text-7xl font-bold leading-none tabular tracking-tight"
+      style={{
+        color: dim ? "var(--ink-muted)" : readableInk(color, { min: 0.28, max: 0.46 }),
+        opacity: dim ? 0.45 : 1,
+      }}
+    >
+      {v ?? "—"}
+    </span>
+  );
+}
+
+function TeamBlock({
+  side, record, align, final, at = false,
 }: {
-  side: GameSide; periods: number[]; cols: number;
-  record?: string; final: boolean; at?: boolean;
+  side: GameSide; record?: string;
+  align: "left" | "right"; final: boolean; at?: boolean;
 }) {
-  const won = final && side.winner === true;
   const lost = final && side.winner === false;
   return (
-    <tr className="border-t border-hairline">
-      <td className="py-2.5 pr-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          {/* The at-sign belongs to the HOME team — it is where the game is
-              being played, not who is travelling. Neutral sites get none. */}
-          <span className="w-3 shrink-0 text-ink-muted text-sm" aria-hidden>{at ? "@" : ""}</span>
-          <TeamLogo name={side.team} size={28} />
+    // Logo outermost, name nearest the number, on both sides. Mirroring the
+    // away block put the mark between the name and the score, which reads as
+    // the logo belonging to the number rather than to the team.
+    <div className={cn("flex items-center gap-2.5 sm:gap-4 min-w-0", align === "right" && "justify-end")}>
+      <span className="shrink-0">
+        <TeamLogo name={side.team} size={48} />
+      </span>
+      <div className={cn("min-w-0", align === "right" && "text-right")}>
+        <div className={cn("flex items-center gap-1.5 sm:gap-2", align === "right" && "justify-end")}>
+          {at && <span className="text-ink-muted text-sm" aria-hidden>@</span>}
           {side.rank != null && (
-            <span className="shrink-0 inline-flex items-center justify-center min-w-[1.25rem] h-[1.25rem] px-1 rounded bg-coral text-white text-[0.62rem] font-bold tabular leading-none">
+            <span className="shrink-0 inline-flex items-center justify-center min-w-[1.3rem] h-[1.3rem] px-1 rounded bg-coral text-white text-[0.65rem] font-bold tabular leading-none">
               {side.rank}
             </span>
           )}
           <Link
             href={`/teams/${teamSlug(side.team)}/`}
             className={cn(
-              "font-display text-lg sm:text-xl leading-none truncate hover:text-coral transition-colors",
+              "font-display text-lg sm:text-2xl lg:text-3xl leading-none truncate hover:text-coral transition-colors",
               lost ? "text-ink-muted" : "text-ink",
             )}
           >
             {side.team}
           </Link>
-          {record && <span className="text-[0.68rem] tabular text-ink-muted shrink-0">{record}</span>}
         </div>
-      </td>
-      {Array.from({ length: cols }, (_, i) => (
-        <td key={i} className={cn("text-right tabular text-sm", lost ? "text-ink-muted" : "text-ink-soft")}>
-          {periods[i] ?? "—"}
-        </td>
-      ))}
-      <td className={cn(
-        "text-right tabular font-display text-2xl sm:text-3xl leading-none",
-        won ? "text-ink" : lost ? "text-ink-muted" : "text-ink",
-      )}>
-        {side.points ?? "—"}
-      </td>
-    </tr>
+        <p className="mt-1.5 text-[0.68rem] tabular text-ink-muted truncate">
+          {record}
+          {side.conference && <span className="ml-2">{side.conference}</span>}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 1H / 2H / T, centred under the score. Absent until periods exist — an empty
+ * column set under a scheduled game is a table of dashes.
+ */
+function LineScore({ b }: { b: GameBundle }) {
+  const g = b.game;
+  const cols = Math.max(g.home.periods.length, g.away.periods.length);
+  if (cols === 0) return null;
+  const heads = periodHeadings(cols);
+  return (
+    <table className="mt-5 mx-auto tabular text-[0.78rem]">
+      <thead>
+        <tr className="text-[0.5rem] uppercase tracking-[0.12em] font-bold text-ink-muted">
+          <th className="text-left pr-4" />
+          {heads.map((h) => <th key={h} className="w-9 text-right font-bold pb-1">{h}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {[g.away, g.home].map((s) => {
+          const lost = isFinal(g) && s.winner === false;
+          return (
+            <tr key={s.team}>
+              <td className={cn(
+                "pr-4 text-[0.62rem] uppercase tracking-widest whitespace-nowrap",
+                lost ? "text-ink-muted" : "text-ink-soft",
+              )}>
+                {s.team}
+              </td>
+              {Array.from({ length: cols }, (_, i) => (
+                <td key={i} className={cn("text-right", lost ? "text-ink-muted" : "text-ink")}>
+                  {s.periods[i] ?? "—"}
+                </td>
+              ))}
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
 
