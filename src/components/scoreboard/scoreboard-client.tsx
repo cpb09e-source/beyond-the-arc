@@ -8,7 +8,7 @@ import { confDisplay } from "@/lib/conf-display";
 import { cn } from "@/lib/utils";
 import { DatePicker } from "./date-picker";
 import {
-  EMPTY_SLATE, POLL_MS, dateLabel, fetchSlate, isFinal, isLive, isRanked, recordLabel, slateIsSettled, tipLabel,
+  EMPTY_SLATE, POLL_MS, dateLabel, fetchSlate, isFinal, isLive, isRanked, lineLabel, recordLabel, slateIsSettled, tipLabel,
   type ScoreGame, type Slate,
 } from "@/lib/scoreboard";
 
@@ -282,6 +282,7 @@ function GameCard({ g }: { g: ScoreGame }) {
   // Halves only once they exist. A scheduled game has none, and a live first
   // half has one — showing an empty "2H" column would read as a 0.
   const halves = Math.max(g.home.periods.length, g.away.periods.length);
+  const line = lineLabel(g);
   return (
     <div className={cn(
       "bg-card border rounded-xl px-3.5 py-3 transition-colors",
@@ -309,8 +310,18 @@ function GameCard({ g }: { g: ScoreGame }) {
         </div>
       )}
 
-      <TeamRow t={g.away} final={final} halves={halves} side="away" />
-      <TeamRow t={g.home} final={final} halves={halves} side="home" />
+      <TeamRow t={g.away} final={final} halves={halves} at={false} />
+      <TeamRow t={g.home} final={final} halves={halves} at={!g.neutralSite} />
+
+      {/* The pre-tip line, kept quiet and last: it is context for the result
+          above it, not a headline. Absent for most small-conference games,
+          which is why it collapses rather than reserving space. */}
+      {line && (
+        <div className="mt-2 pt-2 border-t border-hairline flex items-center gap-1.5 text-[0.6rem] text-ink-muted">
+          <span className="uppercase tracking-[0.1em] font-semibold text-ink-muted/70">Line</span>
+          <span className="tabular">{line}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -320,15 +331,17 @@ function periodLabels(n: number): string[] {
   return Array.from({ length: n }, (_, i) => (i === 0 ? "1H" : i === 1 ? "2H" : i === 2 ? "OT" : `${i - 1}OT`));
 }
 
-function TeamRow({ t, final, halves, side }: { t: ScoreGame["home"]; final: boolean; halves: number; side: "home" | "away" }) {
+function TeamRow({ t, final, halves, at }: { t: ScoreGame["home"]; final: boolean; halves: number; at: boolean }) {
   const won = final && t.winner === true;
   const rec = recordLabel(t);
   return (
     <div className="flex items-center gap-2 py-1">
-      {/* "@" marks the road team, the way a schedule is written. The home team
-          carries no glyph — the absence IS the signal, and two marks would make
-          the reader work out which is which. */}
-      <span className="w-2 shrink-0 text-[0.6rem] text-ink-muted/70 tabular">{side === "away" ? "@" : ""}</span>
+      {/* "@" marks the HOME team: in "Duke @ North Carolina" the glyph attaches
+          to the host, because the game is played AT their building. It used to
+          sit on the road team, which read "@ Gonzaga" while Gonzaga stood in
+          Gill Coliseum, Oregon State's floor. Neutral-site games carry no
+          glyph; the venue line above already says "Neutral site". */}
+      <span className="w-2 shrink-0 text-[0.6rem] text-ink-muted/70 tabular">{at ? "@" : ""}</span>
       <TeamLogo name={t.team} size={20} />
       {t.rank != null ? <RankBadge rank={t.rank} /> : t.seed != null ? (
         <span className="text-[0.6rem] text-ink-muted tabular">{t.seed}</span>

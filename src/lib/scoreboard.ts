@@ -33,6 +33,8 @@ export type ScoreGame = {
   venue: string | null;
   period: number | null;
   clock: string | null;
+  /** Closing betting line, HOME perspective (negative = home favoured). */
+  line: { spread: number | null; overUnder: number | null; provider: string } | null;
 };
 
 export type Slate = {
@@ -72,6 +74,27 @@ export function isFinal(g: ScoreGame): boolean {
  */
 export function slateIsSettled(s: Slate): boolean {
   return s.games.length > 0 && s.games.every((g) => isFinal(g));
+}
+
+/**
+ * "Duke -2.5 · O/U 148.5" — the pre-tip line, written the way it is quoted:
+ * the FAVOURITE named with its own number. The wire format is home-perspective
+ * (see the function), so an away favourite has to be flipped, and a pick'em
+ * (spread 0) is named rather than shown as "-0".
+ */
+export function lineLabel(g: ScoreGame): string {
+  if (!g.line) return "";
+  const parts: string[] = [];
+  const s = g.line.spread;
+  if (s !== null) {
+    if (s === 0) parts.push("Pick'em");
+    else {
+      const fav = s < 0 ? g.home.team : g.away.team;
+      parts.push(`${fav} ${(-Math.abs(s)).toFixed(1).replace(/\.0$/, "")}`);
+    }
+  }
+  if (g.line.overUnder !== null) parts.push(`O/U ${g.line.overUnder}`);
+  return parts.join(" · ");
 }
 
 /** "12-4", or "" when we have no record for the team. */

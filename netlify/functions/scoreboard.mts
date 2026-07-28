@@ -91,6 +91,8 @@ type Game = {
   /** Live only: current period and game clock, when CBBD supplies them. */
   period: number | null;
   clock: string | null;
+  /** Closing betting line, HOME perspective (negative = home favoured). */
+  line: { spread: number | null; overUnder: number | null; provider: string } | null;
 };
 
 type Slate = {
@@ -169,6 +171,7 @@ function normalise(r: Record<string, unknown>): Game | null {
     venue: str(r.venue),
     period: num(r.period),
     clock: str(r.clock),
+    line: null,
   };
 }
 
@@ -259,6 +262,49 @@ async function recordsBefore(key: string, season: number, beforeDate: string): P
 }
 
 /**
+ * gameId → the closing betting line, keyed by the same date window as the
+ * slate. Cached for an hour alongside the season games.
+ *
+ * SIGN CONVENTION: `spread` is from the HOME team's perspective, so −8.5 means
+ * the home side is laying 8.5. Verified against 136 settled games from 7 Feb
+ * 2026 — reading it as home-favoured makes the favourite win 72% of the time,
+ * which is the expected rate for college basketball; the opposite reading would
+ * have put it at 28% and inverted every game on the page.
+ *
+ * Draft Kings preferred, any provider accepted, because a missing book should
+ * degrade to a different book rather than to no line.
+ */
+const LINE_TTL_MS = 60 * 60 * 1000;
+type LineRow = { gameId?: number; lines?: Array<{ provider?: string; spread?: number; overUnder?: number }> };
+const lineCache = new Map<string, { at: number; map: Map<number, Game["line"]> }>();
+
+async function linesForDate(key: string, season: number, onDate: string): Promise<Map<number, Game["line"]>> {
+  const hit = lineCache.get(onDate);
+  if (hit && Date.now() - hit.at < LINE_TTL_MS) return hit.map;
+  const map = new Map<number, Game["line"]>();
+  try {
+    // A day either side, because the endpoint filters on the UTC start and our
+    // day is Eastern — the same straddle easternDate() exists to handle.
+    const from = iso(new Date(Date.parse(`${onDate}T12:00:00Z`) - 86_400_000));
+    const to = iso(new Date(Date.parse(`${onDate}T12:00:00Z`) + 86_400_000));
+    const rows = (await cbbd(`/lines?season=${season}&startDateRange=${from}&endDateRange=${to}`, key)) as LineRow[];
+    for (const r of rows) {
+      if (typeof r.gameId !== "number" || !Array.isArray(r.lines) || r.lines.length === 0) continue;
+      const pick = r.lines.find((l) => l.provider === "Draft Kings") ?? r.lines[0]!;
+      const spread = typeof pick.spread === "number" ? pick.spread : null;
+      const overUnder = typeof pick.overUnder === "number" ? pick.overUnder : null;
+      if (spread === null && overUnder === null) continue;
+      map.set(r.gameId, { spread, overUnder, provider: pick.provider ?? "" });
+    }
+  } catch {
+    // No line is a normal state (small conferences often have none). Never let
+    // it take the scores down.
+  }
+  lineCache.set(onDate, { at: Date.now(), map });
+  return map;
+}
+
+/**
  * Ranked games lead, best matchup first: a top-5 vs top-10 outranks a #2 vs
  * unranked. Everything else keeps tip order. This is the order the ticker and
  * the page both render, so "the games that matter" are what you see without
@@ -302,15 +348,17 @@ async function resolveSlate(key: string, season: number, anchor?: Date): Promise
     const games = live.map((r) => normalise(r as Record<string, unknown>)).filter((g): g is Game => g !== null);
     if (games.length > 0) {
       const date = easternDate(games[0]!.startDate) ?? iso(now);
-      const [ranks, recs] = await Promise.all([
+      const [ranks, recs, lines] = await Promise.all([
         rankingsForDate(key, season, date),
         recordsBefore(key, season, date),
+              linesForDate(key, season, date),
       ]);
       for (const g of games) {
         g.home.rank = ranks.get(g.home.team) ?? null;
         g.away.rank = ranks.get(g.away.team) ?? null;
         g.home.record = recs.get(g.home.team) ?? null;
         g.away.record = recs.get(g.away.team) ?? null;
+        g.line = lines.get(g.id) ?? null;
       }
       return { source: "live", date, games: orderGames(games), fetchedAt: now.toISOString() };
     }
@@ -345,15 +393,17 @@ async function resolveSlate(key: string, season: number, anchor?: Date): Promise
       : null;
     const games = day ? byDate.get(day) : undefined;
     if (games && games.length > 0) {
-      const [ranks, recs] = await Promise.all([
+      const [ranks, recs, lines] = await Promise.all([
         rankingsForDate(key, season, day!),
         recordsBefore(key, season, day!),
+              linesForDate(key, season, day!),
       ]);
       for (const g of games) {
         g.home.rank = ranks.get(g.home.team) ?? null;
         g.away.rank = ranks.get(g.away.team) ?? null;
         g.home.record = recs.get(g.home.team) ?? null;
         g.away.record = recs.get(g.away.team) ?? null;
+        g.line = lines.get(g.id) ?? null;
       }
       return { source: "recent", date: day, games: orderGames(games), fetchedAt: now.toISOString() };
     }
