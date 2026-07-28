@@ -59,6 +59,78 @@ export const EMPTY_SLATE: Slate = { source: "recent", date: null, games: [], fet
 let demoSlate: Promise<Slate> | null = null;
 
 /**
+ * DEV ONLY — rewind or wind forward the baked slate so the live and preseason
+ * states can be looked at in July.
+ *
+ * The function has had `?sim=live` since the ticker was built, but demo mode
+ * never reaches the function, so the flag quietly stopped working the moment
+ * the slate was baked — and a real live slate does not exist again until
+ * November. This is the same transform, moved to the client for the demo path.
+ *
+ * GATED ON THE HOSTNAME, not on `process.env.NODE_ENV`. The env check is the
+ * obvious way to write this and it silently broke the page: `process` does not
+ * exist as a browser global, and where the bundler does not inline the
+ * expression the reference throws inside the fetch chain — which surfaced not
+ * as an error but as a slate that never resolved, so the scoreboard and the
+ * ticker both sat empty with a clean console. A hostname test needs no build
+ * step to be true and says exactly what it guarantees: local only.
+ */
+function simulate(slate: Slate): Slate {
+  if (typeof window === "undefined") return slate;
+  const host = window.location.hostname;
+  if (host !== "localhost" && host !== "127.0.0.1") return slate;
+  const sim = new URLSearchParams(window.location.search).get("sim");
+  if (sim !== "live" && sim !== "upcoming") return slate;
+
+  if (sim === "upcoming") {
+    return {
+      ...slate,
+      source: "upcoming",
+      games: slate.games.map((g) => ({
+        ...g, status: "scheduled", period: null, clock: null,
+        home: { ...g.home, points: null, winner: null, periods: [] },
+        away: { ...g.away, points: null, winner: null, periods: [] },
+      })),
+    };
+  }
+
+  return {
+    ...slate,
+    source: "live",
+    // A third left final, a third in progress, a third not yet tipped, so one
+    // page shows all three states at once rather than a wall of identical live
+    // cards. Derived from the index, so a reload gives the same picture instead
+    // of reshuffling underneath you.
+    games: slate.games.map((g, i) => {
+      const bucket = i % 3;
+      if (bucket === 0) return g;
+      if (bucket === 2) {
+        return {
+          ...g, status: "scheduled", period: null, clock: null,
+          home: { ...g.home, points: null, winner: null, periods: [] },
+          away: { ...g.away, points: null, winner: null, periods: [] },
+        };
+      }
+      const half = (s: ScoreTeam): ScoreTeam => ({
+        ...s,
+        points: s.periods[0] ?? Math.round((s.points ?? 0) / 2),
+        periods: s.periods.slice(0, 1),
+        winner: null,
+      });
+      const secs = 60 + ((i * 137) % 1080);
+      return {
+        ...g,
+        status: "in_progress",
+        period: 2,
+        clock: `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`,
+        home: half(g.home),
+        away: half(g.away),
+      };
+    }),
+  };
+}
+
+/**
  * Poll interval. Matches the function's edge cache, so a reader's request is
  * usually answered from the CDN and CBBD sees roughly one call a minute no
  * matter how many people are watching — see the quota note in the function.
@@ -217,7 +289,7 @@ export async function fetchSlate(date?: string, signal?: AbortSignal): Promise<S
         demoSlate = null; // let a later mount retry a genuine network failure
         return EMPTY_SLATE;
       });
-    return demoSlate;
+    return simulate(await demoSlate);
   }
 
   const qs = new URLSearchParams();
