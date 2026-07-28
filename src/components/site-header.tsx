@@ -131,9 +131,8 @@ export function SiteHeader() {
           })}
         </nav>
 
-        {/* Right cluster: 32-0 game pill, search on desktop, hamburger on mobile. */}
+        {/* Right cluster: search on desktop, hamburger on mobile. */}
         <div className="flex items-center gap-2.5 shrink-0">
-          {/* 32-0 nav button hidden for now (game still lives at /32-0). */}
           {/* SearchDialog renders its own desktop trigger (hidden on mobile) and
               the modal. Kept un-wrapped so the modal works on mobile too. */}
           <SearchDialog />

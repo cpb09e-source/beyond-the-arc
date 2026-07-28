@@ -1,13 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 
 export function SiteFooter() {
-  const pathname = usePathname() || "";
-  // The 32-0 game is a full-viewport immersive surface — no footer.
-  if (pathname.replace(/\/$/, "") === "/32-0") return null;
-
+  // The /32-0 exemption that used to live here went with the game itself. If it
+  // comes back it needs this again — the game is a full-viewport surface and
+  // wants no footer. See the archive/32-0-game tag.
   return (
     <footer className="border-t border-hairline mt-6 sm:mt-12 py-6 sm:py-8">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-10 flex flex-row items-center justify-between gap-3 sm:gap-4 text-sm text-ink-muted">

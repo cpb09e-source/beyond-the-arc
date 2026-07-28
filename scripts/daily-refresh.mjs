@@ -55,7 +55,6 @@
  *        npm run export:data                                    reads C's files
  *        npx tsx scripts/compute-player-ranks.mts
  *        node scripts/prune-search-index.mjs
- *        node scripts/build-thirty-two-zero-index.mjs
  *        npm run sync:r2
  *        node scripts/build-with-r2-stash.mjs
  *        netlify deploy --prod --dir=out --no-build

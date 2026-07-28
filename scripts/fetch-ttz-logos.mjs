@@ -1,8 +1,12 @@
-// Downloads the team logos for every team in the 32-0 index into public/ttz-logos/
-// so the shareable result card can render them SAME-ORIGIN. The GCS logo host
-// sends no CORS headers, which taints the canvas and makes html-to-image's
-// "Save card" throw. Local copies dodge that entirely (works in dev + static
-// export). Resolution logic mirrors src/components/team-logo.tsx lookup().
+// Downloads every known team's logo into public/ttz-logos/ so they can render
+// SAME-ORIGIN. The GCS logo host sends no CORS headers, which taints the canvas
+// and makes html-to-image throw on any "save as image" path. Local copies dodge
+// that entirely (works in dev + static export). Resolution logic mirrors
+// src/components/team-logo.tsx lookup().
+//
+// The `ttz-` name is historical: this began as a fetcher for the 32-0 game's
+// share card. The directory is now what TeamLogo serves from everywhere, and
+// outlived the game — see the archive/32-0-game tag.
 //
 // Run: node scripts/fetch-ttz-logos.mjs
 
@@ -13,7 +17,6 @@ import { fileURLToPath } from 'node:url'
 const ROOT = process.cwd()
 const OUT = path.join(ROOT, 'public/ttz-logos')
 const TEAMS = JSON.parse(fs.readFileSync(path.join(ROOT, 'src/data/cbb-team-ids.json'), 'utf8'))
-const J = JSON.parse(fs.readFileSync(path.join(ROOT, 'public/data/thirty-two-zero-index.json'), 'utf8'))
 
 // ---- mirror of team-logo.tsx lookup() ----
 const normalize = (s) =>
@@ -53,12 +56,20 @@ function lookup(name) {
   return null
 }
 
+// EVERY known team, rather than the distinct schools in the 32-0 index.
+//
+// The index was the source here until the game was archived (see the
+// archive/32-0-game tag). It was always the wrong list anyway — the local
+// copies are what TeamLogo serves site-wide, not just on the game's share
+// card, so scoping them to the schools that happened to appear in the draft
+// pool left every other team falling back to the CORS-less GCS host. The full
+// table is a superset, so nothing that worked before stops working.
 const ids = new Set()
 const misses = []
-for (const t of [...new Set(J.players.map((p) => p.t))]) {
-  const e = lookup(t)
-  if (e) ids.add(e.id)
-  else misses.push(t)
+for (const key of Object.keys(TEAMS)) {
+  const e = TEAMS[key]
+  if (e && e.id) ids.add(e.id)
+  else misses.push(key)
 }
 
 fs.mkdirSync(OUT, { recursive: true })
