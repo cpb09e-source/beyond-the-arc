@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, Landmark, MapPin, Scale, Sigma, Tv, Users } from "lucide-react";
+import { ArrowUpDown, CircleDollarSign, Clock, Landmark, MapPin, Tv, Users } from "lucide-react";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { loadPhotoIndex, lookupId, type PhotoIndex } from "@/lib/player-photo-index";
@@ -212,8 +212,9 @@ function GameInfo({ b }: { b: GameBundle }) {
     ["Tip-off", tipLabel(g.startDate), Clock],
     ["Attendance", g.attendance ? g.attendance.toLocaleString() : null, Users],
     ["Television", tv || null, Tv],
-    ["Line", line, Scale],
-    ["Total", ou !== null ? `${ou} · ${total > ou ? "over" : "under"} at ${total}` : null, Sigma],
+    ["Line", line, CircleDollarSign],
+    // Over/under is literally a direction, which is what the glyph says.
+    ["Total", ou !== null ? `${ou} · ${total > ou ? "over" : "under"} at ${total}` : null, ArrowUpDown],
   ];
   // Two per row in a column: a single full-width strip left most of the line
   // empty here, and a label/value table wasted half the width on labels.
@@ -481,6 +482,12 @@ function FourFactors({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
 
   const name = winner === "a" ? b.game.away.team : winner === "h" ? b.game.home.team : null;
   const won = winner === "a" ? b.game.away.winner : winner === "h" ? b.game.home.winner : null;
+  // A sweep is a different, much stronger condition than simply taking more of
+  // the four, and it carries a different historical rate. Quoting the general
+  // figure under a 4-0 would understate it; quoting the sweep figure under a
+  // 2-1 would overstate it. Say which one is on screen.
+  const swept = Math.max(aWins, hWins) === 4;
+  const rate = swept ? FACTOR_WIN_RATE.sweep : FACTOR_WIN_RATE.overall;
 
   return (
     <Panel title="Four factors" note="This game">
@@ -508,9 +515,10 @@ function FourFactors({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
                   : ""}
               </p>
               <p className="text-[0.62rem] text-ink-muted leading-tight mt-1">
-                Teams taking the four factors won{" "}
-                <span className="tabular font-semibold text-good">{n1(FACTOR_WIN_RATE.overall)}%</span>
-                {" "}of the time in {seasonLabel(FACTOR_WIN_RATE.season)}.
+                {swept ? "Teams sweeping all four won " : "Teams taking more of the four won "}
+                <span className="tabular font-semibold text-good">{n1(rate)}%</span>
+                {" "}of the time in {seasonLabel(FACTOR_WIN_RATE.season)}
+                {!swept && <> · a sweep is worth {n1(FACTOR_WIN_RATE.sweep)}%</>}.
               </p>
             </div>
           </div>

@@ -43,10 +43,22 @@ const orbs = [];
 for (const [k, v] of Object.entries(teamStats)) {
   if (Number(k.split("|")[1]) === season && typeof v?.orb_pct === "number") orbs.push(v.orb_pct);
 }
-const ORB_BAR = orbs.reduce((s, x) => s + x, 0) / orbs.length; // 0-1
+// ROUNDED TO ONE DECIMAL, deliberately: this must be the identical threshold
+// src/lib/league-averages.ts publishes and the game page scores against. Using
+// the raw mean here made the historical rate answer a slightly different
+// question than the panel above it (30.9855% vs the 31.0% on screen), which is
+// exactly the kind of drift that makes two true numbers look like a bug.
+const ORB_BAR = Math.round((orbs.reduce((s, x) => s + x, 0) / orbs.length) * 1000) / 1000;
 
 const tally = {
-  reb: [0, 0], orb: [0, 0], fbp: [0, 0], tpm: [0, 0], fta: [0, 0], overall: [0, 0],
+  reb: [0, 0], orb: [0, 0], fbp: [0, 0], tpm: [0, 0], fta: [0, 0],
+  // "overall" = took MORE of the four than the opponent, which is the claim the
+  // game page actually makes when it declares a 2-1 winner.
+  overall: [0, 0],
+  // "sweep" = took all four. A much stronger and much rarer condition — this is
+  // the number the Win Calculator returns for four positive filters, and the
+  // two must be labelled apart or they read as contradicting each other.
+  sweep: [0, 0],
 };
 const bump = (key, won) => { tally[key][1]++; if (won) tally[key][0]++; };
 
@@ -76,6 +88,7 @@ for (const r of logs) {
     const oppOrb = typeof get(b, "ff_orb_def") === "number" ? get(b, "ff_orb_def") > ORB_BAR : false;
     const theirs = [oppReb, oppOrb, oppFbp, oppTpm].filter(Boolean).length;
     if (mine > theirs) bump("overall", r.won);
+    if (mine === 4) bump("sweep", r.won);
   }
 }
 
@@ -94,4 +107,5 @@ export const FACTOR_WIN_RATE = {
   tpm: ${pct(tally.tpm)},
   fta: ${pct(tally.fta)},
   overall: ${pct(tally.overall)},
+  sweep: ${pct(tally.sweep)},
 } as const;`);

@@ -62,7 +62,7 @@ export function orebBaseline(season: number): number {
  * excluded, from the same game logs the Win Calculator reads.
  *
  * OREB% IS THE ODD ONE AND THE NUMBER IS NOT A BUG. Clearing the league's
- * offensive rebound rate won only 42.1% of the time — worse than a coin flip.
+ * offensive rebound rate won only 41.9% of the time — worse than a coin flip.
  * Offensive rebounds are only available off your own misses, so a high rate is
  * partly a symptom of poor shooting. It is the one factor here that is closer
  * to a warning than to an achievement, which is exactly why it is worth
@@ -71,13 +71,23 @@ export function orebBaseline(season: number): number {
 export const FACTOR_WIN_RATE = {
   season: 2026,
   reb: 70.6,
-  orb: 42.1,
+  orb: 41.9,
   fbp: 65.6,
   tpm: 64.5,
   /** The tiebreak: a higher FTA rate than the opponent. */
   fta: 64.2,
-  /** Taking more of the four than the opponent. */
+  /**
+   * Taking MORE of the four than the opponent — the claim the game page makes
+   * when it declares a 2-1 winner.
+   */
   overall: 71.8,
+  /**
+   * Taking ALL FOUR. Far stronger and far rarer (654 team-games in a season
+   * against 4,737), and the number the Win Calculator returns for four
+   * positive filters. The two must be labelled apart or a reader comparing
+   * them will think one of them is broken.
+   */
+  sweep: 86.5,
 } as const;
 
 /** "2025-26" for a CBBD season label of 2026. */
