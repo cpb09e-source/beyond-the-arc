@@ -252,8 +252,8 @@ function TeamStatsPanel({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }
       aNote: `${a.threePointFieldGoals.made}-${a.threePointFieldGoals.attempted}`, hNote: `${h.threePointFieldGoals.made}-${h.threePointFieldGoals.attempted}` },
     { label: "Free Throw %", a: a.freeThrows.pct, h: h.freeThrows.pct, unit: "%",
       aNote: `${a.freeThrows.made}-${a.freeThrows.attempted}`, hNote: `${h.freeThrows.made}-${h.freeThrows.attempted}` },
-    { label: "Rebounds", a: a.rebounds.total, h: h.rebounds.total,
-      aNote: `${a.rebounds.offensive} off`, hNote: `${h.rebounds.offensive} off` },
+    { label: "Rebounds", a: a.rebounds.total, h: h.rebounds.total },
+    { label: "Offensive Rebounds", a: a.rebounds.offensive, h: h.rebounds.offensive },
     { label: "Assists", a: a.assists, h: h.assists },
     { label: "Turnovers", a: a.turnovers.total, h: h.turnovers.total, lowerIsBetter: true },
     { label: "Points in the Paint", a: a.points.inPaint, h: h.points.inPaint },
@@ -312,6 +312,25 @@ type StatRow = {
   lowerIsBetter?: boolean;
 };
 
+/**
+ * Marks the side that took a category.
+ *
+ * A wash of green behind the figure rather than a colour change to the figure
+ * itself: the numbers are already carrying team identity, and overloading them
+ * to also carry won/lost left neither reading cleanly. Green is the only
+ * semantic colour on the panel, so it cannot be mistaken for a team.
+ *
+ * Renders a plain wrapper when it did not win, so the number does not shift.
+ */
+function Won({ on, children }: { on: boolean; children: React.ReactNode }) {
+  if (!on) return <span className="inline-block px-1.5 py-0.5">{children}</span>;
+  return (
+    <span className="inline-block px-1.5 py-0.5 rounded-md bg-good/18 ring-1 ring-good/35">
+      {children}
+    </span>
+  );
+}
+
 /** A percentage of attempts, e.g. 3PA rate. Guards the zero-attempt game. */
 function rate(part: number, whole: number): number {
   return whole > 0 ? (part / whole) * 100 : 0;
@@ -340,20 +359,25 @@ function StatRowView({ r, hc, ac }: { r: StatRow; hc: string; ac: string }) {
     <div className="py-2.5">
       <div className="grid grid-cols-[1fr_auto_1fr] items-baseline gap-3">
         <div className="min-w-0">
-          {/* The number wears its school's colour and the trailing side is
-              dimmed rather than greyed, so the row still reads as two teams
-              instead of one winner and one neutral figure. */}
-          <span className="text-lg tabular font-bold" style={{ color: readableInk(ac), opacity: lead === "h" ? 0.5 : 1 }}>
-            {n1(r.a)}{r.unit}
-          </span>
+          {/* Both numbers stay at full strength in their school's colour; the
+              winner is marked by a soft green chip instead. Dimming the loser
+              made half of every row look like missing data, and it fought the
+              team colours the row exists to show. */}
+          <Won on={lead === "a"}>
+            <span className="text-lg tabular font-bold" style={{ color: readableInk(ac) }}>
+              {n1(r.a)}{r.unit}
+            </span>
+          </Won>
           {r.aNote && <span className="text-[0.62rem] tabular text-ink-muted ml-1.5">({r.aNote})</span>}
         </div>
         <span className="w-24 text-center text-[0.68rem] font-bold text-ink leading-tight">{r.label}</span>
         <div className="min-w-0 text-right">
           {r.hNote && <span className="text-[0.62rem] tabular text-ink-muted mr-1.5">({r.hNote})</span>}
-          <span className="text-lg tabular font-bold" style={{ color: readableInk(hc), opacity: lead === "a" ? 0.5 : 1 }}>
-            {n1(r.h)}{r.unit}
-          </span>
+          <Won on={lead === "h"}>
+            <span className="text-lg tabular font-bold" style={{ color: readableInk(hc) }}>
+              {n1(r.h)}{r.unit}
+            </span>
+          </Won>
         </div>
       </div>
       <div className="mt-1.5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
@@ -509,14 +533,14 @@ function FactorRow({ f, b, hc, ac }: { f: Factor; b: GameBundle; hc: string; ac:
         <p className="text-[0.78rem] font-medium text-ink leading-tight">{f.label}</p>
         <p className="text-[0.62rem] text-ink-muted leading-tight">{f.sub}</p>
       </div>
-      <div className="flex items-baseline gap-2 tabular shrink-0">
-        <span className="text-[0.82rem] font-semibold" style={{ color: readableInk(ac), opacity: aWon ? 1 : 0.45 }}>
-          {show(f.a)}
-        </span>
-        <span className="text-ink-muted/50 text-[0.7rem]">/</span>
-        <span className="text-[0.82rem] font-semibold" style={{ color: readableInk(hc), opacity: hWon ? 1 : 0.45 }}>
-          {show(f.h)}
-        </span>
+      <div className="flex items-baseline gap-1.5 tabular shrink-0">
+        <Won on={aWon}>
+          <span className="text-[0.82rem] font-semibold" style={{ color: readableInk(ac) }}>{show(f.a)}</span>
+        </Won>
+        <span className="text-ink-muted/40 text-[0.7rem]">/</span>
+        <Won on={hWon}>
+          <span className="text-[0.82rem] font-semibold" style={{ color: readableInk(hc) }}>{show(f.h)}</span>
+        </Won>
       </div>
       {/* Marks rather than a tick: they say WHO took it, and on the baseline
           row there can be two of them or none. */}
