@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
+import { ScoreTicker } from "@/components/scoreboard/score-ticker";
 import { SiteFooter } from "@/components/site-footer";
 
 const geistSans = Geist({
@@ -75,6 +76,9 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-paper text-ink">
         <SiteHeader />
+        {/* Score rail, under the nav on every page. Renders nothing when there
+            are no games, so it costs zero height in the offseason. */}
+        <ScoreTicker />
         <main className="flex-1">{children}</main>
         <SiteFooter />
       </body>
