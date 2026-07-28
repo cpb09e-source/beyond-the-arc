@@ -174,11 +174,11 @@ function LineScore({ b }: { b: GameBundle }) {
   if (cols === 0) return null;
   const heads = periodHeadings(cols);
   return (
-    <table className="mt-5 mx-auto tabular text-[0.78rem]">
+    <table className="mt-5 mx-auto tabular text-sm">
       <thead>
-        <tr className="text-[0.5rem] uppercase tracking-[0.12em] font-bold text-ink-muted">
-          <th className="text-left pr-4" />
-          {heads.map((h) => <th key={h} className="w-9 text-right font-bold pb-1">{h}</th>)}
+        <tr className="text-[0.55rem] uppercase tracking-[0.12em] font-bold text-ink-muted">
+          <th className="pr-4" />
+          {heads.map((h) => <th key={h} className="w-10 text-right font-bold pb-1">{h}</th>)}
         </tr>
       </thead>
       <tbody>
@@ -186,14 +186,16 @@ function LineScore({ b }: { b: GameBundle }) {
           const lost = isFinal(g) && s.winner === false;
           return (
             <tr key={s.team}>
-              <td className={cn(
-                "pr-4 text-[0.62rem] uppercase tracking-widest whitespace-nowrap",
-                lost ? "text-ink-muted" : "text-ink-soft",
-              )}>
-                {s.team}
+              {/* The mark, not the name. Both schools are already spelled out at
+                  3xl a few inches above; repeating them here in small caps made
+                  a four-number table carry two extra words of chrome. */}
+              <td className="pr-4 py-0.5">
+                <span className="flex justify-center" title={s.team}>
+                  <TeamLogo name={s.team} size={22} />
+                </span>
               </td>
               {Array.from({ length: cols }, (_, i) => (
-                <td key={i} className={cn("text-right", lost ? "text-ink-muted" : "text-ink")}>
+                <td key={i} className={cn("text-right font-semibold", lost ? "text-ink-muted" : "text-ink")}>
                   {s.periods[i] ?? "—"}
                 </td>
               ))}

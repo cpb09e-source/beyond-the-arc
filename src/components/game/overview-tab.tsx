@@ -763,13 +763,16 @@ function StandingsTable({
   capped: boolean;
 }) {
   return (
-    <div className={cn("-mx-1 px-1", capped && "max-h-64 overflow-y-auto")}>
-      <table className="w-full text-[0.72rem] tabular">
+    <div className={cn("-mx-1 px-1", capped && "max-h-80 overflow-y-auto")}>
+      {/* Sized to be READ, not skimmed past. At 0.72rem this ran a full
+          conference of eighteen rows in type smaller than the footnotes beside
+          it, which is the wrong way round: the table is the panel. */}
+      <table className="w-full text-sm tabular">
         <thead className="sticky top-0 bg-card">
-          <tr className="text-[0.52rem] uppercase tracking-[0.1em] text-ink-muted">
+          <tr className="text-[0.58rem] uppercase tracking-widest text-ink-muted">
             <th className="text-left font-bold pb-1">Team</th>
-            <th className="w-12 text-right font-bold pb-1">Conf</th>
-            <th className="w-12 text-right font-bold pb-1">All</th>
+            <th className="w-14 text-right font-bold pb-1">Conf</th>
+            <th className="w-14 text-right font-bold pb-1">All</th>
           </tr>
         </thead>
         <tbody>
@@ -784,10 +787,10 @@ function StandingsTable({
                 className="border-t border-hairline/50"
                 style={c ? { background: `${c}14` } : undefined}
               >
-                <td className="py-1 pr-2">
+                <td className="py-1.5 pr-2">
                   <span className="inline-flex items-center gap-2 min-w-0">
-                    <span className="w-4 text-right text-ink-muted shrink-0">{i + 1}</span>
-                    <TeamLogo name={r.team} size={16} />
+                    <span className="w-5 text-right text-ink-muted shrink-0">{i + 1}</span>
+                    <TeamLogo name={r.team} size={20} />
                     <span className={cn("truncate", c ? "font-semibold" : "text-ink-soft")}
                       style={c ? { color: readableInk(c) } : undefined}>
                       {r.team}
