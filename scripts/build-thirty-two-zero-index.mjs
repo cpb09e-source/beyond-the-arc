@@ -51,6 +51,11 @@ const round = (n, d = 1) => (n == null ? null : Math.round(n * 10 ** d) / 10 ** 
 
 // PRTG floors — trim weak players to shrink the index (faster download/parse)
 // and keep rolls to relevant names. Power confs are deep, so floor is higher.
+//
+// RAW PRTG VALUES, which is why this script cannot simply be pointed at `epm`:
+// measured against the rank files, 25 sits near the 90th percentile and 10 near
+// the 55th. EPM occupies a different range entirely, so the same numbers would
+// admit everybody or nobody. See the migration guard before the write.
 const POWER_MIN = 25
 const OTHER_MIN = 10
 
@@ -63,7 +68,10 @@ const ids = [...new Set(idx.map((p) => p.id))]
 const players = []
 let read = 0,
   skipped = 0,
-  lowPrtg = 0
+  lowPrtg = 0,
+  // Season rows that carry `epm` where `bta_portg` used to be. See the guard
+  // below — this is the tripwire for the metric migration, not a statistic.
+  epmInstead = 0
 
 for (const id of ids) {
   const f = path.join(RANKS, id + '.json')
@@ -106,7 +114,10 @@ for (const id of ids) {
     const pct = (k) => (s[k] ? s[k].percentile : null)
     const val = (k) => (s[k] ? s[k].value : null)
     const prtgVal = val('bta_portg')
-    if (prtgVal == null) continue
+    if (prtgVal == null) {
+      if (val('epm') != null) epmInstead++
+      continue
+    }
     // PRTG floor: power confs > 30, everyone else > 5
     if (prtgVal <= (POWER.has(conf) ? POWER_MIN : OTHER_MIN)) {
       lowPrtg++
@@ -178,6 +189,32 @@ players.push({
   astP: 20, stlP: 40, tovP: 50,
   efg: null, efgP: 10, tsP: 10,
 })
+
+// STOP RATHER THAN SILENTLY GUT THE INDEX.
+//
+// The rank files have migrated from `bta_portg` to `epm`: from 2014 on, epm
+// covers ~1,700-1,900 season rows a year and bta_portg 33-160, and the two
+// never appear on the same row. This script drops any player without
+// bta_portg, so a rebuild against migrated data would quietly write an index
+// with a fraction of the players and no error at all — and the committed
+// output would look like a successful build.
+//
+// It is NOT fixed by reading `epm` here. The floors below are raw PRTG values
+// (25 and 10, roughly the 90th and 55th percentiles) and EPM runs on a
+// different scale entirely, so swapping the key would either admit everyone or
+// nobody. Converting means re-deriving the floors — and the talent curve the
+// /32-0 page draws from these numbers — which is a modelling decision, not a
+// rename.
+if (epmInstead > players.length) {
+  console.error(
+    `\n  ABORTED: ${epmInstead} season rows carry \`epm\` where \`bta_portg\` is missing,\n` +
+    `  against only ${players.length} rows kept. The rank files have moved to EPM.\n\n` +
+    `  Writing now would publish a heavily truncated index over a good one.\n` +
+    `  Convert this script to EPM and re-derive POWER_MIN / OTHER_MIN (currently\n` +
+    `  ${POWER_MIN} / ${OTHER_MIN} on the PRTG scale) plus the /32-0 talent curve first.\n`,
+  )
+  process.exit(1)
+}
 
 const conferences = [...new Set(players.map((p) => p.c))]
   .sort()

@@ -146,6 +146,7 @@ async function main() {
   // PIR, PPG, RPG, APG, 3P%, FT% + percentile chips). Percentages are stored
   // 0-1 (the table multiplies ×100). null if the player has no rank file.
   const round1 = (n) => (typeof n === "number" ? Math.round(n * 10) / 10 : null);
+  let prtgMigrated = 0;
   const NULL_STATS = {
     prtg: null, prtgP: null, pir: null, pirP: null, pts: null, ptsP: null,
     reb: null, rebP: null, ast: null, astP: null, fg3: null, fg3P: null, ft: null, ftP: null,
@@ -156,6 +157,11 @@ async function main() {
       const s = ((j.seasonRanks || []).find((x) => x.year === PREV_YEAR) || {}).stats || {};
       const v = (k) => (typeof s[k]?.value === "number" ? s[k].value : null);
       const p = (k) => (typeof s[k]?.percentile === "number" ? s[k].percentile : null);
+      // Tripwire for the PRTG → EPM migration in the rank files. A player who
+      // played last season and has epm but no bta_portg is not a player with
+      // nothing to show — it is this script reading a column the pipeline has
+      // stopped writing. Counted, then reported after the build.
+      if (v("bta_portg") === null && v("epm") !== null) prtgMigrated++;
       const asFrac = (k) => { const x = v(k); return x == null ? null : x > 1.5 ? x / 100 : x; }; // → 0-1
       return {
         prtg: round1(v("bta_portg")), prtgP: p("bta_portg"),
@@ -403,6 +409,24 @@ async function main() {
     recruit_attribution: recruitAttribution,
     teams,
   };
+  const withPrtg = Object.values(teams)
+    .flatMap((t) => t.roster)
+    .filter((r) => r.prtg != null).length;
+
+  // WARN, don't abort — unlike the /32-0 index, a missing PRTG here empties one
+  // column of a roster table rather than dropping the player, so the page still
+  // works. But a preview whose talent column has quietly gone blank for
+  // returning starters is worth saying out loud: the rank files have moved from
+  // `bta_portg` to `epm`, and this script still reads the old key.
+  if (prtgMigrated > withPrtg) {
+    console.warn(
+      `\n  ⚠ ${prtgMigrated} players have \`epm\` but no \`bta_portg\`, against ${withPrtg} with PRTG.\n` +
+      `    The rank files have migrated to EPM and this script still reads bta_portg,\n` +
+      `    so the preview's talent column is mostly empty. Converting needs the same\n` +
+      `    rescale as scripts/build-thirty-two-zero-index.mjs — see the guard there.\n`,
+    );
+  }
+
   fs.writeFileSync(OUT, JSON.stringify(out));
   const mb = (fs.statSync(OUT).size / 1e6).toFixed(2);
   console.log(`\n✓ wrote ${OUT} (${mb} MB)`);
