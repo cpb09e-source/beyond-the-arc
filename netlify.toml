@@ -39,7 +39,18 @@
 # are present too. Pinned explicitly rather than left to framework detection,
 # which otherwise tries the production build command.
 [dev]
-  command = "next dev"
+  # The heap flag is HERE, on the Next child, rather than in NODE_OPTIONS.
+  #
+  # scripts/dev.mjs used to export NODE_OPTIONS=--max-old-space-size=8192 for
+  # the whole dev tree, to stop Next's render fork being OOM-killed on the coach
+  # pages. But NODE_OPTIONS is inherited by every node process underneath,
+  # including the Netlify CLI's proxy — which leaks about 250 MB per proxied
+  # response on this site and never gives it back. Granting the leak an 8 GB
+  # ceiling did not prevent a crash, it just deferred one: the proxy climbed to
+  # the cap, V8 aborted through __fastfail, and Windows reported exit
+  # 3221226505 (0xC0000409) with no message. Scoped to Next, the render fork
+  # keeps its headroom and the proxy keeps Node's ordinary default.
+  command = "node --max-old-space-size=8192 ./node_modules/next/dist/bin/next dev"
   framework = "#custom"
   targetPort = 3000
   # Not Netlify's default 8888 — a system service (ipfsvc) already listens

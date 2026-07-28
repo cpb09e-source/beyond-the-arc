@@ -15,7 +15,24 @@
  *    and the OS kills it. Next reports that as "Jest worker encountered 2 child
  *    process exceptions, exceeding retry limit", which names neither the cause
  *    nor the page. Coach pages hit it first because one of them parses ~140 MB
- *    of game logs. A bigger heap makes it far less likely.
+ *    of game logs. A bigger heap makes it far less likely — granted to Next
+ *    alone, on the `[dev] command` in netlify.toml. See point 3.
+ *
+ * 3. THE NETLIFY CLI PROXY LEAKS, AND THEN ABORTS. Measured on this project:
+ *    the proxy process went from 131 MB to 4,988 MB in 126 seconds across
+ *    twenty requests, monotonically, while `next dev` held flat at 2.5 GB. It
+ *    climbs until it reaches its heap ceiling, at which point V8 aborts through
+ *    __fastfail and Windows reports exit 3221226505 with no message, no npm
+ *    error and no Windows Error Reporting entry — so it reads as the dev server
+ *    having simply vanished mid-request.
+ *
+ *    Two consequences, both handled here. The heap flag must NOT be set through
+ *    NODE_OPTIONS, because every node process in the tree inherits it and the
+ *    leak would be handed an 8 GB rope. And because the proxy is the process
+ *    that dies, its own `next dev` child survives holding port 3000 — so a
+ *    crash used to poison the next start too. This script now supervises:
+ *    clears the orphan and restarts, turning a dead afternoon into a few
+ *    seconds. The leak is upstream and cannot be fixed from here.
  *
  * Usage: npm run dev  (see also docs/dev-scoreboard.md)
  */
@@ -111,18 +128,57 @@ function waitForPorts() {
 clearStale();
 waitForPorts();
 
-const child = spawn("netlify", ["dev"], {
-  stdio: "inherit",
-  shell: true,
-  env: {
-    ...process.env,
-    // Headroom for the render fork. See note 2 above.
-    NODE_OPTIONS: [process.env.NODE_OPTIONS, "--max-old-space-size=8192"].filter(Boolean).join(" "),
-  },
-});
+/**
+ * 0xC0000409 — STATUS_STACK_BUFFER_OVERRUN, which on modern Windows is what
+ * `__fastfail` reports. Node uses it for a V8 fatal error, so this is the
+ * signature of the proxy aborting on its own heap rather than being killed.
+ */
+const FASTFAIL = 3221226505;
+
+let child = null;
+let shuttingDown = false;
+let restarts = 0;
+/** Enough to survive an afternoon; a cap so a genuinely broken config still stops. */
+const MAX_RESTARTS = 20;
+
+function start() {
+  // NOTE: no NODE_OPTIONS here on purpose. The render fork's heap flag lives on
+  // the `[dev] command` in netlify.toml so it applies to Next ALONE — see the
+  // comment there. Setting it in the environment handed the same 8 GB ceiling
+  // to the leaking Netlify proxy, which is what turned a slow leak into a hard
+  // crash.
+  child = spawn("netlify", ["dev"], { stdio: "inherit", shell: true });
+
+  child.on("exit", (code, signal) => {
+    if (shuttingDown) return;
+    const how = signal ? `signal ${signal}` : `exit code ${code}`;
+    const leaked = code === FASTFAIL;
+    console.log(`\n· netlify dev ended — ${how}${leaked ? "  (V8 fatal error — the CLI proxy's known heap leak)" : ""}`);
+
+    if (restarts >= MAX_RESTARTS) {
+      console.log(`· ${MAX_RESTARTS} restarts reached; stopping. Something is wrong beyond the leak.`);
+      process.exit(code ?? 0);
+    }
+    restarts++;
+    // The dead proxy leaves its `next dev` child holding port 3000. Left alone,
+    // the respawn hits "Another next dev server is already running" and exits —
+    // which is how one crash used to end the whole session.
+    console.log(`· clearing the orphaned next dev and restarting (${restarts}/${MAX_RESTARTS})…`);
+    clearStale();
+    waitForPorts();
+    start();
+  });
+}
 
 // Take the children with us, so the next run starts clean.
-const bye = () => { clearStale(); process.exit(0); };
-process.on("SIGINT", bye);
-process.on("SIGTERM", bye);
-child.on("exit", (code) => process.exit(code ?? 0));
+const bye = (sig) => {
+  shuttingDown = true;
+  console.log(`\n· dev.mjs received ${sig}, cleaning up`);
+  clearStale();
+  process.exit(0);
+};
+process.on("SIGINT", () => bye("SIGINT"));
+process.on("SIGTERM", () => bye("SIGTERM"));
+process.on("SIGHUP", () => bye("SIGHUP"));
+
+start();

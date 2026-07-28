@@ -106,10 +106,43 @@ the OS kills it. Next reports the death without naming the cause or the page.
 Coach pages trip it first because one of them parses ~140 MB of game logs.
 Restart the dev server. The 8 GB heap in `scripts/dev.mjs` makes it rare.
 
-**A function returns 500 or the connection resets, but curl says 200** — the
-CLI's proxy, not your code. Both the ticker and the game page now retry once
-before showing anything, which absorbs it. If it persists, verify the function
-directly with the tsx recipe above before changing any code.
+**The dev server dies mid-session, often mid-request** — the Netlify CLI's dev
+proxy leaks memory and then aborts. This is upstream and cannot be fixed from
+this repo, but it is fully understood, and `npm run dev` now recovers from it
+by itself.
+
+Measured on this project (CLI 26.0.1): the proxy process climbs about **16 MB
+per request**, near enough regardless of response size — a 15 KB favicon costs
+almost as much as the 1.8 MB search index — and never gives any of it back.
+It went 131 MB → 4,988 MB in 126 seconds across twenty requests while
+`next dev` held flat. When it reaches its heap ceiling V8 aborts through
+`__fastfail`, and Windows reports **exit 3221226505** (`0xC0000409`) with no
+message, no `npm ERR!` and no Windows Error Reporting entry. That silence is
+why it reads as the server having simply vanished, and why the log's last line
+is always whatever request it happened to be serving — which makes an innocent
+request look like the culprit.
+
+Two things follow, both already handled:
+
+- The render fork's `--max-old-space-size=8192` lives on the `[dev] command` in
+  `netlify.toml`, NOT in `NODE_OPTIONS`. Every node process in the tree
+  inherits `NODE_OPTIONS`, so setting it there handed the leak an 8 GB ceiling
+  — and a proxy sitting at 5-8 GB is also what starved Next's render fork and
+  produced the "Jest worker" deaths on the coach pages above. One cause, two
+  symptoms.
+- `scripts/dev.mjs` supervises the proxy: on an unexpected exit it clears the
+  orphaned `next dev` (which survives, because the proxy is the process that
+  died, and then holds port 3000 against the restart) and starts it again. A
+  crash costs a few seconds instead of the session.
+
+If it becomes constant, `netlify-cli` is worth updating — 27.x is out and this
+box is on 26.0.1. Until then, plain `next dev` on port 3000 has no proxy in it
+at all and is the better place to work on anything that isn't function-backed.
+
+**A function returns 500 or the connection resets, but curl says 200** — both
+the ticker and the game page retry once before showing anything, which absorbs
+it. If it persists, verify the function directly with the tsx recipe above
+before changing any code.
 
 **The page sits on "Loading the game…"** — the request hung. The client gives
 up after 15 seconds and retries once, then shows an error. If you see the
