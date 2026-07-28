@@ -44,13 +44,14 @@ export function OverviewTab({ b, hc, ac, onOpenBox }: { b: GameBundle; hc: strin
       <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3 items-start">
         <div className="space-y-5">
           <Leaders b={b} hc={hc} ac={ac} photos={photos} onOpenBox={onOpenBox} />
-          <FourFactors b={b} hc={hc} ac={ac} />
+          <Standings b={b} hc={hc} ac={ac} />
         </div>
         <TeamStatsPanel b={b} hc={hc} ac={ac} />
-        <Standings b={b} hc={hc} ac={ac} />
+        <div className="space-y-5">
+          <FourFactors b={b} hc={hc} ac={ac} />
+          <GameInfo b={b} />
+        </div>
       </div>
-
-      <GameInfo b={b} />
     </div>
   );
 }
@@ -211,15 +212,15 @@ function GameInfo({ b }: { b: GameBundle }) {
     ["Line", line],
     ["Total", ou !== null ? `${ou} · ${total > ou ? "over" : "under"} at ${total}` : null],
   ];
-  // Laid out as an inline strip rather than a label/value table: as a table it
-  // was a narrow column of text beside an empty half-page.
+  // Two per row in a column: a single full-width strip left most of the line
+  // empty here, and a label/value table wasted half the width on labels.
   return (
     <Panel title="Game info">
-      <dl className="flex flex-wrap gap-x-8 gap-y-3">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
         {rows.filter(([, v]) => v).map(([k, v]) => (
-          <div key={k}>
+          <div key={k} className="min-w-0">
             <dt className="text-[0.55rem] uppercase tracking-[0.14em] font-bold text-ink-muted">{k}</dt>
-            <dd className="text-[0.82rem] text-ink-soft leading-snug mt-0.5">{v}</dd>
+            <dd className="text-[0.8rem] text-ink-soft leading-snug mt-0.5">{v}</dd>
           </div>
         ))}
       </dl>
