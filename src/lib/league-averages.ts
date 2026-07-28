@@ -48,3 +48,39 @@ export function orebBaseline(season: number): number {
     Math.abs(s - season) < Math.abs(best - season) ? s : best, seasons[0]!);
   return OREB_PCT_D1[nearest]!;
 }
+
+/**
+ * How often winning each of our four factors won the GAME, across a full
+ * season of D-I play.
+ *
+ * GENERATED — run `node scripts/build-factor-winrates.mjs 2026`. Held static
+ * on purpose: a rate computed from a completed season is a stable reference
+ * for the season being played, and recomputing it live would move the goalposts
+ * game by game. Restate it against the new season each summer.
+ *
+ * Measured per team-game (each game contributes both sides), non-D1 opponents
+ * excluded, from the same game logs the Win Calculator reads.
+ *
+ * OREB% IS THE ODD ONE AND THE NUMBER IS NOT A BUG. Clearing the league's
+ * offensive rebound rate won only 42.1% of the time — worse than a coin flip.
+ * Offensive rebounds are only available off your own misses, so a high rate is
+ * partly a symptom of poor shooting. It is the one factor here that is closer
+ * to a warning than to an achievement, which is exactly why it is worth
+ * printing beside the others rather than quietly dropping.
+ */
+export const FACTOR_WIN_RATE = {
+  season: 2026,
+  reb: 70.6,
+  orb: 42.1,
+  fbp: 65.6,
+  tpm: 64.5,
+  /** The tiebreak: a higher FTA rate than the opponent. */
+  fta: 64.2,
+  /** Taking more of the four than the opponent. */
+  overall: 71.8,
+} as const;
+
+/** "2025-26" for a CBBD season label of 2026. */
+export function seasonLabel(season: number): string {
+  return `${season - 1}-${String(season).slice(2)}`;
+}

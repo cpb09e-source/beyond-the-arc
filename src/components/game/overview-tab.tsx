@@ -5,7 +5,7 @@ import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { loadPhotoIndex, lookupId, type PhotoIndex } from "@/lib/player-photo-index";
 import { readableInk } from "@/lib/team-colors";
-import { orebBaseline } from "@/lib/league-averages";
+import { orebBaseline, FACTOR_WIN_RATE, seasonLabel } from "@/lib/league-averages";
 import { cn } from "@/lib/utils";
 import {
   shortDate, tipLabel, lineLabel,
@@ -325,7 +325,7 @@ type StatRow = {
 function Won({ on, children }: { on: boolean; children: React.ReactNode }) {
   if (!on) return <span className="inline-block px-1.5 py-0.5">{children}</span>;
   return (
-    <span className="inline-block px-1.5 py-0.5 rounded-md bg-good/18 ring-1 ring-good/35">
+    <span className="inline-block px-1.5 py-0.5 rounded-md bg-emerald-100/60 ring-1 ring-emerald-300/60">
       {children}
     </span>
   );
@@ -454,11 +454,15 @@ function FourFactors({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
   const base = orebBaseline(b.game.season);
 
   const factors: Factor[] = [
-    { key: "reb", label: "REB Diff", sub: "total rebounds vs allowed", a: rebDiff, h: -rebDiff, diff: true },
+    { key: "reb", label: "REB Diff", sub: "total rebounds vs allowed", a: rebDiff, h: -rebDiff, diff: true,
+      winRate: FACTOR_WIN_RATE.reb },
     { key: "orb", label: "OREB %", sub: `offensive rebound rate vs ${n1(base)}% D-I average`,
-      a: a.fourFactors.offensiveReboundPct, h: h.fourFactors.offensiveReboundPct, unit: "%", baseline: base },
-    { key: "fbp", label: "FBP Diff", sub: "fast-break points vs allowed", a: fbpDiff, h: -fbpDiff, diff: true },
-    { key: "tpm", label: "3PM Diff", sub: "3-pointers made vs allowed", a: tpmDiff, h: -tpmDiff, diff: true },
+      a: a.fourFactors.offensiveReboundPct, h: h.fourFactors.offensiveReboundPct, unit: "%", baseline: base,
+      winRate: FACTOR_WIN_RATE.orb },
+    { key: "fbp", label: "FBP Diff", sub: "fast-break points vs allowed", a: fbpDiff, h: -fbpDiff, diff: true,
+      winRate: FACTOR_WIN_RATE.fbp },
+    { key: "tpm", label: "3PM Diff", sub: "3-pointers made vs allowed", a: tpmDiff, h: -tpmDiff, diff: true,
+      winRate: FACTOR_WIN_RATE.tpm },
   ];
 
   const aWins = factors.filter((f) => winsFactor(f, "a")).length;
@@ -497,6 +501,11 @@ function FourFactors({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
                   ? "And won the game."
                   : ""}
               </p>
+              <p className="text-[0.62rem] text-ink-muted leading-tight mt-1">
+                Teams taking the four factors won{" "}
+                <span className="tabular font-semibold text-good">{n1(FACTOR_WIN_RATE.overall)}%</span>
+                {" "}of the time in {seasonLabel(FACTOR_WIN_RATE.season)}.
+              </p>
             </div>
           </div>
         ) : (
@@ -514,6 +523,8 @@ type Factor = {
   diff?: boolean;
   /** Scored against this league value instead of against the opponent. */
   baseline?: number;
+  /** How often taking this factor won the game, last completed season. */
+  winRate?: number;
 };
 
 /** Did this side take the factor? Against the baseline where there is one,
@@ -532,6 +543,17 @@ function FactorRow({ f, b, hc, ac }: { f: Factor; b: GameBundle; hc: string; ac:
       <div className="min-w-0 flex-1">
         <p className="text-[0.78rem] font-medium text-ink leading-tight">{f.label}</p>
         <p className="text-[0.62rem] text-ink-muted leading-tight">{f.sub}</p>
+        {f.winRate !== undefined && (
+          // What taking this factor has historically been worth. Below 50 is
+          // not an error — see FACTOR_WIN_RATE on offensive rebounding.
+          <p className={cn(
+            "text-[0.6rem] tabular leading-tight mt-0.5",
+            f.winRate >= 50 ? "text-good" : "text-ink-muted",
+          )}>
+            {n1(f.winRate)}% win rate
+            {f.winRate < 50 && <span className="text-ink-muted/80"> · a warning sign, not a win</span>}
+          </p>
+        )}
       </div>
       <div className="flex items-baseline gap-1.5 tabular shrink-0">
         <Won on={aWon}>
