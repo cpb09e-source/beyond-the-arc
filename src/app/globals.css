@@ -170,8 +170,20 @@ body {
 .bta-search-grow {
   animation: bta-search-grow 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* The results panel easing down out of the field it belongs to.
+ *
+ * Short and ease-out-quint: fast off the mark, long settle, no bounce. The
+ * panel used to simply exist on the next frame, which is most of why it read as
+ * a 2010 dropdown — nothing about it said it came FROM the input. */
+@keyframes bta-search-drop {
+  from { opacity: 0; transform: translateY(-0.5rem); }
+}
+.bta-search-drop {
+  animation: bta-search-drop 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
 @media (prefers-reduced-motion: reduce) {
-  .bta-search-grow { animation: none; }
+  .bta-search-grow, .bta-search-drop { animation: none; }
 }
 
 /* Mobile nav burger → X.
