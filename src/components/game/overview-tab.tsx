@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Clock, Landmark, MapPin, Scale, Sigma, Tv, Users } from "lucide-react";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { loadPhotoIndex, lookupId, type PhotoIndex } from "@/lib/player-photo-index";
@@ -203,24 +204,29 @@ function GameInfo({ b }: { b: GameBundle }) {
   const ou = (b.line.find((l) => l.provider === "Draft Kings") ?? b.line[0])?.overUnder ?? null;
   const total = (g.home.points ?? 0) + (g.away.points ?? 0);
 
-  const rows: [string, string | null][] = [
-    ["Arena", g.venue],
-    ["Location", [g.city, g.state].filter(Boolean).join(", ") || null],
-    ["Tip-off", tipLabel(g.startDate)],
-    ["Attendance", g.attendance ? g.attendance.toLocaleString() : null],
-    ["Television", tv || null],
-    ["Line", line],
-    ["Total", ou !== null ? `${ou} · ${total > ou ? "over" : "under"} at ${total}` : null],
+  // Every row carries an icon rather than only some of them: a two-column grid
+  // with half its cells indented and half not reads as a rendering fault.
+  const rows: Array<[string, string | null, typeof Landmark]> = [
+    ["Arena", g.venue, Landmark],
+    ["Location", [g.city, g.state].filter(Boolean).join(", ") || null, MapPin],
+    ["Tip-off", tipLabel(g.startDate), Clock],
+    ["Attendance", g.attendance ? g.attendance.toLocaleString() : null, Users],
+    ["Television", tv || null, Tv],
+    ["Line", line, Scale],
+    ["Total", ou !== null ? `${ou} · ${total > ou ? "over" : "under"} at ${total}` : null, Sigma],
   ];
   // Two per row in a column: a single full-width strip left most of the line
   // empty here, and a label/value table wasted half the width on labels.
   return (
     <Panel title="Game info">
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
-        {rows.filter(([, v]) => v).map(([k, v]) => (
-          <div key={k} className="min-w-0">
-            <dt className="text-[0.55rem] uppercase tracking-[0.14em] font-bold text-ink-muted">{k}</dt>
-            <dd className="text-[0.8rem] text-ink-soft leading-snug mt-0.5">{v}</dd>
+        {rows.filter(([, v]) => v).map(([k, v, Icon]) => (
+          <div key={k} className="min-w-0 flex gap-2">
+            <Icon className="w-3.5 h-3.5 mt-0.5 shrink-0 text-ink-muted" aria-hidden strokeWidth={1.75} />
+            <div className="min-w-0">
+              <dt className="text-[0.55rem] uppercase tracking-[0.14em] font-bold text-ink-muted">{k}</dt>
+              <dd className="text-[0.8rem] text-ink-soft leading-snug mt-0.5">{v}</dd>
+            </div>
           </div>
         ))}
       </dl>
