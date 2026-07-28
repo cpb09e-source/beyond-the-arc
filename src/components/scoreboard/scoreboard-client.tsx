@@ -88,10 +88,16 @@ export function ScoreboardClient() {
 
   // Conference games group under their own conference; everything else is
   // non-conference. Sorted by tip so the page reads down the evening.
+  //
+  // Ranked games are EXCLUDED here, because they already lead the page under
+  // Top 25 and printing them twice made the ACC read as if Duke played North
+  // Carolina in two different buildings. Top 25 is filtered by the same
+  // conference selection, so choosing the ACC still shows its ranked games —
+  // just once, at the top, where they belong.
   const groups = useMemo(() => {
     const m = new Map<string, ScoreGame[]>();
     for (const g of slate.games) {
-      if (!inConf(g)) continue;
+      if (!inConf(g) || isRanked(g)) continue;
       const key = g.conferenceGame && g.home.conference ? confDisplay(g.home.conference) : "Non-conference";
       if (!m.has(key)) m.set(key, []);
       m.get(key)!.push(g);
@@ -103,8 +109,8 @@ export function ScoreboardClient() {
   }, [slate.games, conf]);
 
   // Games with an AP Top 25 side, in the order the function ranked them (best
-  // matchup first). They ALSO stay in their conference group below — a reader
-  // scanning the Big Ten should not find a hole where the ranked game was.
+  // matchup first). These are the ONLY place a ranked game appears; the
+  // conference groups below skip them.
   const ranked = useMemo(() => slate.games.filter(isRanked), [slate.games]);
 
 
