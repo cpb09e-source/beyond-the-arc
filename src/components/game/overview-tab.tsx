@@ -253,6 +253,11 @@ function TeamStatsPanel({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }
   const led = percentLed(b);
 
   const rows: StatRow[] = [
+    // Efficiency leads. Everything below it is the how; these two are the what,
+    // and they are the pair that actually decides who was better per
+    // possession once pace is taken out.
+    { label: "Offensive Rating", a: a.rating, h: h.rating },
+    { label: "Defensive Rating", a: h.rating, h: a.rating, lowerIsBetter: true },
     { label: "Field Goal %", a: a.fieldGoals.pct, h: h.fieldGoals.pct, unit: "%",
       aNote: `${a.fieldGoals.made}-${a.fieldGoals.attempted}`, hNote: `${h.fieldGoals.made}-${h.fieldGoals.attempted}` },
     { label: "Three Point %", a: a.threePointFieldGoals.pct, h: h.threePointFieldGoals.pct, unit: "%",
@@ -271,11 +276,6 @@ function TeamStatsPanel({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }
     { label: "3PA Rate", a: rate(a.threePointFieldGoals.attempted, a.fieldGoals.attempted),
       h: rate(h.threePointFieldGoals.attempted, h.fieldGoals.attempted), unit: "%" },
     { label: "FTA Rate", a: a.fourFactors.freeThrowRate, h: h.fourFactors.freeThrowRate, unit: "%" },
-    // A team's defensive rating IS its opponent's offensive rating: the same
-    // possessions scored from the other end. Showing both makes each side's
-    // row readable on its own without mentally mirroring the one above.
-    { label: "Offensive Rating", a: a.rating, h: h.rating },
-    { label: "Defensive Rating", a: h.rating, h: a.rating, lowerIsBetter: true },
     { label: "Largest Lead", a: a.points.largestLead, h: h.points.largestLead },
   ];
   if (led) rows.push({ label: "Percent Led", a: led.away, h: led.home, unit: "%" });
@@ -285,13 +285,11 @@ function TeamStatsPanel({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 pb-3 border-b border-hairline">
         <div className="flex items-center gap-2">
           <TeamLogo name={b.game.away.team} size={24} />
-          <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: ac }} aria-hidden />
           <span className="text-[0.68rem] uppercase tracking-[0.1em] font-bold text-ink truncate">{b.game.away.team}</span>
         </div>
         <span className="w-24" aria-hidden />
         <div className="flex items-center gap-2 justify-end">
           <span className="text-[0.68rem] uppercase tracking-[0.1em] font-bold text-ink truncate">{b.game.home.team}</span>
-          <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: hc }} aria-hidden />
           <TeamLogo name={b.game.home.team} size={24} />
         </div>
       </div>
@@ -478,12 +476,6 @@ function FourFactors({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
 
   const name = winner === "a" ? b.game.away.team : winner === "h" ? b.game.home.team : null;
   const won = winner === "a" ? b.game.away.winner : winner === "h" ? b.game.home.winner : null;
-  // A sweep is a different, much stronger condition than simply taking more of
-  // the four, and it carries a different historical rate. Quoting the general
-  // figure under a 4-0 would understate it; quoting the sweep figure under a
-  // 2-1 would overstate it. Say which one is on screen.
-  const swept = Math.max(aWins, hWins) === 4;
-  const rate = swept ? FACTOR_WIN_RATE.sweep : FACTOR_WIN_RATE.overall;
 
   return (
     <Panel title="Four factors" note="This game">
@@ -510,11 +502,14 @@ function FourFactors({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
                   ? "And won the game."
                   : ""}
               </p>
+              {/* One benchmark, and it is the strong one: sweeping all four.
+                  The rate for merely taking more of them is a weaker claim and
+                  having both on screen invited comparing two numbers that
+                  answer different questions. */}
               <p className="text-[0.62rem] text-ink-muted leading-tight mt-1">
-                {swept ? "Teams sweeping all four won " : "Teams taking more of the four won "}
-                <span className="tabular font-semibold text-good">{n1(rate)}%</span>
-                {" "}of the time in {seasonLabel(FACTOR_WIN_RATE.season)}
-                {!swept && <> · a sweep is worth {n1(FACTOR_WIN_RATE.sweep)}%</>}.
+                Teams winning all four won{" "}
+                <span className="tabular font-semibold text-good">{n1(FACTOR_WIN_RATE.sweep)}%</span>
+                {" "}of the time in {seasonLabel(FACTOR_WIN_RATE.season)}.
               </p>
             </div>
           </div>
@@ -547,10 +542,13 @@ function FactorRow({ f, b, hc, ac }: { f: Factor; b: GameBundle; hc: string; ac:
   const aWon = winsFactor(f, "a"), hWon = winsFactor(f, "h");
   const show = (v: number) => (f.diff && v > 0 ? `+${n1(v)}` : `${n1(v)}${f.unit ?? ""}`);
   return (
-    <div className="flex items-center gap-3 py-2.5">
+    // The definition rides on the row's title rather than under every label:
+    // it is worth having for the OREB row, where the baseline explains how a
+    // category can end up with no winner at all, but not worth four lines of
+    // permanent explanatory text.
+    <div className="flex items-center gap-3 py-2.5" title={f.sub}>
       <div className="min-w-0 flex-1">
-        <p className="text-[0.78rem] font-medium text-ink leading-tight">{f.label}</p>
-        <p className="text-[0.62rem] text-ink-muted leading-tight">{f.sub}</p>
+        <p className="text-[0.72rem] font-bold uppercase tracking-[0.08em] text-ink leading-tight">{f.label}</p>
       </div>
       <div className="flex items-baseline gap-1.5 tabular shrink-0">
         <Won on={aWon}>
