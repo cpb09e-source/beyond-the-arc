@@ -154,13 +154,34 @@ export function dateLabel(d: string | null): string {
  * a broken one.
  */
 export async function fetchSlate(date?: string, signal?: AbortSignal): Promise<Slate> {
-  try {
-    const qs = date ? `?date=${encodeURIComponent(date)}` : "";
-    const res = await fetch(`/api/scoreboard${qs}`, { signal });
-    if (!res.ok) return EMPTY_SLATE;
-    const j = (await res.json()) as Slate;
-    return Array.isArray(j?.games) ? j : EMPTY_SLATE;
-  } catch {
-    return EMPTY_SLATE;
+  const qs = new URLSearchParams();
+  if (date) qs.set("date", date);
+  // Dev-only passthrough: ?sim=live lets the live styling be exercised at any
+  // hour. Inert in production — the function ignores it unless NETLIFY_DEV is
+  // set. See docs/dev-scoreboard.md.
+  if (typeof window !== "undefined") {
+    const sim = new URLSearchParams(window.location.search).get("sim");
+    if (sim) qs.set("sim", sim);
   }
+  const url = `/api/scoreboard${qs.toString() ? `?${qs}` : ""}`;
+
+  // ONE RETRY BEFORE GIVING UP. A single failed request used to blank the
+  // ticker for a full minute — it renders nothing on an empty slate, so a
+  // transient blip reads to the reader as "no games tonight". A short second
+  // attempt costs nothing and the edge cache absorbs it.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, { signal });
+      if (res.ok) {
+        const j = (await res.json()) as Slate;
+        if (Array.isArray(j?.games)) return j;
+      }
+    } catch {
+      // Aborted by the caller — do not retry into a torn-down component.
+      if (signal?.aborted) return EMPTY_SLATE;
+    }
+    if (signal?.aborted) return EMPTY_SLATE;
+    if (attempt === 0) await new Promise((r) => setTimeout(r, 1200));
+  }
+  return EMPTY_SLATE;
 }

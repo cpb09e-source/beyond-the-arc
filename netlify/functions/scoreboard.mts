@@ -109,6 +109,54 @@ function iso(d: Date): string {
 }
 
 /**
+ * DEV ONLY — rewind a settled slate so the live styling can be worked on at
+ * any hour.
+ *
+ * Live games happen for about four hours a night. Without this, iterating on
+ * the pulsing clock, the "N live" rail label, the half-filled line score or
+ * the live card border means either waiting for tip-off or hand-editing the
+ * response, and nobody does the second one twice. `?sim=live` takes whatever
+ * slate was resolved and puts a share of it back in progress with a plausible
+ * clock, so the states are reachable from a desk at ten in the morning.
+ *
+ * GATED ON NETLIFY_DEV, which the Netlify CLI sets for local runs and which is
+ * never set in a deployed function. A production request carrying ?sim=live
+ * gets the real slate — the parameter is not merely ignored by convention, it
+ * is unreachable.
+ */
+function simulateLive(games: Game[]): Game[] {
+  return games.map((g, i) => {
+    // Leave a third finished and a few not yet tipped, so one page shows all
+    // three states at once rather than a wall of identical live cards.
+    const bucket = i % 3;
+    if (bucket === 0) return g;
+    if (bucket === 2) {
+      return {
+        ...g, status: "scheduled", period: null, clock: null,
+        home: { ...g.home, points: null, winner: null, periods: [] },
+        away: { ...g.away, points: null, winner: null, periods: [] },
+      };
+    }
+    // In progress: keep first-half points, drop the rest, invent a clock.
+    const half = (side: Side): Side => ({
+      ...side,
+      points: side.periods[0] ?? Math.round((side.points ?? 0) / 2),
+      periods: side.periods.slice(0, 1),
+      winner: null,
+    });
+    const secs = 60 + ((i * 137) % 1080); // deterministic, so reloads are stable
+    return {
+      ...g,
+      status: "in_progress",
+      period: 2,
+      clock: `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`,
+      home: half(g.home),
+      away: half(g.away),
+    };
+  });
+}
+
+/**
  * The calendar date a game BELONGS to, US Eastern.
  *
  * CBBD timestamps are UTC and a college basketball night runs from about 7pm
@@ -488,6 +536,11 @@ export default async (req: Request, _context: Context) => {
   const season = Number(params.get("season")) || currentSeason(anchor);
   try {
     const slate = await resolveSlate(key, season, anchor);
+    // See simulateLive(). Unreachable in a deployed function.
+    if (process.env.NETLIFY_DEV === "true" && params.get("sim") === "live") {
+      slate.games = simulateLive(slate.games);
+      slate.source = "live";
+    }
     return new Response(JSON.stringify(slate), { status: 200, headers });
   } catch (err) {
     // Never 5xx at the reader. An empty slate collapses the ticker; a 500 would

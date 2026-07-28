@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/dev.mjs",
     "build": "next build",
     "postbuild": "node scripts/strip-r2-mirrored-from-out.mjs",
     "start": "next start",
@@ -23,7 +23,8 @@
     "scrape:nba-players": "node scripts/scrape-nba-players.mjs",
     "scrape:tournament-games": "node scripts/scrape-tournament-games.mjs",
     "scrape:tournament-boxscores": "node scripts/scrape-tournament-boxscores.mjs",
-    "dev:netlify": "netlify dev"
+    "dev:netlify": "netlify dev",
+    "dev:next": "next dev"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
