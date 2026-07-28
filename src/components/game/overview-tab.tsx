@@ -5,6 +5,7 @@ import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { loadPhotoIndex, lookupId, type PhotoIndex } from "@/lib/player-photo-index";
 import { readableInk } from "@/lib/team-colors";
+import { orebBaseline } from "@/lib/league-averages";
 import { cn } from "@/lib/utils";
 import {
   shortDate, tipLabel, lineLabel,
@@ -405,13 +406,18 @@ function percentLed(b: GameBundle): { home: number; away: number } | null {
  * differential, and three-point differential. NOT Dean Oliver's four; ours are
  * the ones our own model leans on.
  *
- * Three of them are differentials, so one team's figure is the negative of the
+ * THREE OF THEM ARE DIFFERENTIALS, so one team's figure is the negative of the
  * other's and each is won outright. Offensive rebound rate is the exception:
- * both sides have their own, and both can be good.
+ * both teams have their own, and a 34% and a 33% night is two teams crashing
+ * the glass, not one winning a category. It is scored against the D-I season
+ * average instead, so BOTH sides can take it or neither can.
  *
- * THE TIEBREAK. Split two apiece and the game gets decided on FTA rate — which
- * is deliberately NOT one of the four. Getting to the line is the closest
- * thing to a fifth factor, and leaving a 2-2 unresolved would waste the panel.
+ * That means the tallies are not complementary — 3-2 and 1-1 are both possible
+ * — and the panel counts each team out of four rather than splitting four.
+ *
+ * THE TIEBREAK. Level on the four and the game goes to FTA rate, which is
+ * deliberately not one of them. Getting to the line is the closest thing to a
+ * fifth factor, and leaving a draw unresolved would waste the verdict.
  */
 function FourFactors({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
   const h = b.teamStats.home, a = b.teamStats.away;
@@ -420,20 +426,21 @@ function FourFactors({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
   const rebDiff = a.rebounds.total - h.rebounds.total;
   const fbpDiff = a.points.fastBreak - h.points.fastBreak;
   const tpmDiff = a.threePointFieldGoals.made - h.threePointFieldGoals.made;
+  const base = orebBaseline(b.game.season);
 
   const factors: Factor[] = [
     { key: "reb", label: "REB Diff", sub: "total rebounds vs allowed", a: rebDiff, h: -rebDiff, diff: true },
-    { key: "orb", label: "OREB %", sub: "offensive rebound rate",
-      a: a.fourFactors.offensiveReboundPct, h: h.fourFactors.offensiveReboundPct, unit: "%" },
+    { key: "orb", label: "OREB %", sub: `offensive rebound rate vs ${n1(base)}% D-I average`,
+      a: a.fourFactors.offensiveReboundPct, h: h.fourFactors.offensiveReboundPct, unit: "%", baseline: base },
     { key: "fbp", label: "FBP Diff", sub: "fast-break points vs allowed", a: fbpDiff, h: -fbpDiff, diff: true },
     { key: "tpm", label: "3PM Diff", sub: "3-pointers made vs allowed", a: tpmDiff, h: -tpmDiff, diff: true },
   ];
 
-  const aWins = factors.filter((f) => f.a > f.h).length;
-  const hWins = factors.filter((f) => f.h > f.a).length;
+  const aWins = factors.filter((f) => winsFactor(f, "a")).length;
+  const hWins = factors.filter((f) => winsFactor(f, "h")).length;
   const ftaA = a.fourFactors.freeThrowRate, ftaH = h.fourFactors.freeThrowRate;
-  const split = aWins === hWins;
-  const winner = !split
+  const level = aWins === hWins;
+  const winner = !level
     ? (aWins > hWins ? "a" : "h")
     : ftaA === ftaH ? null : ftaA > ftaH ? "a" : "h";
 
@@ -453,12 +460,12 @@ function FourFactors({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
             <div className="min-w-0">
               <p className="text-[0.82rem] text-ink leading-tight">
                 <span className="font-semibold" style={{ color: readableInk(winner === "a" ? ac : hc) }}>{name}</span>
-                {" won the four factors "}
+                {level ? " took the four factors " : " won the four factors "}
                 <span className="tabular font-semibold">{Math.max(aWins, hWins)}–{Math.min(aWins, hWins)}</span>
               </p>
               <p className="text-[0.65rem] text-ink-muted leading-tight mt-0.5">
-                {split
-                  ? `Split two apiece; FTA rate broke it, ${n1(Math.max(ftaA, ftaH))}% to ${n1(Math.min(ftaA, ftaH))}%.`
+                {level
+                  ? `Level at ${aWins}; FTA rate broke it, ${n1(Math.max(ftaA, ftaH))}% to ${n1(Math.min(ftaA, ftaH))}%.`
                   : won === false
                   ? "And lost the game."
                   : won === true
@@ -480,12 +487,20 @@ type Factor = {
   a: number; h: number; unit?: string;
   /** A differential: one side's figure is the negative of the other's. */
   diff?: boolean;
+  /** Scored against this league value instead of against the opponent. */
+  baseline?: number;
 };
 
+/** Did this side take the factor? Against the baseline where there is one,
+ *  against the opponent otherwise. */
+function winsFactor(f: Factor, side: "a" | "h"): boolean {
+  const mine = side === "a" ? f.a : f.h;
+  const theirs = side === "a" ? f.h : f.a;
+  return f.baseline !== undefined ? mine > f.baseline : mine > theirs;
+}
+
 function FactorRow({ f, b, hc, ac }: { f: Factor; b: GameBundle; hc: string; ac: string }) {
-  const winner = f.a === f.h ? null : f.a > f.h ? "a" : "h";
-  const team = winner === "a" ? b.game.away.team : winner === "h" ? b.game.home.team : null;
-  const color = winner === "a" ? ac : hc;
+  const aWon = winsFactor(f, "a"), hWon = winsFactor(f, "h");
   const show = (v: number) => (f.diff && v > 0 ? `+${n1(v)}` : `${n1(v)}${f.unit ?? ""}`);
   return (
     <div className="flex items-center gap-3 py-2.5">
@@ -494,20 +509,21 @@ function FactorRow({ f, b, hc, ac }: { f: Factor; b: GameBundle; hc: string; ac:
         <p className="text-[0.62rem] text-ink-muted leading-tight">{f.sub}</p>
       </div>
       <div className="flex items-baseline gap-2 tabular shrink-0">
-        <span className="text-[0.82rem] font-semibold" style={{ color: readableInk(ac), opacity: winner === "h" ? 0.5 : 1 }}>
+        <span className="text-[0.82rem] font-semibold" style={{ color: readableInk(ac), opacity: aWon ? 1 : 0.45 }}>
           {show(f.a)}
         </span>
         <span className="text-ink-muted/50 text-[0.7rem]">/</span>
-        <span className="text-[0.82rem] font-semibold" style={{ color: readableInk(hc), opacity: winner === "a" ? 0.5 : 1 }}>
+        <span className="text-[0.82rem] font-semibold" style={{ color: readableInk(hc), opacity: hWon ? 1 : 0.45 }}>
           {show(f.h)}
         </span>
       </div>
-      {/* The winner's mark rather than a tick: it says WHO without a legend. */}
-      <span className="w-6 flex justify-center shrink-0">
-        {team ? <TeamLogo name={team} size={20} /> : <span className="text-ink-muted/40 text-xs">–</span>}
+      {/* Marks rather than a tick: they say WHO took it, and on the baseline
+          row there can be two of them or none. */}
+      <span className="w-12 flex justify-end gap-1 shrink-0">
+        {aWon && <TeamLogo name={b.game.away.team} size={20} />}
+        {hWon && <TeamLogo name={b.game.home.team} size={20} />}
+        {!aWon && !hWon && <span className="text-ink-muted/40 text-xs">–</span>}
       </span>
-      <span className="w-1 self-stretch rounded-full shrink-0"
-        style={{ background: winner ? color : "transparent" }} aria-hidden />
     </div>
   );
 }
