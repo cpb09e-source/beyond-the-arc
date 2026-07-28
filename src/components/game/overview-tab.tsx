@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
+import { PlayerPhoto } from "@/components/player-photo";
+import { loadPhotoIndex, lookupId, type PhotoIndex } from "@/lib/player-photo-index";
 import { cn } from "@/lib/utils";
 import {
   shortDate, tipLabel, lineLabel,
@@ -16,17 +19,33 @@ import {
  */
 export function OverviewTab({ b, hc, ac, onOpenBox }: { b: GameBundle; hc: string; ac: string; onOpenBox?: () => void }) {
   const g = b.game;
+
+  // One fetch per season, shared by every panel that shows a face. Resolved
+  // here rather than inside each card so the page makes one request, not four.
+  const [photos, setPhotos] = useState<PhotoIndex>({});
+  useEffect(() => {
+    let live = true;
+    void loadPhotoIndex(g.season).then((i) => { if (live) setPhotos(i); });
+    return () => { live = false; };
+  }, [g.season]);
+
   return (
-    <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
-      {/* Form and history lead: they are the context you want BEFORE the box
-          score, not a footnote under it. */}
-      <Form side={g.away} rows={b.form.away} />
-      <Form side={g.home} rows={b.form.home} />
-      <HeadToHead b={b} />
-      <Leaders b={b} hc={hc} ac={ac} onOpenBox={onOpenBox} />
-      <TeamStatsPanel b={b} hc={hc} ac={ac} />
+    <div className="space-y-5">
+      {/* Form and history lead: context you want BEFORE the box score. Flat on
+          the page, no card — they are a strip of results, not a panel. */}
+      <div className="grid gap-5 lg:grid-cols-3">
+        <Form side={g.away} rows={b.form.away} />
+        <Form side={g.home} rows={b.form.home} />
+        <HeadToHead b={b} />
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3 items-start">
+        <Leaders b={b} hc={hc} ac={ac} photos={photos} onOpenBox={onOpenBox} />
+        <TeamStatsPanel b={b} hc={hc} ac={ac} />
+        <Standings b={b} />
+      </div>
+
       <GameInfo b={b} />
-      <Standings b={b} className="xl:col-span-3" />
     </div>
   );
 }
@@ -77,31 +96,38 @@ function best(players: BoxPlayer[], pick: (p: BoxPlayer) => number | null): BoxP
  * teams across a shared stat label makes it one glance and costs one panel
  * instead of two.
  */
-function Leaders({ b, hc, ac, onOpenBox }: { b: GameBundle; hc: string; ac: string; onOpenBox?: () => void }) {
+function Leaders({
+  b, hc, ac, photos, onOpenBox,
+}: {
+  b: GameBundle; hc: string; ac: string; photos: PhotoIndex; onOpenBox?: () => void;
+}) {
   const rows: [string, (p: BoxPlayer) => number | null, (p: BoxPlayer) => string][] = [
-    ["Points", (p) => p.points, (p) => `${p.fieldGoals.made}-${p.fieldGoals.attempted} FG · ${p.freeThrows.made}-${p.freeThrows.attempted} FT`],
-    ["Rebounds", (p) => p.rebounds.total, (p) => `${p.rebounds.defensive} def · ${p.rebounds.offensive} off`],
-    ["Assists", (p) => p.assists, (p) => `${p.turnovers} TO · ${p.minutes} min`],
+    ["Points", (p) => p.points,
+      (p) => `${p.fieldGoals.made}/${p.fieldGoals.attempted} FG, ${p.freeThrows.made}/${p.freeThrows.attempted} FT`],
+    ["Rebounds", (p) => p.rebounds.total,
+      (p) => `${p.rebounds.defensive} DREB, ${p.rebounds.offensive} OREB`],
+    ["Assists", (p) => p.assists,
+      (p) => `${p.turnovers} TO, ${p.minutes} MIN`],
   ];
   return (
     <Panel title="Game leaders">
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 pb-3 border-b border-hairline">
-        <div className="flex items-center gap-2 justify-end">
-          <span className="text-[0.62rem] uppercase tracking-[0.12em] font-bold text-ink truncate">{b.game.away.team}</span>
-          <TeamLogo name={b.game.away.team} size={22} />
-        </div>
-        <span className="w-14" aria-hidden />
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 pb-3 border-b border-hairline">
         <div className="flex items-center gap-2">
-          <TeamLogo name={b.game.home.team} size={22} />
-          <span className="text-[0.62rem] uppercase tracking-[0.12em] font-bold text-ink truncate">{b.game.home.team}</span>
+          <TeamLogo name={b.game.away.team} size={24} />
+          <span className="text-[0.68rem] uppercase tracking-[0.1em] font-bold text-ink truncate">{b.game.away.team}</span>
+        </div>
+        <span className="w-24" aria-hidden />
+        <div className="flex items-center gap-2 justify-end">
+          <span className="text-[0.68rem] uppercase tracking-[0.1em] font-bold text-ink truncate">{b.game.home.team}</span>
+          <TeamLogo name={b.game.home.team} size={24} />
         </div>
       </div>
       <div className="divide-y divide-hairline/60">
         {rows.map(([label, pick, detail]) => (
-          <div key={label} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-3">
-            <LeaderSide p={best(b.players.away, pick)} pick={pick} detail={detail} color={ac} align="right" />
-            <span className="w-14 text-center text-[0.55rem] uppercase tracking-[0.1em] font-bold text-ink-muted">{label}</span>
-            <LeaderSide p={best(b.players.home, pick)} pick={pick} detail={detail} color={hc} align="left" />
+          <div key={label} className="grid grid-cols-[1fr_auto_1fr] items-start gap-3 py-3.5">
+            <LeaderSide p={best(b.players.away, pick)} pick={pick} detail={detail} color={ac} photos={photos} align="left" />
+            <span className="w-24 pt-4 text-center text-[0.68rem] font-bold text-ink leading-tight">{label}</span>
+            <LeaderSide p={best(b.players.home, pick)} pick={pick} detail={detail} color={hc} photos={photos} align="right" />
           </div>
         ))}
       </div>
@@ -109,7 +135,7 @@ function Leaders({ b, hc, ac, onOpenBox }: { b: GameBundle; hc: string; ac: stri
         <button
           type="button"
           onClick={onOpenBox}
-          className="mt-3 pt-3 border-t border-hairline w-full text-center text-[0.7rem] font-medium text-coral hover:underline"
+          className="mt-3 pt-3 border-t border-hairline w-full text-center text-[0.72rem] font-medium text-coral hover:underline"
         >
           Full box score
         </button>
@@ -118,28 +144,48 @@ function Leaders({ b, hc, ac, onOpenBox }: { b: GameBundle; hc: string; ac: stri
   );
 }
 
+/**
+ * One side of a leader row: headshot, the number, then name and detail beneath.
+ *
+ * The photo resolves through the season's name index — CBBD gives us a name
+ * and its own athlete id, neither of which is the id our images are keyed by
+ * (see src/lib/player-photo-index.ts). A miss falls back to the monogram
+ * PlayerPhoto already draws, so a player we cannot resolve degrades quietly.
+ */
 function LeaderSide({
-  p, pick, detail, color, align,
+  p, pick, detail, color, photos, align,
 }: {
   p: BoxPlayer | null;
   pick: (p: BoxPlayer) => number | null;
   detail: (p: BoxPlayer) => string;
   color: string;
+  photos: PhotoIndex;
   align: "left" | "right";
 }) {
   if (!p) return <span className={cn("text-sm text-ink-muted", align === "right" && "text-right block")}>—</span>;
+  const bartId = lookupId(photos, p.name);
   return (
-    <div className={cn("flex items-center gap-2.5 min-w-0", align === "right" && "flex-row-reverse")}>
-      {/* Sans, not the display face: its "1" is a bare stem, so a two-digit
-          11 reads as "||" at this size. The scoreline can carry it because
-          those numbers are large; these cannot. */}
-      <span className="text-2xl font-semibold tabular leading-none shrink-0" style={{ color }}>{pick(p)}</span>
-      <div className={cn("min-w-0", align === "right" && "text-right")}>
-        <p className="text-[0.78rem] text-ink font-medium truncate leading-tight">{p.name}</p>
-        <p className="text-[0.62rem] tabular text-ink-muted leading-tight">{detail(p)}</p>
+    <div className={cn("min-w-0", align === "right" && "text-right")}>
+      <div className={cn("flex items-center gap-2.5", align === "right" && "flex-row-reverse")}>
+        <PlayerPhoto bartPlayerId={bartId} name={p.name} size={44} className="rounded-full shrink-0" />
+        <span className="text-3xl font-semibold tabular leading-none" style={{ color }}>{pick(p)}</span>
       </div>
+      <p className="mt-1.5 text-[0.78rem] text-ink font-medium truncate leading-tight">
+        {shortName(p.name)}
+        {p.position && <span className="text-ink-muted font-normal ml-1.5">{p.position}</span>}
+      </p>
+      <p className="text-[0.65rem] tabular text-ink-muted leading-tight">{detail(p)}</p>
     </div>
   );
+}
+
+/** "Cameron Boozer" → "C. Boozer". Keeps a long name on one line beside a
+ *  44px photo without an ellipsis eating the surname, which is the half that
+ *  identifies the player. */
+function shortName(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length < 2) return name;
+  return `${parts[0]![0]}. ${parts.slice(1).join(" ")}`;
 }
 
 /* ------------------------------- game info ------------------------------- */
@@ -158,16 +204,18 @@ function GameInfo({ b }: { b: GameBundle }) {
     ["Attendance", g.attendance ? g.attendance.toLocaleString() : null],
     ["Television", tv || null],
     ["Line", line],
-    ["Total", ou !== null ? `${ou} · game went ${total > ou ? "over" : "under"} at ${total}` : null],
-    ["Pace", b.teamStats.pace !== null ? `${b.teamStats.pace} possessions` : null],
+    ["Total", ou !== null ? `${ou} · ${total > ou ? "over" : "under"} at ${total}` : null],
+    ["Pace", b.teamStats.pace !== null ? `${b.teamStats.pace} poss` : null],
   ];
+  // Laid out as an inline strip rather than a label/value table: as a table it
+  // was a narrow column of text beside an empty half-page.
   return (
     <Panel title="Game info">
-      <dl className="space-y-0">
+      <dl className="flex flex-wrap gap-x-8 gap-y-3">
         {rows.filter(([, v]) => v).map(([k, v]) => (
-          <div key={k} className="grid grid-cols-[5.5rem_1fr] gap-3 py-1.5 border-b border-hairline/60 last:border-b-0">
-            <dt className="text-[0.58rem] uppercase tracking-[0.12em] font-bold text-ink-muted pt-0.5">{k}</dt>
-            <dd className="text-[0.78rem] text-ink-soft leading-snug">{v}</dd>
+          <div key={k}>
+            <dt className="text-[0.55rem] uppercase tracking-[0.14em] font-bold text-ink-muted">{k}</dt>
+            <dd className="text-[0.82rem] text-ink-soft leading-snug mt-0.5">{v}</dd>
           </div>
         ))}
       </dl>
@@ -193,36 +241,38 @@ function TeamStatsPanel({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }
   const led = percentLed(b);
 
   const rows: StatRow[] = [
-    { label: "Field goal %", a: a.fieldGoals.pct, h: h.fieldGoals.pct, unit: "%",
+    { label: "Field Goal %", a: a.fieldGoals.pct, h: h.fieldGoals.pct, unit: "%",
       aNote: `${a.fieldGoals.made}-${a.fieldGoals.attempted}`, hNote: `${h.fieldGoals.made}-${h.fieldGoals.attempted}` },
-    { label: "Three point %", a: a.threePointFieldGoals.pct, h: h.threePointFieldGoals.pct, unit: "%",
+    { label: "Three Point %", a: a.threePointFieldGoals.pct, h: h.threePointFieldGoals.pct, unit: "%",
       aNote: `${a.threePointFieldGoals.made}-${a.threePointFieldGoals.attempted}`, hNote: `${h.threePointFieldGoals.made}-${h.threePointFieldGoals.attempted}` },
-    { label: "Free throw %", a: a.freeThrows.pct, h: h.freeThrows.pct, unit: "%",
+    { label: "Free Throw %", a: a.freeThrows.pct, h: h.freeThrows.pct, unit: "%",
       aNote: `${a.freeThrows.made}-${a.freeThrows.attempted}`, hNote: `${h.freeThrows.made}-${h.freeThrows.attempted}` },
     { label: "Rebounds", a: a.rebounds.total, h: h.rebounds.total,
       aNote: `${a.rebounds.offensive} off`, hNote: `${h.rebounds.offensive} off` },
     { label: "Assists", a: a.assists, h: h.assists },
     { label: "Turnovers", a: a.turnovers.total, h: h.turnovers.total },
-    { label: "Points in the paint", a: a.points.inPaint, h: h.points.inPaint },
+    { label: "Points in the Paint", a: a.points.inPaint, h: h.points.inPaint },
     { label: "Effective FG%", a: a.fourFactors.effectiveFieldGoalPct, h: h.fourFactors.effectiveFieldGoalPct, unit: "%" },
-    { label: "Largest lead", a: a.points.largestLead, h: h.points.largestLead },
+    { label: "Largest Lead", a: a.points.largestLead, h: h.points.largestLead },
   ];
-  if (led) rows.push({ label: "Percent led", a: led.away, h: led.home, unit: "%" });
+  if (led) rows.push({ label: "Percent Led", a: led.away, h: led.home, unit: "%" });
 
   return (
     <Panel title="Team stats">
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 pb-3 border-b border-hairline">
-        <div className="flex items-center gap-2 justify-end">
-          <span className="text-[0.62rem] uppercase tracking-[0.12em] font-bold text-ink truncate">{b.game.away.team}</span>
-          <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: ac }} aria-hidden />
-        </div>
-        <span className="w-20" aria-hidden />
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 pb-3 border-b border-hairline">
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: hc }} aria-hidden />
-          <span className="text-[0.62rem] uppercase tracking-[0.12em] font-bold text-ink truncate">{b.game.home.team}</span>
+          <TeamLogo name={b.game.away.team} size={24} />
+          <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: ac }} aria-hidden />
+          <span className="text-[0.68rem] uppercase tracking-[0.1em] font-bold text-ink truncate">{b.game.away.team}</span>
+        </div>
+        <span className="w-24" aria-hidden />
+        <div className="flex items-center gap-2 justify-end">
+          <span className="text-[0.68rem] uppercase tracking-[0.1em] font-bold text-ink truncate">{b.game.home.team}</span>
+          <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: hc }} aria-hidden />
+          <TeamLogo name={b.game.home.team} size={24} />
         </div>
       </div>
-      <div className="pt-1">
+      <div className="divide-y divide-hairline/50">
         {rows.map((r) => <StatRowView key={r.label} r={r} hc={hc} ac={ac} />)}
       </div>
     </Panel>
@@ -234,39 +284,47 @@ type StatRow = {
   aNote?: string; hNote?: string;
 };
 
+/**
+ * One stat, both sides.
+ *
+ * Each team gets its own track, filled in ITS OWN COLOUR and anchored at the
+ * outer edge so both bars grow toward the centre label. Anchoring outward
+ * would put the two lengths at opposite ends of the row and make the
+ * comparison a measurement rather than a glance.
+ *
+ * Bars are scaled to the pair, not to a fixed maximum, so a row where the two
+ * teams are close reads as close and a blowout row reads as a blowout.
+ */
 function StatRowView({ r, hc, ac }: { r: StatRow; hc: string; ac: string }) {
   const tot = r.a + r.h;
-  // A 0-0 row (a game with no free throws) would divide by zero; show two
-  // empty tracks rather than two full ones.
+  // A 0-0 row (a game with no free throws attempted) would divide by zero;
+  // show two empty tracks rather than two full ones.
   const aw = tot > 0 ? (r.a / tot) * 100 : 0;
   const hw = tot > 0 ? (r.h / tot) * 100 : 0;
   const lead = r.a === r.h ? null : r.a > r.h ? "a" : "h";
   return (
-    <div className="py-2">
-      <div className="grid grid-cols-[1fr_auto_1fr] items-baseline gap-2">
-        <div className="text-right min-w-0">
-          <span className={cn("text-sm tabular font-semibold", lead === "a" ? "text-ink" : "text-ink-muted")}>
+    <div className="py-2.5">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-baseline gap-3">
+        <div className="min-w-0">
+          <span className={cn("text-lg tabular font-bold", lead === "a" ? "text-ink" : "text-ink-muted")}>
             {n1(r.a)}{r.unit}
           </span>
-          {r.aNote && <span className="text-[0.6rem] tabular text-ink-muted ml-1.5">({r.aNote})</span>}
+          {r.aNote && <span className="text-[0.62rem] tabular text-ink-muted ml-1.5">({r.aNote})</span>}
         </div>
-        <span className="w-20 text-center text-[0.55rem] uppercase tracking-[0.1em] font-bold text-ink-muted leading-tight">
-          {r.label}
-        </span>
-        <div className="min-w-0">
-          {r.hNote && <span className="text-[0.6rem] tabular text-ink-muted mr-1.5">({r.hNote})</span>}
-          <span className={cn("text-sm tabular font-semibold", lead === "h" ? "text-ink" : "text-ink-muted")}>
+        <span className="w-24 text-center text-[0.68rem] font-bold text-ink leading-tight">{r.label}</span>
+        <div className="min-w-0 text-right">
+          {r.hNote && <span className="text-[0.62rem] tabular text-ink-muted mr-1.5">({r.hNote})</span>}
+          <span className={cn("text-lg tabular font-bold", lead === "h" ? "text-ink" : "text-ink-muted")}>
             {n1(r.h)}{r.unit}
           </span>
         </div>
       </div>
-      {/* Two tracks, each filling from the centre outward. */}
-      <div className="mt-1 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-        <span className="h-1.5 rounded-full bg-paper-deep overflow-hidden flex justify-end">
+      <div className="mt-1.5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <span className="h-2 rounded-full bg-paper-deep overflow-hidden flex">
           <span className="h-full rounded-full" style={{ width: `${aw}%`, background: ac }} />
         </span>
-        <span className="w-20" aria-hidden />
-        <span className="h-1.5 rounded-full bg-paper-deep overflow-hidden flex justify-start">
+        <span className="w-24" aria-hidden />
+        <span className="h-2 rounded-full bg-paper-deep overflow-hidden flex justify-end">
           <span className="h-full rounded-full" style={{ width: `${hw}%`, background: hc }} />
         </span>
       </div>
@@ -307,32 +365,56 @@ function percentLed(b: GameBundle): { home: number; away: number } | null {
 /* ------------------------- form + head to head ---------------------------- */
 
 /**
- * A résumé strip, borrowed from the March-resume ticker on the coach pages:
- * one cell per game, washed green for a win and red for a loss, with the
- * opponent's mark and the score inside it.
- *
- * The reason it beats a W/L/W/W/L chip row is that a bare letter says a team
- * went 4-1 without saying whether the win was by 30 at home or by 1 in
- * overtime on the road. Putting the opponent and the score in the cell makes
- * "hot" and "flattered by the schedule" distinguishable at the same glance.
+ * Flat strips, not cards. These are a row of results, and wrapping each in its
+ * own white panel gave three boxes competing with the two that carry the
+ * actual analysis below them.
  */
-function ResumeStrip({ rows, emptyLabel }: { rows: ScheduleRow[]; emptyLabel: string }) {
+function Strip({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <div className="flex items-baseline gap-2 mb-2">
+        <h2 className="text-[0.6rem] uppercase tracking-[0.18em] font-bold text-ink">{title}</h2>
+        {note && <span className="text-[0.6rem] text-ink-muted ml-auto">{note}</span>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * A résumé strip, borrowed from the March-résumé ticker on the coach pages:
+ * one cell per game, washed green for a win and red for a loss, with a mark
+ * and the score inside it.
+ *
+ * It beats a bare W/L/W/W/L chip row because a letter says a team went 4-1
+ * without saying whether the win came by 30 at home or by 1 in overtime on the
+ * road. Opponent and score in the cell make "hot" and "flattered by the
+ * schedule" distinguishable at the same glance.
+ */
+function ResumeStrip({
+  rows, emptyLabel, markFor,
+}: {
+  rows: ScheduleRow[];
+  emptyLabel: string;
+  /** Which school's mark the cell wears. Defaults to the opponent. */
+  markFor?: (r: ScheduleRow) => string;
+}) {
   if (rows.length === 0) return <p className="text-sm text-ink-muted">{emptyLabel}</p>;
   return (
-    <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-1 px-1">
-      {rows.map((r) => <ResumeCell key={r.id} r={r} />)}
+    <div className="flex gap-1.5">
+      {rows.map((r) => <ResumeCell key={r.id} r={r} mark={markFor ? markFor(r) : r.opponent} />)}
     </div>
   );
 }
 
-function ResumeCell({ r }: { r: ScheduleRow }) {
+function ResumeCell({ r, mark }: { r: ScheduleRow; mark: string }) {
   const won = r.won;
   const where = r.neutral ? "vs" : r.isHome ? "vs" : "at";
   return (
     <div
       title={`${shortDate(r.date)} ${where} ${r.opponent} · ${won ? "W" : "L"} ${r.us}-${r.them}`}
       className={cn(
-        "shrink-0 basis-0 grow flex flex-col items-center gap-1 rounded-lg px-1.5 pt-1.5 pb-1 ring-1 min-w-14",
+        "flex-1 min-w-0 flex flex-col items-center gap-1 rounded-lg px-1.5 pt-1.5 pb-1 ring-1",
         won === true && "bg-emerald-100/60 ring-emerald-300/60",
         won === false && "bg-rose-100/50 ring-rose-300/50",
         won === null && "bg-paper-deep ring-hairline",
@@ -344,7 +426,7 @@ function ResumeCell({ r }: { r: ScheduleRow }) {
       )}>
         {won === null ? "–" : won ? "W" : "L"}
       </span>
-      <TeamLogo name={r.opponent} size={22} />
+      <TeamLogo name={mark} size={22} />
       <span className="text-[0.62rem] tabular font-semibold text-ink leading-none">{r.us}-{r.them}</span>
       <span className="text-[0.5rem] tabular text-ink-muted leading-none">
         {where === "at" ? "@" : ""}{shortDate(r.date)}
@@ -354,14 +436,10 @@ function ResumeCell({ r }: { r: ScheduleRow }) {
 }
 
 function Form({ side, rows }: { side: GameSide; rows: ScheduleRow[] }) {
-  const w = rows.filter((r) => r.won).length;
   return (
-    <Panel
-      title={`${side.team} form`}
-      note={rows.length ? `${w}-${rows.length - w} in the last ${rows.length}` : undefined}
-    >
+    <Strip title={`${side.team} form`}>
       <ResumeStrip rows={rows} emptyLabel="No completed games before this one." />
-    </Panel>
+    </Strip>
   );
 }
 
@@ -369,14 +447,17 @@ function HeadToHead({ b }: { b: GameBundle }) {
   const g = b.game;
   const w = b.h2h.filter((r) => r.won).length;
   return (
-    <Panel
-      title="Head to head"
-      note={b.h2h.length ? `${g.home.team} ${w}-${b.h2h.length - w}` : undefined}
-    >
-      {/* Rows are stored from the HOME team's side, so the panel says whose
-          record it is — a bare W/L strip between two teams is ambiguous. */}
-      <ResumeStrip rows={b.h2h} emptyLabel="First meeting in our records." />
-    </Panel>
+    <Strip title="Head to head" note={b.h2h.length ? `${g.home.team} ${w}-${b.h2h.length - w}` : undefined}>
+      {/* Each cell wears the WINNER's mark rather than the opponent's. Rows are
+          stored from the home team's side, so an unlabelled row of five
+          identical opponent logos left the reader to work out who the W and L
+          belonged to. The winning school's badge answers it directly. */}
+      <ResumeStrip
+        rows={b.h2h}
+        emptyLabel="First meeting in our records."
+        markFor={(r) => (r.won ? g.home.team : r.opponent)}
+      />
+    </Strip>
   );
 }
 
