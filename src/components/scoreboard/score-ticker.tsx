@@ -148,7 +148,9 @@ function TickerSide({ side, won }: { side: ScoreGame["home"]; won: boolean }) {
           Tournament seed only shows when there is no poll rank — in March both
           exist and two small numbers next to one team read as a score. */}
       {side.rank != null ? (
-        <span className="text-[0.55rem] font-bold text-coral tabular">{side.rank}</span>
+        <span className="shrink-0 inline-flex items-center justify-center min-w-4 h-3.5 px-0.5 rounded-sm bg-coral text-white text-[0.5rem] font-bold tabular leading-none">
+          {side.rank}
+        </span>
       ) : side.seed != null ? (
         <span className="text-[0.5rem] text-ink-muted tabular">{side.seed}</span>
       ) : null}

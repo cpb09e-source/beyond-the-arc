@@ -73,6 +73,10 @@ type Side = {
   seed: number | null;
   /** AP Top 25 position in the poll current as of this slate, else null. */
   rank: number | null;
+  /** Points by period: [1H, 2H, OT, 2OT…]. Empty when not reported. */
+  periods: number[];
+  /** W-L from completed games BEFORE this slate. Null when unknown. */
+  record: { w: number; l: number } | null;
 };
 
 type Game = {
@@ -147,6 +151,8 @@ function normalise(r: Record<string, unknown>): Game | null {
       winner: typeof r.homeWinner === "boolean" ? r.homeWinner : null,
       seed: num(r.homeSeed),
       rank: null,
+      periods: Array.isArray(r.homePeriodPoints) ? (r.homePeriodPoints as number[]).filter((n) => typeof n === "number") : [],
+      record: null,
     },
     away: {
       team: away,
@@ -155,6 +161,8 @@ function normalise(r: Record<string, unknown>): Game | null {
       winner: typeof r.awayWinner === "boolean" ? r.awayWinner : null,
       seed: num(r.awaySeed),
       rank: null,
+      periods: Array.isArray(r.awayPeriodPoints) ? (r.awayPeriodPoints as number[]).filter((n) => typeof n === "number") : [],
+      record: null,
     },
     neutralSite: r.neutralSite === true,
     conferenceGame: r.conferenceGame === true,
@@ -210,6 +218,47 @@ async function rankingsForDate(key: string, season: number, onDate: string): Pro
 }
 
 /**
+ * Team → W-L from every completed game BEFORE `beforeDate`.
+ *
+ * CBBD's /games has winner flags but no record column, so the record has to be
+ * tallied. One request covers the whole season and is cached for an hour: the
+ * figure only moves when games finish, and it is deliberately the record a team
+ * CARRIES INTO the day, which is stable for that whole day. That also makes it
+ * historically correct when stepping back through February — showing today's
+ * record beside a game from three weeks ago would be a lie about the standings
+ * at the time.
+ */
+const RECORD_TTL_MS = 60 * 60 * 1000;
+type SeasonRow = { startDate?: string; homeTeam?: string; awayTeam?: string; homeWinner?: boolean; awayWinner?: boolean };
+let seasonCache: { season: number; at: number; rows: SeasonRow[] } | null = null;
+
+async function recordsBefore(key: string, season: number, beforeDate: string): Promise<Map<string, { w: number; l: number }>> {
+  const out = new Map<string, { w: number; l: number }>();
+  try {
+    if (!seasonCache || seasonCache.season !== season || Date.now() - seasonCache.at > RECORD_TTL_MS) {
+      const rows = (await cbbd(`/games?season=${season}`, key)) as SeasonRow[];
+      seasonCache = { season, at: Date.now(), rows };
+    }
+    const bump = (team: string, won: boolean) => {
+      const cur = out.get(team) ?? { w: 0, l: 0 };
+      if (won) cur.w++; else cur.l++;
+      out.set(team, cur);
+    };
+    for (const r of seasonCache.rows) {
+      if (!r.startDate || !r.homeTeam || !r.awayTeam) continue;
+      if (typeof r.homeWinner !== "boolean" || typeof r.awayWinner !== "boolean") continue;
+      const d = easternDate(r.startDate);
+      if (!d || d >= beforeDate) continue;
+      bump(r.homeTeam, r.homeWinner);
+      bump(r.awayTeam, r.awayWinner);
+    }
+  } catch {
+    // Records are supporting detail; never let them take the scores down.
+  }
+  return out;
+}
+
+/**
  * Ranked games lead, best matchup first: a top-5 vs top-10 outranks a #2 vs
  * unranked. Everything else keeps tip order. This is the order the ticker and
  * the page both render, so "the games that matter" are what you see without
@@ -253,10 +302,15 @@ async function resolveSlate(key: string, season: number, anchor?: Date): Promise
     const games = live.map((r) => normalise(r as Record<string, unknown>)).filter((g): g is Game => g !== null);
     if (games.length > 0) {
       const date = easternDate(games[0]!.startDate) ?? iso(now);
-      const ranks = await rankingsForDate(key, season, date);
+      const [ranks, recs] = await Promise.all([
+        rankingsForDate(key, season, date),
+        recordsBefore(key, season, date),
+      ]);
       for (const g of games) {
         g.home.rank = ranks.get(g.home.team) ?? null;
         g.away.rank = ranks.get(g.away.team) ?? null;
+        g.home.record = recs.get(g.home.team) ?? null;
+        g.away.record = recs.get(g.away.team) ?? null;
       }
       return { source: "live", date, games: orderGames(games), fetchedAt: now.toISOString() };
     }
@@ -291,10 +345,15 @@ async function resolveSlate(key: string, season: number, anchor?: Date): Promise
       : null;
     const games = day ? byDate.get(day) : undefined;
     if (games && games.length > 0) {
-      const ranks = await rankingsForDate(key, season, day!);
+      const [ranks, recs] = await Promise.all([
+        rankingsForDate(key, season, day!),
+        recordsBefore(key, season, day!),
+      ]);
       for (const g of games) {
         g.home.rank = ranks.get(g.home.team) ?? null;
         g.away.rank = ranks.get(g.away.team) ?? null;
+        g.home.record = recs.get(g.home.team) ?? null;
+        g.away.record = recs.get(g.away.team) ?? null;
       }
       return { source: "recent", date: day, games: orderGames(games), fetchedAt: now.toISOString() };
     }

@@ -6,8 +6,9 @@ import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { confDisplay } from "@/lib/conf-display";
 import { cn } from "@/lib/utils";
+import { DatePicker } from "./date-picker";
 import {
-  EMPTY_SLATE, POLL_MS, dateLabel, fetchSlate, isFinal, isLive, isRanked, slateIsSettled, tipLabel,
+  EMPTY_SLATE, POLL_MS, dateLabel, fetchSlate, isFinal, isLive, isRanked, recordLabel, slateIsSettled, tipLabel,
   type ScoreGame, type Slate,
 } from "@/lib/scoreboard";
 
@@ -67,11 +68,30 @@ export function ScoreboardClient() {
   // no way to reach a day that actually has games — a dead end.
   const shown = pinned ?? slate.date ?? todayEastern();
 
+  // Conference filter. Every conference with a game today, plus the
+  // non-conference bucket; "" means show everything.
+  const [conf, setConf] = useState("");
+  const confOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const g of slate.games) {
+      if (g.home.conference) set.add(confDisplay(g.home.conference));
+      if (g.away.conference) set.add(confDisplay(g.away.conference));
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [slate.games]);
+  // Matches on EITHER side, so picking the Big Ten keeps a Big Ten team's
+  // non-conference game — the thing a reader following that league wants.
+  const inConf = (g: ScoreGame) =>
+    !conf ||
+    (g.home.conference && confDisplay(g.home.conference) === conf) ||
+    (g.away.conference && confDisplay(g.away.conference) === conf);
+
   // Conference games group under their own conference; everything else is
   // non-conference. Sorted by tip so the page reads down the evening.
   const groups = useMemo(() => {
     const m = new Map<string, ScoreGame[]>();
     for (const g of slate.games) {
+      if (!inConf(g)) continue;
       const key = g.conferenceGame && g.home.conference ? confDisplay(g.home.conference) : "Non-conference";
       if (!m.has(key)) m.set(key, []);
       m.get(key)!.push(g);
@@ -79,12 +99,15 @@ export function ScoreboardClient() {
     for (const list of m.values()) list.sort((a, b) => a.startDate.localeCompare(b.startDate));
     return [...m.entries()].sort((a, b) =>
       a[0] === "Non-conference" ? 1 : b[0] === "Non-conference" ? -1 : a[0].localeCompare(b[0]));
-  }, [slate.games]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slate.games, conf]);
 
   // Games with an AP Top 25 side, in the order the function ranked them (best
   // matchup first). They ALSO stay in their conference group below — a reader
   // scanning the Big Ten should not find a hole where the ranked game was.
   const ranked = useMemo(() => slate.games.filter(isRanked), [slate.games]);
+
+
   const liveCount = slate.games.filter(isLive).length;
 
   return (
@@ -115,22 +138,36 @@ export function ScoreboardClient() {
             the platform's own calendar, keyboard entry, and localisation for
             free, and on a phone it opens the OS picker — all things a
             hand-rolled calendar would have to reimplement worse. */}
-        <label className="flex items-center gap-2 text-xs text-ink-muted">
-          <span className="uppercase tracking-[0.12em] font-semibold">Jump to</span>
-          <input
-            type="date"
-            value={shown}
-            onChange={(e) => e.target.value && setPinned(e.target.value)}
-            aria-label="Choose a date"
-            className="h-9 px-2.5 rounded-md border border-ink/15 bg-card text-ink text-base sm:text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40"
-          />
-        </label>
+        <div className="flex items-center gap-2">
+          <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">Jump to</span>
+          <DatePicker value={shown} onChange={setPinned} />
+        </div>
       </div>
 
       {/* Week strip: the shown day centred, three either side, arrows stepping a
           week at a time. Gives the whole week at a glance and makes "the night
           before" one tap instead of a round trip through the picker. */}
       <WeekStrip shown={shown} onPick={setPinned} />
+
+      {confOptions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-6">
+          <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">Conference</span>
+          <select
+            value={conf}
+            onChange={(e) => setConf(e.target.value)}
+            aria-label="Filter by conference"
+            className="h-9 px-2.5 rounded-md border border-ink/15 bg-card text-ink text-base sm:text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40"
+          >
+            <option value="">All conferences</option>
+            {confOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          {conf && (
+            <button type="button" onClick={() => setConf("")} className="text-xs text-coral hover:underline">
+              Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {!loading && slate.games.length === 0 && (
         <div className="bg-card border border-ink/10 rounded-xl px-6 py-12 text-center">
@@ -142,15 +179,15 @@ export function ScoreboardClient() {
         </div>
       )}
 
-      {ranked.length > 0 && (
+      {ranked.filter(inConf).length > 0 && (
         <section className="mb-8">
           <h2 className="text-[0.62rem] uppercase tracking-[0.16em] font-bold text-coral mb-2.5 flex items-center gap-2">
             Top 25
             <span className="h-px flex-1 bg-coral/25" />
-            <span className="text-coral/70 font-medium tabular">{ranked.length}</span>
+            <span className="text-coral/70 font-medium tabular">{ranked.filter(inConf).length}</span>
           </h2>
           <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-            {ranked.map((g) => <GameCard key={`r-${g.id}`} g={g} />)}
+            {ranked.filter(inConf).map((g) => <GameCard key={`r-${g.id}`} g={g} />)}
           </div>
         </section>
       )}
@@ -242,6 +279,9 @@ function dayNum(d: string): string {
 function GameCard({ g }: { g: ScoreGame }) {
   const live = isLive(g);
   const final = isFinal(g);
+  // Halves only once they exist. A scheduled game has none, and a live first
+  // half has one — showing an empty "2H" column would read as a 0.
+  const halves = Math.max(g.home.periods.length, g.away.periods.length);
   return (
     <div className={cn(
       "bg-card border rounded-xl px-3.5 py-3 transition-colors",
@@ -249,31 +289,48 @@ function GameCard({ g }: { g: ScoreGame }) {
     )}>
       <div className="flex items-center justify-between gap-2 mb-2">
         <span className="text-[0.58rem] uppercase tracking-[0.12em] font-semibold text-ink-muted truncate">
-          {g.neutralSite ? "Neutral" : g.venue ?? ""}
+          {g.neutralSite ? "Neutral site" : g.venue ?? ""}
         </span>
         <span className={cn(
           "shrink-0 text-[0.58rem] uppercase tracking-[0.12em] font-bold tabular",
           live ? "text-coral" : "text-ink-muted",
         )}>
-          {live ? `${g.clock ?? "Live"}${g.period != null ? ` · ${g.period <= 2 ? (g.period === 1 ? "1st" : "2nd") : "OT"}` : ""}`
+          {live ? `${g.clock ?? "Live"}${g.period != null ? ` · ${ordinalPeriod(g.period)}` : ""}`
             : final ? "Final" : tipLabel(g.startDate)}
         </span>
       </div>
-      <TeamRow t={g.away} final={final} />
-      <TeamRow t={g.home} final={final} />
+
+      {/* Column heads only when there are halves to label. */}
+      {halves > 0 && (
+        <div className="flex items-center gap-2 pb-1 text-[0.5rem] uppercase tracking-[0.1em] font-bold text-ink-muted/70">
+          <span className="flex-1" />
+          {periodLabels(halves).map((p) => <span key={p} className="w-6 text-center">{p}</span>)}
+          <span className="w-8 text-right">T</span>
+        </div>
+      )}
+
+      <TeamRow t={g.away} final={final} halves={halves} side="away" />
+      <TeamRow t={g.home} final={final} halves={halves} side="home" />
     </div>
   );
 }
 
-function TeamRow({ t, final }: { t: ScoreGame["home"]; final: boolean }) {
+/** ["1H","2H","OT","2OT"] for however many periods were played. */
+function periodLabels(n: number): string[] {
+  return Array.from({ length: n }, (_, i) => (i === 0 ? "1H" : i === 1 ? "2H" : i === 2 ? "OT" : `${i - 1}OT`));
+}
+
+function TeamRow({ t, final, halves, side }: { t: ScoreGame["home"]; final: boolean; halves: number; side: "home" | "away" }) {
   const won = final && t.winner === true;
+  const rec = recordLabel(t);
   return (
     <div className="flex items-center gap-2 py-1">
+      {/* "@" marks the road team, the way a schedule is written. The home team
+          carries no glyph — the absence IS the signal, and two marks would make
+          the reader work out which is which. */}
+      <span className="w-2 shrink-0 text-[0.6rem] text-ink-muted/70 tabular">{side === "away" ? "@" : ""}</span>
       <TeamLogo name={t.team} size={20} />
-      {/* Poll rank wins over tournament seed when both exist — see the ticker. */}
-      {t.rank != null ? (
-        <span className="text-[0.62rem] font-bold text-coral tabular">{t.rank}</span>
-      ) : t.seed != null ? (
+      {t.rank != null ? <RankBadge rank={t.rank} /> : t.seed != null ? (
         <span className="text-[0.6rem] text-ink-muted tabular">{t.seed}</span>
       ) : null}
       <Link
@@ -282,9 +339,45 @@ function TeamRow({ t, final }: { t: ScoreGame["home"]; final: boolean }) {
       >
         {t.team}
       </Link>
-      <span className={cn("ml-auto tabular text-base", won ? "text-ink font-bold" : "text-ink-muted")}>
-        {t.points ?? "—"}
-      </span>
+      {rec && <span className="shrink-0 text-[0.6rem] text-ink-muted tabular">({rec})</span>}
+
+      {halves > 0 && (
+        <span className="ml-auto flex items-center gap-2">
+          {Array.from({ length: halves }, (_, i) => (
+            <span key={i} className="w-6 text-center text-[0.7rem] tabular text-ink-muted">
+              {t.periods[i] ?? "—"}
+            </span>
+          ))}
+          <span className={cn("w-8 text-right tabular text-base", won ? "text-ink font-bold" : "text-ink-muted")}>
+            {t.points ?? "—"}
+          </span>
+        </span>
+      )}
+      {halves === 0 && (
+        <span className={cn("ml-auto tabular text-base", won ? "text-ink font-bold" : "text-ink-muted")}>
+          {t.points ?? "—"}
+        </span>
+      )}
     </div>
   );
+}
+
+/**
+ * AP rank as a filled chip rather than a bare numeral. At 10px next to a logo
+ * and a team name, a loose "4" reads as part of the score; a solid accent block
+ * reads as a rank at a glance, which is the whole point of surfacing it.
+ */
+function RankBadge({ rank }: { rank: number }) {
+  return (
+    <span className="shrink-0 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded bg-coral text-white text-[0.62rem] font-bold tabular leading-none">
+      {rank}
+    </span>
+  );
+}
+
+/** "2nd" / "OT" / "2OT" — college basketball plays two halves, then overtimes. */
+function ordinalPeriod(p: number): string {
+  if (p <= 1) return "1st";
+  if (p === 2) return "2nd";
+  return p === 3 ? "OT" : `${p - 2}OT`;
 }

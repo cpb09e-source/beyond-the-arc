@@ -15,6 +15,10 @@ export type ScoreTeam = {
   seed: number | null;
   /** AP Top 25 position in the poll current as of the slate, else null. */
   rank: number | null;
+  /** Points by period: [1H, 2H, OT, 2OT…]. Empty when not reported. */
+  periods: number[];
+  /** W-L from completed games before this slate. Null when unknown. */
+  record: { w: number; l: number } | null;
 };
 
 export type ScoreGame = {
@@ -68,6 +72,11 @@ export function isFinal(g: ScoreGame): boolean {
  */
 export function slateIsSettled(s: Slate): boolean {
   return s.games.length > 0 && s.games.every((g) => isFinal(g));
+}
+
+/** "12-4", or "" when we have no record for the team. */
+export function recordLabel(t: ScoreTeam): string {
+  return t.record ? `${t.record.w}-${t.record.l}` : "";
 }
 
 /** Tip time in US Eastern, which is how the sport lists its schedule. */
