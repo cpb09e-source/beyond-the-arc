@@ -38,8 +38,13 @@ export type ScoreGame = {
 };
 
 export type Slate = {
-  /** "live" came from CBBD's live feed; "recent" is a completed day we fell back to. */
-  source: "live" | "recent";
+  /**
+   * "live"     — CBBD's live feed, games in progress now
+   * "recent"   — a completed day we fell back to (last night)
+   * "upcoming" — the next day that has games, none of them played yet. The
+   *              offseason and preseason state; in July it is opening night.
+   */
+  source: "live" | "recent" | "upcoming";
   date: string | null;
   games: ScoreGame[];
   fetchedAt: string;
@@ -71,9 +76,33 @@ export function isFinal(g: ScoreGame): boolean {
 /**
  * Any game still to tip, or currently being played, means the slate is worth
  * re-polling. A day of all-finals is settled — stop asking.
+ *
+ * A FUTURE slate is settled too, and that one matters against the call budget:
+ * out of season the feed answers with opening night, every game "scheduled" and
+ * therefore never all-final. Left to the games alone, the ticker would poll
+ * once a minute for four months to re-learn a fixture list that cannot change
+ * — about 43,000 CBBD calls a month against a quota of roughly 20,000. Nothing
+ * about 3 November moves while it is still July.
  */
 export function slateIsSettled(s: Slate): boolean {
-  return s.games.length > 0 && s.games.every((g) => isFinal(g));
+  if (s.games.length === 0) return false;
+  if (s.date && s.date > todayEastern()) return true;
+  return s.games.every((g) => isFinal(g));
+}
+
+/** Today's date in US Eastern, the day the sport files its schedule under. */
+export function todayEastern(): string {
+  return ET_DAY.format(new Date());
+}
+
+/** "Nov 3" — compact enough for the ticker's label rail. */
+export function shortDateLabel(d: string | null): string {
+  if (!d) return "";
+  const t = Date.parse(`${d}T12:00:00Z`);
+  if (!Number.isFinite(t)) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC", month: "short", day: "numeric",
+  }).format(new Date(t));
 }
 
 /**

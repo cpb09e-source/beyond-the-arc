@@ -124,6 +124,8 @@ export function ScoreboardClient() {
             <span className="h-px w-6 bg-coral" />
             {slate.source === "live" && liveCount > 0
               ? `${liveCount} game${liveCount === 1 ? "" : "s"} in progress`
+              : slate.source === "upcoming"
+              ? "Next up"
               : "Scoreboard"}
           </div>
           <h1 className="font-display text-4xl lg:text-5xl text-ink leading-none tracking-tight">
@@ -135,7 +137,11 @@ export function ScoreboardClient() {
               : slate.games.length === 0
               ? "No games on this date."
               : `${slate.games.length} game${slate.games.length === 1 ? "" : "s"}${
-                  slate.source === "live" ? " · updating every minute" : ""
+                  slate.source === "live"
+                    ? " · updating every minute"
+                    : slate.source === "upcoming"
+                    ? " · none tipped yet"
+                    : ""
                 }`}
           </p>
         </div>

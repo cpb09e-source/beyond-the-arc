@@ -54,22 +54,37 @@ setDefaultResultOrder("ipv4first");
 const API = "https://api.collegebasketballdata.com";
 
 /**
- * ⚠ TEMPORARY PREVIEW PIN — DELETE BEFORE THE SEASON STARTS.
+ * LAST-RESORT PREVIEW SLATE.
  *
- * Set to an ISO date, the feed pretends that day is "today" whenever no
- * explicit ?date= is given. Set to null, everything behaves normally: live feed
- * first, then a walk back for the most recent completed slate.
+ * Used only when live, recent AND upcoming all come up empty — never as an
+ * override. That ordering matters: the moment CBBD publishes the 2026-27
+ * schedule this pin stops being reached on its own, and the surfaces switch to
+ * the real opening night with no code change and no deploy.
  *
- * It exists because we are building this in July. CBBD's live /scoreboard is
- * live-ONLY and returns [] out of season, and the fallback walk finds nothing
- * either, so both the ticker and the page correctly render nothing at all —
- * which makes them impossible to look at. Saturday 7 Feb 2026 is the fullest
- * slate of that month: 155 games, 17 of them power-conference, a mix of finals
- * and blowouts and one-possession games.
+ * It exists because CBBD's live /scoreboard is live-ONLY and returns [] out of
+ * season. As of 28 July 2026 `/games?season=2027` also returns zero rows —
+ * CBBD has rolled `/teams` forward to 2027 (365 of them) but not the schedule —
+ * so all three resolution paths find nothing and both surfaces would correctly
+ * render nothing at all. Saturday 7 Feb 2026 is the fullest slate of that
+ * month: 155 games, 17 power-conference, a mix of finals and blowouts and
+ * one-possession games.
  *
- * Setting this back to null is the only step needed to go live.
+ * Set to null once the season is under way. Until then it is harmless: it can
+ * only fire on a day the sport genuinely has nothing.
  */
 const DEMO_DATE: string | null = "2026-02-07";
+
+/**
+ * Forward search for the next scheduled slate, in windows of this many days.
+ *
+ * Windowed rather than one wide query because CBBD caps EVERY list response at
+ * 3,000 rows with no error and no cursor (see recordsBefore) — a query spanning
+ * November would silently lose its tail. Two weeks of November is roughly 700
+ * rows, comfortably clear.
+ */
+const LOOKAHEAD_DAYS = 14;
+/** Windows to try before giving up: 5 × 14 covers ten weeks. */
+const LOOKAHEAD_WINDOWS = 5;
 
 /** Edge cache lifetime. See the quota arithmetic in the header comment. */
 const REFRESH_SECONDS = 60;
@@ -115,8 +130,13 @@ type Game = {
 };
 
 type Slate = {
-  /** "live" = from CBBD's live feed; "recent" = a completed slate we fell back to. */
-  source: "live" | "recent";
+  /**
+   * "live"     — CBBD's live feed, games in progress right now
+   * "recent"   — a completed slate we fell back to (last night)
+   * "upcoming" — the next day that HAS games, nothing played yet. This is the
+   *              offseason and preseason state: in July it means opening night.
+   */
+  source: "live" | "recent" | "upcoming";
   /** ISO date the games belong to, for the UI's heading. */
   date: string | null;
   games: Game[];
@@ -173,6 +193,27 @@ function simulateLive(games: Game[]): Game[] {
       away: half(g.away),
     };
   });
+}
+
+/**
+ * DEV ONLY — wind a settled slate FORWARD, so the preseason state is reachable.
+ *
+ * Same gate and same purpose as simulateLive(), for the opposite end of the
+ * calendar: until CBBD publishes a schedule there is no way to see what the
+ * ticker and the page look like the week before the season starts, and "we will
+ * find out in November" is not a design process. Scores and winners are
+ * stripped, records are kept — a real opening night has 0-0 everywhere, but the
+ * week after has records, and that is the version worth checking.
+ */
+function simulateUpcoming(games: Game[]): Game[] {
+  return games.map((g) => ({
+    ...g,
+    status: "scheduled",
+    period: null,
+    clock: null,
+    home: { ...g.home, points: null, winner: null, periods: [] },
+    away: { ...g.away, points: null, winner: null, periods: [] },
+  }));
 }
 
 /**
@@ -517,7 +558,82 @@ async function resolveSlate(key: string, season: number, anchor?: Date): Promise
       return { source: "recent", date: day, games: orderGames(games), fetchedAt: now.toISOString() };
     }
   }
+  // Nothing live and nothing behind us. Look FORWARD for the next day that has
+  // games — which in July is opening night, and in early November is tomorrow.
+  // Skipped when a date was explicitly asked for: "show me 4 February" must not
+  // silently answer with 11 February because the 4th was empty.
+  if (!anchor) {
+    const next = await nextSlate(key, season, now);
+    if (next) {
+      const [ranks, recs, lines] = await Promise.all([
+        rankingsForDate(key, season, next.date),
+        recordsBefore(key, season, next.date),
+        linesForDate(key, season, next.date),
+      ]);
+      for (const g of next.games) {
+        g.home.rank = ranks.get(g.home.team) ?? null;
+        g.away.rank = ranks.get(g.away.team) ?? null;
+        g.home.record = recs.get(g.home.team) ?? null;
+        g.away.record = recs.get(g.away.team) ?? null;
+        g.line = lines.get(g.id) ?? null;
+      }
+      return { source: "upcoming", date: next.date, games: orderGames(next.games), fetchedAt: now.toISOString() };
+    }
+  }
   return { source: "recent", date: null, games: [], fetchedAt: now.toISOString() };
+}
+
+/**
+ * The earliest day from `now` forward that has games on the schedule.
+ *
+ * WHY IT STARTS AT THE SEASON OPENER RATHER THAN TODAY: for five months of the
+ * year the answer is months away, and stepping forward a fortnight at a time
+ * from late July would burn a dozen calls to learn what the calendar already
+ * says — the sport does not play before November. Jumping the cursor straight
+ * to 1 November collapses the whole offseason to a single request.
+ *
+ * Returns the first day with ANY game, not the first day with a good one. In
+ * November that is a Monday of buy games, and that is the honest answer to
+ * "when does basketball start".
+ *
+ * EXPORTED for scripts/check-schedule.mts, which asks "has CBBD published next
+ * season yet?". That script wants the real walk rather than a copy of it —
+ * a second implementation of the cursor and the bucketing is a second thing to
+ * get wrong. Netlify only ever invokes the default export.
+ */
+export async function nextSlate(
+  key: string, season: number, now: Date,
+): Promise<{ date: string; games: Game[] } | null> {
+  const today = easternDate(now.toISOString()) ?? iso(now);
+  // A CBBD season labelled N is played across N-1 and N, and opens in early
+  // November of N-1. Late-October exhibitions exist, so the cursor starts there.
+  const opens = `${season - 1}-10-25`;
+  let cursor = today > opens ? today : opens;
+
+  for (let w = 0; w < LOOKAHEAD_WINDOWS; w++) {
+    const to = iso(new Date(Date.parse(`${cursor}T12:00:00Z`) + LOOKAHEAD_DAYS * 86_400_000));
+    const rows = await cbbd(
+      `/games?season=${season}&startDateRange=${cursor}&endDateRange=${to}`, key,
+    ).catch(() => [] as unknown[]);
+
+    const byDate = new Map<string, Game[]>();
+    for (const row of rows) {
+      const g = normalise(row as Record<string, unknown>);
+      if (!g) continue;
+      const d = easternDate(g.startDate);
+      // Strictly forward. The window's first day is today, whose already-played
+      // games belong to the backward walk that ran before this.
+      if (!d || d < today) continue;
+      if (!byDate.has(d)) byDate.set(d, []);
+      byDate.get(d)!.push(g);
+    }
+    if (byDate.size > 0) {
+      const first = [...byDate.keys()].sort()[0]!;
+      return { date: first, games: byDate.get(first)! };
+    }
+    cursor = to;
+  }
+  return null;
 }
 
 /**
@@ -547,18 +663,37 @@ export default async (req: Request, _context: Context) => {
   }
 
   // ?date=YYYY-MM-DD pins the slate to one day — what the /scoreboard page's
-  // day picker asks for, and the only way to exercise a populated slate out of
-  // season. Anything unparseable falls through to "today".
+  // day picker asks for. Anything unparseable falls through to "today".
   const params = new URL(req.url).searchParams;
-  const raw = params.get("date") ?? DEMO_DATE; // see DEMO_DATE — remove for live
-  const anchor = raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T23:59:59Z`) : undefined;
+  const raw = params.get("date");
+  const asDate = (d: string | null) =>
+    d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(`${d}T23:59:59Z`) : undefined;
+  const anchor = asDate(raw);
   const season = Number(params.get("season")) || currentSeason(anchor);
   try {
-    const slate = await resolveSlate(key, season, anchor);
+    let slate = await resolveSlate(key, season, anchor);
+    // DEMO_DATE is reached ONLY here, after live, recent and upcoming have all
+    // come up empty, and only when no date was asked for. Ordering it last is
+    // what makes it self-retiring: publish the schedule upstream and the
+    // preview stops being consulted, no deploy required.
+    if (!anchor && slate.games.length === 0 && DEMO_DATE) {
+      const demo = asDate(DEMO_DATE);
+      if (demo) slate = await resolveSlate(key, currentSeason(demo), demo);
+    }
     // See simulateLive(). Unreachable in a deployed function.
-    if (process.env.NETLIFY_DEV === "true" && params.get("sim") === "live") {
-      slate.games = simulateLive(slate.games);
-      slate.source = "live";
+    if (process.env.NETLIFY_DEV === "true") {
+      const sim = params.get("sim");
+      if (sim === "live") {
+        slate.games = simulateLive(slate.games);
+        slate.source = "live";
+      } else if (sim === "upcoming") {
+        // The preseason state, which is otherwise unreachable until CBBD
+        // publishes a schedule: every game back to scheduled, dated forward so
+        // the "future slate stops polling" rule is exercised too.
+        slate.games = simulateUpcoming(slate.games);
+        slate.source = "upcoming";
+        slate.date = iso(new Date(Date.now() + 30 * 86_400_000));
+      }
     }
     return new Response(JSON.stringify(slate), { status: 200, headers });
   } catch (err) {

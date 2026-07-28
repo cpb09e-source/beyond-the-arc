@@ -6,7 +6,7 @@ import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
 import { useDragPan } from "@/lib/use-drag-pan";
 import {
-  EMPTY_SLATE, POLL_MS, fetchSlate, gameHref, isFinal, isLive, slateIsSettled, tipLabel,
+  EMPTY_SLATE, POLL_MS, fetchSlate, gameHref, isFinal, isLive, shortDateLabel, slateIsSettled, tipLabel,
   type ScoreGame, type Slate,
 } from "@/lib/scoreboard";
 
@@ -93,6 +93,11 @@ export function ScoreTicker() {
               </span>
               <span className="text-coral">{liveCount} live</span>
             </>
+          ) : slate.source === "upcoming" ? (
+            // Out of season the rail carries a fixture list, not results, and
+            // "Scores" over a row of tip times is a small lie. Naming the day
+            // is also the answer to the only question anyone has in July.
+            <span className="whitespace-nowrap">{shortDateLabel(slate.date)}</span>
           ) : (
             <span>Scores</span>
           )}
