@@ -73,7 +73,7 @@ export function GameDetail({ b }: { b: GameBundle }) {
       </nav>
 
       <div className="mx-auto max-w-[92rem] px-5 lg:px-10 pt-6">
-        {tab === "overview" && <OverviewTab b={b} hc={hc} ac={ac} />}
+        {tab === "overview" && <OverviewTab b={b} hc={hc} ac={ac} onOpenBox={() => setTab("players")} />}
         {tab === "players" && <PlayersTab b={b} hc={hc} ac={ac} />}
         {tab === "plays" && <PlaysTab b={b} />}
       </div>

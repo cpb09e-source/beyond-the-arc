@@ -6,37 +6,52 @@ import { cn } from "@/lib/utils";
 import { periodLabel, type GameBundle, type Play } from "./types";
 
 /**
- * Play by play.
+ * Play by play, grouped by period.
  *
- * GROUPED BY POSSESSION-ISH RUN, NOT FLAT. A flat log of 365 rows is a wall;
- * breaking on the scoring plays gives the eye somewhere to land and makes a
- * 9-0 run visible as a run rather than as nine consecutive lines.
+ * A flat log of 365 rows is a wall. Breaking it into collapsible halves gives
+ * the eye somewhere to land and makes "what happened in the second half" one
+ * click rather than a scroll hunt. The period heading also carries the clock
+ * context, so each row can drop its own "1H" prefix and the times line up.
  *
- * The running score sits on the scoring plays only. Repeating an unchanged
- * score on every rebound and substitution is noise that makes the changes
- * harder to spot, which is the opposite of what a score column is for.
+ * The running score sits on scoring plays only, in two columns — away then
+ * home, matching the order the header and every card on the site use. A score
+ * repeated on every rebound and substitution is noise that makes the changes
+ * harder to find, which is the opposite of what a score column is for.
  */
 export function PlaysTab({ b }: { b: GameBundle }) {
   const [side, setSide] = useState<"all" | "home" | "away">("all");
   const [kind, setKind] = useState<"all" | "scoring" | "shots" | "turnovers">("all");
-  const [half, setHalf] = useState(0);
+  const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
 
-  const periods = useMemo(
-    () => [...new Set(b.plays.map((p) => p.per))].sort((a, c) => a - c),
-    [b.plays],
+  const rows = useMemo(
+    () =>
+      b.plays.filter((p) => {
+        if (side === "home" && !p.h) return false;
+        if (side === "away" && p.h) return false;
+        if (kind === "scoring") return p.sc;
+        if (kind === "shots") return p.sh;
+        if (kind === "turnovers") return /turnover|steal/i.test(p.t);
+        return true;
+      }),
+    [b.plays, side, kind],
   );
 
-  const rows = useMemo(() => {
-    return b.plays.filter((p) => {
-      if (half !== 0 && p.per !== half) return false;
-      if (side === "home" && !p.h) return false;
-      if (side === "away" && p.h) return false;
-      if (kind === "scoring") return p.sc;
-      if (kind === "shots") return p.sh;
-      if (kind === "turnovers") return /turnover|steal/i.test(p.t);
-      return true;
+  // Periods in play order, each with its own rows.
+  const groups = useMemo(() => {
+    const m = new Map<number, Play[]>();
+    for (const p of rows) {
+      if (!m.has(p.per)) m.set(p.per, []);
+      m.get(p.per)!.push(p);
+    }
+    return [...m.entries()].sort((a, c) => a[0] - c[0]);
+  }, [rows]);
+
+  const toggle = (per: number) =>
+    setCollapsed((s) => {
+      const next = new Set(s);
+      if (next.has(per)) next.delete(per); else next.add(per);
+      return next;
     });
-  }, [b.plays, side, kind, half]);
 
   return (
     <div className="rounded-xl border border-hairline bg-card overflow-hidden">
@@ -44,11 +59,6 @@ export function PlaysTab({ b }: { b: GameBundle }) {
         <Seg opts={[["all", "Both"], ["away", b.game.away.team], ["home", b.game.home.team]]} v={side} on={(x) => setSide(x as never)} />
         <span className="w-px h-5 bg-hairline hidden sm:block" />
         <Seg opts={[["all", "Everything"], ["scoring", "Scoring"], ["shots", "Shots"], ["turnovers", "Turnovers"]]} v={kind} on={(x) => setKind(x as never)} />
-        <span className="w-px h-5 bg-hairline hidden sm:block" />
-        <Seg
-          opts={[["0", "Full game"], ...periods.map((p) => [String(p), periodLabel(p)] as [string, string])]}
-          v={String(half)} on={(x) => setHalf(Number(x))}
-        />
         <span className="ml-auto text-[0.65rem] tabular text-ink-muted">{rows.length} plays</span>
       </div>
 
@@ -56,44 +66,72 @@ export function PlaysTab({ b }: { b: GameBundle }) {
         <p className="px-4 py-8 text-sm text-ink-muted">Nothing matches those filters.</p>
       ) : (
         // Sized off the viewport rather than a fixed height: the log is the
-        // point of this tab, and a short window means scrolling a 365-row list
-        // through a letterbox. Capped so the filter bar above stays on screen.
-        <ol className="max-h-[calc(100vh-14rem)] min-h-[32rem] overflow-y-auto divide-y divide-hairline/50">
-          {rows.map((p) => <PlayRow key={p.i} p={p} home={b.game.home.team} away={b.game.away.team} />)}
-        </ol>
+        // point of this tab, and a short window means scrolling hundreds of
+        // rows through a letterbox.
+        <div className="max-h-[calc(100vh-13rem)] min-h-[34rem] overflow-y-auto">
+          {groups.map(([per, list]) => {
+            const shut = collapsed.has(per);
+            return (
+              <section key={per}>
+                <h3 className="sticky top-0 z-10 bg-paper-deep/95 backdrop-blur border-y border-hairline">
+                  <button
+                    type="button"
+                    onClick={() => toggle(per)}
+                    aria-expanded={!shut}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-left hover:bg-paper-deep transition-colors"
+                  >
+                    <span className="text-[0.72rem] uppercase tracking-[0.14em] font-bold text-ink">{periodLabel(per)} half</span>
+                    <span className="text-[0.6rem] tabular text-ink-muted">{list.length}</span>
+                    <svg viewBox="0 0 24 24" aria-hidden
+                      className={cn("ml-auto w-3.5 h-3.5 text-ink-muted transition-transform", shut && "-rotate-90")}
+                      fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </h3>
+                {!shut && (
+                  <ol className="divide-y divide-hairline/50">
+                    {list.map((p) => (
+                      <PlayRow key={p.i} p={p} home={b.game.home.team} away={b.game.away.team} />
+                    ))}
+                  </ol>
+                )}
+              </section>
+            );
+          })}
+        </div>
       )}
     </div>
   );
 }
 
 /**
- * The acting team is carried by its logo rather than a coloured dot. A dot
- * needs a legend and two navy programmes make it useless; a mark you already
- * recognise from the scoreboard needs neither.
- *
- * Some rows belong to no team — end of period, official timeouts — and those
- * keep an empty slot so the text column still lines up.
+ * The acting team is carried by its logo rather than a coloured dot: a dot
+ * needs a legend, and two navy programmes make it useless. Rows belonging to
+ * no team — end of period, official timeouts — keep the empty slot so the text
+ * column still lines up.
  */
 function PlayRow({ p, home, away }: { p: Play; home: string; away: string }) {
   const team = p.tm || (p.h ? home : away);
   const neutral = /end period|end game|official|tv timeout/i.test(p.t);
   return (
-    <li className={cn("grid grid-cols-[3.4rem_auto_1fr_auto] gap-x-3 items-center px-4 py-2", p.sc && "bg-paper-deep/25")}>
-      <span className="text-[0.62rem] tabular text-ink-muted whitespace-nowrap">
-        {p.per <= 2 ? `${p.per}H` : periodLabel(p.per)} {p.clk}
-      </span>
-      <span className="w-5 flex justify-center shrink-0">
+    <li className={cn(
+      "grid grid-cols-[1.75rem_3rem_1fr_2.25rem_2.25rem] gap-x-3 items-center px-4 py-2",
+      p.sc && "bg-paper-deep/20",
+    )}>
+      <span className="flex justify-center">
         {neutral || !team ? null : <TeamLogo name={team} size={18} />}
       </span>
-      <span className="text-[0.8rem] text-ink-soft leading-snug min-w-0">{p.txt}</span>
-      <span className="text-[0.78rem] tabular whitespace-nowrap">
-        {p.sc ? (
-          <span className="font-semibold text-ink">
-            {p.as}<span className="text-ink-muted mx-1">–</span>{p.hs}
-          </span>
-        ) : (
-          <span className="text-ink-muted/30">·</span>
-        )}
+      <span className="text-[0.68rem] tabular text-ink-muted">{p.clk}</span>
+      <span className={cn("text-[0.8rem] leading-snug min-w-0", p.sc ? "text-ink font-medium" : "text-ink-soft")}>
+        {p.txt}
+      </span>
+      {/* Away then home, the order every other surface on the site uses. */}
+      <span className={cn("text-right text-[0.8rem] tabular", p.sc ? "text-ink font-semibold" : "text-transparent")}>
+        {p.sc ? p.as : "·"}
+      </span>
+      <span className={cn("text-right text-[0.8rem] tabular", p.sc ? "text-ink font-semibold" : "text-transparent")}>
+        {p.sc ? p.hs : "·"}
       </span>
     </li>
   );

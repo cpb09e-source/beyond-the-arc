@@ -14,7 +14,7 @@ import {
  * play log is two, so this page's job is orientation: who led it, how the two
  * teams shot, where each sits in its league, and whether either arrived hot.
  */
-export function OverviewTab({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
+export function OverviewTab({ b, hc, ac, onOpenBox }: { b: GameBundle; hc: string; ac: string; onOpenBox?: () => void }) {
   const g = b.game;
   return (
     <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
@@ -23,11 +23,10 @@ export function OverviewTab({ b, hc, ac }: { b: GameBundle; hc: string; ac: stri
       <Form side={g.away} rows={b.form.away} />
       <Form side={g.home} rows={b.form.home} />
       <HeadToHead b={b} />
-      <Leaders side={g.away} players={b.players.away} color={ac} />
-      <Leaders side={g.home} players={b.players.home} color={hc} />
+      <Leaders b={b} hc={hc} ac={ac} onOpenBox={onOpenBox} />
+      <TeamStatsPanel b={b} hc={hc} ac={ac} />
       <GameInfo b={b} />
-      <TeamStatsPanel b={b} hc={hc} ac={ac} className="lg:col-span-2" />
-      <Standings b={b} />
+      <Standings b={b} className="xl:col-span-3" />
     </div>
   );
 }
@@ -69,38 +68,77 @@ function best(players: BoxPlayer[], pick: (p: BoxPlayer) => number | null): BoxP
   return topV <= 0 ? null : top;
 }
 
-function Leaders({ side, players, color }: { side: GameSide; players: BoxPlayer[]; color: string }) {
-  const rows: [string, BoxPlayer | null, (p: BoxPlayer) => string][] = [
-    ["Points", best(players, (p) => p.points), (p) => `${p.points} pts · ${p.fieldGoals.made}-${p.fieldGoals.attempted} FG`],
-    ["Rebounds", best(players, (p) => p.rebounds.total), (p) => `${p.rebounds.total} reb · ${p.rebounds.offensive} off`],
-    ["Assists", best(players, (p) => p.assists), (p) => `${p.assists} ast · ${p.turnovers} TO`],
+/**
+ * Game leaders, both sides in ONE card.
+ *
+ * Two separate leader panels spent a full column each to say the same three
+ * things, and the comparison they exist to support — who was the best player
+ * in this game — was left for the reader to make across a gap. Facing the two
+ * teams across a shared stat label makes it one glance and costs one panel
+ * instead of two.
+ */
+function Leaders({ b, hc, ac, onOpenBox }: { b: GameBundle; hc: string; ac: string; onOpenBox?: () => void }) {
+  const rows: [string, (p: BoxPlayer) => number | null, (p: BoxPlayer) => string][] = [
+    ["Points", (p) => p.points, (p) => `${p.fieldGoals.made}-${p.fieldGoals.attempted} FG · ${p.freeThrows.made}-${p.freeThrows.attempted} FT`],
+    ["Rebounds", (p) => p.rebounds.total, (p) => `${p.rebounds.defensive} def · ${p.rebounds.offensive} off`],
+    ["Assists", (p) => p.assists, (p) => `${p.turnovers} TO · ${p.minutes} min`],
   ];
   return (
-    <Panel title={`${side.team} leaders`}>
-      <div className="space-y-3">
-        {rows.map(([label, p, fmt]) => (
-          <div key={label} className="flex items-baseline gap-3">
-            <span className="w-16 shrink-0 text-[0.58rem] uppercase tracking-[0.12em] font-bold text-ink-muted">{label}</span>
-            {p ? (
-              <span className="min-w-0">
-                <span className="text-sm text-ink font-medium">{p.name}</span>
-                {p.position && <span className="text-[0.6rem] text-ink-muted ml-1.5">{p.position}</span>}
-                <span className="block text-[0.7rem] tabular text-ink-soft">{fmt(p)}</span>
-              </span>
-            ) : (
-              <span className="text-sm text-ink-muted">—</span>
-            )}
+    <Panel title="Game leaders">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 pb-3 border-b border-hairline">
+        <div className="flex items-center gap-2 justify-end">
+          <span className="text-[0.62rem] uppercase tracking-[0.12em] font-bold text-ink truncate">{b.game.away.team}</span>
+          <TeamLogo name={b.game.away.team} size={22} />
+        </div>
+        <span className="w-14" aria-hidden />
+        <div className="flex items-center gap-2">
+          <TeamLogo name={b.game.home.team} size={22} />
+          <span className="text-[0.62rem] uppercase tracking-[0.12em] font-bold text-ink truncate">{b.game.home.team}</span>
+        </div>
+      </div>
+      <div className="divide-y divide-hairline/60">
+        {rows.map(([label, pick, detail]) => (
+          <div key={label} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-3">
+            <LeaderSide p={best(b.players.away, pick)} pick={pick} detail={detail} color={ac} align="right" />
+            <span className="w-14 text-center text-[0.55rem] uppercase tracking-[0.1em] font-bold text-ink-muted">{label}</span>
+            <LeaderSide p={best(b.players.home, pick)} pick={pick} detail={detail} color={hc} align="left" />
           </div>
         ))}
       </div>
-      <div className="mt-4 pt-3 border-t border-hairline flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} aria-hidden />
-        <TeamLogo name={side.team} size={16} />
-        <span className="text-[0.65rem] text-ink-muted">
-          {players.length} played{side.elo && ` · Elo ${side.elo[1]} (${side.elo[1] >= side.elo[0] ? "+" : ""}${side.elo[1] - side.elo[0]})`}
-        </span>
-      </div>
+      {onOpenBox && (
+        <button
+          type="button"
+          onClick={onOpenBox}
+          className="mt-3 pt-3 border-t border-hairline w-full text-center text-[0.7rem] font-medium text-coral hover:underline"
+        >
+          Full box score
+        </button>
+      )}
     </Panel>
+  );
+}
+
+function LeaderSide({
+  p, pick, detail, color, align,
+}: {
+  p: BoxPlayer | null;
+  pick: (p: BoxPlayer) => number | null;
+  detail: (p: BoxPlayer) => string;
+  color: string;
+  align: "left" | "right";
+}) {
+  if (!p) return <span className={cn("text-sm text-ink-muted", align === "right" && "text-right block")}>—</span>;
+  return (
+    <div className={cn("flex items-center gap-2.5 min-w-0", align === "right" && "flex-row-reverse")}>
+      {/* Sans, not the display face: its "1" is a bare stem, so a two-digit
+          11 reads as "||" at this size. The scoreline can carry it because
+          those numbers are large; these cannot. */}
+      <span className="text-2xl font-semibold tabular leading-none shrink-0" style={{ color }}>{pick(p)}</span>
+      <div className={cn("min-w-0", align === "right" && "text-right")}>
+        <p className="text-[0.78rem] text-ink font-medium truncate leading-tight">{p.name}</p>
+        <p className="text-[0.62rem] tabular text-ink-muted leading-tight">{detail(p)}</p>
+      </div>
+    </div>
   );
 }
 
@@ -139,78 +177,131 @@ function GameInfo({ b }: { b: GameBundle }) {
 
 /* ------------------------------- team stats ------------------------------ */
 
-function TeamStatsPanel({
-  b, hc, ac, className,
-}: { b: GameBundle; hc: string; ac: string; className?: string }) {
+/**
+ * Team stats, two-sided.
+ *
+ * Each row is a value, the label, a value — and a pair of bars that grow
+ * OUTWARD from the centre. Growing from a shared middle means the two lengths
+ * start at the same place, so "who was bigger" is a single comparison rather
+ * than two measurements against different baselines. Bars are scaled to the
+ * pair, so a row where the teams are close reads as close.
+ */
+function TeamStatsPanel({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
   const h = b.teamStats.home, a = b.teamStats.away;
   if (!h || !a) return null;
-  const shooting: [string, string, string][] = [
-    ["Field goals", pctLine(a.fieldGoals), pctLine(h.fieldGoals)],
-    ["Three-pointers", pctLine(a.threePointFieldGoals), pctLine(h.threePointFieldGoals)],
-    ["Free throws", pctLine(a.freeThrows), pctLine(h.freeThrows)],
+
+  const led = percentLed(b);
+
+  const rows: StatRow[] = [
+    { label: "Field goal %", a: a.fieldGoals.pct, h: h.fieldGoals.pct, unit: "%",
+      aNote: `${a.fieldGoals.made}-${a.fieldGoals.attempted}`, hNote: `${h.fieldGoals.made}-${h.fieldGoals.attempted}` },
+    { label: "Three point %", a: a.threePointFieldGoals.pct, h: h.threePointFieldGoals.pct, unit: "%",
+      aNote: `${a.threePointFieldGoals.made}-${a.threePointFieldGoals.attempted}`, hNote: `${h.threePointFieldGoals.made}-${h.threePointFieldGoals.attempted}` },
+    { label: "Free throw %", a: a.freeThrows.pct, h: h.freeThrows.pct, unit: "%",
+      aNote: `${a.freeThrows.made}-${a.freeThrows.attempted}`, hNote: `${h.freeThrows.made}-${h.freeThrows.attempted}` },
+    { label: "Rebounds", a: a.rebounds.total, h: h.rebounds.total,
+      aNote: `${a.rebounds.offensive} off`, hNote: `${h.rebounds.offensive} off` },
+    { label: "Assists", a: a.assists, h: h.assists },
+    { label: "Turnovers", a: a.turnovers.total, h: h.turnovers.total },
+    { label: "Points in the paint", a: a.points.inPaint, h: h.points.inPaint },
+    { label: "Effective FG%", a: a.fourFactors.effectiveFieldGoalPct, h: h.fourFactors.effectiveFieldGoalPct, unit: "%" },
+    { label: "Largest lead", a: a.points.largestLead, h: h.points.largestLead },
   ];
-  const bars: [string, number, number, string][] = [
-    ["Rebounds", a.rebounds.total, h.rebounds.total, ""],
-    ["Offensive boards", a.rebounds.offensive, h.rebounds.offensive, ""],
-    ["Assists", a.assists, h.assists, ""],
-    ["Turnovers", a.turnovers.total, h.turnovers.total, ""],
-    ["Points in the paint", a.points.inPaint, h.points.inPaint, ""],
-    ["Fast-break points", a.points.fastBreak, h.points.fastBreak, ""],
-    ["Effective FG%", a.fourFactors.effectiveFieldGoalPct, h.fourFactors.effectiveFieldGoalPct, "%"],
-    ["True shooting", a.trueShooting, h.trueShooting, "%"],
-    ["Offensive rating", a.rating, h.rating, ""],
-  ];
+  if (led) rows.push({ label: "Percent led", a: led.away, h: led.home, unit: "%" });
+
   return (
-    <Panel title="Team stats" note={`${b.game.away.team} · ${b.game.home.team}`} className={className}>
-      <div className="grid sm:grid-cols-2 gap-x-8 gap-y-0">
-        <div>
-          {shooting.map(([label, av, hv]) => (
-            <div key={label} className="grid grid-cols-[1fr_auto_1fr] items-baseline gap-3 py-2 border-b border-hairline/60">
-              <span className="text-right text-[0.78rem] tabular font-semibold" style={{ color: ac }}>{av}</span>
-              <span className="text-[0.58rem] uppercase tracking-[0.1em] text-ink-muted text-center">{label}</span>
-              <span className="text-[0.78rem] tabular font-semibold" style={{ color: hc }}>{hv}</span>
-            </div>
-          ))}
+    <Panel title="Team stats">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 pb-3 border-b border-hairline">
+        <div className="flex items-center gap-2 justify-end">
+          <span className="text-[0.62rem] uppercase tracking-[0.12em] font-bold text-ink truncate">{b.game.away.team}</span>
+          <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: ac }} aria-hidden />
         </div>
-        <div>
-          {bars.slice(0, 3).map((r) => <StatBar key={r[0]} row={r} hc={hc} ac={ac} />)}
+        <span className="w-20" aria-hidden />
+        <div className="flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: hc }} aria-hidden />
+          <span className="text-[0.62rem] uppercase tracking-[0.12em] font-bold text-ink truncate">{b.game.home.team}</span>
         </div>
-        <div>
-          {bars.slice(3, 6).map((r) => <StatBar key={r[0]} row={r} hc={hc} ac={ac} />)}
-        </div>
-        <div>
-          {bars.slice(6).map((r) => <StatBar key={r[0]} row={r} hc={hc} ac={ac} />)}
-        </div>
+      </div>
+      <div className="pt-1">
+        {rows.map((r) => <StatRowView key={r.label} r={r} hc={hc} ac={ac} />)}
       </div>
     </Panel>
   );
 }
 
-function pctLine(p: { made: number; attempted: number; pct: number }): string {
-  return `${p.made}-${p.attempted} · ${n1(p.pct)}%`;
-}
+type StatRow = {
+  label: string; a: number; h: number; unit?: string;
+  aNote?: string; hNote?: string;
+};
 
-/**
- * One bar per row, split at the true ratio, rather than two bars with separate
- * baselines. A single divided bar puts the comparison at one point the eye can
- * find; two bars ask it to measure twice and subtract.
- */
-function StatBar({ row, hc, ac }: { row: [string, number, number, string]; hc: string; ac: string }) {
-  const [label, av, hv, unit] = row;
-  const tot = av + hv || 1;
+function StatRowView({ r, hc, ac }: { r: StatRow; hc: string; ac: string }) {
+  const tot = r.a + r.h;
+  // A 0-0 row (a game with no free throws) would divide by zero; show two
+  // empty tracks rather than two full ones.
+  const aw = tot > 0 ? (r.a / tot) * 100 : 0;
+  const hw = tot > 0 ? (r.h / tot) * 100 : 0;
+  const lead = r.a === r.h ? null : r.a > r.h ? "a" : "h";
   return (
-    <div className="py-2 border-b border-hairline/60 last:border-b-0">
-      <div className="flex items-baseline justify-between gap-2 text-[0.72rem] tabular">
-        <span className="font-semibold" style={{ color: ac }}>{n1(av)}{unit}</span>
-        <span className="text-[0.58rem] uppercase tracking-[0.1em] text-ink-muted truncate">{label}</span>
-        <span className="font-semibold" style={{ color: hc }}>{n1(hv)}{unit}</span>
+    <div className="py-2">
+      <div className="grid grid-cols-[1fr_auto_1fr] items-baseline gap-2">
+        <div className="text-right min-w-0">
+          <span className={cn("text-sm tabular font-semibold", lead === "a" ? "text-ink" : "text-ink-muted")}>
+            {n1(r.a)}{r.unit}
+          </span>
+          {r.aNote && <span className="text-[0.6rem] tabular text-ink-muted ml-1.5">({r.aNote})</span>}
+        </div>
+        <span className="w-20 text-center text-[0.55rem] uppercase tracking-[0.1em] font-bold text-ink-muted leading-tight">
+          {r.label}
+        </span>
+        <div className="min-w-0">
+          {r.hNote && <span className="text-[0.6rem] tabular text-ink-muted mr-1.5">({r.hNote})</span>}
+          <span className={cn("text-sm tabular font-semibold", lead === "h" ? "text-ink" : "text-ink-muted")}>
+            {n1(r.h)}{r.unit}
+          </span>
+        </div>
       </div>
-      <div className="mt-1 h-1 w-full flex rounded-full overflow-hidden bg-paper-deep">
-        <span style={{ width: `${(av / tot) * 100}%`, background: ac }} />
-        <span style={{ width: `${(hv / tot) * 100}%`, background: hc }} />
+      {/* Two tracks, each filling from the centre outward. */}
+      <div className="mt-1 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+        <span className="h-1.5 rounded-full bg-paper-deep overflow-hidden flex justify-end">
+          <span className="h-full rounded-full" style={{ width: `${aw}%`, background: ac }} />
+        </span>
+        <span className="w-20" aria-hidden />
+        <span className="h-1.5 rounded-full bg-paper-deep overflow-hidden flex justify-start">
+          <span className="h-full rounded-full" style={{ width: `${hw}%`, background: hc }} />
+        </span>
       </div>
     </div>
   );
+}
+
+/**
+ * Share of game clock each side spent in front, as whole percents.
+ *
+ * Derived from the play-by-play rather than reported: it is the stat that says
+ * whether a three-point win was a lead held all night or a rescue in the last
+ * minute, and the two read identically in every other number on this panel.
+ * Time tied belongs to neither side, so the two figures need not sum to 100.
+ */
+function percentLed(b: GameBundle): { home: number; away: number } | null {
+  const plays = b.plays;
+  if (plays.length < 2) return null;
+  const elapsed = (p: (typeof plays)[number]) => {
+    const before = p.per <= 2 ? (p.per - 1) * 1200 : 2400 + (p.per - 3) * 300;
+    const len = p.per <= 2 ? 1200 : 300;
+    return before + (len - p.sec);
+  };
+  let home = 0, away = 0, total = 0;
+  for (let i = 1; i < plays.length; i++) {
+    const prev = plays[i - 1]!, cur = plays[i]!;
+    const dt = elapsed(cur) - elapsed(prev);
+    if (dt <= 0) continue;
+    total += dt;
+    // The score BEFORE the gap is who was ahead during it.
+    if (prev.hs > prev.as) home += dt;
+    else if (prev.as > prev.hs) away += dt;
+  }
+  if (total <= 0) return null;
+  return { home: Math.round((home / total) * 100), away: Math.round((away / total) * 100) };
 }
 
 /* ------------------------- form + head to head ---------------------------- */
@@ -291,13 +382,13 @@ function HeadToHead({ b }: { b: GameBundle }) {
 
 /* ------------------------------- standings ------------------------------- */
 
-function Standings({ b }: { b: GameBundle }) {
+function Standings({ b, className }: { b: GameBundle; className?: string }) {
   const g = b.game;
   const confs = Object.keys(b.standings);
   if (confs.length === 0) return null;
   const highlight = new Set([g.home.team, g.away.team]);
   return (
-    <Panel title={confs.length === 1 ? `${confs[0]} standings` : "Standings"} note="Entering this game">
+    <Panel title={confs.length === 1 ? `${confs[0]} standings` : "Standings"} note="Entering this game" className={className}>
       <div className="space-y-4">
         {confs.map((c) => (
           <div key={c}>
