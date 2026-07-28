@@ -20,27 +20,58 @@
  * Usage: npm run dev  (see also docs/dev-scoreboard.md)
  */
 import { spawn, execSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import process from "node:process";
 
 const isWindows = process.platform === "win32";
 
-/** Kill any next/netlify node process still holding this project's ports. */
+/** Ports this project's dev stack binds. Freeing these is the whole job. */
+const PORTS = [8899, 3000];
+
+/**
+ * Kill whatever is still holding the dev ports, plus any stray next/netlify
+ * node process.
+ *
+ * WRITTEN TO A SCRIPT FILE RATHER THAN PASSED AS -Command. An earlier version
+ * inlined the PowerShell in an execSync string; the nested quotes required by
+ * `-Filter "Name='node.exe'"` were stripped on the way through the shell and
+ * PowerShell answered "Invalid query" — so the cleanup silently did nothing,
+ * netlify dev then failed on "Could not acquire required 'port': '8899'", and
+ * the whole point of this script was lost. A temp file has no quoting layer to
+ * get wrong.
+ *
+ * PORT OWNERS FIRST, name matching second: the thing blocking startup is
+ * whoever holds the port, whatever it happens to be called.
+ */
 function clearStale() {
   try {
     if (isWindows) {
-      // CommandLine matching rather than port scanning: a stale child may hold
-      // several ports, and we want all of its pieces gone, not one listener.
-      const ps = [
-        "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\"",
-        "| Where-Object { $_.CommandLine -match 'next dist.bin.next|netlify-cli|next[\\\\/]dist[\\\\/]server' }",
-        "| ForEach-Object { $_.ProcessId }",
-      ].join(" ");
-      const out = execSync(`powershell -NoProfile -Command "${ps}"`, { encoding: "utf8" }).trim();
-      const pids = out.split(/\s+/).filter(Boolean).filter((p) => Number(p) !== process.pid);
-      if (pids.length === 0) return;
-      console.log(`· clearing ${pids.length} stale dev process${pids.length === 1 ? "" : "es"}`);
-      execSync(`powershell -NoProfile -Command "Stop-Process -Id ${pids.join(",")} -Force -ErrorAction SilentlyContinue"`);
+      const ps = `
+$ErrorActionPreference = 'SilentlyContinue'
+$ids = @()
+foreach ($p in ${PORTS.join(",")}) {
+  $ids += (Get-NetTCPConnection -LocalPort $p -State Listen).OwningProcess
+}
+$ids += (Get-CimInstance Win32_Process | Where-Object {
+  $_.Name -eq 'node.exe' -and $_.CommandLine -match 'netlify-cli|next\dist\bin\next|next\dist\server'
+}).ProcessId
+$ids = $ids | Where-Object { $_ -and $_ -ne $PID } | Select-Object -Unique
+if ($ids) { $ids -join ',' ; Stop-Process -Id $ids -Force }
+`;
+      const file = path.join(os.tmpdir(), `bta-dev-clean-${process.pid}.ps1`);
+      fs.writeFileSync(file, ps, "utf8");
+      try {
+        const out = execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${file}"`, {
+          encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+        }).trim();
+        if (out) console.log(`· cleared stale dev process(es): ${out}`);
+      } finally {
+        fs.rmSync(file, { force: true });
+      }
     } else {
+      execSync(`lsof -ti:${PORTS.join(",")} | xargs -r kill -9`, { stdio: "ignore" });
       execSync("pkill -f 'next/dist/bin/next|netlify-cli' || true", { stdio: "ignore" });
     }
   } catch {
@@ -48,7 +79,29 @@ function clearStale() {
   }
 }
 
+/** Give the OS a moment to actually release the sockets before rebinding. */
+function waitForPorts() {
+  const deadline = Date.now() + 8000;
+  while (Date.now() < deadline) {
+    try {
+      if (isWindows) {
+        const out = execSync(
+          `powershell -NoProfile -Command "(Get-NetTCPConnection -LocalPort ${PORTS.join(",")} -State Listen -ErrorAction SilentlyContinue | Measure-Object).Count"`,
+          { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+        ).trim();
+        if (out === "0") return;
+      } else {
+        execSync(`lsof -ti:${PORTS.join(",")}`, { stdio: "ignore" });
+      }
+    } catch {
+      return; // nothing listening
+    }
+    execSync(isWindows ? "powershell -NoProfile -Command \"Start-Sleep -Milliseconds 400\"" : "sleep 0.4", { stdio: "ignore" });
+  }
+}
+
 clearStale();
+waitForPorts();
 
 const child = spawn("netlify", ["dev"], {
   stdio: "inherit",

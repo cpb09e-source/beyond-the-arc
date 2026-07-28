@@ -1,5 +1,24 @@
 import type { Context } from "@netlify/functions";
 
+import { setDefaultResultOrder } from "node:dns";
+
+/**
+ * Resolve IPv4 first.
+ *
+ * CBBD sits behind Cloudflare and its DNS answers list AAAA records ahead of
+ * A records, so Node's dual-stack connect tries IPv6 first. Netlify's local
+ * dev sandbox has no working IPv6 egress and the happy-eyeballs fallback does
+ * not recover, so every upstream call died with an unhelpful bare
+ * `AggregateError` out of internalConnectMultiple — which reads as "the
+ * function is broken" rather than "the socket never opened".
+ *
+ * This is an ORDERING PREFERENCE, not a restriction: IPv6 is still used if no
+ * A record exists. Safe in production, where it is also the faster path to a
+ * Cloudflare edge.
+ */
+setDefaultResultOrder("ipv4first");
+
+
 /**
  * scoreboard — today's college basketball slate, for the site-wide ticker and
  * the /scoreboard page.
