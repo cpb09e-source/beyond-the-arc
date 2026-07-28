@@ -148,7 +148,9 @@ function TeamBlock({
           <Link
             href={`/teams/${teamSlug(side.team)}/`}
             className={cn(
-              "font-display text-lg sm:text-2xl lg:text-3xl leading-none truncate hover:text-coral transition-colors",
+              // Sans, like the numbers beside it. The display face was the odd
+              // one out in a header that is otherwise all one voice.
+              "text-lg sm:text-2xl lg:text-3xl font-semibold tracking-tight leading-none truncate hover:text-coral transition-colors",
               lost ? "text-ink-muted" : "text-ink",
             )}
           >

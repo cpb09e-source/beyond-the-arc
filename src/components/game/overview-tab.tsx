@@ -152,7 +152,7 @@ function Leaders({
           const hv = h ? c.pick(h) ?? 0 : 0;
           return (
             <div key={c.label}>
-              <p className="px-4 pt-3 pb-1 text-[0.55rem] uppercase tracking-widest font-bold text-ink-muted">
+              <p className="px-4 pt-3 pb-1 text-[0.6rem] uppercase tracking-widest font-bold text-ink">
                 {c.label}
               </p>
               {/* A tie tints BOTH rows: 11 rebounds each is two players who led
@@ -308,30 +308,32 @@ function TeamStatsPanel({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }
   if (led) rows.push({ label: "Percent Led", a: led.away, h: led.home, unit: "%" });
 
   return (
-    <Panel title="Team stats">
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 pb-3 border-b border-hairline">
-        <div className="flex items-center gap-2">
-          <TeamLogo name={b.game.away.team} size={24} />
-          <span className="text-[0.68rem] uppercase tracking-[0.1em] font-bold text-ink truncate">{b.game.away.team}</span>
-        </div>
-        <span className="w-24" aria-hidden />
-        <div className="flex items-center gap-2 justify-end">
-          <span className="text-[0.68rem] uppercase tracking-[0.1em] font-bold text-ink truncate">{b.game.home.team}</span>
-          <TeamLogo name={b.game.home.team} size={24} />
+    <Panel title="Team stats" flush>
+      <div className="px-4 pt-4">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 pb-3 border-b border-hairline">
+          <div className="flex items-center gap-2">
+            <TeamLogo name={b.game.away.team} size={24} />
+            <span className="text-[0.68rem] uppercase tracking-widest font-bold text-ink truncate">{b.game.away.team}</span>
+          </div>
+          <span className="w-16" aria-hidden />
+          <div className="flex items-center gap-2 justify-end">
+            <span className="text-[0.68rem] uppercase tracking-widest font-bold text-ink truncate">{b.game.home.team}</span>
+            <TeamLogo name={b.game.home.team} size={24} />
+          </div>
         </div>
       </div>
-      <div className="divide-y divide-hairline/50">
+      <div>
         {rows.map((r) => <StatRowView key={r.label} r={r} hc={hc} ac={ac} />)}
       </div>
       {/* Pace belongs to the game, not to a team — both sides face the same
           number of possessions — so the figure sits in the middle rather than
           being staged as a contest with itself.
-          
+
           Each side's season average flanks it, because the number only means
           something against how these teams usually play: 64 is a grind for one
           pair and a track meet for another. */}
       {b.teamStats.pace !== null && (
-        <div className="mt-3 pt-3 border-t border-hairline grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div className="px-4 py-3 border-t border-hairline grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           <SeasonPace value={b.teamStats.seasonPace?.away ?? null} game={b.teamStats.pace} color={ac} align="left" />
           <div className="text-center">
             <p className="text-[0.55rem] uppercase tracking-[0.14em] font-bold text-ink-muted">Pace</p>
@@ -399,58 +401,78 @@ function rate(part: number, whole: number): number {
 }
 
 /**
- * One stat, both sides.
+ * One stat, both sides, as a SINGLE track split at a moving seam.
  *
- * Each team gets its own track, filled in ITS OWN COLOUR and anchored at the
- * outer edge so both bars grow toward the centre label. Anchoring outward
- * would put the two lengths at opposite ends of the row and make the
- * comparison a measurement rather than a glance.
+ * This replaced a pair of mirrored tracks growing inward from either edge. Two
+ * bars means two lengths starting in different places and running in opposite
+ * directions, which is a measurement rather than a glance, and each row left
+ * two stretches of empty track that read as missing data. One continuous bar
+ * has a single thing to look at — where the seam sits — and the tick at dead
+ * centre gives it a fixed reference, so the margin is a distance rather than a
+ * subtraction. The explicit +N states it outright for anyone who wants the
+ * number.
  *
- * Bars are scaled to the pair, not to a fixed maximum, so a row where the two
- * teams are close reads as close and a blowout row reads as a blowout.
+ * THE SEAM ALWAYS LEANS TOWARD THE BETTER TEAM, which is not the same as
+ * leaning toward the bigger number. Turnovers and defensive rating are won by
+ * the SMALLER figure, and a plain share-of-total split put the longer segment
+ * under the side that turned it over more while the +N underneath credited the
+ * other — the bar and the verdict pointing opposite ways in the same row. Those
+ * rows invert, so one rule holds down the whole column: further from centre
+ * toward a team means that team did better. The figures themselves are printed
+ * either side, so nothing is hidden by the flip.
+ *
+ * The green winner chip is gone with the mirrored bars. It was a third colour
+ * system laid over two team colours to say what the seam now says by shape.
  */
 function StatRowView({ r, hc, ac }: { r: StatRow; hc: string; ac: string }) {
-  const tot = r.a + r.h;
-  // A 0-0 row (a game with no free throws attempted) would divide by zero;
-  // show two empty tracks rather than two full ones.
-  const aw = tot > 0 ? (r.a / tot) * 100 : 0;
-  const hw = tot > 0 ? (r.h / tot) * 100 : 0;
   const better = r.lowerIsBetter ? (x: number, y: number) => x < y : (x: number, y: number) => x > y;
   const lead = r.a === r.h ? null : better(r.a, r.h) ? "a" : "h";
+
+  // Share of the pair, inverted for the lower-is-better rows so the seam and
+  // the verdict never disagree. A 0-0 row (a game with no free throws) has no
+  // ratio at all and sits dead centre rather than dividing by zero.
+  const tot = Math.abs(r.a) + Math.abs(r.h);
+  const raw = tot > 0 ? (Math.abs(r.a) / tot) * 100 : 50;
+  const aw = r.lowerIsBetter ? 100 - raw : raw;
+
   return (
-    <div className="py-2.5">
-      <div className="grid grid-cols-[1fr_auto_1fr] items-baseline gap-3">
-        <div className="min-w-0">
-          {/* Both numbers stay at full strength in their school's colour; the
-              winner is marked by a soft green chip instead. Dimming the loser
-              made half of every row look like missing data, and it fought the
-              team colours the row exists to show. */}
-          <Won on={lead === "a"}>
-            <span className="text-lg tabular font-bold" style={{ color: readableInk(ac) }}>
-              {n1(r.a)}{r.unit}
-            </span>
-          </Won>
-          {r.aNote && <span className="text-[0.62rem] tabular text-ink-muted ml-1.5">({r.aNote})</span>}
-        </div>
-        <span className="w-24 text-center text-[0.68rem] font-bold text-ink leading-tight">{r.label}</span>
-        <div className="min-w-0 text-right">
-          {r.hNote && <span className="text-[0.62rem] tabular text-ink-muted mr-1.5">({r.hNote})</span>}
-          <Won on={lead === "h"}>
-            <span className="text-lg tabular font-bold" style={{ color: readableInk(hc) }}>
-              {n1(r.h)}{r.unit}
-            </span>
-          </Won>
-        </div>
-      </div>
-      <div className="mt-1.5 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <span className="h-2 rounded-full bg-paper-deep overflow-hidden flex">
-          <span className="h-full rounded-full" style={{ width: `${aw}%`, background: ac }} />
+    <div className="px-4 py-2.5 border-t border-hairline/50">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[0.82rem] tabular font-bold" style={{ color: readableInk(ac) }}>
+          {n1(r.a)}{r.unit}
+          {r.aNote && <span className="ml-1 text-[0.58rem] font-normal text-ink-muted">({r.aNote})</span>}
         </span>
-        <span className="w-24" aria-hidden />
-        <span className="h-2 rounded-full bg-paper-deep overflow-hidden flex justify-end">
-          <span className="h-full rounded-full" style={{ width: `${hw}%`, background: hc }} />
+        <span className="text-[0.6rem] uppercase tracking-wide font-bold text-ink text-center leading-tight">
+          {r.label}
+        </span>
+        <span className="text-[0.82rem] tabular font-bold text-right" style={{ color: readableInk(hc) }}>
+          {r.hNote && <span className="mr-1 text-[0.58rem] font-normal text-ink-muted">({r.hNote})</span>}
+          {n1(r.h)}{r.unit}
         </span>
       </div>
+
+      <div className="relative mt-1.5 h-2.5 rounded-full overflow-hidden flex bg-paper-deep">
+        <span style={{ width: `${aw}%`, background: ac }} />
+        <span className="flex-1" style={{ background: hc }} />
+        {/* A paper hairline at the seam. This sport pits blue against blue
+            constantly, and two close colours meeting with no break read as one
+            continuous block that says nothing. */}
+        <span className="absolute inset-y-0 w-0.5 bg-card" style={{ left: `${aw}%` }} aria-hidden />
+        {/* Even. How far the seam sits from this is the margin. */}
+        <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-ink/25" aria-hidden />
+      </div>
+
+      {lead && (
+        <p
+          className="mt-1 text-[0.55rem] uppercase tracking-widest font-bold"
+          style={{
+            color: lead === "a" ? readableInk(ac) : readableInk(hc),
+            textAlign: lead === "a" ? "left" : "right",
+          }}
+        >
+          +{n1(Math.abs(r.a - r.h))}{r.unit}
+        </p>
+      )}
     </div>
   );
 }

@@ -44,6 +44,14 @@ const PORTS = [8899, 3000];
  *
  * PORT OWNERS FIRST, name matching second: the thing blocking startup is
  * whoever holds the port, whatever it happens to be called.
+ *
+ * THE PATTERN USES `.` WHERE A PATH HAS `\`, deliberately, and it is wrong two
+ * different ways if you write the backslashes out. A JS template literal eats
+ * `\d` down to `d` (unknown escapes drop the backslash), so `next\dist` reached
+ * PowerShell as `nextdist`; and even delivered intact, `-match` is a REGEX
+ * operator where `\d` means "a digit". Both branches silently matched nothing.
+ * A dot matches the separator on either OS and cannot be mangled by either
+ * layer.
  */
 function clearStale() {
   try {
@@ -55,7 +63,7 @@ foreach ($p in ${PORTS.join(",")}) {
   $ids += (Get-NetTCPConnection -LocalPort $p -State Listen).OwningProcess
 }
 $ids += (Get-CimInstance Win32_Process | Where-Object {
-  $_.Name -eq 'node.exe' -and $_.CommandLine -match 'netlify-cli|next\dist\bin\next|next\dist\server'
+  $_.Name -eq 'node.exe' -and $_.CommandLine -match 'netlify-cli|next.dist.bin.next|next.dist.server'
 }).ProcessId
 $ids = $ids | Where-Object { $_ -and $_ -ne $PID } | Select-Object -Unique
 if ($ids) { $ids -join ',' ; Stop-Process -Id $ids -Force }
