@@ -31,7 +31,12 @@ export function ScoreTicker() {
   const railRef = useRef<HTMLDivElement>(null);
   // Same click-and-drag gesture as the teams and players tables, so the rail
   // behaves the way every other horizontally scrolling surface here does.
-  const panHandlers = useDragPan(railRef);
+  //
+  // fromLinks, because every cell here IS a link: the hook's default guard
+  // skips a pan that starts on an <a>, which on this rail meant every pointer
+  // down. It also swallows the click that ends a drag, so dragging past a game
+  // doesn't open it.
+  const panHandlers = useDragPan(railRef, { fromLinks: true });
 
   useEffect(() => {
     let cancelled = false;

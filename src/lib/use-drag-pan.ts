@@ -1,26 +1,46 @@
 "use client";
 
-import { useRef, type RefObject, type PointerEvent as ReactPointerEvent } from "react";
+import { useRef, type RefObject, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from "react";
 
 /**
- * Click-and-drag panning for a horizontally scrolling table.
+ * Click-and-drag panning for a horizontally scrolling surface.
  *
  * Grab anywhere in the data area and drag left/right. A 4px threshold keeps
- * plain clicks (links, copy buttons, sort headers) working, and interactive
- * elements never start a pan at all — a drag that began on an <a> would fight
- * the browser's native link-drag, and one that began on a sortable header would
- * fight the column-reorder drag.
+ * plain clicks working, and by default interactive elements never start a pan
+ * at all — a drag that began on an <a> would fight the browser's native
+ * link-drag, and one that began on a sortable header would fight the
+ * column-reorder drag.
+ *
+ * `fromLinks` OPTS OUT OF THAT GUARD, for surfaces made ENTIRELY of links.
+ * The score ticker is the case: once every cell became a link to its game, the
+ * default guard matched every pointerdown and silently disabled panning
+ * altogether. There the two gestures have to coexist, so the hook pans from
+ * anchors and then swallows the click that the drag would otherwise fire —
+ * without that, letting go after a drag navigates to whichever game happened
+ * to be under the cursor.
  *
  * Returns props to spread on the scroll container. Pair with `cursor-grab` on
  * that element; the hook adds `cursor-grabbing` for the duration of the drag.
  */
-export function useDragPan(ref: RefObject<HTMLElement | null>) {
+export function useDragPan(
+  ref: RefObject<HTMLElement | null>,
+  opts?: { fromLinks?: boolean },
+) {
+  const fromLinks = opts?.fromLinks ?? false;
   const pan = useRef<{ x: number; left: number; active: boolean } | null>(null);
+  /** Set when a drag actually moved, so the trailing click can be cancelled. */
+  const swallowClick = useRef(false);
 
   const onPointerDown = (e: ReactPointerEvent) => {
     if (e.button !== 0) return;
+    // Touch already scrolls an overflow container natively, and better —
+    // momentum, rubber-banding, the lot. Hijacking it would only make the
+    // gesture worse and risks eating taps on the links.
+    if (fromLinks && e.pointerType === "touch") return;
     const t = e.target as HTMLElement;
-    if (t.closest("a,button,input,select,[data-no-pan]")) return;
+    const blocked = fromLinks ? "button,input,select,[data-no-pan]" : "a,button,input,select,[data-no-pan]";
+    if (t.closest(blocked)) return;
+    swallowClick.current = false;
     pan.current = { x: e.clientX, left: ref.current?.scrollLeft ?? 0, active: false };
   };
 
@@ -48,8 +68,22 @@ export function useDragPan(ref: RefObject<HTMLElement | null>) {
     if (pan.current?.active && el) {
       el.releasePointerCapture?.(e.pointerId);
       el.classList.remove("select-none", "cursor-grabbing");
+      // A click always follows pointerup on the same element. Mark it.
+      if (fromLinks) swallowClick.current = true;
     }
     pan.current = null;
+  };
+
+  /**
+   * Cancel the click that ends a drag. Capture phase, on the container, so it
+   * runs before the link's own handler — by the bubble phase Next's Link has
+   * already begun navigating.
+   */
+  const onClickCapture = (e: ReactMouseEvent) => {
+    if (!swallowClick.current) return;
+    swallowClick.current = false;
+    e.preventDefault();
+    e.stopPropagation();
   };
 
   return {
@@ -57,5 +91,6 @@ export function useDragPan(ref: RefObject<HTMLElement | null>) {
     onPointerMove,
     onPointerUp: onPointerEnd,
     onPointerCancel: onPointerEnd,
+    ...(fromLinks ? { onClickCapture } : {}),
   };
 }
