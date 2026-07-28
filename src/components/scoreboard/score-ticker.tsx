@@ -119,8 +119,8 @@ function TickerGame({ g }: { g: ScoreGame }) {
   const live = isLive(g);
   const final = isFinal(g);
   return (
-    <div className="shrink-0 flex items-center gap-2.5 px-3.5 py-1.5 border-r border-hairline/60 last:border-r-0">
-      <div className="flex flex-col gap-0.5 leading-none">
+    <div className="shrink-0 flex items-center gap-2.5 px-3.5 py-2.5 border-r border-hairline/60 last:border-r-0">
+      <div className="flex flex-col gap-1 leading-none">
         <TickerSide side={g.away} won={final && g.away.winner === true} />
         <TickerSide side={g.home} won={final && g.home.winner === true} />
       </div>

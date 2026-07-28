@@ -158,7 +158,7 @@ export function ScoreboardClient() {
             aria-label="Filter by conference"
             className="h-9 px-2.5 rounded-md border border-ink/15 bg-card text-ink text-base sm:text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40"
           >
-            <option value="">All conferences</option>
+            <option value="">All Conferences</option>
             {confOptions.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
           {conf && (
@@ -219,11 +219,25 @@ export function ScoreboardClient() {
  * trip through the date picker.
  */
 function WeekStrip({ shown, onPick }: { shown: string; onPick: (d: string) => void }) {
-  const days = [-3, -2, -1, 0, 1, 2, 3].map((n) => shiftDay(shown, n));
+  // The window the strip is SHOWING, which is not the same thing as the day
+  // that is selected. Arrows move this and nothing else: paging to next week
+  // should let you look at it before committing, not silently swap the slate
+  // out from under you and fire a fetch for a day you never asked for.
+  const [anchor, setAnchor] = useState(shown);
+  // Re-centre when the selection changes from outside (calendar, a day click).
+  // Adjust-during-render rather than an effect, so the strip never paints one
+  // frame around the old week.
+  const [lastShown, setLastShown] = useState(shown);
+  if (shown !== lastShown) {
+    setLastShown(shown);
+    setAnchor(shown);
+  }
+
+  const days = [-3, -2, -1, 0, 1, 2, 3].map((n) => shiftDay(anchor, n));
   const today = todayEastern();
   return (
     <div className="flex items-stretch gap-1 mb-6">
-      <StripArrow label="Previous week" onClick={() => onPick(shiftDay(shown, -7))}>‹</StripArrow>
+      <StripArrow label="Previous week" onClick={() => setAnchor(shiftDay(anchor, -7))}>‹</StripArrow>
       <div className="flex-1 grid grid-cols-7 gap-1">
         {days.map((d) => {
           const active = d === shown;
@@ -240,7 +254,7 @@ function WeekStrip({ shown, onPick }: { shown: string; onPick: (d: string) => vo
                   : "border-ink/10 text-ink-muted hover:border-ink/25 hover:text-ink",
               )}
             >
-              <span className="text-[0.55rem] uppercase tracking-[0.12em] font-semibold">{dowLabel(d)}</span>
+              <span className="text-[0.55rem] uppercase tracking-widest font-semibold">{dowLabel(d)}</span>
               <span className={cn("text-sm tabular leading-none", active && "font-bold")}>{dayNum(d)}</span>
               {/* A quiet marker for the real today, so a reader three weeks deep
                   in February still knows where the present is. */}
@@ -249,7 +263,7 @@ function WeekStrip({ shown, onPick }: { shown: string; onPick: (d: string) => vo
           );
         })}
       </div>
-      <StripArrow label="Next week" onClick={() => onPick(shiftDay(shown, 7))}>›</StripArrow>
+      <StripArrow label="Next week" onClick={() => setAnchor(shiftDay(anchor, 7))}>›</StripArrow>
     </div>
   );
 }
@@ -279,16 +293,17 @@ function dayNum(d: string): string {
 function GameCard({ g }: { g: ScoreGame }) {
   const live = isLive(g);
   const final = isFinal(g);
-  // Halves only once they exist. A scheduled game has none, and a live first
-  // half has one — showing an empty "2H" column would read as a 0.
-  const halves = Math.max(g.home.periods.length, g.away.periods.length);
   const line = lineLabel(g);
+  // Halves only once they exist. A scheduled game has none, and a live first
+  // half has one — an empty "2H" column would read as a zero.
+  const halves = Math.max(g.home.periods.length, g.away.periods.length);
+  const labels = periodLabels(halves);
   return (
     <div className={cn(
-      "bg-card border rounded-xl px-3.5 py-3 transition-colors",
+      "bg-card border rounded-xl shadow-sm overflow-hidden transition-colors",
       live ? "border-coral/40 ring-1 ring-coral/15" : "border-ink/10",
     )}>
-      <div className="flex items-center justify-between gap-2 mb-2">
+      <div className="flex items-center justify-between gap-2 px-4 pt-3">
         <span className="text-[0.58rem] uppercase tracking-[0.12em] font-semibold text-ink-muted truncate">
           {g.neutralSite ? "Neutral site" : g.venue ?? ""}
         </span>
@@ -301,24 +316,29 @@ function GameCard({ g }: { g: ScoreGame }) {
         </span>
       </div>
 
-      {/* Column heads only when there are halves to label. */}
-      {halves > 0 && (
-        <div className="flex items-center gap-2 pb-1 text-[0.5rem] uppercase tracking-[0.1em] font-bold text-ink-muted/70">
-          <span className="flex-1" />
-          {periodLabels(halves).map((p) => <span key={p} className="w-6 text-center">{p}</span>)}
-          <span className="w-8 text-right">T</span>
+      <div className="px-4 pb-3">
+        {halves > 0 && (
+          <div className="flex items-center gap-2 pb-1 text-[0.5rem] uppercase tracking-widest font-bold text-ink-muted/70">
+            <span className="flex-1" />
+            {labels.map((p) => <span key={p} className="w-7 text-center">{p}</span>)}
+            <span className="w-10 text-right">T</span>
+          </div>
+        )}
+        {/* A hairline between the two rows rather than around them: the pair is
+            one result, and a divider inside reads as the scoreline it is. */}
+        <div className="divide-y divide-hairline/60">
+          <TeamRow t={g.away} final={final} halves={halves} at={false} />
+          <TeamRow t={g.home} final={final} halves={halves} at={!g.neutralSite} />
         </div>
-      )}
+      </div>
 
-      <TeamRow t={g.away} final={final} halves={halves} at={false} />
-      <TeamRow t={g.home} final={final} halves={halves} at={!g.neutralSite} />
-
-      {/* The pre-tip line, kept quiet and last: it is context for the result
-          above it, not a headline. Absent for most small-conference games,
-          which is why it collapses rather than reserving space. */}
+      {/* The pre-tip line rides the paper-deep wash the headline cards use for
+          their meta band: context for the result above it, not a headline.
+          Absent for most small-conference games, so it collapses rather than
+          reserving space. */}
       {line && (
-        <div className="mt-2 pt-2 border-t border-hairline flex items-center gap-1.5 text-[0.6rem] text-ink-muted">
-          <span className="uppercase tracking-[0.1em] font-semibold text-ink-muted/70">Line</span>
+        <div className="px-4 py-2 border-t border-hairline bg-paper-deep/30 flex items-center gap-1.5 text-[0.6rem] text-ink-muted">
+          <span className="uppercase tracking-widest font-semibold text-ink-muted/70">Line</span>
           <span className="tabular">{line}</span>
         </div>
       )}
@@ -335,7 +355,7 @@ function TeamRow({ t, final, halves, at }: { t: ScoreGame["home"]; final: boolea
   const won = final && t.winner === true;
   const rec = recordLabel(t);
   return (
-    <div className="flex items-center gap-2 py-1">
+    <div className="flex items-center gap-2 py-1.5">
       {/* "@" marks the HOME team: in "Duke @ North Carolina" the glyph attaches
           to the host, because the game is played AT their building. It used to
           sit on the road team, which read "@ Gonzaga" while Gonzaga stood in
@@ -343,6 +363,8 @@ function TeamRow({ t, final, halves, at }: { t: ScoreGame["home"]; final: boolea
           glyph; the venue line above already says "Neutral site". */}
       <span className="w-2 shrink-0 text-[0.6rem] text-ink-muted/70 tabular">{at ? "@" : ""}</span>
       <TeamLogo name={t.team} size={20} />
+      {/* Poll rank displaces tournament seed where a team carries both — two
+          small numerals beside one team read as a score. */}
       {t.rank != null ? <RankBadge rank={t.rank} /> : t.seed != null ? (
         <span className="text-[0.6rem] text-ink-muted tabular">{t.seed}</span>
       ) : null}
@@ -354,32 +376,26 @@ function TeamRow({ t, final, halves, at }: { t: ScoreGame["home"]; final: boolea
       </Link>
       {rec && <span className="shrink-0 text-[0.6rem] text-ink-muted tabular">({rec})</span>}
 
-      {halves > 0 && (
-        <span className="ml-auto flex items-center gap-2">
-          {Array.from({ length: halves }, (_, i) => (
-            <span key={i} className="w-6 text-center text-[0.7rem] tabular text-ink-muted">
-              {t.periods[i] ?? "—"}
-            </span>
-          ))}
-          <span className={cn("w-8 text-right tabular text-base", won ? "text-ink font-bold" : "text-ink-muted")}>
-            {t.points ?? "—"}
+      <span className="ml-auto flex items-center">
+        {halves > 0 && Array.from({ length: halves }, (_, i) => (
+          <span key={i} className="w-7 text-center text-[0.7rem] tabular text-ink-muted">
+            {t.periods[i] ?? "—"}
           </span>
-        </span>
-      )}
-      {halves === 0 && (
-        <span className={cn("ml-auto tabular text-base", won ? "text-ink font-bold" : "text-ink-muted")}>
+        ))}
+        {/* The total in the display face, which is where this product puts a
+            number that is the answer rather than a supporting figure. */}
+        <span className={cn(
+          "text-right font-display tabular text-lg leading-none",
+          halves > 0 ? "w-10" : "w-auto pl-2",
+          won ? "text-ink" : "text-ink-muted",
+        )}>
           {t.points ?? "—"}
         </span>
-      )}
+      </span>
     </div>
   );
 }
 
-/**
- * AP rank as a filled chip rather than a bare numeral. At 10px next to a logo
- * and a team name, a loose "4" reads as part of the score; a solid accent block
- * reads as a rank at a glance, which is the whole point of surfacing it.
- */
 function RankBadge({ rank }: { rank: number }) {
   return (
     <span className="shrink-0 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded bg-coral text-white text-[0.62rem] font-bold tabular leading-none">
