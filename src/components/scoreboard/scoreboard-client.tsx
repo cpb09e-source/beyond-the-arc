@@ -6,6 +6,7 @@ import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { confDisplay } from "@/lib/conf-display";
 import { cn } from "@/lib/utils";
+import { IS_DEMO } from "@/lib/flags";
 import { DatePicker } from "./date-picker";
 import {
   EMPTY_SLATE, POLL_MS, dateLabel, fetchSlate, gameHref, isFinal, isLive, isRanked, lineLabel, recordLabel, slateIsSettled, tipLabel,
@@ -66,7 +67,12 @@ export function ScoreboardClient() {
   // Falls back to today so the stepper ALWAYS renders. Without this an empty
   // slate left `shown` null, the stepper was hidden, and the offseason page had
   // no way to reach a day that actually has games — a dead end.
-  const shown = pinned ?? slate.date ?? todayEastern();
+  //
+  // In demo mode there is exactly ONE baked day, so the heading is pinned to it
+  // and the day controls are hidden below. Left in, they would relabel the same
+  // 128 games with whatever date you clicked, which is a worse answer than not
+  // offering the control.
+  const shown = IS_DEMO ? (slate.date ?? "2026-02-07") : (pinned ?? slate.date ?? todayEastern());
 
   // Conference filter. Every conference with a game today, plus the
   // non-conference bucket; "" means show everything.
@@ -122,7 +128,9 @@ export function ScoreboardClient() {
         <div>
           <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
             <span className="h-px w-6 bg-coral" />
-            {slate.source === "live" && liveCount > 0
+            {IS_DEMO
+              ? "Sample slate"
+              : slate.source === "live" && liveCount > 0
               ? `${liveCount} game${liveCount === 1 ? "" : "s"} in progress`
               : slate.source === "upcoming"
               ? "Next up"
@@ -137,7 +145,9 @@ export function ScoreboardClient() {
               : slate.games.length === 0
               ? "No games on this date."
               : `${slate.games.length} game${slate.games.length === 1 ? "" : "s"}${
-                  slate.source === "live"
+                  IS_DEMO
+                    ? " · a real night from last season, while we wait for this one"
+                    : slate.source === "live"
                     ? " · updating every minute"
                     : slate.source === "upcoming"
                     ? " · none tipped yet"
@@ -150,16 +160,18 @@ export function ScoreboardClient() {
             the platform's own calendar, keyboard entry, and localisation for
             free, and on a phone it opens the OS picker — all things a
             hand-rolled calendar would have to reimplement worse. */}
-        <div className="flex items-center gap-2">
-          <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">Jump to</span>
-          <DatePicker value={shown} onChange={setPinned} />
-        </div>
+        {!IS_DEMO && (
+          <div className="flex items-center gap-2">
+            <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">Jump to</span>
+            <DatePicker value={shown} onChange={setPinned} />
+          </div>
+        )}
       </div>
 
       {/* Week strip: the shown day centred, three either side, arrows stepping a
           week at a time. Gives the whole week at a glance and makes "the night
           before" one tap instead of a round trip through the picker. */}
-      <WeekStrip shown={shown} onPick={setPinned} />
+      {!IS_DEMO && <WeekStrip shown={shown} onPick={setPinned} />}
 
       {confOptions.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-6">

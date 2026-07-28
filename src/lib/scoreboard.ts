@@ -7,6 +7,8 @@
  * parse-query.mts inlines its stat list). Keep the two in step.
  */
 
+import { DEMO_GAME, DEMO_SLATE_URL, IS_DEMO } from "./flags";
+
 export type ScoreTeam = {
   team: string;
   conference: string | null;
@@ -53,6 +55,9 @@ export type Slate = {
 
 export const EMPTY_SLATE: Slate = { source: "recent", date: null, games: [], fetchedAt: "" };
 
+/** The in-flight (then resolved) demo slate, shared by every caller. */
+let demoSlate: Promise<Slate> | null = null;
+
 /**
  * Poll interval. Matches the function's edge cache, so a reader's request is
  * usually answered from the CDN and CBBD sees roughly one call a minute no
@@ -85,6 +90,9 @@ export function isFinal(g: ScoreGame): boolean {
  * about 3 November moves while it is still July.
  */
 export function slateIsSettled(s: Slate): boolean {
+  // A baked slate cannot change. Polling it would re-read the same static file
+  // forever, on every page of the site.
+  if (IS_DEMO) return true;
   if (s.games.length === 0) return false;
   if (s.date && s.date > todayEastern()) return true;
   return s.games.every((g) => isFinal(g));
@@ -158,6 +166,10 @@ const ET_DAY = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
 });
 export function gameHref(g: ScoreGame): string {
+  // Demo mode has one baked box score, so every card opens it. Pointing the
+  // links at their real ids instead would give 127 of the 128 cards a page that
+  // can only fail — a dead end is worse than a sample.
+  if (IS_DEMO) return `/game?id=${DEMO_GAME.id}&date=${DEMO_GAME.date}`;
   const t = Date.parse(g.startDate);
   const date = Number.isFinite(t) ? ET_DAY.format(new Date(t)) : "";
   return `/game?id=${g.id}${date ? `&date=${date}` : ""}`;
@@ -183,6 +195,31 @@ export function dateLabel(d: string | null): string {
  * a broken one.
  */
 export async function fetchSlate(date?: string, signal?: AbortSignal): Promise<Slate> {
+  // DEMO MODE: one static asset, no function, no CBBD, no retry loop. The
+  // ticker is on every page of the site, so this is the difference between a
+  // browser-cached file and a serverless round trip per navigation. The `date`
+  // argument is ignored on purpose — there is exactly one baked day, and
+  // quietly returning it for any requested date is better than an empty page
+  // from the scoreboard's day stepper.
+  if (IS_DEMO) {
+    // Memoised across callers AND across navigations. The ticker and the
+    // scoreboard page both want this file, and on /scoreboard they mount
+    // together — without the shared promise that is two requests for identical
+    // bytes on first paint. Holding the promise rather than the result also
+    // collapses the two calls that race on mount into one.
+    //
+    // Deliberately NOT passed the abort signal: one component unmounting must
+    // not cancel a fetch the other is still waiting on.
+    demoSlate ??= fetch(DEMO_SLATE_URL)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: Slate | null) => (Array.isArray(j?.games) ? j : EMPTY_SLATE))
+      .catch(() => {
+        demoSlate = null; // let a later mount retry a genuine network failure
+        return EMPTY_SLATE;
+      });
+    return demoSlate;
+  }
+
   const qs = new URLSearchParams();
   if (date) qs.set("date", date);
   // Dev-only passthrough: ?sim=live lets the live styling be exercised at any

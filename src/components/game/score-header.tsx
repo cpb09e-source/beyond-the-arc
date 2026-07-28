@@ -43,7 +43,11 @@ export function ScoreHeader({
   const started = g.away.points != null || g.home.points != null;
 
   return (
-    <header className="border-b border-hairline bg-card">
+    // paper-deep, not card. `--card` is pure #ffffff, and a full-width sheet of
+    // it above a warm off-white page glared — the banner read as a hole in the
+    // paper rather than a masthead on it. The deeper tone also gives the white
+    // panels below it something to sit against.
+    <header className="border-b border-hairline bg-paper-deep/70">
       <div className="mx-auto max-w-[92rem] px-5 lg:px-10 pt-5 pb-6">
         <p className="text-center text-[0.6rem] uppercase tracking-[0.22em] font-bold text-ink-muted">
           {g.conferenceGame && g.home.conference

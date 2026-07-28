@@ -77,7 +77,10 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-paper text-ink">
         <SiteHeader />
         {/* Score rail, under the nav on every page. Renders nothing when there
-            are no games, so it costs zero height in the offseason. */}
+            are no games, so it costs zero height in the offseason. In demo mode
+            it reads one baked static file rather than the function, so having
+            it on every page costs a cached asset instead of a CBBD round trip
+            (see src/lib/flags.ts). */}
         <ScoreTicker />
         <main className="flex-1">{children}</main>
         <SiteFooter />

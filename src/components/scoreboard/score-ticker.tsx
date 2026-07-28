@@ -5,6 +5,7 @@ import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
 import { useDragPan } from "@/lib/use-drag-pan";
+import { IS_DEMO } from "@/lib/flags";
 import {
   EMPTY_SLATE, POLL_MS, fetchSlate, gameHref, isFinal, isLive, shortDateLabel, slateIsSettled, tipLabel,
   type ScoreGame, type Slate,
@@ -93,6 +94,11 @@ export function ScoreTicker() {
               </span>
               <span className="text-coral">{liveCount} live</span>
             </>
+          ) : IS_DEMO ? (
+            // SAY IT IS A SAMPLE. The demo slate is a real February night, and
+            // a rail of real scores under the word "Scores" reads as tonight's
+            // — the one thing a scoreboard must never be wrong about.
+            <span className="whitespace-nowrap">Sample</span>
           ) : slate.source === "upcoming" ? (
             // Out of season the rail carries a fixture list, not results, and
             // "Scores" over a row of tip times is a small lie. Naming the day

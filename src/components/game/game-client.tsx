@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { DEMO_GAME_URL, IS_DEMO } from "@/lib/flags";
 import { GameDetail } from "./game-detail";
 import { isFinal, isLive, type GameBundle } from "./types";
 
@@ -64,8 +65,13 @@ export function GameClient() {
       const signal = typeof AbortSignal.any === "function"
         ? AbortSignal.any([ctrl.signal, timeout])
         : ctrl.signal;
+      // Demo mode reads the one baked bundle, whatever id the URL carries —
+      // every demo link points here anyway (see gameHref), and honouring a
+      // hand-typed id would mean a CBBD call for a season that has no data.
       const res = await fetch(
-        `/api/game?id=${encodeURIComponent(id)}&date=${encodeURIComponent(date)}`,
+        IS_DEMO
+          ? DEMO_GAME_URL
+          : `/api/game?id=${encodeURIComponent(id)}&date=${encodeURIComponent(date)}`,
         { signal },
       );
       const j = await res.json();

@@ -45,12 +45,12 @@ export function OverviewTab({ b, hc, ac, onOpenBox }: { b: GameBundle; hc: strin
       <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3 items-start">
         <div className="space-y-5">
           <Leaders b={b} hc={hc} ac={ac} photos={photos} onOpenBox={onOpenBox} />
-          <Standings b={b} hc={hc} ac={ac} />
+          <GameInfo b={b} />
         </div>
         <TeamStatsPanel b={b} hc={hc} ac={ac} />
         <div className="space-y-5">
           <FourFactors b={b} hc={hc} ac={ac} />
-          <GameInfo b={b} />
+          <Standings b={b} hc={hc} ac={ac} />
         </div>
       </div>
     </div>
