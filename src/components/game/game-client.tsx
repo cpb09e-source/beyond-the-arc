@@ -8,6 +8,15 @@ import { isFinal, isLive, type GameBundle } from "./types";
 
 /** Matches the function's live edge cache; polling faster only re-serves bytes. */
 const POLL_MS = 60_000;
+/**
+ * A request that never answers must fail rather than hang. Without this the
+ * page sits on "Loading the game…" indefinitely — no error, no retry, nothing
+ * the reader can act on — which is strictly worse than saying it went wrong.
+ */
+const REQUEST_TIMEOUT_MS = 15_000;
+/** One silent retry before showing an error. A cold function plus a dropped
+ *  connection is common enough that the first failure is not worth a page. */
+const RETRY_DELAY_MS = 1_500;
 
 /**
  * /game?id=…&date=… — fetches one game from the Netlify function.
@@ -49,21 +58,43 @@ export function GameClient() {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const ctrl = new AbortController();
 
-    const tick = async () => {
+    const load = async () => {
+      // Abort on unmount OR on the timeout, whichever comes first.
+      const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+      const signal = typeof AbortSignal.any === "function"
+        ? AbortSignal.any([ctrl.signal, timeout])
+        : ctrl.signal;
+      const res = await fetch(
+        `/api/game?id=${encodeURIComponent(id)}&date=${encodeURIComponent(date)}`,
+        { signal },
+      );
+      const j = await res.json();
+      if (!res.ok || j?.error || !j?.game) throw new Error(j?.error ?? `HTTP ${res.status}`);
+      return j as GameBundle;
+    };
+
+    const tick = async (attempt = 0) => {
       try {
-        const res = await fetch(`/api/game?id=${encodeURIComponent(id)}&date=${encodeURIComponent(date)}`, { signal: ctrl.signal });
-        const j = await res.json();
+        const j = await load();
         if (cancelled) return;
-        if (!res.ok || j?.error || !j?.game) { setFailed(true); return; }
-        bundleRef.current = j as GameBundle;
-        setBundle(j as GameBundle);
+        bundleRef.current = j;
+        setBundle(j);
         setFailed(false);
         // Keep asking only while there is something left to happen.
-        if (!isFinal(j.game)) timer = setTimeout(tick, POLL_MS);
+        if (!isFinal(j.game)) timer = setTimeout(() => void tick(), POLL_MS);
       } catch {
-        // A failed poll on a game we already have keeps showing what we have;
-        // only a cold failure is an error state.
-        if (!cancelled && !bundleRef.current) setFailed(true);
+        if (cancelled) return;
+        // A failed poll on a game we already hold keeps showing what we have.
+        if (bundleRef.current) {
+          if (!isFinal(bundleRef.current.game)) timer = setTimeout(() => void tick(), POLL_MS);
+          return;
+        }
+        // Cold failure: one quiet retry before the reader sees anything.
+        if (attempt === 0) {
+          timer = setTimeout(() => void tick(1), RETRY_DELAY_MS);
+          return;
+        }
+        setFailed(true);
       }
     };
 

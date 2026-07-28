@@ -9,6 +9,9 @@ import { cn } from "@/lib/utils";
 
 const NAV = [
   { href: "/", label: "Teams" },
+  // Second, not last: scores are the reason to come back daily, and the only
+  // page here whose answer changes between two visits on the same evening.
+  { href: "/scoreboard", label: "Scoreboard" },
   { href: "/preview", label: "26-27 Preview" },
   { href: "/players", label: "Players" },
   { href: "/coaches", label: "Coaches" },
@@ -20,6 +23,10 @@ const NAV = [
 // every page starts with "/" and the home link would always read active.
 function isCurrent(pathname: string, href: string): boolean {
   if (href === "/") return pathname === "/";
+  // A single game lives at /game?id=… rather than under /scoreboard/, because
+  // a static export cannot enumerate every game id at build time. It is still
+  // the scoreboard's territory, so it lights that tab.
+  if (href === "/scoreboard" && pathname.startsWith("/game")) return true;
   return pathname === href || pathname.startsWith(href + "/");
 }
 
@@ -31,7 +38,7 @@ export function SiteHeader() {
   useEffect(() => {
     if (!open) return;
     function onResize() {
-      if (window.innerWidth >= 768) setOpen(false);
+      if (window.innerWidth >= 1024) setOpen(false);
     }
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
@@ -51,7 +58,10 @@ export function SiteHeader() {
           chrome in ~24px from the table edges on each side — per Colin, the
           header sits a touch narrower than the content under it.
           `relative` anchors the search dropdown panel to this container. */}
-      <div className="relative mx-auto max-w-[108rem] px-6 lg:px-16 h-16 flex items-center justify-between">
+      {/* The generous lg:px-16 gutter only starts at xl now: at exactly 1024 the
+          seven nav labels needed 13px more than the row had, and the gutter was
+          the cheapest 48px on the page to give back. */}
+      <div className="relative mx-auto max-w-[108rem] px-6 lg:px-10 xl:px-16 h-16 flex items-center justify-between">
         <Link
           href="/"
           className="flex items-center group shrink-0"
@@ -73,7 +83,12 @@ export function SiteHeader() {
             the current page. The underline scales from 0 → 100% on hover for
             non-active links (40% width tease) and stays full-width on the
             active link. Mirrors the kicker-rule motif used across the site. */}
-        <nav className="hidden md:flex items-center gap-1 lg:gap-2">
+        {/* The inline nav starts at lg, not md. Seven items plus the wordmark and
+            the search box need about 990px; at the md breakpoint the row was
+            941px wide in a 768px viewport and pushed the whole page sideways —
+            with six items it was already 820px, so this predates the scoreboard
+            link and was only ever hidden by nobody sitting at exactly 768. */}
+        <nav className="hidden lg:flex items-center gap-1 xl:gap-2">
           {NAV.map((item) => {
             const active = isCurrent(pathname, item.href);
             return (
@@ -82,7 +97,11 @@ export function SiteHeader() {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "group relative px-3 py-2 text-[0.7rem] uppercase tracking-[0.18em] font-medium transition-colors",
+                  // Nowrap plus a tighter tier at lg: seven labels on one
+                  // line need the room, and "Transfer Portal" breaking across
+                  // two lines in a nav bar reads as a layout accident.
+                  "group relative whitespace-nowrap py-2 text-[0.7rem] uppercase font-medium transition-colors",
+                  "px-2 tracking-[0.1em] xl:px-3 xl:tracking-[0.18em]",
                   active ? "text-ink" : "text-ink-muted hover:text-ink",
                 )}
               >
@@ -90,7 +109,7 @@ export function SiteHeader() {
                 <span
                   aria-hidden
                   className={cn(
-                    "pointer-events-none absolute left-3 right-3 bottom-1 h-px bg-coral origin-center",
+                    "pointer-events-none absolute left-2 right-2 xl:left-3 xl:right-3 bottom-1 h-px bg-coral origin-center",
                     "transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
                     active ? "scale-x-100" : "scale-x-0 group-hover:scale-x-[0.4]",
                   )}
@@ -111,14 +130,14 @@ export function SiteHeader() {
             type="button"
             onClick={() => window.dispatchEvent(new Event("bta:open-search"))}
             aria-label="Open search"
-            className="md:hidden inline-flex items-center justify-center w-9 h-9 rounded-md text-ink hover:bg-paper-deep transition-colors"
+            className="lg:hidden inline-flex items-center justify-center w-9 h-9 rounded-md text-ink hover:bg-paper-deep transition-colors"
           >
             <Search size={20} />
           </button>
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="md:hidden inline-flex items-center justify-center w-9 h-9 rounded-md text-ink hover:bg-paper-deep transition-colors"
+            className="lg:hidden inline-flex items-center justify-center w-9 h-9 rounded-md text-ink hover:bg-paper-deep transition-colors"
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
             aria-controls="mobile-nav"
@@ -136,7 +155,7 @@ export function SiteHeader() {
 
       {/* Mobile slide-down drawer */}
       {open && (
-        <div id="mobile-nav" className="md:hidden bg-paper">
+        <div id="mobile-nav" className="lg:hidden bg-paper">
           <nav className="px-6 py-4 flex flex-col">
             {NAV.map((item) => {
               const active = isCurrent(pathname, item.href);
