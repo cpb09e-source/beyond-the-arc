@@ -113,6 +113,27 @@ export function tipLabel(iso: string): string {
   }).format(new Date(t)).replace(":00", "") + " ET";
 }
 
+/**
+ * Link to a game's own page.
+ *
+ * The date rides in the URL because CBBD's per-game endpoints ignore a gameId
+ * filter and everything upstream has to be scoped by a date window — the id
+ * alone is not enough to find the game (see netlify/functions/game.mts). It is
+ * the US Eastern date, which is the day the sport files the game under and the
+ * day the function buckets by.
+ *
+ * One implementation so the ticker and the scoreboard cannot build the link
+ * two different ways.
+ */
+const ET_DAY = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+});
+export function gameHref(g: ScoreGame): string {
+  const t = Date.parse(g.startDate);
+  const date = Number.isFinite(t) ? ET_DAY.format(new Date(t)) : "";
+  return `/game?id=${g.id}${date ? `&date=${date}` : ""}`;
+}
+
 export function dateLabel(d: string | null): string {
   if (!d) return "";
   const t = Date.parse(`${d}T12:00:00Z`);

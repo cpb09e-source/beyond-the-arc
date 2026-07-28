@@ -224,32 +224,74 @@ async function rankingsForDate(key: string, season: number, onDate: string): Pro
  * Team → W-L from every completed game BEFORE `beforeDate`.
  *
  * CBBD's /games has winner flags but no record column, so the record has to be
- * tallied. One request covers the whole season and is cached for an hour: the
- * figure only moves when games finish, and it is deliberately the record a team
- * CARRIES INTO the day, which is stable for that whole day. That also makes it
- * historically correct when stepping back through February — showing today's
- * record beside a game from three weeks ago would be a lie about the standings
- * at the time.
+ * tallied. Cached for an hour: the figure only moves when games finish, and it
+ * is deliberately the record a team CARRIES INTO the day, which is stable for
+ * that whole day. That also makes it historically correct when stepping back
+ * through February — showing today's record beside a game from three weeks ago
+ * would be a lie about the standings at the time.
+ *
+ * FETCHED A MONTH AT A TIME, NOT A SEASON AT A TIME. CBBD caps a response at
+ * 3,000 rows with no error and no paging cursor, and a D-I season is roughly
+ * 6,000 games — so `/games?season=2026` silently returns November through
+ * 6 January and simply omits the rest. This read as every team being stuck on
+ * its early-January record for the whole back half of the season. Monthly
+ * windows are the largest slice that clears the cap (busiest month measured:
+ * 1,534 rows), and asking only up to the slate date keeps it to four or five
+ * calls even in March.
  */
 const RECORD_TTL_MS = 60 * 60 * 1000;
-type SeasonRow = { startDate?: string; homeTeam?: string; awayTeam?: string; homeWinner?: boolean; awayWinner?: boolean };
-let seasonCache: { season: number; at: number; rows: SeasonRow[] } | null = null;
+type SeasonRow = { id?: number; startDate?: string; homeTeam?: string; awayTeam?: string; homeWinner?: boolean; awayWinner?: boolean };
+let seasonCache: { season: number; through: string; at: number; rows: SeasonRow[] } | null = null;
+
+/** Month starts from the season opener up to and including `throughDate`. */
+function monthWindows(season: number, throughDate: string): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  // A CBBD season labelled 2026 opens in November 2025.
+  let y = season - 1, m = 10; // October, 0-indexed — a few exhibitions land there
+  const end = Date.parse(`${throughDate}T12:00:00Z`);
+  for (let i = 0; i < 14; i++) {
+    const from = new Date(Date.UTC(y, m, 1, 12));
+    if (from.getTime() > end) break;
+    const to = new Date(Date.UTC(y, m + 1, 0, 12));
+    out.push([iso(from), iso(to)]);
+    m++;
+    if (m > 11) { m = 0; y++; }
+  }
+  return out;
+}
 
 async function recordsBefore(key: string, season: number, beforeDate: string): Promise<Map<string, { w: number; l: number }>> {
   const out = new Map<string, { w: number; l: number }>();
   try {
-    if (!seasonCache || seasonCache.season !== season || Date.now() - seasonCache.at > RECORD_TTL_MS) {
-      const rows = (await cbbd(`/games?season=${season}`, key)) as SeasonRow[];
-      seasonCache = { season, at: Date.now(), rows };
+    // Cache key includes the date asked for: a slate in March needs strictly
+    // more months than one in December, so a December-shaped cache entry must
+    // not satisfy a March request.
+    if (!seasonCache || seasonCache.season !== season || seasonCache.through !== beforeDate || Date.now() - seasonCache.at > RECORD_TTL_MS) {
+      const windows = monthWindows(season, beforeDate);
+      const chunks = await Promise.all(
+        windows.map(([from, to]) =>
+          cbbd(`/games?season=${season}&startDateRange=${from}&endDateRange=${to}`, key).catch(() => [] as unknown[]),
+        ),
+      );
+      seasonCache = { season, through: beforeDate, at: Date.now(), rows: chunks.flat() as SeasonRow[] };
     }
     const bump = (team: string, won: boolean) => {
       const cur = out.get(team) ?? { w: 0, l: 0 };
       if (won) cur.w++; else cur.l++;
       out.set(team, cur);
     };
+    // Dedupe by game id. The windows are stitched from separate requests and
+    // the range filter runs on the UTC start, so a game tipping late on the
+    // last night of a month can legitimately answer to two of them — and a
+    // double-counted game is two wins for one result.
+    const seen = new Set<number>();
     for (const r of seasonCache.rows) {
       if (!r.startDate || !r.homeTeam || !r.awayTeam) continue;
       if (typeof r.homeWinner !== "boolean" || typeof r.awayWinner !== "boolean") continue;
+      if (typeof r.id === "number") {
+        if (seen.has(r.id)) continue;
+        seen.add(r.id);
+      }
       const d = easternDate(r.startDate);
       if (!d || d >= beforeDate) continue;
       bump(r.homeTeam, r.homeWinner);

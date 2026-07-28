@@ -8,7 +8,7 @@ import { confDisplay } from "@/lib/conf-display";
 import { cn } from "@/lib/utils";
 import { DatePicker } from "./date-picker";
 import {
-  EMPTY_SLATE, POLL_MS, dateLabel, fetchSlate, isFinal, isLive, isRanked, lineLabel, recordLabel, slateIsSettled, tipLabel,
+  EMPTY_SLATE, POLL_MS, dateLabel, fetchSlate, gameHref, isFinal, isLive, isRanked, lineLabel, recordLabel, slateIsSettled, tipLabel,
   type ScoreGame, type Slate,
 } from "@/lib/scoreboard";
 
@@ -306,9 +306,18 @@ function GameCard({ g }: { g: ScoreGame }) {
   const labels = periodLabels(halves);
   return (
     <div className={cn(
-      "bg-card border rounded-xl shadow-sm overflow-hidden transition-colors",
-      live ? "border-coral/40 ring-1 ring-coral/15" : "border-ink/10",
+      "relative bg-card border rounded-xl shadow-sm overflow-hidden transition-colors",
+      live ? "border-coral/40 ring-1 ring-coral/15" : "border-ink/10 hover:border-ink/25",
     )}>
+      {/* The whole card opens the game. A stretched overlay rather than a Link
+          wrapping the card, because the two team names inside are links of
+          their own and an anchor may not contain another one. The team links
+          are lifted above it so they still win a click on the name. */}
+      <Link
+        href={gameHref(g)}
+        aria-label={`${g.away.team} at ${g.home.team} — full box score`}
+        className="absolute inset-0 z-1 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/50"
+      />
       <div className="flex items-center justify-between gap-2 px-4 pt-3">
         <span className="text-[0.58rem] uppercase tracking-[0.12em] font-semibold text-ink-muted truncate">
           {g.neutralSite ? "Neutral site" : g.venue ?? ""}
@@ -376,7 +385,7 @@ function TeamRow({ t, final, halves, at }: { t: ScoreGame["home"]; final: boolea
       ) : null}
       <Link
         href={`/teams/${teamSlug(t.team)}`}
-        className={cn("min-w-0 truncate text-sm hover:text-coral transition-colors", won ? "text-ink font-semibold" : "text-ink-soft")}
+        className={cn("relative z-2 min-w-0 truncate text-sm hover:text-coral transition-colors", won ? "text-ink font-semibold" : "text-ink-soft")}
       >
         {t.team}
       </Link>

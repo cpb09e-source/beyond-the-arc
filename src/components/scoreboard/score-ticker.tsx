@@ -6,7 +6,7 @@ import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
 import { useDragPan } from "@/lib/use-drag-pan";
 import {
-  EMPTY_SLATE, POLL_MS, fetchSlate, isFinal, isLive, slateIsSettled, tipLabel,
+  EMPTY_SLATE, POLL_MS, fetchSlate, gameHref, isFinal, isLive, slateIsSettled, tipLabel,
   type ScoreGame, type Slate,
 } from "@/lib/scoreboard";
 
@@ -119,7 +119,13 @@ function TickerGame({ g }: { g: ScoreGame }) {
   const live = isLive(g);
   const final = isFinal(g);
   return (
-    <div className="shrink-0 flex items-center gap-2.5 px-3.5 py-2.5 border-r border-hairline/60 last:border-r-0">
+    // A link, not a div: each cell opens that game. `draggable={false}` matters
+    // — without it the browser's native link-drag hijacks the pointer and the
+    // rail stops panning the moment you start a drag on a game.
+    <Link
+      href={gameHref(g)}
+      draggable={false}
+      className="shrink-0 flex items-center gap-2.5 px-3.5 py-2.5 border-r border-hairline/60 last:border-r-0 hover:bg-paper-deep/60 transition-colors">
       <div className="flex flex-col gap-1 leading-none">
         <TickerSide side={g.away} won={final && g.away.winner === true} />
         <TickerSide side={g.home} won={final && g.home.winner === true} />
@@ -136,7 +142,7 @@ function TickerGame({ g }: { g: ScoreGame }) {
           <span className="text-ink-muted normal-case tracking-normal font-normal">{tipLabel(g.startDate)}</span>
         )}
       </div>
-    </div>
+    </Link>
   );
 }
 
