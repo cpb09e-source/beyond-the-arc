@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { loadPhotoIndex, lookupId, type PhotoIndex } from "@/lib/player-photo-index";
+import { readableInk } from "@/lib/team-colors";
 import { cn } from "@/lib/utils";
 import {
   shortDate, tipLabel, lineLabel,
@@ -168,7 +169,7 @@ function LeaderSide({
     <div className={cn("min-w-0", align === "right" && "text-right")}>
       <div className={cn("flex items-center gap-2.5", align === "right" && "flex-row-reverse")}>
         <PlayerPhoto bartPlayerId={bartId} name={p.name} size={44} className="rounded-full shrink-0" />
-        <span className="text-3xl font-semibold tabular leading-none" style={{ color }}>{pick(p)}</span>
+        <span className="text-3xl font-semibold tabular leading-none" style={{ color: readableInk(color) }}>{pick(p)}</span>
       </div>
       <p className="mt-1.5 text-[0.78rem] text-ink font-medium truncate leading-tight">
         {shortName(p.name)}
@@ -309,7 +310,7 @@ function StatRowView({ r, hc, ac }: { r: StatRow; hc: string; ac: string }) {
           {/* The number wears its school's colour and the trailing side is
               dimmed rather than greyed, so the row still reads as two teams
               instead of one winner and one neutral figure. */}
-          <span className="text-lg tabular font-bold" style={{ color: ac, opacity: lead === "h" ? 0.5 : 1 }}>
+          <span className="text-lg tabular font-bold" style={{ color: readableInk(ac), opacity: lead === "h" ? 0.5 : 1 }}>
             {n1(r.a)}{r.unit}
           </span>
           {r.aNote && <span className="text-[0.62rem] tabular text-ink-muted ml-1.5">({r.aNote})</span>}
@@ -317,7 +318,7 @@ function StatRowView({ r, hc, ac }: { r: StatRow; hc: string; ac: string }) {
         <span className="w-24 text-center text-[0.68rem] font-bold text-ink leading-tight">{r.label}</span>
         <div className="min-w-0 text-right">
           {r.hNote && <span className="text-[0.62rem] tabular text-ink-muted mr-1.5">({r.hNote})</span>}
-          <span className="text-lg tabular font-bold" style={{ color: hc, opacity: lead === "a" ? 0.5 : 1 }}>
+          <span className="text-lg tabular font-bold" style={{ color: readableInk(hc), opacity: lead === "a" ? 0.5 : 1 }}>
             {n1(r.h)}{r.unit}
           </span>
         </div>
@@ -547,13 +548,17 @@ function StandingsTable({
                 style={c ? { background: `${c}14` } : undefined}
               >
                 <td className="py-1 pr-2">
-                  <span className="text-ink-muted mr-1.5">{i + 1}</span>
-                  <span className={c ? "font-semibold" : "text-ink-soft"} style={c ? { color: c } : undefined}>
-                    {r.team}
+                  <span className="inline-flex items-center gap-2 min-w-0">
+                    <span className="w-4 text-right text-ink-muted shrink-0">{i + 1}</span>
+                    <TeamLogo name={r.team} size={16} />
+                    <span className={cn("truncate", c ? "font-semibold" : "text-ink-soft")}
+                      style={c ? { color: readableInk(c) } : undefined}>
+                      {r.team}
+                    </span>
                   </span>
                 </td>
                 <td className={cn("text-right", !c && "text-ink-soft")}
-                  style={c ? { color: c, fontWeight: 600 } : undefined}>
+                  style={c ? { color: readableInk(c), fontWeight: 600 } : undefined}>
                   {r.cw}-{r.cl}
                 </td>
                 <td className="text-right text-ink-muted">{r.w}-{r.l}</td>

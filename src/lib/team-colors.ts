@@ -140,3 +140,50 @@ export function getTeamColors(teamName: string | null | undefined): TeamColors |
     onPrimary: contrastOn(primary),
   };
 }
+
+/**
+ * A team colour clamped into a band that stays readable as TEXT on either
+ * theme's ground.
+ *
+ * Brand colours span the whole lightness range — Carolina sky blue sits at
+ * L 0.66, Michigan navy at L 0.15 — and both extremes fail as small type: the
+ * pale one washes out on warm paper, the dark one disappears on the dark
+ * theme's near-black. Clamping lightness while holding hue and saturation
+ * keeps the colour unmistakably the team's while guaranteeing it can be read.
+ *
+ * Use for text and numerals. Bars, swatches and fills should use the raw
+ * colour — a large block of it has no legibility problem and the true shade is
+ * what makes the chart look like the team.
+ */
+export function readableInk(hex: string, opts?: { min?: number; max?: number }): string {
+  const min = opts?.min ?? 0.34;
+  const max = opts?.max ?? 0.56;
+  const s = hex.replace("#", "");
+  if (s.length !== 6) return hex;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(s.slice(i, i + 2), 16) / 255) as [number, number, number];
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  const l = (mx + mn) / 2, d = mx - mn;
+  if (d === 0) return hex; // greyscale: no hue to preserve
+  const sat = d / (1 - Math.abs(2 * l - 1));
+  let hue: number;
+  if (mx === r) hue = ((g - b) / d) % 6;
+  else if (mx === g) hue = (b - r) / d + 2;
+  else hue = (r - g) / d + 4;
+  hue = ((hue * 60) + 360) % 360;
+
+  const nl = Math.min(max, Math.max(min, l));
+  if (nl === l) return hex;
+
+  const c = (1 - Math.abs(2 * nl - 1)) * sat;
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = nl - c / 2;
+  let p: [number, number, number];
+  if (hue < 60) p = [c, x, 0];
+  else if (hue < 120) p = [x, c, 0];
+  else if (hue < 180) p = [0, c, x];
+  else if (hue < 240) p = [0, x, c];
+  else if (hue < 300) p = [x, 0, c];
+  else p = [c, 0, x];
+  const hex2 = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, "0");
+  return `#${hex2(p[0])}${hex2(p[1])}${hex2(p[2])}`;
+}
