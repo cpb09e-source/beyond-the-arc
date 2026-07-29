@@ -288,12 +288,17 @@ export function ConferenceRankingsModal({
                       return (
                         <li key={r.conference} className="flex items-center gap-3 py-2.5 hover:bg-paper-deep/40 transition-colors -mx-2 px-2 rounded">
                           <span className="font-display text-base text-ink-muted tabular w-6 text-center">{rank}</span>
+                          {/* The contributing/total count ("10/12") used to sit
+                              beside the name to make the two-worst exclusion
+                              visible. It read as a record on a table of
+                              conferences and earned its space back as a
+                              tooltip — the subhead already states the rule. */}
                           <span className="flex-1 min-w-0">
-                            <span className="font-medium text-ink text-sm">{confDisplay(r.conference)}</span>
-                            {/* How many teams actually fed the average, so the
-                                two-worst exclusion isn't invisible. */}
-                            <span className="text-ink-muted text-xs ml-1.5 tabular" title={`${r.contributing} of ${r.teams} teams counted`}>
-                              {r.contributing}/{r.teams}
+                            <span
+                              className="font-medium text-ink text-sm"
+                              title={`${r.contributing} of ${r.teams} teams counted`}
+                            >
+                              {confDisplay(r.conference)}
                             </span>
                           </span>
                           <span className={`font-display text-lg tabular ${r.avg_a_net >= 0 ? "text-coral" : "text-ink-muted"}`}>

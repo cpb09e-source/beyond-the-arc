@@ -235,6 +235,7 @@ export function TeamPageView({
   shootingRanks,
   fourFactorRanks,
   scheduleGames,
+  netRanks,
   preview = false,
 }: {
   team: { name: string; seasons: StaticTeamSeasonRow[] };
@@ -246,6 +247,8 @@ export function TeamPageView({
   shootingRanks: DistributionRank[];
   fourFactorRanks: DistributionRank[];
   scheduleGames: GameLog[];
+  /** year → this team's aNET rank that season. See netRanksForTeam(). */
+  netRanks: Record<number, number>;
   // Preview mode — renders the last-completed-season layout with game-dependent
   // sections blurred, the roster swapped for the upcoming-season client roster,
   // record shown as 0-0 and BTA rank as TBD.
@@ -267,9 +270,13 @@ export function TeamPageView({
   // Newest season first — team.seasons already comes that way from the export.
   const chronological = [...team.seasons];
 
-  // Average BTA Rank over the last 5 seasons (newest first in team.seasons).
+  // NET rank — where this team's aNET sat in that season's D-I cohort. The
+  // headline badge and the five-year average both read from it, so the number
+  // on the shield is the same one the explorer sorts on by default.
+  const currentNetRank = netRanks[current.year] ?? null;
+  // Average over the last 5 seasons (newest first in team.seasons).
   const last5 = team.seasons.slice(0, 5);
-  const last5Ranks = last5.map((s) => s.bta_rank).filter((r): r is number => typeof r === "number");
+  const last5Ranks = last5.map((s) => netRanks[s.year]).filter((r): r is number => typeof r === "number");
   const avgRank = last5Ranks.length > 0
     ? Math.round(last5Ranks.reduce((a, b) => a + b, 0) / last5Ranks.length)
     : null;
@@ -313,20 +320,20 @@ export function TeamPageView({
                   <span
                     className="inline-flex items-baseline gap-1 px-3 py-1.5 rounded-md text-white font-display text-xl md:text-2xl tabular leading-none shadow-sm"
                     style={accentColor ? { background: accentColor, color: teamColors?.onPrimary ?? "#fff" } : { background: "var(--color-coral, #ed5a4f)" }}
-                    title={`BTA Rank for ${PREVIEW_SEASON_LABEL} — set once games are played`}
+                    title={`NET rank for ${PREVIEW_SEASON_LABEL} — set once games are played`}
                   >
-                    <span className="text-[0.6em] opacity-80 uppercase tracking-widest mr-0.5">BTA</span>
+                    <span className="text-[0.6em] opacity-80 uppercase tracking-widest mr-0.5">NET</span>
                     TBD
                   </span>
                 ) : (
-                  current.bta_rank !== null && current.bta_rank !== undefined && (
+                  currentNetRank !== null && (
                     <span
                       className="inline-flex items-baseline gap-1 px-3 py-1.5 rounded-md text-white font-display text-xl md:text-2xl tabular leading-none shadow-sm"
                       style={accentColor ? { background: accentColor, color: teamColors?.onPrimary ?? "#fff" } : { background: "var(--color-coral, #ed5a4f)" }}
-                      title={`BTA Rank for ${seasonLabel(current.year)}`}
+                      title={`NET rank for ${seasonLabel(current.year)} — aNET position in D-I`}
                     >
-                      <span className="text-[0.6em] opacity-80 uppercase tracking-widest mr-0.5">BTA</span>
-                      #{current.bta_rank}
+                      <span className="text-[0.6em] opacity-80 uppercase tracking-widest mr-0.5">NET</span>
+                      #{currentNetRank}
                     </span>
                   )
                 )}
@@ -337,7 +344,7 @@ export function TeamPageView({
                 </span>
                 {!preview && avgRank !== null && last5Ranks.length > 1 && (
                   <span className="text-sm text-ink-muted">
-                    Avg BTA Rank, last {last5Ranks.length} seasons: #{avgRank}
+                    Avg NET Rank, last {last5Ranks.length} seasons: #{avgRank}
                   </span>
                 )}
                 {(() => {

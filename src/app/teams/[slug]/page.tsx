@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { readIndex, readPlayersForYear, readImpactForYear, readTeam, readRankedPlayerIds, readConfRecordsByTeam, readAllTeams, readGameLogsForYear } from "@/lib/static-data";
+import { readIndex, readPlayersForYear, readImpactForYear, readTeam, readRankedPlayerIds, readConfRecordsByTeam, readAllTeams, netRanksForTeam, readGameLogsForYear } from "@/lib/static-data";
 import { TeamPageView, buildRoster, attachRosterRanks } from "@/components/teams/team-page-view";
 import { buildShootingRanks, buildFourFactorRanks } from "@/components/teams/distribution-panel";
 import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches";
@@ -65,6 +65,8 @@ export default async function TeamPage({ params }: { params: Promise<{ slug: str
   const confRecordsAll = await readConfRecordsByTeam();
   const confRecords = confRecordsAll.get(team.name) ?? new Map();
   const allTeams = await readAllTeams();
+  // Headline badge + the five-year average both read aNET position in D-I.
+  const netRanks = netRanksForTeam(allTeams, team.name, team.seasons.map((s) => s.year));
   const yearCohort = allTeams.filter((t) => t.year === current.year);
   const shootingRanks = buildShootingRanks(current, yearCohort);
   const fourFactorRanks = buildFourFactorRanks(current, yearCohort);
@@ -100,6 +102,7 @@ export default async function TeamPage({ params }: { params: Promise<{ slug: str
       shootingRanks={shootingRanks}
       fourFactorRanks={fourFactorRanks}
       scheduleGames={scheduleGames}
+      netRanks={netRanks}
     />
   );
 }

@@ -74,6 +74,14 @@ export type StaticTeamSeasonRow = {
     ortg: number | null; drtg: number | null;
     net_rtg: number | null; ortg_adj: number | null;
     drtg_adj: number | null; net_rtg_adj: number | null;
+    /**
+     * Our own schedule-adjusted ratings (scripts/build-adjusted-ratings.mjs) —
+     * the same aNET/aORTG/aDRTG the explorer sorts on by default. Present in
+     * teams-all.json since that script landed; they were simply never declared
+     * here, so anything reading them off a StaticTeamSeasonRow had to widen the
+     * type by hand.
+     */
+    a_net?: number | null; a_ortg?: number | null; a_drtg?: number | null;
     pace: number | null;
     fbpts_pct: number | null; pitp_pct: number | null; pot_pct?: number | null;
     fg3_made_diff?: number | null; orb_diff_ct?: number | null;
@@ -127,6 +135,46 @@ export async function readIndex(): Promise<StaticIndex> {
 export async function readAllTeams(): Promise<StaticTeamSeasonRow[]> {
   const all = await readJson<StaticTeamSeasonRow[]>("teams-all.json");
   return all.filter((t) => isUsableSeason(t.year));
+}
+
+/**
+ * One team's NET rank in each of the given seasons — where its aNET sits in
+ * that year's D-I cohort, 1 = best.
+ *
+ * Computed here at build time rather than stored, because it is a pure function
+ * of teams-all.json, which every caller already has open. Storing it would mean
+ * a data re-export to change a display detail, and a second number that can
+ * drift out of step with the aNET it ranks.
+ *
+ * Standard competition ranking: ties share the better position (two teams at
+ * the top are both #1, the next is #3). A team with no aNET for a year is
+ * absent from the result rather than ranked last — no rating is not a bad one.
+ */
+export function netRanksForTeam(
+  allTeams: StaticTeamSeasonRow[],
+  teamName: string,
+  years: number[],
+): Record<number, number> {
+  const want = new Set(years);
+  // One pass, not one per year: these pages call this with up to 13 seasons
+  // against ~6,700 rows.
+  const mine = new Map<number, number>();
+  const cohort = new Map<number, number[]>();
+  for (const t of allTeams) {
+    if (!want.has(t.year)) continue;
+    const v = t.team_season_stats?.a_net;
+    if (typeof v !== "number") continue;
+    (cohort.get(t.year) ?? cohort.set(t.year, []).get(t.year)!).push(v);
+    if (t.name === teamName) mine.set(t.year, v);
+  }
+  const out: Record<number, number> = {};
+  for (const [year, v] of mine) {
+    const all = cohort.get(year) ?? [];
+    let better = 0;
+    for (const other of all) if (other > v) better++;
+    out[year] = better + 1;
+  }
+  return out;
 }
 
 export async function readTeam(slug: string): Promise<{ name: string; seasons: StaticTeamSeasonRow[] } | null> {
