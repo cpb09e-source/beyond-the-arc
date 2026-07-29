@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { readIndex, readPlayersForYear, readImpactForYear, readTeam, readRankedPlayerIds, readConfRecordsByTeam, readAllTeams, netRanksForTeam, readGameLogsForYear } from "@/lib/static-data";
+import { readIndex, readPlayersForYear, readImpactForYear, readTeam, readRankedPlayerIds, readConfRecordsByTeam, readAllTeams, netRanksForTeam, readTeamSplits, readGameLogsForYear } from "@/lib/static-data";
 import { TeamPageView, buildRoster, attachRosterRanks } from "@/components/teams/team-page-view";
 import { buildShootingRanks, buildFourFactorRanks } from "@/components/teams/distribution-panel";
 import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches";
@@ -67,6 +67,9 @@ export default async function TeamPage({ params }: { params: Promise<{ slug: str
   const allTeams = await readAllTeams();
   // Headline badge + the five-year average both read aNET position in D-I.
   const netRanks = netRanksForTeam(allTeams, team.name, team.seasons.map((s) => s.year));
+  // Eight-way stat splits for the season on screen. Season file is read once
+  // and cached, so all ~365 team pages for a year share one parse.
+  const teamSplits = await readTeamSplits(current.year, team.name);
   const yearCohort = allTeams.filter((t) => t.year === current.year);
   const shootingRanks = buildShootingRanks(current, yearCohort);
   const fourFactorRanks = buildFourFactorRanks(current, yearCohort);
@@ -103,6 +106,7 @@ export default async function TeamPage({ params }: { params: Promise<{ slug: str
       fourFactorRanks={fourFactorRanks}
       scheduleGames={scheduleGames}
       netRanks={netRanks}
+      teamSplits={teamSplits}
     />
   );
 }

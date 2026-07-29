@@ -177,6 +177,38 @@ export function netRanksForTeam(
   return out;
 }
 
+/**
+ * One team's eight-way stat splits for a season, or null when the season has
+ * no splits file (pre-2014 seasons have no per-game box archive).
+ *
+ * Reads the whole season's file — ~1.2 MB — and hands back only this team's
+ * rows, which is a few KB. That is deliberate: the file is read once per season
+ * and cached, so 365 team pages share one parse, and nothing ships to the
+ * browser except the one team's numbers.
+ */
+const _splitsCache = new Map<number, TeamSplitsFile | null>();
+type TeamSplitsFile = {
+  season: number;
+  splits: { key: string; label: string }[];
+  stats: { key: string; group: string; label: string; fmt: "num1" | "pct1" | "x2" }[];
+  groups: Record<string, string>;
+  teams: Record<string, Record<string, { games: number; v: (number | null)[]; p: (number | null)[] }>>;
+};
+
+export async function readTeamSplits(year: number, teamName: string) {
+  if (!_splitsCache.has(year)) {
+    try {
+      _splitsCache.set(year, await readJson<TeamSplitsFile>(`team-splits/${year}.json`));
+    } catch {
+      _splitsCache.set(year, null);
+    }
+  }
+  const file = _splitsCache.get(year);
+  const rows = file?.teams?.[teamName];
+  if (!file || !rows) return null;
+  return { season: file.season, splits: file.splits, stats: file.stats, groups: file.groups, rows };
+}
+
 export async function readTeam(slug: string): Promise<{ name: string; seasons: StaticTeamSeasonRow[] } | null> {
   try {
     const t = await readJson<{ name: string; seasons: StaticTeamSeasonRow[] }>(`team/${slug}.json`);

@@ -22,6 +22,13 @@ const DIRS = [
   "data/team",
   "data/game-players",
   "data/shots",
+  // NOT R2-mirrored — stripped for a different reason. team-splits is read at
+  // BUILD time by readTeamSplits() and reaches the browser as props on the team
+  // page, so nothing ever fetches it over the network. Left in place it would
+  // ship ~14 MB of files no request can ask for. (Contrast game-box-by-year,
+  // which looks similar but IS fetched client-side by the Win Calculator and
+  // the box-score modal, so it has to stay.)
+  "data/team-splits",
 ];
 
 let removed = 0;

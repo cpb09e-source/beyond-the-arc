@@ -13,6 +13,7 @@ import { SortableSeasonsTable } from "@/components/teams/sortable-seasons-table"
 import { SortableRosterTable } from "@/components/teams/sortable-roster-table";
 import { DistributionPanel, type DistributionRank } from "@/components/teams/distribution-panel";
 import { ScheduleTicker } from "@/components/teams/schedule-ticker";
+import { TeamStatsPanel, type TeamSplits } from "@/components/teams/team-stats-panel";
 import { FindGameTrigger } from "@/components/teams/find-game-trigger";
 import { TourneyTimeline } from "@/components/teams/tourney-timeline";
 import { PlayerHeadshotStrip } from "@/components/teams/player-headshot-strip";
@@ -235,6 +236,7 @@ export function TeamPageView({
   fourFactorRanks,
   scheduleGames,
   netRanks,
+  teamSplits,
   preview = false,
 }: {
   team: { name: string; seasons: StaticTeamSeasonRow[] };
@@ -248,6 +250,8 @@ export function TeamPageView({
   scheduleGames: GameLog[];
   /** year → this team's aNET rank that season. See netRanksForTeam(). */
   netRanks: Record<number, number>;
+  /** Eight-way stat splits for the season on screen; null before 2014. */
+  teamSplits: TeamSplits | null;
   // Preview mode — renders the last-completed-season layout with game-dependent
   // sections blurred, the roster swapped for the upcoming-season client roster,
   // record shown as 0-0 and BTA rank as TBD.
@@ -417,6 +421,15 @@ export function TeamPageView({
           )}
         </div>
       </section>
+
+      {/* Everything we hold on the team, in six cards, sliced eight ways.
+          Sits directly under the best/worst barbell above: that names the five
+          things worth knowing, this is the rest of it on demand. */}
+      {teamSplits && (
+        <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-10">
+          <TeamStatsPanel splits={teamSplits} blurBody={preview} />
+        </section>
+      )}
 
       {preview ? (
         // Upcoming-season roster + projected record — client-hydrated from
