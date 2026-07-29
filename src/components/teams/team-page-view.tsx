@@ -424,9 +424,11 @@ export function TeamPageView({
 
       {/* Everything we hold on the team, in six cards, sliced eight ways.
           Sits directly under the best/worst barbell above: that names the five
-          things worth knowing, this is the rest of it on demand. */}
+          things worth knowing, this is the rest of it on demand.
+          Deliberately tighter than a normal section break (the hero's own pb-8
+          already contributes 32px) because the two belong together. */}
       {teamSplits && (
-        <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-10">
+        <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-2">
           <TeamStatsPanel splits={teamSplits} blurBody={preview} />
         </section>
       )}
