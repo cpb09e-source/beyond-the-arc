@@ -8,8 +8,9 @@ import {
   RangeRow, isBoundActive, roundNice,
   type RangeStat, type RangeState,
 } from "@/components/filters/range-row";
+import { StatChipStrip, buildStatChips, type StatChip } from "@/components/filters/stat-chips";
 import {
-  parseSpec, specToParams,
+  parseSpec, specToParams, teamStatColumn,
   type StatFilter, type TeamFilterSpec, type TeamStatKey,
 } from "@/lib/team-filters";
 
@@ -139,16 +140,48 @@ function sameFilterSet(a: StatFilter[], b: StatFilter[]): boolean {
   return b.every((f) => sa.has(key(f)));
 }
 
+// ---------------------------------------------------------------------------
+// Selection chips
+// ---------------------------------------------------------------------------
+// The same strip /players carries, built the same way: in the toolbar off the
+// committed URL, in the panel header off the working draft.
+//
+// Labels come from TEAM_STAT_COLUMNS rather than the slider's own, so a chip
+// matches the column header it put in the table — "WAB", not "Wins above
+// bubble"; "TS%", not "True shooting".
+const CHIP_ORDER = ALL_RANGE_STATS.map((s) => s.key);
+const chipLabel = (key: string) =>
+  teamStatColumn(key)?.label ?? RANGE_BY_KEY.get(key)?.label ?? key;
+
+export function teamStatChips(cols: readonly string[], ranges: RangeState): StatChip[] {
+  return buildStatChips(cols, ranges, CHIP_ORDER, chipLabel);
+}
+
+/** Same chips, built from a committed spec rather than a live range draft. */
+export function teamStatChipsFromSpec(cols: readonly string[], filters: StatFilter[]): StatChip[] {
+  return teamStatChips(cols, filtersToRanges(filters));
+}
+
 export function TeamStatFilters({
   previewCount,
+  open: openProp,
+  onOpenChange,
 }: {
   /** Runs the live pipeline against the working draft for the footer total. */
   previewCount?: (filters: StatFilter[]) => number;
+  /** Optional control, so the toolbar's "+N more" chip can open the panel. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const router = useRouter();
   const search = useSearchParams();
   const [, startTransition] = useTransition();
-  const [open, setOpen] = useState(false);
+  const [openLocal, setOpenLocal] = useState(false);
+  const open = openProp ?? openLocal;
+  const setOpen = useCallback(
+    (v: boolean) => { if (onOpenChange) onOpenChange(v); else setOpenLocal(v); },
+    [onOpenChange],
+  );
 
   const params = useMemo(() => {
     const obj: Record<string, string> = {};
@@ -175,7 +208,7 @@ export function TeamStatFilters({
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("keydown", onKey);
     return () => { document.body.style.overflow = prev; document.removeEventListener("keydown", onKey); };
-  }, [open]);
+  }, [open, setOpen]);
 
   // Stable so memoized RangeRows don't re-render on every drag tick.
   const setBound = useCallback(
@@ -196,6 +229,21 @@ export function TeamStatFilters({
     [],
   );
   const clearAll = () => { setDraft({}); setPins([]); };
+  // Chip X — drop the stat wholesale: unpin the column AND release its bounds.
+  // Splitting those into two gestures would mean two clicks to undo one pick,
+  // since narrowing a slider auto-pins.
+  const removeStat = useCallback((key: string) => {
+    setPins((p) => p.filter((k) => k !== key));
+    setDraft((d) => {
+      if (!(key in d)) return d;
+      const next = { ...d };
+      delete next[key];
+      return next;
+    });
+  }, []);
+
+  // Uncapped here — the panel is where the full picture belongs.
+  const chips = useMemo(() => teamStatChips(pins, draft), [pins, draft]);
 
   const draftFilters = useMemo(() => rangesToFilters(draft), [draft]);
   const samePins =
@@ -258,17 +306,19 @@ export function TeamStatFilters({
             aria-label="Stat filters"
           >
             <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-5 pb-4 border-b border-hairline">
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 {/* min-h reserves the badge's height so the header doesn't grow
                     (and the centred modal doesn't jump) on the first filter. */}
-                <div className="flex items-center gap-2 min-h-6">
+                <div className="flex items-center flex-wrap gap-2 min-h-6">
                   <h3 className="text-base font-semibold text-ink leading-none">View &amp; Filters</h3>
                   {activeDraft > 0 && (
                     <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-coral text-white text-[0.62rem] font-bold tabular">{activeDraft}</span>
                   )}
-                  {activeDraft > 0 && (
+                  {chips.length > 0 && (
                     <button type="button" onClick={clearAll} className="text-xs text-ink-muted hover:text-coral transition-colors">Clear all</button>
                   )}
+                  {/* Everything picked, right where you picked it. */}
+                  <StatChipStrip chips={chips} onRemove={removeStat} ariaLabel="Selected columns and filters" />
                 </div>
                 <p className="mt-1.5 text-xs text-ink-muted leading-snug">
                   Tick a stat name to add it as a column, and/or drag a slider to narrow the field. Then Submit.

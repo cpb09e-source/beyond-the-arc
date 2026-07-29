@@ -174,6 +174,10 @@ export function limitLabel(n: number): string {
 }
 
 const COLUMN_BY_KEY = new Map(TEAM_STAT_COLUMNS.map((c) => [c.key, c]));
+/** Lookup a stat column by key — the grid-short label/format for the filter UI. */
+export function teamStatColumn(key: string): TeamStatColumn | undefined {
+  return COLUMN_BY_KEY.get(key);
+}
 function isStatKey(s: string | undefined): s is TeamStatKey {
   return !!s && COLUMN_BY_KEY.has(s);
 }

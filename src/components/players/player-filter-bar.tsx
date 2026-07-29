@@ -9,6 +9,7 @@ import {
   RangeRow, isBoundActive, roundNice,
   type RangeStat, type RangeState,
 } from "@/components/filters/range-row";
+import { StatChipStrip, buildStatChips, type StatChip } from "@/components/filters/stat-chips";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { ScopeCollapse, scopeSummary } from "@/components/filters/scope-collapse";
@@ -400,121 +401,21 @@ function sameFilterSet(a: PlayerStatFilter[], b: PlayerStatFilter[]): boolean {
 // ---------------------------------------------------------------------------
 // Selection chips
 // ---------------------------------------------------------------------------
-// The drawer knows what you picked; the table did not say so anywhere. These
-// chips are that read-out, rendered twice against the same builder: in the
-// toolbar off the committed URL, and in the drawer header off the working
-// draft. Both are removable, so a chip is also the shortest path back out of a
-// filter you no longer want.
+// Rendered twice against the same builder: in the toolbar off the committed
+// URL, and in the drawer header off the working draft. The strip itself is
+// shared with /teams — only the key→label resolution is per-page.
 
-export type StatChip = {
-  key: string;
-  /** Grid-short label — "TS%", not "True Shooting %". The strip is tight. */
-  label: string;
-  /** "≥ 55", "12–24", or null when the stat is a column with no bounds. */
-  detail: string | null;
-};
+const CHIP_ORDER = ALL_RANGE_STATS.map((s) => s.key);
+const chipLabel = (key: string) =>
+  playerStatColumn(key)?.label ?? RANGE_BY_KEY.get(key)?.label ?? key;
 
-function boundText(lo: number | null, hi: number | null): string | null {
-  const n = (v: number) => String(roundNice(v));
-  if (lo !== null && hi !== null) return `${n(lo)}–${n(hi)}`;
-  if (lo !== null) return `≥ ${n(lo)}`;
-  if (hi !== null) return `≤ ${n(hi)}`;
-  return null;
-}
-
-/**
- * One chip per stat, never two: a stat that is both pinned and bounded reads as
- * a single chip carrying its range. Pinned columns come first in pick order,
- * then any stat bounded without being pinned — an old bookmark, or one of the
- * `filterOnly` shot-profile stats that can never become a column at all.
- */
 export function statChips(cols: string[], ranges: RangeState): StatChip[] {
-  const out: StatChip[] = [];
-  const seen = new Set<string>();
-  const push = (key: string) => {
-    if (seen.has(key)) return;
-    seen.add(key);
-    const b = ranges[key];
-    out.push({
-      key,
-      label: playerStatColumn(key)?.label ?? RANGE_BY_KEY.get(key)?.label ?? key,
-      detail: boundText(b?.lo ?? null, b?.hi ?? null),
-    });
-  };
-  for (const k of cols) push(k);
-  for (const st of ALL_RANGE_STATS) if (isBoundActive(ranges[st.key])) push(st.key);
-  return out;
+  return buildStatChips(cols, ranges, CHIP_ORDER, chipLabel);
 }
 
 /** Same chips, built from a committed spec rather than a live range draft. */
 export function statChipsFromSpec(cols: string[], filters: PlayerStatFilter[]): StatChip[] {
   return statChips(cols, filtersToRanges(filters));
-}
-
-/**
- * The chip row. `max` caps it so a reader with fourteen columns doesn't push
- * the toolbar into three lines; the remainder collapses into a "+N more" that
- * opens the drawer, where the full set is always shown uncapped.
- */
-export function StatChipStrip({
-  chips,
-  onRemove,
-  max,
-  onOverflow,
-  ariaLabel,
-  className,
-}: {
-  chips: StatChip[];
-  onRemove: (key: string) => void;
-  max?: number;
-  onOverflow?: () => void;
-  ariaLabel: string;
-  className?: string;
-}) {
-  if (chips.length === 0) return null;
-  const shown = max && chips.length > max ? chips.slice(0, max) : chips;
-  const hidden = chips.length - shown.length;
-  return (
-    <ul aria-label={ariaLabel} className={cn("flex items-center flex-wrap gap-1.5 min-w-0", className)}>
-      {shown.map((c) => (
-        <li key={c.key}>
-          {/* Bounded stats wear coral, plain columns stay neutral — the strip
-              should distinguish "narrowed the field" from "added a column" at a
-              glance, since only the first changes the row count. */}
-          <span
-            className={cn(
-              "inline-flex items-center gap-1 h-6 pl-2 pr-1 rounded-full border text-[0.68rem] font-semibold whitespace-nowrap",
-              c.detail
-                ? "border-coral/40 bg-coral/8 text-coral"
-                : "border-ink/15 bg-paper-deep text-ink-soft",
-            )}
-          >
-            {c.label}
-            {c.detail && <span className="font-normal tabular opacity-80">{c.detail}</span>}
-            <button
-              type="button"
-              onClick={() => onRemove(c.key)}
-              aria-label={c.detail ? `Remove ${c.label} filter` : `Remove ${c.label} column`}
-              className="w-4 h-4 inline-flex items-center justify-center rounded-full hover:bg-ink/12 transition-colors"
-            >
-              <X size={11} strokeWidth={2.6} />
-            </button>
-          </span>
-        </li>
-      ))}
-      {hidden > 0 && (
-        <li>
-          <button
-            type="button"
-            onClick={onOverflow}
-            className="h-6 px-2 rounded-full border border-dashed border-ink/25 text-[0.68rem] font-semibold text-ink-muted hover:text-ink hover:border-ink/40 transition-colors"
-          >
-            +{hidden} more
-          </button>
-        </li>
-      )}
-    </ul>
-  );
 }
 
 /**

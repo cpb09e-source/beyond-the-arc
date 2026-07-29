@@ -8,8 +8,9 @@ import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { PercentileChip } from "@/components/percentile-chip";
 import {
-  DRAWER_SLOT_ID, PlayerFilterBar, PlayerStatFilters, StatChipStrip, statChipsFromSpec,
+  DRAWER_SLOT_ID, PlayerFilterBar, PlayerStatFilters, statChipsFromSpec,
 } from "@/components/players/player-filter-bar";
+import { StatChipStrip } from "@/components/filters/stat-chips";
 import { ComparePlayersModal } from "@/components/players/compare-players-modal";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { Select } from "@/components/select";

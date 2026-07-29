@@ -15,10 +15,12 @@ import {
   type RawTeamSeason,
   type TeamRow,
   type StatFilter,
+  type TeamFilterSpec,
 } from "@/lib/team-filters";
 import { Select } from "@/components/select";
 import { FilterBar, ConferenceRankingsModal } from "@/components/explorer/filter-bar";
-import { TeamStatFilters } from "@/components/explorer/team-stat-filters";
+import { TeamStatFilters, teamStatChipsFromSpec } from "@/components/explorer/team-stat-filters";
+import { StatChipStrip } from "@/components/filters/stat-chips";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { CompareTeamsModal } from "@/components/explorer/compare-teams-modal";
 import { TeamLogo } from "@/components/team-logo";
@@ -144,6 +146,9 @@ export function ExplorerClient({
 }) {
   const [compareOpen, setCompareOpen] = useState(false);
   const [showRankings, setShowRankings] = useState(false);
+  // Owned here, not inside TeamStatFilters, so the toolbar's "+N more" chip can
+  // open the panel on the full list.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const router = useRouter();
   const [, startTransition] = useTransition();
   const search = useSearchParams();
@@ -170,6 +175,21 @@ export function ExplorerClient({
     for (const t of allTeams) s.add(t.name);
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [allTeams]);
+
+  // Toolbar read-out of the COMMITTED selection (the panel's own strip tracks
+  // the uncommitted draft). Removing here is immediate — there is no Submit on
+  // the toolbar, and a chip whose X did nothing until you opened a panel would
+  // be a lie.
+  const specChips = useMemo(() => teamStatChipsFromSpec(spec.cols, spec.filters), [spec.cols, spec.filters]);
+  const removeSpecStat = (key: string) => {
+    const next: TeamFilterSpec = {
+      ...spec,
+      cols: spec.cols.filter((k) => k !== key),
+      filters: spec.filters.filter((f) => f.stat !== key),
+    };
+    const p = specToParams(next).toString();
+    startTransition(() => router.replace(p ? `/?${p}` : "/", { scroll: false }));
+  };
 
   // Inline quick-filter on the table — by team name only, separate from the
   // URL-persisted Team picker in the FilterBar above. We run processTeams with
@@ -336,7 +356,7 @@ export function ExplorerClient({
 
             {/* Filters sits left of Compare, the same slot the drawer occupies
                 on /players (immediately right of the search box). */}
-            <TeamStatFilters previewCount={previewCount} />
+            <TeamStatFilters previewCount={previewCount} open={filtersOpen} onOpenChange={setFiltersOpen} />
 
             <button
               type="button"
@@ -364,6 +384,18 @@ export function ExplorerClient({
                 View Conference Rankings →
               </button>
             )}
+
+            {/* What's currently applied, and the fastest way to undo any of it.
+                Last in the row rather than straight after the count, so a wide
+                selection doesn't push the rankings link out of reach. Capped at
+                six; the rest opens the panel, which shows them all. */}
+            <StatChipStrip
+              chips={specChips}
+              onRemove={removeSpecStat}
+              max={6}
+              onOverflow={() => setFiltersOpen(true)}
+              ariaLabel="Applied columns and filters"
+            />
           </div>
 
           {/* w-full on mobile, matching /players. The sliding mobile search
