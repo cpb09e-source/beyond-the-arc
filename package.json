@@ -24,7 +24,8 @@
     "scrape:tournament-games": "node scripts/scrape-tournament-games.mjs",
     "scrape:tournament-boxscores": "node scripts/scrape-tournament-boxscores.mjs",
     "dev:netlify": "netlify dev",
-    "dev:next": "next dev"
+    "dev:next": "next dev",
+    "dev:functions": "netlify functions:serve --port 9999"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

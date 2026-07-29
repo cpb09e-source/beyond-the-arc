@@ -18,21 +18,24 @@
  *    of game logs. A bigger heap makes it far less likely — granted to Next
  *    alone, on the `[dev] command` in netlify.toml. See point 3.
  *
- * 3. THE NETLIFY CLI PROXY LEAKS, AND THEN ABORTS. Measured on this project:
- *    the proxy process went from 131 MB to 4,988 MB in 126 seconds across
- *    twenty requests, monotonically, while `next dev` held flat at 2.5 GB. It
- *    climbs until it reaches its heap ceiling, at which point V8 aborts through
- *    __fastfail and Windows reports exit 3221226505 with no message, no npm
- *    error and no Windows Error Reporting entry — so it reads as the dev server
- *    having simply vanished mid-request.
+ * 3. THE NETLIFY CLI PROXY LEAKED, AND THEN ABORTED — SO IT IS GONE. Measured
+ *    on this project: the proxy process went from 131 MB to 4,988 MB in 126
+ *    seconds across twenty requests, monotonically, while `next dev` held flat
+ *    at 2.5 GB. It climbed until V8 aborted through __fastfail and Windows
+ *    reported exit 3221226505 with no message, no npm error and no Windows
+ *    Error Reporting entry — so it read as the dev server having simply
+ *    vanished mid-request. Upgrading the CLI 26 -> 27 made it worse.
  *
- *    Two consequences, both handled here. The heap flag must NOT be set through
- *    NODE_OPTIONS, because every node process in the tree inherits it and the
- *    leak would be handed an 8 GB rope. And because the proxy is the process
- *    that dies, its own `next dev` child survives holding port 3000 — so a
- *    crash used to poison the next start too. This script now supervises:
- *    clears the orphan and restarts, turning a dead afternoon into a few
- *    seconds. The leak is upstream and cannot be fixed from here.
+ *    And well before the crash it started SILENTLY DROPPING CLIENT
+ *    NAVIGATIONS: on the teams explorer nothing could write the URL — not the
+ *    filter chips, not the "Show" select, not column sorting — with no error
+ *    and no failed request, while production did the same interaction in 800ms.
+ *    A proxy that fails by doing nothing is worse than one that crashes.
+ *
+ *    So `netlify dev` no longer runs at all. This script starts the three
+ *    processes itself and puts our own streaming proxy in front — see the
+ *    SERVICES table below and scripts/dev-proxy.mjs. The heap flag still stays
+ *    on Next alone rather than in NODE_OPTIONS, which every child inherits.
  *
  * Usage: npm run dev  (see also docs/dev-scoreboard.md)
  */
@@ -45,7 +48,7 @@ import process from "node:process";
 const isWindows = process.platform === "win32";
 
 /** Ports this project's dev stack binds. Freeing these is the whole job. */
-const PORTS = [8899, 3000];
+const PORTS = [8899, 3000, 9999];
 
 /**
  * Kill whatever is still holding the dev ports, plus any stray next/netlify
@@ -131,42 +134,73 @@ waitForPorts();
 /**
  * 0xC0000409 — STATUS_STACK_BUFFER_OVERRUN, which on modern Windows is what
  * `__fastfail` reports. Node uses it for a V8 fatal error, so this is the
- * signature of the proxy aborting on its own heap rather than being killed.
+ * signature of a process aborting on its own heap rather than being killed.
  */
 const FASTFAIL = 3221226505;
 
-let child = null;
 let shuttingDown = false;
-let restarts = 0;
 /** Enough to survive an afternoon; a cap so a genuinely broken config still stops. */
 const MAX_RESTARTS = 20;
 
-function start() {
-  // NOTE: no NODE_OPTIONS here on purpose. The render fork's heap flag lives on
-  // the `[dev] command` in netlify.toml so it applies to Next ALONE — see the
-  // comment there. Setting it in the environment handed the same 8 GB ceiling
-  // to the leaking Netlify proxy, which is what turned a slow leak into a hard
-  // crash.
-  child = spawn("netlify", ["dev"], { stdio: "inherit", shell: true });
+/**
+ * THREE PROCESSES, NOT ONE.
+ *
+ * `netlify dev` used to be the single entry point: it spawned Next and put its
+ * own proxy in front. That proxy is the leak (see the header, and
+ * scripts/dev-proxy.mjs), so it is gone. What replaces it:
+ *
+ *   next dev            :3000   the app
+ *   functions:serve     :9999   the three /api/* functions, real runtime + env
+ *   dev-proxy.mjs       :8899   streaming front door, one origin over both
+ *
+ * Each is supervised independently, because they fail independently: Next dies
+ * on a render-fork OOM, functions:serve dies on an esbuild error in a handler,
+ * and neither should take the other down. The proxy is ours and holds nothing,
+ * so in practice it just sits there.
+ *
+ * The heap flag stays scoped to Next alone (it is the only one that renders
+ * pages) rather than going through NODE_OPTIONS, which every child inherits.
+ */
+const SERVICES = [
+  {
+    name: "next dev",
+    cmd: "node",
+    args: ["--max-old-space-size=8192", "./node_modules/next/dist/bin/next", "dev", "--port", "3000"],
+  },
+  {
+    name: "functions:serve",
+    cmd: "netlify",
+    args: ["functions:serve", "--port", "9999"],
+  },
+  {
+    name: "dev-proxy",
+    cmd: "node",
+    args: ["./scripts/dev-proxy.mjs"],
+  },
+];
+
+const children = new Map();
+
+function start(svc) {
+  const child = spawn(svc.cmd, svc.args, { stdio: "inherit", shell: true });
+  children.set(svc.name, child);
 
   child.on("exit", (code, signal) => {
     if (shuttingDown) return;
+    children.delete(svc.name);
     const how = signal ? `signal ${signal}` : `exit code ${code}`;
-    const leaked = code === FASTFAIL;
-    console.log(`\n· netlify dev ended — ${how}${leaked ? "  (V8 fatal error — the CLI proxy's known heap leak)" : ""}`);
+    const fatal = code === FASTFAIL;
+    console.log(`\n· ${svc.name} ended — ${how}${fatal ? "  (V8 fatal error — out of heap)" : ""}`);
 
-    if (restarts >= MAX_RESTARTS) {
-      console.log(`· ${MAX_RESTARTS} restarts reached; stopping. Something is wrong beyond the leak.`);
-      process.exit(code ?? 0);
+    svc.restarts = (svc.restarts ?? 0) + 1;
+    if (svc.restarts > MAX_RESTARTS) {
+      console.log(`· ${svc.name} restarted ${MAX_RESTARTS} times; giving up. Something is wrong beyond a leak.`);
+      return;
     }
-    restarts++;
-    // The dead proxy leaves its `next dev` child holding port 3000. Left alone,
-    // the respawn hits "Another next dev server is already running" and exits —
-    // which is how one crash used to end the whole session.
-    console.log(`· clearing the orphaned next dev and restarting (${restarts}/${MAX_RESTARTS})…`);
-    clearStale();
-    waitForPorts();
-    start();
+    // Only this service's port needs freeing — the other two are still serving,
+    // and clearing everything would turn one crash into a full restart.
+    console.log(`· restarting ${svc.name} (${svc.restarts}/${MAX_RESTARTS})…`);
+    setTimeout(() => start(svc), 500);
   });
 }
 
@@ -174,6 +208,7 @@ function start() {
 const bye = (sig) => {
   shuttingDown = true;
   console.log(`\n· dev.mjs received ${sig}, cleaning up`);
+  for (const child of children.values()) child.kill();
   clearStale();
   process.exit(0);
 };
@@ -181,4 +216,4 @@ process.on("SIGINT", () => bye("SIGINT"));
 process.on("SIGTERM", () => bye("SIGTERM"));
 process.on("SIGHUP", () => bye("SIGHUP"));
 
-start();
+for (const svc of SERVICES) start(svc);

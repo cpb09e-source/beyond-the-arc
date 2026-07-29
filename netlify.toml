@@ -32,24 +32,21 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
-# `npm run dev` is plain `next dev`, which serves the pages but knows nothing
-# about netlify/functions — /api/parse-query 404s there, which looks like the
-# ask box is broken when it is only unreachable. `npm run dev:netlify` runs
-# next dev behind Netlify's proxy so the functions and the injected env vars
-# are present too. Pinned explicitly rather than left to framework detection,
-# which otherwise tries the production build command.
+# THIS BLOCK NO LONGER DRIVES `npm run dev`. It is kept only for
+# `npm run dev:netlify`, an escape hatch for reproducing Netlify's own routing.
+#
+# `npm run dev` now starts the three processes itself (next dev :3000,
+# `netlify functions:serve` :9999, and scripts/dev-proxy.mjs :8899) because the
+# Netlify CLI's dev proxy leaks ~16-28 MB per proxied response until V8 aborts,
+# and well before that starts silently dropping client-side navigations — see
+# the header of scripts/dev.mjs for the measurements. Our proxy holds nothing:
+# 75 -> 88 -> 87 MB across 240 requests, against 131 -> 4,988 MB across 20.
+#
+# If you do run dev:netlify, the heap flag below stays on the Next child rather
+# than in NODE_OPTIONS: every node process in the tree inherits NODE_OPTIONS, so
+# setting it there hands the CLI proxy's leak an 8 GB rope, which defers the
+# crash rather than preventing it.
 [dev]
-  # The heap flag is HERE, on the Next child, rather than in NODE_OPTIONS.
-  #
-  # scripts/dev.mjs used to export NODE_OPTIONS=--max-old-space-size=8192 for
-  # the whole dev tree, to stop Next's render fork being OOM-killed on the coach
-  # pages. But NODE_OPTIONS is inherited by every node process underneath,
-  # including the Netlify CLI's proxy — which leaks about 250 MB per proxied
-  # response on this site and never gives it back. Granting the leak an 8 GB
-  # ceiling did not prevent a crash, it just deferred one: the proxy climbed to
-  # the cap, V8 aborted through __fastfail, and Windows reported exit
-  # 3221226505 (0xC0000409) with no message. Scoped to Next, the render fork
-  # keeps its headroom and the proxy keeps Node's ordinary default.
   command = "node --max-old-space-size=8192 ./node_modules/next/dist/bin/next dev"
   framework = "#custom"
   targetPort = 3000

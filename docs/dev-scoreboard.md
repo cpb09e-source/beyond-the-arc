@@ -9,10 +9,20 @@ a Netlify Function, so they are the only ones that need more than `next dev`.
 npm run dev
 ```
 
-That runs `netlify dev` behind `scripts/dev.mjs`, which clears orphaned
-processes first and gives Next's render fork an 8 GB heap. Use it rather than
-`netlify dev` directly — see *When it goes wrong* for what those two guards
-are actually for.
+`scripts/dev.mjs` clears orphaned processes, then starts three:
+
+| port | process | what it serves |
+|------|---------|----------------|
+| 3000 | `next dev` (8 GB heap for the render fork) | the app |
+| 9999 | `netlify functions:serve` | the three functions, on their real `/api/*` paths |
+| 8899 | `scripts/dev-proxy.mjs` | front door: `/api/*` → 9999, everything else → 3000 |
+
+**Do not use `netlify dev` (`npm run dev:netlify`) for ordinary work.** Its
+proxy leaks 16–28 MB per response until V8 aborts, and well before that it
+starts silently dropping client-side navigations — on `/` nothing could write
+the URL at all, including the teams table's own sort and row-count controls,
+with no error to show for it. Our proxy streams instead of buffering: measured
+flat at 75 → 88 → 87 MB across 240 requests, against 131 → 4,988 MB across 20.
 
 - **http://localhost:8899** — the whole site, functions included. Use this.
 - **http://localhost:3000** — plain `next dev`, no functions. `/api/*` 404s
@@ -96,7 +106,7 @@ live. During the season, leave it null and use `?date=` for specific days.
 
 ## Testing a function without the browser
 
-The fastest and most reliable loop, and the one to reach for when `netlify dev`
+The fastest and most reliable loop, and the one to reach for when a dev server
 is misbehaving — it calls the handler directly, with no dev server and no proxy
 in the way:
 
@@ -121,11 +131,11 @@ answers in about two seconds and never lies to you about the proxy.
 
 ## When it goes wrong
 
-**"Another next dev server is already running"** — `netlify dev` spawns its own
-`next dev`, and that child outlives the parent when the parent is killed. The
-zombie keeps port 3000 and the next start fails. `npm run dev` clears these
-before starting; if you started `netlify dev` by hand, kill stray node
-processes and retry.
+**"Another next dev server is already running"** — a previous `next dev`
+outlived its parent and still holds port 3000. `npm run dev` clears ports 3000,
+8899 and 9999 before starting; if you started something by hand, kill stray node
+processes and retry. Two supervisors running at once produce a restart loop,
+each clearing the other's children — check for a second `scripts/dev.mjs` first.
 
 **"Jest worker encountered 2 child process exceptions, exceeding retry limit"**
 — this is a memory failure wearing a confusing hat. Next renders in a forked
@@ -134,51 +144,51 @@ the OS kills it. Next reports the death without naming the cause or the page.
 Coach pages trip it first because one of them parses ~140 MB of game logs.
 Restart the dev server. The 8 GB heap in `scripts/dev.mjs` makes it rare.
 
-**The dev server dies mid-session, often mid-request** — the Netlify CLI's dev
-proxy leaks memory and then aborts. This is upstream and cannot be fixed from
-this repo, but it is fully understood, and `npm run dev` now recovers from it
-by itself.
+### The Netlify CLI proxy — why it is no longer in the stack
 
-Measured on this project (CLI 26.0.1): the proxy process climbs about **16 MB
-per request**, near enough regardless of response size — a 15 KB favicon costs
-almost as much as the 1.8 MB search index — and never gives any of it back.
-It went 131 MB → 4,988 MB in 126 seconds across twenty requests while
-`next dev` held flat. When it reaches its heap ceiling V8 aborts through
-`__fastfail`, and Windows reports **exit 3221226505** (`0xC0000409`) with no
-message, no `npm ERR!` and no Windows Error Reporting entry. That silence is
-why it reads as the server having simply vanished, and why the log's last line
-is always whatever request it happened to be serving — which makes an innocent
-request look like the culprit.
+**Fixed on 29 July 2026 by removing it.** Kept here because the symptoms are
+distinctive and you will recognise them if `dev:netlify` is ever used again.
 
-Two things follow, both already handled:
+Measured on this project (CLI 26.0.1): the proxy process climbed about **16 MB
+per request**, near enough regardless of response size — a 15 KB favicon cost
+almost as much as the 1.8 MB search index — and never gave any of it back.
+131 MB → 4,988 MB in 126 seconds across twenty requests, while `next dev` held
+flat. At its heap ceiling V8 aborts through `__fastfail`, and Windows reports
+**exit 3221226505** (`0xC0000409`) with no message, no `npm ERR!` and no Windows
+Error Reporting entry. That silence is why it read as the server having simply
+vanished, and why the log's last line was always whatever request it happened
+to be serving — making an innocent request look like the culprit.
 
-- The render fork's `--max-old-space-size=8192` lives on the `[dev] command` in
-  `netlify.toml`, NOT in `NODE_OPTIONS`. Every node process in the tree
-  inherits `NODE_OPTIONS`, so setting it there handed the leak an 8 GB ceiling
-  — and a proxy sitting at 5-8 GB is also what starved Next's render fork and
-  produced the "Jest worker" deaths on the coach pages above. One cause, two
-  symptoms.
-- `scripts/dev.mjs` supervises the proxy: on an unexpected exit it clears the
-  orphaned `next dev` (which survives, because the proxy is the process that
-  died, and then holds port 3000 against the restart) and starts it again. A
-  crash costs a few seconds instead of the session.
+**The worse symptom, found later: it silently drops client-side navigations.**
+Long before the crash, `router.replace` on `/` stopped doing anything at all —
+the teams explorer could not write its own URL, so filter chips, the row-count
+select and column sorting were all dead. No error, no failed request, no
+navigation. The same interactions ran in 800 ms in production and 3 s on port
+3000, and this was reproduced on unmodified code with local changes stashed. A
+proxy that fails by doing nothing costs far more than one that crashes, because
+every symptom points at your own code.
 
-**Upgrading the CLI does not fix it.** Measured across 26.0.1 → 27.0.1 on the
+**Upgrading the CLI did not fix it.** Measured across 26.0.1 → 27.0.1 on the
 same test: 16.3 → 14.3 MB per small request, 27.1 → 28.5 MB per large one.
 Noise. Don't spend time on it again.
+
+**What replaced it** is `scripts/dev-proxy.mjs`, about forty lines that pipe
+instead of buffering: `/api/*` to `netlify functions:serve`, everything else to
+`next dev`, and a raw `upgrade` handler so HMR's WebSocket still connects.
+Measured across 240 requests: **75 → 88 → 87 MB**, i.e. flat — the first 13 MB
+is V8 warm-up and the second 120 requests cost nothing. Fast Refresh rebuilds
+also dropped from ~4.5 s to ~2.0 s, since nothing is sitting at 7 GB any more.
+
+One thing that did NOT change: the render fork's `--max-old-space-size=8192`
+still belongs to Next alone, never `NODE_OPTIONS`, which every child inherits.
 
 **Why it started mattering on 28 July 2026 and never before.** Until the
 site-wide score ticker landed (`7f5e5842b7`), the only function on the site was
 `parse-query`, used on one page and only when you type a question — so almost
 nothing went through the proxy and `next dev` on port 3000 was enough for
-nearly all work. The ticker put an `/api/scoreboard` call on *every page load*,
-and the scoreboard, ticker and game pages are exactly the surfaces that cannot
-be worked on without the proxy. Traffic through the leak went from roughly zero
-to every navigation. The leak is old; the exposure is new.
-
-Which points at the practical mitigation: **plain `next dev` on port 3000 has
-no proxy in it at all** and is the right place to work on anything that isn't
-function-backed.
+nearly all work. The ticker put an `/api/scoreboard` call on *every page load*.
+Traffic through the leak went from roughly zero to every navigation. The leak
+was old; the exposure was new.
 
 **A function returns 500 or the connection resets, but curl says 200** — both
 the ticker and the game page retry once before showing anything, which absorbs
