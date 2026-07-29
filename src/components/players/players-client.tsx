@@ -7,7 +7,7 @@ import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { PercentileChip } from "@/components/percentile-chip";
-import { PlayerFilterBar, PlayerStatFilters } from "@/components/players/player-filter-bar";
+import { DRAWER_SLOT_ID, PlayerFilterBar, PlayerStatFilters } from "@/components/players/player-filter-bar";
 import { ComparePlayersModal } from "@/components/players/compare-players-modal";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { Select } from "@/components/select";
@@ -919,6 +919,11 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
             </div>
           </div>
         </div>
+        {/* Where the Filters drawer expands. It portals in here so it sits in
+            normal flow between the toolbar and the table — opening it grows the
+            card and pushes the table down, rather than covering it. Empty and
+            zero-height while closed. */}
+        <div id={DRAWER_SLOT_ID} />
         {/* D&3-style internal scroll: the table scrolls inside its own viewport
             (both axes) while BOTH header rows stay frozen and the RK + Player
             columns pin left. Sticky cells carry opaque backgrounds. */}

@@ -176,6 +176,22 @@ body {
  * Short and ease-out-quint: fast off the mark, long settle, no bounce. The
  * panel used to simply exist on the next frame, which is most of why it read as
  * a 2010 dropdown — nothing about it said it came FROM the input. */
+/* An inline drawer that animates from nothing to its natural height.
+ *
+ * grid-template-rows 0fr → 1fr is the only way to transition to `auto` height
+ * without measuring the content in JS. The inner element needs overflow:hidden
+ * or the content spills out of the collapsed row while it animates. */
+.bta-drawer {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.bta-drawer.is-open { grid-template-rows: 1fr; }
+.bta-drawer > * { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  .bta-drawer { transition: none; }
+}
+
 @keyframes bta-search-drop {
   from { opacity: 0; transform: translateY(-0.5rem); }
 }

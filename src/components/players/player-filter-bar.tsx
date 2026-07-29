@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -253,7 +254,7 @@ function QuickField({ label, children }: { label: string; children: React.ReactN
 // stored as fractions in the URL but shown/edited as whole percent here.
 type RangeGroup = { label: string; stats: RangeStat[] };
 
-const RANGE_GROUPS: RangeGroup[] = [
+const RANGE_GROUPS_RAW: RangeGroup[] = [
   {
     label: "Estimated +/-",
     stats: [
@@ -327,6 +328,28 @@ const RANGE_GROUPS: RangeGroup[] = [
   },
 ];
 
+/**
+ * "Minutes per game" → "Minutes Per Game", without wrecking the acronyms.
+ *
+ * A word is only capitalised when it is ENTIRELY lowercase. Anything already
+ * carrying a capital is left exactly as written, which is what protects PIR,
+ * EPM, FG, 3PT, TS and — the one a naive title-case always ruins — eWins.
+ */
+function titleCase(label: string): string {
+  return label
+    .split(" ")
+    .map((w) => (w && w === w.toLowerCase() ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(" ");
+}
+
+// Title-cased once here rather than in RangeRow, which the teams explorer also
+// renders — this is the players drawer's house style, not a change to the
+// shared row.
+const RANGE_GROUPS: RangeGroup[] = RANGE_GROUPS_RAW.map((g) => ({
+  ...g,
+  stats: g.stats.map((s) => ({ ...s, label: titleCase(s.label) })),
+}));
+
 const ALL_RANGE_STATS: RangeStat[] = RANGE_GROUPS.flatMap((g) => g.stats);
 const RANGE_BY_KEY = new Map(ALL_RANGE_STATS.map((s) => [s.key, s]));
 
@@ -375,6 +398,24 @@ function sameFilterSet(a: PlayerStatFilter[], b: PlayerStatFilter[]): boolean {
 }
 
 /**
+ * Where the page puts the drawer, and what the trigger points `aria-controls`
+ * at. The page renders an empty div with this id directly beneath the toolbar
+ * row; the panel portals into it so it expands the card in normal flow.
+ */
+export const DRAWER_SLOT_ID = "player-filters-slot";
+const DRAWER_PANEL_ID = "player-filters-panel";
+const SEARCH_LIST_ID = "player-filters-find";
+
+/** Magnifier, matching the one on the table's own search box. */
+function SearchGlass({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+      <circle cx={11} cy={11} r={7} /><line x1={20} y1={20} x2={16.65} y2={16.65} />
+    </svg>
+  );
+}
+
+/**
  * Filters trigger + full range-filter drawer. Lives INSIDE the table toolbar
  * (next to the search box). Self-contained: reads its own draft of stat ranges
  * from the URL and, on Submit, pushes { ...urlSpec, filters } — preserving the
@@ -412,15 +453,40 @@ export function PlayerStatFilters({
     /* eslint-disable-next-line */
   }, [search]);
 
-  // Lock body scroll + wire Escape while the drawer is open.
+  // Escape still closes. Body scroll is NOT locked any more — this is an inline
+  // drawer, not a modal, so the page behind it is not "behind" anything and
+  // freezing it would strand a reader who opened the drawer halfway down the
+  // table.
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("keydown", onKey);
-    return () => { document.body.style.overflow = prev; document.removeEventListener("keydown", onKey); };
+    return () => document.removeEventListener("keydown", onKey);
   }, [open]);
+
+  // The drawer renders into a slot the page puts directly under the toolbar, so
+  // it expands the card and pushes the table down instead of floating over it.
+  // A portal rather than rendering in place because the trigger sits inside a
+  // nested flex group in the toolbar — a full-width panel there would be
+  // trapped in that group's width.
+  //
+  // The lookup happens at RENDER time behind a mounted flag, rather than being
+  // captured into state by an effect. Caching the element in state looked
+  // tidier and silently never mounted the portal: this component re-mounts on
+  // navigation and filter changes, and a one-shot effect that misses the slot —
+  // or holds a node from a previous mount — leaves nothing to portal into, with
+  // no error to show for it. Re-reading each render is a getElementById against
+  // a stable id and always yields the live node.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    // Flipping a mounted flag once is the standard way to defer a DOM read past
+    // hydration; there is nothing here to cascade into.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMounted(true);
+  }, []);
+  const slot = mounted && typeof document !== "undefined"
+    ? document.getElementById(DRAWER_SLOT_ID)
+    : null;
 
   // Stable so memoized RangeRows don't re-render on every drag tick — only the
   // row whose lo/hi actually changed reconciles.
@@ -441,6 +507,52 @@ export function PlayerStatFilters({
     [],
   );
   const clearAll = () => { setDraft({}); setPins([]); };
+
+  // ---- Jump-to-field search -------------------------------------------------
+  //
+  // Seven groups and 112 controls is a lot to hunt through when you already
+  // know you want Turnover Rate. Type, pick, and the field is added as a
+  // column; the box empties itself so the next one is just more typing.
+  const [q, setQ] = useState("");
+  const [hi, setHi] = useState(0);
+  const fieldMatches = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return [] as RangeStat[];
+    return ALL_RANGE_STATS
+      .filter((s) => pinnable(s.key) && s.label.toLowerCase().includes(needle))
+      // Label-start matches first: typing "to" should offer "Turnovers Per
+      // Game" before "Assisted %", not whatever the group order happens to be.
+      .sort((a, b) => {
+        const ai = a.label.toLowerCase().indexOf(needle);
+        const bi = b.label.toLowerCase().indexOf(needle);
+        return ai - bi || a.label.localeCompare(b.label);
+      })
+      .slice(0, 8);
+  }, [q]);
+  // Clamp during render — a shrinking list must never leave the highlight
+  // pointing past the end, which would make Enter do nothing.
+  const hiSafe = fieldMatches.length ? Math.min(hi, fieldMatches.length - 1) : 0;
+
+  const pickField = (st: RangeStat) => {
+    // Add as a column and put the box back to empty, ready for the next one.
+    setPins((pp) => (pp.includes(st.key) ? pp : [...pp, st.key]));
+    setQ("");
+    setHi(0);
+  };
+
+  const onSearchKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!fieldMatches.length) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); setHi((h) => Math.min(h + 1, fieldMatches.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
+    else if (e.key === "Enter") { e.preventDefault(); pickField(fieldMatches[hiSafe]!); }
+    else if (e.key === "Escape") {
+      // Clear the search first; only a second Escape closes the drawer, so
+      // abandoning a search doesn't throw away the whole panel.
+      e.preventDefault();
+      e.stopPropagation();
+      setQ("");
+    }
+  };
 
   const draftFilters = useMemo(() => rangesToFilters(draft), [draft]);
   const samePins = pins.length === urlSpec.cols.length && pins.every((k, i) => k === urlSpec.cols[i]);
@@ -471,12 +583,175 @@ export function PlayerStatFilters({
     setOpen(false);
   };
 
+  const panel = (
+    <div className={cn("bta-drawer border-b border-hairline bg-paper-deep/20", open && "is-open")}>
+      <div>
+        <div id={DRAWER_PANEL_ID} role="region" aria-label="Stat filters">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-3 px-4 lg:px-5 pt-4 pb-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 min-h-6">
+                <h3 className="text-base font-semibold text-ink leading-none">View &amp; Filters</h3>
+                {activeDraft > 0 && (
+                  <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-coral text-white text-[0.62rem] font-bold tabular">{activeDraft}</span>
+                )}
+                {activeDraft > 0 && (
+                  <button type="button" onClick={clearAll} className="text-xs text-ink-muted hover:text-coral transition-colors">Clear all</button>
+                )}
+              </div>
+              <p className="mt-1.5 text-xs text-ink-muted leading-snug">
+                Tick a stat name to add it as a column, and/or drag a slider to narrow the field. Then Submit.
+              </p>
+
+              {/* Jump to a field by name. */}
+              <div className="relative mt-3 max-w-80">
+                <SearchGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" />
+                <input
+                  type="text"
+                  value={q}
+                  onChange={(e) => { setQ(e.target.value); setHi(0); }}
+                  onKeyDown={onSearchKey}
+                  placeholder="Find a stat…"
+                  aria-label="Find a stat and add it as a column"
+                  aria-expanded={fieldMatches.length > 0}
+                  aria-controls={SEARCH_LIST_ID}
+                  aria-autocomplete="list"
+                  aria-activedescendant={fieldMatches[hiSafe] ? `${SEARCH_LIST_ID}-${fieldMatches[hiSafe]!.key}` : undefined}
+                  role="combobox"
+                  className="h-8 w-full pl-8 pr-7 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+                />
+                {q && (
+                  <button
+                    type="button"
+                    onClick={() => { setQ(""); setHi(0); }}
+                    aria-label="Clear stat search"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 inline-flex items-center justify-center rounded text-ink-muted hover:text-coral hover:bg-paper-deep"
+                  >
+                    ×
+                  </button>
+                )}
+                {fieldMatches.length > 0 && (
+                  <ul
+                    id={SEARCH_LIST_ID}
+                    role="listbox"
+                    className="absolute left-0 right-0 top-9 z-20 rounded-md border border-hairline bg-popover shadow-lg overflow-hidden py-1"
+                  >
+                    {fieldMatches.map((st, i) => {
+                      const already = pins.includes(st.key);
+                      return (
+                        <li key={st.key}>
+                          <button
+                            type="button"
+                            id={`${SEARCH_LIST_ID}-${st.key}`}
+                            role="option"
+                            aria-selected={i === hiSafe}
+                            // onMouseDown, not onClick: the input keeps focus so
+                            // the next field can be typed straight away.
+                            onMouseDown={(e) => { e.preventDefault(); pickField(st); }}
+                            onMouseEnter={() => setHi(i)}
+                            className={cn(
+                              "w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 transition-colors",
+                              i === hiSafe ? "bg-coral/10 text-ink" : "text-ink-soft hover:bg-paper-deep",
+                            )}
+                          >
+                            <span className="truncate">{st.label}</span>
+                            {already && (
+                              <span className="ml-auto text-[0.62rem] text-ink-muted shrink-0">added</span>
+                            )}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close filters"
+              className="shrink-0 w-8 h-8 -mr-1 inline-flex items-center justify-center rounded-md text-ink-muted hover:text-ink hover:bg-paper-deep transition-colors"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Body. Capped so a drawer opened on a long table cannot push the
+              results entirely off the screen; it scrolls past that. */}
+          <div className="max-h-[60vh] overflow-y-auto px-4 lg:px-5 pb-5 space-y-6">
+            {RANGE_GROUPS.map((g) => {
+              const gc = g.stats.reduce((n, s) => n + (isBoundActive(draft[s.key]) ? 1 : 0), 0);
+              return (
+                // CSS containment. Without it, changing one slider re-styles and
+                // re-lays-out the whole panel — 112 form controls across seven groups —
+                // on every tick of a drag. Measured alternating, warm: p90 25ms with ~4
+                // dropped frames a drag, against 16.8ms and ~1.5 once each group is
+                // contained. Safe here because a group holds only static rows; nothing
+                // inside is sticky or absolutely positioned against an outer ancestor.
+                <section key={g.label} className="[contain:layout_style]">
+                  <div className="flex items-center gap-2 mb-3 min-h-5">
+                    <h4 className="text-[0.62rem] uppercase tracking-[0.18em] font-semibold text-ink-soft">{g.label}</h4>
+                    {gc > 0 && (
+                      <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-coral/15 text-coral text-[0.58rem] font-bold tabular">{gc}</span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                    {g.stats.map((st) => (
+                      <RangeRow
+                        key={st.key}
+                        st={st}
+                        lo={draft[st.key]?.lo ?? null}
+                        hi={draft[st.key]?.hi ?? null}
+                        setBound={setBound}
+                        pinned={pins.includes(st.key)}
+                        onTogglePin={pinnable(st.key) ? togglePin : undefined}
+                      />
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+
+          {/* Footer. Sticky to the bottom of the scrolling body so Submit stays
+              reachable without scrolling back down through seven groups. */}
+          <div className="sticky bottom-0 px-4 lg:px-5 py-3 border-t border-hairline bg-paper-deep/60 backdrop-blur-sm flex items-center gap-3">
+            {matches !== null && (
+              <div className="text-sm text-ink-soft leading-none">
+                <span className="text-lg font-bold text-ink tabular">{matches.toLocaleString()}</span>
+                <span className="ml-1.5 text-xs text-ink-muted">{matches === 1 ? "player" : "players"}</span>
+              </div>
+            )}
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="h-9 px-3 text-sm text-ink-muted hover:text-ink transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submit}
+                disabled={!dirty}
+                className="h-9 text-sm font-semibold bg-coral text-white px-6 rounded-md hover:bg-coral-soft disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className={cn("relative", block && "w-full")}>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
+        aria-controls={DRAWER_PANEL_ID}
         className={cn(
           "inline-flex items-center gap-1.5 h-8 px-3 rounded-md border text-sm font-medium shadow-sm transition-colors",
           block ? "w-full justify-center" : "",
@@ -490,114 +765,7 @@ export function PlayerStatFilters({
         )}
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-60 flex items-start sm:items-center justify-center p-4 sm:p-6">
-          {/* Backdrop */}
-          <div
-            className="bta-backdrop-in absolute inset-0 bg-ink/40 backdrop-blur-[1px]"
-            onClick={() => setOpen(false)}
-            aria-hidden
-          />
-          {/* Centered modal */}
-          <div
-            className="bta-modal-in relative z-10 w-full max-w-176 lg:max-w-256 max-h-[85vh] bg-paper rounded-2xl shadow-2xl ring-1 ring-ink/10 flex flex-col overflow-hidden"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Stat filters"
-          >
-            {/* Header */}
-            <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-5 pb-4 border-b border-hairline">
-              <div className="min-w-0">
-                {/* min-h reserves the badge's height so the header doesn't grow
-                    (and the centered modal doesn't recenter/jump) on first filter */}
-                <div className="flex items-center gap-2 min-h-6">
-                  <h3 className="text-base font-semibold text-ink leading-none">View &amp; Filters</h3>
-                  {activeDraft > 0 && (
-                    <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-coral text-white text-[0.62rem] font-bold tabular">{activeDraft}</span>
-                  )}
-                  {activeDraft > 0 && (
-                    <button type="button" onClick={clearAll} className="text-xs text-ink-muted hover:text-coral transition-colors">Clear all</button>
-                  )}
-                </div>
-                <p className="mt-1.5 text-xs text-ink-muted leading-snug">
-                  Tick a stat name to add it as a column, and/or drag a slider to narrow the field. Then Submit.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Close filters"
-                className="shrink-0 w-8 h-8 -mr-1 inline-flex items-center justify-center rounded-md text-ink-muted hover:text-ink hover:bg-paper-deep transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Scrollable body — two columns of stat ranges */}
-            <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-5 space-y-6">
-              {RANGE_GROUPS.map((g) => {
-                const gc = g.stats.reduce((n, s) => n + (isBoundActive(draft[s.key]) ? 1 : 0), 0);
-                return (
-                  // CSS containment. Without it, changing one slider re-styles and
-                  // re-lays-out the whole modal — 112 form controls across seven groups —
-                  // on every tick of a drag. Measured alternating, warm: p90 25ms with ~4
-                  // dropped frames a drag, against 16.8ms and ~1.5 once each group is
-                  // contained. Safe here because a group holds only static rows; nothing
-                  // inside is sticky or absolutely positioned against an outer ancestor.
-                  <section key={g.label} className="[contain:layout_style]">
-                    <div className="flex items-center gap-2 mb-3 min-h-5">
-                      <h4 className="text-[0.62rem] uppercase tracking-[0.18em] font-semibold text-ink-soft">{g.label}</h4>
-                      {gc > 0 && (
-                        <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-coral/15 text-coral text-[0.58rem] font-bold tabular">{gc}</span>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-                      {g.stats.map((st) => (
-                        <RangeRow
-                          key={st.key}
-                          st={st}
-                          lo={draft[st.key]?.lo ?? null}
-                          hi={draft[st.key]?.hi ?? null}
-                          setBound={setBound}
-                          pinned={pins.includes(st.key)}
-                          onTogglePin={pinnable(st.key) ? togglePin : undefined}
-                        />
-                      ))}
-                    </div>
-                  </section>
-                );
-              })}
-            </div>
-
-            {/* Footer */}
-            <div className="px-5 sm:px-6 py-4 border-t border-hairline bg-paper-deep/30 flex items-center gap-3">
-              {matches !== null && (
-                <div className="text-sm text-ink-soft leading-none">
-                  <span className="text-lg font-bold text-ink tabular">{matches.toLocaleString()}</span>
-                  <span className="ml-1.5 text-xs text-ink-muted">{matches === 1 ? "player" : "players"}</span>
-                </div>
-              )}
-              <div className="ml-auto flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="h-9 px-3 text-sm text-ink-muted hover:text-ink transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={submit}
-                  disabled={!dirty}
-                  className="h-9 text-sm font-semibold bg-coral text-white px-6 rounded-md hover:bg-coral-soft disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Submit
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {slot ? createPortal(panel, slot) : null}
     </div>
   );
 }
