@@ -146,9 +146,11 @@ async function main() {
   // PIR, PPG, RPG, APG, 3P%, FT% + percentile chips). Percentages are stored
   // 0-1 (the table multiplies ×100). null if the player has no rank file.
   const round1 = (n) => (typeof n === "number" ? Math.round(n * 10) / 10 : null);
-  let prtgMigrated = 0;
+  // Rank files that still carry only the retired BTA PRTG column. Reported at
+  // the end as a coverage figure, not a warning — see the note there.
+  let prtgOnly = 0;
   const NULL_STATS = {
-    prtg: null, prtgP: null, pir: null, pirP: null, pts: null, ptsP: null,
+    epm: null, epmP: null, pir: null, pirP: null, pts: null, ptsP: null,
     reb: null, rebP: null, ast: null, astP: null, fg3: null, fg3P: null, ft: null, ftP: null,
   };
   const statsFor = (bartId) => {
@@ -157,14 +159,14 @@ async function main() {
       const s = ((j.seasonRanks || []).find((x) => x.year === PREV_YEAR) || {}).stats || {};
       const v = (k) => (typeof s[k]?.value === "number" ? s[k].value : null);
       const p = (k) => (typeof s[k]?.percentile === "number" ? s[k].percentile : null);
-      // Tripwire for the PRTG → EPM migration in the rank files. A player who
-      // played last season and has epm but no bta_portg is not a player with
-      // nothing to show — it is this script reading a column the pipeline has
-      // stopped writing. Counted, then reported after the build.
-      if (v("bta_portg") === null && v("epm") !== null) prtgMigrated++;
+      // The impact column is EPM now. This script used to read `bta_portg`,
+      // which the rank pipeline stopped writing: sampled 259 players with a
+      // 2026 season, 220 carried `epm`, 26 carried `bta_portg`, and ZERO
+      // carried both — so the old read returned null for ~90% of the roster.
+      if (v("epm") === null && v("bta_portg") !== null) prtgOnly++;
       const asFrac = (k) => { const x = v(k); return x == null ? null : x > 1.5 ? x / 100 : x; }; // → 0-1
       return {
-        prtg: round1(v("bta_portg")), prtgP: p("bta_portg"),
+        epm: round1(v("epm")), epmP: p("epm"),
         pir: round1(v("pir")), pirP: p("pir"),
         pts: round1(v("pts_pg")), ptsP: p("pts_pg"),
         reb: round1(v("reb_pg")), rebP: p("reb_pg"),
@@ -255,7 +257,7 @@ async function main() {
           ...NULL_STATS,
           ...(lowSample ? {} : {
             pts: e.ppg ?? null, reb: e.rpg ?? null, ast: e.apg ?? null,
-            pir: round1(e.pir), prtg: round1(e.bta_portg),
+            pir: round1(e.pir), epm: round1(e.epm),
           }),
         });
         addedFromPortal++;
@@ -397,8 +399,13 @@ async function main() {
   }
   console.log(`  height backfill: ${heightFilled} players`);
 
+  // Best player first, now by EPM. The previous sort on `prtg` did work — 1,136
+  // players still carried it — so this changes the order rather than fixing an
+  // absence, and it changes it a lot: PRTG is a volume-weighted composite where
+  // EPM is per-possession impact, which is why Michigan's second name goes from
+  // L.J. Cason (PRTG 8.0) to Trey McKenney (EPM 4.9, 98th pct).
   for (const t of Object.values(teams)) {
-    t.roster.sort((a, b) => (b.prtg ?? -99) - (a.prtg ?? -99));
+    t.roster.sort((a, b) => (b.epm ?? -99) - (a.epm ?? -99));
   }
 
   const out = {
@@ -409,22 +416,28 @@ async function main() {
     recruit_attribution: recruitAttribution,
     teams,
   };
-  const withPrtg = Object.values(teams)
-    .flatMap((t) => t.roster)
-    .filter((r) => r.prtg != null).length;
+  const allRoster = Object.values(teams).flatMap((t) => t.roster);
+  const withEpm = allRoster.filter((r) => r.epm != null).length;
+  const returning = allRoster.filter((r) => r.status === "returning").length;
+  console.log(`  impact column: ${withEpm} of ${allRoster.length} players carry EPM (${returning} returning)`);
+  if (prtgOnly > 0) {
+    console.log(`  · ${prtgOnly} rank files still carry only the retired bta_portg and were skipped`);
+  }
 
-  // WARN, don't abort — unlike the /32-0 index, a missing PRTG here empties one
-  // column of a roster table rather than dropping the player, so the page still
-  // works. But a preview whose talent column has quietly gone blank for
-  // returning starters is worth saying out loud: the rank files have moved from
-  // `bta_portg` to `epm`, and this script still reads the old key.
-  if (prtgMigrated > withPrtg) {
-    console.warn(
-      `\n  ⚠ ${prtgMigrated} players have \`epm\` but no \`bta_portg\`, against ${withPrtg} with PRTG.\n` +
-      `    The rank files have migrated to EPM and this script still reads bta_portg,\n` +
-      `    so the preview's talent column is mostly empty. Converting needs the same\n` +
-      `    rescale as scripts/build-thirty-two-zero-index.mjs — see the guard there.\n`,
+  // ABORT rather than warn. The old code warned and wrote anyway, which is how
+  // the talent column sat empty through several builds without anyone noticing
+  // — a green log over a file that had quietly lost a column. There is no
+  // rescale to do (EPM is already a per-100 impact number on its own scale, and
+  // the roster table formats it as such), so the only way this trips is the
+  // rank pipeline changing keys again. Better to stop than to ship blanks.
+  if (withEpm === 0 && allRoster.length > 0) {
+    console.error(
+      `\n  ABORTED: not one of ${allRoster.length} preview players carries an \`epm\` value.\n` +
+      `    The rank files have presumably changed keys again. Check what\n` +
+      `    public/data/player-ranks/<id>.json now calls the impact stat before\n` +
+      `    rerunning — writing this file would blank the preview's talent column.\n`,
     );
+    process.exit(1);
   }
 
   fs.writeFileSync(OUT, JSON.stringify(out));

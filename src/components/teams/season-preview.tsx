@@ -25,7 +25,8 @@ type PreviewPlayer = {
   from?: string | null;
   link?: boolean;
   rsci?: number | null;
-  prtg: number | null; prtgP: number | null;
+  /** Last season's EPM + its percentile. Was `prtg` (retired BTA PRTG). */
+  epm: number | null; epmP: number | null;
   pir: number | null; pirP: number | null;
   pts: number | null; ptsP: number | null;
   reb: number | null; rebP: number | null;
@@ -66,11 +67,17 @@ export function SeasonPreview({ teamName }: { teamName: string }) {
     rsci: p.rsci, // undefined for official-added newcomers → no recruit chip; number|null for recruits
     pts: p.pts, reb: p.reb, ast: p.ast,
     fg3_pct: p.fg3, ft_pct: p.ft, pir: p.pir,
-    // Upcoming season — no play-by-play EPM / shot data yet.
-    epm: null, ts_pct: null, usg_pct: null,
+    // EPM is LAST season's, carried over — nobody has played a 2026-27 game, so
+    // every number in this table is a carryover and this one is no different.
+    // It used to be hard-coded null while the file still shipped a `prtg` the
+    // table never read, which left the impact column blank for every roster.
+    epm: p.epm,
+    // Genuinely unavailable: both need this season's play-by-play.
+    ts_pct: null, usg_pct: null,
     pcts: {
       pir: p.pirP, pts: p.ptsP, reb: p.rebP,
       ast: p.astP, fg3_pct: p.fg3P, ft_pct: p.ftP,
+      epm: p.epmP,
     },
   }));
 
