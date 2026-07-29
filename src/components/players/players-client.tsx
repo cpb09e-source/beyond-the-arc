@@ -45,11 +45,14 @@ type GridCol = {
   band?: boolean;
 };
 const GRID_COLS: GridCol[] = [
-  { label: "MPG", field: "min_pg", fmt: "int", pct: null, sortKey: "min" },
-  { label: "USG", field: "usage_pct", fmt: "pct1", pct: "usage_pct", sortKey: "usage" },
+  // EPM LEADS. It is the headline metric — the one the table is sorted by out
+  // of the box and the reason to read the row at all — so it sits first, before
+  // the minutes and usage that describe the role it was earned in.
   { label: "Off", field: "off_epm", fmt: "epm", pct: "off_epm", sortKey: "off_epm", band: true },
   { label: "Def", field: "def_epm", fmt: "epm", pct: "def_epm", sortKey: "def_epm", band: true },
   { label: "EPM", field: "epm", fmt: "epm", pct: "epm", sortKey: "epm", band: true },
+  { label: "MPG", field: "min_pg", fmt: "int", pct: null, sortKey: "min" },
+  { label: "USG", field: "usage_pct", fmt: "pct1", pct: "usage_pct", sortKey: "usage" },
   { label: "PIR", field: "pir", fmt: "num1", pct: "pir", sortKey: "pir" },
   { label: "PPG", field: "pts_pg", fmt: "num1", pct: "pts_pg", sortKey: "pts" },
   { label: "TS%", field: "ts_pct", fmt: "pct1", pct: "ts_pct", sortKey: "ts_pct" },
@@ -64,10 +67,12 @@ const GRID_COLS: GridCol[] = [
   { label: "BLK", field: "blk_pg", fmt: "num1", pct: "blk_pg", sortKey: "blk" },
   { label: "HKM", field: "hkm_pct", fmt: "pct100", pct: "hkm_pct", sortKey: "hkm" },
 ];
-// Band header row: label + how many GRID_COLS it spans (order must match).
+// Band header row: label + how many GRID_COLS it spans (ORDER MUST MATCH
+// GRID_COLS — the bands are laid out by walking spans, not by looking up
+// columns, so moving a group means moving it in both lists).
 const GRID_BANDS: Array<{ label: string; span: number; epm?: boolean }> = [
-  { label: "Role", span: 2 },
   { label: "EPM", span: 3, epm: true },
+  { label: "Role", span: 2 },
   { label: "Scoring", span: 2 },
   { label: "Shooting", span: 3 },
   { label: "Rebounding", span: 3 },

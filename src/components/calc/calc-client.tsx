@@ -95,21 +95,31 @@ function isPctKey(key: string): boolean {
 }
 
 /**
- * Group accent hues. Used only for small areas — slider fills, comparator
- * accents — so mid-saturation values read fine on both paper and dark themes.
- * Brand vars are reused where a group has a natural owner (scoring = coral,
- * defense = bad).
+ * ONE ACCENT FOR EVERY GROUP — the site's own azure.
+ *
+ * These were nine different hues, one per group: gold for Differentials, olive
+ * for Box, teal for Pace, muted red for Defense. Nothing read them as a key,
+ * because the group is already named in the heading directly above the rows;
+ * the colour was decoration that made a sheet of otherwise identical rows look
+ * like it was signalling something it wasn't, and a gold slider beside a blue
+ * one just looked unfinished.
+ *
+ * Kept as a map rather than collapsed to a constant so per-group hues can come
+ * back behind a real meaning, and so nothing downstream has to change shape.
+ * `var(--coral)` is the accent (azure, #0c6bd6) and is theme-aware — it lifts
+ * on dark, which a hardcoded hex would not.
  */
+const GROUP_ACCENT = "var(--coral)";
 const GROUP_HUES: Record<string, string> = {
-  "Context":       "var(--court)",
-  "Scoring":       "var(--coral)",
-  "Differentials": "#c98a2d",
-  "Defense":       "var(--bad)",
-  "Efficiency":    "#3e7cb1",
-  "Box":           "#7a7f4b",
-  "Game Shape":    "#b8763e",
-  "Pace":          "#2d8a8a",
-  "Opponent":      "#4a5d8a",
+  "Context":       GROUP_ACCENT,
+  "Scoring":       GROUP_ACCENT,
+  "Differentials": GROUP_ACCENT,
+  "Defense":       GROUP_ACCENT,
+  "Efficiency":    GROUP_ACCENT,
+  "Box":           GROUP_ACCENT,
+  "Game Shape":    GROUP_ACCENT,
+  "Pace":          GROUP_ACCENT,
+  "Opponent":      GROUP_ACCENT,
 };
 
 /**
@@ -1503,7 +1513,22 @@ function StatTile({
     const flagState = !filter ? "any" : filter.value === 1 ? "yes" : "no";
     return (
       <div className="flex items-center justify-between gap-2 min-h-13 py-2 border-b border-hairline/60">
-        <span className={`text-sm truncate transition-colors ${active ? "text-ink font-medium" : "text-ink-soft"}`}>{label}</span>
+        {/* Same switch as the slider rows. "Yes" is the sensible on-state for a
+            flag — nobody sets a Quad-1 filter meaning "and it must NOT be". */}
+        <button
+          type="button"
+          onClick={() => (active ? onClear() : onPatch({ op: "eq", value: 1 }))}
+          aria-pressed={active}
+          title={active ? `Turn off ${label}` : `Filter on ${label}`}
+          className={`shrink min-w-0 text-left text-sm truncate rounded-md px-1.5 py-0.5 -ml-1.5 border transition-colors ${
+            active
+              ? "text-ink font-medium bg-card"
+              : "text-ink-soft border-hairline bg-paper-deep/40 hover:bg-paper-deep hover:border-ink/25 hover:text-ink"
+          }`}
+          style={active ? { borderColor: hue } : undefined}
+        >
+          {label}
+        </button>
         <div className="inline-flex rounded-md border border-hairline overflow-hidden shrink-0">
           {(["any", "yes", "no"] as const).map((s) => (
             <button
@@ -1530,9 +1555,26 @@ function StatTile({
   return (
     <div className="py-2 border-b border-hairline/60">
       <div className="flex items-center gap-1.5">
-        <span className={`text-sm truncate transition-colors ${active ? "text-ink font-medium" : "text-ink-soft"}`}>
+        {/* The NAME IS THE SWITCH. Waking a condition used to mean nudging a
+            hairline slider or hitting a 24px comparator glyph — discoverable
+            only by poking at it. The label is the biggest, most obvious target
+            in the row and the thing you are actually looking for, so it turns
+            the condition on, and turns it off again. The × still clears, for
+            anyone who has already learned it. */}
+        <button
+          type="button"
+          onClick={() => (active ? onClear() : onPatch({ op, value }))}
+          aria-pressed={active}
+          title={active ? `Turn off ${label}` : `Filter on ${label}`}
+          className={`shrink min-w-0 text-left text-sm truncate rounded-md px-1.5 py-0.5 -ml-1.5 border transition-colors ${
+            active
+              ? "text-ink font-medium bg-card"
+              : "text-ink-soft border-hairline bg-paper-deep/40 hover:bg-paper-deep hover:border-ink/25 hover:text-ink"
+          }`}
+          style={active ? { borderColor: hue } : undefined}
+        >
           {label}
-        </span>
+        </button>
         <div className="ml-auto flex items-center gap-1 shrink-0">
           <div className="relative">
             <button
