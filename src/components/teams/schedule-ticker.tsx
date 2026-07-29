@@ -112,6 +112,19 @@ export function ScheduleTicker({
     };
   }, []);
 
+  // Open at the END of the schedule — the most recent game — and let the reader
+  // scroll left into the season. A ticker parked at November opens on games
+  // nobody is looking for; the interesting end of a season is the end of it.
+  //
+  // Written directly rather than via scrollTo({behavior:"smooth"}) so the strip
+  // is simply already there on first paint instead of visibly animating past
+  // every game on the way.
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollLeft = el.scrollWidth;
+  }, [games]);
+
   function handleCellClick(game: GameLog) {
     // If the user just finished dragging, swallow this click.
     if (suppressClickRef.current) {

@@ -11,7 +11,6 @@ import { SeasonSwitcher } from "@/components/teams/season-switcher";
 import { NationalRanks } from "@/components/teams/national-ranks";
 import { SortableSeasonsTable } from "@/components/teams/sortable-seasons-table";
 import { SortableRosterTable } from "@/components/teams/sortable-roster-table";
-import { TeamLineups } from "@/components/teams/team-lineups";
 import { DistributionPanel, type DistributionRank } from "@/components/teams/distribution-panel";
 import { ScheduleTicker } from "@/components/teams/schedule-ticker";
 import { FindGameTrigger } from "@/components/teams/find-game-trigger";
@@ -419,27 +418,6 @@ export function TeamPageView({
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-2 grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <DistributionPanel title="Shooting" ranks={shootingRanks} blurBody={preview} />
-        <DistributionPanel title="Four Factors" ranks={fourFactorRanks} blurBody={preview}>
-          {current.four_factor_record && current.four_factor_record.games > 0 && (
-            <>
-              <div className="text-xs uppercase tracking-widest text-ink-muted font-medium mb-1">
-                Record when all three positive
-              </div>
-              <div className="flex items-baseline gap-3">
-                <span className="font-display text-5xl text-ink tabular leading-none">
-                  {current.four_factor_record.wins}-{current.four_factor_record.losses}
-                </span>
-                <span className="text-xs text-ink-muted">
-                  {`across ${current.four_factor_record.games} game${current.four_factor_record.games === 1 ? "" : "s"} where REB Diff > 0, FBP Diff > 0, 3PM Diff > 0`}
-                </span>
-              </div>
-            </>
-          )}
-        </DistributionPanel>
-      </section>
-
       {preview ? (
         // Upcoming-season roster + projected record — client-hydrated from
         // season-preview.json, kept sharp (not blurred).
@@ -463,12 +441,32 @@ export function TeamPageView({
       </section>
       )}
 
-      {/* Top 5-man lineups (play-by-play seasons only; renders nothing otherwise) */}
-      {!preview && (
-        <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8">
-          <TeamLineups teamName={team.name} year={current.year} />
-        </section>
-      )}
+      {/* Shooting + Four Factors sit BELOW the roster now. They are a closing
+          detail on the season, not the way into it — the reader wants the team,
+          then the players, then the breakdown. */}
+      <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <DistributionPanel title="Shooting" ranks={shootingRanks} blurBody={preview} />
+        <DistributionPanel title="Four Factors" ranks={fourFactorRanks} blurBody={preview}>
+          {current.four_factor_record && current.four_factor_record.games > 0 && (
+            <>
+              <div className="text-xs uppercase tracking-widest text-ink-muted font-medium mb-1">
+                Record when all three positive
+              </div>
+              <div className="flex items-baseline gap-3">
+                <span className="font-display text-5xl text-ink tabular leading-none">
+                  {current.four_factor_record.wins}-{current.four_factor_record.losses}
+                </span>
+                <span className="text-xs text-ink-muted">
+                  {`across ${current.four_factor_record.games} game${current.four_factor_record.games === 1 ? "" : "s"} where REB Diff > 0, FBP Diff > 0, 3PM Diff > 0`}
+                </span>
+              </div>
+            </>
+          )}
+        </DistributionPanel>
+      </section>
+
+      {/* Top 5-man lineups removed for now. TeamLineups and lineups-<year>.json
+          are both still here — this is one JSX block away from returning. */}
 
       {/* BY SEASON — headline ledger. Mirrors the coach page's "Season by
           season" treatment so cross-page recognition is consistent. */}
