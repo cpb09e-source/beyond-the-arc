@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { pctColor } from "@/components/percentile-chip";
+import type { TeamsIndexEntry } from "@/components/explorer/explorer-client";
 import {
   processTeams,
   type RawTeamSeason,
@@ -128,13 +129,20 @@ function seasonLabel(y: number): string {
 export function CompareTeamsModal({
   open,
   onClose,
-  allTeams,
+  teamsIndex,
+  rowsByYear,
+  loadYears,
   coachByTeamYear,
   tourneyFinishByTeamYear,
 }: {
   open: boolean;
   onClose: () => void;
-  allTeams: RawTeamSeason[];
+  /** Every (team, season) we hold, names and years only — the picker list. */
+  teamsIndex: TeamsIndexEntry[];
+  /** Seasons already fetched by the explorer, shared so a season opened here
+   *  and a season shown in the table are never downloaded twice. */
+  rowsByYear: Record<number, RawTeamSeason[]>;
+  loadYears: (years: number[]) => void;
   coachByTeamYear: Record<string, string | null>;
   tourneyFinishByTeamYear: Record<string, string>;
 }) {
@@ -171,16 +179,16 @@ export function CompareTeamsModal({
   // Flat option list: every (team, year) we have. Pre-sorted by year desc then
   // team alpha so the natural picker default reads "most recent first".
   const options = useMemo(() => {
-    const out = allTeams.map((t) => ({
-      key: `${t.name}|${t.year}`,
-      team: t.name,
-      year: t.year,
-      conference: t.conference,
-      label: `${t.name} · ${seasonLabel(t.year)}`,
+    const out = teamsIndex.map((t) => ({
+      key: `${t.n}|${t.y}`,
+      team: t.n,
+      year: t.y,
+      conference: t.c,
+      label: `${t.n} · ${seasonLabel(t.y)}`,
     }));
     out.sort((a, b) => b.year - a.year || a.team.localeCompare(b.team));
     return out;
-  }, [allTeams]);
+  }, [teamsIndex]);
 
   const optionByKey = useMemo(() => {
     const m = new Map<string, typeof options[number]>();
@@ -214,7 +222,10 @@ export function CompareTeamsModal({
           sortDir: "desc",
           limit: -1,
         };
-        const { rows } = processTeams(allTeams, spec);
+        // Only this season's rows. Seasons arrive via loadYears below; an
+        // unloaded one yields no cohort yet and the slot renders empty until
+        // the fetch lands, which is one frame in practice.
+        const { rows } = processTeams(rowsByYear[opt.year] ?? [], spec);
         byYear.set(opt.year, rows);
         // Build the SoS leaderboard for this year so the SoS row can
         // display "#79" instead of an opaque "79.7%". #1 = hardest schedule.
@@ -232,7 +243,16 @@ export function CompareTeamsModal({
       if (row) result.set(slot, row);
     }
     return { rowByKey: result, sosRankByKey: sosRanks };
-  }, [slots, allTeams, optionByKey]);
+  }, [slots, rowsByYear, optionByKey]);
+
+  // Pull whichever seasons the chosen slots live in. Shared with the table's
+  // loader, so a season already on screen costs nothing here.
+  useEffect(() => {
+    const years = slots
+      .map((s) => (s ? optionByKey.get(s)?.year : undefined))
+      .filter((y): y is number => typeof y === "number");
+    if (years.length) loadYears(years);
+  }, [slots, optionByKey, loadYears]);
 
   const filledSlots = slots
     .map((s) => (s ? { key: s, row: rowByKey.get(s), opt: optionByKey.get(s) } : null))

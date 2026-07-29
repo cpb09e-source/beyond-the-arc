@@ -31,6 +31,18 @@ const DIRS = [
   "data/team-splits",
 ];
 
+/**
+ * Individual files, same reasoning as the build-time-only dirs above.
+ *
+ * teams-all.json is 12 MB and no longer reaches the browser: the home page
+ * ships one season from data/teams-by-year/ plus data/teams-index.json, and the
+ * team/coach pages read teams-all at BUILD time through readAllTeams(). It has
+ * to stay in public/ for that, and out of out/ for the 12 MB.
+ */
+const FILES = [
+  "data/teams-all.json",
+];
+
 let removed = 0;
 for (const d of DIRS) {
   const full = path.join(OUT, d);
@@ -43,3 +55,16 @@ for (const d of DIRS) {
   }
 }
 console.log(`Stripped ${removed}/${DIRS.length} dirs from ${OUT}/.`);
+
+let removedFiles = 0;
+for (const f of FILES) {
+  const full = path.join(OUT, f);
+  try {
+    await rm(full, { force: true });
+    console.log(`  stripped ${full}`);
+    removedFiles++;
+  } catch (e) {
+    console.warn(`  could not strip ${full}: ${e.message}`);
+  }
+}
+console.log(`Stripped ${removedFiles}/${FILES.length} files from ${OUT}/.`);

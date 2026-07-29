@@ -20,12 +20,18 @@ const geistMono = Geist_Mono({
 
 // Display face — self-hosted Moneta Sans Bold. Mapped to every weight so any
 // heading using the display family always renders in the Bold cut.
+//
+// WOFF2, not the original OTF. This font is preloaded on every page, so it sits
+// on the critical path sitewide, and OTF ships uncompressed glyf data: 45.9 KB
+// against 24.5 KB for the same outlines as WOFF2, a 47% saving on every cold
+// visit. Converted with fontTools (flavor = "woff2"); the .otf stays in the repo
+// as the source of truth for future re-cuts.
 const moneta = localFont({
   variable: "--font-display",
   display: "swap",
   src: [
-    { path: "../../public/fonts/MonetaSans-Bold.otf", weight: "400", style: "normal" },
-    { path: "../../public/fonts/MonetaSans-Bold.otf", weight: "700", style: "normal" },
+    { path: "../../public/fonts/MonetaSans-Bold.woff2", weight: "400", style: "normal" },
+    { path: "../../public/fonts/MonetaSans-Bold.woff2", weight: "700", style: "normal" },
   ],
 });
 

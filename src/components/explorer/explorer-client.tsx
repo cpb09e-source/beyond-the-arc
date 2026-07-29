@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect, useRef, useCallback, useTransition } from
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { dataUrl } from "@/lib/data-url";
 import {
   parseSpec,
   processTeams,
@@ -133,13 +134,22 @@ function fmtColValue(v: number | null | undefined, fmt: TeamCol["fmt"]): string 
 }
 
 
+/** Names and years for every team-season, without the stat rows. See page.tsx. */
+export type TeamsIndexEntry = { n: string; y: number; c: string | null };
+
 export function ExplorerClient({
-  allTeams,
+  initialTeams,
+  teamsIndex,
+  latestYear,
   confsByYear,
   coachByTeamYear,
   tourneyFinishByTeamYear,
 }: {
-  allTeams: RawTeamSeason[];
+  /** The latest season's rows, server-rendered so the table has real content
+   *  on first paint. Every other season is fetched on demand. */
+  initialTeams: RawTeamSeason[];
+  teamsIndex: TeamsIndexEntry[];
+  latestYear: number;
   confsByYear: Record<string, string[]>;
   coachByTeamYear: Record<string, string | null>;
   tourneyFinishByTeamYear: Record<string, string>;
@@ -170,11 +180,63 @@ export function ExplorerClient({
     for (const list of Object.values(confsByYear)) for (const c of list) s.add(c);
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [confsByYear]);
+  // From the index, not the loaded rows — the Team picker must offer every
+  // school we have ever held, including seasons not currently fetched.
   const teamNames = useMemo(() => {
     const s = new Set<string>();
-    for (const t of allTeams) s.add(t.name);
+    for (const t of teamsIndex) s.add(t.n);
     return [...s].sort((a, b) => a.localeCompare(b));
-  }, [allTeams]);
+  }, [teamsIndex]);
+
+  // ---- Season rows, loaded on demand -------------------------------------
+  //
+  // Seeded with the server-rendered latest season so first paint has real rows
+  // and no spinner. Selecting another season in the picker fetches just that
+  // season; once fetched it stays, so flicking between years is instant after
+  // the first visit to each.
+  const [rowsByYear, setRowsByYear] = useState<Record<number, RawTeamSeason[]>>(
+    () => ({ [latestYear]: initialTeams }),
+  );
+  const [loadingYears, setLoadingYears] = useState<number[]>([]);
+  // Years already requested, so a re-render mid-flight cannot fire a second
+  // fetch for the same file. A ref rather than state: it must be updated
+  // synchronously, before the effect can run again.
+  const requested = useRef<Set<number>>(new Set([latestYear]));
+
+  // Shared with the Compare modal, which needs whichever seasons its slots
+  // point at — those are chosen independently of the table's season picker.
+  const loadYears = useCallback((years: number[]) => {
+    const missing = years.filter((y) => Number.isFinite(y) && !requested.current.has(y));
+    if (missing.length === 0) return;
+    for (const y of missing) requested.current.add(y);
+    setLoadingYears((prev) => [...prev, ...missing]);
+    Promise.all(
+      missing.map((y) =>
+        fetch(dataUrl(`/data/teams-by-year/${y}.json`))
+          .then((r) => (r.ok ? r.json() : []))
+          // A failed season resolves to no rows rather than rejecting: one bad
+          // year should narrow the table, not blank the page.
+          .catch(() => [])
+          .then((rows: RawTeamSeason[]) => [y, rows] as const),
+      ),
+    ).then((pairs) => {
+      setRowsByYear((prev) => {
+        const next = { ...prev };
+        for (const [y, rows] of pairs) next[y] = rows;
+        return next;
+      });
+      setLoadingYears((prev) => prev.filter((y) => !missing.includes(y)));
+    });
+  }, []);
+
+  useEffect(() => { loadYears(spec.years); }, [spec.years, loadYears]);
+
+  /** The rows the table actually works over: the selected seasons, once loaded. */
+  const allTeams = useMemo(
+    () => spec.years.flatMap((y) => rowsByYear[y] ?? []),
+    [spec.years, rowsByYear],
+  );
+  const loadingSeasons = loadingYears.length > 0;
 
   // Toolbar read-out of the COMMITTED selection (the panel's own strip tracks
   // the uncommitted draft). Removing here is immediate — there is no Submit on
@@ -280,13 +342,20 @@ export function ExplorerClient({
   // of the explorer's current year selection. Drops the worst 2 teams in each
   // conference before averaging aNET (filters out cellar dwellers so the
   // ranking reflects the conference's competitive core).
-  const latestYear = useMemo(() => Math.max(...allTeams.map((t) => t.year)), [allTeams]);
+  // Always the LATEST season's rows, not the selected ones. This panel is
+  // defined as "this year's conference strength", so it must not follow the
+  // season picker — and since latestYear is the season seeded from the server,
+  // those rows are always in hand even when the table is showing 2019.
+  // Memoized, not a bare `?? []`. A fresh array literal every render would make
+  // the conferenceRankings useMemo below recompute on every keystroke in the
+  // table search — the exact cost this whole change exists to remove.
+  const latestRows = useMemo(() => rowsByYear[latestYear] ?? [], [rowsByYear, latestYear]);
   const conferenceRankings = useMemo(() => {
     // limit: -1 disables the explorer's default top-50 cap. Without this, we'd
     // only see teams that crack the national top-50 aNET, hiding most of
     // each mid-major conference and inflating the averages.
     const scopedSpec = { ...parseSpec({}), years: [latestYear], limit: -1 };
-    const { rows: scoped } = processTeams(allTeams, scopedSpec);
+    const { rows: scoped } = processTeams(latestRows, scopedSpec);
     const byConf = new Map<string, number[]>();
     for (const r of scoped) {
       if (!r.team_conference || r.a_net === null) continue;
@@ -311,7 +380,7 @@ export function ExplorerClient({
       })
       .filter((r): r is { conference: string; avg_a_net: number; teams: number; contributing: number } => r.avg_a_net !== null)
       .sort((a, b) => b.avg_a_net - a.avg_a_net);
-  }, [allTeams, latestYear]);
+  }, [latestRows, latestYear]);
 
   return (
     <>
@@ -373,6 +442,10 @@ export function ExplorerClient({
             <span className="text-xs text-ink-muted whitespace-nowrap tabular">
               <span className="text-ink font-medium">{rows.length.toLocaleString()}</span>
               {count > rows.length && <> of {count.toLocaleString()}</>} teams
+              {/* A season the reader just added is a fetch away, not on the
+                  page. Say so rather than briefly showing a short table as if
+                  that were the answer. */}
+              {loadingSeasons && <span className="ml-1.5 text-coral">· loading season…</span>}
             </span>
 
             {conferenceRankings.length > 0 && (
@@ -646,7 +719,9 @@ export function ExplorerClient({
       <CompareTeamsModal
         open={compareOpen}
         onClose={() => setCompareOpen(false)}
-        allTeams={allTeams}
+        teamsIndex={teamsIndex}
+        rowsByYear={rowsByYear}
+        loadYears={loadYears}
         coachByTeamYear={coachByTeamYear}
         tourneyFinishByTeamYear={tourneyFinishByTeamYear}
       />
