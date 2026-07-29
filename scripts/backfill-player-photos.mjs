@@ -8,13 +8,31 @@
  *   1. Read existing player-photos.json (the cache built by fetch:photos).
  *   2. Walk every ranked player profile (the ones with /players/<id> pages).
  *   3. For each one without a photo, query ESPN's search-v2 endpoint.
- *   4. Find a basketball athlete that best matches the name; grab their CDN
- *      headshot (may be under nba/, mens-college-basketball/, etc).
+ *   4. Find a basketball athlete that best matches the name, then take their
+ *      COLLEGE headshot if ESPN has one, falling back to whatever the search
+ *      returned (see step 4 note below).
  *   5. Download + optimize via Sharp; update player-photos.json incrementally.
  *
  * Politeness: 1 req/sec to ESPN. ~9k players → ~3 hours full run. Incremental
  * — re-running picks up where it left off via the photo-map cache + a
  * per-bartId "tried" set so we don't re-search hopeless misses.
+ *
+ * STEP 4 — COLLEGE PHOTO FIRST. ESPN's search returns a player's CURRENT
+ * image, so anyone who has gone pro came back wearing an NBA jersey: Chet
+ * Holmgren in Thunder blue beside a row reading "Gonzaga · 21-22". The same
+ * athlete id serves a different image per sport path, so asking
+ * mens-college-basketball/ first gets the college-era shot for one extra HEAD.
+ * Verified on Holmgren (4433255): college returns the Gonzaga photo at 236,948
+ * bytes, nba the Thunder one at 257,316, both 200.
+ *
+ * There WAS already a college-first helper here, findHeadshotUrl(). It was
+ * unreachable: it only ran when the search result carried no image, which is
+ * the rare case. The preference existed and never fired.
+ *
+ * Photos already downloaded are unaffected — this only changes what future
+ * runs fetch. player-photos-source.json records which athlete and which era
+ * each photo came from, so correcting the existing ones later is a targeted
+ * pass rather than a full re-search.
  *
  * Run: node scripts/backfill-player-photos.mjs
  */
@@ -28,6 +46,20 @@ const PUB = path.resolve("public/images/players");
 const DATA = path.resolve("src/data");
 const PHOTOS_JSON = path.join(DATA, "player-photos.json");
 const TRIED_JSON = path.join(DATA, "player-photos-tried.json");
+/**
+ * bartId → { espn, source } — which ESPN athlete a photo came from and whether
+ * it is the college-era shot or the player's current one.
+ *
+ * A SEPARATE FILE, not extra fields on player-photos.json, because that map is
+ * imported straight into the client by PlayerPhoto and is typed as
+ * Record<string, string>. Widening it would ship this bookkeeping to every
+ * visitor for no reason.
+ *
+ * Its purpose is to make a future correction pass cheap. Photos fetched before
+ * the college-first fix have no entry here, and re-checking them otherwise
+ * means re-searching ESPN by name at one request a second for every player.
+ */
+const SOURCE_JSON = path.join(DATA, "player-photos-source.json");
 const RANKS_DIR = path.resolve("public/data/player-ranks");
 const PLAYER_DIR = path.resolve("public/data/player");
 
@@ -79,11 +111,21 @@ async function downloadImage(url, destPng) {
   }
 }
 
-async function optimize(srcPng, destWebp, destThumbWebp) {
-  if (!existsSync(destWebp)) {
+/**
+ * PNG → full webp + face-cropped thumbnail.
+ *
+ * `force` REPLACES existing output. The skip-if-present guard is right for the
+ * original backfill, where re-encoding a photo already on disk is pure waste —
+ * and silently wrong for a re-fetch, where replacing it is the entire point. It
+ * cost a fix: the first --only run downloaded the correct college headshot,
+ * reported "downloaded: 1", and left the old NBA webp untouched, because the
+ * file it was about to write already existed.
+ */
+async function optimize(srcPng, destWebp, destThumbWebp, force = false) {
+  if (force || !existsSync(destWebp)) {
     await sharp(srcPng).webp({ quality: 82 }).toFile(destWebp);
   }
-  if (!existsSync(destThumbWebp)) {
+  if (force || !existsSync(destThumbWebp)) {
     await sharp(srcPng)
       .resize(240, 174, { fit: "cover", position: "top" })
       .webp({ quality: 78 })
@@ -105,6 +147,32 @@ async function findHeadshotUrl(athleteId) {
       if (res.ok) return url;
     } catch {}
   }
+  return null;
+}
+
+/**
+ * The COLLEGE-ERA headshot for an athlete id, or null.
+ *
+ * This site is about college basketball, and ESPN's search hands back a
+ * player's CURRENT image — for anyone who has gone pro that is their NBA
+ * photo. Chet Holmgren in a Thunder jersey beside a row reading
+ * "Gonzaga · 21-22" is the visible symptom.
+ *
+ * ESPN keeps the same athlete id across college and the pros, and serves a
+ * DIFFERENT image per sport path. Verified for Holmgren (id 4433255): the
+ * college path returns him in a Gonzaga jersey, 236,948 bytes; the nba path
+ * returns the Thunder photo, 257,316. Both 200.
+ *
+ * One HEAD request rather than reusing findHeadshotUrl(), which would also
+ * probe nba and wnba — pointless here, because the search result we fall back
+ * to already covers those and is known good.
+ */
+async function collegeHeadshotUrl(athleteId) {
+  const url = `https://a.espncdn.com/i/headshots/mens-college-basketball/players/full/${athleteId}.png`;
+  try {
+    const res = await throttled(url, { method: "HEAD" });
+    if (res.ok) return url;
+  } catch {}
   return null;
 }
 
@@ -146,6 +214,8 @@ async function main() {
   const photoMap = await loadJsonIf(PHOTOS_JSON, {});
   /** @type {Record<string, { tried_at: string; reason?: string }>} */
   const triedMap = await loadJsonIf(TRIED_JSON, {});
+  /** @type {Record<string, { espn: string | null; source: string }>} */
+  const sourceMap = await loadJsonIf(SOURCE_JSON, {});
 
   // Build the working set: ranked players (those with profile pages) who
   // don't have a photo yet and haven't been tried recently.
@@ -160,18 +230,51 @@ async function main() {
   console.log(`Already photographed:  ${Object.keys(photoMap).length}`);
   console.log(`Already tried:         ${Object.keys(triedMap).length}`);
 
-  // Targets = ranked & no photo & not tried.
+  // --recheck revisits players who ALREADY have a photo, to see whether a
+  // college-era shot exists that the old current-photo-first ordering missed.
+  //
+  // Needed because the ordering fix only governs what future fetches pull, and
+  // the cache deliberately skips anyone already photographed — so on its own it
+  // would never correct a single one of the ~10k photos already downloaded.
+  // Anything carrying a recorded college source is skipped: that one is already
+  // right and re-fetching it would spend a request to confirm it.
+  //
+  // Same politeness and the same incremental saves as a normal run, so it can
+  // be interrupted and resumed. Expect roughly an hour per 3,500 players.
+  const recheck = process.argv.includes("--recheck");
+  // --only=<bartId>[,<bartId>…] — fix one player without a full pass. For
+  // spot-correcting a photo someone has noticed is wrong.
+  const onlyArg = process.argv.find((a) => a.startsWith("--only="));
+  const only = onlyArg
+    ? new Set(onlyArg.slice(7).split(",").map((s) => parseInt(s.trim(), 10)).filter(Number.isFinite))
+    : null;
+
   const targets = [];
-  for (const bartId of rankedIds) {
-    if (photoMap[bartId]) continue;
-    if (triedMap[bartId]) continue;
-    targets.push(bartId);
+  if (only) {
+    for (const bartId of only) targets.push(bartId);
+    console.log(`Only:                  ${targets.join(", ")}\n`);
+  } else if (recheck) {
+    for (const bartId of rankedIds) {
+      if (!photoMap[bartId]) continue;
+      if (sourceMap[bartId]?.source === "college") continue;
+      targets.push(bartId);
+    }
+    console.log(`Recheck targets:       ${targets.length}  (already have a photo, era unconfirmed)\n`);
+  } else {
+    // Targets = ranked & no photo & not tried.
+    for (const bartId of rankedIds) {
+      if (photoMap[bartId]) continue;
+      if (triedMap[bartId]) continue;
+      targets.push(bartId);
+    }
+    console.log(`Backfill targets:      ${targets.length}\n`);
   }
-  console.log(`Backfill targets:      ${targets.length}\n`);
 
   let attempted = 0;
   let found = 0;
   let cdnHits = 0;
+  let collegeHits = 0;
+  let noCollege = 0;
   let downloads = 0;
   let saveCounter = 0;
   const t0 = Date.now();
@@ -211,11 +314,33 @@ async function main() {
       if (!best) best = results.find((r) => norm(r.name) === normTarget);
       if (!best) best = results[0];
 
-      let url = best.image;
-      // If search didn't return an image, try the CDN paths directly.
+      // COLLEGE PHOTO FIRST, current photo second.
+      //
+      // `best.image` is whatever ESPN's search considers current, so for a
+      // player who has gone pro it is their NBA headshot. Asking the college
+      // path for the same athlete id first gets the college-era shot where one
+      // exists, and costs a single HEAD.
+      let url = null;
+      let source = null;
+      if (best.id) {
+        url = await collegeHeadshotUrl(best.id);
+        if (url) { collegeHits++; source = "college"; }
+      }
+      // On a recheck the ONLY reason to download is a college shot we don't
+      // already have. Falling through to the current photo here would re-fetch
+      // and re-encode a file identical to the one on disk, for every player who
+      // never went pro — which is most of them.
+      if (!url && recheck) {
+        sourceMap[bartId] = { espn: best.id ?? null, source: "current" };
+        noCollege++;
+        saveCounter++;
+        continue;
+      }
+      if (!url && best.image) { url = best.image; source = "current"; }
+      // Search gave us nothing either — probe the remaining CDN paths.
       if (!url && best.id) {
         url = await findHeadshotUrl(best.id);
-        if (url) cdnHits++;
+        if (url) { cdnHits++; source = "cdn"; }
       }
 
       if (url) {
@@ -227,8 +352,10 @@ async function main() {
         if (r.bytes) {
           downloads++;
           try {
-            await optimize(pngPath, webpPath, thumbPath);
+            // Replacing, not filling a gap, whenever we deliberately re-fetch.
+            await optimize(pngPath, webpPath, thumbPath, Boolean(recheck || only));
             photoMap[bartId] = `/images/players/${bartId}.webp`;
+            sourceMap[bartId] = { espn: best.id ?? null, source: source ?? "unknown" };
             await fs.unlink(pngPath).catch(() => {});
           } catch {
             triedMap[bartId] = { tried_at: new Date().toISOString(), reason: "sharp fail" };
@@ -247,18 +374,22 @@ async function main() {
       saveCounter = 0;
       await fs.writeFile(PHOTOS_JSON, JSON.stringify(photoMap, null, 2));
       await fs.writeFile(TRIED_JSON, JSON.stringify(triedMap));
+      await fs.writeFile(SOURCE_JSON, JSON.stringify(sourceMap));
     }
   }
 
   // Final save.
   await fs.writeFile(PHOTOS_JSON, JSON.stringify(photoMap, null, 2));
   await fs.writeFile(TRIED_JSON, JSON.stringify(triedMap));
+  await fs.writeFile(SOURCE_JSON, JSON.stringify(sourceMap, null, 2));
 
   const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
   console.log(`\n${"═".repeat(60)}`);
   console.log(`Done in ${elapsed}s (${Math.round(elapsed / 60)}min).`);
   console.log(`  attempted:    ${attempted}`);
   console.log(`  photos found: ${found}`);
+  console.log(`  college shot: ${collegeHits}`);
+  if (recheck) console.log(`  no college:   ${noCollege}   (kept the existing photo, marked so it is not rechecked)`);
   console.log(`  CDN-fallback: ${cdnHits}`);
   console.log(`  downloaded:   ${downloads}`);
   console.log(`  photo-map:    ${Object.keys(photoMap).length} entries`);
