@@ -131,7 +131,6 @@ export function TeamStatsPanel({
       <p className="mt-3 text-[0.65rem] text-ink-muted">
         Chips are national percentiles within the selected split — a team&rsquo;s away numbers are
         ranked against every other team&rsquo;s away numbers, not against the full season.
-        Splits with fewer than 20 ranked teams are left unchipped.
       </p>
     </div>
   );
