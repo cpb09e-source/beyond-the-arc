@@ -41,7 +41,27 @@ const STRIP_DIRS = [
 ];
 
 async function main() {
-  console.log("→ npm run build…");
+  // Regenerate the per-season shards the home page fetches at runtime BEFORE
+  // building. They are derived wholly from teams-all.json, so leaving them to a
+  // manual step means a data refresh silently serves last export's numbers on
+  // the explorer while every server-rendered page shows the new ones — a
+  // divergence with nothing to signal it. Cheap (a couple of seconds) and
+  // idempotent, so it runs every build.
+  console.log("→ node scripts/build-teams-by-year.mjs…");
+  const shardCode = await new Promise((resolve) => {
+    const child = spawn("node", ["scripts/build-teams-by-year.mjs"], {
+      stdio: "inherit",
+      shell: true,
+      cwd: ROOT,
+    });
+    child.on("close", (code) => resolve(code ?? 1));
+  });
+  if (shardCode !== 0) {
+    console.error(`✗ teams-by-year shard build failed (exit ${shardCode})`);
+    process.exit(shardCode);
+  }
+
+  console.log("\n→ npm run build…");
   const exitCode = await new Promise((resolve) => {
     const child = spawn("npm", ["run", "build"], {
       stdio: "inherit",
