@@ -397,6 +397,126 @@ function sameFilterSet(a: PlayerStatFilter[], b: PlayerStatFilter[]): boolean {
   return b.every((f) => sa.has(key(f)));
 }
 
+// ---------------------------------------------------------------------------
+// Selection chips
+// ---------------------------------------------------------------------------
+// The drawer knows what you picked; the table did not say so anywhere. These
+// chips are that read-out, rendered twice against the same builder: in the
+// toolbar off the committed URL, and in the drawer header off the working
+// draft. Both are removable, so a chip is also the shortest path back out of a
+// filter you no longer want.
+
+export type StatChip = {
+  key: string;
+  /** Grid-short label — "TS%", not "True Shooting %". The strip is tight. */
+  label: string;
+  /** "≥ 55", "12–24", or null when the stat is a column with no bounds. */
+  detail: string | null;
+};
+
+function boundText(lo: number | null, hi: number | null): string | null {
+  const n = (v: number) => String(roundNice(v));
+  if (lo !== null && hi !== null) return `${n(lo)}–${n(hi)}`;
+  if (lo !== null) return `≥ ${n(lo)}`;
+  if (hi !== null) return `≤ ${n(hi)}`;
+  return null;
+}
+
+/**
+ * One chip per stat, never two: a stat that is both pinned and bounded reads as
+ * a single chip carrying its range. Pinned columns come first in pick order,
+ * then any stat bounded without being pinned — an old bookmark, or one of the
+ * `filterOnly` shot-profile stats that can never become a column at all.
+ */
+export function statChips(cols: string[], ranges: RangeState): StatChip[] {
+  const out: StatChip[] = [];
+  const seen = new Set<string>();
+  const push = (key: string) => {
+    if (seen.has(key)) return;
+    seen.add(key);
+    const b = ranges[key];
+    out.push({
+      key,
+      label: playerStatColumn(key)?.label ?? RANGE_BY_KEY.get(key)?.label ?? key,
+      detail: boundText(b?.lo ?? null, b?.hi ?? null),
+    });
+  };
+  for (const k of cols) push(k);
+  for (const st of ALL_RANGE_STATS) if (isBoundActive(ranges[st.key])) push(st.key);
+  return out;
+}
+
+/** Same chips, built from a committed spec rather than a live range draft. */
+export function statChipsFromSpec(cols: string[], filters: PlayerStatFilter[]): StatChip[] {
+  return statChips(cols, filtersToRanges(filters));
+}
+
+/**
+ * The chip row. `max` caps it so a reader with fourteen columns doesn't push
+ * the toolbar into three lines; the remainder collapses into a "+N more" that
+ * opens the drawer, where the full set is always shown uncapped.
+ */
+export function StatChipStrip({
+  chips,
+  onRemove,
+  max,
+  onOverflow,
+  ariaLabel,
+  className,
+}: {
+  chips: StatChip[];
+  onRemove: (key: string) => void;
+  max?: number;
+  onOverflow?: () => void;
+  ariaLabel: string;
+  className?: string;
+}) {
+  if (chips.length === 0) return null;
+  const shown = max && chips.length > max ? chips.slice(0, max) : chips;
+  const hidden = chips.length - shown.length;
+  return (
+    <ul aria-label={ariaLabel} className={cn("flex items-center flex-wrap gap-1.5 min-w-0", className)}>
+      {shown.map((c) => (
+        <li key={c.key}>
+          {/* Bounded stats wear coral, plain columns stay neutral — the strip
+              should distinguish "narrowed the field" from "added a column" at a
+              glance, since only the first changes the row count. */}
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 h-6 pl-2 pr-1 rounded-full border text-[0.68rem] font-semibold whitespace-nowrap",
+              c.detail
+                ? "border-coral/40 bg-coral/8 text-coral"
+                : "border-ink/15 bg-paper-deep text-ink-soft",
+            )}
+          >
+            {c.label}
+            {c.detail && <span className="font-normal tabular opacity-80">{c.detail}</span>}
+            <button
+              type="button"
+              onClick={() => onRemove(c.key)}
+              aria-label={c.detail ? `Remove ${c.label} filter` : `Remove ${c.label} column`}
+              className="w-4 h-4 inline-flex items-center justify-center rounded-full hover:bg-ink/12 transition-colors"
+            >
+              <X size={11} strokeWidth={2.6} />
+            </button>
+          </span>
+        </li>
+      ))}
+      {hidden > 0 && (
+        <li>
+          <button
+            type="button"
+            onClick={onOverflow}
+            className="h-6 px-2 rounded-full border border-dashed border-ink/25 text-[0.68rem] font-semibold text-ink-muted hover:text-ink hover:border-ink/40 transition-colors"
+          >
+            +{hidden} more
+          </button>
+        </li>
+      )}
+    </ul>
+  );
+}
+
 /**
  * Where the page puts the drawer, and what the trigger points `aria-controls`
  * at. The page renders an empty div with this id directly beneath the toolbar
@@ -428,14 +548,24 @@ function SearchGlass({ className }: { className?: string }) {
 export function PlayerStatFilters({
   block = false,
   previewCount,
+  open: openProp,
+  onOpenChange,
 }: {
   block?: boolean;
   previewCount?: (filters: PlayerStatFilter[]) => number;
+  /** Optional control, so the toolbar's "+N more" chip can open the drawer. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const router = useRouter();
   const search = useSearchParams();
   const [, startTransition] = useTransition();
-  const [open, setOpen] = useState(false);
+  const [openLocal, setOpenLocal] = useState(false);
+  const open = openProp ?? openLocal;
+  const setOpen = useCallback(
+    (v: boolean) => { if (onOpenChange) onOpenChange(v); else setOpenLocal(v); },
+    [onOpenChange],
+  );
 
   const params = useMemo(() => {
     const obj: Record<string, string> = {};
@@ -462,7 +592,7 @@ export function PlayerStatFilters({
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
+  }, [open, setOpen]);
 
   // The drawer renders into a slot the page puts directly under the toolbar, so
   // it expands the card and pushes the table down instead of floating over it.
@@ -507,6 +637,18 @@ export function PlayerStatFilters({
     [],
   );
   const clearAll = () => { setDraft({}); setPins([]); };
+  // Chip X — drop the stat wholesale: unpin the column AND release its bounds.
+  // Splitting those into two gestures would mean two clicks to undo one pick,
+  // since narrowing a slider auto-pins.
+  const removeStat = useCallback((key: string) => {
+    setPins((pp) => pp.filter((k) => k !== key));
+    setDraft((d) => {
+      if (!(key in d)) return d;
+      const next = { ...d };
+      delete next[key];
+      return next;
+    });
+  }, []);
 
   // ---- Jump-to-field search -------------------------------------------------
   //
@@ -554,6 +696,9 @@ export function PlayerStatFilters({
     }
   };
 
+  // Uncapped here — the drawer is where the full picture belongs.
+  const chips = useMemo(() => statChips(pins, draft), [pins, draft]);
+
   const draftFilters = useMemo(() => rangesToFilters(draft), [draft]);
   const samePins = pins.length === urlSpec.cols.length && pins.every((k, i) => k === urlSpec.cols[i]);
   // Submit enables on EITHER change — ticking a column with no bounds set is a
@@ -589,15 +734,18 @@ export function PlayerStatFilters({
         <div id={DRAWER_PANEL_ID} role="region" aria-label="Stat filters">
           {/* Header */}
           <div className="flex items-start justify-between gap-3 px-4 lg:px-5 pt-4 pb-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 min-h-6">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center flex-wrap gap-2 min-h-6">
                 <h3 className="text-base font-semibold text-ink leading-none">View &amp; Filters</h3>
                 {activeDraft > 0 && (
                   <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-coral text-white text-[0.62rem] font-bold tabular">{activeDraft}</span>
                 )}
-                {activeDraft > 0 && (
+                {chips.length > 0 && (
                   <button type="button" onClick={clearAll} className="text-xs text-ink-muted hover:text-coral transition-colors">Clear all</button>
                 )}
+                {/* Everything picked, right where you picked it — a stat added
+                    by tick or by the find box lands here immediately. */}
+                <StatChipStrip chips={chips} onRemove={removeStat} ariaLabel="Selected columns and filters" />
               </div>
               <p className="mt-1.5 text-xs text-ink-muted leading-snug">
                 Tick a stat name to add it as a column, and/or drag a slider to narrow the field. Then Submit.
@@ -749,7 +897,7 @@ export function PlayerStatFilters({
     <div className={cn("relative", block && "w-full")}>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-controls={DRAWER_PANEL_ID}
         className={cn(

@@ -7,7 +7,9 @@ import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { PercentileChip } from "@/components/percentile-chip";
-import { DRAWER_SLOT_ID, PlayerFilterBar, PlayerStatFilters } from "@/components/players/player-filter-bar";
+import {
+  DRAWER_SLOT_ID, PlayerFilterBar, PlayerStatFilters, StatChipStrip, statChipsFromSpec,
+} from "@/components/players/player-filter-bar";
 import { ComparePlayersModal } from "@/components/players/compare-players-modal";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { Select } from "@/components/select";
@@ -546,6 +548,9 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [compareOpen, setCompareOpen] = useState(false);
+  // Owned here, not inside PlayerStatFilters, so the toolbar's "+N more" chip
+  // can open the drawer on the full list.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
   // Mobile: the table search collapses to an icon that slides open on tap.
   const [searchOpen, setSearchOpen] = useState(false);
@@ -817,6 +822,19 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     return out;
   }, [spec.cols, spec.filters]);
 
+  // Toolbar read-out of the COMMITTED selection (the drawer's own strip tracks
+  // the uncommitted draft). Removing here is immediate — there is no Submit on
+  // the toolbar, and a chip whose X did nothing until you opened a drawer would
+  // be a lie.
+  const specChips = useMemo(() => statChipsFromSpec(spec.cols, spec.filters), [spec.cols, spec.filters]);
+  const removeSpecStat = (key: string) => {
+    updateSpec({
+      ...spec,
+      cols: spec.cols.filter((k) => k !== key),
+      filters: spec.filters.filter((f) => f.stat !== key),
+    });
+  };
+
   return (
     <>
       <PlayerFilterBar conferences={conferences} teams={teamOptions} />
@@ -828,7 +846,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         {/* Compact D&3-style toolbar: search + count + compare on the left,
             sort/order/show on the right — one row, table starts below. */}
         <div className="px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center flex-wrap gap-2.5 min-w-0">
             {/* Search */}
             <div className="relative hidden lg:block">
               <SearchGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" />
@@ -851,7 +869,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                 the only way to filter by EPM, usage, TS% — did not exist at all
                 on a phone. The drawer itself is a full-screen sheet on mobile,
                 so there was nothing to hide it for. */}
-            <PlayerStatFilters previewCount={previewCount} />
+            <PlayerStatFilters previewCount={previewCount} open={filtersOpen} onOpenChange={setFiltersOpen} />
             <button
               type="button"
               onClick={() => setCompareOpen(true)}
@@ -870,6 +888,16 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               {!loading && spec.conf.length > 0 && <> · {spec.conf.length === 1 ? spec.conf[0] : `${spec.conf.length} confs`}</>}
               {!loading && spec.cls.length > 0 && <> · {spec.cls.length === 1 ? (CLASS_LABEL[spec.cls[0]!] ?? spec.cls[0]) : `${spec.cls.length} classes`}</>}
             </span>
+            {/* What's currently applied, and the fastest way to undo any of it.
+                Capped at six so a wide selection can't push the toolbar into a
+                third line; the rest opens the drawer, which shows them all. */}
+            <StatChipStrip
+              chips={specChips}
+              onRemove={removeSpecStat}
+              max={6}
+              onOverflow={() => setFiltersOpen(true)}
+              ariaLabel="Applied columns and filters"
+            />
           </div>
           <div className="relative flex items-center gap-2 w-full sm:w-auto justify-end">
             {/* Sort/order live on the column headers; only the row-count select
