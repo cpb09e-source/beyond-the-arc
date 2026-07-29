@@ -497,20 +497,50 @@ export function CalcClient({
       const nextYears = resolved.seasons.length
         ? [...resolved.seasons].sort((a, b) => b - a)
         : [...ALL_SEASONS].sort((a, b) => b - a);
-      // Dimensions the question didn't speak to keep their current value, so a
-      // follow-up ("...and only at home") refines rather than resets.
-      const nextConferences = resolved.resolved.conferences.length ? resolved.resolved.conferences : conferences;
-      const nextTeams = resolved.resolved.teams.length ? resolved.resolved.teams : teams;
-      const nextCoaches = resolved.resolved.coaches.length ? resolved.resolved.coaches : coaches;
-      const nextOpponents = resolved.resolved.opponents.length ? resolved.resolved.opponents : opponents;
-      const nextQuads = resolved.quads.length ? resolved.quads.map(String) : quads;
-      const nextVenue = resolved.venue !== "all" ? resolved.venue : venue;
+      // A QUESTION THAT NAMES A SUBJECT STARTS OVER. Anything it doesn't
+      // mention is cleared rather than inherited.
+      //
+      // Dimensions the question didn't speak to used to keep their current
+      // value unconditionally, so a follow-up ("...and only at home") could
+      // refine instead of resetting. That is right for a follow-up and wrong
+      // for a new question, and nothing told the two apart: asking about Bill
+      // Self and then asking about Purdue kept Bill Self, so the second answer
+      // was Purdue games coached by Bill Self — a coach who has never coached
+      // there. Nought games, 0.0%, no error. The venue rode along the same way.
+      //
+      // Naming a team, coach, conference or opponent is the signal that the
+      // subject has changed and the previous question is over. Ask something
+      // with no subject at all ("...and only in Quad 1") and every carry-over
+      // still applies, so refining a question keeps working.
+      //
+      // Same disease the seasons rule above already treats, and the same cure:
+      // trust what the parser resolved rather than quietly widening it. The
+      // cost is that "what about Purdue" drops the conditions from the previous
+      // question — visible in the chips, and recoverable, where inheriting a
+      // stale coach was neither.
+      const namesSubject =
+        resolved.resolved.teams.length > 0 ||
+        resolved.resolved.coaches.length > 0 ||
+        resolved.resolved.conferences.length > 0 ||
+        resolved.resolved.opponents.length > 0;
+      /** The parser's value, else the current one — unless the subject changed. */
+      const keep = <T,>(next: T[], current: T[]): T[] =>
+        next.length ? next : namesSubject ? [] : current;
+
+      const nextConferences = keep(resolved.resolved.conferences, conferences);
+      const nextTeams = keep(resolved.resolved.teams, teams);
+      const nextCoaches = keep(resolved.resolved.coaches, coaches);
+      const nextOpponents = keep(resolved.resolved.opponents, opponents);
+      const nextQuads = keep(resolved.quads.map(String), quads);
+      const nextVenue = resolved.venue !== "all" ? resolved.venue : namesSubject ? "all" : venue;
       const nextFilters = resolved.conditions.length
         ? resolved.conditions.slice(0, 8).map((c) => ({
             ...makeFilter(c.stat as keyof GameLog),
             op: c.op,
             value: c.value,
           }))
+        : namesSubject
+        ? []
         : filters;
 
       setYears(nextYears);
