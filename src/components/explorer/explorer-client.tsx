@@ -19,7 +19,7 @@ import {
 } from "@/lib/team-filters";
 import { Select } from "@/components/select";
 import { FilterBar, ConferenceRankingsModal } from "@/components/explorer/filter-bar";
-import { TeamStatFilters, teamStatChipsFromSpec } from "@/components/explorer/team-stat-filters";
+import { TEAM_DRAWER_SLOT_ID, TeamStatFilters, teamStatChipsFromSpec } from "@/components/explorer/team-stat-filters";
 import { StatChipStrip } from "@/components/filters/stat-chips";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { CompareTeamsModal } from "@/components/explorer/compare-teams-modal";
@@ -469,6 +469,11 @@ export function ExplorerClient({
           </div>
         </div>
 
+        {/* Where the Filters drawer expands. It portals in here so it sits in
+            normal flow between the toolbar and the table — opening it grows the
+            card and pushes the table down, rather than covering it. Empty and
+            zero-height while closed. */}
+        <div id={TEAM_DRAWER_SLOT_ID} />
         {/* Vertical bound is what makes the `sticky top-0 / top-6` header rows
             below actually stick. Without a height the wrapper never scrolls
             vertically — and since `overflow-x: auto` forces `overflow-y` to
