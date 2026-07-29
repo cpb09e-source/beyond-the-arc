@@ -113,19 +113,10 @@ export default async function HomePage() {
         <div className="court-divider" />
       </div>
 
-      {/* Explains the HEADLINE column. This used to describe BTA RTG, which is
-          no longer what the table leads with — a footnote defining a metric the
-          reader can't see is worse than no footnote. */}
-      <section className="mx-auto max-w-[108rem] px-6 lg:px-10 pb-10">
-        <p className="text-sm text-ink-muted max-w-2xl leading-relaxed">
-          <span className="text-ink">aNET</span> is our schedule-adjusted net
-          rating — points per 100 possessions against an average D-I opponent on
-          a neutral floor. Offense and defense are solved together across every
-          game of the season, so beating a good defense counts for more than
-          beating a bad one. <span className="text-ink">SOS</span> is the average
-          adjusted net rating of the opponents faced.
-        </p>
-      </section>
+      {/* The aNET / SOS footnote that sat here is gone — those definitions
+          belong on the glossary page, not repeated under one table. Every
+          column head still carries its own `title`, so the meaning is a hover
+          away in the meantime. */}
     </>
   );
 }
