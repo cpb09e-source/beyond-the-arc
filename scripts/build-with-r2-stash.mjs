@@ -75,6 +75,24 @@ async function main() {
     process.exit(exitCode);
   }
 
+  // Next writes its segment-prefetch payloads as nested directories but its own
+  // client asks for the dot-flattened names, so every prefetch 404s until these
+  // are renamed. See the header of the script for the encoder this mirrors.
+  // Must run AFTER next build (it rewrites out/) and is idempotent.
+  console.log("\n→ node scripts/flatten-rsc-segment-files.mjs…");
+  const flattenCode = await new Promise((resolve) => {
+    const child = spawn("node", ["scripts/flatten-rsc-segment-files.mjs"], {
+      stdio: "inherit",
+      shell: true,
+      cwd: ROOT,
+    });
+    child.on("close", (code) => resolve(code ?? 1));
+  });
+  if (flattenCode !== 0) {
+    console.error(`✗ segment-file flatten failed (exit ${flattenCode})`);
+    process.exit(flattenCode);
+  }
+
   console.log("\n→ Stripping R2-mirrored dirs from out/…");
   let stripped = 0;
   for (const d of STRIP_DIRS) {
