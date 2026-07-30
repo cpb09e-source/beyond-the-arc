@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  pctBgStrong, pctBgStrongDark, pctColorLight, pctColorDark, PercentileGauge,
-} from "@/components/players/player-stats-grid";
+import { PercentileGauge } from "@/components/players/player-stats-grid";
+import { pctBg, pctColor } from "@/components/percentile-chip";
 
 /**
  * Shot-profile data + presentational pieces (zone diet bars, minis), shared by
@@ -25,15 +24,25 @@ export function seasonLabel(y: number) { return `${y - 1}-${String(y).slice(-2)}
 const jr = (r: Response) => (r.ok ? r.json() : null);
 const f1 = (v: number | null | undefined) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 1 }));
 
-// The four CSS vars the site's .stat-tile / .stat-tile-color classes read
-// (theme-aware). Set them on a container and any descendant tile bg / color /
-// gauge picks up the percentile treatment.
+// The four CSS vars the site's .stat-tile / .stat-tile-color classes read. Set
+// them on a container and any descendant tile bg / color / gauge picks up the
+// percentile treatment.
+//
+// Same ramp as ZoneTile in the Shot Diet panel, which is the primary surface
+// this card stands in for: identical zones, identical percentiles, so a reader
+// who sees one on a 2019 player and the other on a 2025 player should be
+// reading the same colours. It used to run on a separate three-band
+// olive/amber/tomato ramp with cuts at 67/34, which put an 80th-percentile
+// finisher two full bands away from where every chip on the site puts him.
+//
+// pctBg/pctColor are theme-agnostic by design, so light and dark take the same
+// value — matching ZoneTile and StatTile rather than the old ramp's split.
 function tileVars(pct: number | null): React.CSSProperties {
   return {
-    "--tile-bg-light": pctBgStrong(pct),
-    "--tile-bg-dark": pctBgStrongDark(pct),
-    "--tile-color-light": pct == null ? "var(--ink-muted)" : pctColorLight(pct),
-    "--tile-color-dark": pct == null ? "var(--ink-muted)" : pctColorDark(pct),
+    "--tile-bg-light": pctBg(pct),
+    "--tile-bg-dark": pctBg(pct),
+    "--tile-color-light": pct == null ? "var(--ink-muted)" : pctColor(pct),
+    "--tile-color-dark": pct == null ? "var(--ink-muted)" : pctColor(pct),
   } as React.CSSProperties;
 }
 

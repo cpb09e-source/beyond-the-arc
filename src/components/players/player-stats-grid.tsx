@@ -3,75 +3,12 @@ import { STAT_META, fmtValue, type StatFormat } from "./where-they-rank";
 import { StatInfo } from "./stat-info";
 import type { Shooting } from "./player-shot-impact";
 import { pctColor, pctBg } from "@/components/percentile-chip";
-// pctBgStrong/pctColorLight variants (below) are kept for the shot-profile card;
-// the Player Overview tiles use the players-table chip ramp (pctBg/pctColor).
 
-/**
- * Editorial heatmap palette — DataGolf-inspired but with a middle yellow
- * band so mid-cohort stats register visually as "average" rather than
- * disappearing. Three tiers, each encoded as alpha against the page bg:
- *
- *   pct ≥ 67  → olive (forest-toned green, datagolf #3D9970)
- *   pct 34–66 → amber (warm yellow, datagolf #FFC107)
- *   pct ≤ 33  → tomato (warm red, datagolf #FF4136)
- *
- * Alpha grows with magnitude inside each band so the wash gets bolder
- * as you move toward an extreme. Light and dark themes use the same
- * colors but the dark variant pushes alpha higher so the tint registers
- * on the navy page bg.
- */
-const OLIVE_RGB = "61, 153, 112";
-const AMBER_RGB = "255, 193, 7";
-const TOMATO_RGB = "255, 65, 54";
-
-export function pctBgStrong(pct: number | null): string {
-  if (pct === null) return "transparent";
-  if (pct >= 67) {
-    // 67th → low alpha, 100th → max bold olive
-    const alpha = 0.18 + ((pct - 67) / 33) * 0.47;
-    return `rgba(${OLIVE_RGB}, ${alpha.toFixed(3)})`;
-  }
-  if (pct >= 34) {
-    // Middle band: warm amber. Peaks at the band's center (50th pct)
-    // and softens toward each edge so neighboring tiles don't compete.
-    const dist = Math.abs(pct - 50) / 16;
-    const alpha = 0.32 - dist * 0.12;
-    return `rgba(${AMBER_RGB}, ${alpha.toFixed(3)})`;
-  }
-  // 33rd → low alpha, 0th → max bold tomato
-  const alpha = 0.18 + ((33 - pct) / 33) * 0.32;
-  return `rgba(${TOMATO_RGB}, ${alpha.toFixed(3)})`;
-}
-
-export function pctBgStrongDark(pct: number | null): string {
-  if (pct === null) return "transparent";
-  // Same color regions, alpha bumped so the wash reads against navy.
-  if (pct >= 67) {
-    const alpha = 0.28 + ((pct - 67) / 33) * 0.5;
-    return `rgba(${OLIVE_RGB}, ${alpha.toFixed(3)})`;
-  }
-  if (pct >= 34) {
-    const dist = Math.abs(pct - 50) / 16;
-    const alpha = 0.4 - dist * 0.14;
-    return `rgba(${AMBER_RGB}, ${alpha.toFixed(3)})`;
-  }
-  const alpha = 0.28 + ((33 - pct) / 33) * 0.4;
-  return `rgba(${TOMATO_RGB}, ${alpha.toFixed(3)})`;
-}
-
-export function pctColorLight(pct: number): string {
-  // Solid versions for the gauge arc + percentile number text. The
-  // amber band gets a darker mustard so the chip reads on a yellow tile.
-  if (pct >= 67) return `rgb(${OLIVE_RGB})`;
-  if (pct >= 34) return "rgb(180, 130, 5)"; // dark mustard, reads on amber
-  return `rgb(${TOMATO_RGB})`;
-}
-export function pctColorDark(pct: number): string {
-  // Lighter variants for visibility on dark navy tinted tiles.
-  if (pct >= 67) return "rgb(120, 200, 160)";
-  if (pct >= 34) return "rgb(255, 210, 100)"; // brighter amber
-  return "rgb(255, 140, 130)";
-}
+// Every percentile-tinted surface on this page — StatTile, ZoneTile, and the
+// shot-profile fallback card's ZoneBars — now runs on the site-wide chip ramp
+// in percentile-chip.tsx. The three-band olive/amber/tomato ramp that used to
+// live here (pctBgStrong/pctBgStrongDark/pctColorLight/pctColorDark, cuts at
+// 67/34) was the last holdout and went with the fallback card 2026-07.
 
 /**
  * Player Overview — bento-card stat grid.
@@ -285,8 +222,8 @@ function StatTile({
   // globals.css picks the right one based on [data-theme="dark"]. This
   // keeps the tile a server-renderable component (no client theme hook)
   // and avoids any flash during hydration.
-  // Match the players-table percentile chips: the continuous HSL ramp
-  // (pctBg background + pctColor text/gauge), theme-agnostic like the chip.
+  // Match the players-table percentile chips: pctBg background + pctColor
+  // text/gauge, theme-agnostic like the chip itself.
   const tileStyle: React.CSSProperties = {
     "--tile-bg-light": pctBg(percentile),
     "--tile-bg-dark": pctBg(percentile),
