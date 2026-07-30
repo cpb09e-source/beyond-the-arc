@@ -463,22 +463,22 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                       {r.current_conference ? confDisplay(r.current_conference) : <span className="text-ink-muted">—</span>}
                     </Td>
                     <Td className="text-right tabular font-medium text-ink">{fmtPct(r.career_win_pct)}</Td>
-                    <Td className="hidden md:table-cell">
+                    <Td className="hidden md:table-cell text-right">
                       <ValueChip value={fmtPct(r.conf_win_pct ?? null)} pct={pcts.conf.get(r.slug)} />
                     </Td>
-                    <Td className="hidden md:table-cell">
+                    <Td className="hidden md:table-cell text-right">
                       <ValueChip
                         value={r.adj_net_avg != null ? (r.adj_net_avg > 0 ? "+" : "") + r.adj_net_avg.toFixed(1) : "—"}
                         pct={pcts.adjNet.get(r.slug)}
                       />
                     </Td>
-                    <Td>
+                    <Td className="text-right">
                       <ValueChip
                         value={r.composite_score != null ? r.composite_score.toFixed(1) : "—"}
                         pct={pcts.composite.get(r.slug)}
                       />
                     </Td>
-                    <Td className="hidden lg:table-cell">
+                    <Td className="hidden lg:table-cell text-right">
                       <ValueChip
                         value={r.composite_per_season != null ? r.composite_per_season.toFixed(1) : "—"}
                         pct={pcts.perSeason.get(r.slug)}
@@ -615,13 +615,13 @@ function ThSort({
  */
 function ValueChip({ value, pct }: { value: string; pct: number | undefined }) {
   return (
-    <span className="flex items-center justify-end gap-1.5">
+    // Stacked, not side-by-side: value on top, chip beneath. Matches the teams
+    // and players grids exactly — same flex-col/items-end/gap-0.5, and the chip
+    // is left to render its own number and to disappear on a null percentile
+    // rather than being handed children and a fixed-width placeholder.
+    <span className="inline-flex flex-col items-end gap-0.5 leading-tight">
       <span className={cn("tabular font-medium", value === "—" ? "text-ink-muted/50" : "text-ink")}>{value}</span>
-      {pct !== undefined ? (
-        <PercentileChip pct={pct} className="w-9 justify-center">{pct}</PercentileChip>
-      ) : (
-        <span className="w-9" />
-      )}
+      <PercentileChip pct={pct ?? null} />
     </span>
   );
 }
