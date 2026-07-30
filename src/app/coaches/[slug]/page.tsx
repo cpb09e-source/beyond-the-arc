@@ -205,7 +205,7 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
             {/* Bottom-aligned with the name's baseline block rather than
                 centred on it — the display type is the anchor here, and a
                 centred photo would float above a 7xl cap height. */}
-            <CoachPhoto slug={profile.slug} name={profile.name} size={96} className="mb-1" />
+            <CoachPhoto slug={profile.slug} name={profile.name} size={160} className="mb-1" />
             <h1 className="font-display text-5xl md:text-6xl lg:text-7xl leading-[0.95] tracking-tight text-ink">
               {profile.name}
             </h1>
