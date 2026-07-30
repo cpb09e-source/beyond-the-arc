@@ -9,7 +9,7 @@ import { Select } from "@/components/select";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
 import type { SearchableOption } from "@/components/explorer/searchable-select";
 import { CompareModal } from "@/components/coaches/compare-modal";
-import { X } from "lucide-react";
+import { Trophy, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
@@ -736,13 +736,18 @@ function CoachChips({
 
 /**
  * Tournament success in one cell: appearances as ticks, Sweet 16s filled,
- * titles called out.
+ * then both counts written out.
  *
  * Four counting stats (appearances / S16 / F4 / titles) would be four columns
- * that mostly read zero. As a shape they fit in one and stay comparable — you
- * can see that a coach goes often but shallow, or rarely but deep, without
- * reading a number. The exact counts are in the tooltip and the sort is on the
- * packed hierarchy (titles first), not on the tick count.
+ * that mostly read zero. As a shape they fit in one and stay comparable — the
+ * ticks show at a glance that a coach goes often but shallow, or rarely but
+ * deep. The two lines beneath name what the ticks are counting, because a bare
+ * `9/5` needs a legend and a legend in a table cell is a tooltip nobody opens.
+ *
+ * Structure is fixed at three rows so the column doesn't go ragged: Final Fours
+ * stay in the tooltip, and titles ride the tick row as a trophy pill rather than
+ * adding a fourth line to the ~4% of coaches who have any. Sort is on the packed
+ * hierarchy (titles first), not on the tick count.
  */
 function MarchCell({ apps, s16, f4, titles }: { apps: number; s16: number; f4: number; titles: number }) {
   if (apps === 0) {
@@ -752,18 +757,33 @@ function MarchCell({ apps, s16, f4, titles }: { apps: number; s16: number; f4: n
   const filled = Math.min(s16, shown);
   return (
     <span
-      className="inline-flex flex-col items-end gap-0.5 leading-tight"
+      className="inline-flex flex-col items-end gap-1 leading-tight"
       title={`${apps} NCAA appearance${apps === 1 ? "" : "s"} · ${s16} Sweet 16${s16 === 1 ? "" : "s"} · ${f4} Final Four${f4 === 1 ? "" : "s"} · ${titles} title${titles === 1 ? "" : "s"}`}
     >
-      <span className="inline-flex items-end gap-[2px] h-3.5">
-        {Array.from({ length: shown }, (_, i) => (
-          <span key={i} className={cn("w-[3px] rounded-sm", i < filled ? "h-3.5 bg-coral" : "h-2 bg-ink/20")} />
-        ))}
+      <span className="inline-flex items-center gap-1.5">
+        {titles > 0 && (
+          <span className="inline-flex items-center gap-0.5 h-4 px-1 rounded-full bg-coral/12 text-coral text-[0.6rem] font-bold tabular">
+            <Trophy size={9} strokeWidth={2.6} />
+            {titles}×
+          </span>
+        )}
+        <span className="inline-flex items-end gap-[2px] h-3.5">
+          {Array.from({ length: shown }, (_, i) => (
+            <span key={i} className={cn("w-[3px] rounded-sm", i < filled ? "h-3.5 bg-coral" : "h-2 bg-ink/20")} />
+          ))}
+        </span>
       </span>
-      <span className="text-[0.62rem] text-ink-muted tabular whitespace-nowrap">
-        {apps}/{s16}
-        {titles > 0 && <span className="ml-1 text-coral font-bold">{titles}×</span>}
-      </span>
+      <MarchLine n={apps} unit={apps === 1 ? "appearance" : "appearances"} />
+      <MarchLine n={s16} unit={s16 === 1 ? "Sweet 16" : "Sweet 16s"} muted={s16 === 0} />
+    </span>
+  );
+}
+
+/** One written-out count: the number carries the weight, the unit stays quiet. */
+function MarchLine({ n, unit, muted = false }: { n: number; unit: string; muted?: boolean }) {
+  return (
+    <span className="text-[0.65rem] text-ink-muted whitespace-nowrap">
+      <span className={cn("tabular font-semibold", muted ? "text-ink-muted" : "text-ink-soft")}>{n}</span> {unit}
     </span>
   );
 }
