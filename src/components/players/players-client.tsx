@@ -16,7 +16,8 @@ import { SortableTh } from "@/components/explorer/sortable-th";
 import { Select } from "@/components/select";
 import {
   DEFAULT_PLAYER_SPEC,
-  PLAYER_COLS,
+  // PLAYER_COLS is gone from here: the raw_row offsets it names are now read
+  // only by scripts/build-players-explorer.mjs, at build time.
   PLAYER_STAT_COLUMNS,
   parsePlayerSpec,
   passesPlayerFilter,
@@ -130,141 +131,46 @@ function teamSlug(name: string): string {
   return name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-type RawPlayer = {
-  id: number;
-  bart_player_id: number | null;
-  name: string;
-  year: number;
-  class: string | null;
-  height: string | null;
-  hometown: string | null;
-  teams: { id: number; name: string; conference: string | null } | Array<{ id: number; name: string; conference: string | null }>;
-  player_bart_stats: {
-    raw_row: Array<string | number | null> | null;
-    games: number | null;
-    notes: string | null;
-    projection: number | null;
-  } | Array<{ raw_row: Array<string | number | null> | null; games: number | null; notes: string | null; projection: number | null }>;
+/**
+ * What /data/players-explorer/<year>.json ships: a field header and one array
+ * per player, already transformed by scripts/build-players-explorer.mjs.
+ *
+ * The explorer used to fetch players-by-year, the Supabase row shipped whole —
+ * 1.14 MB gzipped for 2025, of which Bart's 67-column `raw_row` was 73% and the
+ * page read 22 of those columns. Doing the transform at build time and dropping
+ * the JSON keys took the same season to 504 KB.
+ *
+ * `fields` is read from the file rather than assumed, so the builder owns the
+ * column order and the two cannot drift apart silently.
+ */
+type ExplorerPayload = {
+  fields: string[];
+  rows: Array<Array<string | number | null>>;
 };
 
-function asNum(v: unknown): number | null {
-  if (typeof v === "number") return v;
-  if (typeof v === "string") { const n = Number(v); return Number.isFinite(n) ? n : null; }
-  return null;
-}
-function fromEnd(row: Array<string | number | null> | null, offset: number): unknown {
-  if (!row || row.length <= offset) return null;
-  return row[row.length - 1 - offset];
-}
-function fromStart(row: Array<string | number | null> | null, idx: number): unknown {
-  if (!row || row.length <= idx) return null;
-  return row[idx];
-}
+/** Fields attached after load, from the EPM and shooting files. */
+const LATE_FIELDS = {
+  epm: null, off_epm: null, def_epm: null, epm_estimated: false,
+  ewins: null, on_off: null,
+  rim_pct: null, mid_pct: null, assisted_pct: null, rim_rate: null, tp_rate: null,
+  bta_ind_ortg: null,
+} as const;
 
-function transformPlayer(raw: RawPlayer): PlayerSummary {
-  const team = Array.isArray(raw.teams) ? raw.teams[0]! : raw.teams;
-  const stats = Array.isArray(raw.player_bart_stats) ? raw.player_bart_stats[0]! : raw.player_bart_stats;
-  const row = stats?.raw_row ?? null;
-  // Advanced aggregates from CBB Analytics player_game_stats — pre-baked
-  // into the JSON by scripts/export-static-data.mts. Null when the player
-  // has no game-log coverage for the season.
-  const adv = (raw as RawPlayer & { advanced_stats?: { tov_pg: number | null; tov_pct: number | null; usage_pct: number | null; net_rtg: number | null } | null }).advanced_stats ?? null;
-
-  const games = stats?.games ?? null;
-  const pts_pg = asNum(fromEnd(row, PLAYER_COLS.pts_pg_offset));
-  const reb_pg = asNum(fromEnd(row, PLAYER_COLS.reb_pg_offset));
-  const ast_pg = asNum(fromEnd(row, PLAYER_COLS.ast_pg_offset));
-  const stl_pg = asNum(fromEnd(row, PLAYER_COLS.stl_pg_offset));
-  const blk_pg = asNum(fromEnd(row, PLAYER_COLS.blk_pg_offset));
-
-  const fg2_made = asNum(fromStart(row, PLAYER_COLS.fg2_made));
-  const fg2_att  = asNum(fromStart(row, PLAYER_COLS.fg2_att));
-  const fg3_made = asNum(fromStart(row, PLAYER_COLS.fg3_made));
-  const fg3_att  = asNum(fromStart(row, PLAYER_COLS.fg3_att));
-  const ft_made  = asNum(fromStart(row, PLAYER_COLS.ft_made));
-  const ft_att   = asNum(fromStart(row, PLAYER_COLS.ft_att));
-
-  const fgm = fg2_made !== null && fg3_made !== null ? fg2_made + fg3_made : null;
-  const fga = fg2_att  !== null && fg3_att  !== null ? fg2_att  + fg3_att  : null;
-  const fg_pct = fgm !== null && fga !== null && fga > 0 ? fgm / fga : null;
-
-  // TS% = PTS / (2 * (FGA + 0.44 * FTA))  — needs season totals + season pts
-  let ts_pct: number | null = null;
-  if (pts_pg !== null && games !== null && fga !== null && ft_att !== null) {
-    const denom = 2 * (fga + 0.44 * ft_att);
-    ts_pct = denom > 0 ? (pts_pg * games) / denom : null;
-  }
-
-  // eFG% = (FGM + 0.5 * 3PM) / FGA — credits 3PT shooting.
-  const efg_pct = fgm !== null && fg3_made !== null && fga !== null && fga > 0
-    ? (fgm + 0.5 * fg3_made) / fga
-    : null;
-
-  // FTA Rate = FTA / FGA — how often the player gets to the line per shot.
-  const fta_rate = ft_att !== null && fga !== null && fga > 0 ? ft_att / fga : null;
-
-  const orb_pg = asNum(fromEnd(row, PLAYER_COLS.orb_pg_offset));
-
-  // PIR per game (EuroLeague Performance Index Rating).
-  // Bart's player CSV doesn't expose per-game turnovers reliably, so we
-  // compute the boxscore-positive minus missed-shot components and document
-  // the omission in the UI footnote.
-  const missed_fg_pg = asNum(fromStart(row, PLAYER_COLS.missed_fg_pg));
-  const missed_ft_pg = asNum(fromStart(row, PLAYER_COLS.missed_ft_pg));
-  let pir: number | null = null;
-  if (pts_pg !== null && reb_pg !== null && ast_pg !== null && stl_pg !== null && blk_pg !== null) {
-    const positives = pts_pg + reb_pg + ast_pg + stl_pg + blk_pg;
-    const negatives = (missed_fg_pg ?? 0) + (missed_ft_pg ?? 0);
-    pir = positives - negatives;
-  }
-
-  return {
-    id: raw.id,
-    bart_player_id: raw.bart_player_id,
-    name: raw.name,
-    team_name: team?.name ?? "—",
-    team_conference: team?.conference ?? null,
-    team_id: team?.id ?? 0,
-    year: raw.year,
-    class: raw.class,
-    height: raw.height,
-    hometown: raw.hometown,
-    position_note: fromEnd(row, PLAYER_COLS.notes_offset) as string | null,
-    games,
-    min_pg: asNum(fromStart(row, PLAYER_COLS.min_pg)),
-    pts_pg, reb_pg, ast_pg, stl_pg, blk_pg,
-    fg_pct,
-    fg3_pct: asNum(fromStart(row, PLAYER_COLS.fg3_pct)),
-    fg2_pct: asNum(fromStart(row, PLAYER_COLS.fg2_pct)),
-    ft_pct:  asNum(fromStart(row, PLAYER_COLS.ft_pct)),
-    ts_pct,
-    efg_pct,
-    fta_rate,
-    orb_pg,
-    tov_pg: adv?.tov_pg ?? null,
-    tov_pct: adv?.tov_pct ?? null,
-    usage_pct: adv?.usage_pct ?? null,
-    net_rtg: adv?.net_rtg ?? null,
-    // AST/TOV ratio. Null when TOV is missing or zero (avoids inf/NaN).
-    ast_to_tov: ast_pg !== null && adv?.tov_pg != null && adv.tov_pg > 0
-      ? ast_pg / adv.tov_pg
-      : null,
-    drb_pg: reb_pg !== null && orb_pg !== null ? reb_pg - orb_pg : null,
-    // HKM (Hakeem %) = BLK% + STL% — Bart raw cols 22/23 (verified: Bidunga 9 + 1.4).
-    hkm_pct: (() => {
-      const b = asNum(fromStart(row, 22)), s = asNum(fromStart(row, 23));
-      return b !== null && s !== null ? b + s : null;
-    })(),
-    epm: null, off_epm: null, def_epm: null, epm_estimated: false, // attached from /data/epm-<year>.json (or box-epm-<year>.json)
-    ewins: null, on_off: null, // EPM-extras (filter-only), from epm-<year>.json
-    // Shooting profile — attached from /data/shooting-<year>.json (filter-only).
-    rim_pct: null, mid_pct: null, assisted_pct: null, rim_rate: null, tp_rate: null,
-    pir,
-    porpag: asNum(fromStart(row, PLAYER_COLS.porpag)),
-    bta_ind_ortg: null,   // attached per cohort below
-    fg3_made,
-    fg3_att,
-  };
+/**
+ * Payload rows -> PlayerSummary objects.
+ *
+ * Called from the per-year memo rather than at fetch time, and deliberately:
+ * the cohort pass below mutates what it is given (EPM, shooting and percentiles
+ * are attached in place), so it needs a fresh object every run. Expanding here
+ * keeps the state holding immutable payloads, exactly as the old transform did.
+ */
+function expandRows(payload: ExplorerPayload): PlayerSummary[] {
+  const { fields, rows } = payload;
+  return rows.map((row) => {
+    const o: Record<string, unknown> = { ...LATE_FIELDS };
+    for (let i = 0; i < fields.length; i++) o[fields[i]!] = row[i] ?? null;
+    return o as unknown as PlayerSummary;
+  });
 }
 
 // Position bucket from Bart's position note. Mirrors the mapping in
@@ -538,7 +444,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [confsByYear]);
 
-  const [rawByYear, setRawByYear] = useState<Record<number, RawPlayer[]>>({});
+  const [rawByYear, setRawByYear] = useState<Record<number, ExplorerPayload>>({});
   // BTA EPM per season: bart_player_id -> {epm, off, def}. Fetched lazily per
   // selected year; 404 (no fit for that season) caches as an empty map.
   // Per-season impact map. `estimated` marks a season served by the box-score
@@ -593,9 +499,9 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     setLoading(true);
     Promise.all(
       toFetch.map((y) =>
-        fetch(`/data/players-by-year/${y}.json`)
+        fetch(`/data/players-explorer/${y}.json`)
           .then((r) => r.json())
-          .then((arr: RawPlayer[]) => [y, arr] as const),
+          .then((payload: ExplorerPayload) => [y, payload] as const),
       ),
     )
       .then((entries) => {
@@ -679,7 +585,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     for (const y of spec.years) {
       const raw = rawByYear[y];
       if (!raw) continue;
-      const arr = raw.map(transformPlayer);
+      const arr = expandRows(raw);
       // Attach BTA EPM by bart id. Real RAPM fit where available, else the
       // estimated box-score model — `estimated` flags which for the UI marker.
       const epmEntry = epmByYear[y];
