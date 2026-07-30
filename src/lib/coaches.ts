@@ -124,6 +124,30 @@ export type CoachIndexRow = {
   // Composite ranking — TODO: formula in progress. Optional + nullable so
   // the UI can render "—" until the export pipeline populates it.
   composite_score?: number | null;
+  /**
+   * Composite per season coached.
+   *
+   * The composite already folds in a per-season term (75% cumulative + 25%
+   * per-season × 14), but it still correlates 0.72 with seasons coached, so a
+   * long career outruns a short excellent one. Surfacing the rate separately
+   * lets the table answer "who was best" as well as "who did most" — and it
+   * matters here because our window starts in 2013, so a career that predates
+   * it (Krzyzewski shows 10 seasons, not 42) is truncated through no fault of
+   * the coach.
+   */
+  composite_per_season?: number | null;
+  /** Mean adjusted net rating across seasons that have one (86% coverage). */
+  adj_net_avg?: number | null;
+  /** Conference-only win rate. Near-total coverage (99.8%). */
+  conf_win_pct?: number | null;
+  conf_wins?: number;
+  conf_losses?: number;
+  /** Best (lowest) BTA rank reached in any season. */
+  best_bta_rank?: number | null;
+  /** Seasons finishing inside the BTA top 25. */
+  top25_seasons?: number;
+  /** NCAA appearances / seasons coached — how reliably they get there. */
+  ncaa_rate?: number | null;
   // Aggregate counts used by the head-to-head compare modal on /coaches.
   // All scoped to the 2013-26 data window.
   ncaa_titles: number;
@@ -1098,8 +1122,61 @@ export async function loadAllCoachProfiles(): Promise<CoachProfile[]> {
   const gamesLookup = buildGamesByTeamYear(tGames);
   for (const p of profiles) {
     p.composite_score = computeCompositeScore(p, gamesLookup);
+    attachCareerAggregates(p);
   }
   return profiles;
+}
+
+/**
+ * Career-level rollups the explorer table and filters read.
+ *
+ * All derived from `by_year`, which the index strips before it ships — so this
+ * has to run while the profile is still whole. Every one of these is a mean or
+ * a count over seasons that actually carry the field: a coach with adjusted
+ * ratings for 9 of 14 seasons gets the mean of those 9, not a zero-padded
+ * average that would quietly punish the older half of the window.
+ */
+/** Seasons a coach needs before a per-season rate is published. See below. */
+const MIN_SEASONS_FOR_RATE = 4;
+
+function attachCareerAggregates(p: CoachProfile): void {
+  const seasons = p.by_year;
+
+  // Rate stats need a qualifier, the same way a batting average does. Without
+  // one the leaderboard is all one-season coaches: a single good year at 63.0
+  // beats Mark Few's 14-season 18.6, because there is nothing to regress it
+  // toward. Four seasons is the floor — enough to have survived a bad year,
+  // low enough to keep genuine short-tenure standouts (Scheyer, Bo Ryan,
+  // Tommy Lloyd) who are the whole reason this column exists.
+  p.composite_per_season =
+    p.seasons_count >= MIN_SEASONS_FOR_RATE && typeof p.composite_score === "number"
+      ? Math.round((p.composite_score / p.seasons_count) * 10) / 10
+      : null;
+
+  const nets = seasons.map((s) => s.adj_net).filter((v): v is number => typeof v === "number");
+  p.adj_net_avg = nets.length > 0
+    ? Math.round((nets.reduce((a, b) => a + b, 0) / nets.length) * 10) / 10
+    : null;
+
+  let cw = 0, cl = 0;
+  for (const s of seasons) {
+    if (typeof s.conf_wins === "number") cw += s.conf_wins;
+    if (typeof s.conf_losses === "number") cl += s.conf_losses;
+  }
+  p.conf_wins = cw;
+  p.conf_losses = cl;
+  p.conf_win_pct = cw + cl > 0 ? cw / (cw + cl) : null;
+
+  const ranks = seasons.map((s) => s.bta_rank).filter((v): v is number => typeof v === "number");
+  p.best_bta_rank = ranks.length > 0 ? Math.min(...ranks) : null;
+  p.top25_seasons = ranks.filter((r) => r <= 25).length;
+
+  // Appearances over seasons coached. 2020 is excluded from the denominator —
+  // the tournament was cancelled, so counting it as a miss would penalise every
+  // coach active that year for something nobody could reach.
+  const eligible = seasons.filter((s) => s.year !== 2020).length;
+  const appearances = seasons.filter((s) => s.year !== 2020 && s.round != null).length;
+  p.ncaa_rate = eligible > 0 ? appearances / eligible : null;
 }
 
 export async function loadCoachIndex(): Promise<CoachIndexRow[]> {
