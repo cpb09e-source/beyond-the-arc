@@ -1,9 +1,19 @@
 {
+  "bill-self": "5cd1b9a691c13a40538a74be516dbc447d046cbd",
   "brad-underwood": "f584e07eb6e6a6d26b201e3475e981ec1591b9b4",
+  "dan-hurley": "b5d9a14e59e2d1181229305f706201719d9ba336",
   "dana-altman": "92fcc6d8c05c3be80df6b8b6619ec3beac402fc0",
+  "jay-wright": "a90042c67b512de43c57f4ae556cb2befbb7a502",
   "john-becker": "edf62f9e76b9c5b37601a529efa5a08a6c159d92",
   "john-calipari": "2f031628a16c4f2e7250107265fcbab957e3f2f7",
+  "kelvin-sampson": "d8c4c8d5de4b5e18663115d5b4817df75da414aa",
+  "mark-few": "d2bcc33d705d904b98aa07e6dcd4d63469701f60",
   "matt-painter": "27548ecfb8d1af86a51029769e46ee4b18208f75",
+  "mick-cronin": "d97635a9fb257c75957f96d3a5bc948adcee86a4",
+  "mike-krzyzewski": "f31f7c879fd157064b6d7f98db94bee04cbbfc38",
+  "rick-pitino": "a649251ce466e30d01448b998273f19fa846795b",
   "roy-williams": "b38727fa7e100d854f2bd3009e937a984fef8981",
-  "scott-drew": "da54bf3bebf394892c73ef3d7608675ba43d031d"
+  "scott-drew": "da54bf3bebf394892c73ef3d7608675ba43d031d",
+  "tom-izzo": "b81cde3a543103bddf63b4d8575f54e9f67c8797",
+  "tony-bennett": "ca40541860c7b6474af151ce17e54c179fc6378a"
 }
