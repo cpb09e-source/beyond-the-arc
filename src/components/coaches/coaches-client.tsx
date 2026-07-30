@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
@@ -15,10 +15,13 @@ import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { PercentileChip } from "@/components/percentile-chip";
 import { ScopeCollapse, scopeSummary } from "@/components/filters/scope-collapse";
+import { CoachStatFilters, COACH_DRAWER_SLOT_ID, passesCoachFilters, coachFilterChips } from "@/components/coaches/coach-filters";
+import { StatChipStrip } from "@/components/filters/stat-chips";
+import type { RangeState } from "@/components/filters/range-row";
 import type { CoachRow } from "@/app/coaches/page";
 
 type SortKey = "name" | "team" | "conference" | "active" | "career_wins" | "career_winpct" | "seasons" | "schools" | "composite"
-  | "composite_per_season" | "conf_winpct" | "adj_net";
+  | "composite_per_season" | "conf_winpct" | "adj_net" | "tourney";
 type StatusFilter = "All" | "Active" | "Inactive";
 type TierFilter = "All" | "Power" | "Mid Major";
 
@@ -150,6 +153,37 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
     return Array.from(s).sort().map((t) => ({ value: t, label: t }));
   }, [rows]);
 
+  const [statFilters, setStatFilters] = useState<RangeState>({});
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  /**
+   * How many coaches survive a candidate stat-filter set, with every other
+   * scope control held as it is. Runs on each slider tick — cheap here because
+   * the whole 804-row index is already in memory and each predicate is a
+   * handful of numeric comparisons.
+   */
+  const previewCoachCount = useCallback((candidate: RangeState) => {
+    const q = query.trim().toLowerCase();
+    const confSet = confFilter.length === 0 ? null : new Set(confFilter);
+    const teamSet = teamFilter.length === 0 ? null : new Set(teamFilter);
+    let n = 0;
+    for (const r of rows) {
+      if (status === "Active" && !r.is_active) continue;
+      if (status === "Inactive" && r.is_active) continue;
+      if (teamSet && !(r.all_teams ?? []).some((t) => teamSet.has(t))) continue;
+      if (confSet && (!r.current_conference || !confSet.has(r.current_conference))) continue;
+      if (tier !== "All") {
+        const isPower = r.current_conference ? POWER_CONFS.has(r.current_conference) : false;
+        if (tier === "Power" && !isPower) continue;
+        if (tier === "Mid Major" && isPower) continue;
+      }
+      if (q && !r.name.toLowerCase().includes(q) && !(r.current_team ?? "").toLowerCase().includes(q)) continue;
+      if (!passesCoachFilters(r, candidate)) continue;
+      n++;
+    }
+    return n;
+  }, [rows, query, confFilter, teamFilter, tier, status]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const confSet = confFilter.length === 0 ? null : new Set(confFilter);
@@ -172,9 +206,10 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
         if (tier === "Mid Major" && isPower) return false;
       }
       if (q && !r.name.toLowerCase().includes(q) && !(r.current_team ?? "").toLowerCase().includes(q)) return false;
+      if (!passesCoachFilters(r, statFilters)) return false;
       return true;
     });
-  }, [rows, query, confFilter, teamFilter, tier, status]);
+  }, [rows, query, confFilter, teamFilter, tier, status, statFilters]);
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
@@ -192,6 +227,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
         case "composite_per_season": return r.composite_per_season ?? null;
         case "conf_winpct":    return r.conf_win_pct ?? null;
         case "adj_net":        return r.adj_net_avg ?? null;
+        case "tourney":        return r.tourney_rank_key ?? null;
       }
     }
     return [...filtered].sort((a, b) => {
@@ -332,6 +368,14 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
               )}
             </div>
 
+            <CoachStatFilters
+              state={statFilters}
+              onChange={(next) => { setStatFilters(next); setPage(1); }}
+              open={filtersOpen}
+              onOpenChange={setFiltersOpen}
+              previewCount={previewCoachCount}
+            />
+
             <button
               type="button"
               onClick={() => setCompareOpen(true)}
@@ -358,6 +402,13 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
               onClearTier={() => { setTier("All"); setPage(1); }}
               onRemoveTeam={(t) => { setTeamFilter(teamFilter.filter((x) => x !== t)); setPage(1); }}
               onRemoveConf={(c) => { setConfFilter(confFilter.filter((x) => x !== c)); setPage(1); }}
+            />
+            <StatChipStrip
+              chips={coachFilterChips(statFilters)}
+              onRemove={(k) => { const n = { ...statFilters }; delete n[k]; setStatFilters(n); setPage(1); }}
+              max={5}
+              onOverflow={() => setFiltersOpen(true)}
+              ariaLabel="Active coach stat filters"
             />
           </div>
 
@@ -413,6 +464,8 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
             </div>
           </div>
         </div>
+        {/* Where the Filters drawer expands — in flow, pushing the table down. */}
+        <div id={COACH_DRAWER_SLOT_ID} />
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-paper-deep/70">
@@ -425,6 +478,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                 <ThSort label="Win" active={sortBy==="career_winpct"} dir={sortDir} onClick={() => toggle("career_winpct","desc")} />
                 <ThSort label="Conf W%" active={sortBy==="conf_winpct"} dir={sortDir} onClick={() => toggle("conf_winpct","desc")} className="hidden md:table-cell" />
                 <ThSort label="Adj Net" active={sortBy==="adj_net"} dir={sortDir} onClick={() => toggle("adj_net","desc")} className="hidden md:table-cell" />
+                <ThSort label="March" active={sortBy==="tourney"} dir={sortDir} onClick={() => toggle("tourney","desc")} />
                 <ThSort label="Composite" active={sortBy==="composite"} dir={sortDir} onClick={() => toggle("composite","desc")} />
                 <ThSort label="Per Szn" active={sortBy==="composite_per_season"} dir={sortDir} onClick={() => toggle("composite_per_season","desc")} className="hidden lg:table-cell" />
                 <ThSort label="Seasons" active={sortBy==="seasons"} dir={sortDir} onClick={() => toggle("seasons","desc")} />
@@ -433,7 +487,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
             </thead>
             <tbody>
               {pageRows.length === 0 ? (
-                <tr><td colSpan={13} className="px-4 py-12 text-center text-ink-muted">No coaches match these filters.</td></tr>
+                <tr><td colSpan={14} className="px-4 py-12 text-center text-ink-muted">No coaches match these filters.</td></tr>
               ) : (
                 pageRows.map((r, i) => (
                   <tr key={`${r.slug}-${i}`} className={cn("transition-colors hover:bg-coral/5", i % 2 === 0 ? "bg-paper/70" : "bg-transparent")}>
@@ -470,6 +524,14 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                       <ValueChip
                         value={r.adj_net_avg != null ? (r.adj_net_avg > 0 ? "+" : "") + r.adj_net_avg.toFixed(1) : "—"}
                         pct={pcts.adjNet.get(r.slug)}
+                      />
+                    </Td>
+                    <Td className="text-right">
+                      <MarchCell
+                        apps={r.ncaa_appearances}
+                        s16={r.sweet_sixteens}
+                        f4={r.final_fours}
+                        titles={r.ncaa_titles}
                       />
                     </Td>
                     <Td className="text-right">
@@ -669,5 +731,39 @@ function CoachChips({
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * Tournament success in one cell: appearances as ticks, Sweet 16s filled,
+ * titles called out.
+ *
+ * Four counting stats (appearances / S16 / F4 / titles) would be four columns
+ * that mostly read zero. As a shape they fit in one and stay comparable — you
+ * can see that a coach goes often but shallow, or rarely but deep, without
+ * reading a number. The exact counts are in the tooltip and the sort is on the
+ * packed hierarchy (titles first), not on the tick count.
+ */
+function MarchCell({ apps, s16, f4, titles }: { apps: number; s16: number; f4: number; titles: number }) {
+  if (apps === 0) {
+    return <span className="text-ink-muted/50 tabular">—</span>;
+  }
+  const shown = Math.min(apps, 10);
+  const filled = Math.min(s16, shown);
+  return (
+    <span
+      className="inline-flex flex-col items-end gap-0.5 leading-tight"
+      title={`${apps} NCAA appearance${apps === 1 ? "" : "s"} · ${s16} Sweet 16${s16 === 1 ? "" : "s"} · ${f4} Final Four${f4 === 1 ? "" : "s"} · ${titles} title${titles === 1 ? "" : "s"}`}
+    >
+      <span className="inline-flex items-end gap-[2px] h-3.5">
+        {Array.from({ length: shown }, (_, i) => (
+          <span key={i} className={cn("w-[3px] rounded-sm", i < filled ? "h-3.5 bg-coral" : "h-2 bg-ink/20")} />
+        ))}
+      </span>
+      <span className="text-[0.62rem] text-ink-muted tabular whitespace-nowrap">
+        {apps}/{s16}
+        {titles > 0 && <span className="ml-1 text-coral font-bold">{titles}×</span>}
+      </span>
+    </span>
   );
 }

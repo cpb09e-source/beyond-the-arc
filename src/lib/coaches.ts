@@ -94,6 +94,8 @@ export type CoachSeason = {
   adj_de_pct?: number | null;         // adj_de percentile within the year (lower=better)
   adj_net?: number | null;            // adj_oe - adj_de
   adj_net_pct?: number | null;        // net percentile within the year (higher=better)
+  /** Play-style rates for the team this season. Null before 2014 / in 2021. */
+  style?: CoachStyle | null;
 };
 
 export type CoachSchoolStint = {
@@ -148,6 +150,24 @@ export type CoachIndexRow = {
   top25_seasons?: number;
   /** NCAA appearances / seasons coached — how reliably they get there. */
   ncaa_rate?: number | null;
+  /** Sweet 16s / seasons coached. */
+  s16_rate?: number | null;
+  /**
+   * Career play-style fingerprint: the mean of each rate across the seasons
+   * that have one. This is what makes "show me fast coaches who crash the
+   * glass" answerable. Validates against reputation — Tony Bennett comes out
+   * slowest of the well-known names at 60.6 possessions, Beilein highest from
+   * three at 42.1%, Sampson top of the offensive glass at 35.7%.
+   */
+  style_avg?: CoachStyle | null;
+  /**
+   * Single ordering for "tournament success", most significant first: titles,
+   * then finals, then Final Fours, then Sweet 16s, then appearances. Packed
+   * into one number so a table column can sort on it — comparing the tuple
+   * lexicographically is the intent, and base-100 packing gets that for free
+   * without a custom comparator. Counts are far below 100 in a 13-year window.
+   */
+  tourney_rank_key?: number;
   // Aggregate counts used by the head-to-head compare modal on /coaches.
   // All scoped to the 2013-26 data window.
   ncaa_titles: number;
@@ -200,6 +220,27 @@ type RatingsRow = {
   adj_de_pct: number | null;
   adj_net: number | null;
   adj_net_pct: number | null;
+  style: CoachStyle | null;
+};
+
+/**
+ * A season's play-style fingerprint, lifted straight off the team-season row.
+ *
+ * Every one of these is a rate, so averaging them across a career is
+ * meaningful in a way that a counting stat would not be. Percentages arrive
+ * from the export as either 0-1 or 0-100 depending on the field, so they are
+ * normalised to 0-100 once, here, rather than at each of the call sites.
+ */
+export type CoachStyle = {
+  pace: number | null;        // possessions per game
+  fg3a_rate: number | null;   // share of FGA from three
+  fta_rate: number | null;    // FTA / FGA
+  orb_pct: number | null;     // offensive rebound rate
+  tov_pct: number | null;     // own turnover rate
+  ast_pct: number | null;     // share of made FGs assisted
+  efg_def: number | null;     // opponent eFG
+  tov_def: number | null;     // opponent turnover rate (forced)
+  orb_def: number | null;     // opponent offensive rebound rate (allowed)
 };
 type RawSourceData = {
   history: Record<string, Record<string, SrSeason>>;   // { team: { year: SrSeason } }
@@ -234,6 +275,13 @@ async function loadRawSources(): Promise<RawSourceData> {
   // each year to compute percentiles. We bucket by year and then sort.
   type Raw = { team: string; year: number; bta: number | null; oe: number | null; de: number | null };
   const rawRows: Raw[] = [];
+  // Play style rides the same (team, year) join the ratings already use — the
+  // coach layer is the only place that knows which coach owned which season,
+  // so the fingerprint has to be assembled here rather than on the team side.
+  const styleByTeamYear = new Map<string, CoachStyle>();
+  /** Export writes some rates 0-1 and others 0-100. Normalise once. */
+  const asPct = (v: unknown): number | null =>
+    typeof v === "number" ? (v <= 1.5 ? v * 100 : v) : null;
   for (const t of teams) {
     const team = overrideTeam(t.name);
     const key = `${team}|${t.year}`;
@@ -241,6 +289,22 @@ async function loadRawSources(): Promise<RawSourceData> {
     const bta = (t as unknown as { bta_rtg?: number | null }).bta_rtg ?? null;
     const trank = (t as unknown as { team_trank_stats?: { record?: string | null; wins?: number | null; losses?: number | null; adjoe?: number | null; adjde?: number | null } | null }).team_trank_stats;
     rawRows.push({ team, year: t.year, bta, oe: trank?.adjoe ?? null, de: trank?.adjde ?? null });
+    {
+      const ss = (t as unknown as { team_season_stats?: Record<string, number | null> | null }).team_season_stats;
+      if (ss) {
+        styleByTeamYear.set(key, {
+          pace: typeof ss.pace === "number" ? ss.pace : null,
+          fg3a_rate: asPct(ss.fg3a_rate),
+          fta_rate: asPct(ss.fta_rate),
+          orb_pct: asPct(ss.orb_pct),
+          tov_pct: asPct(ss.tov_pct),
+          ast_pct: asPct(ss.ast_pct),
+          efg_def: asPct(ss.efg_pct_def),
+          tov_def: asPct(ss.tov_pct_def),
+          orb_def: asPct(ss.orb_pct_def),
+        });
+      }
+    }
     if (t.year === LATEST_YEAR) {
       meta.set(team, {
         conference: t.conference ?? null,
@@ -322,6 +386,7 @@ async function loadRawSources(): Promise<RawSourceData> {
       adj_de_pct: dePct.get(key) ?? null,
       adj_net: r.oe != null && r.de != null ? r.oe - r.de : null,
       adj_net_pct: netPct.get(key) ?? null,
+      style: styleByTeamYear.get(key) ?? null,
     });
   }
 
@@ -360,6 +425,7 @@ function flattenSeasons(raw: RawSourceData): CoachSeason[] {
         adj_de_pct: r?.adj_de_pct ?? null,
         adj_net: r?.adj_net ?? null,
         adj_net_pct: r?.adj_net_pct ?? null,
+        style: r?.style ?? null,
       });
     }
   }
@@ -1177,6 +1243,40 @@ function attachCareerAggregates(p: CoachProfile): void {
   const eligible = seasons.filter((s) => s.year !== 2020).length;
   const appearances = seasons.filter((s) => s.year !== 2020 && s.round != null).length;
   p.ncaa_rate = eligible > 0 ? appearances / eligible : null;
+  p.s16_rate = eligible > 0 ? p.sweet_sixteens / eligible : null;
+
+  // Career style: mean of each rate over the seasons that carry it. A coach
+  // with style data for 9 of 14 seasons gets the mean of 9 — same rule as the
+  // ratings average above, for the same reason.
+  const mean = (pick: (st: CoachStyle) => number | null): number | null => {
+    const vals: number[] = [];
+    for (const s of seasons) {
+      const v = s.style ? pick(s.style) : null;
+      if (typeof v === "number") vals.push(v);
+    }
+    if (vals.length === 0) return null;
+    return Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10;
+  };
+  p.style_avg = {
+    pace: mean((st) => st.pace),
+    fg3a_rate: mean((st) => st.fg3a_rate),
+    fta_rate: mean((st) => st.fta_rate),
+    orb_pct: mean((st) => st.orb_pct),
+    tov_pct: mean((st) => st.tov_pct),
+    ast_pct: mean((st) => st.ast_pct),
+    efg_def: mean((st) => st.efg_def),
+    tov_def: mean((st) => st.tov_def),
+    orb_def: mean((st) => st.orb_def),
+  };
+
+  // Titles > finals > Final Fours > Sweet 16s > appearances, packed base-100.
+  const finals = seasons.filter((s) => s.round === "Runner-up" || s.round === "Champion").length;
+  p.tourney_rank_key =
+    p.ncaa_titles * 1e8 +
+    finals * 1e6 +
+    p.final_fours * 1e4 +
+    p.sweet_sixteens * 1e2 +
+    p.ncaa_appearances;
 }
 
 export async function loadCoachIndex(): Promise<CoachIndexRow[]> {
