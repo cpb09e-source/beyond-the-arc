@@ -165,7 +165,7 @@
       "conf_wins": 9,
       "conf_losses": 9,
       "seed": 10,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Mick Cronin",
@@ -176,7 +176,7 @@
       "conf_wins": 15,
       "conf_losses": 3,
       "seed": 5,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Mick Cronin",
@@ -499,7 +499,7 @@
       "conf_wins": 9,
       "conf_losses": 9,
       "seed": 10,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Tom Crean",
@@ -789,7 +789,7 @@
       "conf_wins": 10,
       "conf_losses": 8,
       "seed": 9,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Jay Wright",
@@ -1101,7 +1101,7 @@
       "conf_wins": 11,
       "conf_losses": 7,
       "seed": 10,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Lon Kruger",
@@ -1112,7 +1112,7 @@
       "conf_wins": 12,
       "conf_losses": 6,
       "seed": 5,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Lon Kruger",
@@ -1279,7 +1279,7 @@
       "conf_wins": 8,
       "conf_losses": 10,
       "seed": 11,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Shaka Smart",
@@ -1903,7 +1903,7 @@
       "conf_wins": 11,
       "conf_losses": 7,
       "seed": 10,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Mark Fox",
@@ -2037,7 +2037,7 @@
       "conf_wins": 11,
       "conf_losses": 7,
       "seed": 8,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Mark Gottfried",
@@ -2048,7 +2048,7 @@
       "conf_wins": 9,
       "conf_losses": 9,
       "seed": 12,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Mark Gottfried",
@@ -2371,7 +2371,7 @@
       "conf_wins": 11,
       "conf_losses": 7,
       "seed": 3,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Scott Drew",
@@ -2505,7 +2505,7 @@
       "conf_wins": 11,
       "conf_losses": 7,
       "seed": 9,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Frank Haith",
@@ -2672,7 +2672,7 @@
       "conf_wins": 12,
       "conf_losses": 4,
       "seed": 5,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Shaka Smart",
@@ -2683,7 +2683,7 @@
       "conf_wins": 12,
       "conf_losses": 6,
       "seed": 7,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Will Wade",
@@ -2995,7 +2995,7 @@
       "conf_wins": 15,
       "conf_losses": 3,
       "seed": 6,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Tim Jankovich",
@@ -3285,7 +3285,7 @@
       "conf_wins": 13,
       "conf_losses": 3,
       "seed": 3,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Craig Neal",
@@ -3296,7 +3296,7 @@
       "conf_wins": 15,
       "conf_losses": 3,
       "seed": 7,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Craig Neal",
@@ -4689,7 +4689,7 @@
       "conf_wins": 13,
       "conf_losses": 3,
       "seed": 13,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Frank Haith",
@@ -5012,7 +5012,7 @@
       "conf_wins": 11,
       "conf_losses": 7,
       "seed": 11,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Andy Kennedy",
@@ -5157,7 +5157,7 @@
       "conf_wins": 10,
       "conf_losses": 8,
       "seed": 10,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Herb Sendek",
@@ -5636,7 +5636,7 @@
       "conf_wins": 11,
       "conf_losses": 7,
       "seed": 9,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Johnny Jones",
@@ -5937,7 +5937,7 @@
       "conf_wins": 10,
       "conf_losses": 8,
       "seed": 11,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Ed Cooley",
@@ -5948,7 +5948,7 @@
       "conf_wins": 11,
       "conf_losses": 7,
       "seed": 6,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Ed Cooley",
@@ -6238,7 +6238,7 @@
       "conf_wins": 14,
       "conf_losses": 2,
       "seed": 12,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Keith Dambrot",
@@ -6862,7 +6862,7 @@
       "conf_wins": 14,
       "conf_losses": 4,
       "seed": 2,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "John Thompson",
@@ -7174,7 +7174,7 @@
       "conf_wins": 10,
       "conf_losses": 8,
       "seed": 10,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Tad Boyle",
@@ -7185,7 +7185,7 @@
       "conf_wins": 10,
       "conf_losses": 8,
       "seed": 8,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Tad Boyle",
@@ -7341,7 +7341,7 @@
       "conf_wins": 13,
       "conf_losses": 5,
       "seed": 10,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Dave Rose",
@@ -7965,7 +7965,7 @@
       "conf_wins": 13,
       "conf_losses": 5,
       "seed": 3,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Mike Krzyzewski",
@@ -8288,7 +8288,7 @@
       "conf_wins": 12,
       "conf_losses": 6,
       "seed": 3,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Steve Prohm",
@@ -8444,7 +8444,7 @@
       "conf_wins": 12,
       "conf_losses": 6,
       "seed": 9,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Matt Painter",
@@ -8756,7 +8756,7 @@
       "conf_wins": 10,
       "conf_losses": 8,
       "seed": 9,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Chris Mullin",
@@ -9525,7 +9525,7 @@
       "conf_wins": 11,
       "conf_losses": 7,
       "seed": 11,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Tim Miles",
@@ -10138,7 +10138,7 @@
       "conf_wins": 12,
       "conf_losses": 6,
       "seed": 5,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Bo Ryan",
@@ -10461,7 +10461,7 @@
       "conf_wins": 10,
       "conf_losses": 8,
       "seed": 6,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Thad Matta",
@@ -10606,7 +10606,7 @@
       "conf_wins": 13,
       "conf_losses": 5,
       "seed": 6,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Steve Alford",
@@ -11230,7 +11230,7 @@
       "conf_wins": 14,
       "conf_losses": 2,
       "seed": 11,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Rick Byrd",
@@ -11252,7 +11252,7 @@
       "conf_wins": 11,
       "conf_losses": 5,
       "seed": 15,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Rick Byrd",
@@ -11397,7 +11397,7 @@
       "conf_wins": 11,
       "conf_losses": 5,
       "seed": 9,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Mike Lonergan",
@@ -11698,7 +11698,7 @@
       "conf_wins": 13,
       "conf_losses": 5,
       "seed": 5,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Travis Ford",
@@ -11709,7 +11709,7 @@
       "conf_wins": 8,
       "conf_losses": 10,
       "seed": 9,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Travis Ford",
@@ -11720,7 +11720,7 @@
       "conf_wins": 8,
       "conf_losses": 10,
       "seed": 9,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Travis Ford",
@@ -12344,7 +12344,7 @@
       "conf_wins": 17,
       "conf_losses": 1,
       "seed": 12,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Brad Underwood",
@@ -13414,7 +13414,7 @@
       "conf_wins": 11,
       "conf_losses": 5,
       "seed": 10,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Phil Martelli",
@@ -13581,7 +13581,7 @@
       "conf_wins": 11,
       "conf_losses": 7,
       "seed": 12,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Larry Shyatt",
@@ -14339,7 +14339,7 @@
       "conf_wins": 14,
       "conf_losses": 4,
       "seed": 4,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Bruce Weber",
@@ -14350,7 +14350,7 @@
       "conf_wins": 10,
       "conf_losses": 8,
       "seed": 9,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Bruce Weber",
@@ -14495,7 +14495,7 @@
       "conf_wins": 11,
       "conf_losses": 7,
       "seed": 7,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Mike Brey",
@@ -14651,7 +14651,7 @@
       "conf_wins": 17,
       "conf_losses": 1,
       "seed": 14,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Bob McKillop",
@@ -14673,7 +14673,7 @@
       "conf_wins": 14,
       "conf_losses": 4,
       "seed": 10,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Bob McKillop",
@@ -14807,7 +14807,7 @@
       "conf_wins": 12,
       "conf_losses": 6,
       "seed": 8,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Jamie Dixon",
@@ -15053,7 +15053,7 @@
       "conf_wins": 10,
       "conf_losses": 6,
       "seed": 5,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Dave Rice",
@@ -15521,7 +15521,7 @@
       "conf_wins": 13,
       "conf_losses": 5,
       "seed": 15,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Ron Verlin",
@@ -16380,7 +16380,7 @@
       "conf_wins": 12,
       "conf_losses": 4,
       "seed": 15,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "David Richman",
@@ -20124,7 +20124,7 @@
       "conf_wins": 12,
       "conf_losses": 6,
       "seed": 16,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Andrew Toole",
@@ -22130,7 +22130,7 @@
       "conf_wins": 14,
       "conf_losses": 4,
       "seed": 13,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Jim Hayford",
@@ -22286,7 +22286,7 @@
       "conf_wins": 12,
       "conf_losses": 3,
       "seed": 13,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Tommy Amaker",
@@ -22409,7 +22409,7 @@
       "conf_wins": 10,
       "conf_losses": 10,
       "seed": 16,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Ray Harper",
@@ -22956,7 +22956,7 @@
       "conf_wins": 13,
       "conf_losses": 3,
       "seed": 14,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Bryce Drew",
@@ -22978,7 +22978,7 @@
       "conf_wins": 13,
       "conf_losses": 3,
       "seed": 13,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Bryce Drew",
@@ -24527,7 +24527,7 @@
       "conf_wins": 10,
       "conf_losses": 6,
       "seed": 6,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Derek Kellogg",
@@ -24672,7 +24672,7 @@
       "conf_wins": 19,
       "conf_losses": 1,
       "seed": 13,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Wayne Tinkle",
@@ -27012,7 +27012,7 @@
       "conf_wins": 14,
       "conf_losses": 4,
       "seed": 13,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Marvin Menzies",
@@ -27023,7 +27023,7 @@
       "conf_wins": 12,
       "conf_losses": 4,
       "seed": 13,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Marvin Menzies",
@@ -27034,7 +27034,7 @@
       "conf_wins": 13,
       "conf_losses": 1,
       "seed": 15,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Marvin Menzies",
@@ -28919,7 +28919,7 @@
       "conf_wins": 11,
       "conf_losses": 7,
       "seed": 16,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Matt Brady",
@@ -29086,7 +29086,7 @@
       "conf_wins": 14,
       "conf_losses": 6,
       "seed": 16,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Randy Rahe",
@@ -31270,7 +31270,7 @@
       "conf_wins": 13,
       "conf_losses": 5,
       "seed": 15,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Mike Brennan",
@@ -32195,7 +32195,7 @@
       "conf_wins": 15,
       "conf_losses": 3,
       "seed": 16,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Roman Banks",
@@ -34067,7 +34067,7 @@
       "conf_wins": 14,
       "conf_losses": 4,
       "seed": 14,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Steve Hawkins",
@@ -34704,7 +34704,7 @@
       "conf_wins": 11,
       "conf_losses": 7,
       "seed": 14,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Bob Marlin",
@@ -35497,7 +35497,7 @@
       "conf_wins": 15,
       "conf_losses": 3,
       "seed": 14,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Mike McConathy",
@@ -35809,7 +35809,7 @@
       "conf_wins": 8,
       "conf_losses": 8,
       "seed": 16,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Cy Alexander",
@@ -36457,7 +36457,7 @@
       "conf_wins": 9,
       "conf_losses": 7,
       "seed": 15,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Will Brown",
@@ -36468,7 +36468,7 @@
       "conf_wins": 9,
       "conf_losses": 7,
       "seed": 16,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Will Brown",
@@ -36479,7 +36479,7 @@
       "conf_wins": 15,
       "conf_losses": 1,
       "seed": 14,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Will Brown",
@@ -36791,7 +36791,7 @@
       "conf_wins": 9,
       "conf_losses": 9,
       "seed": 16,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Fran O'Hanlon",
@@ -37081,7 +37081,7 @@
       "conf_wins": 12,
       "conf_losses": 2,
       "seed": 11,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Dave Paulsen",
@@ -38353,7 +38353,7 @@
       "conf_wins": 16,
       "conf_losses": 1,
       "seed": 14,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "LeVelle Moton",
@@ -41941,7 +41941,7 @@
       "conf_wins": 12,
       "conf_losses": 6,
       "seed": 12,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Nate Oats",
@@ -42086,7 +42086,7 @@
       "conf_wins": 6,
       "conf_losses": 10,
       "seed": 16,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Joe Callero",
@@ -42532,7 +42532,7 @@
       "conf_wins": 13,
       "conf_losses": 3,
       "seed": 13,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Scott Nagy",
@@ -43547,7 +43547,7 @@
       "conf_wins": 11,
       "conf_losses": 5,
       "seed": 16,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Cliff Ellis",
@@ -43558,7 +43558,7 @@
       "conf_wins": 12,
       "conf_losses": 6,
       "seed": 16,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Cliff Ellis",
@@ -44316,7 +44316,7 @@
       "conf_wins": 11,
       "conf_losses": 7,
       "seed": 15,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Tim Cluess",
@@ -46032,7 +46032,7 @@
       "conf_wins": 11,
       "conf_losses": 5,
       "seed": 15,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Mike Young",
@@ -46043,7 +46043,7 @@
       "conf_wins": 16,
       "conf_losses": 2,
       "seed": 12,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Mike Young",
@@ -46344,7 +46344,7 @@
       "conf_wins": 7,
       "conf_losses": 9,
       "seed": 15,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Rob Jeter",
@@ -47783,7 +47783,7 @@
       "conf_wins": 12,
       "conf_losses": 6,
       "seed": 14,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Bill Coen",
@@ -48666,7 +48666,7 @@
       "conf_wins": 11,
       "conf_losses": 5,
       "seed": 15,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Jeff Neubauer",
@@ -48989,7 +48989,7 @@
       "conf_wins": 8,
       "conf_losses": 8,
       "seed": 16,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Edward Joyner",
@@ -49769,7 +49769,7 @@
       "conf_wins": 16,
       "conf_losses": 2,
       "seed": 15,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Mike Davis",
@@ -50382,7 +50382,7 @@
       "conf_wins": 15,
       "conf_losses": 5,
       "seed": 13,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Steve Masiello",
@@ -52893,7 +52893,7 @@
       "conf_wins": 14,
       "conf_losses": 2,
       "seed": 11,
-      "round": "R32"
+      "round": "R64"
     },
     "2014": {
       "name": "Eran Ganot",
@@ -53227,7 +53227,7 @@
       "conf_wins": 11,
       "conf_losses": 5,
       "seed": 13,
-      "round": "R32"
+      "round": "R64"
     },
     "2016": {
       "name": "Russ Turner",
@@ -54600,7 +54600,7 @@
       "conf_wins": 14,
       "conf_losses": 2,
       "seed": 13,
-      "round": "R32"
+      "round": "R64"
     },
     "2015": {
       "name": "Monte Ross",
