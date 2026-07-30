@@ -131,6 +131,49 @@ export function coachFilterChips(state: RangeState): StatChip[] {
   return buildStatChips([], state, ORDER, (k) => BY_KEY.get(k)?.label ?? k);
 }
 
+/**
+ * Stats the table already shows in a column of their own. Filtering on Adj Net
+ * should not produce a second Adj Net column beside the first.
+ *
+ * The March counts are deliberately NOT here: the March cell renders them as a
+ * tick strip, which is a shape rather than a sortable number, so a coach who
+ * filters on Final Fours still has nowhere to read or order the actual count.
+ */
+const ALREADY_COLUMNED = new Set([
+  "composite", "per_season", "career_win_pct", "conf_win_pct", "adj_net_avg", "seasons",
+]);
+
+export type CoachStatColumn = { key: string; label: string };
+
+/**
+ * Bounded stats that deserve a column, in drawer order. Filtering on something
+ * you cannot then see is the gap this closes — you narrow to coaches who play
+ * fast and crash the glass, and the two numbers you chose them for come with
+ * them instead of staying behind in the drawer.
+ */
+export function activeCoachStatColumns(state: RangeState): CoachStatColumn[] {
+  return ALL_STATS
+    .filter((s) => isBoundActive(state[s.key]) && !ALREADY_COLUMNED.has(s.key))
+    .map((s) => ({ key: s.key, label: s.label }));
+}
+
+/** Rates that read as percentages; `pace` is possessions, so it stays bare. */
+const PCT_STATS = new Set([
+  "fg3a_rate", "fta_rate", "orb_pct", "tov_pct", "ast_pct",
+  "efg_def", "tov_def", "orb_def",
+  "career_win_pct", "conf_win_pct", "ncaa_rate", "s16_rate",
+]);
+const COUNT_STATS = new Set([
+  "seasons", "ncaa_appearances", "sweet_sixteens", "final_fours", "ncaa_titles", "top25_seasons",
+]);
+
+export function formatCoachStat(key: string, v: number | null): string {
+  if (v === null) return "—";
+  if (COUNT_STATS.has(key)) return String(v);
+  if (key === "adj_net_avg") return (v > 0 ? "+" : "") + v.toFixed(1);
+  return v.toFixed(1) + (PCT_STATS.has(key) ? "%" : "");
+}
+
 export const COACH_DRAWER_SLOT_ID = "coach-filters-slot";
 const PANEL_ID = "coach-filters-panel";
 const FIND_ID = "coach-filters-find";

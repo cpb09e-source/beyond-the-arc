@@ -15,13 +15,21 @@ import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { PercentileChip } from "@/components/percentile-chip";
 import { ScopeCollapse, scopeSummary } from "@/components/filters/scope-collapse";
-import { CoachStatFilters, COACH_DRAWER_SLOT_ID, passesCoachFilters, coachFilterChips } from "@/components/coaches/coach-filters";
+import {
+  CoachStatFilters, COACH_DRAWER_SLOT_ID, passesCoachFilters, coachFilterChips,
+  activeCoachStatColumns, coachStatValue, formatCoachStat,
+} from "@/components/coaches/coach-filters";
 import { StatChipStrip } from "@/components/filters/stat-chips";
 import type { RangeState } from "@/components/filters/range-row";
 import type { CoachRow } from "@/app/coaches/page";
 
+/**
+ * Fixed columns, plus `stat:<key>` for the columns a stat filter adds. The
+ * tagged form keeps the two kinds apart without a second piece of state, and
+ * lets a stat column be sorted the same way any other column is.
+ */
 type SortKey = "name" | "team" | "conference" | "active" | "career_wins" | "career_winpct" | "seasons" | "schools" | "composite"
-  | "composite_per_season" | "conf_winpct" | "adj_net" | "tourney";
+  | "composite_per_season" | "conf_winpct" | "adj_net" | "tourney" | "tourney_rec" | `stat:${string}`;
 type StatusFilter = "All" | "Active" | "Inactive";
 type TierFilter = "All" | "Power" | "Mid Major";
 
@@ -211,10 +219,25 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
     });
   }, [rows, query, confFilter, teamFilter, tier, status, statFilters]);
 
+  /**
+   * The columns the committed stat filters add, and the sort key that is
+   * actually in force.
+   *
+   * `effectiveSort` exists because clearing a filter takes its column away.
+   * Deriving the fallback here rather than resetting `sortBy` in an effect
+   * keeps the table sorted by something real on the very first render after
+   * the column goes, with no extra pass.
+   */
+  const statCols = useMemo(() => activeCoachStatColumns(statFilters), [statFilters]);
+  const statColKeys = useMemo(() => new Set(statCols.map((c) => c.key)), [statCols]);
+  const effectiveSort: SortKey =
+    sortBy.startsWith("stat:") && !statColKeys.has(sortBy.slice(5)) ? "composite" : sortBy;
+
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
     function key(r: CoachRow): string | number | boolean | null {
-      switch (sortBy) {
+      if (effectiveSort.startsWith("stat:")) return coachStatValue(r, effectiveSort.slice(5));
+      switch (effectiveSort) {
         case "name":           return (r.name.split(" ").pop() ?? r.name).toLowerCase();
         case "team":           return (r.current_team ?? "zzz").toLowerCase();
         case "conference":     return r.current_conference ? confDisplay(r.current_conference).toLowerCase() : "zzz";
@@ -228,6 +251,11 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
         case "conf_winpct":    return r.conf_win_pct ?? null;
         case "adj_net":        return r.adj_net_avg ?? null;
         case "tourney":        return r.tourney_rank_key ?? null;
+        // Wins first, then fewest losses. 20-6 outranks 20-14, and a coach who
+        // has never been leaves the column unranked rather than sorting as 0-0
+        // ahead of someone who went once and lost.
+        case "tourney_rec":    return r.ncaa_appearances > 0 ? r.tourney_wins * 100 - r.tourney_losses : null;
+        default:               return null;
       }
     }
     return [...filtered].sort((a, b) => {
@@ -241,7 +269,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
       const bl = (b.name.split(" ").pop() ?? b.name).toLowerCase();
       return al.localeCompare(bl);
     });
-  }, [filtered, sortBy, sortDir]);
+  }, [filtered, effectiveSort, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -249,9 +277,13 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
   const firstShown = sorted.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const lastShown = Math.min(safePage * pageSize, sorted.length);
 
+  // Against effectiveSort, not sortBy: after a stat column is filtered away the
+  // table falls back to Composite, and clicking the header that is visibly
+  // sorted has to reverse it rather than re-apply the direction it already has.
+  // Committing sortBy in both branches also clears the stale stat key.
   function toggle(k: SortKey, defaultDir: "asc" | "desc") {
-    if (sortBy === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortBy(k); setSortDir(defaultDir); }
+    setSortDir(effectiveSort === k ? (sortDir === "asc" ? "desc" : "asc") : defaultDir);
+    setSortBy(k);
   }
   function reset() { setQuery(""); setConfFilter([]); setTeamFilter([]); setTier("All"); setStatus("All"); setPage(1); setPageSize(100); }
 
@@ -283,8 +315,34 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
       perSeason: rank((r) => r.composite_per_season),
       conf: rank((r) => r.conf_win_pct),
       adjNet: rank((r) => r.adj_net_avg),
+      // Only among coaches who have been. A 0-0 chipped at the 30th percentile
+      // would read as a tournament result, and never qualifying is not one.
+      tourneyWins: rank((r) => (r.ncaa_appearances > 0 ? r.tourney_wins : null)),
     };
   }, [rows]);
+
+  /**
+   * Percentiles for the filter-added columns, on the same national basis.
+   *
+   * Keyed by stat so a column added and removed and added again costs one
+   * ranking pass, not one per render. Nothing is computed for a stat that has
+   * no column.
+   */
+  const statPcts = useMemo(() => {
+    const out = new Map<string, Map<string, number>>();
+    for (const c of statCols) {
+      const vals = rows
+        .map((r) => [r.slug, coachStatValue(r, c.key)] as const)
+        .filter((e): e is readonly [string, number] => typeof e[1] === "number")
+        .sort((a, b) => a[1] - b[1]);
+      const m = new Map<string, number>();
+      if (vals.length >= 2) {
+        vals.forEach(([slug], i) => m.set(slug, Math.round((i / (vals.length - 1)) * 100)));
+      }
+      out.set(c.key, m);
+    }
+    return out;
+  }, [rows, statCols]);
 
   // Collapsed-state read of the scope, same shape as /teams and /players.
   const scopeText = scopeSummary([
@@ -471,23 +529,33 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
             <thead className="bg-paper-deep/70">
               <tr className="border-b border-hairline text-left">
                 <Th className="w-10 text-center">#</Th>
-                <ThSort label="Coach" active={sortBy==="name"} dir={sortDir} onClick={() => toggle("name","asc")} align="left" />
+                <ThSort label="Coach" active={effectiveSort==="name"} dir={sortDir} onClick={() => toggle("name","asc")} align="left" />
                 <Th className="w-9">{""}</Th>
-                <ThSort label="Team" active={sortBy==="team"} dir={sortDir} onClick={() => toggle("team","asc")} align="left" className="hidden sm:table-cell" />
-                <ThSort label="Conf" active={sortBy==="conference"} dir={sortDir} onClick={() => toggle("conference","asc")} align="left" className="hidden sm:table-cell" />
-                <ThSort label="Win" active={sortBy==="career_winpct"} dir={sortDir} onClick={() => toggle("career_winpct","desc")} />
-                <ThSort label="Conf W%" active={sortBy==="conf_winpct"} dir={sortDir} onClick={() => toggle("conf_winpct","desc")} className="hidden md:table-cell" />
-                <ThSort label="Adj Net" active={sortBy==="adj_net"} dir={sortDir} onClick={() => toggle("adj_net","desc")} className="hidden md:table-cell" />
-                <ThSort label="March" active={sortBy==="tourney"} dir={sortDir} onClick={() => toggle("tourney","desc")} />
-                <ThSort label="Composite" active={sortBy==="composite"} dir={sortDir} onClick={() => toggle("composite","desc")} />
-                <ThSort label="Per Szn" active={sortBy==="composite_per_season"} dir={sortDir} onClick={() => toggle("composite_per_season","desc")} className="hidden lg:table-cell" />
-                <ThSort label="Seasons" active={sortBy==="seasons"} dir={sortDir} onClick={() => toggle("seasons","desc")} />
-                <ThSort label="Record" active={sortBy==="career_wins"} dir={sortDir} onClick={() => toggle("career_wins","desc")} />
+                <ThSort label="Team" active={effectiveSort==="team"} dir={sortDir} onClick={() => toggle("team","asc")} align="left" className="hidden sm:table-cell" />
+                <ThSort label="Conf" active={effectiveSort==="conference"} dir={sortDir} onClick={() => toggle("conference","asc")} align="left" className="hidden sm:table-cell" />
+                <ThSort label="Win" active={effectiveSort==="career_winpct"} dir={sortDir} onClick={() => toggle("career_winpct","desc")} />
+                <ThSort label="Conf W%" active={effectiveSort==="conf_winpct"} dir={sortDir} onClick={() => toggle("conf_winpct","desc")} className="hidden md:table-cell" />
+                <ThSort label="Adj Net" active={effectiveSort==="adj_net"} dir={sortDir} onClick={() => toggle("adj_net","desc")} className="hidden md:table-cell" />
+                <ThSort label="March" active={effectiveSort==="tourney"} dir={sortDir} onClick={() => toggle("tourney","desc")} />
+                <ThSort label="NCAA Rec" active={effectiveSort==="tourney_rec"} dir={sortDir} onClick={() => toggle("tourney_rec","desc")} />
+                {statCols.map((c) => (
+                  <ThSort
+                    key={c.key}
+                    label={c.label}
+                    active={effectiveSort === `stat:${c.key}`}
+                    dir={sortDir}
+                    onClick={() => toggle(`stat:${c.key}`, "desc")}
+                  />
+                ))}
+                <ThSort label="Composite" active={effectiveSort==="composite"} dir={sortDir} onClick={() => toggle("composite","desc")} />
+                <ThSort label="Per Szn" active={effectiveSort==="composite_per_season"} dir={sortDir} onClick={() => toggle("composite_per_season","desc")} className="hidden lg:table-cell" />
+                <ThSort label="Seasons" active={effectiveSort==="seasons"} dir={sortDir} onClick={() => toggle("seasons","desc")} />
+                <ThSort label="Record" active={effectiveSort==="career_wins"} dir={sortDir} onClick={() => toggle("career_wins","desc")} />
               </tr>
             </thead>
             <tbody>
               {pageRows.length === 0 ? (
-                <tr><td colSpan={14} className="px-4 py-12 text-center text-ink-muted">No coaches match these filters.</td></tr>
+                <tr><td colSpan={14 + statCols.length} className="px-4 py-12 text-center text-ink-muted">No coaches match these filters.</td></tr>
               ) : (
                 pageRows.map((r, i) => (
                   <tr key={`${r.slug}-${i}`} className={cn("transition-colors hover:bg-coral/5", i % 2 === 0 ? "bg-paper/70" : "bg-transparent")}>
@@ -534,6 +602,20 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                         titles={r.ncaa_titles}
                       />
                     </Td>
+                    <Td className="text-right">
+                      <ValueChip
+                        value={r.ncaa_appearances > 0 ? `${r.tourney_wins}-${r.tourney_losses}` : "—"}
+                        pct={pcts.tourneyWins.get(r.slug)}
+                      />
+                    </Td>
+                    {statCols.map((c) => (
+                      <Td key={c.key} className="text-right">
+                        <ValueChip
+                          value={formatCoachStat(c.key, coachStatValue(r, c.key))}
+                          pct={statPcts.get(c.key)?.get(r.slug)}
+                        />
+                      </Td>
+                    ))}
                     <Td className="text-right">
                       <ValueChip
                         value={r.composite_score != null ? r.composite_score.toFixed(1) : "—"}

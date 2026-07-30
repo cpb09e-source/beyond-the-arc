@@ -174,6 +174,14 @@ export type CoachIndexRow = {
   final_fours: number;          // F4 + Runner-up + Champion
   sweet_sixteens: number;       // Sweet 16 + Elite Eight + F4 + Runner-up + Champion
   ncaa_appearances: number;     // seasons with any non-null tournament round
+  /**
+   * Actual NCAA Tournament game record, counted off the bracket in
+   * `tournament-games.json` rather than inferred from the round label. See
+   * `attachTournamentRecord` — the round field is wrong for every 2013-15 R64
+   * loser, so inferring would hand 96 coach-seasons a win they never played.
+   */
+  tourney_wins: number;
+  tourney_losses: number;
   power_reg_champs: number;     // reg_season_conf_champ AND conference in POWER_CONFS
   reg_season_champs: number;    // reg_season_conf_champ across ALL conferences
   twenty_win_seasons: number;   // any season with wins >= 20
@@ -631,6 +639,9 @@ function profilesFromSeasons(seasons: SeasonWithCoach[], raw: RawSourceData): Co
       final_fours,
       sweet_sixteens,
       ncaa_appearances,
+      // Filled by attachTournamentRecord once the bracket lookup is built.
+      tourney_wins: 0,
+      tourney_losses: 0,
       power_reg_champs,
       reg_season_champs,
       twenty_win_seasons,
@@ -1188,6 +1199,7 @@ export async function loadAllCoachProfiles(): Promise<CoachProfile[]> {
   const gamesLookup = buildGamesByTeamYear(tGames);
   for (const p of profiles) {
     p.composite_score = computeCompositeScore(p, gamesLookup);
+    attachTournamentRecord(p, gamesLookup);
     attachCareerAggregates(p);
   }
   return profiles;
@@ -1366,35 +1378,53 @@ const BART_TO_SR_ALIAS: Record<string, string> = {
   "Grambling St.":            "Grambling",
 };
 
+/**
+ * Every normalized name we would accept for a Bart school, most specific
+ * first. Shared by the lookup and the win/loss test below so both agree on
+ * which SR row "N.C. State" is.
+ */
+function srCandidates(team: string): string[] {
+  const out = [normSchool(team)];
+  // Hand-curated aliases for schools where Bart and SR use materially
+  // different names (UConn ↔ Connecticut, UNC ↔ North Carolina, etc).
+  const srAlias = BART_TO_SR_ALIAS[team];
+  if (srAlias) out.push(normSchool(srAlias));
+  // Bart uses "Michigan St." while SR uses "Michigan State". 62 schools
+  // differ on this suffix alone. Try the expanded form before giving up.
+  if (/\bSt\.$/.test(team)) out.push(normSchool(team.replace(/\bSt\.$/, "State")));
+  return out;
+}
+
+/** The games, plus the normalized name they were found under. */
+function resolveTeamYear(
+  lookup: Map<string, TourneyGame[]>,
+  team: string,
+  year: number,
+): { key: string; games: TourneyGame[] } | null {
+  for (const key of srCandidates(team)) {
+    const games = lookup.get(`${key}|${year}`);
+    if (games) return { key, games };
+  }
+  return null;
+}
+
 export function gamesForTeamYear(
   lookup: Map<string, TourneyGame[]>,
   team: string,
   year: number,
 ): TourneyGame[] {
-  const direct = lookup.get(`${normSchool(team)}|${year}`);
-  if (direct) return direct;
-
-  // Hand-curated aliases for schools where Bart and SR use materially
-  // different names (UConn ↔ Connecticut, UNC ↔ North Carolina, etc).
-  const srAlias = BART_TO_SR_ALIAS[team];
-  if (srAlias) {
-    const aliased = lookup.get(`${normSchool(srAlias)}|${year}`);
-    if (aliased) return aliased;
-  }
-
-  // Bart uses "Michigan St." while SR uses "Michigan State". 62 schools
-  // differ on this suffix alone. Try the expanded form before giving up.
-  if (/\bSt\.$/.test(team)) {
-    const expanded = team.replace(/\bSt\.$/, "State");
-    const aliased = lookup.get(`${normSchool(expanded)}|${year}`);
-    if (aliased) return aliased;
-  }
-  return [];
+  return resolveTeamYear(lookup, team, year)?.games ?? [];
 }
 
 /**
- * NCAA Tournament wins for a coach across the data window. Each round reached
- * implies a fixed number of wins (R64=0, R32=1, S16=2, E8=3, F4=4, NF=5, C=6).
+ * Wins a round label implies (R64=0, R32=1, S16=2, E8=3, F4=4, NF=5, C=6).
+ *
+ * ONLY a fallback. `round` is not trustworthy on its own: in 2013, 2014 and
+ * 2015 every single R64 loser — 32 per year, 96 in all — is labelled "R32",
+ * so this table would credit each of them with a win they never played. The
+ * bracket in `tournament-games.json` is complete for those years (63 games,
+ * correct shape) and disagrees with the label in exactly those 96 rows, which
+ * is how the bug was found. Games win wherever we have them.
  */
 const ROUND_WINS_LOOKUP: Record<TourneyRound, number> = {
   "First Four": 0,
@@ -1406,11 +1436,41 @@ const ROUND_WINS_LOOKUP: Record<TourneyRound, number> = {
   "Runner-up": 5,
   "Champion": 6,
 };
+
+/**
+ * Career NCAA Tournament record, counted off the bracket.
+ *
+ * Counting games rather than reading the round label also gets three things
+ * right that the label cannot express: a First Four win (the label only
+ * records where a team was eliminated), a title run's 6-0 rather than 6-1,
+ * and Oregon's 2021 no-contest against VCU, which advanced them without a
+ * game and is not a win in the record book.
+ *
+ * The (team, year) join resolves for 824 of 880 appearances. The 56 that miss
+ * are small schools whose SR name we have no alias for; they fall back to the
+ * round label, which for a one-and-done mid-major is nearly always right.
+ */
+function attachTournamentRecord(p: CoachProfile, lookup: Map<string, TourneyGame[]>): void {
+  let wins = 0, losses = 0;
+  for (const s of p.by_year) {
+    if (s.round == null) continue;
+    const hit = resolveTeamYear(lookup, s.team, s.year);
+    if (!hit) {
+      wins += ROUND_WINS_LOOKUP[s.round];
+      losses += s.round === "Champion" ? 0 : 1;
+      continue;
+    }
+    for (const g of hit.games) {
+      if (normSchool(g.winner.school) === hit.key) wins++;
+      else losses++;
+    }
+  }
+  p.tourney_wins = wins;
+  p.tourney_losses = losses;
+}
+
 export function tournamentWinsForCoach(profile: CoachProfile): number {
-  return profile.by_year.reduce(
-    (sum, s) => sum + (s.round ? ROUND_WINS_LOOKUP[s.round] : 0),
-    0,
-  );
+  return profile.tourney_wins;
 }
 
 /**
