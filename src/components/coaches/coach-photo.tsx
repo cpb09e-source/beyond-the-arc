@@ -1,0 +1,77 @@
+"use client";
+
+import { useState } from "react";
+import photoMap from "@/data/coach-photos.json";
+import { cn } from "@/lib/utils";
+
+const PHOTOS = photoMap as Record<string, string>;
+
+function initials(name: string): string {
+  const parts = name
+    .replace(/[^A-Za-z\s.'-]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
+}
+
+/**
+ * CoachPhoto — the headshot if we have one, otherwise an initials monogram.
+ * Circular crop, same treatment as PlayerPhoto.
+ *
+ * Keyed by SLUG rather than an id: coaches have no numeric key, and the slug is
+ * already the stable identifier the URL uses. Photos are added by hand, so the
+ * manifest will be sparse for a long time — the monogram is the normal state
+ * here, not an edge case, and it has to look deliberate rather than broken.
+ */
+export function CoachPhoto({
+  slug,
+  name,
+  size = 48,
+  className,
+}: {
+  slug: string;
+  name: string;
+  size?: number;
+  className?: string;
+}) {
+  // Two variants per coach, same 60px threshold as the players. Table rows and
+  // list avatars take the 240x174 thumb; only a profile hero is big enough to
+  // need the 600x436 source.
+  const fullSrc = PHOTOS[slug] ?? null;
+  const src = fullSrc ? (size <= 60 ? fullSrc.replace(/\.webp$/, "-sm.webp") : fullSrc) : null;
+  const [errored, setErrored] = useState(false);
+
+  if (src && !errored) {
+    return (
+      <img
+        src={src}
+        alt={`${name} headshot`}
+        width={size}
+        height={size}
+        loading="lazy"
+        decoding="async"
+        onError={() => setErrored(true)}
+        className={cn(
+          "inline-block object-cover object-top rounded-full bg-paper-deep shrink-0 max-w-none",
+          className,
+        )}
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center justify-center rounded-full bg-paper-deep text-ink-muted font-display font-medium shrink-0 select-none",
+        className,
+      )}
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
+      aria-label={`${name} (no photo)`}
+    >
+      {initials(name)}
+    </span>
+  );
+}

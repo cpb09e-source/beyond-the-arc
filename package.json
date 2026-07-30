@@ -12,6 +12,7 @@
     "sync:bart": "tsx scripts/sync-bart.mts",
     "derive:positions": "tsx scripts/derive-positions.mts",
     "fetch:photos": "node scripts/fetch-player-images.mjs",
+    "photos:coaches": "node scripts/optimize-coach-photos.mjs",
     "snapshot:coaches": "node scripts/snapshot-coaches.mjs",
     "snapshot:coach-history": "node scripts/snapshot-historical-coaches.mjs",
     "export:data": "tsx scripts/export-static-data.mts",

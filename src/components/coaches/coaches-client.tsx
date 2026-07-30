@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { PercentileChip } from "@/components/percentile-chip";
+import { CoachPhoto } from "@/components/coaches/coach-photo";
 import { ScopeCollapse, scopeSummary } from "@/components/filters/scope-collapse";
 import {
   CoachStatFilters, COACH_DRAWER_SLOT_ID, passesCoachFilters, coachFilterChips,
@@ -563,8 +564,12 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                       {(safePage - 1) * pageSize + i + 1}
                     </Td>
                     <Td>
-                      <Link href={`/coaches/${coachSlug(r.name)}/`} className="text-ink hover:text-coral transition-colors">
-                        {r.name}
+                      <Link href={`/coaches/${coachSlug(r.name)}/`} className="inline-flex items-center gap-2 text-ink hover:text-coral transition-colors">
+                        <CoachPhoto slug={r.slug} name={r.name} size={28} />
+                        {/* The avatar took enough width to start wrapping
+                            two-word names onto two lines. The table already
+                            scrolls horizontally, so widen rather than wrap. */}
+                        <span className="whitespace-nowrap">{r.name}</span>
                       </Link>
                     </Td>
                     <Td className="text-center">
