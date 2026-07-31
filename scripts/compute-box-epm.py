@@ -174,19 +174,42 @@ def main():
 
     def fit_set(cols, label):
         """Standardize on training rows, fit off/def, return predictions for all."""
+        # At damp 0 the column is REMOVED rather than zeroed after fitting, and
+        # the difference is not cosmetic.
+        #
+        # Zeroing afterwards was correct while team_adj_net was the only
+        # team-shaped feature. It no longer is: `opp` (strength of schedule)
+        # arrived with the CBBD block and correlates 0.446 with it, so ridge
+        # splits the credit between the two — and deleting team_adj_net's share
+        # afterwards deleted part of the SCHEDULE adjustment with it, while
+        # leaving every other coefficient estimated conditional on a team term
+        # that no longer existed.
+        #
+        # Measured on the prior's conference gap (high-major minus everyone
+        # else), against the +1.31 that prior-free RAPM independently produces:
+        #
+        #     damped after the fit   -0.066   <- backwards; mid-majors rated higher
+        #     dropped before the fit +1.388   <- matches RAPM
+        #
+        # That backwards gap is what put mid-major stat-stuffers near the top of
+        # the board and pushed them HIGHER as lambda rose, since higher lambda
+        # leans harder on the prior.
+        if TEAM_DAMP == 0.0 and TEAM_FEATURE in cols:
+            cols = [c for c in cols if c != TEAM_FEATURE]
         Xtr_raw = df.loc[train, cols]
         mu = Xtr_raw.mean()
         sd = Xtr_raw.std(ddof=0).replace(0, 1.0)
         design = lambda frame: ((frame[cols].fillna(mu) - mu) / sd).to_numpy(dtype=float)
         Xtr, Xall = design(df.loc[train]), design(df)
-        ti = cols.index(TEAM_FEATURE)
+        ti = cols.index(TEAM_FEATURE) if TEAM_FEATURE in cols else None
         out = {}
         for target in ("off", "def"):
             y = df.loc[train, target].to_numpy(dtype=float)
             best = max(lam_grid, key=lambda L: cv_r2(Xtr, y, w, L))
             coef, ybar = ridge_fit(Xtr, y, best, w)
-            raw_team = coef[ti]
-            coef[ti] *= TEAM_DAMP
+            raw_team = coef[ti] if ti is not None else 0.0
+            if ti is not None:
+                coef[ti] *= TEAM_DAMP
             out[target] = Xall @ coef + ybar
             # R2 is reported for the DAMPED model — the one that actually ships.
             # It will read lower than the undamped fit, and should: the labels
@@ -194,7 +217,7 @@ def main():
             # turning down, so a better fit here would mean a worse metric.
             print(f"  {label:6s} {target.upper():3s}  lambda={best:<5} "
                   f"train_R2={r2(y, Xtr @ coef + ybar, w):.3f}  cv_R2={cv_r2(Xtr, y, w, best):.3f}"
-                  f"  team coef {raw_team:+.3f} -> {coef[ti]:+.3f}")
+                  f"  team {'dropped' if ti is None else f'{raw_team:+.3f} -> {coef[ti]:+.3f}'}")
         return out
 
     rich = fit_set(FEATURES, "rich")

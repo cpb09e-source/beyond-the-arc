@@ -194,19 +194,38 @@ def main():
     #     2026     .01381   .02035  .02328  .02148  .01806  .01357  .01046
     #     2025     .01322   .02027  .02403  .02247  .01886  .01419  .01106
     #
-    # Both seasons peak at 500, independently, and the curve is cleanly
-    # unimodal. The old 12000 sat on the far over-shrunk shoulder and gave up
-    # about 70% of the held-out signal, squashing everyone toward the box prior.
+    # (Those figures predate the prior fix; re-run the tuner after changing the
+    # prior. The shape is what matters and it is stable: a broad peak in the
+    # low thousands, with 12000 far out on the over-shrunk shoulder.)
     #
     # The absolute R2 looks tiny because a single stint is a handful of
     # possessions and largely unpredictable; what matters is the ordering.
+    #
+    # SHIPPING 4000, ABOVE THE HELD-OUT PEAK, ON PURPOSE. The tuner also reports
+    # split-half player reliability — fit odd games and even games separately,
+    # then correlate the two sets of player coefficients:
+    #
+    #     lambda        500    1500    4000   12000
+    #     split-half   .501    .753    .906    .979
+    #
+    # At 1500 a quarter of the ranking is fold-dependent noise, and it shows:
+    # Devin McGlockton came out ahead of Cooper Flagg in 2024-25. At 4000 Flagg
+    # is first, which is also what the voters said. The cost is 5% of held-out
+    # R2.
+    #
+    # Held-out prediction keeps favouring a looser fit because five teammates
+    # share every possession: a loose fit scores well by getting the LINEUP
+    # right while the split of credit inside it stays arbitrary. A leaderboard
+    # needs the split, so reliability gets a vote. (Reliability alone would run
+    # to infinity — at huge lambda both halves collapse onto the same prior and
+    # agree about the prior, not the player.)
     #
     # NOT tuned on team reconstruction (summing a team's players back to its net
     # rating), even though that is a tempting external yardstick: it improves
     # monotonically as lambda falls, because at lambda -> 0 the regression
     # reproduces stint outcomes by construction. It measures how much shrinkage
     # was applied, not how much of it was correct.
-    ap.add_argument("--lam", type=float, default=1500.0)
+    ap.add_argument("--lam", type=float, default=4000.0)
     ap.add_argument("--priors", type=str, default=None,
                     help="CSV with playerId,priorOff,priorDef (per-100 vs avg)")
     ap.add_argument("--out", type=str, default="epm.csv",
