@@ -128,8 +128,45 @@ def luck_adjust(stints: pd.DataFrame, players: pd.DataFrame):
     return stints, True
 
 
-def build_design(stints: pd.DataFrame):
-    """Two observations per stint -> sparse X, y, weights, and player index."""
+def conference_flags(season: int):
+    """gameId -> True when both teams share a conference, from CBBD's box archive.
+
+    Used to upweight NON-conference games. Every valid stint joins (verified
+    214,113/214,113 on 2026); 42% of games are non-conference.
+    """
+    import json
+    p = ROOT / "data" / "cbbd" / str(season) / "box-players-full.json.gz"
+    if not p.exists():
+        return None
+    with gzip.open(p, "rt", encoding="utf-8") as f:
+        games = json.load(f)
+    return {g["gameId"]: bool(g.get("conferenceGame")) for g in games}
+
+
+def build_design(stints: pd.DataFrame, conf: dict | None = None, nonconf_w: float = 1.0):
+    """Two observations per stint -> sparse X, y, weights, and player index.
+
+    INTER-CONFERENCE ANCHORING (nonconf_w > 1).
+    ------------------------------------------
+    A player's coefficient is only comparable across conferences because the
+    conferences are connected — and they are connected ONLY by non-conference
+    games. Inside the Southland every possession is Southland-on-Southland, so
+    the regression can rank those players against each other perfectly while
+    having almost nothing to say about what a Southland possession is worth
+    against a Big Ten one. The handful of November games carries that entire
+    burden, and they are outnumbered.
+
+    So weight non-conference observations up. Their outcomes then count for more
+    in every player's coefficient, which is exactly where a mid-major star's
+    rating should be tested.
+
+    Weights are RENORMALIZED to preserve the total, because lambda is defined
+    against the weighted sum: simply multiplying some rows up would also lower
+    the effective penalty, and the comparison would confound anchoring with
+    shrinkage.
+    """
+    if conf is None or nonconf_w == 1.0:
+        conf, nonconf_w = None, 1.0
     # Collect the player universe from the lineups themselves.
     ids = set()
     for col in ("home5", "away5"):
@@ -139,10 +176,10 @@ def build_design(stints: pd.DataFrame):
     n_p = len(pidx)
 
     rows, cols, vals = [], [], []
-    y, w = [], []
+    y, w, wraw = [], [], []
     r = 0
 
-    def add_obs(off_five, def_five, pts, poss, is_home_off):
+    def add_obs(off_five, def_five, pts, poss, is_home_off, wmul=1.0):
         nonlocal r
         if poss < MIN_POSS_STINT:
             return
@@ -153,17 +190,27 @@ def build_design(stints: pd.DataFrame):
         if is_home_off:
             rows.append(r); cols.append(2 * n_p); vals.append(1.0)              # HCA
         y.append(100.0 * pts / poss)
-        w.append(poss)
+        w.append(poss * wmul)
+        wraw.append(poss)
         r += 1
 
     for t in stints.itertuples(index=False):
         h5 = [int(x) for x in str(t.home5).split(";")]
         a5 = [int(x) for x in str(t.away5).split(";")]
-        add_obs(h5, a5, t.ptsHome, t.possHome, True)
-        add_obs(a5, h5, t.ptsAway, t.possAway, False)
+        # conf.get(...) defaults True so an unmatched game is treated as
+        # conference play — i.e. never silently promoted by a join miss.
+        wmul = 1.0 if conf is None else (1.0 if conf.get(t.gameId, True) else nonconf_w)
+        add_obs(h5, a5, t.ptsHome, t.possHome, True, wmul)
+        add_obs(a5, h5, t.ptsAway, t.possAway, False, wmul)
 
     X = sparse.csr_matrix((vals, (rows, cols)), shape=(r, 2 * n_p + 1))
-    return X, np.asarray(y), np.asarray(w), pidx
+    w = np.asarray(w)
+    if conf is not None and nonconf_w != 1.0:
+        # Preserve the total weight so lambda keeps its meaning. Without this,
+        # upweighting rows also lowers the effective penalty and the comparison
+        # would confound anchoring with shrinkage.
+        w = w * (float(np.sum(wraw)) / float(np.sum(w)))
+    return X, np.asarray(y), w, pidx
 
 
 def solve(X, y, w, lam: float, prior: np.ndarray | None = None):
@@ -230,6 +277,20 @@ def main():
                     help="CSV with playerId,priorOff,priorDef (per-100 vs avg)")
     ap.add_argument("--out", type=str, default="epm.csv",
                     help="output filename inside data/cbbd/<season>/ (default epm.csv)")
+    # 2.0 by 5-fold held-out games, ALWAYS scored on raw possession weights so
+    # the training weights cannot rig the comparison:
+    #     x1 .02103   x2 .02144   x3 .02139   x5 .02110
+    # A small real gain, not a cure. It pushes the mid-major/role-player names
+    # down (Fland 17->27, Terry Anderson 11->17) without disturbing the top
+    # (Boozer 1, Lendeborg 2), and past x3 it starts costing top-25 high-major
+    # share and adding spread — reweighting the same games buys information only
+    # up to a point, because it creates no new cross-conference constraints.
+    ap.add_argument("--nonconf-weight", type=float, default=2.0,
+                    help="weight multiplier on NON-conference observations; "
+                         "1.0 = off. Conferences are connected only by these "
+                         "games, so they carry all the cross-conference "
+                         "calibration. Weights are renormalized to keep lambda "
+                         "comparable.")
     ap.add_argument("--no-luck", dest="luck", action="store_false",
                     help="fit on raw points instead of luck-adjusted points")
     args = ap.parse_args()
@@ -240,7 +301,12 @@ def main():
     if args.luck:
         stints, _ = luck_adjust(stints, players)
 
-    X, y, w, pidx = build_design(stints)
+    conf = conference_flags(args.season) if args.nonconf_weight != 1.0 else None
+    if conf is not None:
+        nc = sum(1 for v in conf.values() if not v)
+        print(f"  anchoring: non-conference games weighted x{args.nonconf_weight:g} "
+              f"({nc:,} of {len(conf):,} games)")
+    X, y, w, pidx = build_design(stints, conf, args.nonconf_weight)
     n_p = len(pidx)
     print(f"  design: {X.shape[0]:,} obs x {X.shape[1]:,} cols ({n_p:,} players)")
 
