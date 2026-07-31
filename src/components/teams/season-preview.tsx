@@ -33,6 +33,9 @@ type PreviewPlayer = {
   ast: number | null; astP: number | null;
   fg3: number | null; fg3P: number | null;
   ft: number | null; ftP: number | null;
+  /** Last season's shooting/usage, same carryover as every other column here. */
+  ts: number | null; tsP: number | null;
+  usg: number | null; usgP: number | null;
 };
 type PreviewFile = {
   label: string;
@@ -72,12 +75,16 @@ export function SeasonPreview({ teamName }: { teamName: string }) {
     // It used to be hard-coded null while the file still shipped a `prtg` the
     // table never read, which left the impact column blank for every roster.
     epm: p.epm,
-    // Genuinely unavailable: both need this season's play-by-play.
-    ts_pct: null, usg_pct: null,
+    // Also last season's, and no more "unavailable" than PPG is. The comment
+    // here used to say both needed this season's play-by-play; they do not —
+    // they sit in the rank files next to the stats already being read, keyed as
+    // ts_pct and `usage`. Portal-only players (not in Bart's feed) still come
+    // through null, since their On3 line carries neither.
+    ts_pct: p.ts, usg_pct: p.usg,
     pcts: {
       pir: p.pirP, pts: p.ptsP, reb: p.rebP,
       ast: p.astP, fg3_pct: p.fg3P, ft_pct: p.ftP,
-      epm: p.epmP,
+      epm: p.epmP, ts_pct: p.tsP, usg_pct: p.usgP,
     },
   }));
 

@@ -152,6 +152,7 @@ async function main() {
   const NULL_STATS = {
     epm: null, epmP: null, pir: null, pirP: null, pts: null, ptsP: null,
     reb: null, rebP: null, ast: null, astP: null, fg3: null, fg3P: null, ft: null, ftP: null,
+    ts: null, tsP: null, usg: null, usgP: null,
   };
   const statsFor = (bartId) => {
     try {
@@ -173,6 +174,11 @@ async function main() {
         ast: round1(v("ast_pg")), astP: p("ast_pg"),
         fg3: asFrac("fg3_pct"), fg3P: p("fg3_pct"),
         ft: asFrac("ft_pct"), ftP: p("ft_pct"),
+        // The rank files key usage as `usage`, not `usage_pct` — sampled 259
+        // players with a 2026 season: 259 carried ts_pct, ZERO carried
+        // usage_pct. Both are stored 0-100 and the table wants 0-1.
+        ts: asFrac("ts_pct"), tsP: p("ts_pct"),
+        usg: asFrac("usage"), usgP: p("usage"),
       };
     } catch { return null; }
   };
