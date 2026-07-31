@@ -42,7 +42,7 @@ export const STAT_META: Record<string, StatMeta> = {
   // BTA PRTG used to sit here alongside EPM. Two composite impact ratings in
   // the same best/worst list said the same thing twice and disagreed with each
   // other; EPM is the one the whole site ranks on now.
-  epm:       { label: "ARC",      format: "num" },
+  epm:       { label: "EPM",      format: "num" },
 };
 
 export function fmtValue(v: number | null, format: StatFormat): string {
