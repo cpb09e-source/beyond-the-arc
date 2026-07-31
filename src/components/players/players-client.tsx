@@ -123,18 +123,21 @@ function seasonLabel(y: number): string {
  *
  * Deliberately OFF the red-to-green axis the percentile ramp owns. A freshman
  * badge in ramp-red would read as "bad at being a freshman", which is not a
- * thing; these are a category, not a rank. Cool to warm to deep, so the four
- * read as a sequence a reader can learn — sky, violet, amber, navy — with navy
- * carrying the most weight for seniors.
+ * thing; these are a category, not a rank. Nor the site's link blue, which
+ * would read as interactive, nor body ink, which would read as text.
  *
- * Contrast on their own fills: 6.70, 7.57, 6.49, 8.73 — all clear AA for small
+ * Teal, violet, amber, magenta. They separate by HUE rather than lightness —
+ * the closest two fills differ by a contrast ratio of 1.02 — which is what
+ * keeps them reading as four categories instead of a light-to-dark scale.
+ *
+ * Contrast on their own fills: 6.83, 7.57, 6.49, 7.05 — all clear AA for small
  * text, which matters at this size.
  */
 const CLASS_BADGE: Record<string, { bg: string; fg: string }> = {
-  Fr: { bg: "#DCEEFB", fg: "#14557F" },
-  So: { bg: "#E8E1FA", fg: "#4C3391" },
-  Jr: { bg: "#FBEAC8", fg: "#7A4703" },
-  Sr: { bg: "#DCE2EE", fg: "#283A5C" },
+  Fr: { bg: "#D3EDF2", fg: "#0F5566" },   // teal
+  So: { bg: "#E8E1FA", fg: "#4C3391" },   // violet
+  Jr: { bg: "#FBEAC8", fg: "#7A4703" },   // amber
+  Sr: { bg: "#F2DCEC", fg: "#7A2860" },   // magenta
 };
 
 function seasonBadge(y: number): string {

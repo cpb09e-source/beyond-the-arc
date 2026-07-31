@@ -52,16 +52,16 @@ export function CoachStylePanel({
     /* Sized to its content and dropped straight into the coach header, so it
        carries no heading of its own — the header already names the coach, and
        this is the shape of how his teams played, read alongside it. */
-    <div className="flex flex-col sm:flex-row sm:items-start gap-x-6 gap-y-5">
+    <div className="flex flex-col sm:flex-row sm:items-center gap-x-8 gap-y-6">
       <StyleRadar stylePct={stylePct} />
-      <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+      <div className="grid grid-cols-2 gap-x-8 gap-y-5">
         {(["Offense", "Defense"] as const).map((group) => (
-          <div key={group} className="w-[13.5rem]">
+          <div key={group} className="w-[15rem]">
             <div className="text-[0.55rem] uppercase tracking-[0.18em] text-coral font-bold mb-2 flex items-center gap-1.5">
               <span className="h-px w-4 bg-coral" />
               {group}
             </div>
-            <ul className="space-y-1">
+            <ul className="space-y-1.5">
               {STYLE_DIMENSIONS.filter((d) => d.group === group).map((d) => (
                 <StyleRow
                   key={d.key}
@@ -102,7 +102,7 @@ function StyleRadar({ stylePct }: { stylePct: CoachStyle }) {
     .filter((e): e is { d: (typeof STYLE_DIMENSIONS)[number]; p: number } => typeof e.p === "number");
   if (dims.length < 3) return null;
 
-  const S = 320, C = S / 2, R = 108, FLOOR = 10;
+  const S = 320, C = S / 2, R = 112, FLOOR = 11;
   const n = dims.length;
   const at = (i: number, r: number): [number, number] => {
     const a = (Math.PI * 2 * i) / n - Math.PI / 2;
@@ -112,7 +112,7 @@ function StyleRadar({ stylePct }: { stylePct: CoachStyle }) {
   const poly = dims.map((e, i) => at(i, radius(e.p)).join(",")).join(" ");
 
   return (
-    <div className="w-full max-w-[14.5rem] shrink-0 mx-auto sm:mx-0">
+    <div className="w-full max-w-[21rem] shrink-0 mx-auto sm:mx-0">
       <svg
         viewBox={`0 0 ${S} ${S}`}
         className="w-full h-auto overflow-visible"
@@ -135,16 +135,16 @@ function StyleRadar({ stylePct }: { stylePct: CoachStyle }) {
         {dims.map((e, i) => {
           const [x, y] = at(i, radius(e.p));
           return (
-            <circle key={e.d.key} cx={x} cy={y} r={4}
+            <circle key={e.d.key} cx={x} cy={y} r={4.5}
                     fill={pctBg(e.p)} stroke={pctColor(e.p)} strokeWidth={1.5} />
           );
         })}
         {dims.map((e, i) => {
-          const [x, y] = at(i, R + 20);
+          const [x, y] = at(i, R + 22);
           const anchor = Math.abs(x - C) < 10 ? "middle" : x > C ? "start" : "end";
           return (
             <text key={e.d.key} x={x} y={y} textAnchor={anchor} dominantBaseline="middle"
-                  className="fill-ink-muted text-[10px]">
+                  className="fill-ink-muted text-[11px]">
               {e.d.label}
             </text>
           );
@@ -174,8 +174,8 @@ function StyleRow({
   // repeating it as a bar said the same thing twice in the same panel.
   return (
     <li className="flex items-center gap-2">
-      <span className="flex-1 min-w-0 truncate text-sm text-ink-soft">{label}</span>
-      <span className="w-14 shrink-0 text-right text-sm font-semibold text-ink tabular">
+      <span className="flex-1 min-w-0 truncate text-[0.9rem] text-ink-soft">{label}</span>
+      <span className="w-16 shrink-0 text-right text-[0.9rem] font-semibold text-ink tabular">
         {value.toFixed(1)}{unit}
       </span>
       <PercentileChip pct={Math.round(pct)} className="shrink-0" />
