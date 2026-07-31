@@ -55,7 +55,7 @@ const GRID_COLS: GridCol[] = [
   { label: "Off", field: "off_epm", fmt: "epm", pct: "off_epm", sortKey: "off_epm", band: true },
   { label: "Def", field: "def_epm", fmt: "epm", pct: "def_epm", sortKey: "def_epm", band: true },
   { label: "EPM", field: "epm", fmt: "epm", pct: "epm", sortKey: "epm", band: true },
-  { label: "eWins", field: "ewins", fmt: "num2", pct: null, sortKey: "ewins", band: true },
+  { label: "eWins", field: "ewins", fmt: "num2", pct: "ewins", sortKey: "ewins", band: true },
   { label: "MPG", field: "min_pg", fmt: "int", pct: null, sortKey: "min" },
   { label: "USG", field: "usage_pct", fmt: "pct1", pct: "usage_pct", sortKey: "usage" },
   { label: "PPG", field: "pts_pg", fmt: "num1", pct: "pts_pg", sortKey: "pts" },
@@ -285,6 +285,7 @@ const PCT_KEYS = [
   "orb_pg", "drb_pg", "reb_pg", "ast_pg", "tov_pg", "tov_pct", "stl_pg", "blk_pg", "hkm_pct",
   // Filterable extras that can appear as dynamic columns:
   "efg_pct", "fg2_pct", "ft_pct", "fta_rate", "ast_to_tov", "porpag", "bta_porpag", "min_pg", "ppp",
+  "ewins",
 ] as const;
 type PctKey = (typeof PCT_KEYS)[number];
 type PctMaps = Record<PctKey, Map<number, number>>;
