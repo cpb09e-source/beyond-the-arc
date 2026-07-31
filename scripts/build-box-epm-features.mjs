@@ -68,6 +68,30 @@ function normTeam(s) {
     .replace(/\buniversity\b|\bthe\b/g, "").replace(/\bstate\b/g, "st")
     .replace(/[^a-z0-9]+/g, "");
 }
+/**
+ * NO STRENGTH-OF-SCHEDULE FEATURE HERE, and that is a measured decision.
+ *
+ * The lean model scores 2014-2021 and has no opponent context at all (`opp`
+ * comes from CBBD's per-game archive, which starts in 2022). The lean era's
+ * top 25 on an all-seasons board is 16/25 high-major against the rich era's
+ * 23/25, so it looks exactly like a missing schedule adjustment, and Matt
+ * Rafferty (Furman), Jalan West (Northwestern St.) and Thomas Walkup (Stephen
+ * F. Austin) look exactly like the symptom.
+ *
+ * It was built and measured: mean opponent adjusted net from game-logs-by-year
+ * joined to team-ratings-<year>, 100% coverage on all 13 seasons. The ridge
+ * gave it a coefficient of +0.005 on offence and -0.003 on defence — rank 22 of
+ * 23 features, indistinguishable from zero — and the board did not move. Top-50
+ * high-major stayed 40/50, the lean era's top 25 stayed 16/25, Rafferty stayed
+ * 12th.
+ *
+ * Why it cannot help: the labels are RAPM, and the question the model is asked
+ * is "given this box line, what is his RAPM". Schedule adds nothing CONDITIONAL
+ * on the box line, because the box line is already what that player produced
+ * against that schedule. The prior is faithfully reproducing what the RAPM fit
+ * itself says, and the RAPM fit rates these players highly. Anyone re-adding
+ * this feature is treating a symptom that lives one layer down.
+ */
 function loadTeamRatings(year) {
   const f = join(DATA, `team-ratings-${year}.json`);
   if (!existsSync(f)) return null;
