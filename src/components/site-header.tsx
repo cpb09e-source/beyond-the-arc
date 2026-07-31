@@ -17,6 +17,7 @@ const NAV = [
   { href: "/coaches", label: "Coaches" },
   { href: "/calc", label: "Win Calc" },
   { href: "/portal", label: "Transfer Portal" },
+  { href: "/glossary", label: "Glossary" },
 ];
 
 // Active-route detection. The home route ("/") must match EXACTLY — otherwise
