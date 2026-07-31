@@ -86,6 +86,10 @@ function main() {
             startSecs: p.secondsRemaining, endSecs: p.secondsRemaining,
             ptsHome: 0, ptsAway: 0,
             fgaH: 0, fgaA: 0, orebH: 0, orebA: 0, toH: 0, toA: 0, ftaH: 0, ftaA: 0,
+            // Shot detail for the luck adjustment: threes and free throws are
+            // where on-off variance actually lives, so both attempts and makes
+            // are tracked per side. See scripts/compute-epm-extras.py.
+            fg3aH: 0, fg3mH: 0, fg3aA: 0, fg3mA: 0, ftmH: 0, ftmA: 0,
           };
         }
         cur.endSecs = p.secondsRemaining;
@@ -100,9 +104,26 @@ function main() {
 
         // Possession components by acting side.
         const isHome = p.team === homeTeam;
-        if (FGA_TYPES.has(p.playType)) { isHome ? cur.fgaH++ : cur.fgaA++; }
+        if (FGA_TYPES.has(p.playType)) {
+          isHome ? cur.fgaH++ : cur.fgaA++;
+          // scoreValue is the shot's value whether or not it went in, so a
+          // missed three still reports 3 — which is exactly what an attempt
+          // count needs.
+          if (p.scoreValue === 3) {
+            if (isHome) { cur.fg3aH++; if (p.scoringPlay) cur.fg3mH++; }
+            else { cur.fg3aA++; if (p.scoringPlay) cur.fg3mA++; }
+          }
+        }
         else if (p.playType === "Offensive Rebound") { isHome ? cur.orebH++ : cur.orebA++; }
-        else if (FTA_TYPES.has(p.playType)) { isHome ? cur.ftaH++ : cur.ftaA++; }
+        else if (FTA_TYPES.has(p.playType)) {
+          // Makes come from scoringPlay, NOT the play type. CBBD labels every
+          // free throw "MadeFreeThrow" whichever way it goes — a miss reads
+          // {playType:"MadeFreeThrow", scoringPlay:false, playText:"... missed
+          // Free Throw."}. "MissedFreeThrow" is in FTA_TYPES but never occurs;
+          // trusting the name gave a season free-throw rate of exactly 100%.
+          if (isHome) { cur.ftaH++; if (p.scoringPlay) cur.ftmH++; }
+          else { cur.ftaA++; if (p.scoringPlay) cur.ftmA++; }
+        }
         else if (TO_TYPES.has(p.playType) || /turnover/i.test(p.playType ?? "")) { isHome ? cur.toH++ : cur.toA++; }
       }
       close();
@@ -114,7 +135,10 @@ function main() {
   // clamping each to 0 inflates the game sum by ~15 poss. Negative fragments
   // cancel correctly when stints aggregate; the RAPM weighting floors at 0 there.
   const poss = (fga, oreb, to, fta) => fga - oreb + to + 0.475 * fta;
-  const lines = ["gameId,date,period,valid,secs,home5,away5,ptsHome,ptsAway,possHome,possAway"];
+  // Columns appended, never reordered — compute-epm.py and compute-epm-extras.py
+  // both read this by name via DictReader, so extra trailing fields are free.
+  const lines = ["gameId,date,period,valid,secs,home5,away5,ptsHome,ptsAway,possHome,possAway,"
+    + "fg3aHome,fg3mHome,fg3aAway,fg3mAway,ftaHome,ftmHome,ftaAway,ftmAway"];
   for (const s of stintRows) {
     const secs = Math.max(0, (s.startSecs ?? 0) - (s.endSecs ?? 0));
     lines.push([
@@ -123,6 +147,8 @@ function main() {
       s.ptsHome, s.ptsAway,
       poss(s.fgaH, s.orebH, s.toH, s.ftaH).toFixed(2),
       poss(s.fgaA, s.orebA, s.toA, s.ftaA).toFixed(2),
+      s.fg3aH, s.fg3mH, s.fg3aA, s.fg3mA,
+      s.ftaH, s.ftmH, s.ftaA, s.ftmA,
     ].join(","));
   }
   fs.writeFileSync(path.join(dir, "stints.csv.gz"), zlib.gzipSync(lines.join("\n")));

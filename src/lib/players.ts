@@ -221,7 +221,7 @@ export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
   // players are — and where teammate collinearity shows up, since a rotation
   // that never splits up gives the on-off half nothing to separate.
   { key: "box_epm", label: "Box",    desc: "Box-score half of EPM — the prior the RAPM fit starts from, estimated from box stats alone. Available for every season; EPM itself only from 2025.", group: "impact", format: "num1", field: "box_epm" },
-  { key: "on_off",  label: "On/Off", desc: "On-off half — team net rating with the player on the floor minus off it, per 100. Raw and unregularized, so it is only shown above a possession floor; below that a handful of possessions can read ±90. 2024 onward only.", group: "impact", format: "num1", field: "on_off" },
+  { key: "on_off",  label: "On/Off", desc: "On-off half — team net rating with the player on the floor minus off it, per 100, luck-adjusted: each side's points are restated at its own season three-point and free-throw rates, so the wobble around a team's shooting comes out and the rate itself stays. Unregularized even so, and only shown above a possession floor. Treat it as the weakest number on the page — it barely repeats year to year. 2024 onward.", group: "impact", format: "num1", field: "on_off" },
   // EPM-extras — filterable only (real-EPM seasons 2024+ have them).
   { key: "ewins",  label: "eWins",  desc: "Estimated wins added vs an average player (EPM × possessions)", group: "impact", format: "num1", field: "ewins",  filterOnly: true },
 
