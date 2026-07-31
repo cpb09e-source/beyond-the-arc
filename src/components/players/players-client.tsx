@@ -148,9 +148,19 @@ type ExplorerPayload = {
   rows: Array<Array<string | number | null>>;
 };
 
+/**
+ * Possessions a player needs before their raw on-off is worth printing.
+ *
+ * Matches MIN_POSS in export-epm-json.mjs, which already treats 300 as the
+ * point below which "the RAPM is mostly shrinkage". Unregularized on-off is
+ * noisier still, so the same floor is the least it should carry.
+ */
+const MIN_ON_OFF_POSS = 300;
+
 /** Fields attached after load, from the EPM and shooting files. */
 const LATE_FIELDS = {
   epm: null, off_epm: null, def_epm: null, epm_estimated: false, epm_covered: false,
+  box_epm: null, poss: null,
   ewins: null, on_off: null,
   rim_pct: null, mid_pct: null, assisted_pct: null, rim_rate: null, tp_rate: null,
 } as const;
@@ -334,7 +344,9 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   // selected year; 404 (no fit for that season) caches as an empty map.
   // Per-season impact map. `estimated` marks a season served by the box-score
   // Box-EPM model (pre-2024, no play-by-play) rather than the real RAPM fit.
-  const [epmByYear, setEpmByYear] = useState<Record<number, { players: Record<string, { epm: number; off: number; def: number; ewins?: number | null; on_off?: number | null }>; estimated: boolean }>>({});
+  const [epmByYear, setEpmByYear] = useState<Record<number, { players: Record<string, { epm: number; off: number; def: number; poss?: number | null; ewins?: number | null; on_off?: number | null }>; estimated: boolean }>>({});
+  // Box-EPM per season: bart_player_id -> {epm, off, def}. The box half of EPM.
+  const [boxByYear, setBoxByYear] = useState<Record<number, Record<string, { epm: number; off: number; def: number }>>>({});
   // Shooting profile per season: bart_player_id -> {rim_pct,mid_pct,asst,rim_rate,tp_rate}. Filter-only.
   const [shootingByYear, setShootingByYear] = useState<Record<number, Record<string, { rim_pct: number | null; mid_pct: number | null; asst: number | null; rim_rate: number | null; tp_rate: number | null }>>>({});
   const [loading, setLoading] = useState(true);
@@ -405,6 +417,11 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   // Lazy-load impact per season: prefer the real play-by-play EPM fit; fall back
   // to the estimated box-score model (Box-EPM) for seasons without it. Missing
   // both → empty map.
+  //
+  // Box-EPM is now fetched EVERY season rather than only as a fallback, because
+  // it is also published as its own column — the box half of EPM, beside the
+  // on-off half. On a season with a real fit the two files are both used: one
+  // for the blend, one for the component.
   useEffect(() => {
     const toFetch = spec.years.filter((y) => !epmByYear[y]);
     if (!toFetch.length) return;
@@ -437,6 +454,31 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     });
     return () => { cancelled = true; };
   }, [spec.years, epmByYear]);
+
+  // Box-EPM per season, for the Box column. Separate from the impact fetch
+  // above because that one falls back to this file and would otherwise leave
+  // the component and the blend pointing at the same numbers.
+  useEffect(() => {
+    const toFetch = spec.years.filter((y) => !boxByYear[y]);
+    if (!toFetch.length) return;
+    let cancelled = false;
+    Promise.all(
+      toFetch.map((y) =>
+        fetch(`/data/box-epm-${y}.json`)
+          .then((r) => (r.ok ? r.json() : { players: {} }))
+          .catch(() => ({ players: {} }))
+          .then((j) => [y, j.players ?? {}] as const),
+      ),
+    ).then((entries) => {
+      if (cancelled) return;
+      setBoxByYear((s) => {
+        const next = { ...s };
+        for (const [y, m] of entries) next[y] = m;
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [spec.years, boxByYear]);
 
   // Lazy-load the shooting profile per season (filter-only; 404 → empty map).
   useEffect(() => {
@@ -485,7 +527,23 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       if (epmEntry) {
         for (const p of arr) {
           const e = p.bart_player_id != null ? epmEntry.players[String(p.bart_player_id)] : undefined;
-          if (e) { p.epm = e.epm; p.off_epm = e.off; p.def_epm = e.def; p.epm_estimated = epmEntry.estimated; p.ewins = e.ewins ?? null; p.on_off = e.on_off ?? null; }
+          if (e) {
+            p.epm = e.epm; p.off_epm = e.off; p.def_epm = e.def; p.epm_estimated = epmEntry.estimated;
+            p.ewins = e.ewins ?? null;
+            p.poss = e.poss ?? null;
+            // On-off is raw and unregularized: Juan Reyna reads +89.5 on four
+            // possessions. Published only above a floor, because a number that
+            // wrong is worse than no number.
+            p.on_off = typeof e.poss === "number" && e.poss >= MIN_ON_OFF_POSS ? e.on_off ?? null : null;
+          }
+        }
+      }
+      // Box half of EPM, from its own file so it stays distinct from the blend.
+      const boxMap = boxByYear[y];
+      if (boxMap) {
+        for (const p of arr) {
+          const b = p.bart_player_id != null ? boxMap[String(p.bart_player_id)] : undefined;
+          if (b) p.box_epm = b.epm;
         }
       }
       // Shooting profile (filter-only fields).

@@ -158,6 +158,19 @@ export type PlayerSummary = {
   // real play-by-play RAPM fit — i.e. seasons before onFloor data (pre-2024).
   // Drives the "≈ estimated" marker in the grid.
   epm_estimated: boolean;
+  /**
+   * The box-score half of EPM — the prior the RAPM fit starts from. Shown
+   * beside the blend so the two components are legible separately: where the
+   * box expects more than the on-court results delivered (or less), that gap
+   * is the interesting part, and it is also where teammate collinearity
+   * surfaces.
+   */
+  box_epm: number | null;
+  /**
+   * Possessions the EPM fit saw for this player. Gates on_off, which is raw
+   * and unregularized — four possessions can read +89.5.
+   */
+  poss: number | null;
   pir: number | null;           // EuroLeague PIR per game (minus TOV; see note)
   porpag: number | null;        // Bart Torvik Points Over Replacement Player per Adj Game
   /**
@@ -201,15 +214,21 @@ export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
   { key: "epm",     label: "EPM",     desc: "Estimated Plus-Minus — per-100-possession impact vs. an average player (offense + defense)", group: "impact", format: "num1", field: "epm" },
   { key: "off_epm", label: "Off EPM", desc: "Offensive EPM — per-100 offensive impact",                                                   group: "impact", format: "num1", field: "off_epm" },
   { key: "def_epm", label: "Def EPM", desc: "Defensive EPM — per-100 defensive impact (positive = better defense)",                        group: "impact", format: "num1", field: "def_epm" },
+  // THE TWO HALVES OF EPM, published beside it. EPM is a RAPM fit run as
+  // deviations from a box-score prior, so these are the pieces it is made of:
+  // what the box score alone expects, and what the team's results say while the
+  // player was on the floor. Where they disagree is where the interesting
+  // players are — and where teammate collinearity shows up, since a rotation
+  // that never splits up gives the on-off half nothing to separate.
+  { key: "box_epm", label: "Box",    desc: "Box-score half of EPM — the prior the RAPM fit starts from, estimated from box stats alone. Available for every season; EPM itself only from 2025.", group: "impact", format: "num1", field: "box_epm" },
+  { key: "on_off",  label: "On/Off", desc: "On-off half — team net rating with the player on the floor minus off it, per 100. Raw and unregularized, so it is only shown above a possession floor; below that a handful of possessions can read ±90. 2024 onward only.", group: "impact", format: "num1", field: "on_off" },
   // EPM-extras — filterable only (real-EPM seasons 2024+ have them).
   { key: "ewins",  label: "eWins",  desc: "Estimated wins added vs an average player (EPM × possessions)", group: "impact", format: "num1", field: "ewins",  filterOnly: true },
-  { key: "on_off", label: "On/Off", desc: "Team net rating with the player on the court minus off (raw, per 100)", group: "impact", format: "num1", field: "on_off", filterOnly: true },
 
   // ── Advanced ─────────────────────────────────────────────
   { key: "pir",      label: "PIR",      desc: "EuroLeague Performance Index Rating (per game, minus TOV)",                              group: "advanced", format: "num1", field: "pir" },
   { key: "bta_porpag", label: "PORP",   desc: "BTA Points Over Replacement per game — points produced above a replacement-level player on the same possessions, credited for the defence actually faced. Built from per-game data, so a big night against the country's best defence counts as one.", group: "advanced", format: "num2", field: "bta_porpag" },
   { key: "net_rtg",  label: "Net Rtg",  desc: "Individual offensive rating minus defensive rating, per 100 possessions",               group: "advanced", format: "num1", field: "net_rtg" },
-  { key: "on_off",   label: "On/Off",   desc: "Team net rating with this player on the floor minus with them off it, per 100 possessions. 2024 onward only — earlier seasons have no lineup data.", group: "advanced", format: "num1", field: "on_off" },
   { key: "ast_tov",  label: "AST/TOV",  desc: "Assist-to-turnover ratio (assists per game ÷ turnovers per game)",                       group: "advanced", format: "num2", field: "ast_to_tov" },
 
   // ── Offense ──────────────────────────────────────────────
