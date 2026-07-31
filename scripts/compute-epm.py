@@ -184,12 +184,33 @@ def solve(X, y, w, lam: float, prior: np.ndarray | None = None):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--season", type=int, required=True)
-    # Default tuned for the SPM-prior workflow (D&3-style): higher lambda pulls
-    # RAPM toward the box prior, taming thin-off-court/collinear starters while
-    # keeping true stars' RAPM signal. Always run with --priors.
-    ap.add_argument("--lam", type=float, default=12000.0)
+    # TUNED, finally. This was 12000, set by hand, with the docstring still
+    # admitting it "needs full-season tune". scripts/tune-epm-lambda.py picks it
+    # properly now — 5-fold cross-validation over held-out GAMES (not stints:
+    # two stints from one game share a lineup, a venue and an opponent, so
+    # splitting inside a game leaks). Held-out weighted R2:
+    #
+    #     lambda      50      150     500     1500    4000    12000   30000
+    #     2026     .01381   .02035  .02328  .02148  .01806  .01357  .01046
+    #     2025     .01322   .02027  .02403  .02247  .01886  .01419  .01106
+    #
+    # Both seasons peak at 500, independently, and the curve is cleanly
+    # unimodal. The old 12000 sat on the far over-shrunk shoulder and gave up
+    # about 70% of the held-out signal, squashing everyone toward the box prior.
+    #
+    # The absolute R2 looks tiny because a single stint is a handful of
+    # possessions and largely unpredictable; what matters is the ordering.
+    #
+    # NOT tuned on team reconstruction (summing a team's players back to its net
+    # rating), even though that is a tempting external yardstick: it improves
+    # monotonically as lambda falls, because at lambda -> 0 the regression
+    # reproduces stint outcomes by construction. It measures how much shrinkage
+    # was applied, not how much of it was correct.
+    ap.add_argument("--lam", type=float, default=1500.0)
     ap.add_argument("--priors", type=str, default=None,
                     help="CSV with playerId,priorOff,priorDef (per-100 vs avg)")
+    ap.add_argument("--out", type=str, default="epm.csv",
+                    help="output filename inside data/cbbd/<season>/ (default epm.csv)")
     ap.add_argument("--no-luck", dest="luck", action="store_false",
                     help="fit on raw points instead of luck-adjusted points")
     args = ap.parse_args()
@@ -245,7 +266,7 @@ def main():
             "epm": round(float(off + dEf), 2),
         })
     df = pd.DataFrame(rows).sort_values("epm", ascending=False)
-    out = outdir / "epm.csv"
+    out = outdir / args.out
     df.to_csv(out, index=False)
     qual = df[df["poss"] >= MIN_POSS_PLAYER]
     print(f"  wrote {out} ({len(df):,} players)")

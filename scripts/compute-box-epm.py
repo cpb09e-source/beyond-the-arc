@@ -26,14 +26,26 @@ import pandas as pd
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-FEATURES = [
-    "min_pg", "usg", "to_rate", "porpag",
-    "ts", "efg", "ftr", "tpar",
-    "pts40", "ast40", "reb40", "orb40", "drb40", "stl40", "blk40",
-    "blk_pct", "stl_pct", "height_in", "class_num",
-    "is_g", "is_f", "is_c",
-    "team_adj_net",
+# Feature columns are READ FROM THE CSV HEADER rather than restated here. The
+# builder emits year,bart_player_id,name,team,<features...>,epm,off,def,poss, so
+# the features are everything between. Hardcoding them meant the two files could
+# silently disagree the moment one gained a column.
+# The CBBD-sourced half of the feature set. Present from 2022 (where CBBD's
+# per-game box archive begins) and absent before, which is why main() fits a
+# separate Bart-only model for the older seasons.
+CBBD_ONLY = [
+    "opp", "ortg_opp_delta", "drtg_opp_delta", "usg_opp_delta",
+    "c_ortg", "c_drtg", "c_usg", "c_efg", "c_ts", "c_ftr", "c_orb", "c_ato",
+    "fouls40", "gs40", "gs40_sd", "start_pct",
+    "dunk_rate", "layup_rate", "tip_rate", "rim_rate", "mid_rate", "tp_rate",
+    "rim_pct", "mid_pct",
+    "unassisted", "unassisted_rim", "unassisted_jump", "jump_share",
 ]
+
+
+def feature_columns(df):
+    cols = list(df.columns)
+    return cols[cols.index("team") + 1:cols.index("epm")]
 # Era-normalized features arrive from build-box-epm-features.mjs already z-scored
 # within each season; clip extreme z (low-sample flukes) at +/-5 SD.
 ERA_FEATURES = [
@@ -116,48 +128,81 @@ def cv_r2(X, y, w, lam, folds=5, seed=17):
 
 def main():
     df = pd.read_csv(HERE / "box-epm-features.csv")
+    FEATURES = feature_columns(df)
+    print(f"features: {len(FEATURES)}")
 
     # Clip extreme within-season z-scores (small-sample flukes) consistently.
     for col in ERA_FEATURES:
         df[col] = df[col].clip(lower=-5, upper=5)
+
+    # CBBD per-game rates are raw, not z-scored, so clip them at their own
+    # robust bounds instead: median +/- 6 IQR keeps a cameo's 300 ORtg from
+    # dragging a coefficient.
+    for col in FEATURES:
+        if col in ERA_FEATURES or df[col].dtype.kind not in "fi":
+            continue
+        q1, q3 = df[col].quantile(0.25), df[col].quantile(0.75)
+        iqr = q3 - q1
+        if iqr > 0:
+            df[col] = df[col].clip(q1 - 6 * iqr, q3 + 6 * iqr)
 
     labeled = df["off"].notna() & df["def"].notna()
     train = labeled & (df["min_pg"] >= TRAIN_MIN_PG) & (df["poss"].fillna(0) > 0)
     print(f"loaded {len(df)} rows | {int(labeled.sum())} labeled | {int(train.sum())} train-eligible "
           f"(min_pg>={TRAIN_MIN_PG})")
 
-    # Standardize on training rows; impute NaN with the training mean.
-    Xtr_raw = df.loc[train, FEATURES]
-    mu = Xtr_raw.mean()
-    sd = Xtr_raw.std(ddof=0).replace(0, 1.0)
-    design = lambda frame: ((frame[FEATURES].fillna(mu) - mu) / sd).to_numpy(dtype=float)
-    Xtr = design(df.loc[train])
-    Xall = design(df)
+    # ── TWO MODELS, not one ────────────────────────────────────────────────
+    #
+    # The CBBD half of the feature set (opponent context, per-game efficiency,
+    # shot diet, self-creation) only exists from 2022, where CBBD's per-game box
+    # archive starts. Every LABELED row is 2022+, so a single model would
+    # standardize those columns on modern rows and then hand a mean-imputed
+    # modern profile to every pre-2022 player — silently rewriting fifteen years
+    # of history as "league average at everything we cannot see."
+    #
+    # So: fit the full model for the seasons that have the data, and fit a
+    # second model on Bart's columns alone for the seasons that do not. Each
+    # season is scored by the model that actually saw its inputs, and the output
+    # carries a `rich` flag saying which one produced it.
+    LEGACY = [c for c in FEATURES if c not in CBBD_ONLY]
+    has_rich = df[CBBD_ONLY[0]].notna()
+    print(f"  rich-feature coverage: {int(has_rich.sum()):,}/{len(df):,} rows "
+          f"({int((has_rich & train).sum()):,}/{int(train.sum()):,} of training)")
 
-    # Possession weight (reliability), capped so a few huge-minute stars don't
-    # dominate; sqrt keeps the spread gentle.
     w = np.sqrt(np.clip(df.loc[train, "poss"].to_numpy(dtype=float), 1, 2000))
-
     lam_grid = [1, 5, 10, 30, 100, 300, 1000]
-    ti = FEATURES.index(TEAM_FEATURE)
-    models = {}
-    for target in ("off", "def"):
-        y = df.loc[train, target].to_numpy(dtype=float)
-        best = max(lam_grid, key=lambda L: cv_r2(Xtr, y, w, L))
-        coef, ybar = ridge_fit(Xtr, y, best, w)
-        raw_team = coef[ti]
-        coef[ti] *= TEAM_DAMP
-        models[target] = (coef, ybar)
-        # R2 is reported for the DAMPED model — the one that actually ships.
-        # It will read lower than the undamped fit, and should: the labels are
-        # RAPM, which carries the same team signal we are deliberately turning
-        # down, so a better fit here would mean a worse metric.
-        print(f"  {target.upper():3s}  lambda={best:<5} "
-              f"train_R2={r2(y, Xtr @ coef + ybar, w):.3f}  cv_R2={cv_r2(Xtr, y, w, best):.3f}"
-              f"  team coef {raw_team:+.3f} -> {coef[ti]:+.3f}")
 
-    off_hat = Xall @ models["off"][0] + models["off"][1]
-    def_hat = Xall @ models["def"][0] + models["def"][1]
+    def fit_set(cols, label):
+        """Standardize on training rows, fit off/def, return predictions for all."""
+        Xtr_raw = df.loc[train, cols]
+        mu = Xtr_raw.mean()
+        sd = Xtr_raw.std(ddof=0).replace(0, 1.0)
+        design = lambda frame: ((frame[cols].fillna(mu) - mu) / sd).to_numpy(dtype=float)
+        Xtr, Xall = design(df.loc[train]), design(df)
+        ti = cols.index(TEAM_FEATURE)
+        out = {}
+        for target in ("off", "def"):
+            y = df.loc[train, target].to_numpy(dtype=float)
+            best = max(lam_grid, key=lambda L: cv_r2(Xtr, y, w, L))
+            coef, ybar = ridge_fit(Xtr, y, best, w)
+            raw_team = coef[ti]
+            coef[ti] *= TEAM_DAMP
+            out[target] = Xall @ coef + ybar
+            # R2 is reported for the DAMPED model — the one that actually ships.
+            # It will read lower than the undamped fit, and should: the labels
+            # are RAPM, which carries the same team signal we are deliberately
+            # turning down, so a better fit here would mean a worse metric.
+            print(f"  {label:6s} {target.upper():3s}  lambda={best:<5} "
+                  f"train_R2={r2(y, Xtr @ coef + ybar, w):.3f}  cv_R2={cv_r2(Xtr, y, w, best):.3f}"
+                  f"  team coef {raw_team:+.3f} -> {coef[ti]:+.3f}")
+        return out
+
+    rich = fit_set(FEATURES, "rich")
+    lean = fit_set(LEGACY, "lean")
+
+    pick = has_rich.to_numpy()
+    off_hat = np.where(pick, rich["off"], lean["off"])
+    def_hat = np.where(pick, rich["def"], lean["def"])
     epm_hat = off_hat + def_hat
 
     tr = train.to_numpy()
@@ -167,8 +212,15 @@ def main():
     out = pd.DataFrame({
         "year": df["year"], "bart_player_id": df["bart_player_id"],
         "min_pg": np.round(df["min_pg"], 1),
+        "rich": pick.astype(int),
         "box_off": np.round(off_hat, 2), "box_def": np.round(def_hat, 2),
         "box_epm": np.round(epm_hat, 2),
+        # Both models are emitted for every row, not just the one that was
+        # picked. Keeping the Bart-only estimate alongside is what makes it
+        # possible to ask later whether the CBBD half is carrying real signal
+        # or just noise it happens to share with the same-season labels.
+        "box_epm_lean": np.round(lean["off"] + lean["def"], 2),
+        "box_epm_rich": np.round(rich["off"] + rich["def"], 2),
     })
     dst = HERE / "box-epm-pred.csv"
     out.to_csv(dst, index=False)

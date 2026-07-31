@@ -57,6 +57,10 @@ const FEATURES = [
   "team_adj_net", // team adjusted net rating (from team-ratings-<year>.json); "" when that season's ratings aren't built yet
 ];
 
+// Appended after CBBD_FEATURES is declared below — `const` is not hoisted,
+// so the list cannot reference it from inside its own literal.
+// (see the CBBD_FEATURES block for what these are and why)
+
 // Team adjusted net rating per season, keyed by normalized team name so Bart
 // player-team names join to CBBD-derived team-ratings.
 function normTeam(s) {
@@ -179,9 +183,79 @@ function fromEndNote(row) {
   return typeof v === "string" ? v : null;
 }
 
+/**
+ * CBBD season aggregates (scripts/build-cbbd-player-season.mjs), keyed by Bart
+ * id. Everything Bart's season table cannot say: shot diet, self-creation,
+ * per-game consistency, and above all WHO THE OPPONENT WAS.
+ *
+ * Only exists 2022+, which is where CBBD's per-game box archive starts. Older
+ * seasons get nulls and fall back to the mean, so history still produces a
+ * number — it is just the thinner, Bart-only estimate it always was.
+ */
+const CBBD_FEATURES = [
+  // schedule context — how good were the opponents, and did he hold up
+  "opp", "ortg_opp_delta", "drtg_opp_delta", "usg_opp_delta",
+  // CBBD's own per-game efficiency, minutes/possession weighted
+  "c_ortg", "c_drtg", "c_usg", "c_efg", "c_ts", "c_ftr", "c_orb", "c_ato",
+  "fouls40", "gs40", "gs40_sd", "start_pct",
+  // shot diet — where the offence actually comes from
+  "dunk_rate", "layup_rate", "tip_rate", "rim_rate", "mid_rate", "tp_rate",
+  "rim_pct", "mid_pct",
+  // self-creation — the share he generated himself, overall and by zone
+  "unassisted", "unassisted_rim", "unassisted_jump", "jump_share",
+];
+FEATURES.push(...CBBD_FEATURES);
+
+function loadCbbd(year) {
+  const f = join(__dirname, "..", "data", "derived", `cbbd-season-${year}.json`);
+  if (!existsSync(f)) return null;
+  return JSON.parse(readFileSync(f, "utf8")).players ?? null;
+}
+function cbbdFeatures(rec) {
+  if (!rec) return Object.fromEntries(CBBD_FEATURES.map((k) => [k, ""]));
+  const g = (k) => (typeof rec[k] === "number" && Number.isFinite(rec[k]) ? rec[k] : "");
+  return {
+    opp: g("opp"), ortg_opp_delta: g("ortg_opp_delta"), drtg_opp_delta: g("drtg_opp_delta"),
+    usg_opp_delta: g("usg_opp_delta"),
+    c_ortg: g("ortg"), c_drtg: g("drtg"), c_usg: g("usg"), c_efg: g("efg"), c_ts: g("ts"),
+    c_ftr: g("ftr"), c_orb: g("orb_pct"), c_ato: g("ato"),
+    fouls40: g("fouls40"), gs40: g("gs40"), gs40_sd: g("gs40_sd"), start_pct: g("start_pct"),
+    dunk_rate: g("dunk_rate"), layup_rate: g("layup_rate"), tip_rate: g("tip_rate"),
+    rim_rate: g("rim_rate"), mid_rate: g("mid_rate"), tp_rate: g("tp_rate"),
+    rim_pct: g("rim_pct"), mid_pct: g("mid_pct"),
+    unassisted: g("unassisted"), unassisted_rim: g("unassisted_rim"),
+    unassisted_jump: g("unassisted_jump"), jump_share: g("jump_share"),
+  };
+}
+
+/**
+ * CALIBRATION LABELS — read from epm-cal-<year>.json, NOT the shipped
+ * epm-<year>.json, and the distinction is load-bearing.
+ *
+ * The shipped EPM is a RAPM fit that STARTS FROM the box prior this file is
+ * building. Calibrating the prior against it closes a feedback loop: prior
+ * informs EPM, EPM re-informs prior, and each full pass through the pipeline
+ * amplifies the last one. Measured, it does not settle — running the chain four
+ * times walked the spread of qualified players from sd 1.40 to 1.71 and was
+ * still climbing, which means the number a player got depended on how many
+ * times the build had been run. That is not a statistic.
+ *
+ * epm-cal-<year>.json is a PRIOR-FREE RAPM: the same ridge fit on the same
+ * stints with no box prior at all, shrinking toward zero instead. It is noisier
+ * per player — that is the price of independence — but it is a fixed target
+ * that the prior cannot influence, so the pipeline runs once and lands in the
+ * same place every time.
+ *
+ * Falls back to the shipped file only if the calibration fit has not been built
+ * yet, and says so loudly, because that fallback is the divergent path.
+ */
 function loadEpm(year) {
+  const cal = join(DATA, `epm-cal-${year}.json`);
+  if (existsSync(cal)) return JSON.parse(readFileSync(cal, "utf8")).players ?? null;
   const f = join(DATA, `epm-${year}.json`);
   if (!existsSync(f)) return null;
+  console.warn(`  ! ${year}: no epm-cal-${year}.json — calibrating on the SHIPPED fit, `
+    + "which feeds the prior back into itself. Run compute-epm.py without --priors first.");
   const j = JSON.parse(readFileSync(f, "utf8"));
   return j.players ?? j;
 }
@@ -193,6 +267,7 @@ for (const year of YEARS) {
   if (!existsSync(f)) { console.warn(`skip ${year}: no players file`); continue; }
   const players = JSON.parse(readFileSync(f, "utf8"));
   const epm = loadEpm(year);
+  const cbbd = loadCbbd(year);
   const tr = loadTeamRatings(year);
   // League 3P% for THIS season — the mean the shrinkage pulls toward. Computed
   // per season rather than once overall because the college line moved in 2020.
@@ -218,6 +293,7 @@ for (const year of YEARS) {
     rows.push({
       year, bart_player_id: bid, name: p.name, team: team?.name ?? "",
       ...feat,
+      ...cbbdFeatures(cbbd ? cbbd[String(bid)] : null),
       team_adj_net: teamAdjNet,
       epm: lab ? lab.epm : "", off: lab ? lab.off : "", def: lab ? lab.def : "",
       poss: lab ? lab.poss : "",

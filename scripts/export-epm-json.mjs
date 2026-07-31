@@ -31,7 +31,11 @@ const MIN_POSS = 300; // below this the RAPM is mostly shrinkage — exclude fro
  * "how good is your team". Emitting that as a number invited exactly the wrong
  * reading; emitting nothing lets the UI say "—", which is the truth.
  */
-const MIN_PG = 13;
+const MIN_PG = Number(args.includes("--min-pg") ? args[args.indexOf("--min-pg") + 1] : 13);
+// Which fit to read and where to write it. Defaults are the shipped metric; the
+// CALIBRATION pass overrides both so the prior-free fit lands in its own file.
+const IN_CSV = args.includes("--in") ? args[args.indexOf("--in") + 1] : "epm.csv";
+const OUT_JSON = args.includes("--out") ? args[args.indexOf("--out") + 1] : null;
 const DATA = path.resolve("public/data");
 
 const norm = (s) => (s ?? "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
@@ -47,7 +51,7 @@ function parseCsvLine(l) { // epm.csv is simple (no embedded commas in our field
 
 function main() {
   // 1. EPM rows.
-  const epmCsv = fs.readFileSync(path.resolve(`data/cbbd/${SEASON}/epm.csv`), "utf8").trim().split(/\r?\n/).map((l) => l.replace(/\r$/, ""));
+  const epmCsv = fs.readFileSync(path.resolve(`data/cbbd/${SEASON}/${IN_CSV}`), "utf8").trim().split(/\r?\n/).map((l) => l.replace(/\r$/, ""));
   const head = epmCsv[0].split(",");
   const col = (n) => head.indexOf(n);
   const iId = col("playerId"), iN = col("name"), iT = col("team"), iP = col("poss"),
@@ -147,7 +151,7 @@ function main() {
     players,
     meta: { matched, unmatched: unmatched.length, suppressed },
   };
-  const fp = path.join(DATA, `epm-${SEASON}.json`);
+  const fp = path.join(DATA, OUT_JSON ?? `epm-${SEASON}.json`);
   fs.writeFileSync(fp, JSON.stringify(out));
   console.log(`✓ wrote ${fp} — ${matched.toLocaleString()} matched, ${unmatched.length} unmatched, ${suppressed.toLocaleString()} below ${MIN_PG} mpg (suppressed)`);
   if (unmatched.length) console.log("  sample unmatched:", unmatched.slice(0, 10).join(" | "));

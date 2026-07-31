@@ -80,3 +80,4 @@ supabase/.temp/
 # 12-season pull has run, to match how team-games/player-games are tracked.
 /public/data/game-players/
 __pycache__/
+/data/derived/
