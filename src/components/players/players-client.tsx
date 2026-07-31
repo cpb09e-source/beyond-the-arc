@@ -118,6 +118,25 @@ function seasonLabel(y: number): string {
  * Compact season for the row badge — "24/25". The long form stays in the page
  * kicker, where it is read as prose rather than scanned in a dense cell.
  */
+/**
+ * Class badge colours — one per eligibility year.
+ *
+ * Deliberately OFF the red-to-green axis the percentile ramp owns. A freshman
+ * badge in ramp-red would read as "bad at being a freshman", which is not a
+ * thing; these are a category, not a rank. Cool to warm to deep, so the four
+ * read as a sequence a reader can learn — sky, violet, amber, navy — with navy
+ * carrying the most weight for seniors.
+ *
+ * Contrast on their own fills: 6.70, 7.57, 6.49, 8.73 — all clear AA for small
+ * text, which matters at this size.
+ */
+const CLASS_BADGE: Record<string, { bg: string; fg: string }> = {
+  Fr: { bg: "#DCEEFB", fg: "#14557F" },
+  So: { bg: "#E8E1FA", fg: "#4C3391" },
+  Jr: { bg: "#FBEAC8", fg: "#7A4703" },
+  Sr: { bg: "#DCE2EE", fg: "#283A5C" },
+};
+
 function seasonBadge(y: number): string {
   return `${String(y - 1).slice(-2)}/${String(y).slice(-2)}`;
 }
@@ -948,8 +967,12 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                                 season of a player this row is, so they read as pills
                                 rather than as more dot-separated meta text. */}
                             {p.class && (
-                              <span className="inline-flex items-center rounded px-1.5 py-px text-[0.6rem] font-semibold
-                                               bg-paper-deep text-ink-muted border border-hairline/70">
+                              <span
+                                className="inline-flex items-center rounded px-1.5 py-px text-[0.6rem] font-semibold"
+                                style={CLASS_BADGE[p.class]
+                                  ? { background: CLASS_BADGE[p.class]!.bg, color: CLASS_BADGE[p.class]!.fg }
+                                  : undefined}
+                              >
                                 {p.class}
                               </span>
                             )}
