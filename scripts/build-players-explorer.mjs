@@ -58,7 +58,7 @@ export const FIELDS = [
   "min_pg", "pts_pg", "reb_pg", "ast_pg", "stl_pg", "blk_pg", "fg_pct",
   "fg3_pct", "fg2_pct", "ft_pct", "ts_pct", "efg_pct", "fta_rate", "orb_pg",
   "tov_pg", "tov_pct", "usage_pct", "net_rtg", "ast_to_tov", "drb_pg",
-  "hkm_pct", "pir", "porpag", "bta_porpag", "fg3_made", "fg3_att",
+  "hkm_pct", "pir", "porpag", "bta_porpag", "fg3_made", "fg3_att", "ppp",
 ];
 
 /**
@@ -175,6 +175,27 @@ export function transformPlayer(raw) {
 
   const efg_pct = fgm !== null && fg3_made !== null && fga !== null && fga > 0
     ? (fgm + 0.5 * fg3_made) / fga : null;
+
+  // Points Per Possession — points scored per possession the player USED.
+  //
+  //     PPP = PTS / (FGA + 0.44 * FTA + TOV)
+  //
+  // Same numerator as TS%, and the difference is the point of it: TS% divides by
+  // shooting possessions only, so a turnover is invisible to it. PPP puts
+  // turnovers in the denominator, which is where they belong — a possession
+  // ended with a giveaway was still a possession spent. A high-TS% guard who
+  // coughs it up eight times a night reads differently here than he does there.
+  //
+  // Note this is possessions USED, not the team-possession formula (no
+  // offensive-rebound term): it answers what he did with the ball, not how many
+  // trips the team took. Null when the turnover feed has no row for the player
+  // (~5% of historical seasons) rather than pretending TOV was zero, which would
+  // silently flatter exactly the players it should catch.
+  const tov_total = adv?.tov_pg !== null && adv?.tov_pg !== undefined && games !== null
+    ? adv.tov_pg * games : null;
+  const ppp = pts_pg !== null && games !== null && fga !== null && ft_att !== null
+    && tov_total !== null && (fga + 0.44 * ft_att + tov_total) > 0
+    ? (pts_pg * games) / (fga + 0.44 * ft_att + tov_total) : null;
   const fta_rate = ft_att !== null && fga !== null && fga > 0 ? ft_att / fga : null;
 
   const orb_pg = asNum(fromEnd(row, FROM_END.orb_pg));
@@ -209,6 +230,7 @@ export function transformPlayer(raw) {
     fg2_pct: asNum(fromStart(row, FROM_START.fg2_pct)),
     ft_pct: asNum(fromStart(row, FROM_START.ft_pct)),
     ts_pct,
+    ppp,
     efg_pct,
     fta_rate,
     orb_pg,

@@ -108,6 +108,12 @@ export type PlayerSummary = {
   fg2_pct: number | null;
   ft_pct: number | null;
   ts_pct: number | null;        // PTS / (2 * (FGA + 0.44 * FTA))
+  /**
+   * Points per possession USED — PTS / (FGA + 0.44*FTA + TOV).
+   * Same numerator as TS%; the denominator adds turnovers, which TS% ignores.
+   * Null where the turnover feed has no row rather than treating TOV as zero.
+   */
+  ppp: number | null;
   efg_pct: number | null;       // (FGM + 0.5 * 3PM) / FGA
   fta_rate: number | null;      // FTA / FGA
   orb_pg: number | null;        // offensive rebounds per game
@@ -242,6 +248,7 @@ export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
   { key: "ewins",  label: "eWins",  desc: "Estimated wins added vs an average player — EPM × possessions played ÷ 30 points of margin per win. The value form of EPM: it rewards doing it for 34 minutes a night rather than 18.", group: "impact", format: "num2", field: "ewins" },
 
   // ── Advanced ─────────────────────────────────────────────
+  { key: "ppp",      label: "PPP",      desc: "Points Per Possession — points scored per possession the player USED: PTS / (FGA + 0.44·FTA + TOV). Same numerator as TS%, but turnovers are in the denominator, so a possession ended with a giveaway still counts as one spent.", group: "advanced", format: "num2", field: "ppp" },
   { key: "pir",      label: "PIR",      desc: "EuroLeague Performance Index Rating (per game, minus TOV)",                              group: "advanced", format: "num1", field: "pir" },
   { key: "bta_porpag", label: "PORP",   desc: "BTA Points Over Replacement per game — points produced above a replacement-level player on the same possessions, credited for the defence actually faced. Built from per-game data, so a big night against the country's best defence counts as one.", group: "advanced", format: "num2", field: "bta_porpag" },
   { key: "net_rtg",  label: "Net Rtg",  desc: "Individual offensive rating minus defensive rating, per 100 possessions",               group: "advanced", format: "num1", field: "net_rtg" },
@@ -322,7 +329,7 @@ export type PlayerListSpec = {
    */
   cols: string[];
   sortBy: "pir" | "bta_porpag" | "pts" | "reb" | "ast" | "fg_pct" | "fg3_pct" | "ts_pct" | "games" | "name"
-    | "epm" | "off_epm" | "def_epm" | "ewins" | "min" | "usage" | "orb" | "drb" | "tov" | "tov_pct" | "stl" | "blk" | "hkm";
+    | "epm" | "off_epm" | "def_epm" | "ewins" | "ppp" | "min" | "usage" | "orb" | "drb" | "tov" | "tov_pct" | "stl" | "blk" | "hkm";
   sortDir: "asc" | "desc";
   limit: number;
 };
@@ -335,7 +342,7 @@ export type PlayerListSpec = {
  */
 export const VALID_SORTS: PlayerListSpec["sortBy"][] = [
   "pir", "bta_porpag", "pts", "reb", "ast", "fg_pct", "fg3_pct",
-  "ts_pct", "games", "name", "epm", "off_epm", "def_epm", "ewins", "min", "usage",
+  "ts_pct", "games", "name", "epm", "off_epm", "def_epm", "ewins", "ppp", "min", "usage",
   "orb", "drb", "tov", "tov_pct", "stl", "blk", "hkm",
 ];
 
@@ -348,7 +355,15 @@ export const DEFAULT_PLAYER_SPEC: PlayerListSpec = {
   minGames: 10,
   filters: [],
   cols: [],
-  sortBy: "epm",
+  // eWINS IS THE DEFAULT, not EPM. EPM is a per-100 RATE, so a 24-minute role
+  // player on a good team posts the same number as the man who closes games —
+  // its top 20 averaged 30.3 mpg with four players under 28. eWins multiplies
+  // the rate by the possessions actually played: top 20 at 32.3 mpg and nobody
+  // under 28. Minutes are also the one input here that does NOT come from the
+  // floor — they are a coach's judgement, which is independent evidence the box
+  // score and the stints do not contain, and the only tiebreaker available for
+  // five starters who share every possession.
+  sortBy: "ewins",
   sortDir: "desc",
   // 50 a page. The table now sizes itself to the viewport rather than a
   // fixed 1250px box, so a page of 50 fills the screen and the pager is

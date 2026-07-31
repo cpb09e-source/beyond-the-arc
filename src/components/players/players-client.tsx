@@ -61,6 +61,7 @@ const GRID_COLS: GridCol[] = [
   { label: "PIR", field: "pir", fmt: "num1", pct: "pir", sortKey: "pir" },
   { label: "PPG", field: "pts_pg", fmt: "num1", pct: "pts_pg", sortKey: "pts" },
   { label: "TS%", field: "ts_pct", fmt: "pct1", pct: "ts_pct", sortKey: "ts_pct" },
+  { label: "PPP", field: "ppp", fmt: "num2", pct: "ppp", sortKey: "ppp" },
   { label: "FG%", field: "fg_pct", fmt: "pct1", pct: "fg_pct", sortKey: "fg_pct" },
   { label: "3P%", field: "fg3_pct", fmt: "pct1", pct: "fg3_pct", sortKey: "fg3_pct" },
   { label: "ORB", field: "orb_pg", fmt: "num1", pct: "orb_pg", sortKey: "orb" },
@@ -79,7 +80,7 @@ const GRID_BANDS: Array<{ label: string; span: number; epm?: boolean }> = [
   { label: "EPM", span: 4, epm: true },
   { label: "Role", span: 2 },
   { label: "Scoring", span: 2 },
-  { label: "Shooting", span: 3 },
+  { label: "Shooting", span: 4 },
   { label: "Rebounding", span: 3 },
   { label: "Handle", span: 2 },
   { label: "Defense", span: 3 },
@@ -258,7 +259,7 @@ function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummar
     fg_pct: "fg_pct", fg3_pct: "fg3_pct", ts_pct: "ts_pct",
     games: "games",
     name: "name",
-    epm: "epm", off_epm: "off_epm", def_epm: "def_epm", ewins: "ewins",
+    epm: "epm", off_epm: "off_epm", def_epm: "def_epm", ewins: "ewins", ppp: "ppp",
     min: "min_pg", usage: "usage_pct", orb: "orb_pg", drb: "drb_pg",
     tov: "tov_pg", tov_pct: "tov_pct", stl: "stl_pg", blk: "blk_pg", hkm: "hkm_pct",
   };
@@ -284,7 +285,7 @@ const PCT_KEYS = [
   "epm", "off_epm", "def_epm", "usage_pct", "pts_pg",
   "orb_pg", "drb_pg", "reb_pg", "ast_pg", "tov_pg", "tov_pct", "stl_pg", "blk_pg", "hkm_pct",
   // Filterable extras that can appear as dynamic columns:
-  "efg_pct", "fg2_pct", "ft_pct", "fta_rate", "ast_to_tov", "porpag", "bta_porpag", "min_pg",
+  "efg_pct", "fg2_pct", "ft_pct", "fta_rate", "ast_to_tov", "porpag", "bta_porpag", "min_pg", "ppp",
 ] as const;
 type PctKey = (typeof PCT_KEYS)[number];
 type PctMaps = Record<PctKey, Map<number, number>>;
