@@ -245,7 +245,7 @@ export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
   // so a 6th man can post the same number as a 34-minute starter; multiplying
   // by the possessions he actually played is what separates them. Correlation
   // with minutes goes 0.12 (ARC) to 0.29 (eWins), with usage 0.05 to 0.12.
-  { key: "ewins",  label: "eWins",  desc: "Estimated wins added vs an average player — EPM × possessions played ÷ 30 points of margin per win. The value form of EPM: it rewards doing it for 34 minutes a night rather than 18.", group: "impact", format: "num2", field: "ewins" },
+  { key: "ewins",  label: "eWins",  desc: "Estimated wins added vs an average player — the value form of EPM, converting per-possession impact into wins over the playing time a player actually got. Rewards doing it for 34 minutes a night rather than 18.", group: "impact", format: "num2", field: "ewins" },
 
   // ── Advanced ─────────────────────────────────────────────
   { key: "ppp",      label: "PPP",      desc: "Points Per Possession — points scored per possession the player USED: PTS / (FGA + 0.44·FTA + TOV). Same numerator as TS%, but turnovers are in the denominator, so a possession ended with a giveaway still counts as one spent.", group: "advanced", format: "num2", field: "ppp" },
