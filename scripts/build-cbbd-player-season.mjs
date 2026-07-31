@@ -162,6 +162,7 @@ function buildSeason(year) {
         usg: num(p.usage), efg: num(p.effectiveFieldGoalPct), ts: num(p.trueShootingPct),
         ftr: num(p.freeThrowRate), orb: num(p.offensiveReboundPct),
         ato: num(p.assistsTurnoverRatio), fouls: num(p.fouls), pts: num(p.points),
+        tov: num(p.turnovers),
         fga: num(p.fieldGoals?.attempted) ?? 0,
       });
     }
@@ -245,6 +246,11 @@ function buildSeason(year) {
       efg: r1(w((r) => r.efg, "poss")), ts: r1(w((r) => r.ts, "poss")),
       ftr: r1(w((r) => r.ftr)), orb_pct: r1(w((r) => r.orb)),
       ato: r2(w((r) => r.ato)),
+      // Season turnover TOTAL, not a rate. It exists so the explorer can rebuild
+      // TOV% and PPP for players whose upstream advanced-stats row is missing —
+      // both need turnovers in a denominator, and a null there is what makes the
+      // whole advanced block disappear for ~3% of qualified players.
+      tov: R.reduce((s, r) => s + (r.tov ?? 0), 0),
       fouls40: r2(wmean(R.map((r) => [(r.fouls / r.min) * 40, r.min]))),
       gs40: r2(gsMean), gs40_sd: r2(gsSd),
       ...(sh ? {

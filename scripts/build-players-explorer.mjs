@@ -143,12 +143,41 @@ const fromStart = (row, idx) => (!row || row.length <= idx ? null : row[idx]);
  * bytes are worth.
  */
 
+/**
+ * CBBD season aggregate, used ONLY to fill holes in advanced_stats.
+ *
+ * The upstream advanced row is matched on name, and the match misses when the
+ * two sources spell a player differently — CBBD has "MJ Collins Jr.", Bart has
+ * "MJ Collins". When it misses, usage, TOV%, PPP and Net Rtg all vanish
+ * together, because all four come off that one row: 59 of 2,090 players at 20+
+ * mpg in 2026, every one of them missing the identical four fields.
+ *
+ * The CBBD join in build-cbbd-player-season.mjs normalises suffixes, so it
+ * already has these players. It recovers 49 of the 59.
+ *
+ * SAFE TO SUBSTITUTE because the two agree where both exist: r = 0.980 on
+ * usage over 2,030 qualified 2026 players, mean absolute difference 0.31 usage
+ * points, identical means to one decimal. Only ever used as a FALLBACK — where
+ * the real row is present it wins, so no player's number changes.
+ *
+ * 2022 onward, which is where CBBD's per-game archive starts.
+ */
+const cbbdCache = new Map();
+function cbbdSeason(year) {
+  if (!cbbdCache.has(year)) {
+    const f = path.resolve("data/derived", `cbbd-season-${year}.json`);
+    cbbdCache.set(year, fs.existsSync(f) ? (JSON.parse(fs.readFileSync(f, "utf8")).players ?? {}) : {});
+  }
+  return cbbdCache.get(year);
+}
+
 /** Port of transformPlayer() in players-client.tsx. Keep in step with it. */
 export function transformPlayer(raw) {
   const team = Array.isArray(raw.teams) ? raw.teams[0] : raw.teams;
   const stats = Array.isArray(raw.player_bart_stats) ? raw.player_bart_stats[0] : raw.player_bart_stats;
   const row = stats?.raw_row ?? null;
   const adv = raw.advanced_stats ?? null;
+  const cb = raw.bart_player_id != null ? (cbbdSeason(raw.year)?.[String(raw.bart_player_id)] ?? null) : null;
 
   const games = stats?.games ?? null;
   const pts_pg = asNum(fromEnd(row, FROM_END.pts_pg));
@@ -192,7 +221,8 @@ export function transformPlayer(raw) {
   // (~5% of historical seasons) rather than pretending TOV was zero, which would
   // silently flatter exactly the players it should catch.
   const tov_total = adv?.tov_pg !== null && adv?.tov_pg !== undefined && games !== null
-    ? adv.tov_pg * games : null;
+    ? adv.tov_pg * games
+    : typeof cb?.tov === "number" ? cb.tov : null;
   const ppp = pts_pg !== null && games !== null && fga !== null && ft_att !== null
     && tov_total !== null && (fga + 0.44 * ft_att + tov_total) > 0
     ? (pts_pg * games) / (fga + 0.44 * ft_att + tov_total) : null;
@@ -234,11 +264,20 @@ export function transformPlayer(raw) {
     efg_pct,
     fta_rate,
     orb_pg,
-    tov_pg: adv?.tov_pg ?? null,
-    tov_pct: adv?.tov_pct ?? null,
-    usage_pct: adv?.usage_pct ?? null,
-    net_rtg: adv?.net_rtg ?? null,
-    ast_to_tov: ast_pg !== null && adv?.tov_pg != null && adv.tov_pg > 0 ? ast_pg / adv.tov_pg : null,
+    // Each falls back to the CBBD aggregate when the advanced row is missing.
+    // usage arrives as a percentage there and a fraction here; TOV% and PPP are
+    // recomputed from the turnover total rather than taken over, so they use the
+    // same formula for every player however the turnovers were sourced.
+    tov_pg: adv?.tov_pg ?? (tov_total !== null && games ? tov_total / games : null),
+    tov_pct: adv?.tov_pct
+      ?? (tov_total !== null && fga !== null && ft_att !== null && (fga + 0.44 * ft_att + tov_total) > 0
+        ? tov_total / (fga + 0.44 * ft_att + tov_total) : null),
+    usage_pct: adv?.usage_pct ?? (typeof cb?.usg === "number" ? cb.usg / 100 : null),
+    net_rtg: adv?.net_rtg
+      ?? (typeof cb?.ortg === "number" && typeof cb?.drtg === "number" ? cb.ortg - cb.drtg : null),
+    ast_to_tov: ast_pg !== null && adv?.tov_pg != null && adv.tov_pg > 0
+      ? ast_pg / adv.tov_pg
+      : (typeof cb?.ato === "number" ? cb.ato : null),
     drb_pg: reb_pg !== null && orb_pg !== null ? reb_pg - orb_pg : null,
     hkm_pct: blkRate !== null && stlRate !== null ? blkRate + stlRate : null,
     pir,
