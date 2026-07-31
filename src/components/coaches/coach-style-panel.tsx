@@ -47,57 +47,38 @@ export function CoachStylePanel({
   // They get nothing rather than a panel of dashes.
   if (!styleAvg || !stylePct || typeof styleAvg.pace !== "number") return null;
 
-  const headline = describeStyle(styleAvg, stylePct);
 
   return (
-    <section className="mx-auto max-w-[97rem] px-6 lg:px-10 mt-10">
-      <div className="flex items-baseline gap-3 mb-1">
-        <h2 className="font-display text-2xl lg:text-3xl text-ink leading-none tracking-tight">Play style</h2>
-        <span className="text-[0.6rem] uppercase tracking-[0.18em] text-ink-muted font-semibold">
-          career average vs all coaches
-        </span>
-      </div>
-      {headline && <p className="text-base text-ink-soft mb-6 max-w-3xl">{headline}</p>}
-
-      {/* Content-width, not page-width. The lists were previously sized by a
-          1fr grid track, so each row stretched label away from value across the
-          whole remaining page — the numbers ended up a screen apart from the
-          thing they describe. Fixed columns keep the pair readable together. */}
-      <div className="flex flex-col lg:flex-row lg:items-center gap-x-12 gap-y-8">
-        <StyleRadar stylePct={stylePct} />
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-6">
-          {(["Offense", "Defense"] as const).map((group) => (
-            <div key={group} className="w-full sm:w-[15.5rem]">
-              <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-2.5 flex items-center gap-2">
-                <span className="h-px w-6 bg-coral" />
-                {group}
-              </div>
-              <ul className="space-y-1.5">
-                {STYLE_DIMENSIONS.filter((d) => d.group === group).map((d) => (
-                  <StyleRow
-                    key={d.key}
-                    label={d.label}
-                    unit={d.unit}
-                    value={styleAvg[d.key]}
-                    pct={stylePct[d.key]}
-                  />
-                ))}
-              </ul>
+    /* Sized to its content and dropped straight into the coach header, so it
+       carries no heading of its own — the header already names the coach, and
+       this is the shape of how his teams played, read alongside it. */
+    <div className="flex flex-col sm:flex-row sm:items-start gap-x-6 gap-y-5">
+      <StyleRadar stylePct={stylePct} />
+      <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+        {(["Offense", "Defense"] as const).map((group) => (
+          <div key={group} className="w-[13.5rem]">
+            <div className="text-[0.55rem] uppercase tracking-[0.18em] text-coral font-bold mb-2 flex items-center gap-1.5">
+              <span className="h-px w-4 bg-coral" />
+              {group}
             </div>
-          ))}
-        </div>
+            <ul className="space-y-1">
+              {STYLE_DIMENSIONS.filter((d) => d.group === group).map((d) => (
+                <StyleRow
+                  key={d.key}
+                  label={d.label}
+                  unit={d.unit}
+                  value={styleAvg[d.key]}
+                  pct={stylePct[d.key]}
+                />
+              ))}
+            </ul>
+          </div>
+        ))}
       </div>
-    </section>
+    </div>
   );
 }
 
-/**
- * One dimension: label, value, a centred deviation bar, and the career line.
- *
- * The bar is anchored at the 50th percentile and grows toward whichever end
- * the coach sits at, so length reads as "how unusual" rather than "how much".
- */
 /**
  * The fingerprint itself.
  *
@@ -131,7 +112,7 @@ function StyleRadar({ stylePct }: { stylePct: CoachStyle }) {
   const poly = dims.map((e, i) => at(i, radius(e.p)).join(",")).join(" ");
 
   return (
-    <div className="w-full max-w-[19rem] shrink-0 mx-auto lg:mx-0">
+    <div className="w-full max-w-[14.5rem] shrink-0 mx-auto sm:mx-0">
       <svg
         viewBox={`0 0 ${S} ${S}`}
         className="w-full h-auto overflow-visible"
@@ -200,49 +181,4 @@ function StyleRow({
       <PercentileChip pct={Math.round(pct)} className="shrink-0" />
     </li>
   );
-}
-
-/**
- * Name the style from its two or three most extreme dimensions.
- *
- * The headline the panel is built around: a reader should learn what a coach
- * is before reading a single number. Only genuine outliers qualify — a coach
- * inside the middle 40% of every dimension gets no sentence, because "average
- * at everything" is the honest answer for most of the field.
- */
-function describeStyle(avg: CoachStyle, pct: CoachStyle): string | null {
-  const scored = STYLE_DIMENSIONS
-    .map((d) => ({ d, p: pct[d.key] }))
-    .filter((e): e is { d: (typeof STYLE_DIMENSIONS)[number]; p: number } => typeof e.p === "number")
-    .map((e) => ({ ...e, dev: Math.abs(e.p - 50) }))
-    .filter((e) => e.dev >= 30)
-    .sort((a, b) => b.dev - a.dev)
-    .slice(0, 3);
-
-  if (scored.length === 0) return null;
-  void avg;
-
-  // A genuine outlier gets its own opening sentence, named by the stat rather
-  // than the behaviour: "Lowest tempo in the field." Trying to fold that into
-  // the list produced "plays slow as much as anyone in the field, contests
-  // everything as much as anyone in the field and ...", which is unreadable —
-  // the superlative has to be said once, not attached to every clause.
-  // Only the actual extreme earns the superlative — rank 1 or rank 774 on that
-  // dimension, nothing weaker. At the 5% threshold this started with, six of
-  // the fifteen coaches I checked were each billed as having the lowest
-  // opponent shooting allowed in the field, which is five too many.
-  const top = scored[0]!;
-  const lead = top.dev >= 49.99
-    ? `${top.p >= 50 ? "Highest" : "Lowest"} ${top.d.noun} in the field.`
-    : null;
-
-  const rest = (lead ? scored.slice(1) : scored).map(({ d, p }) => (p >= 50 ? d.high : d.low));
-  if (rest.length === 0) return lead;
-
-  const listed = rest.length === 1
-    ? rest[0]!
-    : `${rest.slice(0, -1).join(", ")} and ${rest[rest.length - 1]}`;
-  const tail = listed.charAt(0).toUpperCase() + listed.slice(1) + ".";
-
-  return lead ? `${lead} ${tail}` : tail;
 }

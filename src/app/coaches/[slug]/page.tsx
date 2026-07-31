@@ -199,6 +199,11 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
         <div className="absolute inset-0 pointer-events-none opacity-[0.04]"
              style={{ backgroundImage: "linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
         <div className="relative mx-auto max-w-[97rem] px-6 lg:px-10 pt-12 pb-5 lg:pb-12">
+          {/* Identity left, style fingerprint right. The header answers "who",
+              and the shape answers "what kind of basketball" — reading them
+              together is the point, and it was previously a scroll apart. */}
+          <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-y-8 xl:gap-x-12">
+          <div className="min-w-0">
           <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium mb-4">
             <span className="h-px w-8 bg-coral" />
             <Link href="/coaches/" className="hover:text-ink transition-colors">All head coaches</Link>
@@ -265,6 +270,14 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
               ))}
             </div>
           )}
+          </div>
+
+          {profile.style_avg && profile.style_pct && (
+            <div className="xl:pt-2 shrink-0">
+              <CoachStylePanel styleAvg={profile.style_avg} stylePct={profile.style_pct} />
+            </div>
+          )}
+          </div>
         </div>
       </section>
 
@@ -380,11 +393,6 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
           </div>
         </section>
       )}
-
-      {/* PLAY STYLE — what kind of basketball, after how good. Self-hiding for
-          the 30 coaches with too few joined team-seasons to average. */}
-      <CoachStylePanel styleAvg={profile.style_avg} stylePct={profile.style_pct} />
-
       {/* YEAR-BY-YEAR — headline ledger. Heavier chrome than the other
           cards on the page so this anchors the page as the canonical record. */}
       <section className="mx-auto max-w-[97rem] px-6 lg:px-10 mt-8">
