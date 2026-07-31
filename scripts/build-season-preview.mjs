@@ -183,6 +183,53 @@ async function main() {
     } catch { return null; }
   };
 
+  /**
+   * Name -> our 2026 player, for rows that arrive WITHOUT a Bart id.
+   *
+   * The overlays (portal, recruits, official rosters, draftees) push players by
+   * NAME, so anyone they add lands with bart_id null, status "newcomer" and a
+   * row of empty stats — even when we already hold his 2025-26 season. Across
+   * all 365 teams that was 657 rows: Jaden Bradley, Brayden Burries and Koa Peat
+   * all showed on Arizona as statless newcomers having just played there.
+   *
+   * Only UNIQUE names resolve. Two players sharing a normalised name is exactly
+   * the case where a guess attaches one man's season to another, and the cost of
+   * leaving those blank is a row that looks like it already did.
+   */
+  const normName = (s) =>
+    (s ?? "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
+  // Suffix-stripping key, on top of the shared normName (which deliberately
+  // keeps suffixes — the recruit and draftee matching below relies on that).
+  // "MJ Collins Jr." and "MJ Collins" are the same man and the two feeds do not
+  // agree on which one to print.
+  const linkKey = (s) => normName(s).replace(/\s+(jr|sr|ii|iii|iv|v)$/, "");
+  const prevByName = new Map();
+  for (const pl of prev) {
+    if (pl.bart_player_id == null) continue;
+    const k = linkKey(pl.name);
+    if (prevByName.has(k)) prevByName.set(k, "AMBIGUOUS");
+    else prevByName.set(k, pl);
+  }
+
+  /** Fill in bart_id, class, height, status and last season's line, in place. */
+  function resolveUnlinked(teamName, row) {
+    if (row.bart_id != null) return false;
+    const hit = prevByName.get(linkKey(row.name));
+    if (!hit || hit === "AMBIGUOUS") return false;
+    const id = hit.bart_player_id;
+    const prevTeam = prevTeamById.get(id) ?? null;
+    const st = statsFor(id);
+    row.bart_id = id;
+    row.status = prevTeam == null ? "newcomer" : prevTeam === teamName ? "returning" : "transfer";
+    if (row.status === "transfer") row.from = prevTeam;
+    else delete row.from;
+    row.ht = row.ht ?? heightById.get(id) ?? null;
+    row.link = hasPage(id, row.cls);
+    if (st) Object.assign(row, st);
+    return true;
+  }
+
   // ---- 4. Build rosters with status tags ----
   // Bart adv columns (same 67-col layout as every season): 0 name, 1 school,
   // 2 conf, 25 class, 26 height, 32 bart id; per-game tail: pts@-4, reb@-8,
@@ -227,9 +274,7 @@ async function main() {
       .replace(/[^a-z0-9]+/g, "")
       .trim();
   const bartTeamByNorm = new Map(Object.keys(teams).map((n) => [normTeam(n), n]));
-  const normName = (s) =>
-    (s ?? "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
-      .replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
+
   let moved = 0, addedFromPortal = 0, destMiss = 0, lowSampleSuppressed = 0;
   try {
     const portal = JSON.parse(fs.readFileSync(path.join(DATA, "portal.json"), "utf8"));
@@ -412,6 +457,15 @@ async function main() {
   // L.J. Cason (PRTG 8.0) to Trey McKenney (EPM 4.9, 98th pct).
   for (const t of Object.values(teams)) {
     t.roster.sort((a, b) => (b.epm ?? -99) - (a.epm ?? -99));
+  }
+
+  // ---- Post-overlay: rescue rows the overlays added by name only ----
+  {
+    let fixed = 0;
+    for (const [teamName, t2] of Object.entries(teams)) {
+      for (const row of t2.roster) if (resolveUnlinked(teamName, row)) fixed++;
+    }
+    console.log(`  linked ${fixed} overlay rows back to their 2026 season`);
   }
 
   const out = {
