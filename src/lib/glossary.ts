@@ -105,7 +105,13 @@ const OVERRIDES: Record<string, Omit<GlossaryEntry, "category">> = {
       + "playing time. This is the default sort on the player board, because a rate alone treats a "
       + "24-minute role player and the man who closes games as equals. Minutes are also the one "
       + "input we have that does not come off the floor — they are a coach's judgement about a "
-      + "player, formed from practices nobody outside the program sees.",
+      + "player, formed from practices nobody outside the program sees."
+      + " Estimates for the lowest-usage players are eased toward average before the total is "
+      + "taken: someone who ends very few possessions leaves less evidence behind him, and a "
+      + "thin estimate should not be published at full confidence.",
+    caveat:
+      "That easing pulls in from BOTH ends — a low-usage player with a negative figure moves up "
+      + "too. It is a statement about how much we know, not about how good he is.",
   },
   PORP: {
     term: "PORP — Points Over Replacement",

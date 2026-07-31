@@ -31,6 +31,32 @@ const MIN_POSS = 300; // below this the RAPM is mostly shrinkage — exclude fro
  * "how good is your team". Emitting that as a number invited exactly the wrong
  * reading; emitting nothing lets the UI say "—", which is the truth.
  */
+/**
+ * eWins RELIABILITY SHRINKAGE for low-usage players.
+ *
+ * eWins is EPM x possessions, and EPM for a low-usage player rests much more
+ * heavily on the box prior — he simply does not end enough possessions for the
+ * on-court half to say much about him specifically, and what the prior knows
+ * about a 12%-usage role player is thin. The estimate is not wrong so much as
+ * UNDER-EVIDENCED, and the honest response to a weak estimate is to move it
+ * toward the average rather than to publish it at full confidence.
+ *
+ * So below the 34th percentile in usage, eWins is scaled toward zero on a ramp:
+ * full weight at the 34th, LOW_USG_FLOOR at the 0th, linear between.
+ *
+ * TOWARD ZERO, NOT DOWNWARD — this is shrinkage, not a penalty. A low-usage
+ * player with NEGATIVE eWins moves UP, because less confidence should pull an
+ * estimate in from both tails, not just the flattering one. A punishment would
+ * only ever subtract, and would be a claim about a player's worth rather than
+ * about how much we know.
+ *
+ * Usage percentile is computed over the players who actually receive an EPM
+ * (post minutes gate), so it ranks against the same population the column is
+ * read against.
+ */
+const LOW_USG_PCTILE = Number(process.env.BTA_LOW_USG_PCTILE ?? 34);
+const LOW_USG_FLOOR = Number(process.env.BTA_LOW_USG_FLOOR ?? 0.85);
+
 const MIN_PG = Number(args.includes("--min-pg") ? args[args.indexOf("--min-pg") + 1] : 13);
 // Which fit to read and where to write it. Defaults are the shipped metric; the
 // CALIBRATION pass overrides both so the prior-free fit lands in its own file.
@@ -90,10 +116,14 @@ function main() {
   // Minutes per game by bart id — Bart's raw_row column 54, the same one the
   // explorer reads. Needed for the MIN_PG gate; epm.csv only carries possessions.
   const mpgByBart = new Map();
+  const usgByBart = new Map();
   for (const p of bart) {
     if (p.bart_player_id == null) continue;
     {
       const st = Array.isArray(p.player_bart_stats) ? p.player_bart_stats[0] : p.player_bart_stats;
+      const u = st?.raw_row?.[6];      // Bart usage %
+      const un = typeof u === "number" ? u : typeof u === "string" ? Number(u) : NaN;
+      if (Number.isFinite(un)) usgByBart.set(p.bart_player_id, un);
       const v = st?.raw_row?.[54];
       const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
       if (Number.isFinite(n)) mpgByBart.set(p.bart_player_id, n);
@@ -142,6 +172,31 @@ function main() {
       ...(ex ? { ewins: ex.ewins, on_off: ex.on_off } : {}),
     };
   }
+
+  // ---- eWins reliability shrinkage (see LOW_USG_* above) ----
+  // Ranked over the players who actually got an EPM, so the percentile matches
+  // the population a reader compares them against.
+  let shrunk = 0, minFactor = 1;
+  {
+    const withUsg = Object.keys(players)
+      .map((bid) => ({ bid, u: usgByBart.get(Number(bid)) }))
+      .filter((x) => Number.isFinite(x.u))
+      .sort((a, b) => a.u - b.u);
+    const n = withUsg.length;
+    withUsg.forEach((x, i) => {
+      const pct = n <= 1 ? 100 : (i / (n - 1)) * 100;
+      if (pct >= LOW_USG_PCTILE) return;
+      const factor = LOW_USG_FLOOR + (1 - LOW_USG_FLOOR) * (pct / LOW_USG_PCTILE);
+      const p = players[x.bid];
+      if (typeof p.ewins !== "number") return;
+      p.ewins = Math.round(p.ewins * factor * 100) / 100;
+      p.usg_shrink = Math.round(factor * 1000) / 1000;
+      shrunk++;
+      if (factor < minFactor) minFactor = factor;
+    });
+  }
+  console.log(`  eWins shrinkage: ${shrunk.toLocaleString()} players under the `
+    + `${LOW_USG_PCTILE}th usage percentile, factor ${minFactor.toFixed(3)}–1.000`);
 
   const out = {
     season: SEASON,
