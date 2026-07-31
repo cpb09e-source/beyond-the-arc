@@ -58,7 +58,6 @@ const GRID_COLS: GridCol[] = [
   { label: "eWins", field: "ewins", fmt: "num2", pct: null, sortKey: "ewins", band: true },
   { label: "MPG", field: "min_pg", fmt: "int", pct: null, sortKey: "min" },
   { label: "USG", field: "usage_pct", fmt: "pct1", pct: "usage_pct", sortKey: "usage" },
-  { label: "PIR", field: "pir", fmt: "num1", pct: "pir", sortKey: "pir" },
   { label: "PPG", field: "pts_pg", fmt: "num1", pct: "pts_pg", sortKey: "pts" },
   { label: "TS%", field: "ts_pct", fmt: "pct1", pct: "ts_pct", sortKey: "ts_pct" },
   { label: "PPP", field: "ppp", fmt: "num2", pct: "ppp", sortKey: "ppp" },
@@ -79,7 +78,7 @@ const GRID_COLS: GridCol[] = [
 const GRID_BANDS: Array<{ label: string; span: number; epm?: boolean }> = [
   { label: "EPM", span: 4, epm: true },
   { label: "Role", span: 2 },
-  { label: "Scoring", span: 2 },
+  { label: "Scoring", span: 1 },
   { label: "Shooting", span: 4 },
   { label: "Rebounding", span: 3 },
   { label: "Handle", span: 2 },
