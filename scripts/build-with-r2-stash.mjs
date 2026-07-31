@@ -108,6 +108,23 @@ async function main() {
   // client asks for the dot-flattened names, so every prefetch 404s until these
   // are renamed. See the header of the script for the encoder this mirrors.
   // Must run AFTER next build (it rewrites out/) and is idempotent.
+  // The explorer's has_page flag is a port of readRankedPlayerIds(); this
+  // checks it against the pages next build actually wrote, so a drifted port
+  // fails the build instead of quietly restoring the 404 links.
+  console.log("\n→ node scripts/verify-player-links.mjs…");
+  const linkCode = await new Promise((resolve) => {
+    const child = spawn("node", ["scripts/verify-player-links.mjs"], {
+      stdio: "inherit",
+      shell: true,
+      cwd: ROOT,
+    });
+    child.on("close", (code) => resolve(code ?? 1));
+  });
+  if (linkCode !== 0) {
+    console.error(`✗ player-link verification failed (exit ${linkCode})`);
+    process.exit(linkCode);
+  }
+
   console.log("\n→ node scripts/flatten-rsc-segment-files.mjs…");
   const flattenCode = await new Promise((resolve) => {
     const child = spawn("node", ["scripts/flatten-rsc-segment-files.mjs"], {

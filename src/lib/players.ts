@@ -66,6 +66,16 @@ function asNum(v: RawCell): number | null {
 export type PlayerSummary = {
   id: number;                   // players.id (per-season DB id)
   bart_player_id: number | null;
+  /**
+   * Whether /players/<bart_player_id>/ was actually generated.
+   *
+   * generateStaticParams only emits profile pages for ranked players plus the
+   * freshman pass, and its own comment says the rest should "render as plain
+   * text everywhere else". The explorer was linking all of them regardless, so
+   * 30% of its rows pointed at a 404. Set from the explorer payload, which
+   * computes it against the same three rules the page generator uses.
+   */
+  has_page: boolean;
   name: string;
   team_name: string;
   team_conference: string | null;

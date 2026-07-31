@@ -53,13 +53,63 @@ const FROM_END = {
  * hardcoded on both sides so a mismatch is impossible to introduce silently.
  */
 export const FIELDS = [
-  "id", "bart_player_id", "name", "team_name", "team_conference", "team_id",
-  "year", "class", "height", "hometown", "position_note", "games", "min_pg",
-  "pts_pg", "reb_pg", "ast_pg", "stl_pg", "blk_pg", "fg_pct", "fg3_pct",
-  "fg2_pct", "ft_pct", "ts_pct", "efg_pct", "fta_rate", "orb_pg", "tov_pg",
-  "tov_pct", "usage_pct", "net_rtg", "ast_to_tov", "drb_pg", "hkm_pct",
-  "pir", "porpag", "fg3_made", "fg3_att",
+  "id", "bart_player_id", "has_page", "name", "team_name", "team_conference",
+  "team_id", "year", "class", "height", "hometown", "position_note", "games",
+  "min_pg", "pts_pg", "reb_pg", "ast_pg", "stl_pg", "blk_pg", "fg_pct",
+  "fg3_pct", "fg2_pct", "ft_pct", "ts_pct", "efg_pct", "fta_rate", "orb_pg",
+  "tov_pg", "tov_pct", "usage_pct", "net_rtg", "ast_to_tov", "drb_pg",
+  "hkm_pct", "pir", "porpag", "fg3_made", "fg3_att",
 ];
+
+/**
+ * bart_player_ids that get a profile page. A port of readRankedPlayerIds() in
+ * src/lib/static-data.ts, which is what generateStaticParams enumerates.
+ *
+ * Ported rather than imported because that file is TypeScript and pulling tsx
+ * onto the production build's critical path is a worse trade than duplicating
+ * twenty lines. The duplication is guarded: scripts/verify-player-links.mjs
+ * runs after `next build` and fails the build if this set and the directories
+ * actually written to out/players/ disagree, so drift cannot ship quietly.
+ *
+ * Three rules, in the same order:
+ *   1. every public/data/player-ranks/<id>.json  (cleared 18g/18mpg/5ppg)
+ *   2. freshman pass — any player whose MOST RECENT season was a freshman year
+ *   3. MANUAL_PROFILE_IDS
+ */
+const FRESHMAN_SCAN_START_YEAR = 2013;
+const LATEST_PLAYER_YEAR = 2026;
+const MANUAL_PROFILE_IDS = [73737]; // Tommy Murr (Lipscomb) — requested by hand
+
+function rankedPlayerIds() {
+  const ids = new Set();
+
+  const ranksDir = path.resolve("public/data/player-ranks");
+  if (fs.existsSync(ranksDir)) {
+    for (const f of fs.readdirSync(ranksDir)) {
+      if (!f.endsWith(".json")) continue;
+      const n = parseInt(f.replace(".json", ""), 10);
+      if (Number.isFinite(n)) ids.add(n);
+    }
+  }
+
+  const latestByBartId = new Map();
+  for (let year = FRESHMAN_SCAN_START_YEAR; year <= LATEST_PLAYER_YEAR; year++) {
+    const file = path.join(SRC, `${year}.json`);
+    if (!fs.existsSync(file)) continue;
+    for (const p of JSON.parse(fs.readFileSync(file, "utf8"))) {
+      const bartId = p.bart_player_id;
+      if (bartId == null || !Number.isFinite(bartId)) continue;
+      const prev = latestByBartId.get(bartId);
+      if (!prev || prev.year < year) latestByBartId.set(bartId, { year, cls: p.class ?? null });
+    }
+  }
+  for (const [bartId, latest] of latestByBartId) {
+    if (latest.cls === "Fr") ids.add(bartId);
+  }
+
+  for (const id of MANUAL_PROFILE_IDS) ids.add(id);
+  return ids;
+}
 
 const asNum = (v) => {
   if (typeof v === "number") return v;
@@ -180,7 +230,10 @@ function main() {
     .filter((f) => (only ? f === `${only}.json` : true))
     .sort();
 
-  let rawBefore = 0, rawAfter = 0, gzBefore = 0, gzAfter = 0;
+  const ranked = rankedPlayerIds();
+  console.log(`  ${ranked.size.toLocaleString()} players have a profile page; the rest render as plain text.\n`);
+
+  let rawBefore = 0, rawAfter = 0, gzBefore = 0, gzAfter = 0, linked = 0, unlinked = 0;
   for (const file of files) {
     const srcPath = path.join(SRC, file);
     const srcBuf = fs.readFileSync(srcPath);
@@ -188,6 +241,8 @@ function main() {
 
     const rows = players.map((p) => {
       const s = transformPlayer(p);
+      s.has_page = s.bart_player_id != null && ranked.has(s.bart_player_id);
+      if (s.has_page) linked++; else unlinked++;
       return FIELDS.map((f) => s[f] ?? null);
     });
 
@@ -211,6 +266,12 @@ function main() {
   console.log(
     `\n  ${files.length} seasons.  raw ${mb(rawBefore)} -> ${mb(rawAfter)}   ` +
     `gz ${mb(gzBefore)} -> ${mb(gzAfter)}  (${((1 - gzAfter / gzBefore) * 100).toFixed(1)}% smaller over the wire)`,
+  );
+  const total = linked + unlinked;
+  console.log(
+    `  ${linked.toLocaleString()} rows link to a profile, ` +
+    `${unlinked.toLocaleString()} render as plain text ` +
+    `(${((unlinked / total) * 100).toFixed(1)}% — these were 404 links).`,
   );
 }
 

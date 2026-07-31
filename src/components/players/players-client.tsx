@@ -946,7 +946,12 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                         <PlayerPhoto bartPlayerId={p.bart_player_id} name={p.name} size={28} />
                         <span className="min-w-0">
                           <span className="flex items-center gap-1">
-                            {p.bart_player_id ? (
+                            {/* Only link players who actually have a page.
+                                Pages are generated for ranked players plus the
+                                freshman pass; linking the rest sent 30% of rows
+                                to a 404. The plain-text branch below is what
+                                generateStaticParams always intended for them. */}
+                            {p.bart_player_id && p.has_page ? (
                               <Link href={`/players/${p.bart_player_id}`} className="font-medium text-ink hover:text-coral transition-colors whitespace-nowrap block leading-tight">
                                 {p.name}
                               </Link>
