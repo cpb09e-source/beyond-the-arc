@@ -234,7 +234,12 @@ export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
   { key: "box_epm", label: "Box",    desc: "Box-score half of ARC — the prior the ridge fit starts from, estimated from box stats alone. Available for every season, unlike ARC itself, which needs play-by-play.", group: "impact", format: "num1", field: "box_epm" },
   { key: "on_off",  label: "On/Off", desc: "On-off half of ARC — team net rating with the player on the floor minus off it, per 100, luck-adjusted: each side's points are restated at its own season three-point and free-throw rates, so the wobble around a team's shooting comes out and the rate itself stays. Unregularized even so, and only shown above a possession floor. Treat it as the weakest number on the page — it barely repeats year to year. 2024 onward.", group: "impact", format: "num1", field: "on_off" },
   // EPM-extras — filterable only (real-EPM seasons 2024+ have them).
-  { key: "ewins",  label: "eWins",  desc: "Estimated wins added vs an average player (ARC × possessions)", group: "impact", format: "num1", field: "ewins",  filterOnly: true },
+  // eWins is ARC's VALUE form, and it is a grid column rather than a filter
+  // because rate alone answers the wrong question. ARC is per 100 possessions,
+  // so a 6th man can post the same number as a 34-minute starter; multiplying
+  // by the possessions he actually played is what separates them. Correlation
+  // with minutes goes 0.12 (ARC) to 0.29 (eWins), with usage 0.05 to 0.12.
+  { key: "ewins",  label: "eWins",  desc: "Estimated wins added vs an average player — ARC × possessions played ÷ 30 points of margin per win. The value form of ARC: it rewards doing it for 34 minutes a night rather than 18.", group: "impact", format: "num2", field: "ewins" },
 
   // ── Advanced ─────────────────────────────────────────────
   { key: "pir",      label: "PIR",      desc: "EuroLeague Performance Index Rating (per game, minus TOV)",                              group: "advanced", format: "num1", field: "pir" },
@@ -317,7 +322,7 @@ export type PlayerListSpec = {
    */
   cols: string[];
   sortBy: "pir" | "bta_porpag" | "pts" | "reb" | "ast" | "fg_pct" | "fg3_pct" | "ts_pct" | "games" | "name"
-    | "epm" | "off_epm" | "def_epm" | "min" | "usage" | "orb" | "drb" | "tov" | "tov_pct" | "stl" | "blk" | "hkm";
+    | "epm" | "off_epm" | "def_epm" | "ewins" | "min" | "usage" | "orb" | "drb" | "tov" | "tov_pct" | "stl" | "blk" | "hkm";
   sortDir: "asc" | "desc";
   limit: number;
 };
@@ -330,7 +335,7 @@ export type PlayerListSpec = {
  */
 export const VALID_SORTS: PlayerListSpec["sortBy"][] = [
   "pir", "bta_porpag", "pts", "reb", "ast", "fg_pct", "fg3_pct",
-  "ts_pct", "games", "name", "epm", "off_epm", "def_epm", "min", "usage",
+  "ts_pct", "games", "name", "epm", "off_epm", "def_epm", "ewins", "min", "usage",
   "orb", "drb", "tov", "tov_pct", "stl", "blk", "hkm",
 ];
 

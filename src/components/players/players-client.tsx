@@ -39,7 +39,7 @@ const CLASS_LABEL: Record<string, string> = {
 // ---- Grouped stat-band grid (see docs/players-grid-rebuild-spec.md) ----
 // One entry per data column. `pct` names the percentile map feeding the chip
 // (null = no chip, e.g. MPG). `band` marks the EPM trio for the coral wash.
-type GridFmt = "num1" | "pct1" | "pct100" | "int" | "epm";
+type GridFmt = "num1" | "num2" | "pct1" | "pct100" | "int" | "epm";
 type GridCol = {
   label: string;
   field: keyof PlayerSummary;
@@ -55,6 +55,7 @@ const GRID_COLS: GridCol[] = [
   { label: "Off", field: "off_epm", fmt: "epm", pct: "off_epm", sortKey: "off_epm", band: true },
   { label: "Def", field: "def_epm", fmt: "epm", pct: "def_epm", sortKey: "def_epm", band: true },
   { label: "ARC", field: "epm", fmt: "epm", pct: "epm", sortKey: "epm", band: true },
+  { label: "eWins", field: "ewins", fmt: "num2", pct: null, sortKey: "ewins", band: true },
   { label: "MPG", field: "min_pg", fmt: "int", pct: null, sortKey: "min" },
   { label: "USG", field: "usage_pct", fmt: "pct1", pct: "usage_pct", sortKey: "usage" },
   { label: "PIR", field: "pir", fmt: "num1", pct: "pir", sortKey: "pir" },
@@ -75,7 +76,7 @@ const GRID_COLS: GridCol[] = [
 // GRID_COLS — the bands are laid out by walking spans, not by looking up
 // columns, so moving a group means moving it in both lists).
 const GRID_BANDS: Array<{ label: string; span: number; epm?: boolean }> = [
-  { label: "ARC", span: 3, epm: true },
+  { label: "ARC", span: 4, epm: true },
   { label: "Role", span: 2 },
   { label: "Scoring", span: 2 },
   { label: "Shooting", span: 3 },
@@ -105,6 +106,9 @@ function fmtGrid(v: number | null, fmt: GridFmt): string {
     case "pct1": return (v * 100).toLocaleString("en-US", { maximumFractionDigits: 1 }) + "%";
     case "pct100": return v.toLocaleString("en-US", { maximumFractionDigits: 1 }) + "%";
     case "epm": return (v >= 0 ? "+" : "") + v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    // eWins runs about 0 to 6 across a season, so one decimal collapses the
+    // middle of the board into ties.
+    case "num2": return v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     default: return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   }
 }
@@ -254,7 +258,7 @@ function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummar
     fg_pct: "fg_pct", fg3_pct: "fg3_pct", ts_pct: "ts_pct",
     games: "games",
     name: "name",
-    epm: "epm", off_epm: "off_epm", def_epm: "def_epm",
+    epm: "epm", off_epm: "off_epm", def_epm: "def_epm", ewins: "ewins",
     min: "min_pg", usage: "usage_pct", orb: "orb_pg", drb: "drb_pg",
     tov: "tov_pg", tov_pct: "tov_pct", stl: "stl_pg", blk: "blk_pg", hkm: "hkm_pct",
   };
@@ -344,7 +348,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   // selected year; 404 (no fit for that season) caches as an empty map.
   // Per-season impact map. `estimated` marks a season served by the box-score
   // Box-EPM model (pre-2024, no play-by-play) rather than the real RAPM fit.
-  const [epmByYear, setEpmByYear] = useState<Record<number, { players: Record<string, { epm: number; off: number; def: number; poss?: number | null; ewins?: number | null; on_off?: number | null }>; estimated: boolean }>>({});
+  const [epmByYear, setEpmByYear] = useState<Record<number, { players: Record<string, { epm: number; off: number; def: number; poss?: number | null; ewins?: number | null; on_off?: number | null; /** ARC-scaled copies, present only on ESTIMATED (box-score) seasons. */ epm_s?: number | null; off_s?: number | null; def_s?: number | null }>; estimated: boolean }>>({});
   // Box-EPM per season: bart_player_id -> {epm, off, def}. The box half of EPM.
   const [boxByYear, setBoxByYear] = useState<Record<number, Record<string, { epm: number; off: number; def: number }>>>({});
   // Shooting profile per season: bart_player_id -> {rim_pct,mid_pct,asst,rim_rate,tp_rate}. Filter-only.
@@ -528,7 +532,17 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         for (const p of arr) {
           const e = p.bart_player_id != null ? epmEntry.players[String(p.bart_player_id)] : undefined;
           if (e) {
-            p.epm = e.epm; p.off_epm = e.off; p.def_epm = e.def; p.epm_estimated = epmEntry.estimated;
+            // On estimated seasons prefer the ARC-SCALED copy. Box-EPM is a
+            // shrunk prediction of ARC and lives on roughly half its spread, so
+            // showing it raw in the ARC column put two different units on one
+            // axis — and no pre-play-by-play season could ever place on an
+            // all-seasons board. export-box-epm-json.mjs fits the mapping on
+            // the seasons where both exist. Real fits have no _s fields and
+            // fall through unchanged.
+            p.epm = e.epm_s ?? e.epm;
+            p.off_epm = e.off_s ?? e.off;
+            p.def_epm = e.def_s ?? e.def;
+            p.epm_estimated = epmEntry.estimated;
             p.ewins = e.ewins ?? null;
             p.poss = e.poss ?? null;
             // On-off is raw and unregularized: Juan Reyna reads +89.5 on four

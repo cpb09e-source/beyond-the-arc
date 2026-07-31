@@ -114,19 +114,48 @@ def main():
                 poss_by[pidx[int(x)]] += both / 2.0
     keep = poss_by >= 800
 
+    # WITHIN-TEAM separation is its own question, and the one that decides
+    # whether a leaderboard is usable.
+    #
+    # Overall reliability can look fine while every starter on a good team lands
+    # within half a point of every other, because five players who share every
+    # possession are not identified by stint data — the regression has nothing to
+    # tell them apart with, so ridge splits the team's credit evenly and the
+    # whole rotation rides the team's quality together.
+    #
+    # So subtract each team's own mean from its players in EACH half separately,
+    # then correlate what is left. That throws away everything the team explains
+    # and asks only: does the same teammate come out ahead both times? Raw spread
+    # is no good as a target — at low lambda it is large and entirely noise —
+    # which is why this is a RELIABILITY of the separation, not its size.
+    team_of = dict(zip(players["id"].astype(int), players["team"]))
+    tarr = np.array([team_of.get(pid, "?") for pid in
+                     sorted(pidx, key=lambda p: pidx[p])])
+
+    def demean_by_team(v):
+        out = v.copy()
+        for t in np.unique(tarr):
+            m = (tarr == t) & keep
+            if m.sum() >= 3:
+                out[m] = v[m] - v[m].mean()
+            else:
+                out[m] = np.nan
+        return out
+
     LAMS = [50, 150, 500, 1500, 4000, 12000, 30000]
-    print(f"\nSPLIT-HALF PLAYER RELIABILITY (odd vs even games, "
+    print(f"\nSPLIT-HALF RELIABILITY (odd vs even games, "
           f"{int(keep.sum()):,} players with 800+ poss)\n")
-    print("   lambda   EPM r    OFF r    DEF r")
+    print("   lambda   overall   WITHIN-TEAM   spread(within)")
     rel = {}
     for lam in LAMS:
         a = fit(half == 0, lam)
         b = fit(half == 1, lam)
         ea, eb = a[:n_p] - a[n_p:2 * n_p], b[:n_p] - b[n_p:2 * n_p]
         rel[lam] = float(np.corrcoef(ea[keep], eb[keep])[0, 1])
-        ro = float(np.corrcoef(a[:n_p][keep], b[:n_p][keep])[0, 1])
-        rd = float(np.corrcoef(a[n_p:2 * n_p][keep], b[n_p:2 * n_p][keep])[0, 1])
-        print(f"   {lam:>6}   {rel[lam]:.4f}   {ro:.4f}   {rd:.4f}")
+        da, db = demean_by_team(ea), demean_by_team(eb)
+        ok = keep & ~np.isnan(da) & ~np.isnan(db)
+        wr = float(np.corrcoef(da[ok], db[ok])[0, 1])
+        print(f"   {lam:>6}   {rel[lam]:.4f}    {wr:.4f}        {da[ok].std():.3f}")
 
     print(f"\n{args.folds}-fold by GAME ({len(uniq):,} games)\n")
     print("   lambda   held-out R2   held-out RMSE   (weighted by possessions)")

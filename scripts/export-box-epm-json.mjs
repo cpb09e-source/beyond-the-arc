@@ -11,7 +11,7 @@
 //
 //   in:  scripts/box-epm-pred.csv   (from compute-box-epm.py)
 //   out: public/data/box-epm-<year>.json  (2008..2026)
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -47,15 +47,74 @@ for (let i = 1; i < csv.length; i++) {
   byYear.get(year)[bid] = { epm, off, def };
 }
 
+/**
+ * ARC-SCALE VERSION OF THE ESTIMATE.
+ *
+ * For seasons with no play-by-play the explorer shows this file's numbers in the
+ * ARC column, marked estimated. That was comparing two different units. Box-EPM
+ * is a shrunk PREDICTION of ARC, so it lives on a much narrower scale — sd 0.87
+ * and a maximum near 3.6, against real ARC's sd 1.67 and maximum near 8.3. On an
+ * all-seasons leaderboard no pre-2024 player could ever place, not because they
+ * were worse but because their number was computed in different units.
+ *
+ * So regress real ARC on the estimate over the seasons where BOTH exist, and
+ * ship the mapping applied to every season as separate `_s` fields.
+ *
+ * Separate fields on purpose: build-epm-priors.mjs reads `off` and `def` from
+ * this same file to build the prior the RAPM fit starts from. Rescaling those
+ * in place would feed an inflated prior back into the fit. The raw values stay
+ * exactly as they were; only the display copy is rescaled.
+ *
+ * This expands the estimate's noise along with its signal — an estimate cannot
+ * become as informative as a measurement by multiplication. It only stops the
+ * two from being silently mixed on one axis.
+ */
+function arcScaling() {
+  const xs = { epm: [], off: [], def: [] };
+  const ys = { epm: [], off: [], def: [] };
+  for (const year of byYear.keys()) {
+    const f = join(DATA, `epm-${year}.json`);
+    if (!existsSync(f)) continue;                       // no real fit this season
+    const real = JSON.parse(readFileSync(f, "utf8")).players ?? {};
+    for (const [bid, r] of Object.entries(real)) {
+      const b = byYear.get(year)[bid];
+      if (!b || !(r.poss >= 800)) continue;             // reliable rows only
+      xs.epm.push(b.epm); ys.epm.push(r.epm);
+      xs.off.push(b.off); ys.off.push(r.off);
+      xs.def.push(b.def); ys.def.push(r.def);
+    }
+  }
+  const fit = (x, y) => {
+    const n = x.length;
+    if (n < 200) return { a: 1, b: 0, n };              // not enough overlap — leave alone
+    const mx = x.reduce((s, v) => s + v, 0) / n, my = y.reduce((s, v) => s + v, 0) / n;
+    let sxy = 0, sxx = 0;
+    for (let i = 0; i < n; i++) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) ** 2; }
+    const a = sxx > 0 ? sxy / sxx : 1;
+    return { a, b: my - a * mx, n };
+  };
+  return { epm: fit(xs.epm, ys.epm), off: fit(xs.off, ys.off), def: fit(xs.def, ys.def) };
+}
+const SCALE = arcScaling();
+console.log(`ARC scaling from ${SCALE.epm.n.toLocaleString()} overlapping player-seasons: `
+  + `epm x${SCALE.epm.a.toFixed(3)}${SCALE.epm.b >= 0 ? "+" : ""}${SCALE.epm.b.toFixed(3)}, `
+  + `off x${SCALE.off.a.toFixed(3)}, def x${SCALE.def.a.toFixed(3)}`);
+
 let total = 0;
 for (const [year, players] of [...byYear.entries()].sort((a, b) => a[0] - b[0])) {
   const n = Object.keys(players).length;
   total += n;
+  for (const p of Object.values(players)) {
+    p.epm_s = Math.round((SCALE.epm.a * p.epm + SCALE.epm.b) * 100) / 100;
+    p.off_s = Math.round((SCALE.off.a * p.off + SCALE.off.b) * 100) / 100;
+    p.def_s = Math.round((SCALE.def.a * p.def + SCALE.def.b) * 100) / 100;
+  }
   const doc = {
     season: year,
     built_at: BUILT_AT,
     estimated: true,
     method: "box-epm ridge (calibrated to RAPM EPM); see scripts/compute-box-epm.py",
+    arc_scale: SCALE,
     players,
   };
   writeFileSync(join(DATA, `box-epm-${year}.json`), JSON.stringify(doc));
