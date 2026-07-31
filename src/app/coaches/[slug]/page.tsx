@@ -13,11 +13,13 @@ import {
   buildGamesByTeamYear,
   gamesForTeamYear,
   tournamentWinsRank,
+  readStyleLeagueAverages,
   LATEST_YEAR,
 } from "@/lib/coaches";
 import { readAllTeams, readGameLogsForYear, type GameLog } from "@/lib/static-data";
 import { ScheduleTicker } from "@/components/teams/schedule-ticker";
 import { CoachPhoto } from "@/components/coaches/coach-photo";
+import { CoachStylePanel } from "@/components/coaches/coach-style-panel";
 import { CoachSeasonPick } from "@/components/coaches/coach-season-pick";
 import { CoachFindGameTrigger } from "@/components/coaches/coach-find-game-trigger";
 import { confDisplay } from "@/lib/conf-display";
@@ -100,6 +102,10 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
       year: s.year,
     });
   }
+
+  // D-I mean per season for each style dimension — the baseline the career
+  // lines in the play-style panel are drawn against.
+  const styleLeagueAverages = await readStyleLeagueAverages();
 
   // March Madness resume — every NCAA tournament game the coach has been on
   // the bench for, ordered chronologically. We cross-reference the year's
@@ -376,6 +382,16 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
           </div>
         </section>
       )}
+
+      {/* PLAY STYLE — what kind of basketball, after how good. Self-hiding for
+          the 30 coaches with too few joined team-seasons to average. */}
+      <CoachStylePanel
+        styleAvg={profile.style_avg}
+        stylePct={profile.style_pct}
+        seasons={profile.by_year}
+        leagueAvg={styleLeagueAverages}
+        coachName={profile.name}
+      />
 
       {/* YEAR-BY-YEAR — headline ledger. Heavier chrome than the other
           cards on the page so this anchors the page as the canonical record. */}

@@ -161,6 +161,18 @@ export type CoachIndexRow = {
    */
   style_avg?: CoachStyle | null;
   /**
+   * Where style_avg sits against every other coach, 0-100 per dimension.
+   *
+   * Ascending and NEUTRAL — 100 means "more of this than anyone", not "best".
+   * The middle 90% of coaches sit inside about 7 possessions of pace, so the
+   * raw 68.4 tells a reader nothing; the rank is the only part that carries
+   * meaning. Deliberately not run through the site's good/bad ramp, because
+   * playing fast is not an achievement.
+   */
+  style_pct?: CoachStyle | null;
+  /** Seasons that actually carry style data. Gates style_pct — see below. */
+  style_seasons?: number;
+  /**
    * Single ordering for "tournament success", most significant first: titles,
    * then finals, then Final Fours, then Sweet 16s, then appearances. Packed
    * into one number so a table column can sort on it — comparing the tuple
@@ -250,6 +262,94 @@ export type CoachStyle = {
   tov_def: number | null;     // opponent turnover rate (forced)
   orb_def: number | null;     // opponent offensive rebound rate (allowed)
 };
+/**
+ * The nine dimensions, with the copy the coach page needs to talk about them.
+ *
+ * `high` / `low` are how a coach at that end of the field is described, so the
+ * page can name a style instead of listing numbers. They are deliberately
+ * descriptive rather than evaluative: fast is not better than slow, and the
+ * panel must not imply otherwise. The two defensive rates where lower really
+ * is better (opponent eFG, opponent OREB) are marked so their sentences read
+ * the right way round.
+ */
+export const STYLE_DIMENSIONS: ReadonlyArray<{
+  key: keyof CoachStyle;
+  label: string;
+  /** Noun phrase for the superlative sentence: "Lowest <noun> in the field." */
+  noun: string;
+  unit: "" | "%";
+  group: "Offense" | "Defense";
+  high: string;
+  low: string;
+  lowerIsBetter?: true;
+}> = [
+  { key: "pace",      label: "Tempo",         noun: "tempo",                     unit: "",  group: "Offense", high: "plays fast", low: "plays slow" },
+  { key: "fg3a_rate", label: "3PA rate",      noun: "three-point rate",          unit: "%", group: "Offense", high: "lives behind the arc", low: "rarely shoots threes" },
+  { key: "fta_rate",  label: "FTA rate",      noun: "free-throw rate",           unit: "%", group: "Offense", high: "gets to the line", low: "never gets to the line" },
+  { key: "orb_pct",   label: "OREB rate",     noun: "offensive rebound rate",    unit: "%", group: "Offense", high: "crashes the glass", low: "gets back on defense" },
+  { key: "tov_pct",   label: "Turnover rate", noun: "turnover rate",             unit: "%", group: "Offense", high: "turns it over", low: "takes care of the ball", lowerIsBetter: true },
+  { key: "ast_pct",   label: "Assist rate",   noun: "assist rate",               unit: "%", group: "Offense", high: "shares the ball", low: "leans on isolation" },
+  { key: "efg_def",   label: "Opp eFG",       noun: "opponent shooting allowed", unit: "%", group: "Defense", high: "gives up clean looks", low: "contests everything", lowerIsBetter: true },
+  { key: "tov_def",   label: "Opp TOV rate",  noun: "forced turnover rate",      unit: "%", group: "Defense", high: "forces turnovers", low: "lets you run offense" },
+  { key: "orb_def",   label: "Opp OREB",      noun: "second chances allowed",    unit: "%", group: "Defense", high: "gives up second chances", low: "ends possessions", lowerIsBetter: true },
+];
+
+/** Export writes some rates 0-1 and others 0-100. Normalise once. */
+const styleAsPct = (v: unknown): number | null =>
+  typeof v === "number" ? (v <= 1.5 ? v * 100 : v) : null;
+
+/** One team-season's style row, or null when the season carries no stats. */
+function styleFromSeasonStats(ss: Record<string, number | null> | null | undefined): CoachStyle | null {
+  if (!ss) return null;
+  return {
+    pace: typeof ss.pace === "number" ? ss.pace : null,
+    fg3a_rate: styleAsPct(ss.fg3a_rate),
+    fta_rate: styleAsPct(ss.fta_rate),
+    orb_pct: styleAsPct(ss.orb_pct),
+    tov_pct: styleAsPct(ss.tov_pct),
+    ast_pct: styleAsPct(ss.ast_pct),
+    efg_def: styleAsPct(ss.efg_pct_def),
+    tov_def: styleAsPct(ss.tov_pct_def),
+    orb_def: styleAsPct(ss.orb_pct_def),
+  };
+}
+
+/**
+ * D-I mean for each style dimension, per season.
+ *
+ * The baseline the career sparklines are drawn against. Without it a flat pace
+ * line looks like a coach standing still, when what actually happened is that
+ * the sport sped up around him — which is the more interesting fact and the
+ * reason this exists.
+ */
+export async function readStyleLeagueAverages(): Promise<Map<number, CoachStyle>> {
+  const teams = await readAllTeams();
+  const sums = new Map<number, { n: Record<string, number>; sum: Record<string, number> }>();
+  for (const t of teams) {
+    const style = styleFromSeasonStats(
+      (t as unknown as { team_season_stats?: Record<string, number | null> | null }).team_season_stats,
+    );
+    if (!style) continue;
+    let acc = sums.get(t.year);
+    if (!acc) { acc = { n: {}, sum: {} }; sums.set(t.year, acc); }
+    for (const d of STYLE_DIMENSIONS) {
+      const v = style[d.key];
+      if (typeof v !== "number") continue;
+      acc.n[d.key] = (acc.n[d.key] ?? 0) + 1;
+      acc.sum[d.key] = (acc.sum[d.key] ?? 0) + v;
+    }
+  }
+  const out = new Map<number, CoachStyle>();
+  for (const [year, acc] of sums) {
+    const row = {} as CoachStyle;
+    for (const d of STYLE_DIMENSIONS) {
+      row[d.key] = acc.n[d.key] ? Math.round((acc.sum[d.key]! / acc.n[d.key]!) * 10) / 10 : null;
+    }
+    out.set(year, row);
+  }
+  return out;
+}
+
 type RawSourceData = {
   history: Record<string, Record<string, SrSeason>>;   // { team: { year: SrSeason } }
   espn: Record<string, EspnCoach>;                     // { team: EspnCoach }
@@ -287,9 +387,6 @@ async function loadRawSources(): Promise<RawSourceData> {
   // coach layer is the only place that knows which coach owned which season,
   // so the fingerprint has to be assembled here rather than on the team side.
   const styleByTeamYear = new Map<string, CoachStyle>();
-  /** Export writes some rates 0-1 and others 0-100. Normalise once. */
-  const asPct = (v: unknown): number | null =>
-    typeof v === "number" ? (v <= 1.5 ? v * 100 : v) : null;
   for (const t of teams) {
     const team = overrideTeam(t.name);
     const key = `${team}|${t.year}`;
@@ -299,19 +396,8 @@ async function loadRawSources(): Promise<RawSourceData> {
     rawRows.push({ team, year: t.year, bta, oe: trank?.adjoe ?? null, de: trank?.adjde ?? null });
     {
       const ss = (t as unknown as { team_season_stats?: Record<string, number | null> | null }).team_season_stats;
-      if (ss) {
-        styleByTeamYear.set(key, {
-          pace: typeof ss.pace === "number" ? ss.pace : null,
-          fg3a_rate: asPct(ss.fg3a_rate),
-          fta_rate: asPct(ss.fta_rate),
-          orb_pct: asPct(ss.orb_pct),
-          tov_pct: asPct(ss.tov_pct),
-          ast_pct: asPct(ss.ast_pct),
-          efg_def: asPct(ss.efg_pct_def),
-          tov_def: asPct(ss.tov_pct_def),
-          orb_def: asPct(ss.orb_pct_def),
-        });
-      }
+      const style = styleFromSeasonStats(ss);
+      if (style) styleByTeamYear.set(key, style);
     }
     if (t.year === LATEST_YEAR) {
       meta.set(team, {
@@ -1202,6 +1288,7 @@ export async function loadAllCoachProfiles(): Promise<CoachProfile[]> {
     attachTournamentRecord(p, gamesLookup);
     attachCareerAggregates(p);
   }
+  attachStylePercentiles(profiles);
   return profiles;
 }
 
@@ -1269,6 +1356,7 @@ function attachCareerAggregates(p: CoachProfile): void {
     if (vals.length === 0) return null;
     return Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10;
   };
+  p.style_seasons = seasons.filter((s) => s.style).length;
   p.style_avg = {
     pace: mean((st) => st.pace),
     fg3a_rate: mean((st) => st.fg3a_rate),
@@ -1289,6 +1377,59 @@ function attachCareerAggregates(p: CoachProfile): void {
     p.final_fours * 1e4 +
     p.sweet_sixteens * 1e2 +
     p.ncaa_appearances;
+}
+
+/**
+ * Rank every coach's career style against the field, one dimension at a time.
+ *
+ * Runs after the per-coach pass because it needs all 774 style averages in
+ * hand. Coaches without a value for a dimension are left out of that ranking
+ * rather than sorted to the bottom — no data is not "the slowest team in the
+ * country".
+ */
+function attachStylePercentiles(profiles: CoachProfile[]): void {
+  for (const p of profiles) p.style_pct = null;
+
+  /**
+   * Ranked over coaches with a real body of work only.
+   *
+   * A style average over one season is not a career style, it is one team, and
+   * left in it takes the superlatives: the extremes were Greg Heiar's single
+   * year at 56.1 possessions rather than Tony Bennett's decade at 60.6, and
+   * eleven of the seventeen coaches billed as most-or-least anything had two
+   * seasons or fewer. Same qualifier and same reasoning as
+   * MIN_SEASONS_FOR_RATE on composite_per_season.
+   *
+   * style_avg itself is untouched, so the explorer's filters still see every
+   * coach — a short tenure is fine to filter on, it just should not define
+   * where the ends of the field are.
+   */
+  const qualified = profiles.filter((p) => (p.style_seasons ?? 0) >= MIN_SEASONS_FOR_RATE);
+
+  for (const d of STYLE_DIMENSIONS) {
+    const ranked = qualified
+      .map((p) => [p, p.style_avg?.[d.key] ?? null] as const)
+      .filter((e): e is readonly [CoachProfile, number] => typeof e[1] === "number")
+      .sort((a, b) => a[1] - b[1]);
+    if (ranked.length < 2) continue;
+    // Stored UNROUNDED. The panel rounds for display, but it also claims
+    // "Lowest tempo in the field" for a coach at the extreme — and rounding
+    // first makes the bottom four of 774 all read as the 0th percentile, so
+    // six different coaches ended up each billed as having the lowest opponent
+    // shooting allowed. Full precision keeps that sentence literally true.
+    ranked.forEach(([p], i) => {
+      if (!p.style_pct) p.style_pct = {} as CoachStyle;
+      p.style_pct[d.key] = (i / (ranked.length - 1)) * 100;
+    });
+  }
+
+  // Fill dimensions a coach has no value for, so the shape is uniform.
+  for (const p of profiles) {
+    if (!p.style_pct) continue;
+    for (const d of STYLE_DIMENSIONS) {
+      if (typeof p.style_pct[d.key] !== "number") p.style_pct[d.key] = null;
+    }
+  }
 }
 
 export async function loadCoachIndex(): Promise<CoachIndexRow[]> {
