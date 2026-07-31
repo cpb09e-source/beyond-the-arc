@@ -73,7 +73,42 @@ function loadTeamRatings(year) {
   return m;
 }
 
-function featurize(p) {
+/**
+ * Three-point shrinkage for the PRIOR.
+ *
+ * This file feeds Box-EPM, which is the Bayesian prior the ridge-RAPM fit
+ * starts from — so its job is to estimate a player's TALENT, not to recount
+ * what the scoreboard said. A season three-point percentage is a bad estimate
+ * of talent at college volume, and we can say how bad from our own archive.
+ *
+ * Empirical Bayes over 2014-2026 (players with 50+ 3PA): the observed spread in
+ * 3P% is 4.9-5.2 points, of which 4.4-4.5 is binomial noise. What survives is
+ * sd(true) ~ 2.2%. That puts the shrinkage constant — the attempt count at
+ * which a player's own rate finally deserves half the weight — at a MEDIAN OF
+ * 412 ATTEMPTS. Year over year, the same player's 3P% correlates at just r=0.22.
+ * At a typical 150 attempts, three quarters of a shooter's deviation from
+ * league average is noise.
+ *
+ * So the prior sees expected threes, not made threes:
+ *
+ *     expected 3P%  = (3PM + K * league3P%) / (3PA + K)
+ *     luck          = 3 * (3PM - 3PA * expected 3P%)
+ *
+ * and TS / eFG / pts40 / PORPAG are all restated net of that luck.
+ *
+ * FREE THROWS AND TWOS ARE LEFT ALONE, and the same measurement is why:
+ * FT% has k = 27 attempts and repeats at r=0.735; 2P% has k = 71 and r=0.602.
+ * Both are essentially skill by the end of a season — a player who shot 88%
+ * from the line really is an 88% shooter. Only the three needed this.
+ *
+ * Note this asks a DIFFERENT question than the team-level luck adjustment in
+ * compute-epm.py. There we removed a team's wobble around its own season rate
+ * and kept the rate. Here the season rate ITSELF is the estimate under
+ * suspicion, which is why free throws come out of the two tests differently.
+ */
+const SHRINK_3PA = Number(process.env.BTA_SHRINK_3PA ?? 412);
+
+function featurize(p, lg3) {
   const st = Array.isArray(p.player_bart_stats) ? p.player_bart_stats[0] : p.player_bart_stats;
   const row = st?.raw_row ?? null;
   if (!row) return null;
@@ -91,11 +126,32 @@ function featurize(p) {
   const fgm = fg2m != null && fg3m != null ? fg2m + fg3m : null;
   const fga = fg2a != null && fg3a != null ? fg2a + fg3a : null;
 
-  const ts = pts_pg != null && games && fga != null && fta != null && (fga + 0.44 * fta) > 0
-    ? (pts_pg * games) / (2 * (fga + 0.44 * fta)) : null;
-  const efg = fgm != null && fg3m != null && fga ? (fgm + 0.5 * fg3m) / fga : null;
+  // Expected threes. Falls through to zero when a season lacks the split, so a
+  // player without shot totals is simply left unadjusted rather than dropped.
+  const exp3 = SHRINK_3PA > 0 && lg3 != null && fg3a != null && fg3m != null
+    ? (fg3m + SHRINK_3PA * lg3) / (fg3a + SHRINK_3PA) : null;
+  const luck3 = exp3 != null ? 3 * (fg3m - fg3a * exp3) : 0;
+
+  const ptsTot = pts_pg != null && games ? pts_pg * games - luck3 : null;
+  const ts = ptsTot != null && fga != null && fta != null && (fga + 0.44 * fta) > 0
+    ? ptsTot / (2 * (fga + 0.44 * fta)) : null;
+  // eFG on expected threes: every three counts as exp3 of a make, half-weighted.
+  const efg = fga && fg2m != null && exp3 != null ? (fg2m + 1.5 * exp3 * fg3a) / fga
+    : fgm != null && fg3m != null && fga ? (fgm + 0.5 * fg3m) / fga : null;
   const ftr = fta != null && fga ? fta / fga : null;
-  const tpar = fg3a != null && fga ? fg3a / fga : null;
+  const tpar = fg3a != null && fga ? fg3a / fga : null;   // volume, not luck
+
+  // PORPAG STAYS RAW, and that is a measured decision, not an oversight. It is
+  // the one remaining points-driven feature, so it still carries three-point
+  // luck — but the correction available for it is worse than the disease.
+  // Subtracting luck/games looks dimensionally right and is not: Bart's
+  // denominator is pace-adjusted games and the statistic is points over a
+  // REPLACEMENT baseline, not raw points. Trying it dropped OFF train R2 from
+  // 0.905 to 0.816 and pushed the prior's out-of-sample correlation with next
+  // season's RAPM BELOW the unadjusted baseline (0.553 vs 0.578), while
+  // handing +3.95 box-EPM to a single high-volume cold shooter. Leaving it
+  // alone is the honest limitation.
+  const porpag = fromStart(row, 28);
 
   const note = fromEndNote(row);
   const bucket = note ? BUCKET[note] ?? null : null;
@@ -104,9 +160,10 @@ function featurize(p) {
     min_pg,
     usg: fromStart(row, 6),
     to_rate: fromStart(row, 9),
-    porpag: fromStart(row, 28),
+    porpag,
     ts, efg, ftr, tpar,
-    pts40: per40(pts_pg), ast40: per40(ast_pg), reb40: per40(reb_pg),
+    pts40: per40(ptsTot != null && games ? ptsTot / games : pts_pg),
+    ast40: per40(ast_pg), reb40: per40(reb_pg),
     orb40: per40(orb_pg), drb40: per40(drb_pg), stl40: per40(stl_pg), blk40: per40(blk_pg),
     blk_pct: fromStart(row, 22), stl_pct: fromStart(row, 23),
     height_in: heightIn(p.height),
@@ -137,10 +194,22 @@ for (const year of YEARS) {
   const players = JSON.parse(readFileSync(f, "utf8"));
   const epm = loadEpm(year);
   const tr = loadTeamRatings(year);
+  // League 3P% for THIS season — the mean the shrinkage pulls toward. Computed
+  // per season rather than once overall because the college line moved in 2020.
+  let m3 = 0, a3 = 0;
+  for (const p of players) {
+    const st = Array.isArray(p.player_bart_stats) ? p.player_bart_stats[0] : p.player_bart_stats;
+    const row = st?.raw_row;
+    if (!row) continue;
+    const m = fromStart(row, 19), a = fromStart(row, 20);
+    if (m != null && a != null) { m3 += m; a3 += a; }
+  }
+  const lg3 = a3 > 0 ? m3 / a3 : null;
+  if (lg3 != null) console.log(`  ${year}: league 3P% ${(lg3 * 100).toFixed(1)} over ${a3.toLocaleString()} attempts`);
   for (const p of players) {
     const bid = p.bart_player_id;
     if (bid == null) continue;
-    const feat = featurize(p);
+    const feat = featurize(p, lg3);
     if (!feat) continue;
     const team = Array.isArray(p.teams) ? p.teams[0] : p.teams;
     const lab = epm ? epm[String(bid)] : null;
