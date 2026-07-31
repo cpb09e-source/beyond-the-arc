@@ -17,6 +17,21 @@ Ridge (L2) regularization shrinks low-minute players toward 0 — or toward thei
 box prior when --priors is given (we then fit deviations from the prior, which
 is exactly "SPM prior in a RAPM regression" a la EPM/BPR).
 
+Luck adjustment (on by default; --no-luck to disable)
+----------------------------------------------------
+`pts` is restated at each shooting team's OWN season three-point and free-throw
+rates before the fit sees it:
+
+    adjusted = pts - 3 * (3PM - 3PA * team3P%) - (FTM - FTA * teamFT%)
+
+Deviation from a team's own season rate is luck; the rate itself is skill, so a
+40% shooting team keeps the credit and only the wobble around 40% comes out.
+The property that makes this safe to run through a regression: because the rate
+is the team's own ratio, each team's adjusted points sum EXACTLY to its actual
+points over the season. Nothing is created or destroyed at the team level — the
+adjustment only moves points between that team's own stints, which is precisely
+where a player's RAPM coefficient is estimated from.
+
 Solve: weighted sparse lsqr with damping sqrt(lambda). ~7k players x 2 coefs on
 a full season (~600k obs) runs in seconds.
 
@@ -47,6 +62,70 @@ def load(season: int):
     players = pd.read_csv(d / "players.csv.gz")
     stints = stints[stints["valid"] == 1].copy()
     return stints, players, d
+
+
+SHOT_COLS = ("fg3aHome", "fg3mHome", "fg3aAway", "fg3mAway",
+             "ftaHome", "ftmHome", "ftaAway", "ftmAway")
+MIN_ATT_FOR_TEAM_RATE = 100   # below this a team's own rate is itself noise
+
+
+def luck_adjust(stints: pd.DataFrame, players: pd.DataFrame):
+    """Restate ptsHome/ptsAway at each shooting team's own season 3P%/FT%.
+
+    Returns (stints, applied). Silently no-ops on stint files built before the
+    shot-detail columns existed, so an old season still fits (unadjusted)
+    rather than crashing.
+
+    Two details keep the adjustment exactly points-neutral per team, which is
+    the whole reason it is safe to push through a ridge fit:
+
+    1. Rates are accumulated over the SAME rows the design matrix will use
+       (poss >= MIN_POSS_STINT, per side). Deriving them from all valid stints
+       instead let ~5k adjusted points pile up in sub-half-possession fragments
+       that add_obs then discards — a made-3-plus-offensive-rebound fragment can
+       carry points with a possession count at or below zero.
+    2. A team under MIN_ATT_FOR_TEAM_RATE is left ALONE rather than adjusted to
+       the league rate. Most of those are non-D-I opponents with a handful of
+       attempts; pricing their shooting at the league rate hands a bad team
+       points it never scored. No own rate, no adjustment.
+    """
+    if not set(SHOT_COLS).issubset(stints.columns):
+        print("  luck: stints lack shot detail — fitting on raw points "
+              "(rebuild with cbbd-build-stints.mjs to enable)")
+        return stints, False
+
+    # Side -> team. players.csv.gz records the first team each id was seen with,
+    # which is stable within a season; the five share it.
+    id2team = dict(zip(players["id"].astype(str), players["team"]))
+    homeT = stints["home5"].astype(str).str.split(";").str[0].map(id2team)
+    awayT = stints["away5"].astype(str).str.split(";").str[0].map(id2team)
+    useH = stints["possHome"] >= MIN_POSS_STINT
+    useA = stints["possAway"] >= MIN_POSS_STINT
+
+    z = lambda s, m: s.where(m, 0.0)
+    acc = pd.DataFrame({
+        "team": pd.concat([homeT, awayT], ignore_index=True),
+        "a3": pd.concat([z(stints.fg3aHome, useH), z(stints.fg3aAway, useA)], ignore_index=True),
+        "m3": pd.concat([z(stints.fg3mHome, useH), z(stints.fg3mAway, useA)], ignore_index=True),
+        "fa": pd.concat([z(stints.ftaHome, useH), z(stints.ftaAway, useA)], ignore_index=True),
+        "fm": pd.concat([z(stints.ftmHome, useH), z(stints.ftmAway, useA)], ignore_index=True),
+    }).groupby("team").sum()
+
+    lg3 = acc.m3.sum() / acc.a3.sum() if acc.a3.sum() else 0.338
+    lgft = acc.fm.sum() / acc.fa.sum() if acc.fa.sum() else 0.72
+    # NaN for a thin team -> the term below fills to 0 -> untouched.
+    rate3 = (acc.m3 / acc.a3).where(acc.a3 >= MIN_ATT_FOR_TEAM_RATE)
+    rateft = (acc.fm / acc.fa).where(acc.fa >= MIN_ATT_FOR_TEAM_RATE)
+
+    for side, T in (("Home", homeT), ("Away", awayT)):
+        r3, rft = T.map(rate3), T.map(rateft)
+        luck3 = (3.0 * (stints[f"fg3m{side}"] - stints[f"fg3a{side}"] * r3)).fillna(0.0)
+        luckft = (stints[f"ftm{side}"] - stints[f"fta{side}"] * rft).fillna(0.0)
+        stints[f"pts{side}"] = stints[f"pts{side}"] - luck3 - luckft
+    kept = int(rate3.notna().sum())
+    print(f"  luck: baseline 3P% {lg3*100:.1f}, FT% {lgft*100:.1f} — "
+          f"{kept:,} of {len(acc):,} teams have their own rate")
+    return stints, True
 
 
 def build_design(stints: pd.DataFrame):
@@ -111,10 +190,15 @@ def main():
     ap.add_argument("--lam", type=float, default=12000.0)
     ap.add_argument("--priors", type=str, default=None,
                     help="CSV with playerId,priorOff,priorDef (per-100 vs avg)")
+    ap.add_argument("--no-luck", dest="luck", action="store_false",
+                    help="fit on raw points instead of luck-adjusted points")
     args = ap.parse_args()
 
     stints, players, outdir = load(args.season)
     print(f"EPM fit — season {args.season}: {len(stints):,} valid stints")
+
+    if args.luck:
+        stints, _ = luck_adjust(stints, players)
 
     X, y, w, pidx = build_design(stints)
     n_p = len(pidx)

@@ -79,3 +79,4 @@ supabase/.temp/
 # some seasons have been generated so far; drop this rule once the full
 # 12-season pull has run, to match how team-games/player-games are tracked.
 /public/data/game-players/
+__pycache__/

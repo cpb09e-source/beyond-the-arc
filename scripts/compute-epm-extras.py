@@ -80,18 +80,32 @@ def main():
     tot = [sum(v[i] for v in team_shot.values()) for i in range(4)]
     lg3 = tot[1] / tot[0] if tot[0] > 0 else 0.338
     lgft = tot[3] / tot[2] if tot[2] > 0 else 0.72
+    # A team with too few attempts to trust its own rate is left ALONE, not
+    # repriced at the league rate. Roughly half the "teams" here are non-D-I
+    # opponents with a handful of attempts, and charging their shooting at the
+    # league average hands a bad team points it never scored — a level shift on
+    # every D-I player who happened to face them. No own rate, no adjustment;
+    # that also keeps the adjustment exactly points-neutral per team, which is
+    # the property that makes it safe. Mirrors luck_adjust in compute-epm.py.
+    MIN_ATT = 100
     rate3, rateft = {}, {}
     for t, (a3, m3, fa, fm) in team_shot.items():
-        rate3[t] = m3 / a3 if a3 >= 100 else lg3
-        rateft[t] = fm / fa if fa >= 100 else lgft
+        if a3 >= MIN_ATT:
+            rate3[t] = m3 / a3
+        if fa >= MIN_ATT:
+            rateft[t] = fm / fa
     if team_shot:
-        print(f"  luck baseline: league 3P% {lg3*100:.1f}, FT% {lgft*100:.1f} over {len(team_shot)} teams")
+        print(f"  luck baseline: league 3P% {lg3*100:.1f}, FT% {lgft*100:.1f} — "
+              f"{len(rate3)} of {len(team_shot)} teams have their own rate")
 
     def luck_adj(pts, a3, m3, fa, fm, team):
         """Actual points minus the shooting that beat (or missed) the baseline."""
-        r3 = rate3.get(team, lg3)
-        rft = rateft.get(team, lgft)
-        return pts - 3.0 * (m3 - a3 * r3) - (fm - fa * rft)
+        r3, rft = rate3.get(team), rateft.get(team)
+        if r3 is not None:
+            pts -= 3.0 * (m3 - a3 * r3)
+        if rft is not None:
+            pts -= fm - fa * rft
+        return pts
 
     # per-player on/off accumulators (offense + defense possessions/points)
     # [offPts, offPoss, defPts, defPoss, offPtsAdj, defPtsAdj]
