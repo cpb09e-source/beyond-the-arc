@@ -56,7 +56,6 @@ const GRID_COLS: GridCol[] = [
   { label: "Def", field: "def_epm", fmt: "epm", pct: "def_epm", sortKey: "def_epm", band: true },
   { label: "EPM", field: "epm", fmt: "epm", pct: "epm", sortKey: "epm", band: true },
   { label: "eWins", field: "ewins", fmt: "num2", pct: "ewins", sortKey: "ewins", band: true },
-  { label: "MPG", field: "min_pg", fmt: "int", pct: null, sortKey: "min" },
   { label: "USG", field: "usage_pct", fmt: "pct1", pct: "usage_pct", sortKey: "usage" },
   { label: "PPG", field: "pts_pg", fmt: "num1", pct: "pts_pg", sortKey: "pts" },
   { label: "TS%", field: "ts_pct", fmt: "pct1", pct: "ts_pct", sortKey: "ts_pct" },
@@ -64,7 +63,6 @@ const GRID_COLS: GridCol[] = [
   { label: "FG%", field: "fg_pct", fmt: "pct1", pct: "fg_pct", sortKey: "fg_pct" },
   { label: "3P%", field: "fg3_pct", fmt: "pct1", pct: "fg3_pct", sortKey: "fg3_pct" },
   { label: "ORB", field: "orb_pg", fmt: "num1", pct: "orb_pg", sortKey: "orb" },
-  { label: "DRB", field: "drb_pg", fmt: "num1", pct: "drb_pg", sortKey: "drb" },
   { label: "RPG", field: "reb_pg", fmt: "num1", pct: "reb_pg", sortKey: "reb" },
   { label: "AST", field: "ast_pg", fmt: "num1", pct: "ast_pg", sortKey: "ast" },
   { label: "TOV%", field: "tov_pct", fmt: "pct1", pct: "tov_pct", sortKey: "tov_pct" },
@@ -77,10 +75,10 @@ const GRID_COLS: GridCol[] = [
 // columns, so moving a group means moving it in both lists).
 const GRID_BANDS: Array<{ label: string; span: number; epm?: boolean }> = [
   { label: "EPM", span: 4, epm: true },
-  { label: "Role", span: 2 },
+  { label: "Role", span: 1 },
   { label: "Scoring", span: 1 },
   { label: "Shooting", span: 4 },
-  { label: "Rebounding", span: 3 },
+  { label: "Rebounding", span: 2 },
   { label: "Handle", span: 2 },
   { label: "Defense", span: 3 },
 ];
@@ -114,6 +112,14 @@ function fmtGrid(v: number | null, fmt: GridFmt): string {
 }
 function seasonLabel(y: number): string {
   return `${y - 1}-${String(y).slice(-2)}`;
+}
+
+/**
+ * Compact season for the row badge — "24/25". The long form stays in the page
+ * kicker, where it is read as prose rather than scanned in a dense cell.
+ */
+function seasonBadge(y: number): string {
+  return `${String(y - 1).slice(-2)}/${String(y).slice(-2)}`;
 }
 // Header kicker text for the chosen seasons. Single year → "2024-25 season";
 // 2 years → "2023-24, 2024-25 seasons"; ≥3 → "3 seasons" to keep it short.
@@ -935,7 +941,24 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                               <TeamLogo name={p.team_name} size={12} />
                               {p.team_name}
                             </Link>
-                            <span>· {p.class ?? "—"}{p.height ? ` · ${p.height.replace(/^(\d+)-(\d+)$/, "$1'$2\"")}` : ""}{multiYear ? ` · ${seasonLabel(p.year)}` : ""}</span>
+                            {p.height && (
+                              <span>· {p.height.replace(/^(\d+)-(\d+)$/, "$1'$2\"")}</span>
+                            )}
+                            {/* Class and season are the two facts that identify WHICH
+                                season of a player this row is, so they read as pills
+                                rather than as more dot-separated meta text. */}
+                            {p.class && (
+                              <span className="inline-flex items-center rounded px-1.5 py-px text-[0.6rem] font-semibold
+                                               bg-paper-deep text-ink-muted border border-hairline/70">
+                                {p.class}
+                              </span>
+                            )}
+                            {multiYear && (
+                              <span className="inline-flex items-center rounded px-1.5 py-px text-[0.6rem] font-semibold
+                                               tabular-nums bg-paper-deep text-ink-muted border border-hairline/70">
+                                {seasonBadge(p.year)}
+                              </span>
+                            )}
                           </span>
                         </span>
                       </span>
