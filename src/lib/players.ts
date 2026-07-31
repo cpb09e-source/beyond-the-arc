@@ -210,20 +210,31 @@ export type PlayerStatColumn = {
 };
 
 export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
-  // ── Impact (BTA EPM — ridge RAPM over play-by-play stints) ───
-  { key: "epm",     label: "EPM",     desc: "Estimated Plus-Minus — per-100-possession impact vs. an average player (offense + defense)", group: "impact", format: "num1", field: "epm" },
-  { key: "off_epm", label: "Off EPM", desc: "Offensive EPM — per-100 offensive impact",                                                   group: "impact", format: "num1", field: "off_epm" },
-  { key: "def_epm", label: "Def EPM", desc: "Defensive EPM — per-100 defensive impact (positive = better defense)",                        group: "impact", format: "num1", field: "def_epm" },
+  // ── Impact (ARC — ridge RAPM over play-by-play stints) ───
+  //
+  // ARC, Adjusted Rating of Contribution, is the site's all-in-one number. It
+  // began as our read of Dunks & Threes' EPM and is no longer that: the points
+  // it fits are luck-adjusted, the box prior underneath it runs on expected
+  // threes and reads CBBD's per-game archive for opponent context and shot
+  // detail, the ridge penalty is tuned against held-out games and split-half
+  // reliability rather than set by hand, and the prior is calibrated against a
+  // prior-free fit so the pipeline cannot feed itself.
+  //
+  // The `key` stays "epm" on purpose — it is in saved URLs, the ?sort= param
+  // and the query-string parser. The label changed; the contract did not.
+  { key: "epm",     label: "ARC",     desc: "Adjusted Rating of Contribution — BTA's all-in-one impact metric. Points per 100 possessions vs. an average player, offense plus defense. A ridge regression over every play-by-play stint, run as deviations from a box-score prior, with three-point and free-throw luck stripped out. Play-by-play only, so 2022 onward.", group: "impact", format: "num1", field: "epm" },
+  { key: "off_epm", label: "ARC Off", desc: "Offensive ARC — per-100 offensive impact",                                                   group: "impact", format: "num1", field: "off_epm" },
+  { key: "def_epm", label: "ARC Def", desc: "Defensive ARC — per-100 defensive impact (positive = better defense)",                        group: "impact", format: "num1", field: "def_epm" },
   // THE TWO HALVES OF EPM, published beside it. EPM is a RAPM fit run as
   // deviations from a box-score prior, so these are the pieces it is made of:
   // what the box score alone expects, and what the team's results say while the
   // player was on the floor. Where they disagree is where the interesting
   // players are — and where teammate collinearity shows up, since a rotation
   // that never splits up gives the on-off half nothing to separate.
-  { key: "box_epm", label: "Box",    desc: "Box-score half of EPM — the prior the RAPM fit starts from, estimated from box stats alone. Available for every season; EPM itself only from 2025.", group: "impact", format: "num1", field: "box_epm" },
-  { key: "on_off",  label: "On/Off", desc: "On-off half — team net rating with the player on the floor minus off it, per 100, luck-adjusted: each side's points are restated at its own season three-point and free-throw rates, so the wobble around a team's shooting comes out and the rate itself stays. Unregularized even so, and only shown above a possession floor. Treat it as the weakest number on the page — it barely repeats year to year. 2024 onward.", group: "impact", format: "num1", field: "on_off" },
+  { key: "box_epm", label: "Box",    desc: "Box-score half of ARC — the prior the ridge fit starts from, estimated from box stats alone. Available for every season, unlike ARC itself, which needs play-by-play.", group: "impact", format: "num1", field: "box_epm" },
+  { key: "on_off",  label: "On/Off", desc: "On-off half of ARC — team net rating with the player on the floor minus off it, per 100, luck-adjusted: each side's points are restated at its own season three-point and free-throw rates, so the wobble around a team's shooting comes out and the rate itself stays. Unregularized even so, and only shown above a possession floor. Treat it as the weakest number on the page — it barely repeats year to year. 2024 onward.", group: "impact", format: "num1", field: "on_off" },
   // EPM-extras — filterable only (real-EPM seasons 2024+ have them).
-  { key: "ewins",  label: "eWins",  desc: "Estimated wins added vs an average player (EPM × possessions)", group: "impact", format: "num1", field: "ewins",  filterOnly: true },
+  { key: "ewins",  label: "eWins",  desc: "Estimated wins added vs an average player (ARC × possessions)", group: "impact", format: "num1", field: "ewins",  filterOnly: true },
 
   // ── Advanced ─────────────────────────────────────────────
   { key: "pir",      label: "PIR",      desc: "EuroLeague Performance Index Rating (per game, minus TOV)",                              group: "advanced", format: "num1", field: "pir" },

@@ -210,7 +210,7 @@ export function PortalClient({
           <aside className="order-1 xl:order-0 xl:sticky xl:top-20 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:[scrollbar-width:none] xl:[&::-webkit-scrollbar]:hidden">
             <TransferClassesPanel
               title="Top transfer classes"
-              subtitle="Net EPM value · all D-I"
+              subtitle="Net ARC value · all D-I"
               rows={transferClasses.top_overall}
               onOpen={setOpenClass}
             />
@@ -248,7 +248,7 @@ export function PortalClient({
                 <ThSort label="To"     active={sortBy==="to"}   dir={sortDir} onClick={() => toggleSort("to","asc")}   align="left" />
                 <ThSort label="ENT" active={sortBy==="date"} dir={sortDir} onClick={() => toggleSort("date","desc")} align="left" />
                 <ThSort label="COM" active={sortBy==="committed"} dir={sortDir} onClick={() => toggleSort("committed","desc")} align="left" />
-                <ThSort label="EPM" active={sortBy==="epm"} dir={sortDir} onClick={() => toggleSort("epm","desc")} />
+                <ThSort label="ARC" active={sortBy==="epm"} dir={sortDir} onClick={() => toggleSort("epm","desc")} />
                 <ThSort label="MPG" active={sortBy==="mpg"} dir={sortDir} onClick={() => toggleSort("mpg","desc")} />
                 <ThSort label="PPG" active={sortBy==="ppg"} dir={sortDir} onClick={() => toggleSort("ppg","desc")} />
                 <ThSort label="RPG" active={sortBy==="rpg"} dir={sortDir} onClick={() => toggleSort("rpg","desc")} />

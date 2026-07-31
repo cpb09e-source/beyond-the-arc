@@ -143,7 +143,7 @@ const ROWS: Row[] = [
   { key: "mpg", label: "MPG", dir: "higher", value: (_r, ctx) => ctx.mpg, format: fmtNum1 },
 
   // ── Production ──────────────────────────────────────
-  { section: "Production", key: "epm", label: "EPM", dir: "higher", value: (r) => r?.stats.epm?.value ?? null, format: fmtStatFor("epm"), percentileKey: "epm" },
+  { section: "Production", key: "epm", label: "ARC", dir: "higher", value: (r) => r?.stats.epm?.value ?? null, format: fmtStatFor("epm"), percentileKey: "epm" },
   { key: "pir", label: "PIR", dir: "higher", value: (r) => r?.stats.pir?.value ?? null, format: fmtStatFor("pir"), percentileKey: "pir" },
   // Leaderboard ranks — lower rank = better, so `dir: "lower"`. The cellRender
   // mirrors the Player Overview rank card treatment (star for top-3, coral

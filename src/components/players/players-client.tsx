@@ -54,7 +54,7 @@ const GRID_COLS: GridCol[] = [
   // the minutes and usage that describe the role it was earned in.
   { label: "Off", field: "off_epm", fmt: "epm", pct: "off_epm", sortKey: "off_epm", band: true },
   { label: "Def", field: "def_epm", fmt: "epm", pct: "def_epm", sortKey: "def_epm", band: true },
-  { label: "EPM", field: "epm", fmt: "epm", pct: "epm", sortKey: "epm", band: true },
+  { label: "ARC", field: "epm", fmt: "epm", pct: "epm", sortKey: "epm", band: true },
   { label: "MPG", field: "min_pg", fmt: "int", pct: null, sortKey: "min" },
   { label: "USG", field: "usage_pct", fmt: "pct1", pct: "usage_pct", sortKey: "usage" },
   { label: "PIR", field: "pir", fmt: "num1", pct: "pir", sortKey: "pir" },
@@ -75,7 +75,7 @@ const GRID_COLS: GridCol[] = [
 // GRID_COLS — the bands are laid out by walking spans, not by looking up
 // columns, so moving a group means moving it in both lists).
 const GRID_BANDS: Array<{ label: string; span: number; epm?: boolean }> = [
-  { label: "EPM", span: 3, epm: true },
+  { label: "ARC", span: 3, epm: true },
   { label: "Role", span: 2 },
   { label: "Scoring", span: 2 },
   { label: "Shooting", span: 3 },
@@ -938,8 +938,8 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                           title={c.band && p.epm_estimated ? "Estimated — box-score model (no play-by-play for this season)" : undefined}
                         >
                           <span className="inline-flex flex-col items-end gap-0.5 leading-tight">
-                            <span className={cn(c.label === "EPM" && "font-semibold", c.band && p.epm_estimated && "text-ink-soft")}>
-                              {c.band && p.epm_estimated && c.label === "EPM" && (
+                            <span className={cn(c.label === "ARC" && "font-semibold", c.band && p.epm_estimated && "text-ink-soft")}>
+                              {c.band && p.epm_estimated && c.label === "ARC" && (
                                 <span className="text-coral/70 font-normal mr-0.5" aria-label="estimated">≈</span>
                               )}
                               {fmtGrid(v, c.fmt)}
@@ -964,7 +964,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         {anyEstimated && (
           <div className="px-3 lg:px-4 py-2 border-t border-hairline bg-paper-deep/20 flex items-center gap-1.5 text-[0.68rem] text-ink-muted">
             <span className="text-coral/70">≈</span>
-            <span>Estimated EPM — box-score model for seasons before play-by-play tracking (pre-2024). Real EPM resumes for 2024 onward.</span>
+            <span>Estimated ARC — the box-score half alone, for seasons with no play-by-play to fit. Full ARC resumes where the stint data starts.</span>
           </div>
         )}
         {!loading && totalPages > 1 && (

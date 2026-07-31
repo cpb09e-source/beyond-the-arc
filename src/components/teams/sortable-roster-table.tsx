@@ -127,7 +127,7 @@ export function SortableRosterTable({
               <ThSort label="Player" active={sortBy==="name"} dir={sortDir} onClick={() => toggle("name","asc")} align="left" />
               <ThSort label="Cl"     active={sortBy==="class"} dir={sortDir} onClick={() => toggle("class","asc")} align="left" />
               <ThSort label="Ht"     active={sortBy==="height"} dir={sortDir} onClick={() => toggle("height","desc")} align="left" />
-              <ThSort label="EPM"    active={sortBy==="epm"} dir={sortDir} onClick={() => toggle("epm","desc")} />
+              <ThSort label="ARC"    active={sortBy==="epm"} dir={sortDir} onClick={() => toggle("epm","desc")} />
               <ThSort label="TS%"    active={sortBy==="ts_pct"} dir={sortDir} onClick={() => toggle("ts_pct","desc")} />
               <ThSort label="USG%"   active={sortBy==="usg_pct"} dir={sortDir} onClick={() => toggle("usg_pct","desc")} />
               <ThSort label="PPG"    active={sortBy==="pts"} dir={sortDir} onClick={() => toggle("pts","desc")} />

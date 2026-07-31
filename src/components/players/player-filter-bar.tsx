@@ -260,8 +260,8 @@ const RANGE_GROUPS_RAW: RangeGroup[] = [
     label: "Estimated +/-",
     stats: [
       { key: "epm",     label: "Estimated Plus-Minus",  min: -12, max: 12, step: 0.1 },
-      { key: "off_epm", label: "Offensive EPM",         min: -12, max: 12, step: 0.1 },
-      { key: "def_epm", label: "Defensive EPM",         min: -8,  max: 8,  step: 0.1 },
+      { key: "off_epm", label: "Offensive ARC",         min: -12, max: 12, step: 0.1 },
+      { key: "def_epm", label: "Defensive ARC",         min: -8,  max: 8,  step: 0.1 },
       { key: "ewins",   label: "eWins",                 min: -1,  max: 12, step: 0.1 },
       { key: "on_off",  label: "On / Off (net)",        min: -40, max: 40, step: 0.5 },
     ],
