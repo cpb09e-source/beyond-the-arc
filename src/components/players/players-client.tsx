@@ -150,7 +150,7 @@ type ExplorerPayload = {
 
 /** Fields attached after load, from the EPM and shooting files. */
 const LATE_FIELDS = {
-  epm: null, off_epm: null, def_epm: null, epm_estimated: false,
+  epm: null, off_epm: null, def_epm: null, epm_estimated: false, epm_covered: false,
   ewins: null, on_off: null,
   rim_pct: null, mid_pct: null, assisted_pct: null, rim_rate: null, tp_rate: null,
   bta_ind_ortg: null,
@@ -330,6 +330,11 @@ function filterSpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSumma
   const out: PlayerSummary[] = [];
   for (const p of players) {
     if (isBelowBaseline(p)) continue;
+    // No EPM, no row — but only for seasons that HAVE EPM. Players under the
+    // 13 mpg floor are deliberately absent from the fit, and a leaderboard
+    // built around impact should not list players it cannot rate. They stay
+    // everywhere else: search, team pages, rosters, and their own profile.
+    if (p.epm_covered && p.epm === null) continue;
     if (confSet && (p.team_conference === null || !confSet.has(p.team_conference))) continue;
     if (teamSet && !teamSet.has(p.team_name)) continue;
     if (clsSet && (p.class === null || !clsSet.has(p.class))) continue;
@@ -589,6 +594,14 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       // Attach BTA EPM by bart id. Real RAPM fit where available, else the
       // estimated box-score model — `estimated` flags which for the UI marker.
       const epmEntry = epmByYear[y];
+      // Does this season have EPM at all? Below the 13 mpg floor the fit is
+      // essentially the prior, so those players are omitted from the file
+      // rather than published as a shrunk-to-zero number — and the explorer
+      // hides them (see filterSpec). This flag is what keeps that from
+      // emptying the table for a season whose EPM was never built: no
+      // coverage, no hiding.
+      const seasonHasEpm = !!epmEntry && Object.keys(epmEntry.players).length > 0;
+      for (const p of arr) p.epm_covered = seasonHasEpm;
       if (epmEntry) {
         for (const p of arr) {
           const e = p.bart_player_id != null ? epmEntry.players[String(p.bart_player_id)] : undefined;

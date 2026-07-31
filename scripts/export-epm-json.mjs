@@ -22,6 +22,16 @@ import zlib from "node:zlib";
 const args = process.argv.slice(2);
 const SEASON = Number(args[args.indexOf("--season") + 1] || 2026);
 const MIN_POSS = 300; // below this the RAPM is mostly shrinkage — exclude from RK
+/**
+ * Minutes floor for being given an EPM at all. Matches MIN_PG in
+ * export-box-epm-json.mjs — the two must agree, or a player would get a real
+ * EPM in one season and a suppressed one in another for the same role.
+ *
+ * Below this the fit is essentially the prior, and the prior is essentially
+ * "how good is your team". Emitting that as a number invited exactly the wrong
+ * reading; emitting nothing lets the UI say "—", which is the truth.
+ */
+const MIN_PG = 13;
 const DATA = path.resolve("public/data");
 
 const norm = (s) => (s ?? "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
@@ -65,8 +75,17 @@ function main() {
   // 2. Bart players for the season → name/team indices.
   const bart = JSON.parse(fs.readFileSync(path.join(DATA, "players-by-year", `${SEASON}.json`), "utf8"));
   const byNameTeam = new Map(), byName = new Map(), byIL = new Map();
+  // Minutes per game by bart id — Bart's raw_row column 54, the same one the
+  // explorer reads. Needed for the MIN_PG gate; epm.csv only carries possessions.
+  const mpgByBart = new Map();
   for (const p of bart) {
     if (p.bart_player_id == null) continue;
+    {
+      const st = Array.isArray(p.player_bart_stats) ? p.player_bart_stats[0] : p.player_bart_stats;
+      const v = st?.raw_row?.[54];
+      const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+      if (Number.isFinite(n)) mpgByBart.set(p.bart_player_id, n);
+    }
     const t = Array.isArray(p.teams) ? p.teams[0] : p.teams;
     const nn = norm(p.name), nt = normTeam(t?.name);
     byNameTeam.set(`${nn}|${nt}`, p.bart_player_id);
@@ -81,7 +100,7 @@ function main() {
 
   // 3. Join.
   const players = {};
-  let matched = 0;
+  let matched = 0, suppressed = 0;
   const unmatched = [];
   // RK over qualified rows first (CBBD universe), then attach to matches.
   const qual = rows.filter((r) => r.poss >= MIN_POSS).sort((a, b) => b.epm - a.epm);
@@ -99,6 +118,10 @@ function main() {
       if (toks.length >= 2) bid = byIL.get(`${toks[0][0]} ${toks[toks.length - 1]}|${nt}`);
     }
     if (bid == null) { unmatched.push(`${r.name} (${r.team})`); continue; }
+    // Below the minutes floor we publish nothing rather than a shrunk-to-zero
+    // number the reader would take at face value.
+    const mpg = mpgByBart.get(bid);
+    if (!Number.isFinite(mpg) || mpg < MIN_PG) { suppressed++; continue; }
     matched++;
     const ex = extras.get(`${nn}|${nt}`);
     players[bid] = {
@@ -112,12 +135,13 @@ function main() {
     season: SEASON,
     built_at: new Date().toISOString(),
     min_poss: MIN_POSS,
+    min_pg: MIN_PG,
     players,
-    meta: { matched, unmatched: unmatched.length },
+    meta: { matched, unmatched: unmatched.length, suppressed },
   };
   const fp = path.join(DATA, `epm-${SEASON}.json`);
   fs.writeFileSync(fp, JSON.stringify(out));
-  console.log(`✓ wrote ${fp} — ${matched.toLocaleString()} matched, ${unmatched.length} unmatched`);
+  console.log(`✓ wrote ${fp} — ${matched.toLocaleString()} matched, ${unmatched.length} unmatched, ${suppressed.toLocaleString()} below ${MIN_PG} mpg (suppressed)`);
   if (unmatched.length) console.log("  sample unmatched:", unmatched.slice(0, 10).join(" | "));
 }
 

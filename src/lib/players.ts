@@ -76,6 +76,17 @@ export type PlayerSummary = {
    * computes it against the same three rules the page generator uses.
    */
   has_page: boolean;
+  /**
+   * Whether this player's SEASON has EPM data at all.
+   *
+   * Set per season by the explorer, not by the payload. Players under the
+   * 13 mpg floor are omitted from epm-<year>.json entirely — below it the fit
+   * is essentially the prior, and publishing that as a number invited it to be
+   * read as measured impact. The explorer hides those rows; this flag is what
+   * stops it from also emptying the table for a season whose EPM was never
+   * built, where every player is legitimately EPM-less.
+   */
+  epm_covered?: boolean;
   name: string;
   team_name: string;
   team_conference: string | null;

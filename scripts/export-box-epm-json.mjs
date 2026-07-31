@@ -18,7 +18,13 @@ import { dirname, join } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const DATA = join(ROOT, "public", "data");
-const MIN_PG = 8;
+// Raised from 8 to 13 (2026-07). At 8 the gate created a cliff rather than a
+// floor: below it a player was absent and the UI showed 0.0, at it he inherited
+// a full team-driven prior. On Michigan that was a 3.9-point gap opened by 7.7
+// minutes. 13 mpg is where a box line starts describing a role instead of a
+// cameo. Players below it are omitted entirely and render as "—", never 0.0,
+// which is a claim we cannot support.
+const MIN_PG = 13;
 const BUILT_AT = process.env.BUILD_STAMP || "";  // deterministic if provided
 
 const csv = readFileSync(join(__dirname, "box-epm-pred.csv"), "utf8")
