@@ -59,12 +59,16 @@ export function CoachStylePanel({
       </div>
       {headline && <p className="text-base text-ink-soft mb-6 max-w-3xl">{headline}</p>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] gap-x-10 gap-y-8 items-center">
+      {/* Content-width, not page-width. The lists were previously sized by a
+          1fr grid track, so each row stretched label away from value across the
+          whole remaining page — the numbers ended up a screen apart from the
+          thing they describe. Fixed columns keep the pair readable together. */}
+      <div className="flex flex-col lg:flex-row lg:items-center gap-x-12 gap-y-8">
         <StyleRadar stylePct={stylePct} />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6 min-w-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-6">
           {(["Offense", "Defense"] as const).map((group) => (
-            <div key={group} className="min-w-0">
+            <div key={group} className="w-full sm:w-[15.5rem]">
               <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-2.5 flex items-center gap-2">
                 <span className="h-px w-6 bg-coral" />
                 {group}
@@ -127,7 +131,7 @@ function StyleRadar({ stylePct }: { stylePct: CoachStyle }) {
   const poly = dims.map((e, i) => at(i, radius(e.p)).join(",")).join(" ");
 
   return (
-    <div className="mx-auto w-full max-w-[22rem]">
+    <div className="w-full max-w-[19rem] shrink-0 mx-auto lg:mx-0">
       <svg
         viewBox={`0 0 ${S} ${S}`}
         className="w-full h-auto overflow-visible"
