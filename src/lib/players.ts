@@ -172,7 +172,6 @@ export type PlayerSummary = {
    * Bart's PORPAG today, so the dependency runs deeper than one column.
    */
   bta_porpag: number | null;
-  bta_ind_ortg: number | null;  // avg(z(PIR), z(PORPAG)) * 20, with 12% non-power-conf penalty
   fg3_made: number | null;
   fg3_att: number | null;
 };
@@ -287,7 +286,7 @@ export type PlayerListSpec = {
    * the stat, which is what the table used to infer from `filters` alone.
    */
   cols: string[];
-  sortBy: "bta_ind_ortg" | "pir" | "bta_porpag" | "pts" | "reb" | "ast" | "fg_pct" | "fg3_pct" | "ts_pct" | "games" | "name"
+  sortBy: "pir" | "bta_porpag" | "pts" | "reb" | "ast" | "fg_pct" | "fg3_pct" | "ts_pct" | "games" | "name"
     | "epm" | "off_epm" | "def_epm" | "min" | "usage" | "orb" | "drb" | "tov" | "tov_pct" | "stl" | "blk" | "hkm";
   sortDir: "asc" | "desc";
   limit: number;
@@ -300,7 +299,7 @@ export type PlayerListSpec = {
  * PlayerListSpec["sortBy"] and with sortKeyMap in players-client.
  */
 export const VALID_SORTS: PlayerListSpec["sortBy"][] = [
-  "bta_ind_ortg", "pir", "bta_porpag", "pts", "reb", "ast", "fg_pct", "fg3_pct",
+  "pir", "bta_porpag", "pts", "reb", "ast", "fg_pct", "fg3_pct",
   "ts_pct", "games", "name", "epm", "off_epm", "def_epm", "min", "usage",
   "orb", "drb", "tov", "tov_pct", "stl", "blk", "hkm",
 ];

@@ -27,7 +27,6 @@ import {
   type PlayerStatFilter,
   type PlayerSummary,
 } from "@/lib/players";
-import { confMultiplier, topTeamMultiplier, top5Tier1Multiplier, top3InConfMultiplier, teamStrengthMultiplier, powerConfSub500Multiplier, BTA_DEF_WEIGHT, btaDefScore } from "@/lib/conf-tiers";
 import { useDragPan } from "@/lib/use-drag-pan";
 import { useMeasuredWidth } from "@/lib/use-measured-width";
 
@@ -154,7 +153,6 @@ const LATE_FIELDS = {
   epm: null, off_epm: null, def_epm: null, epm_estimated: false, epm_covered: false,
   ewins: null, on_off: null,
   rim_pct: null, mid_pct: null, assisted_pct: null, rim_rate: null, tp_rate: null,
-  bta_ind_ortg: null,
 } as const;
 
 /**
@@ -189,125 +187,6 @@ function positionBucket(note: string | null | undefined): "G" | "F" | "C" | null
   return note ? (BUCKET_BY_NOTE[note] ?? null) : null;
 }
 
-// Per-(year, position bucket) efficiency percentile lookup. For each player
-// we compute their TS% percentile AND their FG% percentile within their
-// position bucket, then take the WORST of the two. Catches both:
-//   • low TS overall (the Tai'Reon Joseph archetype — bricks everything)
-//   • good TS propped up by FT volume but awful field efficiency
-//     (the Jahmir Young archetype — lives at the line, can't shoot)
-//
-// The ranking COHORT uses the stricter 18g / 20mpg / 5.3ppg floor (matches the
-// SHOOTING percentile chips on the player profile via
-// scripts/compute-player-ranks.mts), so a player whose profile chip says
-// "25 pctile eFG" gets a penalty calibrated to that same 25th percentile.
-// Non-strict players (above the leaderboard's 8/10/3 floor but below
-// 18/18/5) are still scored — we look up their TS/FG values against the
-// strict cohort's sorted distribution via binary search, so a 20-PPG
-// scorer who only played 15 games still gets penalized.
-// Returns 0–100 where 100 = most efficient at that position.
-function effPctileByPositionMap(players: PlayerSummary[]): Map<number, number> {
-  type Bucket = "G" | "F" | "C";
-  const inStrictCohort = (p: PlayerSummary) =>
-    (p.games ?? 0) >= 18 && (p.min_pg ?? 0) >= 20 && (p.pts_pg ?? 0) >= 5.3;
-  const byBucket: Record<Bucket, PlayerSummary[]> = { G: [], F: [], C: [] };
-  const strictByBucket: Record<Bucket, PlayerSummary[]> = { G: [], F: [], C: [] };
-  for (const p of players) {
-    const b = positionBucket(p.position_note);
-    if (!b) continue;
-    byBucket[b].push(p);
-    if (inStrictCohort(p)) strictByBucket[b].push(p);
-  }
-  // Returns a function that maps any value to its percentile within the
-  // strict cohort's distribution for the given key. Uses binary search so
-  // every player (strict or not) gets a percentile against the same
-  // calibrated distribution.
-  function rankerFor(strictArr: PlayerSummary[], key: "ts_pct" | "fg_pct"): (v: number) => number | null {
-    const sorted = strictArr
-      .map((p) => p[key])
-      .filter((v): v is number => typeof v === "number")
-      .sort((a, b) => a - b);
-    const n = sorted.length;
-    if (n < 2) return () => null;
-    return (v: number) => {
-      let lo = 0, hi = n;
-      while (lo < hi) {
-        const mid = (lo + hi) >> 1;
-        if (sorted[mid]! < v) lo = mid + 1;
-        else hi = mid;
-      }
-      return Math.max(0, Math.min(100, Math.round((lo / (n - 1)) * 100)));
-    };
-  }
-  const out = new Map<number, number>();
-  for (const b of ["G", "F", "C"] as const) {
-    const tsRanker = rankerFor(strictByBucket[b], "ts_pct");
-    const fgRanker = rankerFor(strictByBucket[b], "fg_pct");
-    for (const p of byBucket[b]) {
-      const t = typeof p.ts_pct === "number" ? tsRanker(p.ts_pct) : null;
-      const f = typeof p.fg_pct === "number" ? fgRanker(p.fg_pct) : null;
-      if (t == null && f == null) continue;
-      out.set(p.id, t == null ? f! : f == null ? t : Math.min(t, f));
-    }
-  }
-  return out;
-}
-
-// Volume-shooter penalty — punish high-usage scorers who are inefficient
-// relative to their position. Ramps in linearly:
-//   ppgFactor: 0 at ≤12 PPG, 1 at ≥20 PPG
-//   effFactor: 0 at ≥45th-percentile efficiency (worst-of TS / eFG vs position),
-//              1 at ≤10th
-// Max penalty: −10 BTA points. Applied as a flat add-on after the conference
-// and top-team multipliers so a high-major's penalty isn't amplified by
-// their schedule bonus. (Mirror of bta-prtg.mts :: volumeShooterPenalty.)
-function volumeShooterPenalty(ppg: number | null, effPositionPctile: number | null): number {
-  if (ppg == null || effPositionPctile == null) return 0;
-  const ppgFactor = Math.max(0, Math.min(1, (ppg - 12) / 8));
-  const effFactor = Math.max(0, Math.min(1, (45 - effPositionPctile) / 35));
-  return -10 * ppgFactor * effFactor;
-}
-
-// BTA PRTG = avg(0.69 × z(PIR), z(PORPAG)) × 20 × confMultiplier × topTeamMultiplier
-//   + volumeShooterPenalty(ppg, worst-of(TS pctile, eFG pctile within position))
-// PIR is weighted at 69% to dampen its high-usage-scorer bias; the volume
-// penalty closes that gap further for genuine bad-volume cases (including
-// FT-line-inflated scorers whose TS looks fine but eFG is awful). Conference
-// multiplier ranges from +19 % (Tier 1) to −23 % (Tier 5); top-32 D-I teams
-// get an additional +8 %. See src/lib/conf-tiers.ts. Mutates `bta_ind_ortg`.
-function attachBtaIndOrtg(players: PlayerSummary[]): void {
-  function moments(vals: number[]) {
-    if (vals.length === 0) return { mean: 0, sd: 0 };
-    const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
-    const variance = vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length;
-    return { mean, sd: Math.sqrt(variance) };
-  }
-  const pirVals = players.map((p) => p.pir).filter((v): v is number => typeof v === "number");
-  const porVals = players.map((p) => p.porpag).filter((v): v is number => typeof v === "number");
-  const defVals = players.map((p) => btaDefScore(p.blk_pg, p.stl_pg, p.reb_pg));
-  const pirM = moments(pirVals);
-  const porM = moments(porVals);
-  const defM = moments(defVals);
-  const effByPos = effPctileByPositionMap(players);
-  for (const p of players) {
-    const zParts: number[] = [];
-    if (typeof p.pir === "number" && pirM.sd > 0) zParts.push(((p.pir - pirM.mean) / pirM.sd) * 0.69);
-    if (typeof p.porpag === "number" && porM.sd > 0) zParts.push((p.porpag - porM.mean) / porM.sd);
-    if (zParts.length === 0) { p.bta_ind_ortg = null; continue; }
-    // Offensive blend + additive defensive tilt (see conf-tiers btaDefScore).
-    const off = zParts.reduce((a, b) => a + b, 0) / zParts.length;
-    const zDef = defM.sd > 0 ? (btaDefScore(p.blk_pg, p.stl_pg, p.reb_pg) - defM.mean) / defM.sd : 0;
-    const avg = off + BTA_DEF_WEIGHT * zDef;
-    const base =
-      avg * 20
-      * confMultiplier(p.team_conference)
-      * topTeamMultiplier(p.team_name)
-      * top5Tier1Multiplier(p.team_name)
-      * top3InConfMultiplier(p.team_name)
-      * teamStrengthMultiplier(p.team_name)
-      * powerConfSub500Multiplier(p.team_name);
-    p.bta_ind_ortg = base + volumeShooterPenalty(p.pts_pg, effByPos.get(p.id) ?? null);
-  }
-}
 
 // Leaderboard visibility floor: hide players with <8 games OR <3.5 PPG.
 // Stricter than the previous AND-style filter — keeps deep-bench cameos
@@ -359,7 +238,6 @@ function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummar
   const out = filterSpec(players, spec);
 
   const sortKeyMap: Record<PlayerListSpec["sortBy"], keyof PlayerSummary> = {
-    bta_ind_ortg: "bta_ind_ortg",
     pir: "pir",
     bta_porpag: "bta_porpag",
     pts: "pts_pg", reb: "reb_pg", ast: "ast_pg",
@@ -388,7 +266,7 @@ function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummar
 
 // Chip-bearing stats. TOV inverts (fewer turnovers = higher percentile).
 const PCT_KEYS = [
-  "bta_ind_ortg", "pir", "fg_pct", "fg3_pct", "ts_pct",
+  "pir", "fg_pct", "fg3_pct", "ts_pct",
   "epm", "off_epm", "def_epm", "usage_pct", "pts_pg",
   "orb_pg", "drb_pg", "reb_pg", "ast_pg", "tov_pg", "tov_pct", "stl_pg", "blk_pg", "hkm_pct",
   // Filterable extras that can appear as dynamic columns:
@@ -619,7 +497,6 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         }
       }
       const eligible = arr.filter((p) => !isBelowBaseline(p));
-      attachBtaIndOrtg(eligible);
       const pctMaps = attachPercentiles(eligible);
       out[y] = { players: arr, pctMaps };
     }
