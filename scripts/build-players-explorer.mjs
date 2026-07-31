@@ -58,8 +58,20 @@ export const FIELDS = [
   "min_pg", "pts_pg", "reb_pg", "ast_pg", "stl_pg", "blk_pg", "fg_pct",
   "fg3_pct", "fg2_pct", "ft_pct", "ts_pct", "efg_pct", "fta_rate", "orb_pg",
   "tov_pg", "tov_pct", "usage_pct", "net_rtg", "ast_to_tov", "drb_pg",
-  "hkm_pct", "pir", "porpag", "fg3_made", "fg3_att",
+  "hkm_pct", "pir", "porpag", "bta_porpag", "fg3_made", "fg3_att",
 ];
+
+/**
+ * BTA's own points-over-replacement, by bart id, from
+ * scripts/build-bta-porpag.mjs. Merged in here rather than fetched separately
+ * so the explorer still makes one request per season. Absent for 2021, which
+ * has no CBBD box scores.
+ */
+function btaPorpagFor(year) {
+  const file = path.resolve("public/data", `porpag-${year}.json`);
+  if (!fs.existsSync(file)) return null;
+  return JSON.parse(fs.readFileSync(file, "utf8")).players;
+}
 
 /**
  * bart_player_ids that get a profile page. A port of readRankedPlayerIds() in
@@ -239,10 +251,14 @@ function main() {
     const srcBuf = fs.readFileSync(srcPath);
     const players = JSON.parse(srcBuf.toString("utf8"));
 
+    const btaPor = btaPorpagFor(Number(file.replace(".json", "")));
     const rows = players.map((p) => {
       const s = transformPlayer(p);
       s.has_page = s.bart_player_id != null && ranked.has(s.bart_player_id);
       if (s.has_page) linked++; else unlinked++;
+      s.bta_porpag = btaPor && s.bart_player_id != null
+        ? btaPor[String(s.bart_player_id)]?.porpag ?? null
+        : null;
       return FIELDS.map((f) => s[f] ?? null);
     });
 

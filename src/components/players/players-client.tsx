@@ -19,6 +19,7 @@ import {
   // PLAYER_COLS is gone from here: the raw_row offsets it names are now read
   // only by scripts/build-players-explorer.mjs, at build time.
   PLAYER_STAT_COLUMNS,
+  VALID_SORTS,
   parsePlayerSpec,
   passesPlayerFilter,
   playerSpecToParams,
@@ -360,6 +361,7 @@ function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummar
   const sortKeyMap: Record<PlayerListSpec["sortBy"], keyof PlayerSummary> = {
     bta_ind_ortg: "bta_ind_ortg",
     pir: "pir",
+    bta_porpag: "bta_porpag",
     pts: "pts_pg", reb: "reb_pg", ast: "ast_pg",
     fg_pct: "fg_pct", fg3_pct: "fg3_pct", ts_pct: "ts_pct",
     games: "games",
@@ -390,7 +392,7 @@ const PCT_KEYS = [
   "epm", "off_epm", "def_epm", "usage_pct", "pts_pg",
   "orb_pg", "drb_pg", "reb_pg", "ast_pg", "tov_pg", "tov_pct", "stl_pg", "blk_pg", "hkm_pct",
   // Filterable extras that can appear as dynamic columns:
-  "efg_pct", "fg2_pct", "ft_pct", "fta_rate", "ast_to_tov", "porpag", "min_pg",
+  "efg_pct", "fg2_pct", "ft_pct", "fta_rate", "ast_to_tov", "porpag", "bta_porpag", "min_pg",
 ] as const;
 type PctKey = (typeof PCT_KEYS)[number];
 type PctMaps = Record<PctKey, Map<number, number>>;
@@ -735,6 +737,11 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         // games + plus/minus display as whole numbers.
         fmt: col.field === "games" ? "int" : col.format === "pct1" ? "pct1" : "num1",
         pct: (PCT_KEYS as readonly string[]).includes(col.field as string) ? (col.field as PctKey) : null,
+        // Sortable when the stat's key is one the spec accepts, so a pinned
+        // column behaves like a built-in one rather than being read-only.
+        sortKey: (VALID_SORTS as readonly string[]).includes(col.key)
+          ? (col.key as PlayerListSpec["sortBy"])
+          : undefined,
       });
     };
     for (const key of spec.cols) add(key, true);

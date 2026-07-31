@@ -73,6 +73,22 @@ async function main() {
     process.exit(shardCode);
   }
 
+  // BTA points-over-replacement, from the CBBD box scores. Must run BEFORE the
+  // explorer payload, which merges its output in as the bta_porpag column.
+  console.log("\n→ node scripts/build-bta-porpag.mjs…");
+  const porpagCode = await new Promise((resolve) => {
+    const child = spawn("node", ["scripts/build-bta-porpag.mjs"], {
+      stdio: "inherit",
+      shell: true,
+      cwd: ROOT,
+    });
+    child.on("close", (code) => resolve(code ?? 1));
+  });
+  if (porpagCode !== 0) {
+    console.error(`✗ bta-porpag build failed (exit ${porpagCode})`);
+    process.exit(porpagCode);
+  }
+
   // Same reasoning as the shards above: the explorer payload is derived wholly
   // from players-by-year, so regenerating it every build keeps the two from
   // drifting after a data refresh.

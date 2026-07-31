@@ -160,6 +160,18 @@ export type PlayerSummary = {
   epm_estimated: boolean;
   pir: number | null;           // EuroLeague PIR per game (minus TOV; see note)
   porpag: number | null;        // Bart Torvik Points Over Replacement Player per Adj Game
+  /**
+   * BTA's own points over replacement per game, built from CBBD primitives by
+   * scripts/build-bta-porpag.mjs — per-game offensive rating and usage, credited
+   * for the defence actually faced, minus a replacement rate set from the data.
+   *
+   * Shipped alongside Bart's rather than replacing it: the two agree at
+   * r = 0.947, which is the evidence the construction is sound, and keeping
+   * both visible is how that stays checkable. The long-term point is to stop
+   * depending on someone else's derived stat — bta_ind_ortg is computed from
+   * Bart's PORPAG today, so the dependency runs deeper than one column.
+   */
+  bta_porpag: number | null;
   bta_ind_ortg: number | null;  // avg(z(PIR), z(PORPAG)) * 20, with 12% non-power-conf penalty
   fg3_made: number | null;
   fg3_att: number | null;
@@ -196,6 +208,7 @@ export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
 
   // ── Advanced ─────────────────────────────────────────────
   { key: "pir",      label: "PIR",      desc: "EuroLeague Performance Index Rating (per game, minus TOV)",                              group: "advanced", format: "num1", field: "pir" },
+  { key: "bta_porpag", label: "PORP",   desc: "BTA Points Over Replacement per game — points produced above a replacement-level player on the same possessions, credited for the defence actually faced. Built from per-game data, so a big night against the country's best defence counts as one.", group: "advanced", format: "num2", field: "bta_porpag" },
   { key: "net_rtg",  label: "Net Rtg",  desc: "Individual offensive rating minus defensive rating, per 100 possessions",               group: "advanced", format: "num1", field: "net_rtg" },
   { key: "on_off",   label: "On/Off",   desc: "Team net rating with this player on the floor minus with them off it, per 100 possessions. 2024 onward only — earlier seasons have no lineup data.", group: "advanced", format: "num1", field: "on_off" },
   { key: "ast_tov",  label: "AST/TOV",  desc: "Assist-to-turnover ratio (assists per game ÷ turnovers per game)",                       group: "advanced", format: "num2", field: "ast_to_tov" },
@@ -274,11 +287,23 @@ export type PlayerListSpec = {
    * the stat, which is what the table used to infer from `filters` alone.
    */
   cols: string[];
-  sortBy: "bta_ind_ortg" | "pir" | "pts" | "reb" | "ast" | "fg_pct" | "fg3_pct" | "ts_pct" | "games" | "name"
+  sortBy: "bta_ind_ortg" | "pir" | "bta_porpag" | "pts" | "reb" | "ast" | "fg_pct" | "fg3_pct" | "ts_pct" | "games" | "name"
     | "epm" | "off_epm" | "def_epm" | "min" | "usage" | "orb" | "drb" | "tov" | "tov_pct" | "stl" | "blk" | "hkm";
   sortDir: "asc" | "desc";
   limit: number;
 };
+
+/**
+ * Every accepted sort key. This is the allow-list a URL is checked against, so
+ * a key missing here is silently ignored and the table quietly falls back to
+ * EPM — which is how sorting by TOV% went unnoticed. Keep in step with
+ * PlayerListSpec["sortBy"] and with sortKeyMap in players-client.
+ */
+export const VALID_SORTS: PlayerListSpec["sortBy"][] = [
+  "bta_ind_ortg", "pir", "bta_porpag", "pts", "reb", "ast", "fg_pct", "fg3_pct",
+  "ts_pct", "games", "name", "epm", "off_epm", "def_epm", "min", "usage",
+  "orb", "drb", "tov", "tov_pct", "stl", "blk", "hkm",
+];
 
 export const DEFAULT_PLAYER_SPEC: PlayerListSpec = {
   years: [2026],
@@ -375,8 +400,10 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
   const minG = Number(get("ming"));
   const limitRaw = Number(get("limit"));
   const sortRaw = get("sort");
-  const validSorts: PlayerListSpec["sortBy"][] = ["bta_ind_ortg", "pir", "pts", "reb", "ast", "fg_pct", "fg3_pct", "ts_pct", "games", "name",
-    "epm", "off_epm", "def_epm", "min", "usage", "orb", "drb", "tov", "stl", "blk", "hkm"];
+  // Keep in step with PlayerListSpec["sortBy"] — this is the allow-list a URL
+  // is checked against, so a key missing here is silently ignored and the table
+  // quietly falls back to EPM.
+  const validSorts = VALID_SORTS;
   const sortBy = validSorts.includes(sortRaw as PlayerListSpec["sortBy"]) ? (sortRaw as PlayerListSpec["sortBy"]) : DEFAULT_PLAYER_SPEC.sortBy;
   const sortDirRaw = get("order");
   // Pinned columns. Unknown keys are dropped rather than trusted — this comes
