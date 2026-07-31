@@ -1,4 +1,5 @@
 import { STYLE_DIMENSIONS, type CoachStyle } from "@/lib/coaches";
+import { PercentileChip, pctColor, pctBg } from "@/components/percentile-chip";
 import { cn } from "@/lib/utils";
 
 /**
@@ -16,48 +17,37 @@ import { cn } from "@/lib/utils";
  * makes "extreme in both directions" (Bennett: slowest tempo, best defence)
  * read instantly, and makes the majority look boringly central, which is true.
  *
- * NOT A RADAR, despite the name. Radar area scales with the square of the
- * values, so it overstates every difference, and the shape depends entirely on
- * an axis order that has no meaning. Bars are honest about a nine-way
- * comparison in a way a polygon is not.
+ * A RADAR, deliberately, having previously argued against one here. The old
+ * objection stands on its own terms — polygon AREA scales with the square of
+ * the values, so it overstates every difference, and the shape depends on an
+ * axis order that carries no meaning. Two things answer it. The fill is held
+ * faint and the reading is carried by the vertices and the dashed median ring,
+ * so the eye compares distances along spokes rather than areas. And the axis
+ * order is fixed and grouped — the six offensive dimensions, then the three
+ * defensive ones — so the silhouette means the same thing on every coach's
+ * page, which is the entire point of a fingerprint: Bennett and Huggins should
+ * be different SHAPES, not different bar lengths.
  *
- * NOT COLOURED BY THE GOOD/BAD RAMP either. Playing fast is not an
- * achievement. Style is descriptive, so it gets one neutral accent; the two
- * dimensions where lower genuinely is better say so in words instead.
+ * COLOURED BY THE SITE PERCENTILE RAMP, also a reversal. The caution behind the
+ * old choice was real and has not gone away: playing fast is not an
+ * achievement, and a red chip on Tempo does not mean a coach is bad at tempo.
+ * What the ramp buys is that a reader already knows what it means everywhere
+ * else on the site, and the footnote says out loud that here it marks WHERE in
+ * the field a coach sits rather than whether that is good.
  */
-
-type Season = { year: number; team: string; style?: CoachStyle | null };
 
 export function CoachStylePanel({
   styleAvg,
   stylePct,
-  seasons,
-  leagueAvg,
-  coachName,
 }: {
   styleAvg: CoachStyle | null | undefined;
   stylePct: CoachStyle | null | undefined;
-  seasons: Season[];
-  /** D-I mean per season, so a flat line can be told from a coach standing still. */
-  leagueAvg: Map<number, CoachStyle>;
-  coachName: string;
 }) {
   // 30 of 804 coaches have no style at all — too few joined team-seasons.
   // They get nothing rather than a panel of dashes.
   if (!styleAvg || !stylePct || typeof styleAvg.pace !== "number") return null;
 
   const headline = describeStyle(styleAvg, stylePct);
-
-  // Every season in range, oldest first, INCLUDING the ones with no style —
-  // they are the gaps the sparkline has to break at. Filtering them out first
-  // (which this did originally) closes the gap silently and draws a straight
-  // line through a season we do not hold: Bennett's 2021 vanished and his line
-  // ran unbroken from 2020 to 2022. Only the empty ends are trimmed, since
-  // leading and trailing blanks are dead space rather than missing data.
-  const ordered = [...seasons].sort((a, b) => a.year - b.year);
-  const firstIdx = ordered.findIndex((s) => s.style);
-  const lastIdx = ordered.length - 1 - [...ordered].reverse().findIndex((s) => s.style);
-  const withStyle = firstIdx < 0 ? [] : ordered.slice(firstIdx, lastIdx + 1);
 
   return (
     <section className="mx-auto max-w-[97rem] px-6 lg:px-10 mt-10">
@@ -69,43 +59,31 @@ export function CoachStylePanel({
       </div>
       {headline && <p className="text-base text-ink-soft mb-6 max-w-3xl">{headline}</p>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-10 gap-y-6">
-        {(["Offense", "Defense"] as const).map((group) => (
-          <div key={group}>
-            <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-3 flex items-center gap-2">
-              <span className="h-px w-6 bg-coral" />
-              {group}
-            </div>
-            <ul className="space-y-2.5">
-              {STYLE_DIMENSIONS.filter((d) => d.group === group).map((d) => (
-                <StyleRow
-                  key={d.key}
-                  label={d.label}
-                  unit={d.unit}
-                  value={styleAvg[d.key]}
-                  pct={stylePct[d.key]}
-                  series={withStyle.map((s) => ({
-                    year: s.year,
-                    v: s.style?.[d.key] ?? null,
-                    league: leagueAvg.get(s.year)?.[d.key] ?? null,
-                  }))}
-                  coachName={coachName}
-                />
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] gap-x-10 gap-y-8 items-center">
+        <StyleRadar stylePct={stylePct} />
 
-      <p className="mt-5 text-xs text-ink-muted leading-relaxed max-w-3xl">
-        Each coach&rsquo;s teams, averaged over the seasons we can join to a team-season (86% of
-        them), and ranked against every coach with at least four such seasons — one year is a
-        team, not a style. The bar runs from the median coach toward whichever end this one sits
-        at, so length reads as how unusual rather than how much. The line at the right is that
-        stat season by season, against the dashed D-I average for the same year; it breaks where
-        a season is missing rather than guessing across it. Tempo is raw possessions rather than
-        adjusted, so a coach in a slow league reads slower than he coaches.
-      </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6 min-w-0">
+          {(["Offense", "Defense"] as const).map((group) => (
+            <div key={group} className="min-w-0">
+              <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-2.5 flex items-center gap-2">
+                <span className="h-px w-6 bg-coral" />
+                {group}
+              </div>
+              <ul className="space-y-1.5">
+                {STYLE_DIMENSIONS.filter((d) => d.group === group).map((d) => (
+                  <StyleRow
+                    key={d.key}
+                    label={d.label}
+                    unit={d.unit}
+                    value={styleAvg[d.key]}
+                    pct={stylePct[d.key]}
+                  />
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }
@@ -116,141 +94,107 @@ export function CoachStylePanel({
  * The bar is anchored at the 50th percentile and grows toward whichever end
  * the coach sits at, so length reads as "how unusual" rather than "how much".
  */
+/**
+ * The fingerprint itself.
+ *
+ * Nine spokes in a FIXED order — the six offensive dimensions clockwise from
+ * the top, then the three defensive ones — so the same silhouette means the
+ * same thing on every coach's page. That fixed order is what makes the shape
+ * comparable; a radar whose axes are sorted per subject is decoration.
+ *
+ * The fill is deliberately faint. Polygon area grows with the square of the
+ * radius, so a filled radar overstates every difference; the reading is meant
+ * to come from where the vertices sit against the dashed median ring, not from
+ * how much ink is inside them.
+ *
+ * A vertex is drawn at its percentile from the centre, with a floor so that a
+ * 0th-percentile dimension is still a visible point rather than collapsing
+ * into the middle and taking two neighbouring edges with it. Bennett's tempo
+ * is exactly that case.
+ */
+function StyleRadar({ stylePct }: { stylePct: CoachStyle }) {
+  const dims = STYLE_DIMENSIONS.map((d) => ({ d, p: stylePct[d.key] }))
+    .filter((e): e is { d: (typeof STYLE_DIMENSIONS)[number]; p: number } => typeof e.p === "number");
+  if (dims.length < 3) return null;
+
+  const S = 320, C = S / 2, R = 108, FLOOR = 10;
+  const n = dims.length;
+  const at = (i: number, r: number): [number, number] => {
+    const a = (Math.PI * 2 * i) / n - Math.PI / 2;
+    return [C + Math.cos(a) * r, C + Math.sin(a) * r];
+  };
+  const radius = (p: number) => FLOOR + (Math.max(0, Math.min(100, p)) / 100) * (R - FLOOR);
+  const poly = dims.map((e, i) => at(i, radius(e.p)).join(",")).join(" ");
+
+  return (
+    <div className="mx-auto w-full max-w-[22rem]">
+      <svg
+        viewBox={`0 0 ${S} ${S}`}
+        className="w-full h-auto overflow-visible"
+        role="img"
+        aria-label={`Style fingerprint: ${dims.map((e) => `${e.d.label} ${Math.round(e.p)}th percentile`).join(", ")}`}
+      >
+        {[0.25, 0.5, 0.75, 1].map((f) => (
+          <circle key={f} cx={C} cy={C} r={FLOOR + f * (R - FLOOR)}
+                  fill="none" stroke="currentColor" className="text-ink/[0.07]" />
+        ))}
+        {/* the median coach */}
+        <circle cx={C} cy={C} r={radius(50)} fill="none" stroke="currentColor"
+                strokeDasharray="3 4" className="text-ink/25" />
+        {dims.map((e, i) => {
+          const [x, y] = at(i, R);
+          return <line key={e.d.key} x1={C} y1={C} x2={x} y2={y}
+                       stroke="currentColor" className="text-ink/[0.06]" />;
+        })}
+        <polygon points={poly} className="fill-coral/15 stroke-coral" strokeWidth={1.75} strokeLinejoin="round" />
+        {dims.map((e, i) => {
+          const [x, y] = at(i, radius(e.p));
+          return (
+            <circle key={e.d.key} cx={x} cy={y} r={4}
+                    fill={pctBg(e.p)} stroke={pctColor(e.p)} strokeWidth={1.5} />
+          );
+        })}
+        {dims.map((e, i) => {
+          const [x, y] = at(i, R + 20);
+          const anchor = Math.abs(x - C) < 10 ? "middle" : x > C ? "start" : "end";
+          return (
+            <text key={e.d.key} x={x} y={y} textAnchor={anchor} dominantBaseline="middle"
+                  className="fill-ink-muted text-[10px]">
+              {e.d.label}
+            </text>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
 function StyleRow({
-  label, unit, value, pct, series, coachName,
+  label, unit, value, pct,
 }: {
   label: string;
   unit: "" | "%";
   value: number | null;
   pct: number | null;
-  series: Array<{ year: number; v: number | null; league: number | null }>;
-  coachName: string;
 }) {
   if (typeof value !== "number" || typeof pct !== "number") {
     return (
-      <li className="flex items-center gap-3">
-        <span className="w-28 shrink-0 text-sm text-ink-soft">{label}</span>
-        <span className="text-sm text-ink-muted/60">no data</span>
+      <li className="flex items-center gap-2 text-sm">
+        <span className="flex-1 text-ink-soft">{label}</span>
+        <span className="text-ink-muted/60 text-xs">no data</span>
       </li>
     );
   }
-
-  const dev = pct - 50;                        // -50 … +50
-  const width = `${Math.abs(dev)}%`;           // half-track share
-  const rightward = dev >= 0;
-  const extreme = Math.abs(dev) >= 35;
-
+  // No deviation bar here any more — the radar states the position, and
+  // repeating it as a bar said the same thing twice in the same panel.
   return (
-    <li className="flex items-center gap-3">
-      <span className="w-28 shrink-0 text-sm text-ink-soft">{label}</span>
-
-      {/* Rank bar and career line sit in separate columns. Overlaying the line
-          behind the bar buried the one thing it was there to show — that it is
-          a time series — and left the bar looking like it had a tail. */}
-      <span className="relative flex-1 h-4 min-w-0">
-        {/* Centre line = the median coach. */}
-        <span className="absolute inset-y-0 left-1/2 w-px bg-ink/20" />
-        <span
-          className={cn(
-            "absolute top-1/2 -translate-y-1/2 h-2.5 rounded-sm",
-            extreme ? "bg-coral" : "bg-coral/45",
-          )}
-          style={rightward ? { left: "50%", width } : { right: "50%", width }}
-        />
-      </span>
-
-      <span className="w-16 shrink-0 text-right text-sm font-semibold text-ink tabular">
+    <li className="flex items-center gap-2">
+      <span className="flex-1 min-w-0 truncate text-sm text-ink-soft">{label}</span>
+      <span className="w-14 shrink-0 text-right text-sm font-semibold text-ink tabular">
         {value.toFixed(1)}{unit}
       </span>
-      <span className="w-9 shrink-0 text-right text-[0.68rem] text-ink-muted tabular">
-        {Math.round(pct)}
-        <span className="text-[0.55rem] align-super">{ordinal(Math.round(pct))}</span>
-      </span>
-      <span className="w-24 h-6 shrink-0 hidden sm:block">
-        <StyleSparkline series={series} label={label} coachName={coachName} />
-      </span>
+      <PercentileChip pct={Math.round(pct)} className="shrink-0" />
     </li>
-  );
-}
-
-/**
- * The career line, drawn behind the bar.
- *
- * Coverage is 86%, so a coach can be missing a season mid-career (Bennett has
- * no 2013 or 2021). The path BREAKS at those years rather than interpolating
- * across them — a straight line through a season we do not hold would be an
- * invention, and it would land right where a reader looks for a trend.
- */
-function StyleSparkline({
-  series, label, coachName,
-}: {
-  series: Array<{ year: number; v: number | null; league: number | null }>;
-  label: string;
-  coachName: string;
-}) {
-  const vals = series.map((s) => s.v).filter((v): v is number => typeof v === "number");
-  const leagues = series.map((s) => s.league).filter((v): v is number => typeof v === "number");
-  if (vals.length < 2) return null;
-
-  const all = [...vals, ...leagues];
-  const min = Math.min(...all), max = Math.max(...all);
-  const span = max - min || 1;
-  // Inset on both axes. Without the horizontal pad the final point lands on
-  // x=100 and the endpoint dot is half outside the box.
-  const W = 100, H = 28, PAD = 3, PAD_X = 2.5;
-  const x = (i: number) =>
-    series.length === 1 ? W / 2 : PAD_X + (i / (series.length - 1)) * (W - PAD_X * 2);
-  const y = (v: number) => H - PAD - ((v - min) / span) * (H - PAD * 2);
-
-  // Split into unbroken runs so gaps stay gaps.
-  const runs: string[] = [];
-  let cur: string[] = [];
-  series.forEach((s, i) => {
-    if (typeof s.v === "number") cur.push(`${cur.length === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(s.v).toFixed(1)}`);
-    else if (cur.length > 0) { runs.push(cur.join(" ")); cur = []; }
-  });
-  if (cur.length > 0) runs.push(cur.join(" "));
-
-  const leagueRuns: string[] = [];
-  cur = [];
-  series.forEach((s, i) => {
-    if (typeof s.league === "number") cur.push(`${cur.length === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(s.league).toFixed(1)}`);
-    else if (cur.length > 0) { leagueRuns.push(cur.join(" ")); cur = []; }
-  });
-  if (cur.length > 0) leagueRuns.push(cur.join(" "));
-
-  const first = series.find((s) => typeof s.v === "number");
-  const lastIdx = series.length - 1 - [...series].reverse().findIndex((s) => typeof s.v === "number");
-  const last = lastIdx >= 0 ? series[lastIdx] : undefined;
-
-  return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-      className="w-full h-full overflow-visible"
-      role="img"
-      aria-label={
-        first && last
-          ? `${coachName} ${label} by season: ${first.v?.toFixed(1)} in ${first.year} to ${last.v?.toFixed(1)} in ${last.year}`
-          : `${coachName} ${label} by season`
-      }
-    >
-      {leagueRuns.map((d, i) => (
-        <path key={`l${i}`} d={d} fill="none" stroke="currentColor" strokeWidth={1}
-              className="text-ink/25" strokeDasharray="2 2" vectorEffect="non-scaling-stroke" />
-      ))}
-      {runs.map((d, i) => (
-        <path key={`c${i}`} d={d} fill="none" stroke="currentColor" strokeWidth={1.5}
-              className="text-coral" vectorEffect="non-scaling-stroke" />
-      ))}
-      {/* Anchor the most recent season. A broken line in a strip this size can
-          read as a rendering glitch; a dot on the last point says the line
-          ended there on purpose. */}
-      {lastIdx >= 0 && typeof series[lastIdx]!.v === "number" && (
-        <circle cx={x(lastIdx)} cy={y(series[lastIdx]!.v!)} r={1.6}
-                className="fill-coral" vectorEffect="non-scaling-stroke" />
-      )}
-    </svg>
   );
 }
 
@@ -297,10 +241,4 @@ function describeStyle(avg: CoachStyle, pct: CoachStyle): string | null {
   const tail = listed.charAt(0).toUpperCase() + listed.slice(1) + ".";
 
   return lead ? `${lead} ${tail}` : tail;
-}
-
-function ordinal(n: number): string {
-  const t = n % 100;
-  if (t >= 11 && t <= 13) return "th";
-  return ["th", "st", "nd", "rd"][n % 10] ?? "th";
 }
