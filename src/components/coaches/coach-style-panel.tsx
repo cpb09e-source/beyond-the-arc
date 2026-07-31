@@ -49,32 +49,55 @@ export function CoachStylePanel({
 
 
   return (
-    /* Sized to its content and dropped straight into the coach header, so it
-       carries no heading of its own — the header already names the coach, and
-       this is the shape of how his teams played, read alongside it. */
+    /* Sized to its content and dropped straight into the coach header — no
+       heading of its own, because the header already names the coach and this
+       is the shape of how his teams played, read alongside it. */
     <div className="flex flex-col sm:flex-row sm:items-center gap-x-8 gap-y-6">
       <StyleRadar stylePct={stylePct} />
-      <div className="grid grid-cols-2 gap-x-8 gap-y-5">
-        {(["Offense", "Defense"] as const).map((group) => (
-          <div key={group} className="w-[15rem]">
-            <div className="text-[0.55rem] uppercase tracking-[0.18em] text-coral font-bold mb-2 flex items-center gap-1.5">
-              <span className="h-px w-4 bg-coral" />
-              {group}
-            </div>
-            <ul className="space-y-1.5">
-              {STYLE_DIMENSIONS.filter((d) => d.group === group).map((d) => (
-                <StyleRow
-                  key={d.key}
-                  label={d.label}
-                  unit={d.unit}
-                  value={styleAvg[d.key]}
-                  pct={stylePct[d.key]}
-                />
-              ))}
-            </ul>
+      {SHOW_DIMENSION_LIST && <CoachStyleDimensionList styleAvg={styleAvg} stylePct={stylePct} />}
+    </div>
+  );
+}
+
+/**
+ * The value + percentile lists are PARKED, not deleted.
+ *
+ * The radar carries the shape, which is what the header is for; the lists
+ * repeat the same nine numbers in words and were doubling the height of the
+ * block. StyleRow and the markup below stay wired and compile, so flipping this
+ * to true brings them back exactly as they were — the intent is that they
+ * return somewhere with room for them (a Play style section further down the
+ * page, or a coach-vs-coach view), not that they are gone.
+ */
+const SHOW_DIMENSION_LIST = false;
+
+export function CoachStyleDimensionList({
+  styleAvg, stylePct,
+}: {
+  styleAvg: CoachStyle;
+  stylePct: CoachStyle;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-x-8 gap-y-5">
+      {(["Offense", "Defense"] as const).map((group) => (
+        <div key={group} className="w-[15rem]">
+          <div className="text-[0.55rem] uppercase tracking-[0.18em] text-coral font-bold mb-2 flex items-center gap-1.5">
+            <span className="h-px w-4 bg-coral" />
+            {group}
           </div>
-        ))}
-      </div>
+          <ul className="space-y-1.5">
+            {STYLE_DIMENSIONS.filter((d) => d.group === group).map((d) => (
+              <StyleRow
+                key={d.key}
+                label={d.label}
+                unit={d.unit}
+                value={styleAvg[d.key]}
+                pct={stylePct[d.key]}
+              />
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }
@@ -112,7 +135,7 @@ function StyleRadar({ stylePct }: { stylePct: CoachStyle }) {
   const poly = dims.map((e, i) => at(i, radius(e.p)).join(",")).join(" ");
 
   return (
-    <div className="w-full max-w-[21rem] shrink-0 mx-auto sm:mx-0">
+    <div className="w-full max-w-[18rem] shrink-0 mx-auto sm:mx-0 sm:ml-auto">
       <svg
         viewBox={`0 0 ${S} ${S}`}
         className="w-full h-auto overflow-visible"
