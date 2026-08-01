@@ -5,10 +5,19 @@
  * client-readable static JSON so we don't have to ship the rank-set to the
  * browser inline.
  *
- * Two sources, unioned:
+ * Three sources, unioned — the same three, in the same order, as
+ * readRankedPlayerIds():
  *   1. Cohort-ranked players — every file in public/data/player-ranks/.
  *   2. Freshmen — any bart_player_id whose most-recent appearance in
  *      players-by-year/<year>.json carries class === "Fr".
+ *   3. MANUAL_PROFILE_IDS — hand-picked pages that clear neither bar.
+ *
+ * Rule 3 was missing until 2026-07-31, so Tommy Murr had a profile page that
+ * the box-score modal would not link to: generateStaticParams built the route
+ * from readRankedPlayerIds (which includes him) while the modal asked this file
+ * (which did not). One id today, but the failure is silent by construction —
+ * a page that exists and is unreachable looks exactly like a player who never
+ * had one.
  *
  * Output: public/data/profileable-ids.json (sorted integer array).
  */
@@ -63,10 +72,19 @@ async function main() {
     }
   }
 
+  // 3. Hand-picked pages. Keep in sync with MANUAL_PROFILE_IDS in
+  //    src/lib/static-data.ts and scripts/prune-search-index.mjs — the list is
+  //    duplicated rather than imported because this is plain .mjs and those are
+  //    TypeScript; a drift here unlinks a page that still builds.
+  const MANUAL_PROFILE_IDS = [73737]; // Tommy Murr (Lipscomb) — requested by hand
+  let manualAdded = 0;
+  for (const id of MANUAL_PROFILE_IDS) if (!ids.has(id)) { ids.add(id); manualAdded++; }
+
   const sorted = [...ids].sort((a, b) => a - b);
   await fs.writeFile(OUT, JSON.stringify(sorted));
   console.log(`ranked players:    ${rankedCount}`);
   console.log(`freshmen added:    ${freshmenAdded}`);
+  console.log(`manual added:      ${manualAdded}`);
   console.log(`total profileable: ${sorted.length}`);
   console.log(`wrote ${OUT} (${(JSON.stringify(sorted).length / 1024).toFixed(1)} KB)`);
 }

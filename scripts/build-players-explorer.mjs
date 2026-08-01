@@ -84,7 +84,7 @@ function btaPorpagFor(year) {
  * actually written to out/players/ disagree, so drift cannot ship quietly.
  *
  * Three rules, in the same order:
- *   1. every public/data/player-ranks/<id>.json  (cleared 18g/18mpg/5ppg)
+ *   1. every public/data/player-ranks/<id>.json  (cleared 18g/20mpg/5.3ppg)
  *   2. freshman pass — any player whose MOST RECENT season was a freshman year
  *   3. MANUAL_PROFILE_IDS
  */

@@ -313,7 +313,7 @@ export async function readPlayerRanks(bartId: number): Promise<PlayerRanks | nul
  * Set of bart_player_ids that get a profile page. This is the union of:
  *
  *   1. Cohort-ranked players — those with a `player-ranks/<id>.json` file
- *      (cleared the 18g/18mpg/5ppg + position-bucket eligibility floor in
+ *      (cleared the 18g/20mpg/5.3ppg + position-bucket eligibility floor in
  *      compute-player-ranks.mts).
  *   2. Freshmen — anyone whose most-recent season carries class === "Fr".
  *      They're always clickable so a current-year freshman who hasn't yet

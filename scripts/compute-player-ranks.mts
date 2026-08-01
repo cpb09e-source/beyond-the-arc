@@ -481,6 +481,42 @@ async function main() {
     if (written % 2500 === 0) process.stdout.write(`   ${written}/${playerRanks.size}\r`);
   }
   console.log(`\n✓ wrote ${written} player-rank files to ${path.relative(process.cwd(), OUT_DIR)}`);
+
+  // ---------- Prune ----------
+  // This directory IS the ranked set. readRankedPlayerIds(), the explorer's
+  // has_page flag, emit-profileable-ids and generateStaticParams all answer
+  // "does this player have a page?" by listing it — so a file left behind by an
+  // older run keeps that player on the site with the old run's numbers.
+  //
+  // That is not theoretical. MIN_MPG went 18 → 20 and MIN_PPG 5 → 5.3 at some
+  // point, and because writing is per-player and nothing ever deleted, 1,802
+  // files survived the tightening: players who no longer clear the bar, still
+  // counted as ranked, still given a profile page, and still serving percentiles
+  // from a cohort that no longer exists. They also predate the leaderboard
+  // fields (rank / rankOverall / rankNonPower), so their pages rendered a
+  // strictly older schema than everyone else's.
+  //
+  // Deleting what this run did not write makes the eligibility constants above
+  // the single source of truth again — loosen them and players come back,
+  // tighten them and they leave, without a manual sweep either way.
+  const onDisk = (await fs.readdir(OUT_DIR)).filter((f) => f.endsWith(".json"));
+  const stale = onDisk.filter((f) => !playerRanks.has(parseInt(f, 10)));
+
+  // A prune that can empty the directory is a prune that can silently take the
+  // whole site's player pages down. If the run produced nothing, the run is
+  // what's broken — leave the previous output alone and say so.
+  if (written === 0) {
+    console.error(`\n✗ wrote 0 rank files — refusing to prune ${stale.length} existing ones. Fix the run first.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  for (const f of stale) await fs.unlink(path.join(OUT_DIR, f));
+  console.log(
+    stale.length
+      ? `✓ pruned ${stale.length} stale rank file${stale.length === 1 ? "" : "s"} (no longer clear ${MIN_GAMES}g/${MIN_MPG}mpg/${MIN_PPG}ppg + bucket)`
+      : `✓ no stale rank files to prune`,
+  );
 }
 
 main().catch((e) => { console.error("FATAL:", e); process.exit(1); });

@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 export async function generateStaticParams() {
   // Only emit profile pages for ranked players. Unranked players (didn't
-  // clear 18g/18mpg/5ppg + position bucket) get a 404 — their names render
+  // clear 18g/20mpg/5.3ppg + position bucket) get a 404 — their names render
   // as plain text everywhere else.
   const ranked = await readRankedPlayerIds();
   return [...ranked].map((id) => ({ id: String(id) }));
@@ -107,7 +107,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
     : null;
 
   // Pre-computed percentile ranks (year × position bucket). Drives the
-  // Player Overview panel. Populated for players who clear the 18g/18mpg/5ppg
+  // Player Overview panel. Populated for players who clear the 18g/20mpg/5.3ppg
   // baseline; the year dropdown reflects only ranked seasons.
   const ranks = await readPlayerRanks(bartId);
   const overviewOptions: PlayerOverviewOption[] = ranks

@@ -14,7 +14,7 @@ import { bucketLabel, seasonLabel } from "./where-they-rank";
  * other season they're ranked in (defaults to most-recent).
  *
  * Years that don't appear in the ranks data (e.g. didn't clear the
- * 18g/18mpg/5ppg eligibility floor) are hidden from the dropdown.
+ * 18g/20mpg/5.3ppg eligibility floor) are hidden from the dropdown.
  */
 export type PlayerOverviewOption = {
   year: number;
