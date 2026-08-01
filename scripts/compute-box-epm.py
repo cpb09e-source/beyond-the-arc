@@ -115,6 +115,19 @@ def ridge_fit(X, y, lam, w):
     return np.linalg.solve(A, b), ybar
 
 def cv_r2(X, y, w, lam, folds=5, seed=17):
+    # Folds are RANDOM over player-seasons, and teammates therefore land on both
+    # sides of one. That is a real leak — five players who shared a floor share
+    # a team-season, and ridge-RAPM cannot fully separate them, so their labels
+    # carry a common team-level error. Measured in tune-box-epm-lambda.py it is
+    # worth 0.002 of R2, and folding by team-season instead re-picks lambda onto
+    # a different rung of a flat curve, moving every published number for no
+    # accuracy. Left alone deliberately; change it in the same pass as a real
+    # metric change, not on its own.
+    #
+    # That script also answers the question this fold split was suspected of
+    # causing: no, the prior is not compressed (calibration slope 0.99-1.01 at
+    # every lambda from 0.1 to 10000). The compression that stops rosters adding
+    # up to their teams is in the CALIBRATION TARGET — see its header.
     rng = np.random.default_rng(seed)
     idx = rng.permutation(len(y))
     parts = np.array_split(idx, folds)
