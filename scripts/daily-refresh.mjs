@@ -74,6 +74,7 @@
 import { execSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { assertUnfrozen } from "./lib/data-freeze.mjs";
 
 const ROOT = process.cwd();
 const NO_DEPLOY = process.argv.includes("--no-deploy");
@@ -101,6 +102,13 @@ async function seasonHasStarted() {
 async function main() {
   const stamp = new Date().toISOString();
   console.log(`\n═══ BTA daily refresh @ ${stamp} ═══`);
+
+  // Every branch below this line touches the network — the preview rebuild, the
+  // season-start probe and the deploy. Refuse the whole run during the freeze
+  // rather than guarding each call, and refuse it HERE so the message names the
+  // script someone actually typed. The schedule starts 2026-11-01, after the
+  // thaw, so this only ever fires on a manual run.
+  assertUnfrozen("scripts/daily-refresh.mjs", "Bart's offseason and game feeds");
 
   // 1. Rebuild the preview artifact.
   run("node", ["scripts/build-season-preview.mjs"]);

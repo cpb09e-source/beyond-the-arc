@@ -18,11 +18,17 @@
  * just: node scripts/build-season-preview.mjs && netlify deploy --prod
  * (single-file upload, ~30s, no site rebuild). See scripts/daily-refresh.mjs.
  *
+ * FROZEN UNTIL OCTOBER 2026. Both sources above are live feeds, so this script
+ * cannot run during the freeze — see scripts/lib/data-freeze.mjs. To repair the
+ * artifact already on disk without the network, use relink-season-preview.mjs,
+ * which applies the same joins using only data we already hold.
+ *
  * Run: node scripts/build-season-preview.mjs
  */
 
 import fs from "node:fs";
 import path from "node:path";
+import { assertUnfrozen } from "./lib/data-freeze.mjs";
 
 const UA = {
   "User-Agent":
@@ -72,6 +78,9 @@ function normClass(s) {
 const advanceClass = (s) => { const c = normClass(s); return c ? CLASS_NEXT[c] : null; };
 
 async function main() {
+  // Before the first fetch, not after — the point is that nothing goes out.
+  assertUnfrozen("scripts/build-season-preview.mjs", "Bart's 2027 offseason feed");
+
   console.log(`🔮 season preview build — ${LABEL} (Bart year ${YEAR})\n`);
 
   // ---- 1. Upcoming-season rosters (Bart, living feed) ----
