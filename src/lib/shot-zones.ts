@@ -67,11 +67,15 @@ export const ZONES: Zone[] = [
   { id: "mid_mid", label: "Mid Middle", short: "Middle", band: "mid", x: 250, y: 202 },
   { id: "mid_wing_r", label: "Mid Wing Right", short: "Wing R", band: "mid", x: 356, y: 158 },
   { id: "mid_corner_r", label: "Mid Corner Right", short: "Cnr R", band: "mid", x: 397, y: 81 },
-  // Three: mid-angle at r≈245-265, outside the arc and inside the court.
+  // Three: mid-angle at r≈265-278, far enough outside the arc that the label
+  // block clears it. The wings sat at r=245, which is 23 units of clearance for
+  // a rate-plus-chip stack about 40 units tall, so both of them straddled the
+  // arc and printed half over the mid-range zone behind. Everything else on the
+  // court already had 28 or more; these two were the only offenders.
   { id: "3_corner_l", label: "3PT Corner Left", short: "Cnr L", band: "three", x: 17, y: 58, compact: true },
-  { id: "3_wing_l", label: "3PT Wing Left", short: "Wing L", band: "three", x: 77, y: 226 },
-  { id: "3_mid", label: "3PT Top", short: "Top", band: "three", x: 250, y: 315 },
-  { id: "3_wing_r", label: "3PT Wing Right", short: "Wing R", band: "three", x: 423, y: 226 },
+  { id: "3_wing_l", label: "3PT Wing Left", short: "Wing L", band: "three", x: 63, y: 240 },
+  { id: "3_mid", label: "3PT Top", short: "Top", band: "three", x: 250, y: 330 },
+  { id: "3_wing_r", label: "3PT Wing Right", short: "Wing R", band: "three", x: 437, y: 240 },
   { id: "3_corner_r", label: "3PT Corner Right", short: "Cnr R", band: "three", x: 483, y: 58, compact: true },
 ];
 

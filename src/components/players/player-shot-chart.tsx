@@ -649,14 +649,23 @@ const BEHIND_L = 215;
 const BEHIND_R = -35;
 
 /**
- * Behind the glass: painted back to bare floor after the zones are drawn.
+ * Behind the rim: painted back to bare floor after the zones are drawn.
  *
- * Spans exactly the width of the close band, RIM_X ± CLOSE_R, from the baseline
- * to the rim's own line — which is precisely the half of the close disc that
- * sits behind the hoop, so the close zones end on the pocket's edge rather than
- * leaving a crescent of unfilled floor beside it. The backboard sits inside it.
+ * A SEMICIRCLE ON THE RIM, not a rectangle. The close band stops at the rim's
+ * horizontal, so the floor above that line and inside eight feet belongs to no
+ * zone; the mid ring only starts where the close band ends. Any rectangle laid
+ * over that leaves the wrong shape behind — one the width of the close band had
+ * edges that landed on nothing and read as misaligned with the basket, and one
+ * the width of the backboard left a bare crescent either side of it.
+ *
+ * The upper half of the close disc IS the missing region, exactly. Drawn as
+ * itself, the notch is centred on the rim, curves with it, and needs no
+ * arbitrary numbers. The top of the circle sits above the baseline and is taken
+ * off by Court's own clip, so what shows is a lens from the baseline down to the
+ * rim line — the floor behind the hoop, and nothing else.
  */
-const DEAD = { x: RIM_X - CLOSE_R, y: 0, w: 2 * CLOSE_R, h: RIM_Y };
+const DEAD_PATH =
+  `M ${RIM_X - CLOSE_R} ${RIM_Y} A ${CLOSE_R} ${CLOSE_R} 0 0 1 ${RIM_X + CLOSE_R} ${RIM_Y} Z`;
 
 const ZONE_GEOM: Record<ZoneId, { t: [number, number]; r: [number, number]; clip: Clip }> = {
   close_l: { t: [120, 180], r: [0, CLOSE_R], clip: "in" },
@@ -736,10 +745,10 @@ function ZoneAccuracyChart({
           );
         })}
 
-        {/* Behind the glass. Painted after every zone and before the labels, so
+        {/* Behind the rim. Painted after every zone and before the labels, so
             it removes fill without removing the court markings Court draws on
             top of all of this. */}
-        <rect x={DEAD.x} y={DEAD.y} width={DEAD.w} height={DEAD.h} fill={COURT_BG} />
+        <path d={DEAD_PATH} fill={COURT_BG} />
 
         {/* No line work here on purpose: Court renders the lane, rim and arc
             AFTER its children, so the markings already sit above these fills.
