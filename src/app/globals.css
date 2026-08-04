@@ -148,14 +148,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Display headlines — Roboto Slab at 500.
-   Slab serifs carry more ink per glyph than a grotesk, so matching Moneta's
-   nominal 700 rendered visibly heavier than the face it replaced. Medium is
-   where it settles: still clearly the display voice against Geist body copy,
-   without the headlines shouting over the numbers underneath them. */
+/* Display headlines — Roboto Slab at 400.
+   Slab serifs carry more ink per glyph than a grotesk, so Moneta's nominal 700
+   rendered far heavier once the family changed under it. Regular is enough:
+   the slab's serifs already separate display from Geist body copy, so weight
+   does not have to do that work as well. */
 .font-display {
   font-family: var(--font-display), Rockwell, Georgia, serif;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: -0.02em;
 }
 
@@ -304,7 +304,7 @@ body {
 /* Magazine pull-quote stat */
 .lede-stat {
   font-family: var(--font-display), Rockwell, Georgia, serif;
-  font-weight: 500;
+  font-weight: 400;
   font-size: clamp(3rem, 8vw, 6rem);
   line-height: 0.95;
   letter-spacing: -0.04em;
