@@ -91,10 +91,11 @@ const CARDS: Array<{ title: string; stats: Def[] }> = [
       { key: "ast", label: "AST", block: "g", fmt: "num1" },
       { key: "stl", label: "STL", block: "g", fmt: "num1" },
       { key: "blk", label: "BLK", block: "g", fmt: "num1" },
-      { key: "tov", label: "TO", block: "g", fmt: "num1",
-        info: "Ranked so fewer is better: a high percentile means he gives it away less than his position group." },
-      { key: "pf", label: "PF", block: "g", fmt: "num1",
-        info: "Ranked so fewer is better." },
+      // No tooltips on these two. "Ranked so fewer is better" is the same
+      // sentence twice, and the footnote under the grid already says it for
+      // every stat that inverts.
+      { key: "tov", label: "TO", block: "g", fmt: "num1" },
+      { key: "pf", label: "PF", block: "g", fmt: "num1" },
     ],
   },
   {
