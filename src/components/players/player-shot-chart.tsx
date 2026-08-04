@@ -631,23 +631,34 @@ const INSIDE_3 =
 type Clip = "in" | "out" | "cornerL" | "cornerR";
 
 /**
- * Sweeps, and why the outermost ones run PAST the baseline.
+ * Sweeps, and why the outermost ones run past the rim's horizontal but STOP
+ * short of the hoop's own back.
  *
- * The classifier clamps dy to zero, so a shot from behind the rim — anywhere in
- * the strip between the rim and the baseline — lands at t=0 or t=180 and is
- * therefore a left or right zone depending only on which side of the hoop it
- * came from. Drawing those zones from 0 to 180 left that whole strip unfilled:
- * a bare band across the top of the court where the fills stopped at the rim's
- * own horizontal, which read as the map floating above the baseline.
+ * The classifier clamps dy to zero, so a shot from level with or behind the rim
+ * lands at t=0 or t=180 and belongs to a left or right zone by which side of the
+ * hoop it came from. Drawing those zones from 0 to 180 left the baseline strip
+ * unfilled, and the map looked like it floated above the baseline.
  *
- * So the extreme zones sweep to 270 (straight up, behind the hoop) and −90,
- * which is the same ray. Left meets right exactly on the vertical through the
- * rim, the strip tiles, and the split matches what the classifier does with
- * those shots. The overhang past the court is taken off by Court's own rounded
- * clip.
+ * Sweeping them all the way to 270 fixed that and bought a worse problem: the
+ * fills wrapped around the back of the hoop, and a close-range zone drawn behind
+ * the backboard is a shot nobody has ever taken. So the sweep stops at 215 and
+ * −35 — far enough to cover the playable baseline out at the sides, not far
+ * enough to reach around the rim — and the pocket directly behind the backboard
+ * is painted back out to bare floor below. Both are needed: the sweep alone
+ * covers the impossible pocket, and the pocket alone cannot fill the baseline.
  */
-const BEHIND_L = 270;   // straight up from the rim, sweeping left-to-behind
-const BEHIND_R = -90;   // the same ray, approached from the right
+const BEHIND_L = 215;
+const BEHIND_R = -35;
+
+/**
+ * The dead pocket behind the backboard, painted back to bare floor.
+ *
+ * The board spans RIM_X ± 30 at y = 40. Nothing is attempted from behind it,
+ * so no zone should claim that floor. Slightly wider and slightly deeper than
+ * the board itself, because a fill that stops exactly at the glass reads as a
+ * rendering seam rather than as a deliberate hole.
+ */
+const DEAD = { x: RIM_X - 38, y: 0, w: 76, h: 45 };
 
 const ZONE_GEOM: Record<ZoneId, { t: [number, number]; r: [number, number]; clip: Clip }> = {
   close_l: { t: [120, BEHIND_L], r: [0, CLOSE_R], clip: "in" },
@@ -712,6 +723,11 @@ function ZoneAccuracyChart({
             </g>
           );
         })}
+
+        {/* Behind the glass. Painted after every zone and before the labels, so
+            it removes fill without removing the court markings Court draws on
+            top of all of this. */}
+        <rect x={DEAD.x} y={DEAD.y} width={DEAD.w} height={DEAD.h} fill={COURT_BG} />
 
         {/* No line work here on purpose: Court renders the lane, rim and arc
             AFTER its children, so the markings already sit above these fills.
