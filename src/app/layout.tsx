@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import localFont from "next/font/local";
+import { Geist, Geist_Mono, Roboto_Slab } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { ScoreTicker } from "@/components/scoreboard/score-ticker";
@@ -18,21 +17,22 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
-// Display face — self-hosted Moneta Sans Bold. Mapped to every weight so any
-// heading using the display family always renders in the Bold cut.
+// Display face — Roboto Slab, replacing Moneta Sans Bold.
 //
-// WOFF2, not the original OTF. This font is preloaded on every page, so it sits
-// on the critical path sitewide, and OTF ships uncompressed glyf data: 45.9 KB
-// against 24.5 KB for the same outlines as WOFF2, a 47% saving on every cold
-// visit. Converted with fontTools (flavor = "woff2"); the .otf stays in the repo
-// as the source of truth for future re-cuts.
-const moneta = localFont({
+// Variable rather than a fixed cut, so the 700 that .font-display asks for in
+// globals.css is the real 700 on the weight axis instead of a nearest-match.
+// Moneta was mapped to both 400 and 700 so every heading rendered Bold whatever
+// weight it requested; a variable face reaches the same place honestly.
+//
+// next/font/google downloads and self-hosts at build time, so this stays a
+// same-origin asset with no request to Google at runtime, same as the local
+// file it replaces. Subset to latin to keep it near Moneta's 24.5 KB.
+//
+// public/fonts/MonetaSans-Bold.woff2 and its .otf source are left in the repo.
+const robotoSlab = Roboto_Slab({
   variable: "--font-display",
+  subsets: ["latin"],
   display: "swap",
-  src: [
-    { path: "../../public/fonts/MonetaSans-Bold.woff2", weight: "400", style: "normal" },
-    { path: "../../public/fonts/MonetaSans-Bold.woff2", weight: "700", style: "normal" },
-  ],
 });
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://beyond-the-arc.netlify.app";
@@ -69,7 +69,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${geistSans.variable} ${geistMono.variable} ${moneta.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${robotoSlab.variable} h-full antialiased`}
     >
       <head>
         {/* Dark mode is off for now. The palette lives on in globals.css

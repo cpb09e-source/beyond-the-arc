@@ -148,9 +148,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Display headlines — Moneta Sans Bold */
+/* Display headlines — Roboto Slab */
 .font-display {
-  font-family: var(--font-display), system-ui, -apple-system, sans-serif;
+  font-family: var(--font-display), Rockwell, Georgia, serif;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
@@ -299,7 +299,7 @@ body {
 
 /* Magazine pull-quote stat */
 .lede-stat {
-  font-family: var(--font-display), system-ui, sans-serif;
+  font-family: var(--font-display), Rockwell, Georgia, serif;
   font-weight: 700;
   font-size: clamp(3rem, 8vw, 6rem);
   line-height: 0.95;
