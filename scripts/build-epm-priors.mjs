@@ -63,14 +63,28 @@ function csvCell(line, i) { // players.csv quotes names
   return v.startsWith('"') ? v.slice(1, -1).replace(/""/g, '"') : v;
 }
 
-const out = ["playerId,priorOff,priorDef"];
+// Usage rate by Bart id (raw_row[6]) — carried through so the fit can tell how
+// much of a player's OFFENSIVE signal is his own. A player who ends few
+// possessions is identified mostly by lineup covariation with his teammates, so
+// compute-epm.py leans harder on the prior for him. See --low-usg-damp there.
+const usgByBart = new Map();
+for (const p of bart) {
+  if (p.bart_player_id == null) continue;
+  const st = Array.isArray(p.player_bart_stats) ? p.player_bart_stats[0] : p.player_bart_stats;
+  const u = st?.raw_row?.[6];
+  const n = typeof u === "number" ? u : typeof u === "string" ? Number(u) : NaN;
+  if (Number.isFinite(n)) usgByBart.set(p.bart_player_id, n);
+}
+
+const out = ["playerId,priorOff,priorDef,usg"];
 let hit = 0;
 for (const line of players.slice(1)) {
   const id = csvCell(line, iId), name = csvCell(line, iN), team = csvCell(line, iT);
   const bid = toBart(name, team);
   const b = bid != null ? box[String(bid)] : null;
   if (!b) continue;
-  out.push(`${id},${b.off},${b.def}`);
+  const u = usgByBart.get(bid);
+  out.push(`${id},${b.off},${b.def},${u ?? ""}`);
   hit++;
 }
 const dst = path.join(CBBD, "priors.csv");

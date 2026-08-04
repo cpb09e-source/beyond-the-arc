@@ -213,8 +213,16 @@ def build_design(stints: pd.DataFrame, conf: dict | None = None, nonconf_w: floa
     return X, np.asarray(y), w, pidx
 
 
-def solve(X, y, w, lam: float, prior: np.ndarray | None = None):
-    """Weighted ridge via damped LSQR. If prior is given, fit deviations."""
+def solve(X, y, w, lam: float, prior: np.ndarray | None = None,
+          lam_scale: np.ndarray | None = None):
+    """Weighted ridge via damped LSQR. If prior is given, fit deviations.
+
+    lam_scale, when given, is a PER-COEFFICIENT multiplier on lambda. LSQR's
+    `damp` is a single scalar, so a per-coefficient penalty is expressed the
+    long way instead: stack sqrt(lam_j) on the identity below the design and
+    zeros below the target. Minimizing ||Ab - c|| over that stack is exactly
+    minimizing ||Xb - y||^2 + sum_j lam_j b_j^2, which is the ridge we want.
+    """
     mu = np.average(y, weights=w)                  # league-average efficiency
     resid = y - mu
     if prior is not None:
@@ -222,7 +230,13 @@ def solve(X, y, w, lam: float, prior: np.ndarray | None = None):
     sw = np.sqrt(w)
     Xw = sparse.diags(sw) @ X
     yw = resid * sw
-    beta = lsqr(Xw, yw, damp=np.sqrt(lam))[0]
+
+    if lam_scale is None:
+        beta = lsqr(Xw, yw, damp=np.sqrt(lam))[0]
+    else:
+        pen = sparse.diags(np.sqrt(lam * lam_scale))
+        beta = lsqr(sparse.vstack([Xw, pen], format="csr"),
+                    np.concatenate([yw, np.zeros(Xw.shape[1])]))[0]
     if prior is not None:
         beta = beta + prior
     return beta, mu
@@ -293,6 +307,37 @@ def main():
                          "comparable.")
     ap.add_argument("--no-luck", dest="luck", action="store_false",
                     help="fit on raw points instead of luck-adjusted points")
+    # A JUDGEMENT CALL, AND LABELLED AS ONE. Two instruments were run and they
+    # disagree in the third decimal place, so nothing here is "measured better":
+    #
+    #   damp             1.0      2.0      3.0      5.0
+    #   held-out R2   .02165   .02158   .02153   .02148   (by game)
+    #   transfer r     .495     .497     .496     .494    (2025->2026, moved)
+    #                  .477     .480     .480     .479    (2024->2025, moved)
+    #
+    # Held-out games get very slightly worse; ratings survive a change of
+    # teammates very slightly better. Both movements are inside the noise.
+    #
+    # The two instruments are not equally relevant, which is why 2.0 rather than
+    # 1.0. Folding a season by GAME leaves a player's teammates on both sides of
+    # the fold, so a rating that is really a lineup effect predicts held-out
+    # games just as well as a rating that is really the player — the same reason
+    # the lambda note above says held-out prediction "keeps favouring a looser
+    # fit". Transfers break that: a player who moves keeps his ability and gets
+    # a new supporting cast. The instrument that can tell player from lineup
+    # prefers 2.0; the one that cannot prefers 1.0.
+    #
+    # What it buys, at 2.0: Dallin Hall (13.9% usage) goes 14th to 42nd and C.J.
+    # Cox (14.3%) 18th to 66th, while Boozer, Lendeborg and Lipsey do not move
+    # at all. Past 3.0 both instruments turn down together, so the ceiling is
+    # real and this is under it.
+    ap.add_argument("--low-usg-damp", type=float, default=2.0,
+                    help="extra lambda multiplier on the OFFENSIVE coefficient of "
+                         "the lowest-usage players (1.0 = off). Their offensive "
+                         "signal is mostly lineup covariation, so the prior "
+                         "should carry more of it.")
+    ap.add_argument("--low-usg-pctile", type=float, default=40.0,
+                    help="usage percentile below which --low-usg-damp ramps in")
     args = ap.parse_args()
 
     stints, players, outdir = load(args.season)
@@ -311,9 +356,11 @@ def main():
     print(f"  design: {X.shape[0]:,} obs x {X.shape[1]:,} cols ({n_p:,} players)")
 
     prior = None
+    lam_scale = None
     if args.priors:
         pr = pd.read_csv(args.priors)
         prior = np.zeros(2 * n_p + 1)
+        usg = np.full(n_p, np.nan)
         hit = 0
         for t in pr.itertuples(index=False):
             i = pidx.get(int(t.playerId))
@@ -321,10 +368,49 @@ def main():
                 continue
             prior[i] = t.priorOff
             prior[n_p + i] = -t.priorDef   # DEF stored as "good=positive"; coef is pts allowed
+            if hasattr(t, "usg") and pd.notna(t.usg):
+                usg[i] = float(t.usg)
             hit += 1
         print(f"  priors: {hit:,}/{len(pr):,} matched")
 
-    beta, mu = solve(X, y, w, args.lam, prior)
+        # ── USAGE-AWARE SHRINKAGE, OFFENSE ONLY ──────────────────────────
+        #
+        # A player's OFFENSIVE coefficient is identified mainly by the
+        # possessions he ends. End few and there is little that is his; the fit
+        # is then reading lineup covariation with whoever he never leaves the
+        # floor without, and it credits him for it. That is how a 13.9%-usage
+        # guard on a good team lands in the top 20 on the strength of an on/off
+        # nobody could repeat -- C.J. Cox at +18.2, Dallin Hall at +11.5.
+        #
+        # So raise lambda for low-usage players: less individual evidence, more
+        # weight on the prior. This is not a penalty. It moves the estimate
+        # toward what the box score says about him rather than downward, so a
+        # low-usage player the prior LIKES keeps his number.
+        #
+        # DEFENSE IS DELIBERATELY UNTOUCHED. Usage says nothing about whether a
+        # player's defensive signal is his own -- a low-usage wing can be the
+        # best defender on the floor, and shrinking him for not shooting would
+        # be a straightforward error. Only the offensive half is scaled.
+        if args.low_usg_damp > 1.0:
+            lam_scale = np.ones(2 * n_p + 1)
+            known = ~np.isnan(usg)
+            if known.sum() >= 100:
+                # Rank within the players who actually carry a usage figure, so
+                # the ramp is defined against the population it is applied to.
+                pct = pd.Series(usg[known]).rank(pct=True).to_numpy() * 100
+                s = np.ones(known.sum())
+                below = pct < args.low_usg_pctile
+                # Full extra damping at the 0th percentile, none at the
+                # threshold, linear between.
+                s[below] = 1.0 + (args.low_usg_damp - 1.0) * (
+                    1.0 - pct[below] / args.low_usg_pctile)
+                idx = np.flatnonzero(known)
+                lam_scale[idx] = s               # OFFENSE block only
+                print(f"  low-usage damping: {int(below.sum()):,} players under the "
+                      f"{args.low_usg_pctile:g}th usage pctile, lambda x1.0-{args.low_usg_damp:g} "
+                      f"on offense")
+
+    beta, mu = solve(X, y, w, args.lam, prior, lam_scale)
     print(f"  league avg efficiency: {mu:.1f} | HCA: {beta[-1]:+.2f} pts/100")
 
     # Possessions played per player (sum of stint poss where on floor).
