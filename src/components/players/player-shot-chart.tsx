@@ -633,44 +633,26 @@ type Clip = "in" | "out" | "cornerL" | "cornerR";
 /**
  * Sweeps.
  *
- * CLOSE ZONES STOP DEAD AT THE RIM'S HORIZONTAL, 0 to 180. A close-range zone
- * drawn above that line is floor behind the hoop, and there is no such thing as
- * a close shot from behind the backboard. An earlier pass swept them to 270 to
- * close a bare strip along the baseline, which filled the strip and drew three
- * layup zones wrapped around the back of the rim.
+ * THE CLOSE BAND IS A FULL CIRCLE ON THE RIM. Its three zones tile all 360
+ * degrees: middle takes the front, left and right split everything behind the
+ * hoop between them. That is exactly what the classifier does with those shots
+ * — it clamps dy to zero, so anything level with or behind the rim lands at
+ * t=0 or t=180 and belongs to a side by which side of the hoop it came from.
  *
- * THE MID CORNERS DO THE BASELINE INSTEAD. Out past eight feet the floor beside
- * the lane is real: a baseline two is an ordinary shot. Those two zones carry on
- * to 215 and −35, which covers it, and the classifier agrees — it clamps dy to
- * zero, so a shot level with or behind the rim lands at t=0 or t=180 and belongs
- * to the left or right zone by which side of the hoop it came from.
+ * Earlier passes carved the back of the circle out, on the argument that nobody
+ * shoots from behind the glass. True, and it cost more than it bought: every
+ * patch left the wrong shape somewhere, and a zone with no attempts already
+ * reads as empty without being cut out of the diagram. The mid corners wrap the
+ * same way, so the floor behind the rim tiles cleanly from the circle outward.
  */
-const BEHIND_L = 215;
-const BEHIND_R = -35;
+const BEHIND_L = 270;   // straight up from the rim, sweeping left-to-behind
+const BEHIND_R = -90;   // the same ray, approached from the right
 
-/**
- * Behind the rim: painted back to bare floor after the zones are drawn.
- *
- * A SEMICIRCLE ON THE RIM, not a rectangle. The close band stops at the rim's
- * horizontal, so the floor above that line and inside eight feet belongs to no
- * zone; the mid ring only starts where the close band ends. Any rectangle laid
- * over that leaves the wrong shape behind — one the width of the close band had
- * edges that landed on nothing and read as misaligned with the basket, and one
- * the width of the backboard left a bare crescent either side of it.
- *
- * The upper half of the close disc IS the missing region, exactly. Drawn as
- * itself, the notch is centred on the rim, curves with it, and needs no
- * arbitrary numbers. The top of the circle sits above the baseline and is taken
- * off by Court's own clip, so what shows is a lens from the baseline down to the
- * rim line — the floor behind the hoop, and nothing else.
- */
-const DEAD_PATH =
-  `M ${RIM_X - CLOSE_R} ${RIM_Y} A ${CLOSE_R} ${CLOSE_R} 0 0 1 ${RIM_X + CLOSE_R} ${RIM_Y} Z`;
 
 const ZONE_GEOM: Record<ZoneId, { t: [number, number]; r: [number, number]; clip: Clip }> = {
-  close_l: { t: [120, 180], r: [0, CLOSE_R], clip: "in" },
+  close_l: { t: [120, BEHIND_L], r: [0, CLOSE_R], clip: "in" },
   close_m: { t: [60, 120], r: [0, CLOSE_R], clip: "in" },
-  close_r: { t: [0, 60], r: [0, CLOSE_R], clip: "in" },
+  close_r: { t: [BEHIND_R, 60], r: [0, CLOSE_R], clip: "in" },
   mid_corner_l: { t: [157.5, BEHIND_L], r: [CLOSE_R, BIG_R], clip: "in" },
   mid_wing_l: { t: [112.5, 157.5], r: [CLOSE_R, BIG_R], clip: "in" },
   mid_mid: { t: [67.5, 112.5], r: [CLOSE_R, BIG_R], clip: "in" },
@@ -744,11 +726,6 @@ function ZoneAccuracyChart({
             </g>
           );
         })}
-
-        {/* Behind the rim. Painted after every zone and before the labels, so
-            it removes fill without removing the court markings Court draws on
-            top of all of this. */}
-        <path d={DEAD_PATH} fill={COURT_BG} />
 
         {/* No line work here on purpose: Court renders the lane, rim and arc
             AFTER its children, so the markings already sit above these fills.
