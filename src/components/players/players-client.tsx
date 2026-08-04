@@ -12,7 +12,7 @@ import {
 } from "@/components/players/player-filter-bar";
 import { StatChipStrip } from "@/components/filters/stat-chips";
 import { ComparePlayersModal } from "@/components/players/compare-players-modal";
-import { SortableTh } from "@/components/explorer/sortable-th";
+import { SortableTh, StatLabel } from "@/components/explorer/sortable-th";
 import { Select } from "@/components/select";
 import {
   DEFAULT_PLAYER_SPEC,
@@ -902,10 +902,15 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                     // Index-qualified: a pinned stat that is also a default
                     // column renders twice on purpose, so the label alone is
                     // not a unique key.
-                    <SortableTh key={`${c.field}-${i}`} statKey={c.sortKey} label={c.label} basePath="/players" defaultSort="epm" idleArrows className="sticky top-6 z-30 bg-paper-deep border-b border-hairline" />
+                    // defaultSort MUST match DEFAULT_SPEC.sortBy in lib/players.ts.
+                    // It is how SortableTh knows which column is already sorted
+                    // when the URL carries no ?sort=, and it was still "epm"
+                    // after the board's default moved to eWins — so the grid
+                    // arrived sorted by eWins with the active arrow drawn on EPM.
+                    <SortableTh key={`${c.field}-${i}`} statKey={c.sortKey} label={c.label} basePath="/players" defaultSort="ewins" idleArrows className="sticky top-6 z-30 bg-paper-deep border-b border-hairline" />
                   ) : (
                     <th key={`${c.field}-${i}`} className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-2 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-right whitespace-nowrap align-middle">
-                      {c.label}
+                      <StatLabel label={c.label} />
                     </th>
                   ),
                 )}

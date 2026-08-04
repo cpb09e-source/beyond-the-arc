@@ -14,6 +14,25 @@ import { cn } from "@/lib/utils";
  *
  * State lives in `?sort=<key>&order=<asc|desc>` — refresh-safe & shareable.
  */
+
+/**
+ * StatLabel — a column label that survives the header's blanket `uppercase`.
+ *
+ * Most stat abbreviations are all-caps anyway (PPG, TS%, ORB%), so uppercasing
+ * the header in CSS is free. It is not free for a name whose FIRST letter is
+ * lowercase on purpose: "eWins" is the metric's name, and the transform was
+ * rendering it "EWINS", which reads as a different stat.
+ *
+ * So: detect a leading lowercase letter followed by a capital, opt that label
+ * out of the CSS transform, and uppercase the tail by hand — "eWins" becomes
+ * "eWINS". Everything else is returned untouched and keeps using the CSS rule.
+ * Written as a pattern rather than a list of exceptions so the next lowercase-
+ * initial metric works without anyone remembering this file exists.
+ */
+export function StatLabel({ label }: { label: string }) {
+  if (!/^[a-z][A-Z]/.test(label)) return <>{label}</>;
+  return <span className="normal-case">{label[0] + label.slice(1).toUpperCase()}</span>;
+}
 export function SortableTh({
   statKey,
   label,
@@ -88,7 +107,7 @@ export function SortableTh({
           {variant === "cbb" && (
             <span className="h-1 w-1 rounded-full bg-coral" aria-hidden />
           )}
-          <span>{label}</span>
+          <span><StatLabel label={label} /></span>
           {arrow ? (
             <span className="text-coral text-[0.65rem] leading-none">{arrow}</span>
           ) : idleArrows ? (
