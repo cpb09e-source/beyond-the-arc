@@ -7,6 +7,7 @@ import { StatInfo } from "./stat-info";
 import type { Shooting } from "./player-shot-impact";
 import { PercentileChip } from "@/components/percentile-chip";
 import { Select } from "@/components/select";
+import { StatLabel } from "@/components/explorer/sortable-th";
 import {
   BASIS_OPTIONS, SPLIT_OPTIONS, type Basis, type Cell, type SplitSeason,
 } from "./player-splits";
@@ -54,6 +55,8 @@ const CARDS: Array<{ title: string; stats: Def[] }> = [
       // denominator the impact numbers are earned against, and reading EPM
       // without knowing whether he ended 15% or 30% of possessions is reading
       // half the sentence. It DOES split, unlike the four above it.
+      { key: "on_off", label: "On/Off", block: "impact", fmt: "signed1",
+        info: "Team net rating per 100 possessions with him on the floor minus off it, luck-adjusted. Unregularized and shown only above a possession floor, so treat it as the weakest number here: it barely repeats year to year, and on a rotation that never splits up it is really a statement about the lineup. Season-level, like EPM." },
       { key: "usage_pct", label: "Usage%", block: "m", fmt: "pct1",
         info: "Share of team possessions that end with this player's shot, turnover or trip to the line. Unlike EPM and eWins, this one does follow the selected split." },
       // ORtg and DRtg came from the retired Advanced card. They are per-100
@@ -74,9 +77,10 @@ const CARDS: Array<{ title: string; stats: Def[] }> = [
       { key: "mpg", label: "MPG", block: "m", fmt: "num1" },
     ],
   },
-  // Labels are ABBREVIATIONS on purpose. "Def Rebounds /40" does not fit the
-  // label column at four cards across and was ellipsizing to "Def Rebound…",
-  // which is worse than an abbreviation a hoops reader already knows by heart.
+  // Labels are ABBREVIATIONS on purpose. "Def Rebounds /40" was ellipsizing to
+  // "Def Rebound…", and an abbreviation a hoops reader already knows by heart
+  // beats a truncated word. Rendered upper-case, with StatLabel keeping the
+  // deliberate lower-case initials in eWins and eFG% from being shouted.
   {
     title: "Box Score",
     stats: [
@@ -114,7 +118,7 @@ const CARDS: Array<{ title: string; stats: Def[] }> = [
         info: "Effective Field Goal % — adjusts FG% so a 3-pointer counts 1.5× a 2-pointer." },
       { key: "ts_pct", label: "TS%", block: "m", fmt: "pct1",
         info: "True Shooting % — points per scoring attempt, weighting 2s, 3s and free throws together." },
-      ],
+    ],
   },
 ];
 
@@ -190,7 +194,7 @@ export function PlayerStatsGrid({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 lg:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 lg:gap-6">
         {CARDS.map((card) => (
           <Card key={card.title} title={card.title}>
             {card.stats.map((d) => {
@@ -248,16 +252,19 @@ function Row({
   return (
     <li className="flex items-center gap-3 py-2 px-1 -mx-1 rounded transition-colors hover:bg-[var(--accent-tint)]">
       <span className="flex-1 min-w-0">
-        <span className="flex items-center gap-1 text-ink-soft text-sm">
-          <span className="truncate">{label}</span>
+        {/* The label owns this line by itself. A "full season" badge used to sit
+            beside it and, being flex-none, ate the label's width instead of its
+            own: on the Away split "Off EPM" rendered as "O…". Notes ride
+            underneath now, where nothing competes with them. */}
+        <span className="flex items-center gap-1 text-ink-soft text-sm uppercase tracking-wide">
+          <span className="truncate"><StatLabel label={label} /></span>
           {definition && <StatInfo definition={definition} />}
-          {note && (
-            <span className="shrink-0 text-[0.55rem] uppercase tracking-wider text-ink-muted/80 border border-hairline rounded px-1 py-px">
-              {note}
-            </span>
-          )}
         </span>
-        {sub && <span className="block text-[0.65rem] text-ink-muted tabular truncate">{sub}</span>}
+        {(sub || note) && (
+          <span className="block text-[0.6rem] text-ink-muted tabular truncate">
+            {sub ?? note}
+          </span>
+        )}
       </span>
       <span className="flex-none font-medium text-ink tabular text-sm w-16 text-right">{value}</span>
       {pct !== null ? (
@@ -315,7 +322,7 @@ const LEGACY_PANELS: Array<{ title: string; keys: string[] }> = [
  */
 function LegacyGrid({ season, shooting }: { season: PlayerRanksSeason; shooting?: Shooting | null }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 lg:gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 lg:gap-6">
       {LEGACY_PANELS.map((p) => {
         const rows = p.keys
           .map((k) => {

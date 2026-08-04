@@ -629,20 +629,42 @@ const INSIDE_3 =
   `A ${THREE_R} ${THREE_R} 0 0 0 ${W - CORNER_X} ${CORNER_Y} L ${W - CORNER_X} 0 Z`;
 
 type Clip = "in" | "out" | "cornerL" | "cornerR";
+
+/**
+ * Sweeps, and why the outermost ones run PAST the baseline.
+ *
+ * The classifier clamps dy to zero, so a shot from behind the rim — anywhere in
+ * the strip between the rim and the baseline — lands at t=0 or t=180 and is
+ * therefore a left or right zone depending only on which side of the hoop it
+ * came from. Drawing those zones from 0 to 180 left that whole strip unfilled:
+ * a bare band across the top of the court where the fills stopped at the rim's
+ * own horizontal, which read as the map floating above the baseline.
+ *
+ * So the extreme zones sweep to 270 (straight up, behind the hoop) and −90,
+ * which is the same ray. Left meets right exactly on the vertical through the
+ * rim, the strip tiles, and the split matches what the classifier does with
+ * those shots. The overhang past the court is taken off by Court's own rounded
+ * clip.
+ */
+const BEHIND_L = 270;   // straight up from the rim, sweeping left-to-behind
+const BEHIND_R = -90;   // the same ray, approached from the right
+
 const ZONE_GEOM: Record<ZoneId, { t: [number, number]; r: [number, number]; clip: Clip }> = {
-  close_l: { t: [120, 180], r: [0, CLOSE_R], clip: "in" },
+  close_l: { t: [120, BEHIND_L], r: [0, CLOSE_R], clip: "in" },
   close_m: { t: [60, 120], r: [0, CLOSE_R], clip: "in" },
-  close_r: { t: [0, 60], r: [0, CLOSE_R], clip: "in" },
-  mid_corner_l: { t: [157.5, 180], r: [CLOSE_R, BIG_R], clip: "in" },
+  close_r: { t: [BEHIND_R, 60], r: [0, CLOSE_R], clip: "in" },
+  mid_corner_l: { t: [157.5, BEHIND_L], r: [CLOSE_R, BIG_R], clip: "in" },
   mid_wing_l: { t: [112.5, 157.5], r: [CLOSE_R, BIG_R], clip: "in" },
   mid_mid: { t: [67.5, 112.5], r: [CLOSE_R, BIG_R], clip: "in" },
   mid_wing_r: { t: [22.5, 67.5], r: [CLOSE_R, BIG_R], clip: "in" },
-  mid_corner_r: { t: [0, 22.5], r: [CLOSE_R, BIG_R], clip: "in" },
-  "3_corner_l": { t: [140, 180], r: [0, BIG_R], clip: "cornerL" },
+  mid_corner_r: { t: [BEHIND_R, 22.5], r: [CLOSE_R, BIG_R], clip: "in" },
+  // The corner threes are rectangle-clipped to the strip outside the straight
+  // segment, so they already reach the baseline without extending the sweep.
+  "3_corner_l": { t: [140, BEHIND_L], r: [0, BIG_R], clip: "cornerL" },
   "3_wing_l": { t: [112.5, 180], r: [0, BIG_R], clip: "out" },
   "3_mid": { t: [67.5, 112.5], r: [0, BIG_R], clip: "out" },
   "3_wing_r": { t: [0, 67.5], r: [0, BIG_R], clip: "out" },
-  "3_corner_r": { t: [0, 40], r: [0, BIG_R], clip: "cornerR" },
+  "3_corner_r": { t: [BEHIND_R, 40], r: [0, BIG_R], clip: "cornerR" },
 };
 
 function ZoneAccuracyChart({

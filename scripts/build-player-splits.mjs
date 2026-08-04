@@ -61,6 +61,9 @@ const argYear = process.argv.includes("--year")
 /** Below this a split's rate is noise, so it ships without a percentile. */
 const MIN_SPLIT_GAMES = 4;
 
+/** Season-level, unsplittable, ranked against the (year, bucket) cohort. */
+const IMPACT_STATS = ["epm", "off_epm", "def_epm", "ewins", "on_off"];
+
 const norm = (s) => (s ?? "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
   .replace(/\buniversity\b|\bthe\b/g, "").replace(/\bstate\b/g, "st").replace(/[^a-z0-9]+/g, "");
 
@@ -176,6 +179,10 @@ function main() {
           off_epm: num(est ? v.off_s ?? v.off : v.off),
           def_epm: num(est ? v.def_s ?? v.def : v.def),
           ewins: num(v.ewins),
+          // Raw on/off: team net rating with him on the floor minus off it.
+          // Only the play-by-play fit carries it, and only above a possession
+          // floor, so it is frequently null and that is the honest state.
+          on_off: num(v.on_off),
         });
       }
     }
@@ -243,7 +250,7 @@ function main() {
     const bucket = bucketOf.get(key);
     const im = impactOf.get(key);
     if (!im) continue;
-    for (const stat of ["epm", "off_epm", "def_epm", "ewins"]) {
+    for (const stat of IMPACT_STATS) {
       push(`${yStr}|_impact|${bucket}|i|${stat}`, key, num(im[stat]));
     }
   }
@@ -293,7 +300,7 @@ function main() {
     const im = impactOf.get(key);
     if (im) {
       out.impact = {};
-      for (const stat of ["epm", "off_epm", "def_epm", "ewins"]) {
+      for (const stat of IMPACT_STATS) {
         const v = num(im[stat]);
         out.impact[stat] = [r2(v), v === null ? null : pctOf.get(`${yStr}|_impact|${bucket}|i|${stat}|${key}`) ?? null];
       }
