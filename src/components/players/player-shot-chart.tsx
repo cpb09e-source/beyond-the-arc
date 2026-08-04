@@ -631,39 +631,37 @@ const INSIDE_3 =
 type Clip = "in" | "out" | "cornerL" | "cornerR";
 
 /**
- * Sweeps, and why the outermost ones run past the rim's horizontal but STOP
- * short of the hoop's own back.
+ * Sweeps.
  *
- * The classifier clamps dy to zero, so a shot from level with or behind the rim
- * lands at t=0 or t=180 and belongs to a left or right zone by which side of the
- * hoop it came from. Drawing those zones from 0 to 180 left the baseline strip
- * unfilled, and the map looked like it floated above the baseline.
+ * CLOSE ZONES STOP DEAD AT THE RIM'S HORIZONTAL, 0 to 180. A close-range zone
+ * drawn above that line is floor behind the hoop, and there is no such thing as
+ * a close shot from behind the backboard. An earlier pass swept them to 270 to
+ * close a bare strip along the baseline, which filled the strip and drew three
+ * layup zones wrapped around the back of the rim.
  *
- * Sweeping them all the way to 270 fixed that and bought a worse problem: the
- * fills wrapped around the back of the hoop, and a close-range zone drawn behind
- * the backboard is a shot nobody has ever taken. So the sweep stops at 215 and
- * −35 — far enough to cover the playable baseline out at the sides, not far
- * enough to reach around the rim — and the pocket directly behind the backboard
- * is painted back out to bare floor below. Both are needed: the sweep alone
- * covers the impossible pocket, and the pocket alone cannot fill the baseline.
+ * THE MID CORNERS DO THE BASELINE INSTEAD. Out past eight feet the floor beside
+ * the lane is real: a baseline two is an ordinary shot. Those two zones carry on
+ * to 215 and −35, which covers it, and the classifier agrees — it clamps dy to
+ * zero, so a shot level with or behind the rim lands at t=0 or t=180 and belongs
+ * to the left or right zone by which side of the hoop it came from.
  */
 const BEHIND_L = 215;
 const BEHIND_R = -35;
 
 /**
- * The dead pocket behind the backboard, painted back to bare floor.
+ * Behind the glass: painted back to bare floor after the zones are drawn.
  *
- * The board spans RIM_X ± 30 at y = 40. Nothing is attempted from behind it,
- * so no zone should claim that floor. Slightly wider and slightly deeper than
- * the board itself, because a fill that stops exactly at the glass reads as a
- * rendering seam rather than as a deliberate hole.
+ * Spans exactly the width of the close band, RIM_X ± CLOSE_R, from the baseline
+ * to the rim's own line — which is precisely the half of the close disc that
+ * sits behind the hoop, so the close zones end on the pocket's edge rather than
+ * leaving a crescent of unfilled floor beside it. The backboard sits inside it.
  */
-const DEAD = { x: RIM_X - 38, y: 0, w: 76, h: 45 };
+const DEAD = { x: RIM_X - CLOSE_R, y: 0, w: 2 * CLOSE_R, h: RIM_Y };
 
 const ZONE_GEOM: Record<ZoneId, { t: [number, number]; r: [number, number]; clip: Clip }> = {
-  close_l: { t: [120, BEHIND_L], r: [0, CLOSE_R], clip: "in" },
+  close_l: { t: [120, 180], r: [0, CLOSE_R], clip: "in" },
   close_m: { t: [60, 120], r: [0, CLOSE_R], clip: "in" },
-  close_r: { t: [BEHIND_R, 60], r: [0, CLOSE_R], clip: "in" },
+  close_r: { t: [0, 60], r: [0, CLOSE_R], clip: "in" },
   mid_corner_l: { t: [157.5, BEHIND_L], r: [CLOSE_R, BIG_R], clip: "in" },
   mid_wing_l: { t: [112.5, 157.5], r: [CLOSE_R, BIG_R], clip: "in" },
   mid_mid: { t: [67.5, 112.5], r: [CLOSE_R, BIG_R], clip: "in" },
@@ -692,9 +690,23 @@ function ZoneAccuracyChart({
       <Court label="Shooting accuracy by zone versus position-group average">
         <defs>
           <clipPath id="z-in"><path d={INSIDE_3} /></clipPath>
-          {/* Court rect with the two-point region punched out. */}
+          {/* Outside the arc AND outside both corner strips.
+              A corner-three point is outside the arc too, so clipping the wings
+              to "not the two-point region" handed them the corners — and since
+              the wings paint after the corners, they covered them. At x=15,
+              y=95, inside the left corner and above the junction, the floor was
+              being coloured Wing Left. Punching the two corner rectangles out
+              with the same even-odd rule keeps each side of the junction to its
+              own zone. */}
           <clipPath id="z-out" clipRule="evenodd">
-            <path d={`M0 0 H${W} V${H} H0 Z ${INSIDE_3}`} clipRule="evenodd" />
+            <path
+              d={
+                `M0 0 H${W} V${H} H0 Z ${INSIDE_3} ` +
+                `M0 0 H${CORNER_X} V${CORNER_Y} H0 Z ` +
+                `M${W - CORNER_X} 0 H${W} V${CORNER_Y} H${W - CORNER_X} Z`
+              }
+              clipRule="evenodd"
+            />
           </clipPath>
           <clipPath id="z-cornerL"><rect x={0} y={0} width={CORNER_X} height={CORNER_Y} /></clipPath>
           <clipPath id="z-cornerR"><rect x={W - CORNER_X} y={0} width={CORNER_X} height={CORNER_Y} /></clipPath>
