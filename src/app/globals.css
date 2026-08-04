@@ -28,9 +28,14 @@
   /* shadcn aliases — map to brand */
   --background: var(--paper);
   --foreground: var(--ink);
-  --card: #ffffff;
+  /* Card surfaces were literally #ffffff, which the design system forbids for
+   * a reason: a pure-white panel on warm paper reads as a hole punched in the
+   * page rather than as a sheet resting on it. Warm ivory instead, still a
+   * step above --paper so the elevation survives, tinted on the same axis as
+   * every other neutral here. */
+  --card: #fdfbf6;
   --card-foreground: var(--ink);
-  --popover: #ffffff;
+  --popover: #fdfbf6;
   --popover-foreground: var(--ink);
   --primary: var(--ink);
   --primary-foreground: var(--paper);
