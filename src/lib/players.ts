@@ -228,7 +228,7 @@ export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
   //
   // The `key` stays "epm" on purpose — it is in saved URLs, the ?sort= param
   // and the query-string parser. The label changed; the contract did not.
-  { key: "epm",     label: "EPM",     desc: "Estimated Plus-Minus — per-100-possession impact vs. an average player, offense plus defense. A ridge regression (RAPM) over every play-by-play stint, run as deviations from a box-score prior, with three-point and free-throw luck stripped out and non-conference games weighted up. Needs lineup data, so 2024 onward; older seasons show the box-score estimate.", group: "impact", format: "num1", field: "epm" },
+  { key: "epm",     label: "EPM",     desc: "Estimated Plus-Minus — per-100-possession impact vs. an average player, offense plus defense. A ridge regression (RAPM) over every play-by-play stint, run as deviations from a box-score prior that reads each line against the schedule behind it, with three-point and free-throw luck stripped out and non-conference games weighted up. Needs lineup data, so 2024 onward; older seasons show the box-score estimate.", group: "impact", format: "num1", field: "epm" },
   { key: "off_epm", label: "Off EPM", desc: "Offensive EPM — per-100 offensive impact",                                                   group: "impact", format: "num1", field: "off_epm" },
   { key: "def_epm", label: "Def EPM", desc: "Defensive EPM — per-100 defensive impact (positive = better defense)",                        group: "impact", format: "num1", field: "def_epm" },
   // THE TWO HALVES OF EPM, published beside it. EPM is a RAPM fit run as

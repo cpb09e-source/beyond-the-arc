@@ -55,6 +55,36 @@ const FEATURES = [
   "blk_pct", "stl_pct", "height_in", "class_num",
   "is_g", "is_f", "is_c",
   "team_adj_net", // team adjusted net rating (from team-ratings-<year>.json); "" when that season's ratings aren't built yet
+  // ── SCHEDULE STRENGTH ────────────────────────────────────────────────
+  // Opponent offensive and defensive quality faced across the season, from
+  // team-adjusted-ratings.json. In the SHARED list, not the CBBD block, for the
+  // one reason that matters: it covers every season 2014-2026 at 100% (99.7% in
+  // 2017), so the lean model — which scores 2014-2021 and until now had no
+  // opponent context whatsoever — finally gets some.
+  //
+  // NOT the same thing as team_adj_net, which is dropped just above it.
+  // team_adj_net says how good your team is, and letting the prior read it made
+  // EPM a readout of who you played for. This says how hard your schedule was,
+  // which is the context needed to read a box score at all: 18 points against
+  // the country's best defence is not 18 points against its worst.
+  //
+  // SPLIT rather than combined on purpose. Offence is fit against the DEFENCES
+  // faced and defence against the OFFENCES faced, and a single net SOS blurs
+  // the two. Measured, the split is most of the gain — combined `sos` alone was
+  // worth +0.0014 to lean OFF, the split +0.0065.
+  //
+  // Held-out R2 (folds grouped by team-season), before -> after:
+  //     rich OFF  0.4615 -> 0.4705     rich DEF  0.3939 -> 0.4067
+  //     lean OFF  0.4396 -> 0.4461     lean DEF  0.1727 -> 0.1730
+  // The defensive gain is the notable one: DEF is the half box scores are worst
+  // at, and it moved most.
+  //
+  // Direction, per standard deviation of schedule strength: facing better
+  // defences is worth +0.118 OFF, facing better offences +0.166 DEF. Tougher
+  // schedule buys credit for the same line, so high-major production is marked
+  // up and easy-schedule production marked down — which is the correction the
+  // mid-major stat-stuffers on the leaderboard have needed.
+  "o_sos", "d_sos",
 ];
 
 // Appended after CBBD_FEATURES is declared below — `const` is not hoisted,
@@ -99,6 +129,32 @@ function loadTeamRatings(year) {
   const m = new Map();
   for (const t of j.teams) m.set(normTeam(t.team), t.adj_net);
   return m;
+}
+
+/**
+ * Schedule strength by team-season, from team-adjusted-ratings.json — one file
+ * keyed "<Team>|<Year>", covering 2014-2026. o_sos is the average offence
+ * faced, d_sos the average defence faced, both on the raw 100-possession scale.
+ *
+ * Read once and indexed by normalized name + year, matching loadTeamRatings so
+ * a team that joins in one place joins in the other.
+ */
+let SOS_INDEX = null;
+function sosFor(teamName, year) {
+  if (SOS_INDEX === null) {
+    SOS_INDEX = new Map();
+    const f = join(DATA, "team-adjusted-ratings.json");
+    if (existsSync(f)) {
+      for (const [k, v] of Object.entries(JSON.parse(readFileSync(f, "utf8")))) {
+        const cut = k.lastIndexOf("|");
+        if (cut < 0) continue;
+        SOS_INDEX.set(`${normTeam(k.slice(0, cut))}|${k.slice(cut + 1)}`, v);
+      }
+    }
+  }
+  const v = teamName ? SOS_INDEX.get(`${normTeam(teamName)}|${year}`) : null;
+  const num = (x) => (typeof x === "number" && Number.isFinite(x) ? x : "");
+  return { o_sos: num(v?.o_sos), d_sos: num(v?.d_sos) };
 }
 
 /**
@@ -319,6 +375,7 @@ for (const year of YEARS) {
       ...feat,
       ...cbbdFeatures(cbbd ? cbbd[String(bid)] : null),
       team_adj_net: teamAdjNet,
+      ...sosFor(team?.name, year),
       epm: lab ? lab.epm : "", off: lab ? lab.off : "", def: lab ? lab.def : "",
       poss: lab ? lab.poss : "",
     });

@@ -54,9 +54,11 @@ const OVERRIDES: Record<string, Omit<GlossaryEntry, "category">> = {
       + "observation, and a regression solves for how much each individual is worth once teammates "
       + "and opponents are accounted for. That regression starts from a box-score estimate of the "
       + "player and adjusts it toward what the scoreboard actually did while he played. "
-      + "Three-point and free-throw variance is removed first, because nobody on the floor controls "
-      + "whether an open look drops. Non-conference games count for more, since they are the only "
-      + "games that connect one conference to another.",
+      + "That box-score estimate is read in the context of the schedule behind it: the same line "
+      + "counts for more against the defences a player actually had to face, and less against a soft "
+      + "slate. Three-point and free-throw variance is removed first, because nobody on the floor "
+      + "controls whether an open look drops. Non-conference games count for more, since they are "
+      + "the only games that connect one conference to another.",
     caveat:
       "Five starters who share every possession are difficult to tell apart — the data cannot see "
       + "who caused what when they are never separated. Expect a good team's rotation to cluster.",
