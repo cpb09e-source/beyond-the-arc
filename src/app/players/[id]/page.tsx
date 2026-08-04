@@ -228,7 +228,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
             <div className="mt-6 sm:mt-7 pt-5 border-t border-hairline">
               <div className="text-[0.55rem] uppercase tracking-[0.2em] text-ink-muted font-semibold mb-3">Per game</div>
               <div className="flex items-end gap-x-7 sm:gap-x-9 lg:gap-x-11 gap-y-5 flex-wrap">
-                <PerGameStat label="Points"   value={fmtNum(stats.pts, 1)} lead />
+                <PerGameStat label="Points"   value={fmtNum(stats.pts, 1)} />
                 <PerGameStat label="Rebounds" value={fmtNum(stats.reb, 1)} />
                 <PerGameStat label="Assists"  value={fmtNum(stats.ast, 1)} />
                 <PerGameStat label="Steals"   value={fmtNum(stats.stl, 1)} />
@@ -302,15 +302,22 @@ function VitalRow({ label, children }: { label: string; children: React.ReactNod
 }
 
 /** Per-game figure. `lead` marks points, which carries the accent + extra size. */
-function PerGameStat({ label, value, lead }: { label: string; value: string; lead?: boolean }) {
+/**
+ * One number in the hero's per-game strip.
+ *
+ * Points used to take a `lead` treatment: coral, and a clamp running to 3.5rem
+ * against the 2.25rem everything else got. Two problems, one of them invisible
+ * until you look for it. The colour made it read as a different KIND of number
+ * rather than as the same stat with more weight, and the extra size broke the
+ * row: the flex line aligns on `items-end`, so the taller box pushed its digits
+ * up off the shared baseline and Points floated above its own neighbours.
+ *
+ * All five are the same size and the same ink now, so the baseline is a baseline.
+ */
+function PerGameStat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div
-        className={cn(
-          "font-display tabular leading-none tracking-[-0.03em]",
-          lead ? "text-coral text-[clamp(2.5rem,4.5vw,3.5rem)]" : "text-ink text-2xl sm:text-3xl lg:text-4xl",
-        )}
-      >
+      <div className="font-display tabular leading-none tracking-[-0.03em] text-ink text-2xl sm:text-3xl lg:text-4xl">
         {value}
       </div>
       <div className="mt-2 text-[0.55rem] sm:text-[0.6rem] uppercase tracking-[0.18em] text-ink-muted font-medium">
