@@ -22,6 +22,9 @@ const R2_DIRS = [
   "/data/player-games/",
   "/data/player/",
   "/data/player-ranks/",
+  // Per-player split stats (8 splits x per-game/per-40) for the Player
+  // Overview panel — one file per ranked player, fetched on demand.
+  "/data/player-splits/",
   "/data/tournament-box/",
   "/data/team/",
   // Per-game player box scores for the Win Calculator modal — ~6.3k files per

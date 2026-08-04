@@ -30,6 +30,7 @@ const STRIP_DIRS = [
   "data/player-games",
   "data/player",
   "data/player-ranks",
+  "data/player-splits",
   "data/tournament-box",
   "data/team",
   // These two were R2-served but missing from this list (present in

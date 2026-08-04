@@ -18,6 +18,7 @@ const DIRS = [
   "data/player-games",
   "data/player",
   "data/player-ranks",
+  "data/player-splits",
   "data/tournament-box",
   "data/team",
   "data/game-players",

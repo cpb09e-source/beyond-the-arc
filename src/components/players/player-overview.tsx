@@ -5,6 +5,7 @@ import { TeamLogo } from "@/components/team-logo";
 import { Select } from "@/components/select";
 import type { PlayerRanksSeason } from "@/lib/static-data";
 import { PlayerStatsGrid } from "./player-stats-grid";
+import { usePlayerSplits } from "./player-splits";
 import { useShotProfile } from "./player-shot-impact";
 import { bucketLabel, seasonLabel } from "./where-they-rank";
 
@@ -35,6 +36,9 @@ export function PlayerOverview({
   // Zone splits for the Shot Diet panel. Hook order has to stay stable, so this
   // runs before the early return and takes null when there's no season.
   const shooting = useShotProfile(bartPlayerId, selected?.year ?? null);
+  // One fetch for every season the player has splits for; the year dropdown
+  // then switches without another round trip.
+  const splits = usePlayerSplits(bartPlayerId);
   if (!selected) return null;
 
   return (
@@ -72,7 +76,11 @@ export function PlayerOverview({
         </span>
       </div>
       <div className="p-5 lg:p-6">
-        <PlayerStatsGrid season={selected.ranks} shooting={shooting} />
+        <PlayerStatsGrid
+          season={selected.ranks}
+          shooting={shooting}
+          splitSeason={splits === undefined ? undefined : splits?.seasons?.[String(selected.year)] ?? null}
+        />
       </div>
     </>
   );

@@ -5,9 +5,15 @@ import { hexbin as d3hexbin } from "d3-hexbin";
 import { cn } from "@/lib/utils";
 import { dataUrl } from "@/lib/data-url";
 import { StatInfo } from "@/components/players/stat-info";
+import { pctBg, pctColor } from "@/components/percentile-chip";
 import {
   ShotProfileFallbackCard, useShotProfile, seasonLabel,
 } from "@/components/players/player-shot-impact";
+import {
+  ZONES, zoneOf, percentileFrom,
+  W, H, RIM_X, RIM_Y, THREE_R, CORNER_X, CORNER_Y, CLOSE_R,
+  type Zone, type ZoneId,
+} from "@/lib/shot-zones";
 
 /**
  * Player-page "Shot Chart" card — two views of the same filtered shot set,
@@ -43,7 +49,7 @@ type Baselines = {
 const BUCKET_LABEL: Record<Bucket, string> = { G: "guards", F: "forwards", C: "centers" };
 
 // Rim center in court units — distance derives from this.
-const RIM_X = 250, RIM_Y = 52.5;
+// RIM_X / RIM_Y and the rest of the court geometry come from lib/shot-zones.
 
 type Filters = {
   types: [boolean, boolean, boolean, boolean]; // jump, layup, dunk, tip
@@ -99,6 +105,7 @@ export function PlayerShotChart({
 }) {
   const [data, setData] = useState<ShotsFile | "none" | null>(null);
   const [base, setBase] = useState<Baselines | null>(null);
+  const [zoneBase, setZoneBase] = useState<ZoneBaselines | null>(null);
   const [year, setYear] = useState<number | null>(null);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
 
@@ -118,13 +125,25 @@ export function PlayerShotChart({
   }, [bartPlayerId]);
 
   // League baselines are one small shared file (~56 KB) — fetched alongside,
-  // and the right-hand chart simply sits out if it never arrives.
+  // and the volume chart simply sits out if it never arrives.
   useEffect(() => {
     let cancelled = false;
     fetch(dataUrl("/data/shot-baselines.json"))
       .then((r) => (r.ok ? r.json() : null))
       .then((j: Baselines | null) => { if (!cancelled) setBase(j); })
       .catch(() => { if (!cancelled) setBase(null); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Zone cohorts: the same rates pooled by zone, PLUS the distribution behind
+  // them, which is what makes a percentile possible. ~119 KB, served from
+  // /public rather than R2 — it is one file every player page wants.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/data/shot-zone-baselines.json")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: ZoneBaselines | null) => { if (!cancelled) setZoneBase(j); })
+      .catch(() => { if (!cancelled) setZoneBase(null); });
     return () => { cancelled = true; };
   }, []);
 
@@ -147,6 +166,9 @@ export function PlayerShotChart({
 
   const bucket = year !== null ? positionByYear?.[String(year)] : undefined;
   const cells = base && year !== null && bucket ? base.seasons[String(year)]?.[bucket] : undefined;
+  const zoneCells = zoneBase && year !== null && bucket
+    ? zoneBase.seasons[String(year)]?.[bucket] ?? null
+    : null;
 
   if (data === null) return null;
   // No located shots at all → the old profile-only card, minus nothing the
@@ -261,7 +283,7 @@ export function PlayerShotChart({
                 <>
                   <ZoneAccuracyChart
                     shots={forAccuracy}
-                    cells={cells}
+                    base={zoneCells}
                     label={bucket ? BUCKET_LABEL[bucket] : "position"}
                   />
                   <AccuracyLegend label={bucket ? BUCKET_LABEL[bucket] : "position"} />
@@ -340,12 +362,12 @@ export function PlayerShotChart({
 // ~35ft is a heave and the extra 7ft was just empty floor pushing the card
 // taller (perthirtysix crops at ~38 for the same reason). Cropped shots still
 // count in the totals; their hexes clip at the edge.
-const W = 500, H = 400;
+
 // NCAA line work: 12ft lane, 19ft FT line, 6ft FT circle, 4ft restricted arc,
 // 22'1.75" arc with corner lines 3.35ft off each sideline.
-const THREE_R = 221.5, CORNER_X = 33.5;
+
 // Where the corner line meets the arc: sqrt(r² − (250−33.5)²) below the rim.
-const CORNER_Y = RIM_Y + Math.sqrt(THREE_R * THREE_R - (RIM_X - CORNER_X) * (RIM_X - CORNER_X));
+
 
 // Light, grainy canvas. The court used to be a navy slab, which forced every
 // mark to be a glow on darkness; on warm paper the same marks read as ink and
@@ -502,100 +524,54 @@ const SHRINK_K = 25;
 /* ------------------------------ shot zones -------------------------------- */
 
 /**
- * THIRTEEN NAMED ZONES, replacing the hex grid on the accuracy court.
+ * THE ZONE MAP, replacing first the hex grid and then the bubbles that replaced it.
  *
- * The hexes were honest but they answered the wrong question. A hex is an
- * arbitrary patch of floor, so "you are cold in this hex" is not a sentence
- * about basketball, and a player's attempts scatter across dozens of them
- * thinly enough that most cells were mostly shrinkage. Zones are how shooting
- * is actually discussed — corner three, left wing, at the rim — and pooling a
- * whole zone's attempts means the rate underneath the colour is worth reading.
+ * The hexes were honest but answered the wrong question: a hex is an arbitrary
+ * patch of floor, so "cold in this hex" is not a sentence about basketball, and
+ * attempts scattered thinly enough that most cells were mostly shrinkage.
+ * Bubbles fixed the pooling and introduced their own problem — a circle floating
+ * over a court asserts a location it does not actually occupy, and on a busy
+ * player the close trio grew until they collided.
  *
- * LEFT AND RIGHT ARE THE VIEWER'S, matching the court as drawn: x below the rim
- * is left. That is the same convention as every public shot chart, and it is
- * the opposite of the shooter's own left, which is why it is stated here.
+ * So the zones are drawn as the regions they always were: real shapes, tiled
+ * edge to edge, each one carrying its FG% and a percentile chip. Nothing floats
+ * and nothing overlaps.
+ *
+ * Geometry and the classifier live in src/lib/shot-zones.ts, shared with
+ * scripts/build-shot-zone-baselines.mts, so the cohort and the player are pooled
+ * by one definition of "left wing" rather than two that can drift apart.
  */
-const CLOSE_R = 80; // 8 ft — the paint, near enough
-
-const ZONES = [
-  // The close trio sits wider apart than the shots themselves do. A big man
-  // takes most of his attempts here, so all three pucks run near maximum radius
-  // and anything tighter overlaps into one blob.
-  { id: "close_l",      label: "Close Left",     short: "Close L",  x: 156, y: 66 },
-  { id: "close_m",      label: "Close Middle",   short: "Close M",  x: 250, y: 104 },
-  { id: "close_r",      label: "Close Right",    short: "Close R",  x: 344, y: 66 },
-  { id: "mid_corner_l", label: "Mid Corner Left",  short: "Mid Cnr L",  x: 62,  y: 72 },
-  { id: "mid_wing_l",   label: "Mid Wing Left",    short: "Mid Wing L", x: 112, y: 172 },
-  { id: "mid_mid",      label: "Mid Middle",       short: "Mid M",      x: 250, y: 196 },
-  { id: "mid_wing_r",   label: "Mid Wing Right",   short: "Mid Wing R", x: 388, y: 172 },
-  { id: "mid_corner_r", label: "Mid Corner Right", short: "Mid Cnr R",  x: 438, y: 72 },
-  { id: "3_corner_l",   label: "3PT Corner Left",  short: "3 Cnr L",  x: 17,  y: 60 },
-  { id: "3_wing_l",     label: "3PT Wing Left",    short: "3 Wing L", x: 68,  y: 258 },
-  { id: "3_mid",        label: "3PT Middle",       short: "3 Mid",    x: 250, y: 305 },
-  { id: "3_wing_r",     label: "3PT Wing Right",   short: "3 Wing R", x: 432, y: 258 },
-  { id: "3_corner_r",   label: "3PT Corner Right", short: "3 Cnr R",  x: 483, y: 60 },
-] as const;
-
-type ZoneId = (typeof ZONES)[number]["id"];
 
 /**
- * Which zone a shot came from.
+ * Attempts required before a percentile is shown.
  *
- * `is3` comes from the data flag rather than the geometry wherever we have it,
- * because the feed knows what the officials counted and a shot taken with a toe
- * on the line should not be re-adjudicated by trigonometry.
+ * Matches MIN_ZONE_ATT in the baselines builder, and has to: the cohort
+ * distribution was assembled from players with at least this many attempts in a
+ * zone, so placing a player into it on fewer is reading a rank off a scale he
+ * was not measured against. One corner three that misses is not the 0th
+ * percentile, it is one shot, and the chip is withheld and the count shown.
  */
-function zoneOf(x: number, y: number, is3: boolean): ZoneId {
-  const dx = x - RIM_X;
-  // Shots from behind the backboard get clamped onto the baseline rather than
-  // wrapping past 180 degrees into the wrong side of the court.
-  const dy = Math.max(y - RIM_Y, 0);
-  const t = (Math.atan2(dy, dx) * 180) / Math.PI; // 180 = far left, 0 = far right
-
-  if (is3) {
-    // Corner threes are the strip outside the straight segment, so they are
-    // bounded by where the arc meets it — not by an angle.
-    if (y <= CORNER_Y) return x < RIM_X ? "3_corner_l" : "3_corner_r";
-    if (t >= 112.5) return "3_wing_l";
-    if (t <= 67.5) return "3_wing_r";
-    return "3_mid";
-  }
-  if (Math.hypot(dx, dy) <= CLOSE_R) {
-    if (t >= 120) return "close_l";
-    if (t <= 60) return "close_r";
-    return "close_m";
-  }
-  if (t >= 157.5) return "mid_corner_l";
-  if (t >= 112.5) return "mid_wing_l";
-  if (t > 67.5) return "mid_mid";
-  if (t > 22.5) return "mid_wing_r";
-  return "mid_corner_r";
-}
-
-/** Geometry-only 3PT test, for baseline cells — they carry no made/3PT flag. */
-const cellIs3 = (x: number, y: number) =>
-  y <= CORNER_Y
-    ? x <= CORNER_X || x >= W - CORNER_X
-    : Math.hypot(x - RIM_X, y - RIM_Y) >= THREE_R;
+const MIN_RANK_ATT = 10;
 
 type ZoneBin = {
-  zone: (typeof ZONES)[number];
+  zone: Zone;
   made: number;
   att: number;
   baseRate: number | null;
+  pct: number | null;
+  /** Shrunk difference vs the cohort, still what drives the fill. */
   diff: number | null;
 };
 
-/**
- * Player attempts and cohort baseline, both pooled by zone.
- *
- * The baseline arrives as per-hex [made, attempts] pairs, so it is re-pooled
- * through the same classifier — summing the cohort's counts rather than
- * averaging its rates, so a zone's baseline is weighted by where the cohort
- * actually shoots inside it.
- */
-function zoneBins(shots: ShotRow[], cells: Record<string, [number, number]>): ZoneBin[] {
-  const own = new Map<ZoneId, { made: number; att: number }>();
+/** Per-zone cohort rate and distribution, from shot-zone-baselines.json. */
+type ZoneBaseline = { made: number; att: number; q?: number[] };
+type ZoneBaselines = {
+  minAtt: number;
+  seasons: Record<string, Record<Bucket, Record<string, ZoneBaseline>>>;
+};
+
+function zoneBins(shots: ShotRow[], base: Record<string, ZoneBaseline> | null): ZoneBin[] {
+  const own = new Map<string, { made: number; att: number }>();
   for (const s of shots) {
     const z = zoneOf(s[CX], s[CY], s[IS3] === 1);
     const cur = own.get(z) ?? { made: 0, att: 0 };
@@ -603,99 +579,204 @@ function zoneBins(shots: ShotRow[], cells: Record<string, [number, number]>): Zo
     cur.att += 1;
     own.set(z, cur);
   }
-
-  const base = new Map<ZoneId, { made: number; att: number }>();
-  for (const [key, [m, a]] of Object.entries(cells)) {
-    const comma = key.indexOf(",");
-    const x = Number(key.slice(0, comma));
-    const y = Number(key.slice(comma + 1));
-    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-    const z = zoneOf(x, y, cellIs3(x, y));
-    const cur = base.get(z) ?? { made: 0, att: 0 };
-    cur.made += m;
-    cur.att += a;
-    base.set(z, cur);
-  }
-
   return ZONES.map((zone) => {
     const o = own.get(zone.id) ?? { made: 0, att: 0 };
-    const b = base.get(zone.id);
+    const b = base?.[zone.id];
     const baseRate = b && b.att > 0 ? b.made / b.att : null;
-    // Same stabilizer as the hexes used: equals the raw difference once the
-    // attempts pile up, and collapses toward zero when they don't.
+    const rate = o.att > 0 ? o.made / o.att : null;
+    // Same stabilizer the hexes used: equals the raw difference once attempts
+    // pile up, and collapses toward zero when they don't.
     const diff =
-      baseRate === null || o.att === 0
+      baseRate === null || rate === null
         ? null
         : (o.made - o.att * baseRate) / (o.att + SHRINK_K);
-    return { zone, made: o.made, att: o.att, baseRate, diff };
+    return {
+      zone,
+      made: o.made,
+      att: o.att,
+      baseRate,
+      pct: o.att >= MIN_RANK_ATT ? percentileFrom(b?.q, rate) : null,
+      diff,
+    };
   });
 }
 
+/* ---- region geometry ----
+ *
+ * Every zone is a sector of the rim circle, deliberately drawn long enough to
+ * overrun the court, then CLIPPED to the two-point or three-point side of the
+ * arc. Clipping is what gives the corner zones their real edges: the corner
+ * three is bounded by the straight segment, which no angle from the rim can
+ * express, and building the paths by hand instead would mean hand-authoring the
+ * arc/line junction thirteen times.
+ */
+const BIG_R = 620;
+
+function sector(t1: number, t2: number, r0: number, r1: number): string {
+  const pt = (r: number, t: number) =>
+    [RIM_X + r * Math.cos((t * Math.PI) / 180), RIM_Y + r * Math.sin((t * Math.PI) / 180)] as const;
+  const [x1, y1] = pt(r0, t1);
+  const [x2, y2] = pt(r0, t2);
+  const [x3, y3] = pt(r1, t2);
+  const [x4, y4] = pt(r1, t1);
+  const inner = r0 <= 0.01 ? `M ${RIM_X} ${RIM_Y}` : `M ${x1} ${y1} A ${r0} ${r0} 0 0 1 ${x2} ${y2}`;
+  return `${inner} L ${x3} ${y3} A ${r1} ${r1} 0 0 0 ${x4} ${y4} Z`;
+}
+
+/** The two-point side: baseline, both corner segments, then the arc. */
+const INSIDE_3 =
+  `M ${CORNER_X} 0 L ${CORNER_X} ${CORNER_Y} ` +
+  `A ${THREE_R} ${THREE_R} 0 0 0 ${W - CORNER_X} ${CORNER_Y} L ${W - CORNER_X} 0 Z`;
+
+type Clip = "in" | "out" | "cornerL" | "cornerR";
+const ZONE_GEOM: Record<ZoneId, { t: [number, number]; r: [number, number]; clip: Clip }> = {
+  close_l: { t: [120, 180], r: [0, CLOSE_R], clip: "in" },
+  close_m: { t: [60, 120], r: [0, CLOSE_R], clip: "in" },
+  close_r: { t: [0, 60], r: [0, CLOSE_R], clip: "in" },
+  mid_corner_l: { t: [157.5, 180], r: [CLOSE_R, BIG_R], clip: "in" },
+  mid_wing_l: { t: [112.5, 157.5], r: [CLOSE_R, BIG_R], clip: "in" },
+  mid_mid: { t: [67.5, 112.5], r: [CLOSE_R, BIG_R], clip: "in" },
+  mid_wing_r: { t: [22.5, 67.5], r: [CLOSE_R, BIG_R], clip: "in" },
+  mid_corner_r: { t: [0, 22.5], r: [CLOSE_R, BIG_R], clip: "in" },
+  "3_corner_l": { t: [140, 180], r: [0, BIG_R], clip: "cornerL" },
+  "3_wing_l": { t: [112.5, 180], r: [0, BIG_R], clip: "out" },
+  "3_mid": { t: [67.5, 112.5], r: [0, BIG_R], clip: "out" },
+  "3_wing_r": { t: [0, 67.5], r: [0, BIG_R], clip: "out" },
+  "3_corner_r": { t: [0, 40], r: [0, BIG_R], clip: "cornerR" },
+};
+
 function ZoneAccuracyChart({
-  shots, cells, label,
+  shots, base, label,
 }: {
-  shots: ShotRow[]; cells: Record<string, [number, number]>; label: string;
+  shots: ShotRow[]; base: Record<string, ZoneBaseline> | null; label: string;
 }) {
-  const bins = useMemo(() => zoneBins(shots, cells), [shots, cells]);
-  // Radius tracks attempts by area, against the busiest zone, with a floor big
-  // enough to still hold a percentage and a ceiling that keeps the rim puck
-  // from swallowing its neighbours.
-  const maxAtt = useMemo(() => bins.reduce((m, b) => Math.max(m, b.att), 0), [bins]);
+  const bins = useMemo(() => zoneBins(shots, base), [shots, base]);
   const [hover, setHover] = useState<ZoneId | null>(null);
   const active = hover === null ? null : bins.find((b) => b.zone.id === hover) ?? null;
 
   return (
     <div className="relative" onMouseLeave={() => setHover(null)}>
       <Court label="Shooting accuracy by zone versus position-group average">
+        <defs>
+          <clipPath id="z-in"><path d={INSIDE_3} /></clipPath>
+          {/* Court rect with the two-point region punched out. */}
+          <clipPath id="z-out" clipRule="evenodd">
+            <path d={`M0 0 H${W} V${H} H0 Z ${INSIDE_3}`} clipRule="evenodd" />
+          </clipPath>
+          <clipPath id="z-cornerL"><rect x={0} y={0} width={CORNER_X} height={CORNER_Y} /></clipPath>
+          <clipPath id="z-cornerR"><rect x={W - CORNER_X} y={0} width={CORNER_X} height={CORNER_Y} /></clipPath>
+          {/* Under the attempt floor: hatched, so "not enough shots" cannot be
+              mistaken for "average", which any flat fill would imply. */}
+          <pattern id="z-thin" width={7} height={7} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width={7} height={7} fill="rgba(26,34,56,0.035)" />
+            <line x1={0} y1={0} x2={0} y2={7} stroke="rgba(26,34,56,0.13)" strokeWidth={2} />
+          </pattern>
+        </defs>
+
         {bins.map((b) => {
-          const t = maxAtt > 0 ? Math.sqrt(b.att / maxAtt) : 0;
-          const rr = 15 + 19 * t;
+          const g = ZONE_GEOM[b.zone.id];
           const on = hover === b.zone.id;
-          const empty = b.att === 0;
-          // Corner zones sit close enough to the sideline that a busy one would
-          // hang off the court. Nudge any puck back inside rather than letting
-          // it clip — the position is a label, not a measurement.
-          const cx = Math.min(Math.max(b.zone.x, rr + 2), W - rr - 2);
-          const cy = Math.min(Math.max(b.zone.y, rr + 2), H - rr - 2);
           return (
-            <g
-              key={b.zone.id}
-              transform={`translate(${cx},${cy})`}
-              onMouseEnter={() => setHover(b.zone.id)}
-              role="img"
-              aria-label={zoneSummary(b, label)}
-            >
-              <circle
-                r={empty ? 13 : rr}
-                fill={b.diff === null ? "rgba(26,34,56,0.05)" : diffColor(b.diff)}
-                stroke={on ? "rgba(26,34,56,0.85)" : "rgba(26,34,56,0.22)"}
-                strokeWidth={on ? 2 : 0.8}
+            <g key={b.zone.id} clipPath={`url(#z-${g.clip})`}>
+              <path
+                d={sector(g.t[0], g.t[1], g.r[0], g.r[1])}
+                fill={b.att < MIN_RANK_ATT ? "url(#z-thin)" : b.diff === null ? "rgba(26,34,56,0.05)" : diffColor(b.diff)}
+                stroke={on ? "rgba(26,34,56,0.85)" : "rgba(250,247,242,0.9)"}
+                strokeWidth={on ? 3 : 2.25}
+                onMouseEnter={() => setHover(b.zone.id)}
+                role="img"
+                aria-label={zoneSummary(b, label)}
               />
-              {!empty && (
-                <text
-                  textAnchor="middle"
-                  dominantBaseline="central"
-                  className="pointer-events-none select-none"
-                  style={{
-                    fontSize: Math.max(11, Math.min(15, rr * 0.62)),
-                    fontWeight: 700,
-                    fill: "#12203c",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {Math.round((100 * b.made) / b.att)}
-                </text>
-              )}
             </g>
           );
         })}
+
+        {/* No line work here on purpose: Court renders the lane, rim and arc
+            AFTER its children, so the markings already sit above these fills.
+            Drawing the three-point line again only thickened it. */}
+        <g pointerEvents="none">
+          {bins.map((b) => <ZoneLabel key={b.zone.id} b={b} />)}
+        </g>
       </Court>
       {active && <ZoneTooltip b={active} label={label} />}
     </div>
   );
 }
 
-/** Same card as the hex tooltip, reading a zone instead of a patch of floor. */
+/**
+ * The rate, and under it the percentile as a chip.
+ *
+ * The chip is drawn from the same pctBg/pctColor ramp as every percentile chip
+ * on the site rather than from the court's own hot/cold scale. Two encodings in
+ * one graphic is the risk, and the answer is that they say different things: the
+ * FILL is this player against the cohort AVERAGE, the CHIP is where he lands in
+ * the cohort's SPREAD. A zone can be barely above average and still 80th, if the
+ * field is tight there, and the pair is what shows it.
+ */
+function ZoneLabel({ b }: { b: ZoneBin }) {
+  if (b.att === 0) {
+    return (
+      <text
+        x={b.zone.x} y={b.zone.y} textAnchor="middle" dominantBaseline="central"
+        style={{ fontSize: 12, fill: "rgba(26,34,56,0.35)" }}
+      >
+        —
+      </text>
+    );
+  }
+  const hot = b.diff !== null && Math.abs(b.diff) > 0.055;
+  const ink = hot ? "#fff8f0" : "#12203c";
+  const ranked = b.pct !== null;
+  // Corner strips get the small treatment; everywhere else has room.
+  const sm = b.zone.compact === true;
+  const RATE = sm ? 14 : 21;
+  const CW = sm ? 24 : 34;
+  const CH = sm ? 12 : 15;
+  const chipY = sm ? 2 : 5;
+  return (
+    <g transform={`translate(${b.zone.x},${b.zone.y})`}>
+      <text
+        textAnchor="middle" y={ranked ? (sm ? -6 : -4) : 3}
+        style={{
+          fontSize: RATE, fontWeight: 700, fill: ink,
+          fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em",
+        }}
+      >
+        {Math.round((100 * b.made) / b.att)}%
+      </text>
+      {ranked ? (
+        <>
+          <rect
+            x={-CW / 2} y={chipY} width={CW} height={CH} rx={3}
+            fill={pctBg(b.pct)} stroke="rgba(26,34,56,0.14)" strokeWidth={0.75}
+          />
+          <text
+            textAnchor="middle" x={0} y={chipY + CH / 2 + 0.4} dominantBaseline="middle"
+            style={{
+              fontSize: sm ? 9 : 10.5, fontWeight: 700, fill: pctColor(b.pct),
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {b.pct}
+          </text>
+        </>
+      ) : (
+        <text
+          textAnchor="middle" y={sm ? 12 : 15}
+          style={{
+            fontSize: sm ? 8 : 9.5,
+            fill: hot ? "rgba(255,248,240,0.85)" : "rgba(26,34,56,0.5)",
+            letterSpacing: "0.06em",
+          }}
+        >
+          {b.att} ATT
+        </text>
+      )}
+    </g>
+  );
+}
+
+/** Hover card for one zone, positioned off its own representative point. */
 function ZoneTooltip({ b, label }: { b: ZoneBin; label: string }) {
   const leftPct = (b.zone.x / W) * 100;
   const topPct = (b.zone.y / H) * 100;
@@ -727,6 +808,11 @@ function ZoneTooltip({ b, label }: { b: ZoneBin; label: string }) {
               ? "no baseline here"
               : `D-I ${label} ${pct1(b.baseRate)} · ${raw !== null ? signed(100 * raw) : "—"} raw`}
           </div>
+          <div className="text-[0.68rem] tabular" style={{ color: b.pct === null ? "var(--ink-muted)" : accent }}>
+            {b.pct === null
+              ? `under ${MIN_RANK_ATT} attempts, unranked`
+              : `${b.pct}th percentile among ${label}`}
+          </div>
         </>
       )}
     </div>
@@ -736,10 +822,12 @@ function ZoneTooltip({ b, label }: { b: ZoneBin; label: string }) {
 function zoneSummary(b: ZoneBin, label: string): string {
   if (b.att === 0) return `${b.zone.label}: no attempts`;
   const own = `${b.made} of ${b.att} (${pct1(b.made / b.att)})`;
+  const rank = b.pct === null ? "unranked" : `${b.pct}th percentile`;
   return b.baseRate === null
     ? `${b.zone.label}: ${own}, no baseline here`
-    : `${b.zone.label}: ${own} versus D-I ${label} at ${pct1(b.baseRate)}`;
+    : `${b.zone.label}: ${own} versus D-I ${label} at ${pct1(b.baseRate)}, ${rank}`;
 }
+
 
 const pct1 = (v: number) => (100 * v).toFixed(1) + "%";
 const signed = (v: number) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);

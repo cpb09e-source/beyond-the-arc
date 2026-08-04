@@ -58,6 +58,7 @@ const ALL_DIRS = [
   "public/data/player-games",
   "public/data/player",
   "public/data/player-ranks",
+  "public/data/player-splits",
   "public/data/tournament-box",
   "public/data/team",
   "public/data/game-players",
