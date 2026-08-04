@@ -6,6 +6,19 @@ import { cn } from "@/lib/utils";
 
 const PHOTOS = photoMap as Record<string, string>;
 
+/**
+ * Headshots are OFF. Flip to true to bring them back — the manifest, the two
+ * size variants and the error fallback are all still wired below.
+ *
+ * We hold photos for 17 of 804 coaches, so the monogram was the normal state
+ * and the headshot the exception, and a grid where one row in fifty carries a
+ * face reads as broken rather than as sparse. Initials for everyone is a
+ * consistent design; initials for everyone except Tony Bennett is an accident.
+ */
+// Annotated `boolean` rather than left to infer `false`, so TypeScript does not
+// narrow the photo branch to unreachable and start erroring inside it.
+const SHOW_PHOTOS: boolean = false;
+
 function initials(name: string): string {
   const parts = name
     .replace(/[^A-Za-z\s.'-]/g, " ")
@@ -39,7 +52,7 @@ export function CoachPhoto({
   // Two variants per coach, same 60px threshold as the players. Table rows and
   // list avatars take the 240x174 thumb; only a profile hero is big enough to
   // need the 600x436 source.
-  const fullSrc = PHOTOS[slug] ?? null;
+  const fullSrc = SHOW_PHOTOS ? PHOTOS[slug] ?? null : null;
   const src = fullSrc ? (size <= 60 ? fullSrc.replace(/\.webp$/, "-sm.webp") : fullSrc) : null;
   const [errored, setErrored] = useState(false);
 

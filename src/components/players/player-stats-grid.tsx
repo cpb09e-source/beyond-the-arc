@@ -2,33 +2,25 @@ import type { PlayerRanksSeason } from "@/lib/static-data";
 import { STAT_META, fmtValue, type StatFormat } from "./where-they-rank";
 import { StatInfo } from "./stat-info";
 import type { Shooting } from "./player-shot-impact";
-import { pctColor, pctBg } from "@/components/percentile-chip";
-
-// Every percentile-tinted surface on this page — StatTile, ZoneTile, and the
-// shot-profile fallback card's ZoneBars — now runs on the site-wide chip ramp
-// in percentile-chip.tsx. The three-band olive/amber/tomato ramp that used to
-// live here (pctBgStrong/pctBgStrongDark/pctColorLight/pctColorDark, cuts at
-// 67/34) was the last holdout and went with the fallback card 2026-07.
+import { PercentileChip } from "@/components/percentile-chip";
 
 /**
- * Player Overview — bento-card stat grid.
+ * Player Overview — the same card treatment the team dossier uses.
  *
- * Each stat is a self-contained card: subtle percentile-tinted background,
- * label up top, display-font value as the hero, percentile number as the
- * footing. The tint is intentionally quiet so a wall of cards still reads
- * editorial (not casino), but you can scan the whole grid at a glance and
- * see the red/green map of where the player wins and loses.
+ * This was a bento wall of percentile-tinted tiles: every stat its own box,
+ * display-font value, a small circular gauge. It scanned as a heatmap, which
+ * was the point, but it also meant the two most important pages on the site
+ * presented the same KIND of information in two unrelated visual languages — a
+ * team's Net Rating as a bordered list row, a player's PPG as a tinted tile.
+ * Nothing about a player makes his numbers want a different shape.
  *
- * Three logical sections (Box / Shooting / Advanced) stack vertically with
- * coral kickers — no card chrome around the sections themselves; the
- * individual stat tiles do the visual lifting.
+ * So: bordered cards, a coral section label, one line per stat reading
+ * `label … value [percentile]`, exactly as TeamStatsPanel does it. The colour
+ * moves out of the tile background and into the chip, where it says the same
+ * thing in less ink, and a reader who has learned to scan one page can scan the
+ * other without relearning anything.
  */
 
-// `cols` controls the per-section grid track count at lg+ so each
-// section fits into exactly one row (Box Score 7 cards, Shooting 6,
-// Advanced 10). Below lg the grid wraps to a more compact column count
-// so individual tiles don't go sub-readable on narrow viewports.
-// Tailwind needs literal class strings here — don't interpolate.
 const PANELS: Array<{ title: string; keys: string[] }> = [
   {
     title: "Box Score",
@@ -64,9 +56,9 @@ export function PlayerStatsGrid({
   shooting?: Shooting | null;
 }) {
   return (
-    // Four panels at lg+, two at md. Shot Diet is the narrow one on the end —
-    // three zones, not a wall of tiles — so it doesn't need an equal share.
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 lg:gap-x-8 gap-y-8 px-2 sm:px-5 lg:px-8 pt-1 pb-5 sm:py-6 lg:py-7">
+    // Four cards across at xl so each section owns one column, dropping to two
+    // then one as the viewport narrows. Same gaps as the team panel.
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 lg:gap-6">
       {PANELS.map((p) => (
         <StatPanel key={p.title} title={p.title} keys={p.keys} season={season} />
       ))}
@@ -75,88 +67,46 @@ export function PlayerStatsGrid({
   );
 }
 
-/**
- * Shot Diet — the zone splits that used to sit under the shot chart, moved up
- * beside the other stat panels.
- *
- * Three layers per zone instead of the usual two, because a zone's FG% is
- * meaningless without knowing how much the player actually shoots there: a
- * 60% rim rate reads very differently at 15% of attempts than at 40%. So the
- * headline is FG%, the percentile gauge ranks that FG% within the position
- * cohort, and the share of attempts rides underneath as context.
- */
-function ShotDietPanel({ s }: { s: Shooting }) {
-  const zones = [
-    { key: "Rim", pct: s.rim_pct, rate: s.rim_rate, ptile: s.rim_ptile },
-    { key: "Mid", pct: s.mid_pct, rate: s.mid_rate, ptile: s.mid_ptile },
-    { key: "3PT", pct: s.tp_pct, rate: s.tp_rate, ptile: s.tp_ptile },
-  ].filter((z) => z.pct != null || z.rate != null);
-
-  if (zones.length === 0 && s.asst == null) return null;
+/** The card shell, in one place, so the treatment changes everywhere at once. */
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div>
-      <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-3 flex items-center gap-2">
-        <span className="h-px w-6 bg-coral" />
-        Shot Diet
-      </div>
-      {/* Same track count as every other panel so all four columns render
-          identical tile widths. Four entries fill it as a clean 2×2 at md+. */}
-      <div className="grid grid-cols-3 md:grid-cols-2 gap-2">
-        {zones.map((z) => (
-          <ZoneTile key={z.key} label={z.key} pct={z.pct} rate={z.rate} ptile={z.ptile} />
-        ))}
-        {s.asst != null && (
-          // No gauge and no tint on purpose. Assisted rate is a role
-          // descriptor, not a graded stat — a centre at 80% assisted is
-          // ordinary and a point guard at 80% is not, so ranking it inside one
-          // cohort would assert a verdict the number doesn't carry. The
-          // sub-line says which direction means what instead.
-          <ZoneTile label="Assisted" pct={s.asst} sub="lower = self-created" ptile={null} rate={null} />
-        )}
-      </div>
-    </div>
+    <section className="bg-paper-deep/25 -mx-6 md:mx-0 rounded-none md:rounded-xl border-y border-x-0 md:border-x border-hairline shadow-sm px-5 lg:px-6 py-4">
+      <h3 className="text-xs uppercase tracking-widest text-coral font-medium mb-3">{title}</h3>
+      <ul className="divide-y divide-hairline/40">{children}</ul>
+    </section>
   );
 }
 
-function ZoneTile({
-  label, pct, rate, ptile, sub,
+/**
+ * One stat line. `sub` rides under the label for the shot-diet rows, which
+ * carry a third layer: a zone's FG% means little without how often he shoots
+ * there, since 60% at the rim reads differently on 15% of attempts than on 40%.
+ */
+function Row({
+  label, definition, value, pct, sub,
 }: {
   label: string;
+  definition?: string;
+  value: string;
   pct: number | null;
-  rate: number | null;
-  ptile: number | null;
-  /** Replaces the "x% of shots" sub-line (used by the Assisted tile). */
   sub?: string;
 }) {
-  // Same percentile ramp as StatTile so the panel reads as part of the grid.
-  const p = ptile ?? 50;
-  const tileStyle: React.CSSProperties = {
-    "--tile-bg-light": ptile == null ? "transparent" : pctBg(p),
-    "--tile-bg-dark": ptile == null ? "transparent" : pctBg(p),
-    "--tile-color-light": pctColor(p),
-    "--tile-color-dark": pctColor(p),
-  } as React.CSSProperties;
-  const f1 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 1 }));
   return (
-    <div
-      className="stat-tile relative rounded-lg border border-hairline/40 px-2.5 py-2 overflow-hidden transition-shadow hover:shadow-sm min-h-[5.25rem] flex flex-col"
-      style={tileStyle}
-    >
-      <div className="text-[0.65rem] uppercase tracking-[0.14em] text-ink font-bold mb-1 truncate">{label}</div>
-      {/* Value + gauge on one row, exactly like StatTile, then the third layer
-          on its own full-width line underneath. Nesting it beside the value
-          left it competing with the gauge for a quarter-column and it clipped
-          to "33.5% of sho…". Normal case for the same width reason. */}
-      <div className="flex items-end justify-between gap-1 flex-1">
-        <span className="font-display text-xl lg:text-2xl text-ink tabular leading-none tracking-[-0.02em]">
-          {f1(pct)}%
+    <li className="flex items-center gap-3 py-2 px-1 -mx-1 rounded transition-colors hover:bg-[var(--accent-tint)]">
+      <span className="flex-1 min-w-0">
+        <span className="flex items-center gap-1 text-ink-soft text-sm">
+          <span className="truncate">{label}</span>
+          {definition && <StatInfo definition={definition} />}
         </span>
-        {ptile != null && <PercentileGauge pct={ptile} />}
-      </div>
-      <div className="text-[0.6rem] text-ink-muted tabular mt-1.5 truncate">
-        {sub ?? `${f1(rate)}% of shots`}
-      </div>
-    </div>
+        {sub && <span className="block text-[0.65rem] text-ink-muted tabular truncate">{sub}</span>}
+      </span>
+      <span className="flex-none font-medium text-ink tabular text-sm w-16 text-right">{value}</span>
+      {pct !== null ? (
+        <PercentileChip pct={pct} className="flex-none w-9 justify-center">{pct}</PercentileChip>
+      ) : (
+        <span className="flex-none w-9 text-center text-[0.65rem] text-ink-muted">—</span>
+      )}
+    </li>
   );
 }
 
@@ -172,88 +122,75 @@ function StatPanel({
       const cell = season.stats[k];
       const meta = STAT_META[k];
       if (!cell || !meta) return null;
-      return { key: k, label: meta.label, format: meta.format, value: cell.value, percentile: cell.percentile };
+      return {
+        key: k,
+        label: meta.label,
+        format: meta.format as StatFormat,
+        value: cell.value,
+        percentile: cell.percentile,
+      };
     })
     .filter((r): r is NonNullable<typeof r> => r !== null);
 
+  if (rows.length === 0) {
+    return (
+      <Card title={title}>
+        <li className="py-2 text-sm text-ink-muted">No data.</li>
+      </Card>
+    );
+  }
+
   return (
-    <div>
-      <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-3 flex items-center gap-2">
-        <span className="h-px w-6 bg-coral" />
-        {title}
-      </div>
-      {rows.length === 0 ? (
-        <p className="text-sm text-ink-muted">No data.</p>
-      ) : (
-        <div className="grid grid-cols-3 md:grid-cols-2 gap-2">
-          {rows.map((r) => (
-            <StatTile
-              key={r.key}
-              statKey={r.key}
-              label={r.label}
-              value={r.value}
-              format={r.format}
-              percentile={r.percentile}
-            />
-          ))}
-        </div>
+    <Card title={title}>
+      {rows.map((r) => (
+        <Row
+          key={r.key}
+          label={r.label}
+          definition={STAT_DEFS[r.key]}
+          value={fmtValue(r.value, r.format)}
+          pct={r.percentile}
+        />
+      ))}
+    </Card>
+  );
+}
+
+function ShotDietPanel({ s }: { s: Shooting }) {
+  const f1 = (v: number | null) => (v == null ? "—" : v.toLocaleString("en-US", { maximumFractionDigits: 1 }));
+  const zones = [
+    { key: "Rim", pct: s.rim_pct, rate: s.rim_rate, ptile: s.rim_ptile },
+    { key: "Mid", pct: s.mid_pct, rate: s.mid_rate, ptile: s.mid_ptile },
+    { key: "3PT", pct: s.tp_pct, rate: s.tp_rate, ptile: s.tp_ptile },
+  ].filter((z) => z.pct != null || z.rate != null);
+
+  if (zones.length === 0 && s.asst == null) return null;
+  return (
+    <Card title="Shot Diet">
+      {zones.map((z) => (
+        <Row
+          key={z.key}
+          label={z.key}
+          value={z.pct == null ? "—" : `${f1(z.pct)}%`}
+          pct={z.ptile ?? null}
+          sub={z.rate == null ? undefined : `${f1(z.rate)}% of shots`}
+        />
+      ))}
+      {s.asst != null && (
+        // No percentile on purpose. Assisted rate is a role descriptor, not a
+        // graded stat — a centre at 80% assisted is ordinary and a point guard
+        // at 80% is not, so ranking it inside one cohort would assert a verdict
+        // the number does not carry. The sub-line says which way is which.
+        <Row label="Assisted" value={`${f1(s.asst)}%`} pct={null} sub="lower = self-created" />
       )}
-    </div>
+    </Card>
   );
 }
 
 /**
- * Compact stat tile — label at the top, display-font value as the lede,
- * percentile rendered as a small circular gauge in the bottom-right.
- * Background tint matches the percentile color so a wall of tiles still
- * reads as a heatmap; the gauge adds a second visual data layer that's
- * richer than a flat chip but quieter than a full-width bar.
- */
-function StatTile({
-  statKey, label, value, format, percentile,
-}: {
-  statKey: string;
-  label: string;
-  value: number | null;
-  format: StatFormat;
-  percentile: number;
-}) {
-  // Inline both light + dark variants as CSS custom properties; CSS in
-  // globals.css picks the right one based on [data-theme="dark"]. This
-  // keeps the tile a server-renderable component (no client theme hook)
-  // and avoids any flash during hydration.
-  // Match the players-table percentile chips: pctBg background + pctColor
-  // text/gauge, theme-agnostic like the chip itself.
-  const tileStyle: React.CSSProperties = {
-    "--tile-bg-light": pctBg(percentile),
-    "--tile-bg-dark": pctBg(percentile),
-    "--tile-color-light": pctColor(percentile),
-    "--tile-color-dark": pctColor(percentile),
-  } as React.CSSProperties;
-  return (
-    <div
-      className="stat-tile relative rounded-lg border border-hairline/40 px-2.5 py-2 overflow-hidden transition-shadow hover:shadow-sm min-h-[5.25rem] flex flex-col"
-      style={tileStyle}
-    >
-      <div className="text-[0.65rem] uppercase tracking-[0.14em] text-ink font-bold inline-flex items-center gap-1 mb-1">
-        <span className="truncate">{label}</span>
-        {STAT_DEFS[statKey] && <StatInfo definition={STAT_DEFS[statKey]!} />}
-      </div>
-      <div className="flex items-end justify-between gap-1 flex-1">
-        <span className="font-display text-xl lg:text-2xl text-ink tabular leading-none tracking-[-0.02em]">
-          {fmtValue(value, format)}
-        </span>
-        <PercentileGauge pct={percentile} />
-      </div>
-    </div>
-  );
-}
-
-/**
- * Mini circular percentile gauge — track ring + colored arc that fills
- * clockwise based on the percentile. Both the arc and inner number pull
- * their color from the parent tile's `--tile-color-*` variables, so the
- * dial automatically retints when the theme flips without a JS hook.
+ * Mini circular percentile gauge — track ring + coloured arc filling clockwise.
+ *
+ * The chip replaced it on this page, but player-shot-impact.tsx still renders
+ * it, so it stays exported here rather than moving and breaking that import.
  */
 export function PercentileGauge({ pct }: { pct: number }) {
   const size = 30;
