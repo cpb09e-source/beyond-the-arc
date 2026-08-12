@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -269,15 +269,31 @@ export function TeamStatFilters({
    * already in view, where moving the page would be the surprising thing. The
    * site header is `relative`, not sticky, so there is no offset to clear.
    */
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (!open) return;
     if (typeof window === "undefined") return;
-    if (window.matchMedia("(min-width: 640px)").matches) return;
+    const phone = !window.matchMedia("(min-width: 640px)").matches;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    document.getElementById(TEAM_DRAWER_SLOT_ID)?.scrollIntoView({
-      block: "start",
-      behavior: reduce ? "auto" : "smooth",
-    });
+    const behavior: ScrollBehavior = reduce ? "auto" : "smooth";
+
+    if (open && phone) {
+      // Park the panel at the top of the viewport.
+      document.getElementById(TEAM_DRAWER_SLOT_ID)?.scrollIntoView({ block: "start", behavior });
+    } else if (!open && wasOpen.current && phone) {
+      // CLOSING. The panel was filling the screen and the toolbar was hidden;
+      // both reverse at once, so without this the reader is left wherever the
+      // panel used to be — which is partway down the table, with the filters
+      // they were just using scrolled off the top. Put the toolbar back under
+      // them instead.
+      //
+      // Guarded on wasOpen so this cannot fire on mount, where `open` is
+      // already false and scrolling the page would be inexplicable.
+      triggerRef.current?.scrollIntoView({ block: "start", behavior });
+    }
+    // A ref, not state: this only has to survive to the next run, and writing
+    // state here would re-render the drawer on every open and close.
+    wasOpen.current = open;
   }, [open]);
 
   // The drawer renders into a slot the page puts directly under the toolbar, so
@@ -596,7 +612,7 @@ export function TeamStatFilters({
   );
 
   return (
-    <div className="relative">
+    <div className="relative" ref={triggerRef}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
