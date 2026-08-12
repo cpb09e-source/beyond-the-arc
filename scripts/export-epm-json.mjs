@@ -62,11 +62,20 @@ const MIN_PG = Number(args.includes("--min-pg") ? args[args.indexOf("--min-pg") 
 // CALIBRATION pass overrides both so the prior-free fit lands in its own file.
 const IN_CSV = args.includes("--in") ? args[args.indexOf("--in") + 1] : "epm.csv";
 const OUT_JSON = args.includes("--out") ? args[args.indexOf("--out") + 1] : null;
+import { playerKey } from "./lib/cbbd-join.mjs";
+
 const DATA = path.resolve("public/data");
 
 const norm = (s) => (s ?? "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
   .replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim()
   .replace(/\s+(jr|sr|ii|iii|iv|v)$/, "");
+
+// Shared suffix/initial-tolerant person key. `norm` above only strips the
+// literal Roman numerals, so it misses Bart's lowercase-L homoglyph ("Ace
+// Glass lll") and it never reunites "J.J." with "JJ". Worse, the initial-last
+// fallback below reads that homoglyph as the SURNAME — "Ace Glass lll" becomes
+// "a lll" and can never meet CBBD's "a glass". Consulted as a last tier so no
+// match that already worked can move.
 const normTeam = (s) => (s ?? "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
   .replace(/\buniversity\b|\bthe\b/g, "").replace(/\bstate\b/g, "st")
   .replace(/[^a-z0-9]+/g, "");
@@ -112,6 +121,7 @@ function main() {
 
   // 2. Bart players for the season → name/team indices.
   const bart = JSON.parse(fs.readFileSync(path.join(DATA, "players-by-year", `${SEASON}.json`), "utf8"));
+  const byKey = new Map();
   const byNameTeam = new Map(), byName = new Map(), byIL = new Map();
   // Minutes per game by bart id — Bart's raw_row column 54, the same one the
   // explorer reads. Needed for the MIN_PG gate; epm.csv only carries possessions.
@@ -131,6 +141,11 @@ function main() {
     const t = Array.isArray(p.teams) ? p.teams[0] : p.teams;
     const nn = norm(p.name), nt = normTeam(t?.name);
     byNameTeam.set(`${nn}|${nt}`, p.bart_player_id);
+    // Suffix/initial-tolerant key. null marks an ambiguous key (two players on
+    // one team collapsing to the same stripped name) so it is never guessed.
+    const pk = `${playerKey(p.name)}|${nt}`;
+    if (!byKey.has(pk)) byKey.set(pk, p.bart_player_id);
+    else if (byKey.get(pk) !== p.bart_player_id) byKey.set(pk, null);
     if (!byName.has(nn)) byName.set(nn, []);
     byName.get(nn).push(p.bart_player_id);
     const toks = nn.split(" ");
@@ -159,6 +174,7 @@ function main() {
       const toks = nn.split(" ");
       if (toks.length >= 2) bid = byIL.get(`${toks[0][0]} ${toks[toks.length - 1]}|${nt}`);
     }
+    if (bid == null) bid = byKey.get(`${playerKey(r.name)}|${nt}`) ?? null;
     if (bid == null) { unmatched.push(`${r.name} (${r.team})`); continue; }
     // Below the minutes floor we publish nothing rather than a shrunk-to-zero
     // number the reader would take at face value.

@@ -31,7 +31,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
-import { norm } from "./lib/cbbd-join.mjs";
+import { norm, buildPlayerIndex, resolvePlayer } from "./lib/cbbd-join.mjs";
 
 const ROOT = process.cwd();
 const OUT = path.join(ROOT, "public/data/player-season-adv.json");
@@ -52,15 +52,8 @@ const r1 = (v) => (Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
 /** (season|bartTeamName|normName) → bart_player_id, from the Bart player files. */
 function bartIndex(season) {
   const fp = path.join(ROOT, "public/data/players-by-year", `${season}.json`);
-  const idx = new Map();
-  if (!fs.existsSync(fp)) return idx;
-  for (const p of JSON.parse(fs.readFileSync(fp, "utf8"))) {
-    if (p.bart_player_id == null || !p.name) continue;
-    const team = Array.isArray(p.teams) ? p.teams[0] : p.teams;
-    if (!team?.name) continue;
-    idx.set(`${norm(team.name)}|${norm(p.name)}`, p.bart_player_id);
-  }
-  return idx;
+  if (!fs.existsSync(fp)) return buildPlayerIndex([]);
+  return buildPlayerIndex(JSON.parse(fs.readFileSync(fp, "utf8")));
 }
 
 function readPlayerBox(season) {
@@ -81,7 +74,7 @@ for (const season of SEASONS) {
   const bart = bartIndex(season);
   const eligible = eligibleGames(season);
   const rows = readPlayerBox(season);
-  if (!rows.length || !bart.size) { console.log(`${season}: skipped (no box or no bart index)`); continue; }
+  if (!rows.length || !bart.exact.size) { console.log(`${season}: skipped (no box or no bart index)`); continue; }
 
   // bartId → running totals
   const agg = new Map();
@@ -96,7 +89,7 @@ for (const season of SEASONS) {
 
     for (const p of r.players) {
       if (!p?.name) continue;
-      const bartId = bart.get(`${tk}|${norm(p.name)}`);
+      const bartId = resolvePlayer(bart, tk, p.name);
       if (bartId == null) { unmatched++; continue; }
       matched++;
       let a = agg.get(bartId);

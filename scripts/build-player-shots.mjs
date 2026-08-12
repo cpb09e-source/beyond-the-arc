@@ -49,7 +49,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
-import { norm } from "./lib/cbbd-join.mjs";
+import { norm, buildPlayerIndex, resolvePlayer } from "./lib/cbbd-join.mjs";
 
 const ROOT = process.cwd();
 const OUT_DIR = path.join(ROOT, "public/data/shots");
@@ -65,15 +65,8 @@ const SHOT_TYPE = { JumpShot: 0, LayUpShot: 1, DunkShot: 2, TipShot: 3 };
 /** (normTeam|normName) → bart_player_id for one season. Same as player-games. */
 function bartIndex(season) {
   const fp = path.join(ROOT, "public/data/players-by-year", `${season}.json`);
-  const idx = new Map();
-  if (!fs.existsSync(fp)) return idx;
-  for (const p of JSON.parse(fs.readFileSync(fp, "utf8"))) {
-    if (p.bart_player_id == null || !p.name) continue;
-    const team = Array.isArray(p.teams) ? p.teams[0] : p.teams;
-    if (!team?.name) continue;
-    idx.set(`${norm(team.name)}|${norm(p.name)}`, p.bart_player_id);
-  }
-  return idx;
+  if (!fs.existsSync(fp)) return buildPlayerIndex([]);
+  return buildPlayerIndex(JSON.parse(fs.readFileSync(fp, "utf8")));
 }
 
 /** `${gameId}-${teamId}` → { won, is_home, is_neutral }. */
@@ -103,7 +96,7 @@ function run(season) {
   const bart = bartIndex(season);
   const logs = logIndex(season);
   const dir = path.join(ROOT, "data/cbbd", String(season));
-  if (!bart.size || !logs.size || !fs.existsSync(dir)) {
+  if (!bart.exact.size || !logs.size || !fs.existsSync(dir)) {
     console.log(`${season}: skipped (missing bart index, logs, or plays)`);
     return;
   }
@@ -129,7 +122,7 @@ function run(season) {
 
       const shooter = si.shooter?.name;
       if (!shooter) continue;
-      const bartId = bart.get(`${norm(team.name)}|${norm(shooter)}`);
+      const bartId = resolvePlayer(bart, norm(team.name), shooter);
       if (bartId == null) { unmatchedPlayer++; continue; }
 
       const l = si.location;

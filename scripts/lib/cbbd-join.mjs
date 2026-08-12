@@ -38,6 +38,96 @@ export const norm = (s) =>
 /** Our log's team name → the key CBBD rows normalize to. */
 export const teamKey = (logName) => norm(ALIASES[logName] ?? logName);
 
+/* ------------------------------------------------------------------ *
+ * PERSON names.
+ *
+ * `norm` above is the TEAM normalizer and must not be used on people:
+ * it rewrites "st." to "state" and drops a lone "u", so "Enel St. Bernard"
+ * becomes "enel state bernard". That happens to be harmless while both
+ * sides mangle identically, but "Kevo St.Hilaire" and "Kevo St. Hilaire"
+ * do not mangle identically, and nothing about `norm` was designed for
+ * the two ways a person's name actually varies between providers:
+ *
+ *   SUFFIXES.  Bart and CBBD disagree constantly about whether to carry
+ *   one — "Horace Simmons Jr." vs "Horace Simmons", and the reverse,
+ *   "Lateef Patrick" vs "Lateef Patrick Jr". Bart's feed also emits the
+ *   lowercase-L homoglyph for Roman numerals: Ace Glass (Washington St.,
+ *   2026) is "Ace Glass lll" there and "Ace Glass" at CBBD, which is the
+ *   bug that sent this whole module looking.
+ *
+ *   SPLIT INITIALS.  `norm` collapses punctuation to spaces, so
+ *   "J.J. Starling" becomes "j j starling" while "JJ Starling" becomes
+ *   "jj starling" and the two never meet.
+ *
+ * Measured on 2026: 207 of 5,031 CBBD players failed the exact join.
+ * Suffix stripping alone recovers 62 of them, suffix + glued initials 75.
+ * The residual 132 are mostly sub-40-minute walk-ons and genuine
+ * nickname spellings ("Spudd Webb"), which no normalizer should try to
+ * guess at.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Suffix tokens, matched only at the END of a name.
+ *
+ * End-anchored on purpose. A bare \b(v)\b would eat the middle initial in
+ * "Robert V Smith"; a suffix only means a suffix in final position. Applied
+ * repeatedly so "Jr II" unwinds fully.
+ */
+const SUFFIX_END = /\s+(jr|sr|ii|iii|iv|vi|v|lll|ll)$/;
+
+/**
+ * Join key for a person's name. Lowercase, de-accent, punctuation to
+ * spaces, drop trailing suffixes, then glue single-letter runs so split
+ * initials meet their unsplit twin.
+ */
+export const playerKey = (s) => {
+  let t = (s || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ").trim();
+  let prev;
+  do { prev = t; t = t.replace(SUFFIX_END, ""); } while (t !== prev);
+  // "p j haggerty" → "pj haggerty". Lookahead keeps a trailing lone letter
+  // (a middle initial at the end of a name) from being glued onto a surname.
+  t = t.replace(/\b([a-z])\s+([a-z])\b(?=\s)/g, "$1$2");
+  return t.replace(/\s+/g, " ").trim();
+};
+
+/**
+ * Build the two-tier player index every Bart↔CBBD join needs.
+ *
+ * `exact` is the historical key and always wins, so a fix here can never
+ * re-point a match that already worked. `fuzzy` is consulted only on a
+ * miss, and only when it names exactly one player — a stripped key that
+ * two teammates share (a father-son suffix pair, "Thomas Batties II" and
+ * "Thomas Batties III") is ambiguous and must stay unmatched rather than
+ * be guessed. Measured 0 such collisions in 2026, which is a reason to
+ * keep the guard cheap, not a reason to drop it.
+ *
+ * `rows` is Bart's players-by-year entries; `teamOf` pulls the team name.
+ */
+export function buildPlayerIndex(rows) {
+  const exact = new Map();
+  const fuzzy = new Map();
+  for (const p of rows) {
+    if (p.bart_player_id == null || !p.name) continue;
+    const team = Array.isArray(p.teams) ? p.teams[0] : p.teams;
+    if (!team?.name) continue;
+    const tk = norm(team.name);
+    exact.set(`${tk}|${norm(p.name)}`, p.bart_player_id);
+    const fk = `${tk}|${playerKey(p.name)}`;
+    const seen = fuzzy.get(fk);
+    if (seen === undefined) fuzzy.set(fk, p.bart_player_id);
+    else if (seen !== p.bart_player_id) fuzzy.set(fk, null); // ambiguous — never match
+  }
+  return { exact, fuzzy };
+}
+
+/** Resolve a provider (team, player) pair to a bart id, or null. */
+export function resolvePlayer(idx, normTeamName, playerName) {
+  const hit = idx.exact.get(`${normTeamName}|${norm(playerName)}`);
+  if (hit != null) return hit;
+  return idx.fuzzy.get(`${normTeamName}|${playerKey(playerName)}`) ?? null;
+}
+
 /**
  * Games are keyed on their EASTERN calendar date. A 10pm PT tip is already
  * "tomorrow" in UTC, so normalizing on UTC would put the two sources on

@@ -19,6 +19,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { config as loadEnv } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import { playerKey } from "./lib/cbbd-join.mjs";
 
 loadEnv({ path: ".env.local" });
 
@@ -266,6 +267,14 @@ async function main() {
     if (!p.bart_player_id) continue;
     bartByTeamPlayer.set(`${p.team_id}|${norm(p.name)}`, p);
     bartByTeamPlayer.set(`${p.team_id}|${normTight(p.name)}`, p);
+    // Third key: suffix-tolerant. norm/normTight both carry trailing suffixes
+    // through, so Bart's "Ace Glass lll" (a lowercase-L homoglyph for III)
+    // could never meet ESPN's "Ace Glass". Kept in its own namespace so a
+    // stripped name can never shadow a real one, and skipped when two players
+    // on the roster collapse to it.
+    const pk = `${p.team_id}|pk:${playerKey(p.name)}`;
+    if (!bartByTeamPlayer.has(pk)) bartByTeamPlayer.set(pk, p);
+    else if (bartByTeamPlayer.get(pk)?.bart_player_id !== p.bart_player_id) bartByTeamPlayer.set(pk, null);
   }
 
   // Existing photo map (so re-runs accumulate)
@@ -301,7 +310,8 @@ async function main() {
       const espnNorm = norm(a.displayName);
       const bart = bartByTeamPlayer.get(`${bartTeamId}|${espnNorm}`)
         ?? bartByTeamPlayer.get(`${bartTeamId}|${normTight(a.displayName)}`)
-        ?? (PLAYER_ALIASES[espnNorm] && bartByTeamPlayer.get(`${bartTeamId}|${PLAYER_ALIASES[espnNorm]}`));
+        ?? (PLAYER_ALIASES[espnNorm] && bartByTeamPlayer.get(`${bartTeamId}|${PLAYER_ALIASES[espnNorm]}`))
+        ?? bartByTeamPlayer.get(`${bartTeamId}|pk:${playerKey(a.displayName)}`);
       if (!bart) {
         nameMisses++;
         continue;

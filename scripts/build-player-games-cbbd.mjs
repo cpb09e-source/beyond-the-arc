@@ -32,7 +32,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
-import { norm, etDate } from "./lib/cbbd-join.mjs";
+import { norm, etDate, buildPlayerIndex, resolvePlayer } from "./lib/cbbd-join.mjs";
 
 const ROOT = process.cwd();
 const OUT_DIR = path.join(ROOT, "public/data/player-games");
@@ -47,18 +47,11 @@ const int = (v) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v) 
 const n1 = (v) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 10) / 10 : null);
 const pct = (v) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 10) / 1000 : null);
 
-/** (normTeam|normName) → bart_player_id for one season. */
+/** Exact + suffix/initial-tolerant player index for one season. */
 function bartIndex(season) {
   const fp = path.join(ROOT, "public/data/players-by-year", `${season}.json`);
-  const idx = new Map();
-  if (!fs.existsSync(fp)) return idx;
-  for (const p of JSON.parse(fs.readFileSync(fp, "utf8"))) {
-    if (p.bart_player_id == null || !p.name) continue;
-    const team = Array.isArray(p.teams) ? p.teams[0] : p.teams;
-    if (!team?.name) continue;
-    idx.set(`${norm(team.name)}|${norm(p.name)}`, p.bart_player_id);
-  }
-  return idx;
+  if (!fs.existsSync(fp)) return buildPlayerIndex([]);
+  return buildPlayerIndex(JSON.parse(fs.readFileSync(fp, "utf8")));
 }
 
 /** game_id → the log row, so each game carries the same venue/result the rest of the site shows. */
@@ -83,7 +76,7 @@ function run(season) {
   const bart = bartIndex(season);
   const logs = logIndex(season);
   const rows = readPlayerBox(season);
-  if (!rows.length || !bart.size) { console.log(`${season}: skipped (no box or no bart index)`); return; }
+  if (!rows.length || !bart.exact.size) { console.log(`${season}: skipped (no box or no bart index)`); return; }
 
   let kept = 0, unmatchedPlayer = 0, skippedGame = 0;
 
@@ -101,7 +94,7 @@ function run(season) {
 
     for (const p of r.players) {
       if (!p?.name) continue;
-      const bartId = bart.get(`${tk}|${norm(p.name)}`);
+      const bartId = resolvePlayer(bart, tk, p.name);
       if (bartId == null) { unmatchedPlayer++; continue; }
       let arr = byPlayer.get(bartId);
       if (!arr) { arr = []; byPlayer.set(bartId, arr); }
