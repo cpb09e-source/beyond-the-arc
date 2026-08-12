@@ -29,6 +29,7 @@ import {
 } from "@/lib/players";
 import { useDragPan } from "@/lib/use-drag-pan";
 import { useMeasuredWidth } from "@/lib/use-measured-width";
+import { abbrevName } from "@/lib/player-name";
 
 const LIMIT_OPTIONS = [50, 100, 250, 500];
 
@@ -955,18 +956,26 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                                 to a 404. The plain-text branch below is what
                                 generateStaticParams always intended for them. */}
                             {p.bart_player_id && p.has_page ? (
-                              <Link href={`/players/${p.bart_player_id}`} className="font-medium text-ink hover:text-coral transition-colors whitespace-nowrap block leading-tight">
-                                {p.name}
+                              <Link href={`/players/${p.bart_player_id}`} title={p.name} className="font-medium text-ink hover:text-coral transition-colors whitespace-nowrap block leading-tight">
+                                {abbrevName(p.name)}
                               </Link>
                             ) : (
-                              <span className="font-medium text-ink whitespace-nowrap block leading-tight">{p.name}</span>
+                              <span className="font-medium text-ink whitespace-nowrap block leading-tight" title={p.name}>{abbrevName(p.name)}</span>
                             )}
                             <CopyName name={p.name} />
                           </span>
                           <span className="flex items-center gap-1.5 text-[0.66rem] text-ink-muted whitespace-nowrap leading-tight">
-                            <Link href={`/teams/${teamSlug(p.team_name)}`} className="inline-flex items-center gap-1 hover:text-coral transition-colors">
-                              <TeamLogo name={p.team_name} size={12} />
-                              {p.team_name}
+                            {/* Logo only — the school name was the widest thing
+                                in this column and the mark identifies the team on
+                                its own. Name still reaches assistive tech and
+                                hover via title/aria-label. */}
+                            <Link
+                              href={`/teams/${teamSlug(p.team_name)}`}
+                              title={p.team_name}
+                              aria-label={p.team_name}
+                              className="inline-flex items-center hover:text-coral transition-colors"
+                            >
+                              <TeamLogo name={p.team_name} size={14} />
                             </Link>
                             {p.height && (
                               <span>· {p.height.replace(/^(\d+)-(\d+)$/, "$1'$2\"")}</span>
