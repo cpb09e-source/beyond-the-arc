@@ -296,14 +296,18 @@ export function GameBoxModal({
     return true;
   };
 
+  // Full-bleed on phones, matching coaches/boxscore-modal.tsx. A 16px inset
+  // plus rounded corners spends screen on a strip of dimmed backdrop the reader
+  // cannot use, and this is a dense table — it wants every pixel. The centred,
+  // rounded card comes back at sm.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center p-0 sm:items-center sm:p-4">
       <div className="bta-backdrop-in absolute inset-0 bg-ink/40" onClick={onClose} aria-hidden />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={`Box score: ${game.team_name} ${game.pts_scored ?? ""}, ${oppName} ${game.pts_against ?? ""}`}
-        className="bta-modal-in relative w-full max-w-5xl max-h-[88vh] overflow-y-auto rounded-xl border border-hairline bg-card shadow-xl"
+        className="bta-modal-in relative w-full max-w-5xl h-dvh overflow-y-auto rounded-none border-0 bg-card shadow-xl sm:h-auto sm:max-h-[88vh] sm:rounded-xl sm:border sm:border-hairline"
       >
         {/* Header band — the score is the hero. Date/venue/round sit small in
             the top-left gutter rather than centred beneath it, where they
@@ -318,7 +322,44 @@ export function GameBoxModal({
             ×
           </button>
 
-          <div className="flex items-center justify-center gap-4 sm:gap-6 flex-wrap pr-8">
+          {/* PHONE: a scoreboard, one team per line, score hard right, winner
+              in bold. Everything on one row could not be done without shrinking
+              the score to 15px — smaller than the body text — which made the
+              one thing this modal exists to show the least prominent thing in
+              it. A full row per team also means long names never truncate, and
+              it rhymes with the linescore table further down the same panel. */}
+          <div className="sm:hidden pr-8">
+            <div className="text-center mb-2">
+              <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-semibold">
+                {hasOT ? "Final / OT" : "Final"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2.5 py-1">
+              <TeamLogo name={game.team_name} size={28} />
+              <span className={`flex-1 min-w-0 truncate ${game.won ? "font-bold text-ink" : "text-ink-soft"}`}>
+                {game.team_name}
+              </span>
+              {num(game, "ap_rank") !== null && <RankBadge rank={num(game, "ap_rank")!} />}
+              {num(game, "seed") !== null && <SeedBadge seed={num(game, "seed")!} />}
+              <span className={`font-display text-2xl tabular leading-none ${game.won ? "text-ink" : "text-ink-muted"}`}>
+                {game.pts_scored ?? "—"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2.5 py-1 border-t border-hairline">
+              <TeamLogo name={oppName} size={28} />
+              <span className={`flex-1 min-w-0 truncate ${!game.won ? "font-bold text-ink" : "text-ink-soft"}`}>
+                {game.is_neutral ? "" : game.is_home ? "" : "@ "}{oppName}
+              </span>
+              {num(game, "opp_ap_rank") !== null && <RankBadge rank={num(game, "opp_ap_rank")!} />}
+              {num(game, "opp_seed") !== null && <SeedBadge seed={num(game, "opp_seed")!} />}
+              <span className={`font-display text-2xl tabular leading-none ${!game.won ? "text-ink" : "text-ink-muted"}`}>
+                {game.pts_against ?? "—"}
+              </span>
+            </div>
+          </div>
+
+          {/* sm+: unchanged — the broadcast-bug scoreline, which has the room. */}
+          <div className="hidden sm:flex items-center justify-center gap-4 sm:gap-6 flex-wrap pr-8">
             <div className="flex items-center gap-2.5 min-w-0">
               <span className={`truncate text-right ${game.won ? "font-semibold text-ink" : "text-ink-soft"}`}>
                 {game.team_name}
