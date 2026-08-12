@@ -572,7 +572,17 @@ export function ExplorerClient({
               <tr>
                 <th className="sticky top-0 left-0 z-40 w-12 bg-paper-deep h-6 p-0" />
                 <th style={teamLeft} className="sticky top-0 z-40 bg-paper-deep h-6 p-0" />
-                <th colSpan={multiYear ? 3 : 2} className="sticky top-0 z-30 bg-paper-deep h-6 p-0" />
+                {/* Spacers for Conf / Season / Rec. These MIRROR the column
+                    row below one cell at a time rather than collapsing into a
+                    single colSpan, because Conf is `hidden sm:table-cell`: a
+                    static colSpan of 2 kept claiming that column on phones
+                    where it no longer renders, so every band caption after it —
+                    "Your columns" included — sat one column right of the data
+                    it labels. colSpan is an attribute, so CSS cannot fix it;
+                    the structures have to match. */}
+                <th className="sticky top-0 z-30 bg-paper-deep h-6 p-0 hidden sm:table-cell" />
+                {multiYear && <th className="sticky top-0 z-30 bg-paper-deep h-6 p-0" />}
+                <th className="sticky top-0 z-30 bg-paper-deep h-6 p-0" />
                 {P > 0 && (
                   <th colSpan={P} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-coral text-center border-l border-hairline align-middle">
                     Your columns

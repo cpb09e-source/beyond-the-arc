@@ -386,7 +386,7 @@ export function TeamStatFilters({
   const panel = (
     <div className={cn("bta-drawer border-b border-hairline bg-paper-deep/20", open && "is-open")}>
       <div>
-        <div id={DRAWER_PANEL_ID} role="region" aria-label="Stat filters">
+        <div id={DRAWER_PANEL_ID} role="region" aria-label="Stat filters" className="flex flex-col">
           {/* Header */}
           <div className="flex items-start justify-between gap-3 px-4 lg:px-5 pt-4 pb-3">
             <div className="min-w-0 flex-1">
@@ -481,7 +481,9 @@ export function TeamStatFilters({
 
           {/* Body. Capped so a drawer opened on a long table cannot push the
               results entirely off the screen; it scrolls past that. */}
-          <div className="max-h-[60vh] overflow-y-auto px-4 lg:px-5 pb-5 space-y-6">
+          {/* order-last on phones puts the action bar (below) above this
+              scrolling region instead of under it — see the footer's note. */}
+          <div className="order-last sm:order-none max-h-[60vh] overflow-y-auto px-4 lg:px-5 pb-5 space-y-6">
             {RANGE_GROUPS.map((g) => {
               const gc = g.stats.reduce((n, s) => n + (isBoundActive(draft[s.key]) ? 1 : 0), 0);
               return (
@@ -523,9 +525,18 @@ export function TeamStatFilters({
             })}
           </div>
 
-          {/* Footer. Sticky to the bottom of the scrolling body so Submit stays
-              reachable without scrolling back down through seven groups. */}
-          <div className="sticky bottom-0 px-4 lg:px-5 py-3 border-t border-hairline bg-paper-deep/60 backdrop-blur-sm flex items-center gap-3">
+          {/* Actions. From sm up they sit at the foot of the panel and stick
+              there, so Submit stays reachable without scrolling back down
+              through seven groups.
+
+              On a phone that stickiness fought the page: the drawer opens
+              inline above a long table, so the bar could sit mid-screen with
+              stats above AND below it. Here it moves above the scrolling
+              region instead (the body takes order-last), which puts Submit and
+              the live match count in a fixed spot right under the title — no
+              stickiness needed, because the stats scroll inside their own box
+              and the bar never moves. */}
+          <div className="px-4 lg:px-5 py-3 border-b sm:border-b-0 sm:border-t border-hairline bg-paper-deep/60 backdrop-blur-sm flex items-center gap-3 sm:sticky sm:bottom-0">
             {matches !== null && (
               <div className="text-sm text-ink-soft leading-none">
                 <span className="text-lg font-bold text-ink tabular">{matches.toLocaleString()}</span>
