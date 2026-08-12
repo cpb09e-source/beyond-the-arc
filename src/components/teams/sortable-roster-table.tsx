@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { abbrevName } from "@/lib/player-name";
+import { PlayerName } from "@/components/player-name";
 import { NbaBadge } from "@/components/coaches/nba-badge";
 import { PercentileChip } from "@/components/percentile-chip";
 import { TeamLogo } from "@/components/team-logo";
@@ -168,10 +168,10 @@ export function SortableRosterTable({
                 <Td className="whitespace-nowrap">
                   {p.bart_player_id && rankedPlayerIds.has(p.bart_player_id) ? (
                     <Link href={`/players/${p.bart_player_id}/`} title={p.name} className="font-medium text-ink hover:text-coral transition-colors">
-                      {abbrevName(p.name)}
+                      <PlayerName name={p.name} />
                     </Link>
                   ) : (
-                    <span className="font-medium text-ink" title={p.name}>{abbrevName(p.name)}</span>
+                    <span className="font-medium text-ink" title={p.name}><PlayerName name={p.name} /></span>
                   )}
                   {draftee && <NbaBadge year={draftee.year} pick={draftee.pick} team={draftee.team} />}
                   {p.status && <StatusBadge status={p.status} from={p.from} />}

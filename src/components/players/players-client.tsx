@@ -29,7 +29,7 @@ import {
 } from "@/lib/players";
 import { useDragPan } from "@/lib/use-drag-pan";
 import { useMeasuredWidth } from "@/lib/use-measured-width";
-import { abbrevName } from "@/lib/player-name";
+import { PlayerName } from "@/components/player-name";
 
 const LIMIT_OPTIONS = [50, 100, 250, 500];
 
@@ -957,10 +957,10 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                                 generateStaticParams always intended for them. */}
                             {p.bart_player_id && p.has_page ? (
                               <Link href={`/players/${p.bart_player_id}`} title={p.name} className="font-medium text-ink hover:text-coral transition-colors whitespace-nowrap block leading-tight">
-                                {abbrevName(p.name)}
+                                <PlayerName name={p.name} />
                               </Link>
                             ) : (
-                              <span className="font-medium text-ink whitespace-nowrap block leading-tight" title={p.name}>{abbrevName(p.name)}</span>
+                              <span className="font-medium text-ink whitespace-nowrap block leading-tight" title={p.name}><PlayerName name={p.name} /></span>
                             )}
                             {/* Hover affordance, and a phone has no hover. It sat between the
                                 name and the row's right edge on every one of 50 rows,
