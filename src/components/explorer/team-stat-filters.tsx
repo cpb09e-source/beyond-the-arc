@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -254,24 +254,30 @@ export function TeamStatFilters({
   /**
    * Bring the drawer to the top of the screen when it opens on a phone.
    *
-   * The panel portals into a slot beneath the WHOLE toolbar — trigger row,
-   * chip strip, and the rankings/row-count row — so on a 414px screen it began
-   * roughly a third of the way down, and opening it looked like nothing had
-   * happened until you scrolled. Scrolling the trigger to the top puts the
-   * drawer directly under it and gives the panel the rest of the viewport,
-   * while keeping the Filters button visible so it can be toggled back off.
+   * The toolbar hides itself below sm while this is open (see explorer-client),
+   * so the panel takes over that space — but the page can be scrolled anywhere
+   * when Filters is tapped, and the drawer would open off-screen. This parks it
+   * at the top of the viewport.
    *
-   * Only below sm: on a wide screen the toolbar is one short row and the panel
-   * is already in view, where yanking the page would be the surprising thing.
-   * The site header is `relative`, not sticky, so there is no offset to clear.
+   * Scrolls the SLOT, not the trigger: the trigger is inside the row that just
+   * went `hidden`, and a display:none element has no box to scroll to. The slot
+   * sits outside that row, which is why the panel survives the row hiding at
+   * all. Reading it from the DOM here rather than using the render-time `slot`
+   * keeps this correct if the portal target is remounted.
+   *
+   * Only below sm: on a wide screen the toolbar stays put and the panel is
+   * already in view, where moving the page would be the surprising thing. The
+   * site header is `relative`, not sticky, so there is no offset to clear.
    */
-  const triggerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
     if (typeof window === "undefined") return;
     if (window.matchMedia("(min-width: 640px)").matches) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    triggerRef.current?.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+    document.getElementById(TEAM_DRAWER_SLOT_ID)?.scrollIntoView({
+      block: "start",
+      behavior: reduce ? "auto" : "smooth",
+    });
   }, [open]);
 
   // The drawer renders into a slot the page puts directly under the toolbar, so
@@ -590,7 +596,7 @@ export function TeamStatFilters({
   );
 
   return (
-    <div className="relative" ref={triggerRef}>
+    <div className="relative">
       <button
         type="button"
         onClick={() => setOpen(!open)}

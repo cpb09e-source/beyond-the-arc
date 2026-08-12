@@ -395,7 +395,16 @@ export function ExplorerClient({
             <h2>Teams</h2>, big count) that made this page read as a different
             product from the players table it sits beside in the nav. The page
             heading lives in the page shell now, not inside the data card. */}
-        <div className="px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 flex items-center justify-between gap-3 flex-wrap">
+        {/* Hidden on phones while the drawer is open, so the panel REPLACES
+            this row rather than being pushed below it. The trigger lives in
+            here and goes with it, which is fine: the drawer carries its own
+            close X, Cancel and Submit, and every one of those clears
+            filtersOpen and brings the row straight back. Untouched from sm up,
+            where both fit on screen together. */}
+        <div className={cn(
+          "px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 items-center justify-between gap-3 flex-wrap",
+          filtersOpen ? "hidden sm:flex" : "flex",
+        )}>
           {/* Wraps on narrow screens. Without it the row is one unbreakable
               line and "View Conference Rankings", which is whitespace-nowrap,
               ran ~95px past the right edge of a 390px viewport. */}
