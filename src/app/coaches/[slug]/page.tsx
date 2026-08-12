@@ -17,7 +17,6 @@ import {
 } from "@/lib/coaches";
 import { readAllTeams, readGameLogsForYear, type GameLog } from "@/lib/static-data";
 import { ScheduleTicker } from "@/components/teams/schedule-ticker";
-import { CoachPhoto } from "@/components/coaches/coach-photo";
 import { CoachStylePanel } from "@/components/coaches/coach-style-panel";
 import { CoachSeasonPick } from "@/components/coaches/coach-season-pick";
 import { CoachFindGameTrigger } from "@/components/coaches/coach-find-game-trigger";
@@ -211,10 +210,6 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
             <span className="text-ink-muted">{profile.is_active ? "Active" : "Inactive"}</span>
           </div>
           <div className="flex flex-wrap items-end gap-4 mb-5">
-            {/* Bottom-aligned with the name's baseline block rather than
-                centred on it — the display type is the anchor here, and a
-                centred photo would float above a 7xl cap height. */}
-            <CoachPhoto slug={profile.slug} name={profile.name} size={160} className="mb-1" />
             <h1 className="font-display text-5xl md:text-6xl lg:text-7xl leading-[0.95] tracking-tight text-ink">
               {profile.name}
             </h1>
