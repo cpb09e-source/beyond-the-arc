@@ -83,7 +83,7 @@ export function SortableTh({
   // Moving it inside makes the whole cell tappable, and the extra vertical
   // padding below `sm` takes a phone tap from 16px to 40px.
   const baseClasses =
-    "p-0 text-xs uppercase tracking-widest font-medium select-none cursor-pointer transition-colors";
+    "p-0 text-xs uppercase tracking-wide sm:tracking-widest font-medium select-none cursor-pointer transition-colors";
   const variantClasses =
     variant === "cbb"
       ? "text-right border-l border-coral/30 hover:bg-coral/5"
@@ -100,7 +100,7 @@ export function SortableTh({
       <Link
         href={href}
         scroll={false}
-        className="block w-full h-full px-3 py-3 sm:py-2"
+        className="block w-full h-full px-1.5 sm:px-3 py-3 sm:py-2"
         prefetch={false}
       >
         <span className={cn("inline-flex items-center gap-1", align === "left" ? "justify-start" : "justify-end")}>
@@ -111,7 +111,11 @@ export function SortableTh({
           {arrow ? (
             <span className="text-coral text-[0.65rem] leading-none">{arrow}</span>
           ) : idleArrows ? (
-            <span className="text-ink-muted/50 text-[0.6rem] leading-none tracking-tighter" aria-hidden>↑↓</span>
+            /* Hidden on phones. It is an affordance hint, not information —
+               the ACTIVE arrow above always shows, so the current sort is
+               never in doubt — and at ~14px on every one of a dozen headers
+               it was costing a full column of the little width a phone has. */
+            <span className="hidden sm:inline text-ink-muted/50 text-[0.6rem] leading-none tracking-tighter" aria-hidden>↑↓</span>
           ) : null}
         </span>
       </Link>

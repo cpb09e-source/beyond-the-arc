@@ -580,7 +580,7 @@ export function ExplorerClient({
                   header row. Same two-tier treatment as /players. */}
               <tr>
                 <th className="sticky top-0 left-0 z-40 w-12 bg-paper-deep h-6 p-0" />
-                <th style={teamLeft} className="sticky top-0 z-40 bg-paper-deep h-6 p-0" />
+                <th style={teamLeft} className="sticky top-0 z-40 bg-paper-deep h-6 p-0 border-r border-hairline" />
                 {/* Spacers for Conf / Season / Rec. These MIRROR the column
                     row below one cell at a time rather than collapsing into a
                     single colSpan, because Conf is `hidden sm:table-cell`: a
@@ -608,8 +608,8 @@ export function ExplorerClient({
                 </th>
               </tr>
               <tr>
-                <th ref={rankThRef} className="sticky top-6 left-0 z-40 w-12 bg-paper-deep border-b border-hairline px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
-                <th style={teamLeft} className="sticky top-6 z-40 bg-paper-deep border-b border-hairline px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Team</th>
+                <th ref={rankThRef} className="sticky top-6 left-0 z-40 w-12 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
+                <th style={teamLeft} className="sticky top-6 z-40 bg-paper-deep border-b border-r border-hairline px-2 sm:px-3 py-3 sm:py-2 text-xs uppercase tracking-wide sm:tracking-widest text-ink-muted font-medium text-left align-middle">Team</th>
                 <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle hidden sm:table-cell">Conf</th>
                 {multiYear && <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Season</th>}
                 <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-1.5 sm:px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">
@@ -654,10 +654,16 @@ export function ExplorerClient({
                   const zebra = i % 2 === 0 ? "bg-paper" : "bg-card";
                   return (
                   <tr key={`${r.team_id}-${r.team_year}`} className={cn("group", zebra)}>
-                    <td className={cn("sticky left-0 z-20 w-12 px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
+                    <td className={cn("sticky left-0 z-20 w-12 px-1 sm:px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
                       {(spec.limit === -1 ? 0 : (pageSafe - 1) * spec.limit) + i + 1}
                     </td>
-                    <td style={teamLeft} className={cn("sticky z-20 px-3 py-1 transition-colors", zebra, ROW_HOVER)}>
+                    {/* Trailing edge of the frozen group. #/Team pin and everything
+                        right of them scrolls underneath, so without a seam the
+                        record slid out from behind the team cell and read as
+                        touching the F4 badge. The line says "this column is
+                        pinned, that content is passing behind it" — same
+                        hairline the stat bands already use. */}
+                    <td style={teamLeft} className={cn("sticky z-20 px-2 sm:px-3 py-1 border-r border-hairline transition-colors", zebra, ROW_HOVER)}>
                       <Link
                         href={`/teams/${teamSlug(r.team_name)}/${r.team_year}`}
                         className="inline-flex items-center gap-2.5 group"
@@ -685,7 +691,7 @@ export function ExplorerClient({
                         <td
                           key={`${c.sortKey}-${ci}`}
                           className={cn(
-                            "px-2 py-1 text-right tabular whitespace-nowrap transition-colors",
+                            "px-1 sm:px-2 py-1 text-right tabular whitespace-nowrap transition-colors",
                             isFF && FF_BAND_TINT,
                             groupStarts.has(ci) && "border-l border-hairline",
                             ROW_HOVER,
