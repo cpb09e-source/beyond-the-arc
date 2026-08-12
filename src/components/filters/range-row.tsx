@@ -46,6 +46,7 @@ export const RangeRow = memo(function RangeRow({
   setBound,
   pinned,
   onTogglePin,
+  dense = false,
 }: {
   st: RangeStat;
   lo: number | null;
@@ -59,6 +60,20 @@ export const RangeRow = memo(function RangeRow({
    */
   pinned?: boolean;
   onTogglePin?: (key: string) => void;
+  /**
+   * Narrow-cell layout for a multi-column grid on phones.
+   *
+   * The default row puts the label and both number boxes on one line, which
+   * needs ~180px for the boxes alone — more than a half-width cell on a 414px
+   * screen has to give. Dense stacks the label above the boxes and lets them
+   * share the width below `sm`, and is a no-op from `sm` up, where the cells
+   * are wide enough for the normal row again.
+   *
+   * Opt-in rather than automatic: /players and /coaches render this same row in
+   * a single column on phones, where stacking would only make each row taller
+   * for nothing.
+   */
+  dense?: boolean;
 }) {
   const onChange = (lo: number | null, hi: number | null) => setBound(st.key, lo, hi);
   const clamp = (n: number) => Math.min(Math.max(n, st.min), st.max);
@@ -78,11 +93,20 @@ export const RangeRow = memo(function RangeRow({
     if (lo !== null && v < lo) v = lo;
     onChange(lo, v);
   };
-  const boxCls =
-    "h-8 w-16 px-1.5 rounded-md border border-ink/15 bg-card text-ink text-xs text-center tabular shadow-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40";
+  const boxCls = cn(
+    "h-8 px-1.5 rounded-md border border-ink/15 bg-card text-ink text-xs text-center tabular shadow-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40",
+    // min-w-0 lets the boxes actually shrink inside the flex row; without it
+    // they hold their intrinsic width and overflow the cell instead.
+    dense ? "w-full min-w-0 sm:w-16" : "w-16",
+  );
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 mb-2">
+      <div className={cn(
+        "mb-2",
+        dense
+          ? "flex flex-col items-stretch gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+          : "flex items-center justify-between gap-3",
+      )}>
         {onTogglePin ? (
           <button
             type="button"
@@ -118,7 +142,7 @@ export const RangeRow = memo(function RangeRow({
             {st.pct && <span className="text-ink-muted"> %</span>}
           </span>
         )}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className={cn("flex items-center gap-1.5", dense ? "w-full min-w-0 sm:w-auto sm:shrink-0" : "shrink-0")}>
           <input
             type="number" inputMode="decimal" min={st.min} max={st.max} step={st.step}
             value={lo ?? ""} placeholder="min" aria-label={`${st.label} minimum`}

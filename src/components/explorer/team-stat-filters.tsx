@@ -498,7 +498,13 @@ export function TeamStatFilters({
                       <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-coral/15 text-coral text-[0.58rem] font-bold tabular">{gc}</span>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                  {/* Two up on phones. Seven groups of one-per-row meant the
+                      panel was mostly scroll: aNET to the Wins group was five
+                      screens. The row goes dense below sm so a half-width cell
+                      can hold it — see RangeRow's `dense`. Column gap tightens
+                      to match; gap-x-6 between two 180px cells is 13% of the
+                      viewport spent on nothing. */}
+                  <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-3 sm:gap-x-6 gap-y-4">
                     {g.stats.map((st) => (
                       <RangeRow
                         key={st.key}
@@ -508,6 +514,7 @@ export function TeamStatFilters({
                         setBound={setBound}
                         pinned={pins.includes(st.key)}
                         onTogglePin={togglePin}
+                        dense
                       />
                     ))}
                   </div>
