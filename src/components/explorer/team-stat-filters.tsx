@@ -612,7 +612,7 @@ export function TeamStatFilters({
   );
 
   return (
-    <div className="relative" ref={triggerRef}>
+    <div className="relative scroll-mt-4" ref={triggerRef}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
