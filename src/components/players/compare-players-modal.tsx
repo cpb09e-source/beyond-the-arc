@@ -567,8 +567,7 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
                         <div className="min-w-0">
                           <Link
                             href={`/players/${s.opt.id}/`}
-                            className="font-display text-base text-ink leading-tight hover:text-coral transition-colors block truncate"
-                          >
+                            className="font-display text-base text-ink leading-tight hover:text-coral transition-colors block truncate" prefetch={false}>
                             {s.opt.n}
                           </Link>
                           <div className="text-[0.65rem] text-ink-muted leading-tight truncate">

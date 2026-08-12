@@ -710,8 +710,7 @@ export function ExplorerClient({
                       <Link
                         href={`/teams/${teamSlug(r.team_name)}/${r.team_year}`}
                         className="inline-flex items-center gap-2.5 group"
-                        aria-label={r.team_name}
-                      >
+                        aria-label={r.team_name} prefetch={false}>
 <TeamLogo name={r.team_name} size={24} />
                         <span className="hidden sm:inline font-medium text-ink group-hover:text-coral transition-colors">
                           {r.team_name}

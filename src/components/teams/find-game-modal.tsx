@@ -382,8 +382,7 @@ function ResultsView({
               <TeamLogo name={g.opp_team_market ?? "TBD"} size={20} />
               <Link
                 href={`/teams/${teamSlug(g.opp_team_market ?? "")}/${g.year}/`}
-                className="text-sm text-ink hover:text-coral transition-colors truncate"
-              >
+                className="text-sm text-ink hover:text-coral transition-colors truncate" prefetch={false}>
                 {g.opp_team_market ?? "TBD"}
               </Link>
             </span>

@@ -131,7 +131,7 @@ export function GameClient() {
         <p className="text-ink-soft max-w-prose">
           The link needs both a game id and its date. Out of season there may be nothing to show at all.
         </p>
-        <Link href="/scoreboard" className="inline-block mt-4 text-coral hover:underline">Back to the scoreboard</Link>
+        <Link href="/scoreboard" className="inline-block mt-4 text-coral hover:underline" prefetch={false}>Back to the scoreboard</Link>
       </Shell>
     );
   }

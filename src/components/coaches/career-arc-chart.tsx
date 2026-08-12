@@ -113,8 +113,7 @@ export function CareerArcChart({ seasons }: { seasons: CoachSeason[] }) {
                   <Link
                     href={`/teams/${teamSlug(s.team)}/`}
                     className="flex flex-col items-center gap-0.5 absolute left-0 right-0 -top-0 hover:text-coral transition-colors"
-                    title={`Started at ${s.team}`}
-                  >
+                    title={`Started at ${s.team}`} prefetch={false}>
                     <TeamLogo name={s.team} size={22} />
                     <span className="text-[0.55rem] uppercase tracking-widest text-ink-muted font-medium truncate max-w-[80px] text-center leading-tight">
                       {s.team.length > 10 ? s.team.slice(0, 10) + "…" : s.team}

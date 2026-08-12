@@ -138,8 +138,7 @@ export function SortableSeasonsTable({
                   <Td>
                     <Link
                       href={`/teams/${slug}/${s.year}/`}
-                      className="group inline-flex items-center gap-2.5 transition-colors"
-                    >
+                      className="group inline-flex items-center gap-2.5 transition-colors" prefetch={false}>
                       <TeamLogo name={s.name} size={20} />
                       <span className="font-medium text-ink group-hover:text-coral transition-colors whitespace-nowrap shrink-0">{seasonLabel(s.year)}</span>
                       {/* NCAA tournament seed (tier-colored). Pairs naturally
@@ -165,7 +164,7 @@ export function SortableSeasonsTable({
                   <Td className="whitespace-nowrap">
                     {cr?.coachName ? (
                       cr.coachSlug ? (
-                        <Link href={`/coaches/${cr.coachSlug}/`} className="text-ink hover:text-coral transition-colors">
+                        <Link href={`/coaches/${cr.coachSlug}/`} className="text-ink hover:text-coral transition-colors" prefetch={false}>
                           {cr.coachName}
                         </Link>
                       ) : (

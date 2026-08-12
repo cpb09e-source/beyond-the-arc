@@ -557,8 +557,7 @@ export function CompareTeamsModal({
                         <div className="min-w-0">
                           <Link
                             href={`/teams/${teamSlug(s.opt.team)}/${s.opt.year}/`}
-                            className="font-display text-base text-ink leading-tight hover:text-coral transition-colors block truncate"
-                          >
+                            className="font-display text-base text-ink leading-tight hover:text-coral transition-colors block truncate" prefetch={false}>
                             {s.opt.team}
                           </Link>
                           <div className="text-[0.65rem] text-ink-muted leading-tight truncate">

@@ -63,8 +63,7 @@ function Cell({
       <Link
         href={`/players/${player.bart_player_id}/`}
         className="shrink-0 rounded transition-colors hover:bg-[var(--accent-tint)] p-1 -m-1"
-        title={player.name}
-      >
+        title={player.name} prefetch={false}>
         {inner}
       </Link>
     );

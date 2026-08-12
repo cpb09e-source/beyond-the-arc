@@ -84,8 +84,7 @@ export function ScoreTicker() {
             numbers are, even mid-scroll. */}
         <Link
           href="/scoreboard"
-          className="shrink-0 z-10 flex items-center gap-1.5 pl-4 lg:pl-6 pr-3 bg-paper-deep/40 backdrop-blur-sm border-r border-hairline text-[0.6rem] uppercase tracking-[0.14em] font-bold text-ink-muted hover:text-coral transition-colors"
-        >
+          className="shrink-0 z-10 flex items-center gap-1.5 pl-4 lg:pl-6 pr-3 bg-paper-deep/40 backdrop-blur-sm border-r border-hairline text-[0.6rem] uppercase tracking-[0.14em] font-bold text-ink-muted hover:text-coral transition-colors" prefetch={false}>
           {liveCount > 0 ? (
             <>
               <span className="relative flex h-1.5 w-1.5" aria-hidden>
@@ -120,8 +119,7 @@ export function ScoreTicker() {
             {slate.games.map((g) => <TickerGame key={g.id} g={g} />)}
             <Link
               href="/scoreboard"
-              className="shrink-0 flex items-center px-4 text-[0.62rem] uppercase tracking-[0.12em] font-semibold text-coral hover:underline whitespace-nowrap"
-            >
+              className="shrink-0 flex items-center px-4 text-[0.62rem] uppercase tracking-[0.12em] font-semibold text-coral hover:underline whitespace-nowrap" prefetch={false}>
               Full scoreboard →
             </Link>
           </div>
@@ -141,7 +139,7 @@ function TickerGame({ g }: { g: ScoreGame }) {
     <Link
       href={gameHref(g)}
       draggable={false}
-      className="shrink-0 flex items-center gap-2.5 px-3.5 py-2.5 border-r border-hairline/60 last:border-r-0 hover:bg-paper-deep/60 transition-colors">
+      className="shrink-0 flex items-center gap-2.5 px-3.5 py-2.5 border-r border-hairline/60 last:border-r-0 hover:bg-paper-deep/60 transition-colors" prefetch={false}>
       <div className="flex flex-col gap-1 leading-none">
         <TickerSide side={g.away} won={final && g.away.winner === true} />
         <TickerSide side={g.home} won={final && g.home.winner === true} />

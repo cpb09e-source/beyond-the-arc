@@ -566,20 +566,20 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                       {(safePage - 1) * pageSize + i + 1}
                     </Td>
                     <Td>
-                      <Link href={`/coaches/${coachSlug(r.name)}/`} className="inline-flex items-center gap-2 text-ink hover:text-coral transition-colors">
+                      <Link href={`/coaches/${coachSlug(r.name)}/`} className="inline-flex items-center gap-2 text-ink hover:text-coral transition-colors" prefetch={false}>
                         <span className="whitespace-nowrap">{r.name}</span>
                       </Link>
                     </Td>
                     <Td className="text-center">
                       {r.current_team ? (
-                        <Link href={`/teams/${teamSlug(r.current_team)}/`} className="inline-flex items-center" title={r.current_team}>
+                        <Link href={`/teams/${teamSlug(r.current_team)}/`} className="inline-flex items-center" title={r.current_team} prefetch={false}>
                           <TeamLogo name={r.current_team} size={28} />
                         </Link>
                       ) : <span className="text-ink-muted">—</span>}
                     </Td>
                     <Td className="hidden sm:table-cell">
                       {r.current_team ? (
-                        <Link href={`/teams/${teamSlug(r.current_team)}/`} className="font-medium text-ink hover:text-coral transition-colors">
+                        <Link href={`/teams/${teamSlug(r.current_team)}/`} className="font-medium text-ink hover:text-coral transition-colors" prefetch={false}>
                           <TeamName name={r.current_team} />
                         </Link>
                       ) : <span className="text-ink-muted">—</span>}

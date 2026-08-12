@@ -57,7 +57,7 @@ export function SchoolTimeline({ schools }: { schools: CoachSchoolStint[] }) {
           const pct = s.wins + s.losses > 0 ? s.wins / (s.wins + s.losses) : null;
           return (
             <li key={s.team}>
-              <Link href={`/teams/${teamSlug(s.team)}/`} className="flex items-center gap-3 group">
+              <Link href={`/teams/${teamSlug(s.team)}/`} className="flex items-center gap-3 group" prefetch={false}>
                 <TeamLogo name={s.team} size={32} />
                 <span className="flex-1 min-w-0">
                   <span className="block font-medium text-ink group-hover:text-coral transition-colors truncate">{s.team}</span>

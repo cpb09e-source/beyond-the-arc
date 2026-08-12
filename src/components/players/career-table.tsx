@@ -209,7 +209,7 @@ export function CareerTable({
                     </button>
                   </Td>
                   <Td>
-                    <Link href={`/teams/${teamSlug(s.team_name)}`} className="inline-flex items-center gap-2 hover:text-coral transition-colors">
+                    <Link href={`/teams/${teamSlug(s.team_name)}`} className="inline-flex items-center gap-2 hover:text-coral transition-colors" prefetch={false}>
                       <TeamLogo name={s.team_name} size={20} />
                       <span className="text-ink-soft hidden sm:inline">{s.team_name}</span>
                     </Link>

@@ -87,8 +87,7 @@ export default async function PreviewIndexPage() {
                   <li key={t.slug}>
                     <Link
                       href={`/teams/${t.slug}/${PREVIEW_SEASON_YEAR}/`}
-                      className="group flex items-center gap-2 sm:gap-2.5 py-1.5 px-1.5 sm:px-2 -mx-1.5 sm:-mx-2 rounded-md hover:bg-[var(--accent-tint)] transition-colors"
-                    >
+                      className="group flex items-center gap-2 sm:gap-2.5 py-1.5 px-1.5 sm:px-2 -mx-1.5 sm:-mx-2 rounded-md hover:bg-[var(--accent-tint)] transition-colors" prefetch={false}>
                       {/* 20 rather than 22 at every width: TeamLogo writes its
                           size as an inline style, so a responsive width class
                           here would never win. */}

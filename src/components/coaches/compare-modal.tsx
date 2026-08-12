@@ -356,7 +356,7 @@ export function CompareModal({
                       <div className="flex items-center gap-2.5 min-w-0">
                         {c.current_team && <TeamLogo name={c.current_team} size={28} />}
                         <div className="min-w-0">
-                          <Link href={`/coaches/${c.slug}/`} className="font-display text-base text-ink leading-tight hover:text-coral transition-colors block truncate">
+                          <Link href={`/coaches/${c.slug}/`} className="font-display text-base text-ink leading-tight hover:text-coral transition-colors block truncate" prefetch={false}>
                             {c.name}
                           </Link>
                           <div className="text-[0.65rem] text-ink-muted leading-tight truncate">

@@ -198,7 +198,7 @@ export function ScoreboardClient() {
           <p className="text-ink-soft">Nothing scheduled.</p>
           <p className="mt-1.5 text-xs text-ink-muted">
             College basketball runs November through April. Step back a day, or check the{" "}
-            <Link href="/" className="text-coral hover:underline">team explorer</Link> in the meantime.
+            <Link href="/" className="text-coral hover:underline" prefetch={false}>team explorer</Link> in the meantime.
           </p>
         </div>
       )}
@@ -334,8 +334,7 @@ function GameCard({ g }: { g: ScoreGame }) {
       <Link
         href={gameHref(g)}
         aria-label={`${g.away.team} at ${g.home.team} — full box score`}
-        className="absolute inset-0 z-1 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/50"
-      />
+        className="absolute inset-0 z-1 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/50" prefetch={false} />
       <div className="flex items-center justify-between gap-2 px-4 pt-3">
         <span className="text-[0.58rem] uppercase tracking-[0.12em] font-semibold text-ink-muted truncate">
           {g.neutralSite ? "Neutral site" : g.venue ?? ""}
@@ -403,8 +402,7 @@ function TeamRow({ t, final, halves, at }: { t: ScoreGame["home"]; final: boolea
       ) : null}
       <Link
         href={`/teams/${teamSlug(t.team)}`}
-        className={cn("relative z-2 min-w-0 truncate text-sm hover:text-coral transition-colors", won ? "text-ink font-semibold" : "text-ink-soft")}
-      >
+        className={cn("relative z-2 min-w-0 truncate text-sm hover:text-coral transition-colors", won ? "text-ink font-semibold" : "text-ink-soft")} prefetch={false}>
         {t.team}
       </Link>
       {rec && <span className="shrink-0 text-[0.6rem] text-ink-muted tabular">({rec})</span>}

@@ -140,7 +140,7 @@ export function TournamentSuccess({
                 {/* Seed — minimal, tier-colored. */}
                 <SeedChip seed={s.seed!} />
                 {/* Team + record-in-parens */}
-                <Link href={`/teams/${teamSlug(s.team)}/`} className="inline-flex items-baseline gap-2 group min-w-0 flex-1">
+                <Link href={`/teams/${teamSlug(s.team)}/`} className="inline-flex items-baseline gap-2 group min-w-0 flex-1" prefetch={false}>
                   <TeamLogo name={s.team} size={28} />
                   <span className="font-medium text-ink group-hover:text-coral transition-colors truncate self-center">
                     {s.team}

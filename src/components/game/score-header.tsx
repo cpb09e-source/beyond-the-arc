@@ -156,8 +156,7 @@ function TeamBlock({
               // one out in a header that is otherwise all one voice.
               "text-lg sm:text-2xl lg:text-3xl font-semibold tracking-tight leading-none truncate hover:text-coral transition-colors",
               lost ? "text-ink-muted" : "text-ink",
-            )}
-          >
+            )} prefetch={false}>
             {side.team}
           </Link>
         </div>

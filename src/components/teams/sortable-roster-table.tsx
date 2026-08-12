@@ -167,7 +167,7 @@ export function SortableRosterTable({
                     column is the cheaper of the two. */}
                 <Td className="whitespace-nowrap">
                   {p.bart_player_id && rankedPlayerIds.has(p.bart_player_id) ? (
-                    <Link href={`/players/${p.bart_player_id}/`} title={p.name} className="font-medium text-ink hover:text-coral transition-colors">
+                    <Link href={`/players/${p.bart_player_id}/`} title={p.name} className="font-medium text-ink hover:text-coral transition-colors" prefetch={false}>
                       <PlayerName name={p.name} />
                     </Link>
                   ) : (

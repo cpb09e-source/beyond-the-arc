@@ -956,7 +956,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                                 to a 404. The plain-text branch below is what
                                 generateStaticParams always intended for them. */}
                             {p.bart_player_id && p.has_page ? (
-                              <Link href={`/players/${p.bart_player_id}`} title={p.name} className="font-medium text-ink hover:text-coral transition-colors whitespace-nowrap block leading-tight">
+                              <Link href={`/players/${p.bart_player_id}`} title={p.name} className="font-medium text-ink hover:text-coral transition-colors whitespace-nowrap block leading-tight" prefetch={false}>
                                 <PlayerName name={p.name} />
                               </Link>
                             ) : (
@@ -977,8 +977,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                               href={`/teams/${teamSlug(p.team_name)}`}
                               title={p.team_name}
                               aria-label={p.team_name}
-                              className="inline-flex items-center hover:text-coral transition-colors"
-                            >
+                              className="inline-flex items-center hover:text-coral transition-colors" prefetch={false}>
                               <TeamLogo name={p.team_name} size={14} />
                             </Link>
                             {p.height && (

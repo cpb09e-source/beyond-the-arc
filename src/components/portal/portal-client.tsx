@@ -267,7 +267,7 @@ export function PortalClient({
                     </Td>
                     <Td className="pr-1">
                       {e.bart_player_id ? (
-                        <Link href={`/players/${e.bart_player_id}`} className="font-medium text-ink hover:text-coral transition-colors">{e.name}</Link>
+                        <Link href={`/players/${e.bart_player_id}`} className="font-medium text-ink hover:text-coral transition-colors" prefetch={false}>{e.name}</Link>
                       ) : (
                         <span className="font-medium text-ink">{e.name}</span>
                       )}

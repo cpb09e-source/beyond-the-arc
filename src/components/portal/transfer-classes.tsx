@@ -134,7 +134,7 @@ export function TransferClassModal({ row, onClose }: { row: TransferClassRow; on
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-hairline">
-          <Link href={`/teams/${slugFor(row.school)}/`} className="flex items-center gap-3 group" onClick={onClose}>
+          <Link href={`/teams/${slugFor(row.school)}/`} className="flex items-center gap-3 group" onClick={onClose} prefetch={false}>
             <TeamLogo name={row.school} size={36} />
             <div>
               <div className="font-display text-2xl text-ink leading-tight group-hover:text-coral transition-colors">{row.school}</div>
@@ -196,7 +196,7 @@ function PlayerList({
               <PlayerPhoto bartPlayerId={p.bart_player_id} name={p.name} size={28} />
               <div className="flex-1 min-w-0">
                 {p.bart_player_id ? (
-                  <Link href={`/players/${p.bart_player_id}/`} className="font-medium text-ink hover:text-coral transition-colors block truncate">
+                  <Link href={`/players/${p.bart_player_id}/`} className="font-medium text-ink hover:text-coral transition-colors block truncate" prefetch={false}>
                     {p.name}
                   </Link>
                 ) : (

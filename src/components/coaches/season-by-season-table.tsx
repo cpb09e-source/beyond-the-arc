@@ -143,13 +143,12 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
               <Link
                 href={`/teams/${teamSlug(s.team)}/${s.year}/`}
                 className="hover:text-coral transition-colors"
-                title={`${s.team} ${seasonLabel(s.year)}`}
-              >
+                title={`${s.team} ${seasonLabel(s.year)}`} prefetch={false}>
                 {seasonLabel(s.year)}
               </Link>
             </td>
             <td className="px-1.5 sm:px-3 py-2.5">
-              <Link href={`/teams/${teamSlug(s.team)}/${s.year}/`} className="inline-flex items-center gap-2 group">
+              <Link href={`/teams/${teamSlug(s.team)}/${s.year}/`} className="inline-flex items-center gap-2 group" prefetch={false}>
                 <TeamLogo name={s.team} size={22} />
                 <span className="text-ink group-hover:text-coral transition-colors truncate hidden sm:inline"><TeamName name={s.team} /></span>
                 {/* Tournament seed chip — small, color-coded by tier. */}

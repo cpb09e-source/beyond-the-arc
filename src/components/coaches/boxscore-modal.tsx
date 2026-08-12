@@ -474,7 +474,7 @@ function PlayerTable({
                   const bartId = bartIndex[`${year}|${normTeam}|${normName(p.name)}`];
                   const clickable = bartId != null && profileableIds.has(bartId);
                   return clickable ? (
-                    <Link href={`/players/${bartId}/`} className="hover:text-coral transition-colors">
+                    <Link href={`/players/${bartId}/`} className="hover:text-coral transition-colors" prefetch={false}>
                       {p.name}
                     </Link>
                   ) : (
