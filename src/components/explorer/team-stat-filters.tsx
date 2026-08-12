@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { SlidersHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -250,6 +250,29 @@ export function TeamStatFilters({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open, setOpen]);
+
+  /**
+   * Bring the drawer to the top of the screen when it opens on a phone.
+   *
+   * The panel portals into a slot beneath the WHOLE toolbar — trigger row,
+   * chip strip, and the rankings/row-count row — so on a 414px screen it began
+   * roughly a third of the way down, and opening it looked like nothing had
+   * happened until you scrolled. Scrolling the trigger to the top puts the
+   * drawer directly under it and gives the panel the rest of the viewport,
+   * while keeping the Filters button visible so it can be toggled back off.
+   *
+   * Only below sm: on a wide screen the toolbar is one short row and the panel
+   * is already in view, where yanking the page would be the surprising thing.
+   * The site header is `relative`, not sticky, so there is no offset to clear.
+   */
+  const triggerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    if (typeof window === "undefined") return;
+    if (window.matchMedia("(min-width: 640px)").matches) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    triggerRef.current?.scrollIntoView({ block: "start", behavior: reduce ? "auto" : "smooth" });
+  }, [open]);
 
   // The drawer renders into a slot the page puts directly under the toolbar, so
   // it expands the card and pushes the table down instead of floating over it.
@@ -567,7 +590,7 @@ export function TeamStatFilters({
   );
 
   return (
-    <div className="relative">
+    <div className="relative" ref={triggerRef}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
