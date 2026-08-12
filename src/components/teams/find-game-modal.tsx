@@ -4,15 +4,18 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
-import { Select } from "@/components/select";
 import { MultiYearSelect } from "@/components/explorer/multi-year-select";
+import {
+  ConditionSheet,
+  FLAG_KEYS,
+  defaultValueFor,
+} from "@/components/filters/condition-sheet";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
 import type { SearchableOption } from "@/components/explorer/searchable-select";
 import { ScheduleGameModal } from "@/components/teams/schedule-game-modal";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import {
   STAT_OPTIONS,
-  OPS,
   makeFilter,
   matches,
   loadGamesForYear,
@@ -66,10 +69,7 @@ export function FindGameModal({
       ? Array.from(new Set(teamYearPairs.map((p) => p.year))).sort((a, b) => b - a)
       : [defaultYear],
   );
-  const [filters, setFilters] = useState<Filter[]>([
-    makeFilter("tov_diff"),
-    makeFilter("fg3_made_diff"),
-  ]);
+  const [filters, setFilters] = useState<Filter[]>([]);
   const [yearData, setYearData] = useState<Record<number, GameLog[]>>({});
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState<{ filters: Filter[]; years: number[] } | null>(null);
@@ -147,21 +147,32 @@ export function FindGameModal({
     };
   }, [submitted, teamGames]);
 
-  function addFilter() {
-    if (filters.length >= 8) return;
-    setFilters((f) => [...f, makeFilter()]);
+  /** Engage a dormant tile, or patch the live condition behind it. */
+  function tilePatch(key: string, patch: Partial<Filter>) {
+    setFilters((prev) => {
+      const at = prev.findIndex((f) => f.stat === key);
+      if (at >= 0) return prev.map((f, i) => (i === at ? { ...f, ...patch } : f));
+      const def = STAT_OPTIONS.find((s) => s.key === key);
+      const base = makeFilter(key as keyof GameLog);
+      return [
+        ...prev,
+        {
+          ...base,
+          op: FLAG_KEYS.has(key) ? "eq" : def?.defaultDir === "lt" ? "lt" : "gt",
+          value: defaultValueFor(key),
+          ...patch,
+        } as Filter,
+      ];
+    });
   }
-  function removeFilter(id: string) {
-    setFilters((f) => f.filter((x) => x.id !== id));
-  }
-  function patchFilter(id: string, patch: Partial<Filter>) {
-    setFilters((f) => f.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  function tileClear(key: string) {
+    setFilters((prev) => prev.filter((f) => f.stat !== key));
   }
   function submit() {
     setSubmitted({ filters: [...filters], years: [...years] });
   }
   function reset() {
-    setFilters([makeFilter("tov_diff"), makeFilter("fg3_made_diff")]);
+    setFilters([]);
     setYears([defaultYear]);
     setSubmitted(null);
   }
@@ -243,64 +254,25 @@ export function FindGameModal({
 
           <div className="space-y-2">
             <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">
-              Filters · {filters.length}/8
+              Conditions{filters.length > 0 ? ` \u00b7 ${filters.length}` : ""}
             </span>
-            {filters.map((f, i) => (
-              <div key={f.id} className="flex items-center gap-2">
-                <span className="text-xs text-ink-muted w-9 sm:w-10 shrink-0">
-                  {i === 0 ? "Where" : "And"}
-                </span>
-                <Select
-                  value={f.stat as string}
-                  onChange={(v) => patchFilter(f.id, { stat: v as keyof GameLog })}
-                  className="flex-1 min-w-0 sm:flex-none sm:min-w-44"
-                >
-                  {STAT_OPTIONS.map((s) => (
-                    <option key={s.key as string} value={s.key as string}>
-                      {s.label}
-                    </option>
-                  ))}
-                </Select>
-                <Select
-                  value={f.op}
-                  onChange={(v) => patchFilter(f.id, { op: v as Filter["op"] })}
-                  className="w-16 sm:w-20 shrink-0"
-                >
-                  {OPS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </Select>
-                <input
-                  type="number"
-                  step="any"
-                  value={f.value}
-                  onChange={(e) => patchFilter(f.id, { value: Number(e.target.value) })}
-                  className="h-10 w-14 sm:w-24 px-2 sm:px-3 rounded-md border border-ink/15 bg-card text-ink text-base sm:text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors shrink-0"
-                />
-                {filters.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeFilter(f.id)}
-                    className="text-base text-ink-muted hover:text-coral px-1 sm:px-2 py-1 shrink-0"
-                    aria-label="Remove filter"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-            ))}
+            {/* The same sheet /calc uses. The old builder was a stack of
+                "Where <stat> <op> <value>" dropdown rows, which required you to
+                already know the stat you wanted before it would show you
+                anything — and expressed the identical Filter[] in a completely
+                different shape from the calculator. Groups start folded here:
+                this is a modal over a page, not a page of its own. */}
+            <ConditionSheet
+              options={STAT_OPTIONS}
+              filters={filters}
+              onPatch={tilePatch}
+              onClear={tileClear}
+              collapsedByDefault
+            />
             <div className="flex items-center gap-3 pt-2">
-              <button
-                type="button"
-                onClick={addFilter}
-                disabled={filters.length >= 8}
-                className="text-sm font-medium text-coral hover:text-ink disabled:text-ink-muted/50 disabled:cursor-not-allowed"
-              >
-                + Add filter
-              </button>
               {filters.length < 2 && (
                 <span className="text-xs text-ink-muted">
-                  Add at least one more — Submit needs 2+ filters.
+                  Set at least two conditions to submit.
                 </span>
               )}
               <div className="ml-auto flex items-center gap-2">
