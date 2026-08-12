@@ -104,7 +104,14 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
     // the table keeps real column widths (min-w) and swipes left/right instead
     // of collapsing into overlapping text.
     <div className="overflow-x-auto overscroll-x-contain">
-    <table className="w-full min-w-[60rem] text-sm table-fixed">
+    {/* Content-sized on phones. The percentage colgroup below was authored
+        for the desktop layout, where SCHOOL holds a logo AND the spelled-out
+        team name — but the name is `hidden sm:inline`, so on a phone that 13%
+        reserved width for text that is not being drawn, leaving a gap between
+        the seed chip and CONF. table-auto lets the columns take what their
+        contents actually need; the 60rem floor comes back at sm along with the
+        name it was sized for. */}
+    <table className="w-full text-sm table-auto sm:table-fixed sm:min-w-[60rem]">
       <colgroup>
         <col style={{ width: "11%" }} />
         <col style={{ width: "13%" }} />
@@ -118,7 +125,7 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
       </colgroup>
       <thead>
         <tr className="border-b border-hairline text-left">
-          <SortHeader label="SEASON" k="year" active={sortBy} dir={sortDir} onClick={clickHeader} className="px-4 lg:px-7" />
+          <SortHeader label="SEASON" k="year" active={sortBy} dir={sortDir} onClick={clickHeader} className="px-1.5 sm:px-4 lg:px-7" />
           <SortHeader label="SCHOOL" k="school" active={sortBy} dir={sortDir} onClick={clickHeader} />
           <SortHeader label="CONF" k="conf" active={sortBy} dir={sortDir} onClick={clickHeader} />
           <SortHeader label="RECORD" k="record" active={sortBy} dir={sortDir} onClick={clickHeader} align="center" />
@@ -126,13 +133,13 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
           <SortHeader label="ADJ NET" k="adj_net" active={sortBy} dir={sortDir} onClick={clickHeader} align="center" />
           <SortHeader label="ADJ ORTG" k="adj_oe" active={sortBy} dir={sortDir} onClick={clickHeader} align="center" />
           <SortHeader label="ADJ DRTG" k="adj_de" active={sortBy} dir={sortDir} onClick={clickHeader} align="center" />
-          <SortHeader label="AWARDS" k="awards" active={sortBy} dir={sortDir} onClick={clickHeader} className="px-5 lg:px-7" />
+          <SortHeader label="AWARDS" k="awards" active={sortBy} dir={sortDir} onClick={clickHeader} className="px-1.5 sm:px-5 lg:px-7" />
         </tr>
       </thead>
       <tbody>
         {sorted.map((s, i) => (
           <tr key={`${s.year}-${s.team}-${i}`} className={`transition-colors hover:bg-[var(--accent-tint,rgba(237,90,79,0.08))] ${i % 2 === 0 ? "bg-paper/70" : "bg-transparent"}`}>
-            <td className="px-4 lg:px-7 py-2.5 tabular text-ink-soft whitespace-nowrap">
+            <td className="px-1.5 sm:px-4 lg:px-7 py-2.5 tabular text-ink-soft whitespace-nowrap">
               <Link
                 href={`/teams/${teamSlug(s.team)}/${s.year}/`}
                 className="hover:text-coral transition-colors"
@@ -141,7 +148,7 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
                 {seasonLabel(s.year)}
               </Link>
             </td>
-            <td className="px-3 py-2.5">
+            <td className="px-1.5 sm:px-3 py-2.5">
               <Link href={`/teams/${teamSlug(s.team)}/${s.year}/`} className="inline-flex items-center gap-2 group">
                 <TeamLogo name={s.team} size={22} />
                 <span className="text-ink group-hover:text-coral transition-colors truncate hidden sm:inline"><TeamName name={s.team} /></span>
@@ -150,13 +157,17 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
                 <SeasonPostseasonBadge season={s} />
               </Link>
             </td>
-            <td className="px-3 py-2.5 text-ink-soft">{confDisplay(s.conference)}</td>
-            <td className="px-3 py-2.5 text-center tabular text-ink">{s.wins != null && s.losses != null ? `${s.wins}-${s.losses}` : "—"}</td>
+            <td className="px-1.5 sm:px-3 py-2.5 text-ink-soft">{confDisplay(s.conference)}</td>
+            <td className="px-1.5 sm:px-3 py-2.5 text-center tabular text-ink">{s.wins != null && s.losses != null ? `${s.wins}-${s.losses}` : "—"}</td>
             <RatingCell value={s.bta_rank} pct={null} coral rankFormat />
             <RatingCell value={s.adj_net} pct={s.adj_net_pct} />
             <RatingCell value={s.adj_oe} pct={s.adj_oe_pct} />
             <RatingCell value={s.adj_de} pct={s.adj_de_pct} />
-            <td className="px-5 lg:px-7 py-2.5">
+            {/* Awards on one line. "NCAA Sweet 16" was breaking across three
+                lines and two awards stacked, so a single season could stand
+                five rows tall and the table went ragged. The table already
+                scrolls sideways — that is the right axis for this. */}
+            <td className="px-1.5 sm:px-5 lg:px-7 py-2.5 whitespace-nowrap">
               <SeasonAwards season={s} />
             </td>
           </tr>
@@ -196,7 +207,7 @@ function SortHeader({
   const alignText = align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
   return (
     <th
-      className={`py-2 text-xs uppercase tracking-widest font-medium select-none ${alignText} ${className || "px-3"}`}
+      className={`py-2 text-xs uppercase tracking-wide sm:tracking-widest font-medium select-none whitespace-nowrap ${alignText} ${className || "px-1.5 sm:px-3"}`}
     >
       <button
         type="button"
@@ -213,7 +224,7 @@ function SortHeader({
 }
 
 function RatingCell({ value, pct, coral, rankFormat }: { value: number | null | undefined; pct: number | null | undefined; coral?: boolean; rankFormat?: boolean }) {
-  if (value == null) return <td className="px-3 py-2.5 text-center text-ink-muted/50 tabular">—</td>;
+  if (value == null) return <td className="px-1.5 sm:px-3 py-2.5 text-center text-ink-muted/50 tabular">—</td>;
   let pillClass = "bg-paper-deep text-ink-muted";
   if (pct != null) {
     if (pct >= 90) pillClass = "bg-emerald-100 text-emerald-700";
@@ -223,7 +234,7 @@ function RatingCell({ value, pct, coral, rankFormat }: { value: number | null | 
   }
   const display = rankFormat ? `#${value}` : value.toFixed(1);
   return (
-    <td className="px-3 py-2.5 tabular text-center">
+    <td className="px-1.5 sm:px-3 py-2.5 tabular text-center">
       <span className="inline-flex items-center gap-1.5 leading-none">
         <span className={coral ? "text-coral font-medium" : "text-ink"}>{display}</span>
         {pct != null && (
@@ -259,11 +270,11 @@ function SeasonAwards({ season }: { season: CoachSeason }) {
   }
   if (awards.length === 0) return <span className="text-ink-muted/40">—</span>;
   return (
-    <span className="flex flex-wrap gap-1.5">
+    <span className="flex gap-1.5 whitespace-nowrap">
       {awards.map((a, i) => (
         <span
           key={i}
-          className={`inline-flex items-center px-2 py-0.5 rounded text-[0.65rem] tabular font-medium ${
+          className={`inline-flex items-center shrink-0 whitespace-nowrap px-2 py-0.5 rounded text-[0.65rem] tabular font-medium ${
             a.tone === "coral" ? "bg-coral/10 text-coral" : "border border-hairline text-ink-soft"
           }`}
         >
@@ -280,12 +291,11 @@ function SeasonPostseasonBadge({ season }: { season: CoachSeason }) {
   if (round === "Champion") {
     return (
       <span
-        className="inline-flex items-center justify-center rounded-full bg-amber-500 text-white shadow-sm align-middle ml-1"
-        style={{ width: 18, height: 18 }}
+        className="inline-flex items-center justify-center rounded-full bg-amber-500 text-white shadow-sm align-middle ml-0.5 sm:ml-1 w-3.5 h-3.5 sm:w-[18px] sm:h-[18px]"
         title={`${season.year - 1}-${String(season.year).slice(-2)} National Champion · #${season.seed} seed`}
         aria-label="National champion"
       >
-        <Trophy size={11} strokeWidth={2.5} fill="currentColor" fillOpacity={0.3} />
+        <Trophy className="w-2.5 h-2.5 sm:w-[11px] sm:h-[11px]" strokeWidth={2.5} fill="currentColor" fillOpacity={0.3} />
       </span>
     );
   }
@@ -295,7 +305,7 @@ function SeasonPostseasonBadge({ season }: { season: CoachSeason }) {
   if (round === "Final Four" || round === "Runner-up") {
     return (
       <span
-        className="inline-flex items-center justify-center rounded px-1.5 py-0 bg-coral text-white text-[0.6rem] font-display font-bold leading-tight tabular tracking-wide shadow-sm ml-1"
+        className="inline-flex items-center justify-center rounded px-0.5 sm:px-1.5 py-0 bg-coral text-white text-[0.5rem] sm:text-[0.6rem] font-display font-bold leading-tight tabular tracking-tight sm:tracking-wide shadow-sm ml-0.5 sm:ml-1"
         title={`${season.year - 1}-${String(season.year).slice(-2)} ${round === "Runner-up" ? "Runner-Up" : "Final Four"} · #${season.seed} seed`}
       >
         F4

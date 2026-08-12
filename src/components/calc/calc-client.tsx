@@ -322,6 +322,13 @@ export function CalcClient({
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
 
+  // Free-text filter over the stat sheet. There are 160-odd conditions across
+  // nine groups, so finding "FT Rate" meant scrolling and knowing which group
+  // someone had filed it under. Matches the label, and also the group name, so
+  // "shooting" surfaces the whole section.
+  const [statQ, setStatQ] = useState("");
+  const q = statQ.trim().toLowerCase();
+
   // Builder chrome. `panelOpen` is the scope+conditions panel — Calculate
   // collapses it to a chip summary so the numbers get the screen; "Edit
   // filters" reopens it. `collapsedGroups` folds individual stat-sheet
@@ -688,6 +695,18 @@ export function CalcClient({
     setPage(0); // a new question starts at the first page of its answer
   }
 
+  /** How many stats survive the search, so an empty result can say so. */
+  const matchCount = useMemo(() => {
+    if (q === "") return -1; // not searching
+    return CONDITION_GROUPS.reduce(
+      (n, [group, opts]) =>
+        n + (group.toLowerCase().includes(q)
+          ? opts.length
+          : opts.filter((o) => cleanLabel(o.label).toLowerCase().includes(q)).length),
+      0,
+    );
+  }, [q]);
+
   /** "Clear All": no scope filters, no conditions, no stale results. */
   function clearAll() {
     setYears([...ALL_SEASONS]);
@@ -745,8 +764,12 @@ export function CalcClient({
             value={ask}
             onChange={(e) => setAsk(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); runAsk(); } }}
+            /* The INPUT stays at text-base on phones on purpose: iOS Safari
+               zooms the whole page when a focused field is under 16px. Only the
+               placeholder shrinks, which iOS does not measure — so more of the
+               example fits without the page jumping on tap. */
             placeholder="Roy Williams games where UNC had more fast break points and shot more 3s than their opponent"
-            className="flex-1 min-w-0 h-10 px-3 rounded border border-hairline bg-card text-ink text-base sm:text-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-coral/40"
+            className="flex-1 min-w-0 h-10 px-3 rounded border border-hairline bg-card text-ink text-base sm:text-sm placeholder:text-ink-muted/70 placeholder:text-xs sm:placeholder:text-sm focus:outline-none focus:ring-2 focus:ring-coral/40"
           />
           <button
             type="button"
@@ -1073,6 +1096,34 @@ export function CalcClient({
             <span className="hidden sm:block -mt-1 text-xs text-ink-muted">
               Every stat is listed — set the ones that matter. All must be true; perspective = the team in the row.
             </span>
+            {/* Find a stat. Nine groups and 160-odd conditions is too many to
+                scroll, and it assumes the reader knows which group a stat was
+                filed under — "FT Rate" is under Shooting, not Differentials.
+                Same control on every width: this is not a small-screen problem,
+                it is a long-list problem. */}
+            <div className="relative mt-3 max-w-80">
+              <svg viewBox="0 0 24 24" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" strokeLinecap="round" />
+              </svg>
+              <input
+                type="text"
+                value={statQ}
+                onChange={(e) => setStatQ(e.target.value)}
+                placeholder="Find a stat…"
+                aria-label="Find a condition by stat name"
+                className="w-full h-9 pl-8 pr-8 rounded-md border border-hairline bg-card text-ink text-base sm:text-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 placeholder:text-xs sm:placeholder:text-sm"
+              />
+              {statQ && (
+                <button
+                  type="button"
+                  onClick={() => setStatQ("")}
+                  aria-label="Clear stat search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-base leading-none w-5 h-5 inline-flex items-center justify-center rounded hover:bg-paper-deep"
+                >
+                  ×
+                </button>
+              )}
+            </div>
           </div>
 
           {/* The whole stat sheet, grouped. Each row is a live control: drag
@@ -1080,10 +1131,25 @@ export function CalcClient({
               condition (hue tick + count badge); × releases it. Box-score
               styling on purpose — hairline rows, not a wall of inputs. */}
           <div className="space-y-4">
-            {CONDITION_GROUPS.map(([group, opts]) => {
+            {matchCount === 0 && (
+              <p className="text-sm text-ink-muted py-2">
+                No stat matches <span className="text-ink font-medium">{statQ}</span>.
+              </p>
+            )}
+            {CONDITION_GROUPS.map(([group, allOpts]) => {
+              // A group whose NAME matches keeps all its stats; otherwise only
+              // the matching stats survive. An empty group drops out entirely
+              // rather than leaving a bare header behind.
+              const groupHit = q !== "" && group.toLowerCase().includes(q);
+              const opts = q === "" || groupHit
+                ? allOpts
+                : allOpts.filter((o) => cleanLabel(o.label).toLowerCase().includes(q));
+              if (opts.length === 0) return null;
               const hue = GROUP_HUES[group] ?? "var(--coral)";
               const activeInGroup = opts.filter((o) => filters.some((f) => f.stat === o.key)).length;
-              const collapsed = collapsedGroups.has(group);
+              // While searching, every surviving group is open — collapsing a
+              // result you just searched for would be perverse.
+              const collapsed = q === "" && collapsedGroups.has(group);
               return (
                 <div key={group}>
                   <button
@@ -1111,8 +1177,13 @@ export function CalcClient({
                         that a folded section is still constraining results. */}
                     {activeInGroup > 0 && <CountBadge n={activeInGroup} />}
                   </button>
+                  {/* Two up on phones. One condition per row meant a group like
+                      Shooting ran most of a screen on its own, and the tile is a
+                      truncating label plus a 24px comparator — it fits a
+                      half-width cell. gap-x drops to match: 32px between two
+                      ~190px columns is a sixth of the viewport. */}
                   {!collapsed && (
-                    <div className="grid gap-x-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-x-3 sm:gap-x-8 lg:grid-cols-3 xl:grid-cols-4">
                       {opts.map((o) => (
                         <StatTile
                           key={o.key as string}
@@ -1293,7 +1364,7 @@ export function CalcClient({
                         onChange={(e) => { setTeamFilter(e.target.value); setPage(0); }}
                         placeholder="Search team…"
                         aria-label="Search matching games by team"
-                        className="h-9 w-full sm:w-60 pl-9 pr-8 rounded-md border border-ink/15 bg-card text-ink text-base sm:text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+                        className="h-9 w-full sm:w-60 pl-9 pr-8 rounded-md border border-ink/15 bg-card text-ink text-base sm:text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors placeholder:text-xs sm:placeholder:text-sm"
                       />
                       {teamFilter && (
                         <button
@@ -1542,7 +1613,7 @@ function StatTile({
   if (FLAG_KEYS.has(key)) {
     const flagState = !filter ? "any" : filter.value === 1 ? "yes" : "no";
     return (
-      <div className="flex items-center justify-between gap-2 min-h-13 py-2 border-b border-hairline/60">
+      <div className="flex flex-col items-stretch gap-1 py-2 border-b border-hairline/60 sm:flex-row sm:items-center sm:justify-between sm:gap-2 sm:min-h-13">
         {/* Same switch as the slider rows. "Yes" is the sensible on-state for a
             flag — nobody sets a Quad-1 filter meaning "and it must NOT be". */}
         <button
@@ -1550,7 +1621,7 @@ function StatTile({
           onClick={() => (active ? onClear() : onPatch({ op: "eq", value: 1 }))}
           aria-pressed={active}
           title={active ? `Turn off ${label}` : `Filter on ${label}`}
-          className={`shrink min-w-0 text-left text-sm truncate rounded-md px-1.5 py-0.5 -ml-1.5 border transition-colors ${
+          className={`shrink min-w-0 text-left text-sm leading-tight sm:truncate rounded-md px-1.5 py-0.5 -ml-1.5 border transition-colors ${
             active
               ? "text-ink font-medium bg-card"
               : "text-ink-soft border-hairline bg-paper-deep/40 hover:bg-paper-deep hover:border-ink/25 hover:text-ink"
@@ -1584,7 +1655,11 @@ function StatTile({
 
   return (
     <div className="py-2 border-b border-hairline/60">
-      <div className="flex items-center gap-1.5">
+      {/* Stacked below sm. In a two-column grid each tile is ~176px, and with
+          the label, comparator and value all on one line the label was left
+          ~60px — "eFG%" came out as "eF…". Giving it its own line costs one
+          line of height and makes every condition readable again. */}
+      <div className="flex flex-col items-stretch gap-1 sm:flex-row sm:items-center sm:gap-1.5">
         {/* The NAME IS THE SWITCH. Waking a condition used to mean nudging a
             hairline slider or hitting a 24px comparator glyph — discoverable
             only by poking at it. The label is the biggest, most obvious target
@@ -1596,7 +1671,7 @@ function StatTile({
           onClick={() => (active ? onClear() : onPatch({ op, value }))}
           aria-pressed={active}
           title={active ? `Turn off ${label}` : `Filter on ${label}`}
-          className={`shrink min-w-0 text-left text-sm truncate rounded-md px-1.5 py-0.5 -ml-1.5 border transition-colors ${
+          className={`shrink min-w-0 text-left text-sm leading-tight sm:truncate rounded-md px-1.5 py-0.5 -ml-1.5 border transition-colors ${
             active
               ? "text-ink font-medium bg-card"
               : "text-ink-soft border-hairline bg-paper-deep/40 hover:bg-paper-deep hover:border-ink/25 hover:text-ink"
@@ -1605,7 +1680,7 @@ function StatTile({
         >
           {label}
         </button>
-        <div className="ml-auto flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0 sm:ml-auto">
           <div className="relative">
             <button
               type="button"
@@ -1884,7 +1959,7 @@ function ChipSearchMulti({
           }}
           placeholder={placeholder}
           aria-label={label}
-          className="h-9 w-full px-3 rounded-md border border-hairline bg-card text-ink text-base sm:text-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-coral/40"
+          className="h-9 w-full px-3 rounded-md border border-hairline bg-card text-ink text-base sm:text-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-coral/40 placeholder:text-xs sm:placeholder:text-sm"
         />
         {matches.length > 0 && (
           <ul className="bta-pop-in absolute z-20 mt-1 w-full rounded-md border border-hairline bg-popover shadow-md overflow-hidden" role="listbox">
