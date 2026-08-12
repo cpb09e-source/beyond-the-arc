@@ -14,7 +14,6 @@ import { cn } from "@/lib/utils";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { PercentileChip } from "@/components/percentile-chip";
-import { CoachPhoto } from "@/components/coaches/coach-photo";
 import { ScopeCollapse, scopeSummary } from "@/components/filters/scope-collapse";
 import {
   CoachStatFilters, COACH_DRAWER_SLOT_ID, passesCoachFilters, coachFilterChips,
@@ -531,7 +530,10 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
               <tr className="border-b border-hairline text-left">
                 <Th className="w-10 text-center">#</Th>
                 <ThSort label="Coach" active={effectiveSort==="name"} dir={sortDir} onClick={() => toggle("name","asc")} align="left" />
-                <Th className="w-9">{""}</Th>
+                {/* Header only below sm. From sm up the spelled-out Team
+                    column next door carries the label, and two headers both
+                    reading "Team" would be worse than one blank one. */}
+                <Th className="w-9 text-center"><span className="sm:hidden">Team</span></Th>
                 <ThSort label="Team" active={effectiveSort==="team"} dir={sortDir} onClick={() => toggle("team","asc")} align="left" className="hidden sm:table-cell" />
                 <ThSort label="Conf" active={effectiveSort==="conference"} dir={sortDir} onClick={() => toggle("conference","asc")} align="left" className="hidden sm:table-cell" />
                 <ThSort label="Win" active={effectiveSort==="career_winpct"} dir={sortDir} onClick={() => toggle("career_winpct","desc")} />
@@ -565,10 +567,6 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                     </Td>
                     <Td>
                       <Link href={`/coaches/${coachSlug(r.name)}/`} className="inline-flex items-center gap-2 text-ink hover:text-coral transition-colors">
-                        <CoachPhoto slug={r.slug} name={r.name} size={28} />
-                        {/* The avatar took enough width to start wrapping
-                            two-word names onto two lines. The table already
-                            scrolls horizontally, so widen rather than wrap. */}
                         <span className="whitespace-nowrap">{r.name}</span>
                       </Link>
                     </Td>

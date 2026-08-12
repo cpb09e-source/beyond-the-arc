@@ -962,7 +962,11 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                             ) : (
                               <span className="font-medium text-ink whitespace-nowrap block leading-tight" title={p.name}>{abbrevName(p.name)}</span>
                             )}
-                            <CopyName name={p.name} />
+                            {/* Hover affordance, and a phone has no hover. It sat between the
+                                name and the row's right edge on every one of 50 rows,
+                                costing width in the widest frozen column on the
+                                narrowest screen. */}
+                            <span className="hidden sm:inline-flex"><CopyName name={p.name} /></span>
                           </span>
                           <span className="flex items-center gap-1.5 text-[0.66rem] text-ink-muted whitespace-nowrap leading-tight">
                             {/* Logo only — the school name was the widest thing

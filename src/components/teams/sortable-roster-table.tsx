@@ -159,7 +159,13 @@ export function SortableRosterTable({
                   i % 2 === 0 ? "bg-paper/70" : "bg-transparent",
                 )}
               >
-                <Td>
+                {/* One line, name and badges together. Left to wrap, a phone
+                    broke "M. Johnson Jr." across three lines and dropped the
+                    NBA badge onto a fourth, so rows with a drafted player were
+                    twice the height of the rest and the column went ragged.
+                    The table already scrolls horizontally — widening this
+                    column is the cheaper of the two. */}
+                <Td className="whitespace-nowrap">
                   {p.bart_player_id && rankedPlayerIds.has(p.bart_player_id) ? (
                     <Link href={`/players/${p.bart_player_id}/`} title={p.name} className="font-medium text-ink hover:text-coral transition-colors">
                       {abbrevName(p.name)}
