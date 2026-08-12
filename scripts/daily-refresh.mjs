@@ -121,6 +121,13 @@ async function main() {
   // safe here whether or not the builder already filled the row.
   run("node", ["scripts/patch-preview-impact.mjs"]);
 
+  // 1c. Re-point the name links. Which profile pages exist is decided by the
+  // rank files at site-build time; `link` is baked into this JSON whenever the
+  // preview is built. Rebuild either one alone and they disagree — that is how
+  // 150 rows ended up linking to pages that had been pruned. Cheap and
+  // idempotent, so it runs every time rather than only when ranks change.
+  run("node", ["scripts/refresh-preview-links.mjs"]);
+
   // 2. Season-start detection.
   if (await seasonHasStarted()) {
     console.log(

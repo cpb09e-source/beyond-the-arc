@@ -137,18 +137,45 @@ async function main() {
     }
   }
   // Which bart ids have a profile page (so the roster can link their name).
-  // Mirrors readRankedPlayerIds: a rank file, OR their latest (2026) season was
-  // a freshman year, OR a manual include. Every preview roster player last
-  // played 2026, so the 2027 row's class (carryover) === "Fr" ⇒ freshman page.
+  // Mirrors readRankedPlayerIds: a rank file, OR the player's latest season was
+  // a freshman year, OR a manual include.
+  //
+  // The freshman half used to be `cls === "Fr"` against the class ON THE PREVIEW
+  // ROW — which is the class advanced one year, so a 2025-26 freshman reads "So"
+  // there and failed the test. readRankedPlayerIds looks at the class of the
+  // most recent ACTUAL season, so it said "page exists" while this said "don't
+  // link": 439 players rendered as plain text next to a live profile page.
+  // Scanning for the real latest class costs one pass over the year files.
   const rankedSet = new Set(
     fs.readdirSync(path.join(DATA, "player-ranks"))
       .filter((f) => f.endsWith(".json"))
       .map((f) => parseInt(f.replace(".json", ""), 10))
       .filter(Number.isFinite),
   );
+  const FRESHMAN_SCAN_START_YEAR = 2013; // matches static-data.ts
+  {
+    const latestByBartId = new Map();
+    for (let yr = FRESHMAN_SCAN_START_YEAR; yr <= PREV_YEAR; yr++) {
+      let list;
+      try { list = JSON.parse(fs.readFileSync(path.join(DATA, "players-by-year", `${yr}.json`), "utf8")); }
+      catch { continue; }
+      for (const p of list) {
+        const id = p.bart_player_id;
+        if (id == null || !Number.isFinite(id)) continue;
+        const prevSeen = latestByBartId.get(id);
+        if (!prevSeen || prevSeen.year < yr) latestByBartId.set(id, { year: yr, cls: p.class ?? null });
+      }
+    }
+    for (const [id, latest] of latestByBartId) if (latest.cls === "Fr") rankedSet.add(id);
+  }
   const MANUAL_PAGE_IDS = new Set([73737]); // keep in sync with static-data.ts
-  const hasPage = (bartId, cls) =>
-    bartId != null && (rankedSet.has(bartId) || cls === "Fr" || MANUAL_PAGE_IDS.has(bartId));
+  // No class argument any more. It used to be a second way in — "or this row
+  // says Fr" — and a page either exists or it doesn't; a rule with a second way
+  // in can only disagree with readRankedPlayerIds, in one direction or the
+  // other. It also can't help: a true HS freshman has no prior season, so no
+  // rank file and no page, and calling him "Fr" here would have linked a 404.
+  const hasPage = (bartId) =>
+    bartId != null && (rankedSet.has(bartId) || MANUAL_PAGE_IDS.has(bartId));
 
   // Last-season (2026) stat line + percentiles from the rank file, so the
   // preview roster fills the SAME columns as a normal roster table (BTA PRTG,
@@ -293,7 +320,7 @@ async function main() {
     if (row.status === "transfer") row.from = prevTeam;
     else delete row.from;
     row.ht = row.ht ?? heightById.get(id) ?? null;
-    row.link = hasPage(id, row.cls);
+    row.link = hasPage(id);
     if (st) Object.assign(row, st);
     return true;
   }
@@ -319,7 +346,7 @@ async function main() {
       cls: advanceClass(r[25]),    // last season's class (Bart carryover) → 26-27
       ht: r[26] || null,
       status,
-      link: hasPage(bartId, r[25]),
+      link: hasPage(bartId),
       ...(status === "transfer" ? { from: prevTeam } : {}),
       // last-season line (carryover — no 2026-27 games yet). Rank file when we
       // have it, else the raw Bart row for the box-score basics.
@@ -372,7 +399,7 @@ async function main() {
         dest.roster.push({
           name: e.name, bart_id: e.bart_player_id, cls: advanceClass(e.eligibility), ht: null,
           status: "transfer", from: e.team_from ?? e.last_team ?? null,
-          link: hasPage(e.bart_player_id, e.eligibility === "Freshman" ? "Fr" : null),
+          link: hasPage(e.bart_player_id),
           ...NULL_STATS,
           ...(lowSample ? {} : {
             pts: e.ppg ?? null, reb: e.rpg ?? null, ast: e.apg ?? null,
