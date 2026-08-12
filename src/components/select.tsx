@@ -31,15 +31,23 @@ export function Select({
         onChange={(e) => onChange(e.target.value)}
         aria-label={ariaLabel}
         className={cn(
-          "w-full pl-3 pr-8 rounded-md border border-ink/15 bg-card text-ink appearance-none capitalize shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors",
-          compact ? "h-8 text-xs" : "h-10 text-sm",
+          "w-full rounded-md border border-ink/15 bg-card text-ink appearance-none capitalize shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors",
+          // Compact selects carry short values in narrow boxes, so they get
+          // their own padding. The shared pl-3/pr-8 spent 44px of a 64px
+          // w-16 box on padding and clipped "100" to "10C" on the row-count
+          // control. The caret moves in to match — reducing the right padding
+          // alone would have run the text under it.
+          compact ? "h-8 text-xs pl-2 pr-6" : "h-10 text-sm pl-3 pr-8",
         )}
       >
         {children}
       </select>
       <span
         aria-hidden
-        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted text-[0.7rem]"
+        className={cn(
+          "pointer-events-none absolute top-1/2 -translate-y-1/2 text-ink-muted text-[0.7rem]",
+          compact ? "right-1.5" : "right-2.5",
+        )}
       >
         ▾
       </span>

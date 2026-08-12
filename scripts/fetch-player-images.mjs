@@ -60,11 +60,6 @@ function normTight(s) {
 }
 
 /**
- * Last name only, suffixes dropped. Used exclusively for the within-roster
- * reconciliation pass, never as a primary key — on its own a surname is far
- * too weak to join on.
- */
-/**
  * Do two given names plausibly belong to the same person?
  *
  * A shared surname inside one roster is NOT sufficient on its own, which cost
@@ -94,6 +89,7 @@ const SHORT_FORMS = [
   ["timothy", "tim"], ["stephen", "steve"], ["steven", "steve"], ["daniel", "dan"],
   ["david", "dave"], ["thomas", "tom"], ["peter", "pete"], ["frederick", "fred"],
   ["francis", "frank"], ["walter", "walt"], ["albert", "al"], ["alexander", "alex"],
+  ["charles", "charlie"], ["benjamin", "benji"],
 ];
 
 function editDistance1(a, b) {
@@ -122,6 +118,11 @@ function givenKey(s) {
   return norm(s).split(" ")[0] ?? "";
 }
 
+/**
+ * Last name only, suffixes dropped. Used exclusively for the within-roster
+ * reconciliation pass, never as a primary key — on its own a surname is far
+ * too weak to join on.
+ */
 function surnameKey(s) {
   const toks = norm(s).split(" ").filter((t) => !/^(jr|sr|ii|iii|iv|v|vi|lll|ll)$/.test(t));
   return toks[toks.length - 1] ?? "";
@@ -184,11 +185,28 @@ const TEAM_ALIASES = {
   "southern indiana":  "southern indiana screaming eagles",
 };
 
-// Per-player name aliases for cases where ESPN's displayName has a suffix
-// (Jr., Sr., III) that Bart strips. Key = normalized ESPN name, value =
-// normalized Bart name (must match `norm(bartPlayer.name)` exactly).
+// Per-player name aliases. Key = normalized ESPN name, value = normalized Bart
+// name (must match `norm(bartPlayer.name)` exactly).
+//
+// Two kinds live here. The first is a suffix ESPN carries and Bart strips.
+// The second is a nickname that shares nothing with the given name, which the
+// surname reconciliation refuses on purpose — "Butta" is not derivable from
+// "Efrem" by any rule that wouldn't also derive "Garrett" from "Treyson", and
+// getting that wrong publishes a photo of a different person. So they land
+// here instead, one line each, confirmed by a human rather than inferred.
+//
+// Confirmed 2026-08-12.
 const PLAYER_ALIASES = {
   "mj collins jr": "mj collins",
+
+  // Nicknames — same player, unguessable given name.
+  "butta johnson":    "efrem johnson",         // Clemson
+  "spudd webb":       "tavarus webb",          // Georgia Southern
+  "cash chavis":      "casmir chavis",         // UT Arlington
+  "tj cope":          "tavaj cope",            // New Orleans
+  "tae blackshear":   "rontavious blackshear", // Youngstown St.
+  "bj roy":           "brandon roy jr",        // Washington
+  "chabi barre":      "halil barre",           // Akron
 };
 
 // ---------- ESPN ----------

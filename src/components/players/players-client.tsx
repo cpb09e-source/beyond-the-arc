@@ -896,8 +896,8 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               </tr>
               {/* Column row — search lives in the Player cell (D&3-style). */}
               <tr>
-                <th ref={rkThRef} className="sticky top-6 left-0 z-40 bg-paper-deep border-b border-hairline px-2 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">RK</th>
-                <th style={playerLeft} className="sticky top-6 z-40 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Player</th>
+                <th ref={rkThRef} className="sticky top-6 left-0 z-40 bg-paper-deep border-b border-hairline px-1 sm:px-2 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">RK</th>
+                <th style={playerLeft} className="sticky top-6 z-40 bg-paper-deep border-b border-hairline px-1.5 sm:px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Player</th>
                 {[...dynamicCols, ...GRID_COLS].map((c, i) =>
                   c.sortKey ? (
                     // Index-qualified: a pinned stat that is also a default
@@ -941,12 +941,12 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                   return (
                   <tr key={p.id} className={cn("group", zebra)}>
                     {/* RK — rank within the CURRENT sort */}
-                    <td className={cn("sticky left-0 z-20 px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
+                    <td className={cn("sticky left-0 z-20 px-1 sm:px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
                       {(pageSafe - 1) * spec.limit + i + 1}
                     </td>
                     {/* Player — photo + name + team/class/height meta */}
-                    <td style={playerLeft} className={cn("sticky z-20 px-3 py-1 transition-colors", zebra, ROW_HOVER)}>
-                      <span className="flex items-center gap-2.5 min-w-44">
+                    <td style={playerLeft} className={cn("sticky z-20 px-1.5 sm:px-3 py-1 transition-colors", zebra, ROW_HOVER)}>
+                      <span className="flex items-center gap-2 sm:gap-2.5 min-w-0 sm:min-w-44">
                         <PlayerPhoto bartPlayerId={p.bart_player_id} name={p.name} size={28} />
                         <span className="min-w-0">
                           <span className="flex items-center gap-1">

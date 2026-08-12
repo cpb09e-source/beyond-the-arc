@@ -3,8 +3,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * Visual marker for tournament accomplishments — a hardwood chip reading
- * "Champion" or "Final Four". Returns null when the team didn't reach the
- * Final Four that season.
+ * "Champion" or "F4". Returns null when the team didn't reach the Final Four
+ * that season.
  *
  * WHAT THIS REPLACED, and why: the champion used to be a filled circle holding
  * a trophy glyph while everyone else got a saturated coral "F4" pill. Two
@@ -30,9 +30,14 @@ import { cn } from "@/lib/utils";
 // cut of this chip rendered at half height with no padding. Scale utilities are
 // already present in the stylesheet, so they cannot fail that way, and the chip
 // now grows from its own padding instead of a fixed height.
+//
+// Sized down on phones on top of the shortened labels: padding, type and
+// tracking step down together, because shrinking type alone leaves a chip that
+// is mostly padding.
 const CHIP =
-  "inline-flex items-center px-1.5 py-0.5 rounded border " +
-  "text-[0.6rem] font-bold uppercase tracking-widest leading-none whitespace-nowrap align-middle";
+  "inline-flex items-center rounded border font-bold uppercase leading-none whitespace-nowrap align-middle " +
+  "px-1 py-px text-[0.5rem] tracking-wider " +
+  "sm:px-1.5 sm:py-0.5 sm:text-[0.6rem] sm:tracking-widest";
 
 export function TourneyBadge({
   teamName,
@@ -70,7 +75,16 @@ export function TourneyBadge({
       )}
       title={champion ? `${season} national champion` : `${season} Final Four`}
     >
-      {champion ? "Champion" : "Final Four"}
+      {/* One token at every width. "Final Four" was two words of
+          tracking-widest type sitting next to a 20px logo, which made it the
+          widest thing in the column and pushed RECORD toward the fold; the
+          honour is context, not the row's subject, so it yields first.
+          Champion keeps its word because it already is one and reads instantly;
+          Final Four becomes the "F4" that everyone writing about the tournament
+          already uses. Both still share one chip, one type treatment and one
+          hardwood token — the abbreviation is a length change, not a second
+          visual language. Full wording stays in the title. */}
+      {champion ? "Champion" : "F4"}
     </span>
   );
 }
