@@ -896,8 +896,8 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               </tr>
               {/* Column row — search lives in the Player cell (D&3-style). */}
               <tr>
-                <th ref={rkThRef} className="sticky top-6 left-0 z-40 bg-paper-deep border-b border-hairline px-1 sm:px-2 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">RK</th>
-                <th style={playerLeft} className="sticky top-6 z-40 bg-paper-deep border-b border-hairline px-1.5 sm:px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Player</th>
+                <th ref={rkThRef} className="sticky top-6 left-0 z-40 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">RK</th>
+                <th style={playerLeft} className="sticky top-6 z-40 bg-paper-deep border-b border-hairline px-1.5 sm:px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Player</th>
                 {[...dynamicCols, ...GRID_COLS].map((c, i) =>
                   c.sortKey ? (
                     // Index-qualified: a pinned stat that is also a default
@@ -910,7 +910,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                     // arrived sorted by eWins with the active arrow drawn on EPM.
                     <SortableTh key={`${c.field}-${i}`} statKey={c.sortKey} label={c.label} basePath="/players" defaultSort="ewins" idleArrows className="sticky top-6 z-30 bg-paper-deep border-b border-hairline" />
                   ) : (
-                    <th key={`${c.field}-${i}`} className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-2 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-right whitespace-nowrap align-middle">
+                    <th key={`${c.field}-${i}`} className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-right whitespace-nowrap align-middle">
                       <StatLabel label={c.label} />
                     </th>
                   ),

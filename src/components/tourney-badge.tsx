@@ -75,16 +75,22 @@ export function TourneyBadge({
       )}
       title={champion ? `${season} national champion` : `${season} Final Four`}
     >
-      {/* One token at every width. "Final Four" was two words of
-          tracking-widest type sitting next to a 20px logo, which made it the
-          widest thing in the column and pushed RECORD toward the fold; the
-          honour is context, not the row's subject, so it yields first.
-          Champion keeps its word because it already is one and reads instantly;
-          Final Four becomes the "F4" that everyone writing about the tournament
-          already uses. Both still share one chip, one type treatment and one
-          hardwood token — the abbreviation is a length change, not a second
-          visual language. Full wording stays in the title. */}
-      {champion ? "Champion" : "F4"}
+      {/* "Final Four" was two words of tracking-widest type beside a 20px logo
+          and the widest thing in the column, so it becomes the "F4" everyone
+          writing about the tournament already uses — at every width, since it
+          reads the same on a desktop.
+
+          Champion is spelled out from sm up and collapses to "C" on phones,
+          where the full word is still eight characters next to a logo. A
+          single letter works here only because the two tiers are already
+          separated by FILL: the champion chip is the filled one, so "C" lands
+          on a chip that is visibly the louder of the pair rather than asking
+          the letter to carry the distinction alone. Both remain one chip, one
+          type treatment, one hardwood token — a length change, not the second
+          visual language this component exists to avoid. Full wording stays in
+          the title either way. */}
+      <span className="sm:hidden">{champion ? "C" : "F4"}</span>
+      <span className="hidden sm:inline">{champion ? "Champion" : "F4"}</span>
     </span>
   );
 }

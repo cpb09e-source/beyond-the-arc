@@ -448,20 +448,8 @@ export function ExplorerClient({
               {loadingSeasons && <span className="ml-1.5 text-coral">· loading season…</span>}
             </span>
 
-            {conferenceRankings.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowRankings(true)}
-                className="text-xs text-coral hover:underline whitespace-nowrap inline-flex items-center min-h-11 sm:min-h-0 py-2 sm:py-0"
-              >
-                View Conference Rankings →
-              </button>
-            )}
-
             {/* What's currently applied, and the fastest way to undo any of it.
-                Last in the row rather than straight after the count, so a wide
-                selection doesn't push the rankings link out of reach. Capped at
-                six; the rest opens the panel, which shows them all. */}
+                Capped at six; the rest opens the panel, which shows them all. */}
             <StatChipStrip
               chips={specChips}
               onRemove={removeSpecStat}
@@ -484,6 +472,21 @@ export function ExplorerClient({
                 the table header already does was part of what made these pages
                 feel unrelated. Only the row-count select remains, same position
                 and shape as the one on /players. */}
+            {/* Lives in the controls row rather than with the filters. On a
+                phone the left group wraps and this was landing on a line of its
+                own, directly above a row that was itself mostly empty. mr-auto
+                pins it to the left of that row so the two share one line
+                instead of stacking two half-empty ones. */}
+            {conferenceRankings.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowRankings(true)}
+                className="mr-auto text-xs text-coral hover:underline whitespace-nowrap inline-flex items-center min-h-11 sm:min-h-0 py-2 sm:py-0"
+              >
+                View Conference Rankings →
+              </button>
+            )}
+
             <span className="hidden sm:inline text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Show</span>
             <Select
               value={String(spec.limit)}
@@ -586,11 +589,17 @@ export function ExplorerClient({
                 </th>
               </tr>
               <tr>
-                <th ref={rankThRef} className="sticky top-6 left-0 z-40 w-12 bg-paper-deep border-b border-hairline px-2 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
-                <th style={teamLeft} className="sticky top-6 z-40 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Team</th>
-                <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle hidden sm:table-cell">Conf</th>
-                {multiYear && <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Season</th>}
-                <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 pb-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Record</th>
+                <th ref={rankThRef} className="sticky top-6 left-0 z-40 w-12 bg-paper-deep border-b border-hairline px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
+                <th style={teamLeft} className="sticky top-6 z-40 bg-paper-deep border-b border-hairline px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Team</th>
+                <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle hidden sm:table-cell">Conf</th>
+                {multiYear && <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Season</th>}
+                <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-1.5 sm:px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">
+                  {/* "Record" is seven letters of tracking-widest type over a
+                      five-character value like "37-3", so the header, not the
+                      data, was setting this column's width. */}
+                  <span className="sm:hidden">Rec</span>
+                  <span className="hidden sm:inline">Record</span>
+                </th>
                 {cols.map((c, i) => (
                   <SortableTh
                     // Index-qualified: a pinned stat that is also a default
@@ -644,7 +653,7 @@ export function ExplorerClient({
                     </td>
                     <td className={cn("px-3 py-1 text-ink-muted hidden sm:table-cell transition-colors", ROW_HOVER)}>{confDisplay(r.team_conference)}</td>
                     {multiYear && <td className={cn("px-3 py-1 text-ink-muted tabular transition-colors", ROW_HOVER)}>{seasonLabel(r.team_year)}</td>}
-                    <td className={cn("px-3 py-1 tabular text-ink-muted transition-colors", ROW_HOVER)}>{r.record ?? "—"}</td>
+                    <td className={cn("px-1.5 sm:px-3 py-1 tabular text-ink-muted whitespace-nowrap transition-colors", ROW_HOVER)}>{r.record ?? "—"}</td>
                     {cols.map((c, ci) => {
                       // TeamRow has no index signature, and the column model
                       // addresses it by key — a narrow cast here beats widening
