@@ -18,13 +18,20 @@ import { dirname, join } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const DATA = join(ROOT, "public", "data");
-// Raised from 8 to 13 (2026-07). At 8 the gate created a cliff rather than a
-// floor: below it a player was absent and the UI showed 0.0, at it he inherited
-// a full team-driven prior. On Michigan that was a 3.9-point gap opened by 7.7
-// minutes. 13 mpg is where a box line starts describing a role instead of a
-// cameo. Players below it are omitted entirely and render as "—", never 0.0,
-// which is a claim we cannot support.
-const MIN_PG = 13;
+// Raised from 8 to 13 (2026-07), then 13 to 15 (2026-08). At 8 the gate created
+// a cliff rather than a floor: below it a player was absent and the UI showed
+// 0.0, at it he inherited a full team-driven prior. On Michigan that was a
+// 3.9-point gap opened by 7.7 minutes. 13 mpg was where a box line started
+// describing a role instead of a cameo; 15 is where it starts describing a
+// rotation player, and bench rows in the 13-15 band were still reading mostly
+// as their team. Players below it are omitted entirely and render as "—",
+// never 0.0, which is a claim we cannot support.
+//
+// MUST match MIN_PG in export-epm-json.mjs — if the two disagree, a player
+// gets a real EPM from one source and a suppressed one from the other for the
+// same role, and which he gets depends on whether the play-by-play fit
+// happened to cover him.
+const MIN_PG = 15;
 const BUILT_AT = process.env.BUILD_STAMP || "";  // deterministic if provided
 
 const csv = readFileSync(join(__dirname, "box-epm-pred.csv"), "utf8")

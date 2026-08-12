@@ -57,7 +57,7 @@ const MIN_POSS = 300; // below this the RAPM is mostly shrinkage — exclude fro
 const LOW_USG_PCTILE = Number(process.env.BTA_LOW_USG_PCTILE ?? 34);
 const LOW_USG_FLOOR = Number(process.env.BTA_LOW_USG_FLOOR ?? 0.85);
 
-const MIN_PG = Number(args.includes("--min-pg") ? args[args.indexOf("--min-pg") + 1] : 13);
+const MIN_PG = Number(args.includes("--min-pg") ? args[args.indexOf("--min-pg") + 1] : 15);
 // Which fit to read and where to write it. Defaults are the shipped metric; the
 // CALIBRATION pass overrides both so the prior-free fit lands in its own file.
 const IN_CSV = args.includes("--in") ? args[args.indexOf("--in") + 1] : "epm.csv";
