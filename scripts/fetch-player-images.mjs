@@ -59,6 +59,74 @@ function normTight(s) {
   return norm(s).replace(/\s+/g, "");
 }
 
+/**
+ * Last name only, suffixes dropped. Used exclusively for the within-roster
+ * reconciliation pass, never as a primary key — on its own a surname is far
+ * too weak to join on.
+ */
+/**
+ * Do two given names plausibly belong to the same person?
+ *
+ * A shared surname inside one roster is NOT sufficient on its own, which cost
+ * two wrong faces before this existed: North Dakota St. has a Treyson Anderson
+ * we track and a Garrett Anderson ESPN lists, each unmatched and each unique,
+ * and the reconciliation happily married them. Same for Damari Wheeler-Thomas
+ * and Reggie Thomas. Uniqueness rules out swapping two brothers; it does
+ * nothing about two strangers.
+ *
+ * So the given names have to agree too, by one of three tests that a real
+ * variant passes and a different person does not:
+ *   - one is a prefix of the other  (Vince/Vincent, Somto/Somtochukwu)
+ *   - they differ by a single character  (Pharell/Pharrell)
+ *   - they are a known short form  (Mike/Michael, Drew/Andrew)
+ *
+ * Genuine nicknames that share nothing with the given name — "Butta" for
+ * Efrem, "Spudd" for Tavarus — deliberately fail here. They are real, but
+ * they are unguessable, and the cost of guessing wrong is a photo of someone
+ * else. Those belong in PLAYER_ALIASES where a human has signed off.
+ */
+const SHORT_FORMS = [
+  ["michael", "mike"], ["joseph", "joe"], ["andrew", "drew"], ["robert", "bob"],
+  ["william", "bill"], ["richard", "rick"], ["richard", "dick"], ["charles", "chuck"],
+  ["anthony", "tony"], ["nicholas", "nick"], ["theodore", "ted"], ["edward", "ted"],
+  ["james", "jim"], ["john", "jack"], ["lawrence", "larry"], ["kenneth", "ken"],
+  ["donald", "don"], ["ronald", "ron"], ["patrick", "pat"], ["gregory", "greg"],
+  ["timothy", "tim"], ["stephen", "steve"], ["steven", "steve"], ["daniel", "dan"],
+  ["david", "dave"], ["thomas", "tom"], ["peter", "pete"], ["frederick", "fred"],
+  ["francis", "frank"], ["walter", "walt"], ["albert", "al"], ["alexander", "alex"],
+];
+
+function editDistance1(a, b) {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0, j = 0, edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++edits > 1) return false;
+    if (a.length > b.length) i++;
+    else if (b.length > a.length) j++;
+    else { i++; j++; }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
+function givenNamesAgree(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.startsWith(b) || b.startsWith(a)) return true;
+  if (editDistance1(a, b)) return true;
+  return SHORT_FORMS.some(([full, short]) =>
+    (a === full && b === short) || (a === short && b === full));
+}
+
+function givenKey(s) {
+  return norm(s).split(" ")[0] ?? "";
+}
+
+function surnameKey(s) {
+  const toks = norm(s).split(" ").filter((t) => !/^(jr|sr|ii|iii|iv|v|vi|lll|ll)$/.test(t));
+  return toks[toks.length - 1] ?? "";
+}
+
 // Bart team-name → ESPN team-name aliases pulled from src/data/cbb-team-ids.json
 // (those are CBB names, but ESPN uses similar conventions). For most teams the
 // normalized location matches; the gnarly ones get explicit mappings.
@@ -262,9 +330,18 @@ async function main() {
   // `normTight` keys so dotted-initial ESPN names ("P.J. Haggerty") can find
   // their Bart counterpart ("PJ Haggerty"). normTight collisions are extremely
   // rare for last-name disambiguation within a single roster.
+  const missLog = [];
+  let surnameRescues = 0;
+  let surnameRejected = 0;
+  const bartRosterPlayers = new Map();
+  const bartRosterNames = new Map();
   const bartByTeamPlayer = new Map();
   for (const p of bartPlayers) {
     if (!p.bart_player_id) continue;
+    if (!bartRosterNames.has(p.team_id)) bartRosterNames.set(p.team_id, []);
+    bartRosterNames.get(p.team_id).push(p.name);
+    if (!bartRosterPlayers.has(p.team_id)) bartRosterPlayers.set(p.team_id, []);
+    bartRosterPlayers.get(p.team_id).push(p);
     bartByTeamPlayer.set(`${p.team_id}|${norm(p.name)}`, p);
     bartByTeamPlayer.set(`${p.team_id}|${normTight(p.name)}`, p);
     // Third key: suffix-tolerant. norm/normTight both carry trailing suffixes
@@ -292,6 +369,37 @@ async function main() {
   let failed = 0;
   let nameMisses = 0;
 
+  /**
+   * Download + optimize one athlete's headshot onto a Bart id. Pulled out of
+   * the athlete loop so the surname reconciliation pass below can reuse it
+   * rather than growing a second copy of the sharp/caching logic.
+   */
+  async function claim(bart, href) {
+    matchedAthletes++;
+    const pngPath = path.join(PUB, `${bart.bart_player_id}.png`);
+    const webpPath = path.join(PUB, `${bart.bart_player_id}.webp`);
+    const thumbPath = path.join(PUB, `${bart.bart_player_id}-sm.webp`);
+
+    // Cache signal is the webp (canonical asset), not the png (intermediate).
+    if (existsSync(webpPath) && existsSync(thumbPath)) {
+      cached++;
+      photoMap[bart.bart_player_id] = `/images/players/${bart.bart_player_id}.webp`;
+      return;
+    }
+
+    const r = await downloadImage(href, pngPath);
+    if (r.bytes) downloaded++;
+    else { failed++; return; }
+    try {
+      await optimize(pngPath, webpPath, thumbPath);
+      photoMap[bart.bart_player_id] = `/images/players/${bart.bart_player_id}.webp`;
+      // Drop the PNG — webp is canonical. Avoids ~1 GB of dead originals.
+      await fs.unlink(pngPath).catch(() => {});
+    } catch (e) {
+      console.log(`   ⚠ sharp failed for ${bart.bart_player_id}: ${e.message}`);
+    }
+  }
+
   for (const [bartTeamId, { espnId, bartName }] of espnByBartId.entries()) {
     const res = await throttledGet(`${ESPN_BASE}/teams/${espnId}/roster`);
     if (!res.ok) {
@@ -301,6 +409,9 @@ async function main() {
     const j = await res.json();
     const athletes = j?.athletes ?? [];
     rostersDone++;
+
+    const claimedBart = new Set();
+    const leftoverAthletes = [];
 
     for (const a of athletes) {
       if (!a.headshot?.href) continue;
@@ -314,35 +425,66 @@ async function main() {
         ?? bartByTeamPlayer.get(`${bartTeamId}|pk:${playerKey(a.displayName)}`);
       if (!bart) {
         nameMisses++;
+        leftoverAthletes.push(a);
+        // With PHOTO_DUMP_MISSES=1, record what ESPN called them and what we
+        // had on that roster, so a miss can be diagnosed without guessing at
+        // the name variant. Writing the Bart side too is the point: the miss is
+        // a disagreement, and only one half of it is visible from here.
+        if (process.env.PHOTO_DUMP_MISSES === "1") {
+          missLog.push({
+            espn: a.displayName,
+            team: bartName,
+            bartRoster: bartRosterNames.get(bartTeamId) ?? [],
+          });
+        }
         continue;
       }
-      matchedAthletes++;
-      const pngPath = path.join(PUB, `${bart.bart_player_id}.png`);
-      const webpPath = path.join(PUB, `${bart.bart_player_id}.webp`);
-      const thumbPath = path.join(PUB, `${bart.bart_player_id}-sm.webp`);
+      claimedBart.add(bart.bart_player_id);
+      await claim(bart, a.headshot.href);
+    }
 
-      // Cache signal is the webp (canonical asset), not the png (intermediate).
-      if (existsSync(webpPath) && existsSync(thumbPath)) {
-        cached++;
-        photoMap[bart.bart_player_id] = `/images/players/${bart.bart_player_id}.webp`;
+    // ---- Second pass: reconcile on surname within this one roster.
+    //
+    // The remaining misses are given-name variants that no normalizer should
+    // try to guess at — Bart's "Efrem Johnson" is ESPN's "Butta Johnson", and
+    // "Tavarus Webb" is "Spudd Webb". A nickname dictionary would cover this
+    // season and rot by the next one.
+    //
+    // A surname inside a single roster is a much stronger key than it looks:
+    // both sides are already known to be the same team, so the only way to be
+    // wrong is two same-surname players on one roster. So require the surname
+    // to be unique on BOTH sides among who is still unclaimed, and skip it
+    // otherwise — brothers stay unmatched rather than get swapped.
+    const bySurname = (list, nameOf) => {
+      const m = new Map();
+      for (const x of list) {
+        const k = surnameKey(nameOf(x));
+        if (!k) continue;
+        if (!m.has(k)) m.set(k, []);
+        m.get(k).push(x);
+      }
+      return m;
+    };
+    const espnLeft = bySurname(leftoverAthletes, (a) => a.displayName);
+    const bartLeft = bySurname(
+      (bartRosterPlayers.get(bartTeamId) ?? []).filter((p) => !claimedBart.has(p.bart_player_id)),
+      (p) => p.name,
+    );
+    for (const [k, espnCands] of espnLeft) {
+      const bartCands = bartLeft.get(k);
+      if (espnCands.length !== 1 || !bartCands || bartCands.length !== 1) continue;
+      if (!givenNamesAgree(givenKey(bartCands[0].name), givenKey(espnCands[0].displayName))) {
+        surnameRejected++;
+        if (process.env.PHOTO_VERBOSE === "1") {
+          console.log(`   x ${bartName}: "${bartCands[0].name}" vs ESPN "${espnCands[0].displayName}" — given names disagree, skipped`);
+        }
         continue;
       }
-
-      const r = await downloadImage(a.headshot.href, pngPath);
-      if (r.bytes) {
-        downloaded++;
-      } else {
-        failed++;
-        continue;
+      surnameRescues++;
+      if (process.env.PHOTO_VERBOSE === "1") {
+        console.log(`   ~ ${bartName}: "${bartCands[0].name}" <- ESPN "${espnCands[0].displayName}"`);
       }
-      try {
-        await optimize(pngPath, webpPath, thumbPath);
-        photoMap[bart.bart_player_id] = `/images/players/${bart.bart_player_id}.webp`;
-        // Drop the PNG — webp is canonical. Avoids ~1 GB of dead originals.
-        await fs.unlink(pngPath).catch(() => {});
-      } catch (e) {
-        console.log(`   ⚠ sharp failed for ${bart.bart_player_id}: ${e.message}`);
-      }
+      await claim(bartCands[0], espnCands[0].headshot.href);
     }
 
     if (rostersDone % 25 === 0) {
@@ -362,6 +504,12 @@ async function main() {
   console.log(`  photos cached:        ${cached}`);
   console.log(`  photo fetch failed:   ${failed}`);
   console.log(`  athlete name misses:  ${nameMisses}`);
+  console.log(`  surname rescues:      ${surnameRescues}`);
+  console.log(`  surname rejected:     ${surnameRejected} (same surname, different given name)`);
+  if (process.env.PHOTO_DUMP_MISSES === "1") {
+    await fs.writeFile(".photo-misses.json", JSON.stringify(missLog, null, 1));
+    console.log(`  wrote .photo-misses.json (${missLog.length})`);
+  }
   console.log(`  player-photos.json:   ${Object.keys(photoMap).length} entries`);
 }
 
