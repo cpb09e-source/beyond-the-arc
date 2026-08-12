@@ -732,10 +732,10 @@ function SearchGlass({ className }: { className?: string }) {
   );
 }
 function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <th className={`px-2 sm:px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium ${className}`}>{children}</th>;
+  return <th className={`px-1 sm:px-3 py-2 text-xs uppercase tracking-wide sm:tracking-widest text-ink-muted font-medium ${className}`}>{children}</th>;
 }
 function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-2 sm:px-3 py-2.5 ${className}`}>{children}</td>;
+  return <td className={`px-1 sm:px-3 py-2.5 ${className}`}>{children}</td>;
 }
 function ThSort({
   label, active, dir, onClick, align = "right", className = "",

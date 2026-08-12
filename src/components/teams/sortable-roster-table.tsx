@@ -236,7 +236,7 @@ function RsciBadge({ rank }: { rank?: number | null }) {
 }
 
 function Td({ children, align = "left", className = "" }: { children: React.ReactNode; align?: "left" | "right"; className?: string }) {
-  return <td className={`px-2 sm:px-3 py-2.5 ${align === "right" ? "text-right" : ""} ${className}`}>{children}</td>;
+  return <td className={`px-1 sm:px-3 py-2.5 ${align === "right" ? "text-right" : ""} ${className}`}>{children}</td>;
 }
 function StatCell({ value, pct, emphasized = false }: { value: string; pct: number | null; emphasized?: boolean }) {
   return (
@@ -255,12 +255,12 @@ function ThSort({
 }) {
   return (
     <th className={cn(
-      "p-0 text-xs uppercase tracking-widest font-medium select-none cursor-pointer hover:bg-paper-deep/90 transition-colors",
+      "p-0 text-xs uppercase tracking-wide sm:tracking-widest font-medium select-none cursor-pointer hover:bg-paper-deep/90 transition-colors",
       wrap ? "whitespace-normal" : "whitespace-nowrap",
       align === "right" && "text-right",
       active ? "text-ink" : "text-ink-muted",
     )}>
-      <button type="button" onClick={onClick} className={cn("inline-flex items-center gap-1 w-full px-2 sm:px-3 py-3 sm:py-2", align === "right" && "justify-end")}>
+      <button type="button" onClick={onClick} className={cn("inline-flex items-center gap-1 w-full px-1.5 sm:px-3 py-3 sm:py-2", align === "right" && "justify-end")}>
         <span className={wrap ? "leading-tight text-center" : undefined}>{label}</span>
         {active && <span className="text-coral text-[0.65rem] leading-none">{dir === "asc" ? "↑" : "↓"}</span>}
       </button>

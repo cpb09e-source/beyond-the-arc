@@ -26,6 +26,7 @@ import { SortableTh } from "@/components/explorer/sortable-th";
 import { CompareTeamsModal } from "@/components/explorer/compare-teams-modal";
 import { TeamLogo } from "@/components/team-logo";
 import { TourneyBadge } from "@/components/tourney-badge";
+import { tourneyBadge } from "@/data/tournament-results";
 import { PercentileChip } from "@/components/percentile-chip";
 import { confDisplay } from "@/lib/conf-display";
 import { useDragPan } from "@/lib/use-drag-pan";
@@ -652,9 +653,31 @@ export function ExplorerClient({
                   // Opaque zebra so the frozen columns can share it and still
                   // hide the scrolled content behind them.
                   const zebra = i % 2 === 0 ? "bg-paper" : "bg-card";
+                  // On phones the rank cell carries the tournament honour: the
+                  // chip cost ~23px of a ~71px team column, and this gutter is
+                  // already mostly padding around one or two digits. Hardwood
+                  // rather than a new hue — it is the colour the chip has always
+                  // used, so nothing is introduced, and it cannot be mistaken
+                  // for a percentile, which is only ever green/amber/red.
+                  // max-sm: so the desktop chip and the zebra stripe are
+                  // untouched above the breakpoint.
+                  const honour = tourneyBadge(r.team_name, r.team_year);
+                  const honourCell =
+                    honour === "champion"
+                      ? "max-sm:bg-court/55 max-sm:text-court-ink max-sm:font-bold"
+                      : honour === "final-four"
+                      ? "max-sm:bg-court/20 max-sm:text-court-ink max-sm:font-bold"
+                      : "";
+                  const honourTitle =
+                    honour === "champion" ? `${seasonLabel(r.team_year)} national champion`
+                    : honour === "final-four" ? `${seasonLabel(r.team_year)} Final Four`
+                    : undefined;
                   return (
                   <tr key={`${r.team_id}-${r.team_year}`} className={cn("group", zebra)}>
-                    <td className={cn("sticky left-0 z-20 w-12 px-1 sm:px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
+                    <td
+                      title={honourTitle}
+                      className={cn("sticky left-0 z-20 w-12 px-1 sm:px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER, honourCell)}
+                    >
                       {(spec.limit === -1 ? 0 : (pageSafe - 1) * spec.limit) + i + 1}
                     </td>
                     {/* Trailing edge of the frozen group. #/Team pin and everything
@@ -669,11 +692,11 @@ export function ExplorerClient({
                         className="inline-flex items-center gap-2.5 group"
                         aria-label={r.team_name}
                       >
-                        <TeamLogo name={r.team_name} size={24} />
+<TeamLogo name={r.team_name} size={24} />
                         <span className="hidden sm:inline font-medium text-ink group-hover:text-coral transition-colors">
                           {r.team_name}
                         </span>
-                        <TourneyBadge teamName={r.team_name} year={r.team_year} />
+                        <TourneyBadge teamName={r.team_name} year={r.team_year} className="hidden sm:inline-flex" />
                       </Link>
                     </td>
                     <td className={cn("px-3 py-1 text-ink-muted hidden sm:table-cell transition-colors", ROW_HOVER)}>{confDisplay(r.team_conference)}</td>

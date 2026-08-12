@@ -910,7 +910,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                     // arrived sorted by eWins with the active arrow drawn on EPM.
                     <SortableTh key={`${c.field}-${i}`} statKey={c.sortKey} label={c.label} basePath="/players" defaultSort="ewins" idleArrows className="sticky top-6 z-30 bg-paper-deep border-b border-hairline" />
                   ) : (
-                    <th key={`${c.field}-${i}`} className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-right whitespace-nowrap align-middle">
+                    <th key={`${c.field}-${i}`} className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-right whitespace-nowrap align-middle">
                       <StatLabel label={c.label} />
                     </th>
                   ),
@@ -1009,7 +1009,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                         <td
                           key={`${c.field}-${ci}`}
                           className={cn(
-                            "px-2 py-1 text-right tabular whitespace-nowrap transition-colors",
+                            "px-1 sm:px-2 py-1 text-right tabular whitespace-nowrap transition-colors",
                             c.band && EPM_BAND_TINT,
                             ROW_HOVER,
                           )}

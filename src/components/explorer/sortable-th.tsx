@@ -111,11 +111,7 @@ export function SortableTh({
           {arrow ? (
             <span className="text-coral text-[0.65rem] leading-none">{arrow}</span>
           ) : idleArrows ? (
-            /* Hidden on phones. It is an affordance hint, not information —
-               the ACTIVE arrow above always shows, so the current sort is
-               never in doubt — and at ~14px on every one of a dozen headers
-               it was costing a full column of the little width a phone has. */
-            <span className="hidden sm:inline text-ink-muted/50 text-[0.6rem] leading-none tracking-tighter" aria-hidden>↑↓</span>
+            <span className="text-ink-muted/50 text-[0.6rem] leading-none tracking-tighter" aria-hidden>↑↓</span>
           ) : null}
         </span>
       </Link>
