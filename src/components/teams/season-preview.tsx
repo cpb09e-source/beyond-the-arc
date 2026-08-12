@@ -75,6 +75,8 @@ export function SeasonPreview({ teamName }: { teamName: string }) {
     // It used to be hard-coded null while the file still shipped a `prtg` the
     // table never read, which left the impact column blank for every roster.
     epm: p.epm,
+    ewins: null,
+    on_off: null,
     // Also last season's, and no more "unavailable" than PPG is. The comment
     // here used to say both needed this season's play-by-play; they do not —
     // they sit in the rank files next to the stats already being read, keyed as

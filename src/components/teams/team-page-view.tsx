@@ -65,6 +65,8 @@ export type RosterEntry = {
   ft_pct: number | null;
   pir: number | null;
   epm: number | null;
+  ewins: number | null;
+  on_off: number | null;
   ts_pct: number | null;
   usg_pct: number | null;
   /** Per-stat percentile chips, keyed by the roster column. `null` for any
@@ -78,6 +80,8 @@ export type RosterEntry = {
     fg3_pct?: number | null;
     ft_pct?: number | null;
     epm?: number | null;
+    ewins?: number | null;
+    on_off?: number | null;
     ts_pct?: number | null;
     usg_pct?: number | null;
   };
@@ -167,6 +171,7 @@ export function buildRoster(
   teamId: number,
   year: number,
   epmByBart: Map<number, number>,
+  extrasByBart?: Map<number, { ewins: number | null; on_off: number | null }>,
 ): RosterEntry[] {
   const metrics = computeYearMetrics(players, year);
 
@@ -175,6 +180,8 @@ export function buildRoster(
   const tsById = new Map<number, number | null>();
   const usgById = new Map<number, number | null>();
   const epmById = new Map<number, number | null>();
+  const ewinsById = new Map<number, number | null>();
+  const onOffById = new Map<number, number | null>();
   for (const p of players) {
     const row = p.player_bart_stats?.raw_row ?? null;
     const games = p.player_bart_stats?.games ?? null;
@@ -186,10 +193,17 @@ export function buildRoster(
     const usgRaw = pctFromIdx(row, 6); // Bart usage %, 0–100
     usgById.set(p.id, usgRaw != null ? usgRaw / 100 : null);
     epmById.set(p.id, p.bart_player_id != null ? (epmByBart.get(p.bart_player_id) ?? null) : null);
+    // eWins and on/off exist only for players the play-by-play fit reached, so
+    // these maps are sparser than the EPM one by design.
+    const ex = p.bart_player_id != null ? extrasByBart?.get(p.bart_player_id) : undefined;
+    ewinsById.set(p.id, ex?.ewins ?? null);
+    onOffById.set(p.id, ex?.on_off ?? null);
   }
   const pctlTs = poolPercentiles(tsById);
   const pctlUsg = poolPercentiles(usgById);
   const pctlEpm = poolPercentiles(epmById);
+  const pctlEwins = poolPercentiles(ewinsById);
+  const pctlOnOff = poolPercentiles(onOffById);
 
   return players
     .filter((p) => {
@@ -213,10 +227,14 @@ export function buildRoster(
         ft_pct: pctFromIdx(row, 15),
         pir: m?.pir ?? null,
         epm: epmById.get(p.id) ?? null,
+        ewins: ewinsById.get(p.id) ?? null,
+        on_off: onOffById.get(p.id) ?? null,
         ts_pct: tsById.get(p.id) ?? null,
         usg_pct: usgById.get(p.id) ?? null,
         pcts: {
           epm: pctlEpm.get(p.id) ?? null,
+          ewins: pctlEwins.get(p.id) ?? null,
+          on_off: pctlOnOff.get(p.id) ?? null,
           ts_pct: pctlTs.get(p.id) ?? null,
           usg_pct: pctlUsg.get(p.id) ?? null,
         },

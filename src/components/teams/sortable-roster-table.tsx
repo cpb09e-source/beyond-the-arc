@@ -22,6 +22,10 @@ type RosterEntry = {
   ft_pct: number | null;
   pir: number | null;
   epm: number | null;
+  // Optional: the preview season has no fit at all, and only the play-by-play
+  // fit produces these two, so absent is a normal state rather than an error.
+  ewins?: number | null;
+  on_off?: number | null;
   ts_pct: number | null;
   usg_pct: number | null;
   // Preview-only — roster status shown as an inline badge next to the name
@@ -39,12 +43,14 @@ type RosterEntry = {
     fg3_pct?: number | null;
     ft_pct?: number | null;
     epm?: number | null;
+    ewins?: number | null;
+    on_off?: number | null;
     ts_pct?: number | null;
     usg_pct?: number | null;
   };
 };
 
-type SortKey = "name" | "class" | "height" | "epm" | "ts_pct" | "usg_pct" | "pts" | "reb" | "ast" | "fg3_pct" | "ft_pct";
+type SortKey = "name" | "class" | "height" | "epm" | "ewins" | "on_off" | "ts_pct" | "usg_pct" | "pts" | "reb" | "ast" | "fg3_pct" | "ft_pct";
 
 // Class ordering Fr → So → Jr → Sr → Gr; unknowns last.
 const CLASS_ORDER: Record<string, number> = { Fr: 1, So: 2, Jr: 3, Sr: 4, Gr: 5 };
@@ -84,6 +90,8 @@ export function SortableRosterTable({
         case "class":     return CLASS_ORDER[p.class ?? ""] ?? 99;
         case "height":    return heightInches(p.height);
         case "epm":       return p.epm;
+        case "ewins":     return p.ewins ?? null;
+        case "on_off":    return p.on_off ?? null;
         case "ts_pct":    return p.ts_pct;
         case "usg_pct":   return p.usg_pct;
         case "pts":       return p.pts;
@@ -128,6 +136,8 @@ export function SortableRosterTable({
               <ThSort label="Cl"     active={sortBy==="class"} dir={sortDir} onClick={() => toggle("class","asc")} align="left" />
               <ThSort label="Ht"     active={sortBy==="height"} dir={sortDir} onClick={() => toggle("height","desc")} align="left" />
               <ThSort label="EPM"    active={sortBy==="epm"} dir={sortDir} onClick={() => toggle("epm","desc")} />
+              <ThSort label="eWINS"  active={sortBy==="ewins"} dir={sortDir} onClick={() => toggle("ewins","desc")} />
+              <ThSort label="ON/OFF" active={sortBy==="on_off"} dir={sortDir} onClick={() => toggle("on_off","desc")} />
               <ThSort label="TS%"    active={sortBy==="ts_pct"} dir={sortDir} onClick={() => toggle("ts_pct","desc")} />
               <ThSort label="USG%"   active={sortBy==="usg_pct"} dir={sortDir} onClick={() => toggle("usg_pct","desc")} />
               <ThSort label="PPG"    active={sortBy==="pts"} dir={sortDir} onClick={() => toggle("pts","desc")} />
@@ -163,6 +173,10 @@ export function SortableRosterTable({
                 <Td className="text-ink-muted">{p.class ?? "—"}</Td>
                 <Td className="text-ink-muted whitespace-nowrap">{p.height ?? "—"}</Td>
                 <StatCell value={p.epm != null ? (p.epm >= 0 ? "+" : "") + fmtNum(p.epm, 1) : "—"} pct={p.pcts?.epm ?? null} emphasized />
+                {/* Both come from the play-by-play fit only, so a box-estimate
+                    player shows "—" here while still carrying an EPM. */}
+                <StatCell value={fmtNum(p.ewins ?? null, 1)} pct={p.pcts?.ewins ?? null} />
+                <StatCell value={p.on_off != null ? (p.on_off >= 0 ? "+" : "") + fmtNum(p.on_off, 1) : "—"} pct={p.pcts?.on_off ?? null} />
                 <StatCell value={fmtPct(p.ts_pct)}       pct={p.pcts?.ts_pct    ?? null} />
                 <StatCell value={fmtPct(p.usg_pct)}      pct={p.pcts?.usg_pct   ?? null} />
                 <StatCell value={fmtNum(p.pts, 1)}       pct={p.pcts?.pts       ?? null} />

@@ -242,6 +242,30 @@ export async function readImpactForYear(year: number): Promise<Map<number, numbe
 }
 
 /**
+ * eWins and raw on/off for a season, keyed by bart id.
+ *
+ * Deliberately reads ONLY epm-<year>.json, with no box-epm fallback. The box
+ * estimate is a projection from a box line; it has no lineup information, so it
+ * cannot produce an on/off at all and its eWins would be a different quantity
+ * wearing the same label. A player covered only by the box fit gets nothing
+ * here and renders as "—", which is the same thing the player-page Impact panel
+ * does with these two.
+ */
+export async function readImpactExtrasForYear(
+  year: number,
+): Promise<Map<number, { ewins: number | null; on_off: number | null }>> {
+  const out = new Map<number, { ewins: number | null; on_off: number | null }>();
+  const real = await readJson<{
+    players: Record<string, { ewins?: number | null; on_off?: number | null }>;
+  }>(`epm-${year}.json`).catch(() => null);
+  if (real?.players) for (const [bid, v] of Object.entries(real.players)) {
+    const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : null);
+    out.set(Number(bid), { ewins: num(v.ewins), on_off: num(v.on_off) });
+  }
+  return out;
+}
+
+/**
  * One transfer-portal entry for a specific player. Surface this on the
  * player profile hero when the player has committed elsewhere — we strike
  * through their current school and show the new destination.
