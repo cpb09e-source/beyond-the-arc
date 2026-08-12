@@ -59,6 +59,40 @@ for (const p of prev) {
 // documented there: the impact column is `epm` (not the retired `bta_portg`),
 // and usage is keyed `usage`, not `usage_pct`.
 const round1 = (x) => (x == null ? null : Math.round(x * 10) / 10);
+
+// eWins + on/off, which live in epm-<year>.json rather than the rank files.
+// Same source and same no-box-fallback rule as the builder — see the note on
+// impactExtras there.
+const impactExtras = (() => {
+  const m = new Map();
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(DATA, `epm-${PREV_YEAR}.json`), "utf8"));
+    const num = (x) => (typeof x === "number" && Number.isFinite(x) ? x : null);
+    for (const [bid, v] of Object.entries(j.players || {})) {
+      m.set(Number(bid), { ewins: num(v.ewins), on_off: num(v.on_off) });
+    }
+  } catch { /* leave blank */ }
+  return m;
+})();
+
+// Their percentile chips, over the same pool poolPercentiles uses on a normal
+// team page: every bart id in players-by-year/<PREV>, ranked ascending.
+const percentilesOver = (pick) => {
+  const vals = [];
+  for (const p of prev) {
+    const v = p.bart_player_id != null ? impactExtras.get(p.bart_player_id) : null;
+    const x = v ? pick(v) : null;
+    if (x != null) vals.push([p.bart_player_id, x]);
+  }
+  vals.sort((a, b) => a[1] - b[1]);
+  const out = new Map();
+  if (vals.length < 2) return out;
+  vals.forEach(([id], i) => out.set(id, Math.round((i / (vals.length - 1)) * 100)));
+  return out;
+};
+const ewinsPct = percentilesOver((v) => v.ewins);
+const onOffPct = percentilesOver((v) => v.on_off);
+
 function statsFor(bartId) {
   try {
     const j = JSON.parse(fs.readFileSync(path.join(DATA, "player-ranks", `${bartId}.json`), "utf8"));
@@ -67,8 +101,13 @@ function statsFor(bartId) {
     const p = (k) => (typeof s[k]?.percentile === "number" ? s[k].percentile : null);
     const asFrac = (k) => { const x = v(k); return x == null ? null : x > 1.5 ? x / 100 : x; };
     if (v("pts_pg") === null && v("epm") === null) return null;
+    const ex = impactExtras.get(bartId) ?? { ewins: null, on_off: null };
     return {
       epm: round1(v("epm")), epmP: p("epm"),
+      ewins: ex.ewins == null ? null : Math.round(ex.ewins * 100) / 100,
+      ewinsP: ewinsPct.get(bartId) ?? null,
+      on_off: round1(ex.on_off),
+      on_offP: onOffPct.get(bartId) ?? null,
       pir: round1(v("pir")), pirP: p("pir"),
       pts: round1(v("pts_pg")), ptsP: p("pts_pg"),
       reb: round1(v("reb_pg")), rebP: p("reb_pg"),

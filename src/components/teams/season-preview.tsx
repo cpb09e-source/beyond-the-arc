@@ -27,6 +27,10 @@ type PreviewPlayer = {
   rsci?: number | null;
   /** Last season's EPM + its percentile. Was `prtg` (retired BTA PRTG). */
   epm: number | null; epmP: number | null;
+  /** Last season's eWins + on/off, from epm-<year>.json — the same source
+   *  readImpactExtrasForYear feeds a normal team page, percentiles included. */
+  ewins?: number | null; ewinsP?: number | null;
+  on_off?: number | null; on_offP?: number | null;
   pir: number | null; pirP: number | null;
   pts: number | null; ptsP: number | null;
   reb: number | null; rebP: number | null;
@@ -75,18 +79,20 @@ export function SeasonPreview({ teamName }: { teamName: string }) {
     // It used to be hard-coded null while the file still shipped a `prtg` the
     // table never read, which left the impact column blank for every roster.
     epm: p.epm,
-    ewins: null,
-    on_off: null,
-    // Also last season's, and no more "unavailable" than PPG is. The comment
-    // here used to say both needed this season's play-by-play; they do not —
-    // they sit in the rank files next to the stats already being read, keyed as
-    // ts_pct and `usage`. Portal-only players (not in Bart's feed) still come
-    // through null, since their On3 line carries neither.
+    // Also last season's, carried over on exactly the same terms as EPM. These
+    // two were hard-coded null here on the belief that they needed this
+    // season's play-by-play; they don't — build-season-preview reads them out
+    // of epm-<year>.json now, next to the EPM it was already carrying. Portal-
+    // only players (not in Bart's feed) still come through null.
+    ewins: p.ewins ?? null,
+    on_off: p.on_off ?? null,
+    // Same carryover. These do come from the rank files, keyed ts_pct/`usage`.
     ts_pct: p.ts, usg_pct: p.usg,
     pcts: {
       pir: p.pirP, pts: p.ptsP, reb: p.rebP,
       ast: p.astP, fg3_pct: p.fg3P, ft_pct: p.ftP,
       epm: p.epmP, ts_pct: p.tsP, usg_pct: p.usgP,
+      ewins: p.ewinsP ?? null, on_off: p.on_offP ?? null,
     },
   }));
 
@@ -100,7 +106,11 @@ export function SeasonPreview({ teamName }: { teamName: string }) {
 
   return (
     <section className="mx-auto max-w-7xl px-4 lg:px-10 mt-5">
-      <div className="mb-2 sm:mb-4">
+      {/* px-2 on top of the section's px-4 puts the heading on the same 24px
+          margin as the hero above it. The section can't simply use px-6: the
+          table inside bleeds to the screen edge with -mx-4, and that number is
+          fixed inside SortableRosterTable, which other pages also render. */}
+      <div className="mb-2 sm:mb-4 px-2 lg:px-0">
         <h2 className="font-display text-3xl text-ink whitespace-nowrap">Roster — {shortLabel}</h2>
       </div>
       <SortableRosterTable roster={roster} rankedPlayerIds={linkableIds} />

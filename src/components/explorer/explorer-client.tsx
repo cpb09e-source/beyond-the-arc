@@ -458,6 +458,25 @@ export function ExplorerClient({
               {loadingSeasons && <span className="ml-1.5 text-coral">· loading season…</span>}
             </span>
 
+            {/* Desktop home for the rankings link: immediately after the count.
+                Both are statements about the same set of teams — "100 of 365,
+                and here they are ranked by conference" — so the link reads as a
+                continuation of the count rather than as one more control in the
+                right-hand cluster, where it sat next to Show and the row-count
+                select and looked like a third setting.
+
+                Below sm it keeps its old slot in the right-hand group; see the
+                note there for why. */}
+            {conferenceRankings.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowRankings(true)}
+                className="hidden sm:inline-flex items-center text-xs text-coral hover:underline whitespace-nowrap"
+              >
+                View Conference Rankings →
+              </button>
+            )}
+
             {/* What's currently applied, and the fastest way to undo any of it.
                 Capped at six; the rest opens the panel, which shows them all. */}
             <StatChipStrip
@@ -482,16 +501,17 @@ export function ExplorerClient({
                 the table header already does was part of what made these pages
                 feel unrelated. Only the row-count select remains, same position
                 and shape as the one on /players. */}
-            {/* Lives in the controls row rather than with the filters. On a
-                phone the left group wraps and this was landing on a line of its
-                own, directly above a row that was itself mostly empty. mr-auto
-                pins it to the left of that row so the two share one line
-                instead of stacking two half-empty ones. */}
+            {/* PHONE ONLY. On a phone the left group wraps and this was landing
+                on a line of its own, directly above a row that was itself
+                mostly empty. mr-auto pins it to the left of that row so the two
+                share one line instead of stacking two half-empty ones — which
+                is exactly the reason it can't simply move up to sit beside the
+                count at every width. From sm up the copy above takes over. */}
             {conferenceRankings.length > 0 && (
               <button
                 type="button"
                 onClick={() => setShowRankings(true)}
-                className="mr-auto text-xs text-coral hover:underline whitespace-nowrap inline-flex items-center min-h-11 sm:min-h-0 py-2 sm:py-0"
+                className="sm:hidden mr-auto text-xs text-coral hover:underline whitespace-nowrap inline-flex items-center min-h-11 py-2"
               >
                 View Conference Rankings →
               </button>

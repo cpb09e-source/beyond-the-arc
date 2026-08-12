@@ -50,8 +50,11 @@ export default async function PreviewIndexPage() {
   });
   for (const list of byConf.values()) list.sort((a, b) => a.name.localeCompare(b.name));
 
+  // px-5 below sm rather than px-6: measured at 414px, exactly one of the 365
+  // names ("Texas A&M Corpus Chris…") overflowed its two-column cell, and by
+  // 2px. The 8px this returns clears it with room to spare.
   return (
-    <div className="mx-auto max-w-[88rem] px-6 lg:px-10 py-10 lg:py-14">
+    <div className="mx-auto max-w-[88rem] px-5 sm:px-6 lg:px-10 py-10 lg:py-14">
       <header className="mb-8">
         <span className="text-xs uppercase tracking-widest text-coral font-medium">
           {PREVIEW_SEASON_LABEL} · Season preview
@@ -73,15 +76,24 @@ export default async function PreviewIndexPage() {
                   {teams.length} {teams.length === 1 ? "team" : "teams"}
                 </span>
               </div>
-              <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-1">
+              {/* Two columns on phones as well. A conference is 10-20 teams and
+                  a single column pushed the ACC alone past two screens, so the
+                  page read as a scroll rather than a directory. The gutter,
+                  logo and row padding all step down below sm to buy the second
+                  column its width — at one column the row was mostly empty
+                  space to the right of the name anyway. */}
+              <ul className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-3 sm:gap-x-6 gap-y-0.5 sm:gap-y-1">
                 {teams.map((t) => (
                   <li key={t.slug}>
                     <Link
                       href={`/teams/${t.slug}/${PREVIEW_SEASON_YEAR}/`}
-                      className="group flex items-center gap-2.5 py-1.5 px-2 -mx-2 rounded-md hover:bg-[var(--accent-tint)] transition-colors"
+                      className="group flex items-center gap-2 sm:gap-2.5 py-1.5 px-1.5 sm:px-2 -mx-1.5 sm:-mx-2 rounded-md hover:bg-[var(--accent-tint)] transition-colors"
                     >
-                      <TeamLogo name={t.name} size={22} className="shrink-0 rounded-[3px]" />
-                      <span className="text-sm text-ink group-hover:text-coral transition-colors truncate">
+                      {/* 20 rather than 22 at every width: TeamLogo writes its
+                          size as an inline style, so a responsive width class
+                          here would never win. */}
+                      <TeamLogo name={t.name} size={20} className="shrink-0 rounded-[3px]" />
+                      <span className="text-[0.8rem] sm:text-sm text-ink group-hover:text-coral transition-colors truncate">
                         {t.name}
                       </span>
                     </Link>

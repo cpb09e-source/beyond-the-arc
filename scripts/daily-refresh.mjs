@@ -113,6 +113,14 @@ async function main() {
   // 1. Rebuild the preview artifact.
   run("node", ["scripts/build-season-preview.mjs"]);
 
+  // 1b. Finish the impact group. The builder reads its carried-over stat line
+  // from the rank files, which cover fewer players than the EPM fit does — 654
+  // preview players are in epm-<year>.json with no rank file, and without this
+  // pass they show an eWins and an on/off beside a blank EPM. This stamps the
+  // value from the same file the live team pages read. Idempotent, so it is
+  // safe here whether or not the builder already filled the row.
+  run("node", ["scripts/patch-preview-impact.mjs"]);
+
   // 2. Season-start detection.
   if (await seasonHasStarted()) {
     console.log(

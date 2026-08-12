@@ -159,10 +159,62 @@ async function main() {
   // the end as a coverage figure, not a warning — see the note there.
   let prtgOnly = 0;
   const NULL_STATS = {
-    epm: null, epmP: null, pir: null, pirP: null, pts: null, ptsP: null,
+    epm: null, epmP: null, ewins: null, ewinsP: null, on_off: null, on_offP: null,
+    pir: null, pirP: null, pts: null, ptsP: null,
     reb: null, rebP: null, ast: null, astP: null, fg3: null, fg3P: null, ft: null, ftP: null,
     ts: null, tsP: null, usg: null, usgP: null,
   };
+
+  /**
+   * eWins and on/off for last season, by bart id.
+   *
+   * These two do NOT live in the rank files — sampled 273 players with a 2026
+   * season and not one carried either key, which is why the preview roster read
+   * them as null and every row showed "—" under eWINS and ON/OFF. They live in
+   * epm-<year>.json, alongside the EPM this script already carries over, so a
+   * roster showing last season's EPM has no reason to withhold them.
+   *
+   * epm-<year>.json only — no box-epm fallback, matching readImpactExtrasForYear
+   * on the live team pages: the box fit has no lineup data, so it cannot produce
+   * an on/off at all and its eWins would be a different quantity under the same
+   * label.
+   */
+  const impactExtras = (() => {
+    const m = new Map();
+    try {
+      const j = JSON.parse(fs.readFileSync(path.join(DATA, `epm-${PREV_YEAR}.json`), "utf8"));
+      const num = (x) => (typeof x === "number" && Number.isFinite(x) ? x : null);
+      for (const [bid, v] of Object.entries(j.players || {})) {
+        m.set(Number(bid), { ewins: num(v.ewins), on_off: num(v.on_off) });
+      }
+    } catch (err) {
+      console.log(`  ⚠ epm-${PREV_YEAR}.json unreadable — eWINS/ON-OFF will be blank: ${err.message}`);
+    }
+    return m;
+  })();
+
+  /**
+   * Percentile chips for those two, over the SAME pool a normal team page uses:
+   * poolPercentiles in team-page-view ranks the whole year's player list, so a
+   * bart id in the epm fit but absent from players-by-year is outside the pool
+   * there and is outside it here. round(i / (n-1) * 100), ascending.
+   */
+  const percentilesOver = (pick) => {
+    const vals = [];
+    for (const p of prev) {
+      const v = p.bart_player_id != null ? impactExtras.get(p.bart_player_id) : null;
+      const x = v ? pick(v) : null;
+      if (x != null) vals.push([p.bart_player_id, x]);
+    }
+    vals.sort((a, b) => a[1] - b[1]);
+    const out = new Map();
+    if (vals.length < 2) return out;
+    vals.forEach(([id], i) => out.set(id, Math.round((i / (vals.length - 1)) * 100)));
+    return out;
+  };
+  const ewinsPct = percentilesOver((v) => v.ewins);
+  const onOffPct = percentilesOver((v) => v.on_off);
+
   const statsFor = (bartId) => {
     try {
       const j = JSON.parse(fs.readFileSync(path.join(DATA, "player-ranks", `${bartId}.json`), "utf8"));
@@ -175,8 +227,15 @@ async function main() {
       // carried both — so the old read returned null for ~90% of the roster.
       if (v("epm") === null && v("bta_portg") !== null) prtgOnly++;
       const asFrac = (k) => { const x = v(k); return x == null ? null : x > 1.5 ? x / 100 : x; }; // → 0-1
+      const ex = impactExtras.get(bartId) ?? { ewins: null, on_off: null };
       return {
         epm: round1(v("epm")), epmP: p("epm"),
+        // Both carry a decimal on the site (0.14 eWins, -4.1 on/off), so they
+        // round to 2 and 1 respectively rather than through round1 alike.
+        ewins: ex.ewins == null ? null : Math.round(ex.ewins * 100) / 100,
+        ewinsP: ewinsPct.get(bartId) ?? null,
+        on_off: round1(ex.on_off),
+        on_offP: onOffPct.get(bartId) ?? null,
         pir: round1(v("pir")), pirP: p("pir"),
         pts: round1(v("pts_pg")), ptsP: p("pts_pg"),
         reb: round1(v("reb_pg")), rebP: p("reb_pg"),

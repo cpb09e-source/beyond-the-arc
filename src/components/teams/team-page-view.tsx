@@ -302,6 +302,25 @@ export function TeamPageView({
     ? Math.round(last5Ranks.reduce((a, b) => a + b, 0) / last5Ranks.length)
     : null;
 
+  // "Where they rank best/worst", or three adjusted-efficiency tiles when the
+  // season carries no national ranks. Rendered inside the hero on a normal
+  // season and below the roster on a preview — one definition, two positions.
+  const ranksBlock =
+    current.national_ranks && (current.national_ranks.top.length > 0 || current.national_ranks.bottom.length > 0) ? (
+      <NationalRanks
+        top={current.national_ranks.top}
+        bottom={current.national_ranks.bottom}
+        total={current.national_ranks.top[0]?.total ?? current.national_ranks.bottom[0]?.total ?? 0}
+        blurBody={preview}
+      />
+    ) : (
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-px bg-hairline border border-hairline rounded-lg overflow-hidden">
+        <StatTile label="Adj ORtg" value={fmtNum(currentTrank?.adjoe ?? null, 1)} sub="points per 100" />
+        <StatTile label="Adj DRtg" value={fmtNum(currentTrank?.adjde ?? null, 1)} sub="points per 100 (allowed)" />
+        <StatTile label="Adj Tempo" value={fmtNum(currentTrank?.adjt ?? null, 1)} sub="possessions / 40 min" />
+      </div>
+    );
+
   return (
     <div style={cssVars}>
       {/* Hero */}
@@ -421,24 +440,32 @@ export function TeamPageView({
             </div>
           )}
 
-          {current.national_ranks && (current.national_ranks.top.length > 0 || current.national_ranks.bottom.length > 0) ? (
-            <div className="mt-5">
-              <NationalRanks
-                top={current.national_ranks.top}
-                bottom={current.national_ranks.bottom}
-                total={current.national_ranks.top[0]?.total ?? current.national_ranks.bottom[0]?.total ?? 0}
-                blurBody={preview}
-              />
-            </div>
-          ) : (
-            <div className="mt-5 grid grid-cols-2 md:grid-cols-3 gap-px bg-hairline border border-hairline rounded-lg overflow-hidden">
-              <StatTile label="Adj ORtg" value={fmtNum(currentTrank?.adjoe ?? null, 1)} sub="points per 100" />
-              <StatTile label="Adj DRtg" value={fmtNum(currentTrank?.adjde ?? null, 1)} sub="points per 100 (allowed)" />
-              <StatTile label="Adj Tempo" value={fmtNum(currentTrank?.adjt ?? null, 1)} sub="possessions / 40 min" />
-            </div>
-          )}
+          {/* On a preview page this block moves BELOW the roster — see the
+              note where it renders. Everywhere else it closes the hero. */}
+          {!preview && <div className="mt-5">{ranksBlock}</div>}
         </div>
       </section>
+
+      {/* PREVIEW ORDER: schedule, then the roster, then everything else.
+          Nobody arrives at a 0-0 team for its rankings — the season hasn't
+          happened, so every rank on the page is last year's carried over and
+          shown blurred. The roster is the one thing on a preview page that is
+          genuinely about next season, and it was sitting four blocks down,
+          below two panels of blurred history. It comes straight after the
+          schedule now, and the ranks follow it.
+
+          The ranks block is hoisted to a variable rather than duplicated
+          because it has two shapes (national ranks, or the three-tile
+          fallback) and both would have to be kept in step. */}
+      {preview && (
+        <>
+          <SeasonPreview teamName={team.name} />
+          {/* mb-6 stands in for the hero's pb-8: the panel below opens with
+              mt-2 on the assumption that whatever precedes it already paid for
+              the gap, and here that is this section rather than the hero. */}
+          <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8 mb-6">{ranksBlock}</section>
+        </>
+      )}
 
       {/* Everything we hold on the team, in six cards, sliced eight ways.
           Sits directly under the best/worst barbell above: that names the five
@@ -451,13 +478,13 @@ export function TeamPageView({
         </section>
       )}
 
-      {preview ? (
-        // Upcoming-season roster + projected record — client-hydrated from
-        // season-preview.json, kept sharp (not blurred).
-        <SeasonPreview teamName={team.name} />
-      ) : (
+      {/* Preview rosters render above, right under the schedule. */}
+      {!preview && (
       <section className="mx-auto max-w-7xl px-4 lg:px-10 mt-5">
-        <div className="mb-2 sm:mb-4">
+        {/* px-2 on top of the section's px-4 lands the heading on the same 24px
+            margin as every other block on the page — see the note in
+            season-preview.tsx for why the section itself can't just be px-6. */}
+        <div className="mb-2 sm:mb-4 px-2 lg:px-0">
           <h2 className="font-display text-3xl text-ink whitespace-nowrap">Roster — {seasonLabel(current.year)}</h2>
         </div>
         {/* Player headshot strip — faces + names before the spreadsheet. */}

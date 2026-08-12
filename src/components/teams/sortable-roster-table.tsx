@@ -241,15 +241,35 @@ function RsciBadge({ rank }: { rank?: number | null }) {
   );
 }
 
+// cn(), not a template string: StatCell overrides the padding and only
+// tailwind-merge drops the loser. Concatenated, `px-1 sm:px-3` and `px-1
+// sm:px-2` would both be in the class list and the winner would come down to
+// stylesheet order.
 function Td({ children, align = "left", className = "" }: { children: React.ReactNode; align?: "left" | "right"; className?: string }) {
-  return <td className={`px-1 sm:px-3 py-2.5 ${align === "right" ? "text-right" : ""} ${className}`}>{children}</td>;
+  return <td className={cn("px-2.5 sm:px-3 py-2.5", align === "right" && "text-right", className)}>{children}</td>;
 }
+
+/**
+ * Stat cell — value on top, percentile chip beneath it.
+ *
+ * Side by side (the old shape) the chip and the number fought for the same
+ * line: the number is right-aligned, the chip is 28px of colour to its right,
+ * so the digits landed at a different x in every row depending on whether that
+ * row had a percentile. On a preview roster, where whole columns are chipless,
+ * that read as a broken column rather than as missing data.
+ *
+ * Stacked, the number owns the right edge in every row and the chip hangs
+ * under it, which is what the /players grid, the team explorer and the coaches
+ * table all already do. Rows with no chip get a chip-height spacer for the same
+ * reason those tables do: without it the values in a chipless row sit at a
+ * different height from their neighbours.
+ */
 function StatCell({ value, pct, emphasized = false }: { value: string; pct: number | null; emphasized?: boolean }) {
   return (
-    <Td align="right" className={cn("tabular", emphasized && "font-semibold text-ink")}>
-      <span className="inline-flex items-baseline justify-end gap-1.5">
-        <span>{value}</span>
-        <PercentileChip pct={pct} />
+    <Td align="right" className="py-1 tabular whitespace-nowrap">
+      <span className="inline-flex flex-col items-end gap-0.5 leading-tight">
+        <span className={cn(emphasized && "font-semibold text-ink")}>{value}</span>
+        {pct !== null ? <PercentileChip pct={pct} /> : <span className="h-5" aria-hidden="true" />}
       </span>
     </Td>
   );
@@ -266,7 +286,11 @@ function ThSort({
       align === "right" && "text-right",
       active ? "text-ink" : "text-ink-muted",
     )}>
-      <button type="button" onClick={onClick} className={cn("inline-flex items-center gap-1 w-full px-1.5 sm:px-3 py-3 sm:py-2", align === "right" && "justify-end")}>
+      {/* Padding matches the cells below it exactly. It didn't: headers sat at
+          px-1.5 over stat cells at px-1, so every right-aligned column label
+          was 2px off the numbers underneath it — small, but enough that the
+          columns read as not quite lining up. */}
+      <button type="button" onClick={onClick} className={cn("inline-flex items-center gap-1 w-full px-2.5 sm:px-3 py-3 sm:py-2", align === "right" && "justify-end")}>
         <span className={wrap ? "leading-tight text-center" : undefined}>{label}</span>
         {active && <span className="text-coral text-[0.65rem] leading-none">{dir === "asc" ? "↑" : "↓"}</span>}
       </button>
