@@ -61,11 +61,35 @@ const ROLE_EXP = 0.7;
 // starred without also being visible.
 const MIN_GP = 10, MIN_MPG = 12, MIN_PPG = 4;
 
+/**
+ * RECALIBRATED when EPM's zero point moved (export-epm-json.mjs, 2026-08).
+ *
+ * These are fixed cutoffs on a PVS built from EPM, so they are only meaningful
+ * relative to where EPM's zero sits — and EPM's zero was wrong by +1.18 to
+ * +1.31 depending on the season. Re-running the rescore against the corrected
+ * scale without touching these took the distribution from
+ *
+ *     12 / 64 / 156 / 177 / 149      (2.2 / 11.5 / 28.0 / 31.7 / 26.7 %)
+ * to  8 / 21 /  74 / 103 / 331       (1.5 /  3.9 / 13.8 / 19.2 / 61.6 %)
+ *
+ * — 328 players demoted and 10 promoted, none of whom had played a game in
+ * between. The old numbers were calibrated against an inflated scale; leaving
+ * them would have silently marked most of the portal down.
+ *
+ * Re-chosen against the corrected PVS to restore the distribution this file
+ * already documents as the intent (2 / 12 / 28 / 32 / 27), which lands at
+ * 1.9 / 12.7 / 27.6 / 30.7 / 27.2. Still FIXED, not percentiles, so a player's
+ * tier does not drift as others enter or leave the portal — the calibration is
+ * a one-off against a corrected scale, not a change of method.
+ *
+ * If EPM's zero point ever moves again, these move with it. That is the tell
+ * that they are scale-bound constants rather than free parameters.
+ */
 function starsForPvs(v) {
-  if (v >= 3.5) return 5;
-  if (v >= 2.5) return 4;
-  if (v >= 1.5) return 3;
-  if (v >= 0.6) return 2;
+  if (v >= 3.1) return 5;
+  if (v >= 1.7) return 4;
+  if (v >= 0.5) return 3;
+  if (v >= -0.4) return 2;
   return 1;
 }
 
@@ -163,7 +187,7 @@ portal.transfer_classes = { top_overall, worst_power, by_school };
 portal.scoring = {
   metric: "pvs",
   formula: "EPM * min(1, MPG/28)^0.7",
-  star_cutoffs: [0.6, 1.5, 2.5, 3.5],
+  star_cutoffs: [-0.4, 0.5, 1.7, 3.1],
   rescored_at: new Date().toISOString(),
 };
 fs.writeFileSync(PORTAL, JSON.stringify(portal));
