@@ -63,13 +63,16 @@ export type PortalEntry = {
   /** PIR after the conference-tier multiplier, and that term converted to wins. */
   pir_adj?: number | null;
   pir_wins?: number;
-  /**
-   * THE TRANSFER RATING shown in the table: eWins + freshman development bump
-   * + tiered-PIR term. Same units the transfer classes are summed in, so a
-   * school's class score is literally these numbers added up (incoming, minus
-   * half the outgoing) — the column and the sidebar cannot drift apart.
-   */
+  /** eWins + freshman development bump + tiered-PIR term, in wins. */
   value?: number | null;
+  /**
+   * THE TRANSFER RATING shown in the table: `value` on a readable 0-100 scale
+   * at 30 points per win, where 0 is an average player and the best transfer in
+   * this cycle lands at 97. Negative for players who cost their team more than
+   * an average one would have. Drives the star tiers, so the number and the
+   * chip beside it can never disagree.
+   */
+  rating?: number | null;
   /** EPM added by the sophomore leap; 0 for everyone who is not a freshman. */
   dev_bump?: number;
   stars: 0 | 1 | 2 | 3 | 4 | 5;
@@ -152,7 +155,7 @@ export function PortalClient({
         case "ppg":          return e.ppg;
         case "rpg":          return e.rpg;
         case "apg":          return e.apg;
-        case "rating":       return e.value ?? null;
+        case "rating":       return e.rating ?? null;
       }
     };
     return [...filtered].sort((a, b) => {
@@ -324,13 +327,14 @@ export function PortalClient({
                     <Td className="text-ink-muted tabular text-xs whitespace-nowrap">{e.team_to ? fmtDate(e.date_updated) : "—"}</Td>
                     <Td
                       className="text-right tabular font-medium"
-                      title={e.value == null ? undefined
-                        : `${e.ewins_proj?.toFixed(2) ?? "—"} eWins${(e.dev_bump ?? 0) > 0 ? " (incl. sophomore leap)" : ""}` +
+                      title={e.rating == null ? undefined
+                        : `${e.value?.toFixed(2) ?? "—"} wins = ` +
+                          `${e.ewins_proj?.toFixed(2) ?? "—"} eWins${(e.dev_bump ?? 0) > 0 ? " (incl. sophomore leap)" : ""}` +
                           `  ·  ${(e.pir_wins ?? 0) >= 0 ? "+" : ""}${(e.pir_wins ?? 0).toFixed(2)} from conference-tiered PIR` +
                           `${e.pir_adj != null ? ` (PIR ${e.pir_adj.toFixed(1)} after tier)` : ""}` +
                           `${e.epm != null ? `  ·  EPM ${e.epm > 0 ? "+" : ""}${e.epm.toFixed(1)}` : ""}`}
                     >
-                      {e.value == null ? "—" : `${e.value > 0 ? "+" : ""}${e.value.toFixed(2)}`}
+                      {e.rating == null ? "—" : (e.rating > 0 ? `+${e.rating}` : String(e.rating))}
                     </Td>
                     <Td className="text-right tabular">{fmt1(e.mpg)}</Td>
                     <Td className="text-right tabular">{fmt1(e.ppg)}</Td>

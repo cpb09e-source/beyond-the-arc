@@ -36,9 +36,10 @@
  * layering conf-tiers.ts on top — as BTA PRTG did — would count level of
  * competition twice and inflate every power-conference transfer.
  *
- * STAR TIERS are fixed cutoffs, not percentiles, so a player's tier doesn't
- * drift as other players enter or leave the portal. Chosen against the current
- * distribution to land roughly 2 / 12 / 28 / 32 / 27 percent.
+ * STAR TIERS hang off the Rating (see starsForRating), not off PVS — they were
+ * left on PVS after the blend went in and immediately contradicted the page:
+ * the #1 transfer by Rating wore four stars. Still fixed cutoffs, not
+ * percentiles, so a tier cannot drift because someone else entered the portal.
  *
  * ---------------------------------------------------------------------------
  * CLASS NET is Σ eWins(in) − 0.5·Σ eWins(out) over 2★-and-up moves, in WINS.
@@ -114,35 +115,41 @@ const ROLE_EXP = 0.7;
 // starred without also being visible.
 const MIN_GP = 10, MIN_MPG = 12, MIN_PPG = 4;
 
+
 /**
- * RECALIBRATED when EPM's zero point moved (export-epm-json.mjs, 2026-08).
+ * Rating points per win. The portal Rating is the blended value on a readable
+ * scale: 0 is an average player, and at 30 the best transfer in this cycle
+ * lands at 97 with nothing clipping the top.
  *
- * These are fixed cutoffs on a PVS built from EPM, so they are only meaningful
- * relative to where EPM's zero sits — and EPM's zero was wrong by +1.18 to
- * +1.31 depending on the season. Re-running the rescore against the corrected
- * scale without touching these took the distribution from
- *
- *     12 / 64 / 156 / 177 / 149      (2.2 / 11.5 / 28.0 / 31.7 / 26.7 %)
- * to  8 / 21 /  74 / 103 / 331       (1.5 /  3.9 / 13.8 / 19.2 / 61.6 %)
- *
- * — 328 players demoted and 10 promoted, none of whom had played a game in
- * between. The old numbers were calibrated against an inflated scale; leaving
- * them would have silently marked most of the portal down.
- *
- * Re-chosen against the corrected PVS to restore the distribution this file
- * already documents as the intent (2 / 12 / 28 / 32 / 27), which lands at
- * 1.9 / 12.7 / 27.6 / 30.7 / 27.2. Still FIXED, not percentiles, so a player's
- * tier does not drift as others enter or leave the portal — the calibration is
- * a one-off against a corrected scale, not a change of method.
- *
- * If EPM's zero point ever moves again, these move with it. That is the tell
- * that they are scale-bound constants rather than free parameters.
+ * DELIBERATELY NOT the class score's 12 points per win, and the difference is
+ * not an oversight. A class score is a SUM over a whole roster's worth of moves
+ * and has to stay legible when eight players are added together; a player
+ * rating is a single number and can spend the whole 0-100 range on one man. One
+ * constant cannot do both without either squashing players into single digits
+ * or sending classes into the hundreds.
  */
-function starsForPvs(v) {
-  if (v >= 3.1) return 5;
-  if (v >= 1.7) return 4;
-  if (v >= 0.5) return 3;
-  if (v >= -0.4) return 2;
+const RATING_SCALE = 30;
+
+/**
+ * STAR TIERS, re-cut on the Rating.
+ *
+ * They used to hang off PVS, which stopped being the number this file ranks on
+ * once eWins, the freshman bump and tiered PIR went in. The result was visible
+ * on the page: Tounde Yessoufou was the #1 transfer by Rating and wore four
+ * stars, because PVS could not see either of the two terms that put him there.
+ * A tier that disagrees with the column it sits next to is worse than no tier.
+ *
+ * Re-cut against the Rating distribution to preserve the share split this file
+ * has always documented as the intent — roughly 2 / 12 / 28 / 32 / 27 percent —
+ * so the tiers mean the same thing they did before even though what feeds them
+ * changed. Still FIXED cutoffs rather than percentiles, for the same reason as
+ * ever: a player's tier must not drift because someone else entered the portal.
+ */
+function starsForRating(r) {
+  if (r >= 65) return 5;
+  if (r >= 34) return 4;
+  if (r >= 8) return 3;
+  if (r >= -9) return 2;
   return 1;
 }
 
@@ -478,13 +485,18 @@ for (const e of entries) {
   const eligible =
     epm !== null && (e.gp ?? 0) >= MIN_GP && (e.mpg ?? 0) >= MIN_MPG && (e.ppg ?? 0) >= MIN_PPG;
   if (epm !== null) joined++;
-  if (eligible) {
+  if (eligible && typeof e.value === "number") {
+    // PVS is still computed because the star cutoffs used to hang off it and
+    // the number is worth keeping visible for comparison, but it no longer
+    // decides anything.
     const role = Math.pow(Math.min(1, (e.mpg ?? 0) / FULL_MPG), ROLE_EXP);
     e.pvs = Math.round(epm * role * 1000) / 1000;
-    e.stars = starsForPvs(e.pvs);
+    e.rating = Math.round(e.value * RATING_SCALE);
+    e.stars = starsForRating(e.rating);
     scored++;
   } else {
     e.pvs = null;
+    e.rating = null;
     e.stars = 0;
   }
 }
@@ -612,9 +624,9 @@ portal.scoring = {
   out_weight: OUT_WEIGHT,
   dev_bump: "freshman-only, band-conditional: +0.25 EPM at 0.5-2.0, +0.85 above 2.0, net of mean reversion",
   class_score_formula: `round(net eWins * ${POINTS_PER_WIN})`,
-  star_metric: "pvs",
-  star_formula: "EPM * min(1, MPG/28)^0.7",
-  star_cutoffs: [-0.4, 0.5, 1.7, 3.1],
+  rating_formula: `round(value * ${RATING_SCALE})`,
+  star_metric: "rating",
+  star_cutoffs: [-9, 8, 34, 65],
   rescored_at: new Date().toISOString(),
 };
 fs.writeFileSync(PORTAL, JSON.stringify(portal));
