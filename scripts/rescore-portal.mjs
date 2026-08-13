@@ -194,6 +194,82 @@ function epmForYear(year) {
 }
 
 /* ---------------------------------------------------------------------------
+ * PIR, TIERED BY CONFERENCE.
+ *
+ * PIR is the box-score composite — points + rebounds + assists + steals +
+ * blocks, minus missed shots — and unlike EPM it carries NO opponent
+ * adjustment at all. A 20-PIR season in the Sun Belt and a 20-PIR season in the
+ * SEC are the same number against wildly different defences, which is exactly
+ * the case for tiering it and exactly why EPM is NOT tiered anywhere in this
+ * file: the adjustment is already inside EPM, and applying it twice would
+ * double-count level of competition.
+ *
+ * THE TIERS ARE SPECIFIED, NOT FITTED — they are Colin's, applied as
+ * multipliers (POWER ×1.08 down to Tier 5 ×0.68). What was measured is whether
+ * they help, and they do, clearly:
+ *
+ *   corr(raw PIR,    next-season eWins) = 0.148
+ *   corr(tiered PIR, next-season eWins) = 0.270
+ *
+ * Tiering roughly doubles the signal, which is what you would expect if raw PIR
+ * was mostly rewarding low-major volume.
+ *
+ * AND IT EARNS ITS PLACE IN THE BLEND by the same standard that got the
+ * step-up discount rejected. Over 1,326 transfers with a fit in both seasons,
+ * predicting next-year eWins:
+ *
+ *   eWins alone                 R² = 0.2149
+ *   eWins + PIR raw             R² = 0.2238   (+0.009)
+ *   eWins + PIR TIERED          R² = 0.2468   (+0.032)
+ *
+ * +0.032 R² is ten times what conference-move indicators bought (+0.0035), and
+ * that one was refused. This one is in.
+ *
+ * TWO THINGS THE BLEND HAS TO GET RIGHT, or PIR quietly takes the whole score
+ * over:
+ *
+ *  1. CENTERING. eWins is denominated over an AVERAGE player, so an average
+ *     player scores 0. PIR is not — its cohort mean is 15.2 — so adding it
+ *     uncentered would hand every transfer in the file a large positive number
+ *     and turn the class table into a count of bodies. The term is therefore
+ *     (adjusted PIR − PIR_BASELINE), which is 0 for an average player and
+ *     negative for a below-average one, exactly like eWins.
+ *
+ *  2. SCALE. The weight is not chosen, it is read off the regression above:
+ *     fitting next-year eWins on (eWins, tiered PIR) gives 0.460 and 0.027, so
+ *     one point of adjusted PIR is worth 0.027/0.460 = 0.0587 eWins. At that
+ *     weight the PIR term spans -0.87 to +1.22 wins against eWins' -1.90 to
+ *     +2.83 — a real contribution at roughly 40% of the magnitude, not a
+ *     takeover.
+ * ------------------------------------------------------------------------- */
+const PORTAL_CONF_TIER = {
+  // Power
+  SEC: 0.08, B10: 0.08, B12: 0.08, ACC: 0.08, BE: 0.08,
+  // Tier 1
+  MWC: -0.05, WCC: -0.05, A10: -0.05,
+  // Tier 2
+  MVC: -0.13, Amer: -0.13, Ivy: -0.13, WAC: -0.13,
+  // Tier 3
+  MAC: -0.18, BW: -0.18, CUSA: -0.18, BSky: -0.18,
+  CAA: -0.18, Slnd: -0.18, Horz: -0.18, BSth: -0.18,
+  // Tier 4
+  SB: -0.25, Sum: -0.25, SC: -0.25, MAAC: -0.25, ASun: -0.25,
+};
+/** Everything not named above — AE, MEAC, NEC, OVC, Pat, SWAC and friends. */
+const TIER_5 = -0.32;
+const confTierAdj = (conf) => PORTAL_CONF_TIER[conf] ?? TIER_5;
+
+/**
+ * Mean adjusted PIR across the 579 portal entries that clear the production
+ * floor. Fixed rather than recomputed per run, for the reason the star cutoffs
+ * are fixed: a centering constant that moves with the cohort would make one
+ * school's score depend on who else happened to enter the portal.
+ */
+const PIR_BASELINE = 15.23;
+/** Wins per point of adjusted PIR, from the regression documented above. */
+const PIR_WEIGHT = 0.0587;
+
+/* ---------------------------------------------------------------------------
  * SCHOOL NAMES, and the three bugs one bad name caused.
  *
  * On3 sends schools in registrar form for a large minority of rows — "Gonzaga
@@ -336,7 +412,7 @@ for (const y of [2026, 2025, 2024]) {
 const portal = JSON.parse(fs.readFileSync(PORTAL, "utf8"));
 const entries = portal.entries ?? [];
 
-let joined = 0, scored = 0, withEwins = 0, repaired = 0, renamed = 0, unhidden = 0, bumped = 0;
+let joined = 0, scored = 0, withEwins = 0, repaired = 0, renamed = 0, unhidden = 0, bumped = 0, pirScored = 0;
 const repairs = [];
 for (const e of entries) {
   const hit =
@@ -381,6 +457,24 @@ for (const e of entries) {
   e.ewins_proj = e.ewins === null ? null
     : Math.round((e.ewins + (bump / 100) * (possUsed ?? 0) / PTS_PER_WIN) * 1000) / 1000;
 
+  // Tiered PIR, converted to wins and centred so an average player adds 0.
+  // Graded against the conference he actually PLAYED in — that is where the
+  // box-score line was earned — not the one he is moving to.
+  const conf = e.conf_from ?? e.last_conf ?? null;
+  if (typeof e.pir === "number" && Number.isFinite(e.pir)) {
+    const adj = e.pir * (1 + confTierAdj(conf));
+    e.pir_adj = Math.round(adj * 100) / 100;
+    e.pir_wins = Math.round(PIR_WEIGHT * (adj - PIR_BASELINE) * 1000) / 1000;
+    pirScored++;
+  } else {
+    e.pir_adj = null;
+    e.pir_wins = 0;   // no PIR is not a penalty, it is no contribution
+  }
+  // The portal value a class total is built from: measured wins, plus the
+  // freshman development bump, plus the tiered-PIR term.
+  e.value = e.ewins_proj === null ? null
+    : Math.round((e.ewins_proj + e.pir_wins) * 1000) / 1000;
+
   const eligible =
     epm !== null && (e.gp ?? 0) >= MIN_GP && (e.mpg ?? 0) >= MIN_MPG && (e.ppg ?? 0) >= MIN_PPG;
   if (epm !== null) joined++;
@@ -416,7 +510,7 @@ for (const e of entries) {
    * cannot contribute to a total denominated in wins. It affects 2 of 569.
    */
   if (typeof e.pvs !== "number" || e.stars < 2) continue;
-  if (typeof e.ewins_proj !== "number") continue;
+  if (typeof e.value !== "number") continue;
   const base = {
     cbba_player_id: e.cbba_player_id,
     bart_player_id: e.bart_player_id,
@@ -426,6 +520,9 @@ for (const e of entries) {
     ewins: e.ewins,
     ewins_proj: e.ewins_proj,
     dev_bump: e.dev_bump,
+    pir_adj: e.pir_adj,
+    pir_wins: e.pir_wins,
+    value: e.value,
     stars: e.stars,
   };
   bucket(e.team_from, e.conf_from).out_players.push({ ...base, counter_team: e.team_to, counter_conf: e.conf_to });
@@ -461,12 +558,13 @@ const POINTS_PER_WIN = 12;
  */
 const OUT_WEIGHT = 0.5;
 
+
 const POWER = new Set(["ACC", "B10", "B12", "SEC", "BE"]);
 const allRows = [];
 for (const b of perSchool.values()) {
-  const sum = (a) => a.reduce((s, p) => s + (p.ewins_proj ?? 0), 0);
-  b.in_players.sort((x, y) => (y.ewins_proj ?? 0) - (x.ewins_proj ?? 0));
-  b.out_players.sort((x, y) => (y.ewins_proj ?? 0) - (x.ewins_proj ?? 0));
+  const sum = (a) => a.reduce((s, p) => s + (p.value ?? 0), 0);
+  b.in_players.sort((x, y) => (y.value ?? 0) - (x.value ?? 0));
+  b.out_players.sort((x, y) => (y.value ?? 0) - (x.value ?? 0));
   const net = sum(b.in_players) - OUT_WEIGHT * sum(b.out_players);
   allRows.push({
     school: b.school,
@@ -509,7 +607,8 @@ portal.scoring = {
   // (how much did the school actually gain), because only a wins-denominated
   // quantity can be summed across players.
   metric: "ewins",
-  class_formula: `sum(projected eWins in) - ${OUT_WEIGHT} * sum(projected eWins out), over 2-star-and-up moves with a play-by-play eWins`,
+  class_formula: `sum(value in) - ${OUT_WEIGHT} * sum(value out), over 2-star-and-up moves`,
+  value_formula: `eWins + freshman dev bump + ${PIR_WEIGHT} * (PIR * conf tier - ${PIR_BASELINE})`,
   out_weight: OUT_WEIGHT,
   dev_bump: "freshman-only, band-conditional: +0.25 EPM at 0.5-2.0, +0.85 above 2.0, net of mean reversion",
   class_score_formula: `round(net eWins * ${POINTS_PER_WIN})`,
@@ -526,6 +625,6 @@ console.log(`portal rescored — stars on PVS, classes on eWins`);
 console.log(`  ${entries.length.toLocaleString()} entries · ${joined.toLocaleString()} joined an EPM · ${withEwins.toLocaleString()} joined an eWins · ${scored.toLocaleString()} cleared the baseline and were starred`);
 if (repaired) console.log(`  ${repaired} possession count(s) repaired:\n${repairs.map((r) => `    ${r}`).join("\n")}`);
 console.log(`  ${renamed} school name(s) resolved to the canonical team · ${unhidden} entr(ies) the feed's division field would have hidden`);
-console.log(`  ${bumped} freshman sophomore-leap bump(s) applied`);
+console.log(`  ${bumped} freshman sophomore-leap bump(s) applied · ${pirScored} tiered-PIR terms`);
 console.log(`  tiers  5★ ${tiers[5]}  4★ ${tiers[4]}  3★ ${tiers[3]}  2★ ${tiers[2]}  1★ ${tiers[1]}  unrated ${tiers[0]}`);
 console.log(`  ${allRows.length} schools ranked · best ${top_overall[0]?.school} ${top_overall[0]?.net.toFixed(1)} wins (score ${top_overall[0]?.score}) · worst power ${worst_power[0]?.school} ${worst_power[0]?.net.toFixed(1)} (score ${worst_power[0]?.score})`);

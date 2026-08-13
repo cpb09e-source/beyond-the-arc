@@ -19,14 +19,20 @@ export type TCPlayer = {
   epm: number | null;
   /** Wins over an average player, as measured last season. */
   ewins: number | null;
-  /**
-   * eWins plus the measured freshman development bump. THIS is the class
-   * currency: `net` is the sum of these in minus the sum of these out, so the
-   * numbers in the modal add up to the number on the card.
-   */
+  /** eWins plus the measured freshman development bump. */
   ewins_proj: number | null;
   /** EPM added by the sophomore leap; 0 for everyone who is not a freshman. */
   dev_bump?: number;
+  /** PIR after the conference-tier multiplier. */
+  pir_adj?: number | null;
+  /** The tiered-PIR term converted to wins, centred so average = 0. */
+  pir_wins?: number;
+  /**
+   * eWins + development bump + tiered-PIR term, in wins. THIS is the class
+   * currency: `net` is the sum of these in minus HALF the sum of these out, so
+   * the numbers in the modal add up to the number on the card.
+   */
+  value: number | null;
   stars: 0 | 1 | 2 | 3 | 4 | 5;
   counter_team: string | null;   // OUT: where they went. IN: where they came from.
   counter_conf: string | null;
@@ -176,7 +182,7 @@ export function TransferClassModal({ row, onClose }: { row: TransferClassRow; on
               {/* The score is a reading scale; the wins are the quantity. Both,
                   so the number can be checked against the players below it. */}
               <div className="text-[0.6rem] text-ink-muted tabular mt-0.5">
-                {row.net > 0 ? "+" : ""}{row.net.toFixed(1)} net eWins
+                {row.net > 0 ? "+" : ""}{row.net.toFixed(1)} net wins
               </div>
             </div>
             <button
@@ -208,13 +214,13 @@ function PlayerList({
   players: TCPlayer[];
 }) {
   // Sums eWins, matching the card's net so the two agree on screen.
-  const totalEwins = players.reduce((s, p) => s + (p.ewins_proj ?? 0), 0);
+  const totalEwins = players.reduce((s, p) => s + (p.value ?? 0), 0);
   return (
     <div className="p-5">
       <div className="flex items-baseline justify-between mb-3">
         <span className={`text-xs uppercase tracking-widest font-medium ${accent}`}>{kicker}</span>
         <span className="text-[0.65rem] text-ink-muted">
-          {players.length} {players.length === 1 ? "player" : "players"} · {totalEwins > 0 ? "+" : ""}{totalEwins.toFixed(1)} eWins
+          {players.length} {players.length === 1 ? "player" : "players"} · {totalEwins > 0 ? "+" : ""}{totalEwins.toFixed(1)} wins
           {kicker === "Outgoing" && (
             // The net charges only half of this, so saying so here stops the
             // two numbers on screen from looking like they disagree.
@@ -249,8 +255,14 @@ function PlayerList({
                 </div>
               </div>
               <span className="flex flex-col items-end">
-                <span className={`font-medium tabular text-sm ${(p.ewins_proj ?? 0) >= 0 ? "text-ink" : "text-rose-700"}`}>
-                  {p.ewins_proj === null ? "—" : `${p.ewins_proj > 0 ? "+" : ""}${p.ewins_proj.toFixed(2)}`}
+                <span
+                  className={`font-medium tabular text-sm ${(p.value ?? 0) >= 0 ? "text-ink" : "text-rose-700"}`}
+                  title={p.value === null ? undefined
+                    : `${p.ewins_proj?.toFixed(2) ?? "—"} eWins${(p.dev_bump ?? 0) > 0 ? " (incl. soph leap)" : ""}` +
+                      `  ·  ${(p.pir_wins ?? 0) >= 0 ? "+" : ""}${(p.pir_wins ?? 0).toFixed(2)} from tiered PIR` +
+                      `${p.pir_adj != null ? ` (PIR ${p.pir_adj.toFixed(1)} after conference tier)` : ""}`}
+                >
+                  {p.value === null ? "—" : `${p.value > 0 ? "+" : ""}${p.value.toFixed(2)}`}
                 </span>
                 {/* A bumped freshman is marked rather than silently inflated —
                     the number above him is part projection, and the reader is
