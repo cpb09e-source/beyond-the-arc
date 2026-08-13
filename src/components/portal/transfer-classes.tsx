@@ -34,12 +34,18 @@ export type TCPlayer = {
 export type TransferClassRow = {
   school: string;
   conference: string | null;
-  /** Net eWins: sum of incoming minus sum of outgoing. The underlying quantity. */
+  /**
+   * Net eWins: sum of incoming minus HALF the sum of outgoing. The half-weight
+   * is replacement level — the minutes a departure leaves behind get played by
+   * somebody, usually one of the arrivals already credited in full on the other
+   * side of the same subtraction. See OUT_WEIGHT in scripts/rescore-portal.mjs.
+   */
   net: number;
   /**
-   * The same thing on a 0-100 reading scale — 20 points per net win, so a class
-   * that adds five wins scores 100 and an average one scores 0. Fixed scale, so
-   * a 60 means the same thing in any cycle; negatives are real and unclamped.
+   * The same thing on a 0-100 reading scale — 12 points per net win, so an
+   * average class scores 0 and the best of this cycle lands in the low 90s.
+   * Fixed scale, so a 60 means the same thing in any cycle; negatives are real
+   * and unclamped.
    */
   score: number;
   in_count: number;
@@ -209,6 +215,11 @@ function PlayerList({
         <span className={`text-xs uppercase tracking-widest font-medium ${accent}`}>{kicker}</span>
         <span className="text-[0.65rem] text-ink-muted">
           {players.length} {players.length === 1 ? "player" : "players"} · {totalEwins > 0 ? "+" : ""}{totalEwins.toFixed(1)} eWins
+          {kicker === "Outgoing" && (
+            // The net charges only half of this, so saying so here stops the
+            // two numbers on screen from looking like they disagree.
+            <span className="text-ink-muted/70"> · charged at half</span>
+          )}
         </span>
       </div>
       {players.length === 0 ? (

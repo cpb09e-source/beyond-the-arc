@@ -30,6 +30,7 @@ import {
   top3InConfMultiplier,
 } from "../src/lib/conf-tiers.ts";
 import { overrideTeamName } from "../src/lib/team-overrides.ts";
+import { assertUnfrozen } from "./lib/data-freeze.mjs";
 
 // Raw-row accessors (mirror productionFor in lib/bta-prtg.mts).
 function fe(r: Array<string | number | null> | null, o: number): number | null {
@@ -132,9 +133,22 @@ async function main() {
     if (teamName) rec.teams.add(normTeam(teamName));
     if (year > rec.year) rec.year = year;
   }
+  let yearsLoaded = 0;
   for (const year of YEARS) {
     const fp = path.join(OUT, "players-by-year", `${year}.json`);
-    const players = JSON.parse(await fs.readFile(fp, "utf8")) as Array<{
+    // A year we do not hold is not an error. YEARS starts at 2013 and the
+    // corpus starts at 2014, so this script threw ENOENT on its first file and
+    // could not be run at all — which is the likeliest reason portal.json sat
+    // two months stale while the feed it reads was live the whole time.
+    let text: string;
+    try {
+      text = await fs.readFile(fp, "utf8");
+    } catch {
+      console.log(`   skip ${year} — no players-by-year file`);
+      continue;
+    }
+    yearsLoaded++;
+    const players = JSON.parse(text) as Array<{
       bart_player_id: number | null; name: string; year: number; class: string | null;
       teams: { name?: string; conference?: string | null } | Array<{ name?: string; conference?: string | null }>;
       player_bart_stats:
@@ -167,6 +181,10 @@ async function main() {
         }
       }
     }
+  }
+  if (yearsLoaded === 0) {
+    console.error("✗ no players-by-year files loaded — refusing to rebuild the portal against an empty corpus.");
+    process.exit(1);
   }
   for (const seasons of playersByBartId.values()) seasons.sort((a, b) => b.year - a.year);
   console.log(`   ${playersByBartId.size.toLocaleString()} bart_player_ids · ${idxFull.size.toLocaleString()} distinct names`);
@@ -268,6 +286,17 @@ async function main() {
   }
 
   // 2. Pull On3's public portal feed (whole season in one request).
+  //
+  // This was the one network-touching script without the guard, which is how
+  // portal.json sat two months stale while every other feed was correctly
+  // refusing to run. It is a real upstream pull and it belongs behind the same
+  // deliberate override as the rest — see scripts/lib/data-freeze.mjs.
+  //
+  // Worth noting what it does and does not touch: the pull brings back transfer
+  // EVENTS only. Every stat attached to them is name-matched against the frozen
+  // players-by-year corpus, so refreshing this file cannot mix live production
+  // numbers into the archive — it only updates who moved where.
+  assertUnfrozen("refresh-portal.mts", "the On3 public transfer-portal feed");
   console.log("\n📡 Fetching On3 public portal feed…");
   const res = await fetch(ON3_URL, {
     headers: { "user-agent": UA, accept: "application/json", origin: "https://www.on3.com", referer: "https://www.on3.com/" },

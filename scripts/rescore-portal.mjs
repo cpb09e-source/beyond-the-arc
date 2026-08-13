@@ -41,7 +41,8 @@
  * distribution to land roughly 2 / 12 / 28 / 32 / 27 percent.
  *
  * ---------------------------------------------------------------------------
- * CLASS NET is Σ eWins(in) − Σ eWins(out) over 2★-and-up moves, in WINS.
+ * CLASS NET is Σ eWins(in) − 0.5·Σ eWins(out) over 2★-and-up moves, in WINS.
+ * The half-weight on departures is replacement level — see OUT_WEIGHT.
  *
  * It used to sum PVS. The reason it does not any more is not that eWins is a
  * different opinion — measured across 535 scored portal entries the two
@@ -429,12 +430,33 @@ for (const e of entries) {
 }
 
 /**
- * Class-score points per net win. Chosen against the real distribution: at 20,
- * this cycle runs -112 to +86 with a median of -1, so the scale uses its range
- * without anything pinning at the top. At 25 the best classes clear 100 and the
- * number stops meaning anything.
+ * Class-score points per net win. Re-picked when departures went to half
+ * weight, which raised every net: at 12 this cycle runs -33 to +93 with a
+ * median of 0, so nothing pins at the ceiling. At 13 the best class clears 100.
+ *
+ * It moves with OUT_WEIGHT and with nothing else. That is the tell that it is a
+ * scale constant rather than a free parameter — the same note the star cutoffs
+ * carry, and for the same reason.
  */
-const POINTS_PER_WIN = 20;
+const POINTS_PER_WIN = 12;
+
+/**
+ * How much of a departing player's eWins is charged against his old school.
+ *
+ * It was 1.0 — a school lost exactly what walked out the door — and that
+ * double-counts minutes. The possessions a departure leaves behind do not
+ * vanish; somebody plays them, and on most rosters that somebody is one of the
+ * arrivals already being credited at full value on the other side of the same
+ * subtraction. Charging the full loss AND crediting the full gain bills the
+ * same forty minutes twice.
+ *
+ * The honest version of this is replacement level: a departure costs a school
+ * the gap between the player and whoever inherits his minutes, not his whole
+ * line. Half is a deliberate round number standing in for that gap rather than
+ * a fitted constant — it says "losing a starter hurts, but not as much as
+ * signing an equivalent one helps, because the hole gets partly filled anyway."
+ */
+const OUT_WEIGHT = 0.5;
 
 const POWER = new Set(["ACC", "B10", "B12", "SEC", "BE"]);
 const allRows = [];
@@ -442,7 +464,7 @@ for (const b of perSchool.values()) {
   const sum = (a) => a.reduce((s, p) => s + (p.ewins_proj ?? 0), 0);
   b.in_players.sort((x, y) => (y.ewins_proj ?? 0) - (x.ewins_proj ?? 0));
   b.out_players.sort((x, y) => (y.ewins_proj ?? 0) - (x.ewins_proj ?? 0));
-  const net = sum(b.in_players) - sum(b.out_players);
+  const net = sum(b.in_players) - OUT_WEIGHT * sum(b.out_players);
   allRows.push({
     school: b.school,
     conference: b.conference,
@@ -484,7 +506,8 @@ portal.scoring = {
   // (how much did the school actually gain), because only a wins-denominated
   // quantity can be summed across players.
   metric: "ewins",
-  class_formula: "sum(projected eWins in) - sum(projected eWins out), over 2-star-and-up moves with a play-by-play eWins",
+  class_formula: `sum(projected eWins in) - ${OUT_WEIGHT} * sum(projected eWins out), over 2-star-and-up moves with a play-by-play eWins`,
+  out_weight: OUT_WEIGHT,
   dev_bump: "freshman-only, band-conditional: +0.25 EPM at 0.5-2.0, +0.85 above 2.0, net of mean reversion",
   class_score_formula: `round(net eWins * ${POINTS_PER_WIN})`,
   star_metric: "pvs",
