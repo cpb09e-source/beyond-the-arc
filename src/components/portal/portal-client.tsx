@@ -334,7 +334,11 @@ export function PortalClient({
                           `${e.pir_adj != null ? ` (PIR ${e.pir_adj.toFixed(1)} after tier)` : ""}` +
                           `${e.epm != null ? `  ·  EPM ${e.epm > 0 ? "+" : ""}${e.epm.toFixed(1)}` : ""}`}
                     >
-                      {e.rating == null ? "—" : (e.rating > 0 ? `+${e.rating}` : String(e.rating))}
+                      {/* No leading "+". The rating reads as a score out of a
+                          hundred, and a plus sign on it made it look like a
+                          differential; the minus stays because a negative
+                          rating is a real and meaningful state here. */}
+                      {e.rating == null ? "—" : String(e.rating)}
                     </Td>
                     <Td className="text-right tabular">{fmt1(e.mpg)}</Td>
                     <Td className="text-right tabular">{fmt1(e.ppg)}</Td>
