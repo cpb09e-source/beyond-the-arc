@@ -66,6 +66,8 @@ export type PortalEntry = {
   /** Team net rating on-floor minus off-floor, and the charge for a negative one. */
   on_off?: number | null;
   onoff_pen?: number;
+  /** 10% off the finished number for a non-power-conference season. */
+  mm_penalty?: number;
   /** eWins + freshman development bump + tiered-PIR term, in wins. */
   value?: number | null;
   /**
@@ -336,6 +338,7 @@ export function PortalClient({
                           `  ·  ${(e.pir_wins ?? 0) >= 0 ? "+" : ""}${(e.pir_wins ?? 0).toFixed(2)} from conference-tiered PIR` +
                           `${e.pir_adj != null ? ` (PIR ${e.pir_adj.toFixed(1)} after tier)` : ""}` +
                           `${(e.onoff_pen ?? 0) < 0 ? `  ·  ${e.onoff_pen?.toFixed(2)} for an on/off of ${e.on_off?.toFixed(1)}` : ""}` +
+                          `${(e.mm_penalty ?? 0) < 0 ? `  ·  ${e.mm_penalty?.toFixed(2)} mid-major discount` : ""}` +
                           `${e.epm != null ? `  ·  EPM ${e.epm > 0 ? "+" : ""}${e.epm.toFixed(1)}` : ""}`}
                     >
                       {/* No leading "+". The rating reads as a score out of a

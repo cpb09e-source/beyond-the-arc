@@ -148,10 +148,10 @@ const RATING_SCALE = 33;
  * ever: a player's tier must not drift because someone else entered the portal.
  */
 function starsForRating(r) {
-  if (r >= 62) return 5;
-  if (r >= 32) return 4;
+  if (r >= 57) return 5;
+  if (r >= 31) return 4;
   if (r >= 7) return 3;
-  if (r >= -9) return 2;
+  if (r >= -10) return 2;
   return 1;
 }
 
@@ -346,6 +346,30 @@ const ONOFF_PENALTY = 0.02;
 const ONOFF_FLOOR = -25;
 
 /* ---------------------------------------------------------------------------
+ * THE MID-MAJOR PENALTY. Portal-only, and blunt on purpose.
+ *
+ * Ten percent off the Rating of anyone whose last season was outside the ACC,
+ * Big Ten, Big 12, SEC or Big East. It is a second conference adjustment on top
+ * of the one already inside the PIR term, and the two do different jobs: the
+ * PIR tier grades a box-score line against the defences that allowed it, and
+ * touches roughly 40% of the Rating's magnitude; this one discounts the whole
+ * number, EPM and eWins included, on the view that a mid-major season is a
+ * weaker read on a player full stop.
+ *
+ * APPLIED AS "10% WORSE", NOT AS x0.9, and the difference is the whole
+ * implementation. Multiplying a rating by 0.9 makes a positive one smaller and
+ * a NEGATIVE one smaller too — a -50 would improve to -45, so the penalty would
+ * quietly reward the worst mid-major players in the file, which is the opposite
+ * of the intent. Subtracting a tenth of the ABSOLUTE value moves everyone the
+ * same direction: 60 becomes 54, -50 becomes -55.
+ *
+ * Graded on the conference the player actually PLAYED in, not the one he is
+ * moving to — the season being discounted is the one already on the books.
+ */
+const MID_MAJOR_PENALTY = 0.10;
+const POWER_CONFS = new Set(["ACC", "B10", "B12", "SEC", "BE"]);
+
+/* ---------------------------------------------------------------------------
  * SCHOOL NAMES, and the three bugs one bad name caused.
  *
  * On3 sends schools in registrar form for a large minority of rows — "Gonzaga
@@ -514,7 +538,7 @@ for (const y of [2026, 2025, 2024]) {
 const portal = JSON.parse(fs.readFileSync(PORTAL, "utf8"));
 const entries = portal.entries ?? [];
 
-let joined = 0, scored = 0, withEwins = 0, repaired = 0, renamed = 0, unhidden = 0, bumped = 0, pirScored = 0, penalised = 0;
+let joined = 0, scored = 0, withEwins = 0, repaired = 0, renamed = 0, unhidden = 0, bumped = 0, pirScored = 0, penalised = 0, discounted = 0;
 const repairs = [];
 for (const e of entries) {
   const hit =
@@ -585,8 +609,14 @@ for (const e of entries) {
   // The portal value a class total is built from: measured wins, plus the
   // freshman development bump, plus the tiered-PIR term, minus the on/off
   // penalty.
-  e.value = e.ewins_proj === null ? null
-    : Math.round((e.ewins_proj + e.pir_wins + e.onoff_pen) * 1000) / 1000;
+  const preMM = e.ewins_proj === null ? null
+    : e.ewins_proj + e.pir_wins + e.onoff_pen;
+  // Mid-major discount, applied last so it scales the finished number.
+  e.mm_penalty = preMM === null || POWER_CONFS.has(conf ?? "")
+    ? 0
+    : Math.round(-MID_MAJOR_PENALTY * Math.abs(preMM) * 1000) / 1000;
+  if (e.mm_penalty < 0) discounted++;
+  e.value = preMM === null ? null : Math.round((preMM + e.mm_penalty) * 1000) / 1000;
 
   const eligible =
     epm !== null && (e.gp ?? 0) >= MIN_GP && (e.mpg ?? 0) >= MIN_MPG && (e.ppg ?? 0) >= MIN_PPG;
@@ -642,6 +672,7 @@ for (const e of entries) {
     pir_wins: e.pir_wins,
     on_off: e.on_off,
     onoff_pen: e.onoff_pen,
+    mm_penalty: e.mm_penalty,
     rating: e.rating,
     value: e.value,
     stars: e.stars,
@@ -723,13 +754,13 @@ portal.scoring = {
   // quantity can be summed across players.
   metric: "ewins",
   class_formula: `sum(player Rating in) - ${OUT_WEIGHT} * sum(player Rating out), over 2-star-and-up moves`,
-  value_formula: `eWins + freshman dev bump + ${PIR_WEIGHT} * (PIR/40 * conf tier - ${PIR_BASELINE}) + ${ONOFF_PENALTY} * min(0, max(${ONOFF_FLOOR}, on/off))`,
+  value_formula: `eWins + freshman dev bump + ${PIR_WEIGHT} * (PIR/40 * conf tier - ${PIR_BASELINE}) + ${ONOFF_PENALTY} * min(0, max(${ONOFF_FLOOR}, on/off)), then -${MID_MAJOR_PENALTY} * |value| outside the power conferences`,
   out_weight: OUT_WEIGHT,
   dev_bump: `freshman-only, continuous: min(${SOPH_LEAP_MAX}, ${SOPH_LEAP_SLOPE} * max(0, EPM - ${SOPH_LEAP_FLOOR})), net of mean reversion`,
 
   rating_formula: `round(value * ${RATING_SCALE})`,
   star_metric: "rating",
-  star_cutoffs: [-9, 7, 32, 62],
+  star_cutoffs: [-10, 7, 31, 57],
   rescored_at: new Date().toISOString(),
 };
 fs.writeFileSync(PORTAL, JSON.stringify(portal));
@@ -740,6 +771,6 @@ console.log(`portal rescored — stars on PVS, classes on eWins`);
 console.log(`  ${entries.length.toLocaleString()} entries · ${joined.toLocaleString()} joined an EPM · ${withEwins.toLocaleString()} joined an eWins · ${scored.toLocaleString()} cleared the baseline and were starred`);
 if (repaired) console.log(`  ${repaired} possession count(s) repaired:\n${repairs.map((r) => `    ${r}`).join("\n")}`);
 console.log(`  ${renamed} school name(s) resolved to the canonical team · ${unhidden} entr(ies) the feed's division field would have hidden`);
-console.log(`  ${bumped} sophomore-leap bump(s) · ${pirScored} tiered-PIR terms · ${penalised} negative-on/off penalt(ies)`);
+console.log(`  ${bumped} sophomore-leap bump(s) · ${pirScored} tiered-PIR terms · ${penalised} negative-on/off penalt(ies) · ${discounted} mid-major discounts`);
 console.log(`  tiers  5★ ${tiers[5]}  4★ ${tiers[4]}  3★ ${tiers[3]}  2★ ${tiers[2]}  1★ ${tiers[1]}  unrated ${tiers[0]}`);
 console.log(`  ${allRows.length} schools ranked · best ${top_overall[0]?.school} ${top_overall[0]?.net.toFixed(1)} wins (score ${top_overall[0]?.score}) · worst power ${worst_power[0]?.school} ${worst_power[0]?.net.toFixed(1)} (score ${worst_power[0]?.score})`);
