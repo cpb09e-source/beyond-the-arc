@@ -444,16 +444,42 @@ function resolveSchool(name) {
  * The top band is 67 players. It is a real effect at t=5.7, but it is the
  * thinnest cell here, so it is applied at the measured value and no further.
  * ------------------------------------------------------------------------- */
-const SOPH_LEAP = [
-  { min: 2.0, bump: 0.85 },
-  { min: 0.5, bump: 0.25 },
-];
+/**
+ * The bump as a CONTINUOUS function of prior EPM, not a step.
+ *
+ * It was two bands — +0.25 from 0.5 to 2.0 and +0.85 above — and that was a
+ * mistake in the application, not the measurement: bands are how the effect was
+ * MEASURED, and freezing them into the score created a cliff at exactly EPM 2.0
+ * where a hair of production tripled the reward. Nik Khamenia at 1.92 took
+ * +0.25 while Preston Edmead at 2.12 took +0.85, eleven rating points apart on
+ * indistinguishable seasons. No real developmental effect has an edge like that.
+ *
+ * The two band means are the anchors: the Fr group in [0.5, 2) averages EPM
+ * 1.07 and a bump of 0.26; the group above +2 averages 2.56 and 0.89. A line
+ * through both crosses zero at EPM 0.46 — within noise of the 0.5 floor where
+ * the effect independently measured nothing, which is the check that says the
+ * relationship really is linear rather than two plateaus.
+ *
+ * Finer bins agree that it climbs rather than steps (n in brackets):
+ *
+ *   EPM band     [0,.5) [.5,1)  [1,1.5) [1.5,2)  [2,2.5) [2.5,3.5)
+ *   measured     +0.11  +0.16   +0.42   +0.24    +0.68   +1.01
+ *   this model    0.00   0.10    0.32    0.53     0.75    0.89
+ *                 (414)  (228)   (142)    (83)     (38)     (28)
+ *
+ * The [1.5,2) cell is the one that disagrees, on 83 players; every other bin
+ * tracks. Clamped at both ends: nothing below EPM 0.5, nothing above 0.89, so
+ * the thinnest cell in the data cannot extrapolate into a runaway bump.
+ */
+const SOPH_LEAP_FLOOR = 0.5;    // EPM below which the effect measures nothing
+const SOPH_LEAP_SLOPE = 0.432;  // bump per point of EPM above the floor
+const SOPH_LEAP_MAX = 0.89;     // the measured top-band value; never exceeded
 const FRESHMAN = new Set(["Freshman", "RedShirt Freshman", "Fr"]);
 function sophLeapFor(playedClass, eligibility, epm) {
   const isFr = FRESHMAN.has(playedClass ?? "") || FRESHMAN.has(eligibility ?? "");
   if (!isFr || epm == null) return 0;
-  for (const tier of SOPH_LEAP) if (epm >= tier.min) return tier.bump;
-  return 0;
+  const raw = SOPH_LEAP_SLOPE * (epm - SOPH_LEAP_FLOOR);
+  return Math.round(Math.max(0, Math.min(SOPH_LEAP_MAX, raw)) * 1000) / 1000;
 }
 
 /** The class a player actually played last season — more reliable than the
@@ -684,7 +710,7 @@ portal.scoring = {
   class_formula: `sum(value in) - ${OUT_WEIGHT} * sum(value out), over 2-star-and-up moves`,
   value_formula: `eWins + freshman dev bump + ${PIR_WEIGHT} * (PIR * conf tier - ${PIR_BASELINE}) + ${ONOFF_PENALTY} * min(0, max(${ONOFF_FLOOR}, on/off))`,
   out_weight: OUT_WEIGHT,
-  dev_bump: "freshman-only, band-conditional: +0.25 EPM at 0.5-2.0, +0.85 above 2.0, net of mean reversion",
+  dev_bump: `freshman-only, continuous: min(${SOPH_LEAP_MAX}, ${SOPH_LEAP_SLOPE} * max(0, EPM - ${SOPH_LEAP_FLOOR})), net of mean reversion`,
   class_score_formula: `round(net eWins * ${POINTS_PER_WIN})`,
   rating_formula: `round(value * ${RATING_SCALE})`,
   star_metric: "rating",
