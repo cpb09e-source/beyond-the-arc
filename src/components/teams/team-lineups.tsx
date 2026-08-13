@@ -41,7 +41,7 @@ export function TeamLineups({ teamName, year }: { teamName: string; year: number
         <h2 className="font-display text-2xl lg:text-3xl text-ink leading-none tracking-tight">Top Lineups</h2>
         <p className="mt-1.5 text-xs text-ink-muted">Best five-man combinations by net rating (points per 100 possessions), min 40 possessions.</p>
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overscroll-x-contain">
         <table className="w-full text-sm border-separate border-spacing-0">
           <thead>
             <tr className="text-[0.62rem] uppercase tracking-widest text-ink-muted">

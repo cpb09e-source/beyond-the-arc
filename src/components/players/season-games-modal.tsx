@@ -180,7 +180,7 @@ export function SeasonGamesModal({
           </button>
         </div>
 
-        <div className="overflow-auto">
+        <div className="overflow-auto overscroll-x-contain">
           {err === "HTTP 404" ? (
             <div className="px-5 py-12 text-center text-ink-muted">
               No per-game box scores synced for this player yet.

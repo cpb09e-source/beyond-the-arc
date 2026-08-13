@@ -26,7 +26,7 @@ export function PlayerHeadshotStrip({
 }) {
   if (players.length === 0) return null;
   return (
-    <div className="overflow-x-auto select-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+    <div className="overflow-x-auto overscroll-x-contain select-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
       <div className="flex items-start gap-4 min-w-min py-1 sm:py-2">
         {players.map((p) => <Cell key={p.id} player={p} rankedPlayerIds={rankedPlayerIds} />)}
       </div>

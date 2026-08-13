@@ -72,7 +72,7 @@ export function TourneyTimeline({
           </span>
         </div>
       </div>
-      <div className="overflow-x-auto -mx-2 px-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="overflow-x-auto overscroll-x-contain -mx-2 px-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <div className="flex items-stretch gap-1.5 min-w-min">
           {rows.map((r) => <YearCell key={r.year} row={r} />)}
         </div>

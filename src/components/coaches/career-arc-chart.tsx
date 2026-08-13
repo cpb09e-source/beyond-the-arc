@@ -88,7 +88,7 @@ export function CareerArcChart({ seasons }: { seasons: CoachSeason[] }) {
   }
 
   return (
-    <div className="w-full overflow-x-auto -mx-2 px-2 pb-1">
+    <div className="w-full overflow-x-auto overscroll-x-contain -mx-2 px-2 pb-1">
       <div
         className="relative flex items-stretch min-w-max"
         style={{ minHeight: "180px" }}

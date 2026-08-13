@@ -164,7 +164,7 @@ export function ScheduleTicker({
         const scroller = (
         <div
           ref={scrollerRef}
-          className="overflow-x-auto select-none cursor-grab [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          className="overflow-x-auto overscroll-x-contain select-none cursor-grab [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
           style={{ scrollSnapType: "x proximity" }}
         >
           <div className={cn("flex items-start min-w-min", showSeasonLabels ? "gap-2" : "gap-1.5")}>

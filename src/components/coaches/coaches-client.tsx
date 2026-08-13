@@ -524,7 +524,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
         </div>
         {/* Where the Filters drawer expands — in flow, pushing the table down. */}
         <div id={COACH_DRAWER_SLOT_ID} />
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overscroll-x-contain">
           <table className="w-full text-sm">
             <thead className="bg-paper-deep/70">
               <tr className="border-b border-hairline text-left">

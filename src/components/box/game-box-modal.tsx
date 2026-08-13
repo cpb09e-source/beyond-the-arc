@@ -741,7 +741,7 @@ export function PlayerBoxTable({
         <TeamLogo name={team.logName || team.team} size={20} />
         <span className="text-xs uppercase tracking-widest text-ink font-bold">{team.team}</span>
       </div>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overscroll-x-contain">
         <table className="w-full text-sm">
           <thead className="border-b border-hairline text-left">
             <tr>

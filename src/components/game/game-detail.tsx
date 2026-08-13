@@ -52,7 +52,7 @@ export function GameDetail({ b }: { b: GameBundle }) {
 
       <nav className="sticky top-0 z-30 border-b border-hairline bg-paper/95 backdrop-blur">
         <div className="mx-auto max-w-[92rem] px-5 lg:px-10">
-          <div className="flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {TABS.map((t) => (
               <button
                 key={t.key}

@@ -5,13 +5,17 @@ import { useRef, type RefObject, type PointerEvent as ReactPointerEvent, type Mo
 /**
  * Click-and-drag panning for a horizontally scrolling surface.
  *
+ * MOUSE AND PEN ONLY. Touch is left entirely to the browser — see the guard in
+ * onPointerDown for what happened when it was not.
+ *
  * Grab anywhere in the data area and drag left/right. A 4px threshold keeps
  * plain clicks working, and by default interactive elements never start a pan
  * at all — a drag that began on an <a> would fight the browser's native
  * link-drag, and one that began on a sortable header would fight the
  * column-reorder drag.
  *
- * `fromLinks` OPTS OUT OF THAT GUARD, for surfaces made ENTIRELY of links.
+ * `fromLinks` OPTS OUT OF THE INTERACTIVE-ELEMENT GUARD, for surfaces made
+ * ENTIRELY of links.
  * The score ticker is the case: once every cell became a link to its game, the
  * default guard matched every pointerdown and silently disabled panning
  * altogether. There the two gestures have to coexist, so the hook pans from
@@ -36,7 +40,22 @@ export function useDragPan(
     // Touch already scrolls an overflow container natively, and better —
     // momentum, rubber-banding, the lot. Hijacking it would only make the
     // gesture worse and risks eating taps on the links.
-    if (fromLinks && e.pointerType === "touch") return;
+    //
+    // THIS GUARD USED TO BE GATED BEHIND `fromLinks`, which meant it only ever
+    // ran for the score ticker — the two biggest tables on the site (the player
+    // grid and the team explorer) pass fromLinks: false, so every finger swipe
+    // on them started a pan. Measured on the real page with a synthetic touch
+    // pointer: setPointerCapture fired on the scroll container, cursor-grabbing
+    // was added, and scrollLeft was driven by hand from 0 to 140. The effect on
+    // a phone is a horizontal scroll with no momentum and no flick — position
+    // assigned per pointermove on the main thread instead of handed to the
+    // compositor — while the captured pointer interferes with the vertical
+    // gesture underneath it. That is the "rough" feeling, and the comment above
+    // was already the correct policy; it just was not being applied.
+    //
+    // Pen keeps panning: it is a pointing device, not a finger, and there is no
+    // native pen-scroll gesture to defer to.
+    if (e.pointerType === "touch") return;
     const t = e.target as HTMLElement;
     const blocked = fromLinks ? "button,input,select,[data-no-pan]" : "a,button,input,select,[data-no-pan]";
     if (t.closest(blocked)) return;

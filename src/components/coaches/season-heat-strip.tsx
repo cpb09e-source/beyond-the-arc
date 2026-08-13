@@ -111,7 +111,7 @@ export function SeasonHeatStrip({ seasons }: { seasons: CoachSeason[] }) {
     <div>
       <div
         ref={scrollerRef}
-        className="overflow-x-auto select-none cursor-grab [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden rounded-md border border-hairline"
+        className="overflow-x-auto overscroll-x-contain select-none cursor-grab [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden rounded-md border border-hairline"
         style={{ scrollSnapType: "x proximity" }}
       >
         <div className="flex items-stretch gap-px min-w-min">

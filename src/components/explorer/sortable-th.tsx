@@ -29,7 +29,33 @@ import { cn } from "@/lib/utils";
  * Written as a pattern rather than a list of exceptions so the next lowercase-
  * initial metric works without anyone remembering this file exists.
  */
+/**
+ * Labels that are too wide for a phone column, and the abbreviation to use
+ * there instead.
+ *
+ * These two are the only ones that are two WORDS of tracking-widest caps —
+ * everything else in the header row is already an abbreviation — so they set
+ * the column's minimum width and push the whole table wider than it needs to
+ * be. "3PAR" and "FTAR" are the standard short forms.
+ *
+ * Both forms render and CSS picks one, the same technique as PlayerName: a
+ * header cannot be measured before it has already laid out.
+ */
+const SHORT_ON_MOBILE: Record<string, string> = {
+  "3PA Rate": "3PAR",
+  "FTA Rate": "FTAR",
+};
+
 export function StatLabel({ label }: { label: string }) {
+  const short = SHORT_ON_MOBILE[label];
+  if (short) {
+    return (
+      <>
+        <span className="sm:hidden">{short}</span>
+        <span className="hidden sm:inline">{label}</span>
+      </>
+    );
+  }
   if (!/^[a-z][A-Z]/.test(label)) return <>{label}</>;
   return <span className="normal-case">{label[0] + label.slice(1).toUpperCase()}</span>;
 }

@@ -80,17 +80,19 @@ export function TourneyBadge({
           writing about the tournament already uses — at every width, since it
           reads the same on a desktop.
 
-          Champion is spelled out from sm up and collapses to "C" on phones,
-          where the full word is still eight characters next to a logo. A
-          single letter works here only because the two tiers are already
-          separated by FILL: the champion chip is the filled one, so "C" lands
-          on a chip that is visibly the louder of the pair rather than asking
-          the letter to carry the distinction alone. Both remain one chip, one
-          type treatment, one hardwood token — a length change, not the second
-          visual language this component exists to avoid. Full wording stays in
-          the title either way. */}
+          "CHAMP" from sm up, "C" on phones. The full word was eight characters
+          of tracking-widest caps sitting next to a team name it kept
+          out-measuring; the abbreviation is the one every bracket uses and it
+          brings the chip closer to F4's width, so a column with both in it
+          stops looking ragged. Both lengths work only because the two tiers are
+          already separated by FILL: the champion chip is the filled one, so the
+          shorter word lands on a chip that is visibly the louder of the pair
+          rather than asking the letters to carry the distinction alone. One
+          chip, one type treatment, one hardwood token — a length change, not
+          the second visual language this component exists to avoid. Full
+          wording stays in the title at every width. */}
       <span className="sm:hidden">{champion ? "C" : "F4"}</span>
-      <span className="hidden sm:inline">{champion ? "Champion" : "F4"}</span>
+      <span className="hidden sm:inline">{champion ? "CHAMP" : "F4"}</span>
     </span>
   );
 }

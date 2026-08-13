@@ -1167,7 +1167,7 @@ export function CalcClient({
                     )}
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-x-auto overscroll-x-contain">
                     <table className="w-full text-sm">
                       <thead className="border-b border-hairline text-left">
                         <tr>

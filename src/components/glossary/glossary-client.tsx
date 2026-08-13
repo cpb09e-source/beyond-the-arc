@@ -175,7 +175,7 @@ export function GlossaryClient() {
                     <p className="mt-1.5 text-[0.8rem] text-ink-muted leading-relaxed">{e.body}</p>
                     {e.formula && (
                       <code className="mt-2.5 block bg-card rounded px-2 py-1 text-[0.7rem]
-                                       text-ink-soft overflow-x-auto">
+                                       text-ink-soft overflow-x-auto overscroll-x-contain">
                         {e.formula}
                       </code>
                     )}

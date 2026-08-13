@@ -1093,6 +1093,27 @@ function HeaderField({ label, children, className }: { label: string; children: 
   );
 }
 
+/**
+ * Coalesce a scroll-driven callback to at most one call per frame.
+ *
+ * Both rails setState from a scroll listener, and scroll fires faster than the
+ * screen repaints — so the rails were queueing more React renders than there
+ * were frames to show them in, on the main thread, during the one gesture that
+ * most needs it free. A touch scroll runs on the compositor; work like this is
+ * what drags it back.
+ *
+ * It also covers the MutationObserver below, which watches a subtree of ~1,000
+ * cells and fired a full sync per mutation.
+ */
+function rafCoalesce(fn: () => void) {
+  let queued = 0;
+  const run = () => { queued = 0; fn(); };
+  return {
+    call: () => { if (!queued) queued = requestAnimationFrame(run); },
+    cancel: () => { if (queued) cancelAnimationFrame(queued); queued = 0; },
+  };
+}
+
 // Custom vertical scrollbar for the players grid. The native bar can't start
 // its rail below the frozen header rows, so we hide it (globals.css) and render
 // our own: up arrow, track, draggable thumb, down arrow — positioned to begin
@@ -1110,20 +1131,25 @@ function VScrollRail({ target }: { target: React.RefObject<HTMLDivElement | null
     const railH = rail.clientHeight;
     const h = Math.max(36, (clientHeight / scrollHeight) * railH);
     const top = (scrollTop / (scrollHeight - clientHeight)) * (railH - h);
-    setThumb({ top, h });
+    // Sub-pixel changes can't be seen, so they aren't worth a render.
+    setThumb((prev) =>
+      prev && Math.round(prev.top) === Math.round(top) && Math.round(prev.h) === Math.round(h)
+        ? prev
+        : { top, h });
   };
 
   useEffect(() => {
     const el = target.current;
     if (!el) return;
+    const q = rafCoalesce(sync);
     sync();
-    el.addEventListener("scroll", sync, { passive: true });
-    const ro = new ResizeObserver(sync);
+    el.addEventListener("scroll", q.call, { passive: true });
+    const ro = new ResizeObserver(q.call);
     ro.observe(el);
     // Content height changes (rows load/filter) without a resize of the box:
-    const mo = new MutationObserver(sync);
+    const mo = new MutationObserver(q.call);
     mo.observe(el, { childList: true, subtree: true });
-    return () => { el.removeEventListener("scroll", sync); ro.disconnect(); mo.disconnect(); };
+    return () => { q.cancel(); el.removeEventListener("scroll", q.call); ro.disconnect(); mo.disconnect(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target]);
 
@@ -1193,19 +1219,24 @@ function HScrollRail({ target }: { target: React.RefObject<HTMLDivElement | null
     const railW = clientWidth - 56; // room for the two arrows
     const w = Math.max(48, (clientWidth / scrollWidth) * railW);
     const left = (scrollLeft / (scrollWidth - clientWidth)) * (railW - w);
-    setState({ vw: clientWidth, left, w, x: 0, bottomOff: 0 });
+    setState((prev) =>
+      prev && prev.vw === clientWidth &&
+      Math.round(prev.left) === Math.round(left) && Math.round(prev.w) === Math.round(w)
+        ? prev
+        : { vw: clientWidth, left, w, x: 0, bottomOff: 0 });
   };
 
   useEffect(() => {
     const el = target.current;
     if (!el) return;
+    const q = rafCoalesce(sync);
     sync();
-    el.addEventListener("scroll", sync, { passive: true });
-    const ro = new ResizeObserver(sync);
+    el.addEventListener("scroll", q.call, { passive: true });
+    const ro = new ResizeObserver(q.call);
     ro.observe(el);
-    const mo = new MutationObserver(sync);
+    const mo = new MutationObserver(q.call);
     mo.observe(el, { childList: true, subtree: true });
-    return () => { el.removeEventListener("scroll", sync); ro.disconnect(); mo.disconnect(); };
+    return () => { q.cancel(); el.removeEventListener("scroll", q.call); ro.disconnect(); mo.disconnect(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target]);
 
