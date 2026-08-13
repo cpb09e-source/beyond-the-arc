@@ -118,8 +118,10 @@ const MIN_GP = 10, MIN_MPG = 12, MIN_PPG = 4;
 
 /**
  * Rating points per win. The portal Rating is the blended value on a readable
- * scale: 0 is an average player, and at 30 the best transfer in this cycle
- * lands at 97 with nothing clipping the top.
+ * scale: 0 is an average player, and at 33 the best transfer in this cycle
+ * lands at 97 with nothing clipping the top. It moved from 30 when the PIR term
+ * went per-40 and the value spread widened; it tracks that spread and nothing
+ * else.
  *
  * DELIBERATELY NOT the class score's 12 points per win, and the difference is
  * not an oversight. A class score is a SUM over a whole roster's worth of moves
@@ -128,7 +130,7 @@ const MIN_GP = 10, MIN_MPG = 12, MIN_PPG = 4;
  * constant cannot do both without either squashing players into single digits
  * or sending classes into the hundreds.
  */
-const RATING_SCALE = 30;
+const RATING_SCALE = 33;
 
 /**
  * STAR TIERS, re-cut on the Rating.
@@ -146,9 +148,9 @@ const RATING_SCALE = 30;
  * ever: a player's tier must not drift because someone else entered the portal.
  */
 function starsForRating(r) {
-  if (r >= 65) return 5;
-  if (r >= 34) return 4;
-  if (r >= 8) return 3;
+  if (r >= 62) return 5;
+  if (r >= 32) return 4;
+  if (r >= 7) return 3;
   if (r >= -9) return 2;
   return 1;
 }
@@ -237,18 +239,34 @@ function epmForYear(year) {
  * over:
  *
  *  1. CENTERING. eWins is denominated over an AVERAGE player, so an average
- *     player scores 0. PIR is not — its cohort mean is 15.2 — so adding it
- *     uncentered would hand every transfer in the file a large positive number
- *     and turn the class table into a count of bodies. The term is therefore
- *     (adjusted PIR − PIR_BASELINE), which is 0 for an average player and
- *     negative for a below-average one, exactly like eWins.
+ *     player scores 0. PIR is not, so adding it uncentered would hand every
+ *     transfer a large positive number and turn the class table into a count of
+ *     bodies. The term is (adjusted PIR/40 − PIR_BASELINE), which is 0 for an
+ *     average player and negative below, exactly like eWins.
  *
- *  2. SCALE. The weight is not chosen, it is read off the regression above:
- *     fitting next-year eWins on (eWins, tiered PIR) gives 0.460 and 0.027, so
- *     one point of adjusted PIR is worth 0.027/0.460 = 0.0587 eWins. At that
- *     weight the PIR term spans -0.87 to +1.22 wins against eWins' -1.90 to
- *     +2.83 — a real contribution at roughly 40% of the magnitude, not a
- *     takeover.
+ *  2. PER FORTY MINUTES, NOT PER GAME — and this one was got wrong first time.
+ *     Raw PIR correlates 0.821 with minutes played: it is mostly a minutes
+ *     proxy. eWins is already EPM times possessions, so blending raw PIR
+ *     charged playing time TWICE, in opposite directions for the same player.
+ *     Measured, the per-game term paid +0.313 wins to the 30-40 mpg bucket and
+ *     took 0.402 off the 12-18 bucket, almost independently of quality.
+ *
+ *     Najai Hines is the case: EPM +1.53, a POSITIVE on/off, a freshman — and a
+ *     Rating of -1, because 18 minutes a night meant a raw PIR of 4.6 against a
+ *     15.2 baseline and a 0.61-win charge that erased everything else. Per 40 he
+ *     is 10.9, still below average and still charged, but 0.23 rather than 0.61.
+ *     The per-40 term is flat across minutes buckets by construction: -0.044 to
+ *     +0.033 against the per-game version's -0.402 to +0.313.
+ *
+ *     IT COSTS PREDICTION AND IS WORTH IT. Raw PIR takes the blend to R² 0.2468
+ *     and per-40 to 0.2342, because minutes genuinely do predict — a coach
+ *     playing you 33 a night knows something. But that is a fact about minutes,
+ *     and this file already has a minutes term. Paying for it twice made the
+ *     Rating a worse description of a player, which is what it is for.
+ *
+ *  3. SCALE. The weight is read off the regression, not chosen: fitting
+ *     next-year eWins on (eWins, tiered PIR/40) puts one point of adjusted
+ *     PIR/40 at 0.0201 wins.
  * ------------------------------------------------------------------------- */
 const PORTAL_CONF_TIER = {
   // Power
@@ -273,9 +291,9 @@ const confTierAdj = (conf) => PORTAL_CONF_TIER[conf] ?? TIER_5;
  * are fixed: a centering constant that moves with the cohort would make one
  * school's score depend on who else happened to enter the portal.
  */
-const PIR_BASELINE = 15.23;
-/** Wins per point of adjusted PIR, from the regression documented above. */
-const PIR_WEIGHT = 0.0587;
+const PIR_BASELINE = 22.33;
+/** Wins per point of adjusted PIR-per-40, from the regression documented above. */
+const PIR_WEIGHT = 0.0201;
 
 /* ---------------------------------------------------------------------------
  * THE NEGATIVE ON/OFF PENALTY.
@@ -545,8 +563,10 @@ for (const e of entries) {
   // Graded against the conference he actually PLAYED in — that is where the
   // box-score line was earned — not the one he is moving to.
   const conf = e.conf_from ?? e.last_conf ?? null;
-  if (typeof e.pir === "number" && Number.isFinite(e.pir)) {
-    const adj = e.pir * (1 + confTierAdj(conf));
+  if (typeof e.pir === "number" && Number.isFinite(e.pir) && (e.mpg ?? 0) >= 5) {
+    // Per 40 minutes, so the term grades production RATE and leaves minutes to
+    // eWins, which already carries them.
+    const adj = (e.pir * 40) / e.mpg * (1 + confTierAdj(conf));
     e.pir_adj = Math.round(adj * 100) / 100;
     e.pir_wins = Math.round(PIR_WEIGHT * (adj - PIR_BASELINE) * 1000) / 1000;
     pirScored++;
@@ -708,13 +728,13 @@ portal.scoring = {
   // quantity can be summed across players.
   metric: "ewins",
   class_formula: `sum(value in) - ${OUT_WEIGHT} * sum(value out), over 2-star-and-up moves`,
-  value_formula: `eWins + freshman dev bump + ${PIR_WEIGHT} * (PIR * conf tier - ${PIR_BASELINE}) + ${ONOFF_PENALTY} * min(0, max(${ONOFF_FLOOR}, on/off))`,
+  value_formula: `eWins + freshman dev bump + ${PIR_WEIGHT} * (PIR/40 * conf tier - ${PIR_BASELINE}) + ${ONOFF_PENALTY} * min(0, max(${ONOFF_FLOOR}, on/off))`,
   out_weight: OUT_WEIGHT,
   dev_bump: `freshman-only, continuous: min(${SOPH_LEAP_MAX}, ${SOPH_LEAP_SLOPE} * max(0, EPM - ${SOPH_LEAP_FLOOR})), net of mean reversion`,
   class_score_formula: `round(net eWins * ${POINTS_PER_WIN})`,
   rating_formula: `round(value * ${RATING_SCALE})`,
   star_metric: "rating",
-  star_cutoffs: [-9, 8, 34, 65],
+  star_cutoffs: [-9, 7, 32, 62],
   rescored_at: new Date().toISOString(),
 };
 fs.writeFileSync(PORTAL, JSON.stringify(portal));
