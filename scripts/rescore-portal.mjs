@@ -229,6 +229,9 @@ const TEAM_ALIASES = {
   "nc state": "N.C. State", "ole miss": "Mississippi",
   "loyola maryland": "Loyola MD", "ut martin": "Tennessee Martin",
   "california baptist university": "Cal Baptist",
+  // "X University of Y" survives the generic strip as "x y" — "queens charlotte"
+  // — which matches nothing, so the place-name form needs saying outright.
+  "queens university of charlotte": "Queens",
   "pennsylvania": "Penn", "loyola chi": "Loyola Chicago",
   "middle tennessee state": "Middle Tennessee", "arkansas little rock": "Little Rock",
   "wisconsin milwaukee": "Milwaukee", "central connecticut state": "Central Connecticut",

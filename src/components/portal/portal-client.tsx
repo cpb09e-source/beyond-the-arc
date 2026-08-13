@@ -86,9 +86,10 @@ export function PortalClient({
   const [page, setPage] = useState<number>(1);
   const [query, setQuery] = useState("");
   const [schoolQuery, setSchoolQuery] = useState("");
-  // eWins by default: the table opens on total value delivered, which is the
-  // same thing the transfer-class panels beside it are ranked on.
-  const [sortBy, setSortBy] = useState<SortKey>("ewins");
+  // Commit date by default, newest first: the portal is a feed before it is a
+  // leaderboard, and the first question on opening it is who just landed
+  // somewhere. eWins is one click away in the header.
+  const [sortBy, setSortBy] = useState<SortKey>("committed");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [openClass, setOpenClass] = useState<TransferClassRow | null>(null);
 
