@@ -21,6 +21,7 @@ import {
   PLAYER_STAT_COLUMNS,
   VALID_SORTS,
   parsePlayerSpec,
+  EWINS_FIRST_YEAR,
   passesPlayerFilter,
   playerSpecToParams,
   type PlayerListSpec,
@@ -355,6 +356,12 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   // (prefiltered, transformed) and causes the heavy sort to re-run on
   // every keystroke even though nothing in the URL changed.
   const spec = useMemo(() => parsePlayerSpec(params), [params]);
+  // Mirrors the fallback in parsePlayerSpec: eWins needs the play-by-play fit,
+  // so a selection reaching back before it defaults to EPM instead.
+  const effectiveDefaultSort = useMemo(
+    () => (spec.years.every((y) => y >= EWINS_FIRST_YEAR) ? "ewins" : "epm"),
+    [spec.years],
+  );
 
   // URL-state update for the sort/order/show controls now living in the
   // leaderboard header. Mirrors PlayerFilterBar's `update()` so the two
@@ -903,12 +910,15 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                     // Index-qualified: a pinned stat that is also a default
                     // column renders twice on purpose, so the label alone is
                     // not a unique key.
-                    // defaultSort MUST match DEFAULT_SPEC.sortBy in lib/players.ts.
-                    // It is how SortableTh knows which column is already sorted
-                    // when the URL carries no ?sort=, and it was still "epm"
-                    // after the board's default moved to eWins — so the grid
-                    // arrived sorted by eWins with the active arrow drawn on EPM.
-                    <SortableTh key={`${c.field}-${i}`} statKey={c.sortKey} label={c.label} basePath="/players" defaultSort="ewins" idleArrows className="sticky top-6 z-30 bg-paper-deep border-b border-hairline" />
+                    // defaultSort MUST match what parsePlayerSpec would choose
+                    // for THESE years. It is how SortableTh knows which column
+                    // is already sorted when the URL carries no ?sort=, and it
+                    // was once left at "epm" after the board's default moved to
+                    // eWins — so the grid arrived sorted by eWins with the
+                    // active arrow drawn on EPM. It is a variable now for the
+                    // same reason: pre-2024 seasons have no eWins, so the
+                    // default falls back to EPM and the arrow has to follow.
+                    <SortableTh key={`${c.field}-${i}`} statKey={c.sortKey} label={c.label} basePath="/players" defaultSort={effectiveDefaultSort} idleArrows className="sticky top-6 z-30 bg-paper-deep border-b border-hairline" />
                   ) : (
                     <th key={`${c.field}-${i}`} className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-right whitespace-nowrap align-middle">
                       <StatLabel label={c.label} />

@@ -722,3 +722,30 @@ body {
   line-height: 1.2 !important;
   word-break: break-word !important;
 }
+
+/**
+ * Hardwood honour tint for the frozen rank cell on phones.
+ *
+ * These exist because the tint has to be OPAQUE. The rank column is
+ * `position: sticky`, and the explorer already relies on that: "opaque zebra so
+ * the frozen columns can share it and still hide the scrolled content behind
+ * them". A `bg-court/55` override broke exactly that invariant — at 55% the
+ * ratings columns scrolled visibly underneath the champion and Final Four rows,
+ * so their numbers appeared to bleed through the rank gutter while every
+ * un-honoured row stayed clean.
+ *
+ * Mixed against the two zebra bases rather than one flat colour, so the stripe
+ * still reads underneath the tint. Written here rather than as a Tailwind
+ * arbitrary value because the mix has to resolve against the live token — and
+ * the token flips in dark mode, where --court is a darker brown and the paper
+ * is near-black.
+ *
+ * Scoped below sm: from `sm` up the honour is a chip beside the team name and
+ * the rank cell goes back to being a plain gutter.
+ */
+@media (max-width: 639px) {
+  .honour-champ-paper { background-color: color-mix(in srgb, var(--court) 55%, var(--paper)); }
+  .honour-champ-card  { background-color: color-mix(in srgb, var(--court) 55%, var(--card)); }
+  .honour-f4-paper    { background-color: color-mix(in srgb, var(--court) 20%, var(--paper)); }
+  .honour-f4-card     { background-color: color-mix(in srgb, var(--court) 20%, var(--card)); }
+}

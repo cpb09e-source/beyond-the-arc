@@ -107,6 +107,12 @@ const RATES = [
   { key: "ft_pct",  num: (t) => t.ftm,  den: (t) => t.fta },
   { key: "efg_pct", num: (t) => t.fgm + 0.5 * t.fgm3, den: (t) => t.fga },
   { key: "ts_pct",  num: (t) => t.pts / 2, den: (t) => t.fga + 0.44 * t.fta },
+  // PPP belongs here rather than in AVERAGED for the same reason as TS%: it is
+  // a ratio of season totals, and averaging per-game ratios would weight a
+  // two-shot night like a twenty-shot one. Same numerator family as TS% — the
+  // difference is that turnovers are in the denominator, so a possession ended
+  // with a giveaway still counts as one spent, and the points are not halved.
+  { key: "ppp",     num: (t) => t.pts, den: (t) => t.fga + 0.44 * t.fta + t.tov, scale: 1 },
 ];
 
 // Averaged over games rather than derived, because the feed already computes
@@ -340,7 +346,10 @@ function aggregate(gs) {
   const m = { gp: n, gs: starts, mpg: t.mins / n };
   for (const r of RATES) {
     const d = r.den(t);
-    m[r.key] = d > 0 ? (100 * r.num(t)) / d : null;
+    // scale: every rate here is published as a PERCENTAGE except PPP, which is
+    // points per possession and belongs on its natural ~1.0 scale. Without the
+    // opt-out it shipped as 109.88 instead of 1.10.
+    m[r.key] = d > 0 ? ((r.scale ?? 100) * r.num(t)) / d : null;
   }
   for (const a of AVERAGED) {
     const vals = gs.map((g) => num(a.get(g))).filter((v) => v !== null);

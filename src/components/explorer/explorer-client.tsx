@@ -682,11 +682,20 @@ export function ExplorerClient({
                   // max-sm: so the desktop chip and the zebra stripe are
                   // untouched above the breakpoint.
                   const honour = tourneyBadge(r.team_name, r.team_year);
+                  // OPAQUE tint, keyed to which zebra stripe this row is on.
+                  // bg-court/55 and /20 were translucent, and this cell is
+                  // sticky — so on a champion or Final Four row the ratings
+                  // columns scrolled visibly through the rank gutter while
+                  // every other row stayed clean. See the .honour-* classes in
+                  // globals.css; they mix the hardwood against the same zebra
+                  // base the rest of the frozen group uses.
                   const honourCell =
                     honour === "champion"
-                      ? "max-sm:bg-court/55 max-sm:text-court-ink max-sm:font-bold"
+                      ? cn("max-sm:text-court-ink max-sm:font-bold",
+                           i % 2 === 0 ? "honour-champ-paper" : "honour-champ-card")
                       : honour === "final-four"
-                      ? "max-sm:bg-court/20 max-sm:text-court-ink max-sm:font-bold"
+                      ? cn("max-sm:text-court-ink max-sm:font-bold",
+                           i % 2 === 0 ? "honour-f4-paper" : "honour-f4-card")
                       : "";
                   const honourTitle =
                     honour === "champion" ? `${seasonLabel(r.team_year)} national champion`

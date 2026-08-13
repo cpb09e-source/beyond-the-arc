@@ -340,6 +340,14 @@ export type PlayerListSpec = {
  * EPM — which is how sorting by TOV% went unnoticed. Keep in step with
  * PlayerListSpec["sortBy"] and with sortKeyMap in players-client.
  */
+/**
+ * First season with a play-by-play EPM fit, and therefore the first with eWins
+ * and on/off. Earlier seasons carry the box-score estimate, which has no lineup
+ * data and so cannot produce either. Keep in step with which epm-<year>.json
+ * files exist.
+ */
+export const EWINS_FIRST_YEAR = 2024;
+
 export const VALID_SORTS: PlayerListSpec["sortBy"][] = [
   "pir", "bta_porpag", "pts", "reb", "ast", "fg_pct", "fg3_pct",
   "ts_pct", "games", "name", "epm", "off_epm", "def_epm", "ewins", "ppp", "min", "usage",
@@ -453,7 +461,22 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
   // is checked against, so a key missing here is silently ignored and the table
   // quietly falls back to EPM.
   const validSorts = VALID_SORTS;
-  const sortBy = validSorts.includes(sortRaw as PlayerListSpec["sortBy"]) ? (sortRaw as PlayerListSpec["sortBy"]) : DEFAULT_PLAYER_SPEC.sortBy;
+  /**
+   * DEFAULT SORT FALLS BACK TO EPM WHEN A SELECTED SEASON HAS NO eWINS.
+   *
+   * eWins comes out of the play-by-play fit, which only exists from
+   * EWINS_FIRST_YEAR on — every earlier season has the column but not the
+   * numbers. Sorting a 2019 table by eWins therefore ordered it by nothing:
+   * the whole page tied at null and fell through to whatever came next.
+   *
+   * So the default is eWins when every selected season can supply it, and EPM
+   * otherwise, EPM being the same judgement one rung down (see the note on
+   * DEFAULT_PLAYER_SPEC.sortBy). An EXPLICIT ?sort= is always honoured — this
+   * only changes what happens when the reader has not chosen.
+   */
+  const defaultSort: PlayerListSpec["sortBy"] =
+    years.every((y) => y >= EWINS_FIRST_YEAR) ? DEFAULT_PLAYER_SPEC.sortBy : "epm";
+  const sortBy = validSorts.includes(sortRaw as PlayerListSpec["sortBy"]) ? (sortRaw as PlayerListSpec["sortBy"]) : defaultSort;
   const sortDirRaw = get("order");
   // Pinned columns. Unknown keys are dropped rather than trusted — this comes
   // straight off the query string — and filterOnly stats are refused because
