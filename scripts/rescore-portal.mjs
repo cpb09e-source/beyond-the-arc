@@ -69,24 +69,13 @@
  * the WEAKEST of the three, 0.335 against 0.385, which is the Burton case in
  * reverse: a class total should not credit him for games he did not play, but
  * an estimate of what he will do next year should not dock him for them either.
- * This file ranks what happened. It is not a projection.
  *
- * NO CLASS-DEVELOPMENT BUMP, and that is measured rather than assumed. The
- * freshman-to-sophomore leap is real in the raw numbers for transfers — Fr->So
- * +0.77 EPM against Jr->Sr +0.35 — and it disappears almost entirely once you
- * condition on where the player started:
- *
- *   start band     Fr->So     So->Jr     Jr->Sr
- *   below -1       +1.57      +1.45      +1.37
- *   -1 to +0.5     +0.51      +0.57      +0.51
- *   +0.5 to +2     -0.31      +0.02      -0.09
- *
- * Within a band every class moves the same amount, which is mean reversion, not
- * development — it would happen to a rock. The raw Fr->So edge is just that
- * freshmen start lower and so revert further up. Worse, in the +0.5 to +2 band —
- * exactly where a good freshman about to "leap" sits — the measured Fr->So
- * change is NEGATIVE. A flat sophomore bump would inflate precisely the players
- * it looks most obviously right for.
+ * ONE FORWARD-LOOKING TERM: the sophomore leap. Class totals sum `ewins_proj`,
+ * which is realized eWins plus a measured freshman development bump. Everything
+ * else here is descriptive. See SOPH_LEAP below for the numbers and for the
+ * mistake that nearly kept it out — an earlier pass measured the effect on
+ * transfers alone, where the deciding cell holds 20 players, concluded there was
+ * no class effect, and was contradicted by the full 17,455-pair population.
  *
  * NO STEP-UP DISCOUNT for mid-major players moving to a power league, and this
  * one is worth spelling out because the intuition behind it is CORRECT and the
@@ -203,10 +192,147 @@ function epmForYear(year) {
   return out;
 }
 
+/* ---------------------------------------------------------------------------
+ * SCHOOL NAMES, and the three bugs one bad name caused.
+ *
+ * On3 sends schools in registrar form for a large minority of rows — "Gonzaga
+ * University", "Santa Clara University", "Saint Joseph's University" — where
+ * the rest of the site uses Bart's short names. 126 of 340 distinct portal
+ * school names did not match a team page. That broke three things at once:
+ *
+ *  1. LINKS. The transfer-class panel slugs the name it is given, so Gonzaga's
+ *     card pointed at /teams/gonzaga-university, which is a 404.
+ *  2. CLASSES. Buckets are keyed by school name, so a school could be split
+ *     across two spellings and its card would read "Gonzaga University".
+ *  3. VISIBILITY, the one that actually hid players. On3's own division lookup
+ *     fails on the same names, so it reported division 2 for both ends of
+ *     Massamba Diop's Arizona State -> Gonzaga move. The portal table filters
+ *     to D-I, so 51 players who cleared every production floor were invisible —
+ *     19 of them unambiguously D-I on at least one side. Searching for "Diop"
+ *     or "Murauskas" returned nothing, which reads as a broken search box and
+ *     is really a bad division flag three layers upstream.
+ *
+ * Fixed by resolving every school against OUR OWN archive of D-I team names
+ * and deriving D-I status from whether it resolved, rather than trusting the
+ * feed's division field. Reads only committed data, so it is freeze-safe.
+ * ------------------------------------------------------------------------- */
+const TEAM_ALIASES = {
+  /**
+   * The two ambiguous ones are resolved the same way TeamLogo resolves them,
+   * from evidence rather than preference: every portal row whose ORIGIN is the
+   * bare string was checked against what Bart calls the team that player
+   * actually played for. "Miami" is Miami FL 4 times out of 4 and "USF" is
+   * South Florida 9 of 9, with no counterexample either way.
+   */
+  "miami": "Miami FL", "usf": "South Florida",
+  "nc state": "N.C. State", "ole miss": "Mississippi",
+  "loyola maryland": "Loyola MD", "ut martin": "Tennessee Martin",
+  "california baptist university": "Cal Baptist",
+  "pennsylvania": "Penn", "loyola chi": "Loyola Chicago",
+  "middle tennessee state": "Middle Tennessee", "arkansas little rock": "Little Rock",
+  "wisconsin milwaukee": "Milwaukee", "central connecticut state": "Central Connecticut",
+  "university of maryland baltimore county": "UMBC",
+  "new jersey institute of technology": "NJIT",
+  "university of california santa barbara": "UC Santa Barbara",
+  "university of california san diego": "UC San Diego",
+  "university of california irvine": "UC Irvine",
+  "university of california riverside": "UC Riverside",
+  "california state university northridge": "Cal St. Northridge",
+  "california state university bakersfield": "Cal St. Bakersfield",
+  "california state university long beach": "Long Beach St.",
+  "california state university fullerton": "Cal St. Fullerton",
+  "the university of texas at arlington": "UT Arlington",
+  "the university of texas rio grande valley": "UT Rio Grande Valley",
+  "university of massachusetts lowell": "UMass Lowell",
+  "university of north carolina wilmington": "UNC Wilmington",
+  "university of north carolina asheville": "UNC Asheville",
+  "saint mary s college of california": "Saint Mary's",
+  "college of charleston": "Charleston", "long island university": "LIU",
+};
+const normSchool = (s) => (s ?? "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
+  .replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+
+/** Every D-I team name we publish, across the seasons we hold. */
+const canonical = new Map();   // normalized -> canonical name
+for (const y of [2026, 2025, 2024, 2023]) {
+  const fp = path.join(DATA, "teams-by-year", `${y}.json`);
+  if (!fs.existsSync(fp)) continue;
+  for (const t of JSON.parse(fs.readFileSync(fp, "utf8"))) {
+    if (t?.name) canonical.set(normSchool(t.name), t.name);
+  }
+}
+/** Resolve a feed school name to our canonical team name, or null if not D-I. */
+function resolveSchool(name) {
+  if (!name) return null;
+  const k = normSchool(name);
+  if (canonical.has(k)) return canonical.get(k);
+  const alias = TEAM_ALIASES[k];
+  if (alias && canonical.has(normSchool(alias))) return canonical.get(normSchool(alias));
+  // Registrar wording, then the State/St. swap the archive uses.
+  const stripped = k.replace(/\b(university|college|the|of)\b/g, "").trim().replace(/\s+/g, " ");
+  if (canonical.has(stripped)) return canonical.get(stripped);
+  for (const v of [k, stripped]) {
+    const st = v.replace(/\bstate\b/g, "st").trim().replace(/\s+/g, " ");
+    if (canonical.has(st)) return canonical.get(st);
+  }
+  return null;
+}
+
+/* ---------------------------------------------------------------------------
+ * THE SOPHOMORE LEAP. Measured, band-conditional, freshmen only.
+ *
+ * An earlier pass concluded there was no class effect at all. That was wrong,
+ * and wrong for a specific reason worth recording: it was measured on transfers
+ * alone, where the Fr->So cell in the band that matters holds 20 players. Over
+ * the full 17,455 consecutive player-seasons the effect is clear.
+ *
+ * The number below is the class effect NET OF MEAN REVERSION — a class's mean
+ * EPM change minus the mean change of every other player who started in the
+ * same band. That subtraction is the whole point: everyone below average gains
+ * about +0.85 EPM the following season whatever their class, and crediting a
+ * freshman for that would be crediting him for regression to the mean.
+ *
+ *   band          Fr->So bump    n     95% CI          t
+ *   below +0.5    ~0.00 (unused) 2796  —               —
+ *   +0.5 to +2    +0.25          453   [0.14, 0.39]   4.2
+ *   above +2      +0.85           67   [0.59, 1.20]   5.7
+ *
+ * So->Jr and Jr->Sr come out between -0.01 and +0.08 in every band, so only
+ * freshmen get anything. And the bump only exists for freshmen who were ALREADY
+ * ABOVE AVERAGE: a below-average freshman's apparent improvement is entirely
+ * mean reversion, and paying him twice for it would inflate the noisiest rows
+ * in the file.
+ *
+ * The top band is 67 players. It is a real effect at t=5.7, but it is the
+ * thinnest cell here, so it is applied at the measured value and no further.
+ * ------------------------------------------------------------------------- */
+const SOPH_LEAP = [
+  { min: 2.0, bump: 0.85 },
+  { min: 0.5, bump: 0.25 },
+];
+const FRESHMAN = new Set(["Freshman", "RedShirt Freshman", "Fr"]);
+function sophLeapFor(playedClass, eligibility, epm) {
+  const isFr = FRESHMAN.has(playedClass ?? "") || FRESHMAN.has(eligibility ?? "");
+  if (!isFr || epm == null) return 0;
+  for (const tier of SOPH_LEAP) if (epm >= tier.min) return tier.bump;
+  return 0;
+}
+
+/** The class a player actually played last season — more reliable than the
+ *  feed's eligibility string, which disagrees with it on 82 of 638 entries. */
+const classPlayed = new Map();
+for (const y of [2026, 2025, 2024]) {
+  const fp = path.join(DATA, "players-by-year", `${y}.json`);
+  if (!fs.existsSync(fp)) continue;
+  for (const p of JSON.parse(fs.readFileSync(fp, "utf8"))) {
+    if (p?.bart_player_id != null && p.class) classPlayed.set(`${p.bart_player_id}|${y}`, p.class);
+  }
+}
+
 const portal = JSON.parse(fs.readFileSync(PORTAL, "utf8"));
 const entries = portal.entries ?? [];
 
-let joined = 0, scored = 0, withEwins = 0, repaired = 0;
+let joined = 0, scored = 0, withEwins = 0, repaired = 0, renamed = 0, unhidden = 0, bumped = 0;
 const repairs = [];
 for (const e of entries) {
   const hit =
@@ -227,6 +353,29 @@ for (const e of entries) {
   }
   e.ewins = ewins === null ? null : Math.round(ewins * 1000) / 1000;
   if (e.ewins !== null) withEwins++;
+
+  // Canonical school names + D-I status from our own archive, not the feed's.
+  const fromCanon = resolveSchool(e.team_from), toCanon = resolveSchool(e.team_to);
+  if (fromCanon && fromCanon !== e.team_from) { e.team_from = fromCanon; renamed++; }
+  if (toCanon && toCanon !== e.team_to) { e.team_to = toCanon; renamed++; }
+  // Kept as booleans beside the feed's division fields rather than overwriting
+  // them, so the two sources stay distinguishable if the feed ever improves.
+  e.d1_from = fromCanon !== null;
+  e.d1_to = toCanon !== null;
+  if ((e.d1_from || e.d1_to) && !(e.division_from === 1 || e.division_to === 1)) unhidden++;
+
+  // The sophomore leap, applied to EPM and carried through to a projected eWins
+  // on the same possessions. Both are published: `ewins` is what he did,
+  // `ewins_proj` is what the class total is built from.
+  const played = e.last_year != null ? classPlayed.get(`${e.bart_player_id}|${e.last_year}`) ?? null : null;
+  const bump = sophLeapFor(played, e.eligibility, epm);
+  e.dev_bump = bump || 0;
+  if (bump > 0) bumped++;
+  const possUsed = hit?.poss != null && !(minutes >= 200 && hit.poss < minutes * POSS_PER_MIN * POSS_SANITY)
+    ? hit.poss
+    : (minutes >= 200 ? minutes * POSS_PER_MIN : null);
+  e.ewins_proj = e.ewins === null ? null
+    : Math.round((e.ewins + (bump / 100) * (possUsed ?? 0) / PTS_PER_WIN) * 1000) / 1000;
 
   const eligible =
     epm !== null && (e.gp ?? 0) >= MIN_GP && (e.mpg ?? 0) >= MIN_MPG && (e.ppg ?? 0) >= MIN_PPG;
@@ -263,7 +412,7 @@ for (const e of entries) {
    * cannot contribute to a total denominated in wins. It affects 2 of 569.
    */
   if (typeof e.pvs !== "number" || e.stars < 2) continue;
-  if (typeof e.ewins !== "number") continue;
+  if (typeof e.ewins_proj !== "number") continue;
   const base = {
     cbba_player_id: e.cbba_player_id,
     bart_player_id: e.bart_player_id,
@@ -271,6 +420,8 @@ for (const e of entries) {
     epm: e.epm,
     pvs: e.pvs,
     ewins: e.ewins,
+    ewins_proj: e.ewins_proj,
+    dev_bump: e.dev_bump,
     stars: e.stars,
   };
   bucket(e.team_from, e.conf_from).out_players.push({ ...base, counter_team: e.team_to, counter_conf: e.conf_to });
@@ -288,9 +439,9 @@ const POINTS_PER_WIN = 20;
 const POWER = new Set(["ACC", "B10", "B12", "SEC", "BE"]);
 const allRows = [];
 for (const b of perSchool.values()) {
-  const sum = (a) => a.reduce((s, p) => s + (p.ewins ?? 0), 0);
-  b.in_players.sort((x, y) => (y.ewins ?? 0) - (x.ewins ?? 0));
-  b.out_players.sort((x, y) => (y.ewins ?? 0) - (x.ewins ?? 0));
+  const sum = (a) => a.reduce((s, p) => s + (p.ewins_proj ?? 0), 0);
+  b.in_players.sort((x, y) => (y.ewins_proj ?? 0) - (x.ewins_proj ?? 0));
+  b.out_players.sort((x, y) => (y.ewins_proj ?? 0) - (x.ewins_proj ?? 0));
   const net = sum(b.in_players) - sum(b.out_players);
   allRows.push({
     school: b.school,
@@ -333,7 +484,8 @@ portal.scoring = {
   // (how much did the school actually gain), because only a wins-denominated
   // quantity can be summed across players.
   metric: "ewins",
-  class_formula: "sum(eWins in) - sum(eWins out), over 2-star-and-up moves with a play-by-play eWins",
+  class_formula: "sum(projected eWins in) - sum(projected eWins out), over 2-star-and-up moves with a play-by-play eWins",
+  dev_bump: "freshman-only, band-conditional: +0.25 EPM at 0.5-2.0, +0.85 above 2.0, net of mean reversion",
   class_score_formula: `round(net eWins * ${POINTS_PER_WIN})`,
   star_metric: "pvs",
   star_formula: "EPM * min(1, MPG/28)^0.7",
@@ -347,5 +499,7 @@ for (const e of entries) tiers[e.stars ?? 0]++;
 console.log(`portal rescored — stars on PVS, classes on eWins`);
 console.log(`  ${entries.length.toLocaleString()} entries · ${joined.toLocaleString()} joined an EPM · ${withEwins.toLocaleString()} joined an eWins · ${scored.toLocaleString()} cleared the baseline and were starred`);
 if (repaired) console.log(`  ${repaired} possession count(s) repaired:\n${repairs.map((r) => `    ${r}`).join("\n")}`);
+console.log(`  ${renamed} school name(s) resolved to the canonical team · ${unhidden} entr(ies) the feed's division field would have hidden`);
+console.log(`  ${bumped} freshman sophomore-leap bump(s) applied`);
 console.log(`  tiers  5★ ${tiers[5]}  4★ ${tiers[4]}  3★ ${tiers[3]}  2★ ${tiers[2]}  1★ ${tiers[1]}  unrated ${tiers[0]}`);
 console.log(`  ${allRows.length} schools ranked · best ${top_overall[0]?.school} ${top_overall[0]?.net.toFixed(1)} wins (score ${top_overall[0]?.score}) · worst power ${worst_power[0]?.school} ${worst_power[0]?.net.toFixed(1)} (score ${worst_power[0]?.score})`);

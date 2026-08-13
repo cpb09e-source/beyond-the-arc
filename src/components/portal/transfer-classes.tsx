@@ -17,12 +17,16 @@ export type TCPlayer = {
   // NOT what the class total is built from. See scripts/rescore-portal.mjs.
   pvs: number | null;
   epm: number | null;
-  /**
-   * Wins over an average player. This is the class currency: `net` is the sum
-   * of these in, minus the sum of these out, so the numbers in the modal add up
-   * to the number on the card.
-   */
+  /** Wins over an average player, as measured last season. */
   ewins: number | null;
+  /**
+   * eWins plus the measured freshman development bump. THIS is the class
+   * currency: `net` is the sum of these in minus the sum of these out, so the
+   * numbers in the modal add up to the number on the card.
+   */
+  ewins_proj: number | null;
+  /** EPM added by the sophomore leap; 0 for everyone who is not a freshman. */
+  dev_bump?: number;
   stars: 0 | 1 | 2 | 3 | 4 | 5;
   counter_team: string | null;   // OUT: where they went. IN: where they came from.
   counter_conf: string | null;
@@ -198,7 +202,7 @@ function PlayerList({
   players: TCPlayer[];
 }) {
   // Sums eWins, matching the card's net so the two agree on screen.
-  const totalEwins = players.reduce((s, p) => s + (p.ewins ?? 0), 0);
+  const totalEwins = players.reduce((s, p) => s + (p.ewins_proj ?? 0), 0);
   return (
     <div className="p-5">
       <div className="flex items-baseline justify-between mb-3">
@@ -233,8 +237,21 @@ function PlayerList({
                   ) : null}
                 </div>
               </div>
-              <span className={`font-medium tabular text-sm ${(p.ewins ?? 0) >= 0 ? "text-ink" : "text-rose-700"}`}>
-                {p.ewins === null ? "—" : `${p.ewins > 0 ? "+" : ""}${p.ewins.toFixed(2)}`}
+              <span className="flex flex-col items-end">
+                <span className={`font-medium tabular text-sm ${(p.ewins_proj ?? 0) >= 0 ? "text-ink" : "text-rose-700"}`}>
+                  {p.ewins_proj === null ? "—" : `${p.ewins_proj > 0 ? "+" : ""}${p.ewins_proj.toFixed(2)}`}
+                </span>
+                {/* A bumped freshman is marked rather than silently inflated —
+                    the number above him is part projection, and the reader is
+                    entitled to know which players that applies to. */}
+                {(p.dev_bump ?? 0) > 0 && (
+                  <span
+                    className="text-[0.55rem] uppercase tracking-widest text-coral/80 whitespace-nowrap"
+                    title={`Includes a measured +${p.dev_bump?.toFixed(2)} EPM freshman-to-sophomore development bump`}
+                  >
+                    soph leap
+                  </span>
+                )}
               </span>
             </li>
           ))}

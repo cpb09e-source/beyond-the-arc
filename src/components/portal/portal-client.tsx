@@ -43,12 +43,25 @@ export type PortalEntry = {
   // fit first, box estimate as fallback for EPM.
   epm: number | null;
   /**
+   * Whether each end of the move is a D-I team, resolved against our own
+   * archive rather than taken from the feed. On3's division fields are wrong
+   * whenever it sends a school in registrar form ("Gonzaga University"), which
+   * reported Massamba Diop's Arizona State -> Gonzaga move as D-II on both ends
+   * and hid him — and 50 others — from this table entirely.
+   */
+  d1_from?: boolean;
+  d1_to?: boolean;
+  /**
    * Wins added over an average player across the possessions he actually
    * played. Null for the handful with only a box estimate: eWins comes solely
    * from the play-by-play fit, and inventing one would put a fabricated zero
    * next to a real number.
    */
   ewins: number | null;
+  /** eWins plus the measured freshman development bump. What classes sum. */
+  ewins_proj?: number | null;
+  /** EPM added by the sophomore leap; 0 for everyone who is not a freshman. */
+  dev_bump?: number;
   stars: 0 | 1 | 2 | 3 | 4 | 5;
 };
 
@@ -95,8 +108,10 @@ export function PortalClient({
       if ((e.mpg ?? 0) < 12) return false;
       if ((e.ppg ?? 0) < 4) return false;
       // D-I only — kept as a hard-coded baseline since we dropped the dropdown.
-      const fromD1 = e.division_from === 1;
-      const toD1 = e.division_to === 1;
+      // Prefers the flags rescore-portal.mjs derives from our own team archive;
+      // falls back to the feed's division fields when they are absent.
+      const fromD1 = e.d1_from ?? (e.division_from === 1);
+      const toD1 = e.d1_to ?? (e.division_to === 1);
       if (!fromD1 && !toD1) return false;
       if (confTo !== "All" && e.conf_to !== confTo) return false;
       if (q && !e.name.toLowerCase().includes(q)) return false;
