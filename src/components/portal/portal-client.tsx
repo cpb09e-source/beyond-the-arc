@@ -58,8 +58,18 @@ export type PortalEntry = {
    * next to a real number.
    */
   ewins: number | null;
-  /** eWins plus the measured freshman development bump. What classes sum. */
+  /** eWins plus the measured freshman development bump. */
   ewins_proj?: number | null;
+  /** PIR after the conference-tier multiplier, and that term converted to wins. */
+  pir_adj?: number | null;
+  pir_wins?: number;
+  /**
+   * THE TRANSFER RATING shown in the table: eWins + freshman development bump
+   * + tiered-PIR term. Same units the transfer classes are summed in, so a
+   * school's class score is literally these numbers added up (incoming, minus
+   * half the outgoing) — the column and the sidebar cannot drift apart.
+   */
+  value?: number | null;
   /** EPM added by the sophomore leap; 0 for everyone who is not a freshman. */
   dev_bump?: number;
   stars: 0 | 1 | 2 | 3 | 4 | 5;
@@ -67,7 +77,7 @@ export type PortalEntry = {
 
 type SortKey =
   | "name" | "stars" | "date" | "committed" | "from" | "to"
-  | "mpg" | "ppg" | "rpg" | "apg" | "epm" | "ewins";
+  | "mpg" | "ppg" | "rpg" | "apg" | "rating";
 
 export function PortalClient({
   entries, transferClasses,
@@ -142,8 +152,7 @@ export function PortalClient({
         case "ppg":          return e.ppg;
         case "rpg":          return e.rpg;
         case "apg":          return e.apg;
-        case "epm":          return e.epm;
-        case "ewins":        return e.ewins;
+        case "rating":       return e.value ?? null;
       }
     };
     return [...filtered].sort((a, b) => {
@@ -274,8 +283,7 @@ export function PortalClient({
                 <ThSort label="To"     active={sortBy==="to"}   dir={sortDir} onClick={() => toggleSort("to","asc")}   align="left" />
                 <ThSort label="ENT" active={sortBy==="date"} dir={sortDir} onClick={() => toggleSort("date","desc")} align="left" />
                 <ThSort label="COM" active={sortBy==="committed"} dir={sortDir} onClick={() => toggleSort("committed","desc")} align="left" />
-                <ThSort label="EPM" active={sortBy==="epm"} dir={sortDir} onClick={() => toggleSort("epm","desc")} />
-                <ThSort label="eWINS" active={sortBy==="ewins"} dir={sortDir} onClick={() => toggleSort("ewins","desc")} />
+                <ThSort label="Rating" active={sortBy==="rating"} dir={sortDir} onClick={() => toggleSort("rating","desc")} />
                 <ThSort label="MPG" active={sortBy==="mpg"} dir={sortDir} onClick={() => toggleSort("mpg","desc")} />
                 <ThSort label="PPG" active={sortBy==="ppg"} dir={sortDir} onClick={() => toggleSort("ppg","desc")} />
                 <ThSort label="RPG" active={sortBy==="rpg"} dir={sortDir} onClick={() => toggleSort("rpg","desc")} />
@@ -284,7 +292,7 @@ export function PortalClient({
             </thead>
             <tbody>
               {pageRows.length === 0 ? (
-                <tr><td colSpan={14} className="px-4 py-12 text-center text-ink-muted">No transfers match these filters.</td></tr>
+                <tr><td colSpan={13} className="px-4 py-12 text-center text-ink-muted">No transfers match these filters.</td></tr>
               ) : (
                 pageRows.map((e, i) => (
                   <tr key={e.cbba_player_id + "-" + (e.date_entered ?? "")} className={cn("transition-colors hover:bg-[var(--accent-tint,rgba(237,90,79,0.08))]", i % 2 === 0 ? "bg-paper/70" : "bg-transparent")}>
@@ -314,8 +322,16 @@ export function PortalClient({
                     </Td>
                     <Td className="text-ink-muted tabular text-xs whitespace-nowrap">{fmtDate(e.date_entered)}</Td>
                     <Td className="text-ink-muted tabular text-xs whitespace-nowrap">{e.team_to ? fmtDate(e.date_updated) : "—"}</Td>
-                    <Td className="text-right tabular font-medium">{fmtEpm(e.epm)}</Td>
-                    <Td className="text-right tabular font-medium">{e.ewins === null ? "—" : e.ewins.toFixed(2)}</Td>
+                    <Td
+                      className="text-right tabular font-medium"
+                      title={e.value == null ? undefined
+                        : `${e.ewins_proj?.toFixed(2) ?? "—"} eWins${(e.dev_bump ?? 0) > 0 ? " (incl. sophomore leap)" : ""}` +
+                          `  ·  ${(e.pir_wins ?? 0) >= 0 ? "+" : ""}${(e.pir_wins ?? 0).toFixed(2)} from conference-tiered PIR` +
+                          `${e.pir_adj != null ? ` (PIR ${e.pir_adj.toFixed(1)} after tier)` : ""}` +
+                          `${e.epm != null ? `  ·  EPM ${e.epm > 0 ? "+" : ""}${e.epm.toFixed(1)}` : ""}`}
+                    >
+                      {e.value == null ? "—" : `${e.value > 0 ? "+" : ""}${e.value.toFixed(2)}`}
+                    </Td>
                     <Td className="text-right tabular">{fmt1(e.mpg)}</Td>
                     <Td className="text-right tabular">{fmt1(e.ppg)}</Td>
                     <Td className="text-right tabular">{fmt1(e.rpg)}</Td>
@@ -360,10 +376,6 @@ export function PortalClient({
 function fmt1(v: number | null): string {
   if (v === null || v === undefined) return "—";
   return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-}
-function fmtEpm(v: number | null): string {
-  if (v === null || v === undefined) return "—";
-  return (v >= 0 ? "+" : "") + v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 function fmtDate(s: string | null): string {
   if (!s) return "—";
@@ -514,8 +526,8 @@ function paginationItems(page: number, totalPages: number): Array<number | "…"
 function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <th className={`px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium ${className}`}>{children}</th>;
 }
-function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-3 py-2.5 ${className}`}>{children}</td>;
+function Td({ children, className = "", title }: { children: React.ReactNode; className?: string; title?: string }) {
+  return <td className={`px-3 py-2.5 ${className}`} title={title}>{children}</td>;
 }
 function ThSort({
   label, active, dir, onClick, align = "right", className = "",
