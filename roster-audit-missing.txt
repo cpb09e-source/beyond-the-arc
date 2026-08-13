@@ -12,20 +12,19 @@ SIU Edwardsville
 Southern Indiana
 North Carolina A&T
 Mercyhurst
-Le Moyne
 East Texas A&M
+Le Moyne
 VMI
 The Citadel
 New Haven
 West Florida
 
 ## URL resolved but scraped 0 players (non-Sidearm layout or wrong swap):
-Nebraska	https://huskers.com/sports/mens-basketball/roster
 Alabama	https://rolltide.com/sports/mens-basketball/roster
-Purdue	https://purduesports.com/sports/mens-basketball/roster
+LSU	https://lsusports.net/sports/mens-basketball/roster
+Utah St.	https://utahstateaggies.com/sports/mens-basketball/roster
 George Mason	https://gomason.com/sports/mens-basketball/roster
 Memphis	https://gotigersgo.com/sports/mens-basketball/roster
-Cal Baptist	https://cbulancers.com/sports/mens-basketball/roster
 Bradley	https://bradleybraves.com/sports/mens-basketball/roster
 Jacksonville	https://judolphins.com/sports/mens-basketball/roster
 Tennessee Tech	https://www.ttusports.com/sports/wbkb/roster
@@ -33,4 +32,5 @@ LIU	https://www.liuathletics.com/sports/mens-basketball/roster
 Central Connecticut	https://ccsubluedevils.com/sports/wbkb/roster
 Wagner	https://wagnerathletics.com/sports/mens-basketball/roster
 Incarnate Word	https://uiwcardinals.com/sports/mens-basketball/roster
+Southern	https://gojagsports.com/sports/mens-basketball/roster
 Mississippi Valley St.	https://mvsusports.com/sports/mens-basketball/roster

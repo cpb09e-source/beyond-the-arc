@@ -459,11 +459,15 @@ async function main() {
     const draftees = JSON.parse(fs.readFileSync(path.join(DATA, "nba-draftees.json"), "utf8"));
     const clsOf = new Map(); // normName -> normCollege
     for (const [n, v] of Object.entries(draftees)) {
-      if (v.year === DRAFT_YEAR) clsOf.set(normName(n), normTeam(v.college ?? ""));
+      if (v.year === DRAFT_YEAR) clsOf.set(linkKey(n), normTeam(v.college ?? ""));
     }
     for (const [tn, t] of Object.entries(teams)) {
       t.roster = t.roster.filter((p) => {
-        const college = clsOf.get(normName(p.name));
+        // linkKey, not normName: normName deliberately keeps suffixes (the
+        // recruit matching relies on that), so "Morez Johnson JR" never met the
+        // draft list's "morez johnson" and a 9th overall pick stayed on the
+        // roster. Three of Michigan's projected rotation were drafted.
+        const college = clsOf.get(linkKey(p.name));
         if (college == null) return true;
         // College must corroborate: their preview team or (for overlaid
         // transfers) the team they came from.
@@ -478,6 +482,12 @@ async function main() {
   console.log(`  NBA-departure filter: removed ${drafted} drafted players`);
 
   // ---- 7. Official-roster reconciliation ----
+  // ORDERING HAZARD: this step ADDS anyone on the school's posted roster that we
+  // are missing, and schools keep drafted players posted for weeks after the
+  // draft — so it can put back exactly who step 6 just removed. The departure
+  // filter therefore has to run again at the end; scripts/patch-preview-
+  // departures.mjs is that pass, and it is what repaired the 19 draftees still
+  // on rosters in the 2026-27 build.
   // Bart AND ESPN both keep departed players on offseason rosters, so a team can
   // show 21 names when the real roster is 14. official-rosters-2026.json (from
   // scripts/audit-rosters.mjs — each school's live athletics-site roster) is the
