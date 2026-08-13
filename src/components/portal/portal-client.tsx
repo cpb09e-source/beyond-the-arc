@@ -251,7 +251,7 @@ export function PortalClient({
           <aside className="order-1 xl:order-0 xl:sticky xl:top-20 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:[scrollbar-width:none] xl:[&::-webkit-scrollbar]:hidden">
             <TransferClassesPanel
               title="Top transfer classes"
-              subtitle="eWins + tiered PIR, half-weight out · all D-I"
+              subtitle="Sum of player Ratings, half-weight out · all D-I"
               rows={transferClasses.top_overall}
               onOpen={setOpenClass}
             />

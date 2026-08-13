@@ -642,23 +642,13 @@ for (const e of entries) {
     pir_wins: e.pir_wins,
     on_off: e.on_off,
     onoff_pen: e.onoff_pen,
+    rating: e.rating,
     value: e.value,
     stars: e.stars,
   };
   bucket(e.team_from, e.conf_from).out_players.push({ ...base, counter_team: e.team_to, counter_conf: e.conf_to });
   bucket(e.team_to, e.conf_to).in_players.push({ ...base, counter_team: e.team_from, counter_conf: e.conf_from });
 }
-
-/**
- * Class-score points per net win. Re-picked when departures went to half
- * weight, which raised every net: at 12 this cycle runs -33 to +93 with a
- * median of 0, so nothing pins at the ceiling. At 13 the best class clears 100.
- *
- * It moves with OUT_WEIGHT and with nothing else. That is the tell that it is a
- * scale constant rather than a free parameter — the same note the star cutoffs
- * carry, and for the same reason.
- */
-const POINTS_PER_WIN = 12;
 
 /**
  * How much of a departing player's eWins is charged against his old school.
@@ -682,30 +672,32 @@ const OUT_WEIGHT = 0.5;
 const POWER = new Set(["ACC", "B10", "B12", "SEC", "BE"]);
 const allRows = [];
 for (const b of perSchool.values()) {
-  const sum = (a) => a.reduce((s, p) => s + (p.value ?? 0), 0);
-  b.in_players.sort((x, y) => (y.value ?? 0) - (x.value ?? 0));
-  b.out_players.sort((x, y) => (y.value ?? 0) - (x.value ?? 0));
+  const sum = (a) => a.reduce((s, p) => s + (p.rating ?? 0), 0);
+  b.in_players.sort((x, y) => (y.rating ?? 0) - (x.rating ?? 0));
+  b.out_players.sort((x, y) => (y.rating ?? 0) - (x.rating ?? 0));
   const net = sum(b.in_players) - OUT_WEIGHT * sum(b.out_players);
   allRows.push({
     school: b.school,
     conference: b.conference,
     net: Math.round(net * 100) / 100,
+    /** Wins behind the rating sum, kept for the modal's secondary line. */
+    net_wins: Math.round(
+      (b.in_players.reduce((s, p) => s + (p.value ?? 0), 0)
+        - OUT_WEIGHT * b.out_players.reduce((s, p) => s + (p.value ?? 0), 0)) * 100,
+    ) / 100,
     /**
-     * The same number on a 0-100 reading scale: POINTS_PER_WIN points per win,
-     * so a class that adds five wins scores 100 and an average one scores 0.
+     * THE CLASS SCORE IS THE SUM OF THE PLAYER RATINGS — every arrival's Rating
+     * added up, minus half of every departure's. Nothing is rescaled on the way
+     * through, which is the whole point: the numbers in the modal add up to the
+     * number on the card, and a reader can check the ranking by hand.
      *
-     * Fixed constant, not a percentile or a normalisation against this year's
-     * best class — same reasoning as the star cutoffs above. A percentile would
-     * make 100 mean "best available this cycle", so a weak year's best class
-     * would score the same as a historic one, and every school's number would
-     * move when an unrelated school signed someone. A fixed scale means a 60
-     * is a 60 in any year.
-     *
-     * Unclamped, and negatives are the point: the current spread runs +86 to
-     * -112, and a school that lost five wins of production to the portal has
-     * earned a number that says so.
+     * It therefore runs in the HUNDREDS, not 0-100 — currently -93 to +248 —
+     * because a class is seven or eight players and a player can be worth 97 on
+     * his own. That is the same shape recruiting-class points have always taken,
+     * and it is the direct cost of making the arithmetic visible. If it should
+     * read 0-100 again, divide here; the ordering is identical either way.
      */
-    score: Math.round(net * POINTS_PER_WIN),
+    score: Math.round(net),
     in_count: b.in_players.length,
     out_count: b.out_players.length,
     in_players: b.in_players,
@@ -727,11 +719,11 @@ portal.scoring = {
   // (how much did the school actually gain), because only a wins-denominated
   // quantity can be summed across players.
   metric: "ewins",
-  class_formula: `sum(value in) - ${OUT_WEIGHT} * sum(value out), over 2-star-and-up moves`,
+  class_formula: `sum(player Rating in) - ${OUT_WEIGHT} * sum(player Rating out), over 2-star-and-up moves`,
   value_formula: `eWins + freshman dev bump + ${PIR_WEIGHT} * (PIR/40 * conf tier - ${PIR_BASELINE}) + ${ONOFF_PENALTY} * min(0, max(${ONOFF_FLOOR}, on/off))`,
   out_weight: OUT_WEIGHT,
   dev_bump: `freshman-only, continuous: min(${SOPH_LEAP_MAX}, ${SOPH_LEAP_SLOPE} * max(0, EPM - ${SOPH_LEAP_FLOOR})), net of mean reversion`,
-  class_score_formula: `round(net eWins * ${POINTS_PER_WIN})`,
+
   rating_formula: `round(value * ${RATING_SCALE})`,
   star_metric: "rating",
   star_cutoffs: [-9, 7, 32, 62],

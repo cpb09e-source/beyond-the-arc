@@ -31,11 +31,12 @@ export type TCPlayer = {
   on_off?: number | null;
   onoff_pen?: number;
   /**
-   * eWins + development bump + tiered-PIR term, in wins. THIS is the class
-   * currency: `net` is the sum of these in minus HALF the sum of these out, so
-   * the numbers in the modal add up to the number on the card.
+   * eWins + development bump + tiered-PIR term − on/off penalty, in wins. The
+   * quantity behind the Rating; the class card sums the Rating itself.
    */
   value: number | null;
+  /** The player's Rating. Class scores are these, summed. */
+  rating?: number | null;
   stars: 0 | 1 | 2 | 3 | 4 | 5;
   counter_team: string | null;   // OUT: where they went. IN: where they came from.
   counter_conf: string | null;
@@ -44,17 +45,18 @@ export type TransferClassRow = {
   school: string;
   conference: string | null;
   /**
-   * Net eWins: sum of incoming minus HALF the sum of outgoing. The half-weight
-   * is replacement level — the minutes a departure leaves behind get played by
-   * somebody, usually one of the arrivals already credited in full on the other
-   * side of the same subtraction. See OUT_WEIGHT in scripts/rescore-portal.mjs.
+   * Sum of incoming player Ratings minus HALF the sum of outgoing. The
+   * half-weight is replacement level — the minutes a departure leaves behind
+   * get played by somebody, usually one of the arrivals already credited in
+   * full on the other side of the same subtraction. See OUT_WEIGHT in
+   * scripts/rescore-portal.mjs.
    */
   net: number;
+  /** The same class expressed in wins, for the modal's secondary line. */
+  net_wins?: number;
   /**
-   * The same thing on a 0-100 reading scale — 12 points per net win, so an
-   * average class scores 0 and the best of this cycle lands in the low 90s.
-   * Fixed scale, so a 60 means the same thing in any cycle; negatives are real
-   * and unclamped.
+   * The rating sum, rounded. Runs in the hundreds because a class is seven or
+   * eight players and one can be worth 97 alone.
    */
   score: number;
   in_count: number;
@@ -185,7 +187,7 @@ export function TransferClassModal({ row, onClose }: { row: TransferClassRow; on
               {/* The score is a reading scale; the wins are the quantity. Both,
                   so the number can be checked against the players below it. */}
               <div className="text-[0.6rem] text-ink-muted tabular mt-0.5">
-                {row.net > 0 ? "+" : ""}{row.net.toFixed(1)} net wins
+                {row.net_wins == null ? null : <>{row.net_wins > 0 ? "+" : ""}{row.net_wins.toFixed(1)} net wins</>}
               </div>
             </div>
             <button
@@ -217,13 +219,13 @@ function PlayerList({
   players: TCPlayer[];
 }) {
   // Sums eWins, matching the card's net so the two agree on screen.
-  const totalEwins = players.reduce((s, p) => s + (p.value ?? 0), 0);
+  const totalRating = players.reduce((s, p) => s + (p.rating ?? 0), 0);
   return (
     <div className="p-5">
       <div className="flex items-baseline justify-between mb-3">
         <span className={`text-xs uppercase tracking-widest font-medium ${accent}`}>{kicker}</span>
         <span className="text-[0.65rem] text-ink-muted">
-          {players.length} {players.length === 1 ? "player" : "players"} · {totalEwins > 0 ? "+" : ""}{totalEwins.toFixed(1)} wins
+          {players.length} {players.length === 1 ? "player" : "players"} · {totalRating > 0 ? "+" : ""}{Math.round(totalRating)} rating
           {kicker === "Outgoing" && (
             // The net charges only half of this, so saying so here stops the
             // two numbers on screen from looking like they disagree.
@@ -259,14 +261,14 @@ function PlayerList({
               </div>
               <span className="flex flex-col items-end">
                 <span
-                  className={`font-medium tabular text-sm ${(p.value ?? 0) >= 0 ? "text-ink" : "text-rose-700"}`}
+                  className={`font-medium tabular text-sm ${(p.rating ?? 0) >= 0 ? "text-ink" : "text-rose-700"}`}
                   title={p.value === null ? undefined
                     : `${p.ewins_proj?.toFixed(2) ?? "—"} eWins${(p.dev_bump ?? 0) > 0 ? " (incl. soph leap)" : ""}` +
                       `  ·  ${(p.pir_wins ?? 0) >= 0 ? "+" : ""}${(p.pir_wins ?? 0).toFixed(2)} from tiered PIR` +
                       `${p.pir_adj != null ? ` (PIR ${p.pir_adj.toFixed(1)} after conference tier)` : ""}` +
                       `${(p.onoff_pen ?? 0) < 0 ? `  ·  ${p.onoff_pen?.toFixed(2)} for an on/off of ${p.on_off?.toFixed(1)}` : ""}`}
                 >
-                  {p.value === null ? "—" : `${p.value > 0 ? "+" : ""}${p.value.toFixed(2)}`}
+                  {p.rating == null ? "—" : String(p.rating)}
                 </span>
                 {/* A bumped freshman is marked rather than silently inflated —
                     the number above him is part projection, and the reader is
