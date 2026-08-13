@@ -12,11 +12,6 @@ const NAV = [
   // Second, not last: scores are the reason to come back daily, and the only
   // page here whose answer changes between two visits on the same evening.
   { href: "/scoreboard", label: "Scoreboard" },
-  { href: "/preview", label: "26-27 Preview" },
-  // Sub-page of the preview, and placed next to it rather than inside a
-  // dropdown: the nav is a flat row on desktop and a single list on phones, so
-  // one extra entry costs less than introducing the only nested menu on the site.
-  { href: "/preview/projections", label: "Projections" },
   { href: "/players", label: "Players" },
   { href: "/coaches", label: "Coaches" },
   { href: "/calc", label: "Win Calc" },
@@ -31,9 +26,6 @@ function isCurrent(pathname: string, href: string): boolean {
   // a static export cannot enumerate every game id at build time. It is still
   // the scoreboard's territory, so it lights that tab.
   if (href === "/scoreboard" && pathname.startsWith("/game")) return true;
-  // /preview/projections is its own tab, so the preview tab must not also claim
-  // it — without this both light up and neither tells the reader where he is.
-  if (href === "/preview" && pathname.startsWith("/preview/projections")) return false;
   return pathname === href || pathname.startsWith(href + "/");
 }
 
