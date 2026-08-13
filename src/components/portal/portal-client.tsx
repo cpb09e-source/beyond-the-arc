@@ -39,15 +39,22 @@ export type PortalEntry = {
   spg: number | null;
   bpg: number | null;
   pir: number | null;
-  // Joined server-side in app/portal/page.tsx — real play-by-play fit first,
-  // box estimate as fallback. Not in portal.json itself.
+  // Baked into portal.json by scripts/rescore-portal.mjs — real play-by-play
+  // fit first, box estimate as fallback for EPM.
   epm: number | null;
+  /**
+   * Wins added over an average player across the possessions he actually
+   * played. Null for the handful with only a box estimate: eWins comes solely
+   * from the play-by-play fit, and inventing one would put a fabricated zero
+   * next to a real number.
+   */
+  ewins: number | null;
   stars: 0 | 1 | 2 | 3 | 4 | 5;
 };
 
 type SortKey =
   | "name" | "stars" | "date" | "committed" | "from" | "to"
-  | "mpg" | "ppg" | "rpg" | "apg" | "epm";
+  | "mpg" | "ppg" | "rpg" | "apg" | "epm" | "ewins";
 
 export function PortalClient({
   entries, transferClasses,
@@ -66,7 +73,9 @@ export function PortalClient({
   const [page, setPage] = useState<number>(1);
   const [query, setQuery] = useState("");
   const [schoolQuery, setSchoolQuery] = useState("");
-  const [sortBy, setSortBy] = useState<SortKey>("epm");
+  // eWins by default: the table opens on total value delivered, which is the
+  // same thing the transfer-class panels beside it are ranked on.
+  const [sortBy, setSortBy] = useState<SortKey>("ewins");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [openClass, setOpenClass] = useState<TransferClassRow | null>(null);
 
@@ -118,6 +127,7 @@ export function PortalClient({
         case "rpg":          return e.rpg;
         case "apg":          return e.apg;
         case "epm":          return e.epm;
+        case "ewins":        return e.ewins;
       }
     };
     return [...filtered].sort((a, b) => {
@@ -210,7 +220,7 @@ export function PortalClient({
           <aside className="order-1 xl:order-0 xl:sticky xl:top-20 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:[scrollbar-width:none] xl:[&::-webkit-scrollbar]:hidden">
             <TransferClassesPanel
               title="Top transfer classes"
-              subtitle="Net EPM value · all D-I"
+              subtitle="20 points per net win · all D-I"
               rows={transferClasses.top_overall}
               onOpen={setOpenClass}
             />
@@ -249,6 +259,7 @@ export function PortalClient({
                 <ThSort label="ENT" active={sortBy==="date"} dir={sortDir} onClick={() => toggleSort("date","desc")} align="left" />
                 <ThSort label="COM" active={sortBy==="committed"} dir={sortDir} onClick={() => toggleSort("committed","desc")} align="left" />
                 <ThSort label="EPM" active={sortBy==="epm"} dir={sortDir} onClick={() => toggleSort("epm","desc")} />
+                <ThSort label="eWINS" active={sortBy==="ewins"} dir={sortDir} onClick={() => toggleSort("ewins","desc")} />
                 <ThSort label="MPG" active={sortBy==="mpg"} dir={sortDir} onClick={() => toggleSort("mpg","desc")} />
                 <ThSort label="PPG" active={sortBy==="ppg"} dir={sortDir} onClick={() => toggleSort("ppg","desc")} />
                 <ThSort label="RPG" active={sortBy==="rpg"} dir={sortDir} onClick={() => toggleSort("rpg","desc")} />
@@ -257,7 +268,7 @@ export function PortalClient({
             </thead>
             <tbody>
               {pageRows.length === 0 ? (
-                <tr><td colSpan={13} className="px-4 py-12 text-center text-ink-muted">No transfers match these filters.</td></tr>
+                <tr><td colSpan={14} className="px-4 py-12 text-center text-ink-muted">No transfers match these filters.</td></tr>
               ) : (
                 pageRows.map((e, i) => (
                   <tr key={e.cbba_player_id + "-" + (e.date_entered ?? "")} className={cn("transition-colors hover:bg-[var(--accent-tint,rgba(237,90,79,0.08))]", i % 2 === 0 ? "bg-paper/70" : "bg-transparent")}>
@@ -288,6 +299,7 @@ export function PortalClient({
                     <Td className="text-ink-muted tabular text-xs whitespace-nowrap">{fmtDate(e.date_entered)}</Td>
                     <Td className="text-ink-muted tabular text-xs whitespace-nowrap">{e.team_to ? fmtDate(e.date_updated) : "—"}</Td>
                     <Td className="text-right tabular font-medium">{fmtEpm(e.epm)}</Td>
+                    <Td className="text-right tabular font-medium">{e.ewins === null ? "—" : e.ewins.toFixed(2)}</Td>
                     <Td className="text-right tabular">{fmt1(e.mpg)}</Td>
                     <Td className="text-right tabular">{fmt1(e.ppg)}</Td>
                     <Td className="text-right tabular">{fmt1(e.rpg)}</Td>

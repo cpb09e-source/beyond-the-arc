@@ -13,9 +13,16 @@ export type TCPlayer = {
   cbba_player_id: number;
   bart_player_id: number | null;
   name: string;
-  // Portal Value Score — EPM scaled by role. See scripts/rescore-portal.mjs.
+  // Portal Value Score — EPM scaled by role. Tiers the player (the stars);
+  // NOT what the class total is built from. See scripts/rescore-portal.mjs.
   pvs: number | null;
   epm: number | null;
+  /**
+   * Wins over an average player. This is the class currency: `net` is the sum
+   * of these in, minus the sum of these out, so the numbers in the modal add up
+   * to the number on the card.
+   */
+  ewins: number | null;
   stars: 0 | 1 | 2 | 3 | 4 | 5;
   counter_team: string | null;   // OUT: where they went. IN: where they came from.
   counter_conf: string | null;
@@ -23,7 +30,14 @@ export type TCPlayer = {
 export type TransferClassRow = {
   school: string;
   conference: string | null;
+  /** Net eWins: sum of incoming minus sum of outgoing. The underlying quantity. */
   net: number;
+  /**
+   * The same thing on a 0-100 reading scale — 20 points per net win, so a class
+   * that adds five wins scores 100 and an average one scores 0. Fixed scale, so
+   * a 60 means the same thing in any cycle; negatives are real and unclamped.
+   */
+  score: number;
   in_count: number;
   out_count: number;
   in_players: TCPlayer[];
@@ -92,8 +106,8 @@ export function TransferClassesPanel({
                     {confDisplay(r.conference)} · {r.in_count}↓ {r.out_count}↑
                   </span>
                 </span>
-                <span className={`font-display text-base tabular tabular-nums ${r.net >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                  {r.net > 0 ? "+" : ""}{r.net.toFixed(1)}
+                <span className={`font-display text-base tabular tabular-nums ${r.score >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                  {r.score > 0 ? "+" : ""}{r.score}
                 </span>
               </button>
             </li>
@@ -145,9 +159,14 @@ export function TransferClassModal({ row, onClose }: { row: TransferClassRow; on
           </Link>
           <div className="flex items-baseline gap-3">
             <div className="text-right">
-              <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Net value</div>
-              <div className={`font-display text-3xl tabular ${row.net >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                {row.net > 0 ? "+" : ""}{row.net.toFixed(1)}
+              <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Class score</div>
+              <div className={`font-display text-3xl tabular ${row.score >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+                {row.score > 0 ? "+" : ""}{row.score}
+              </div>
+              {/* The score is a reading scale; the wins are the quantity. Both,
+                  so the number can be checked against the players below it. */}
+              <div className="text-[0.6rem] text-ink-muted tabular mt-0.5">
+                {row.net > 0 ? "+" : ""}{row.net.toFixed(1)} net eWins
               </div>
             </div>
             <button
@@ -178,13 +197,14 @@ function PlayerList({
   accent: string;
   players: TCPlayer[];
 }) {
-  const totalPvs = players.reduce((s, p) => s + (p.pvs ?? 0), 0);
+  // Sums eWins, matching the card's net so the two agree on screen.
+  const totalEwins = players.reduce((s, p) => s + (p.ewins ?? 0), 0);
   return (
     <div className="p-5">
       <div className="flex items-baseline justify-between mb-3">
         <span className={`text-xs uppercase tracking-widest font-medium ${accent}`}>{kicker}</span>
         <span className="text-[0.65rem] text-ink-muted">
-          {players.length} {players.length === 1 ? "player" : "players"} · {totalPvs > 0 ? "+" : ""}{totalPvs.toFixed(1)} total
+          {players.length} {players.length === 1 ? "player" : "players"} · {totalEwins > 0 ? "+" : ""}{totalEwins.toFixed(1)} eWins
         </span>
       </div>
       {players.length === 0 ? (
@@ -213,8 +233,8 @@ function PlayerList({
                   ) : null}
                 </div>
               </div>
-              <span className={`font-medium tabular text-sm ${(p.pvs ?? 0) >= 0 ? "text-ink" : "text-rose-700"}`}>
-                {p.pvs === null ? "—" : `${p.pvs > 0 ? "+" : ""}${p.pvs.toFixed(1)}`}
+              <span className={`font-medium tabular text-sm ${(p.ewins ?? 0) >= 0 ? "text-ink" : "text-rose-700"}`}>
+                {p.ewins === null ? "—" : `${p.ewins > 0 ? "+" : ""}${p.ewins.toFixed(2)}`}
               </span>
             </li>
           ))}
