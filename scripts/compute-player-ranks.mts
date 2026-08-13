@@ -205,7 +205,23 @@ const STATS: StatDef[] = [
 
 // ---------- Cohort eligibility ----------
 const MIN_GAMES = 18;
-const MIN_MPG = 20;
+/**
+ * Lowered from 20 to 15 (2026-08).
+ *
+ * The floor decides who gets a rank file at all, and a rank file is what the
+ * player page's whole Overview panel hangs off — percentile chips, splits, the
+ * lot. At 20 it was excluding real rotation players for missing by a rounding
+ * error: Kiyan Anthony played 29 games at 18.7 MPG and 8.0 PPG for Syracuse,
+ * has an EPM and a full advanced line, and his page showed none of it because
+ * he was 1.3 minutes a night short.
+ *
+ * This is a COHORT change, not a display change — every percentile on the site
+ * is computed within it, so widening the floor moves everyone's chips slightly
+ * as the denominator grows. That is correct rather than a side effect: a
+ * percentile is only meaningful against a population, and 15 MPG is a defensible
+ * line for "plays a real role" in a way that 20 was not.
+ */
+const MIN_MPG = 15;
 const MIN_PPG = 5.3;
 
 function eligible(season: PlayerSeason): boolean {
