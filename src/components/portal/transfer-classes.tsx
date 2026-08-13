@@ -45,11 +45,9 @@ export type TransferClassRow = {
   school: string;
   conference: string | null;
   /**
-   * Sum of incoming player Ratings minus HALF the sum of outgoing. The
-   * half-weight is replacement level — the minutes a departure leaves behind
-   * get played by somebody, usually one of the arrivals already credited in
-   * full on the other side of the same subtraction. See OUT_WEIGHT in
-   * scripts/rescore-portal.mjs.
+   * Sum of incoming player Ratings minus the sum of outgoing — a straight
+   * ledger, both sides at full weight, so the two columns in the modal
+   * subtract to the number on the card.
    */
   net: number;
   /** The same class expressed in wins, for the modal's secondary line. */
@@ -226,11 +224,7 @@ function PlayerList({
         <span className={`text-xs uppercase tracking-widest font-medium ${accent}`}>{kicker}</span>
         <span className="text-[0.65rem] text-ink-muted">
           {players.length} {players.length === 1 ? "player" : "players"} · {totalRating > 0 ? "+" : ""}{Math.round(totalRating)} rating
-          {kicker === "Outgoing" && (
-            // The net charges only half of this, so saying so here stops the
-            // two numbers on screen from looking like they disagree.
-            <span className="text-ink-muted/70"> · charged at half</span>
-          )}
+
         </span>
       </div>
       {players.length === 0 ? (

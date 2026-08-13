@@ -42,8 +42,8 @@
  * percentiles, so a tier cannot drift because someone else entered the portal.
  *
  * ---------------------------------------------------------------------------
- * CLASS NET is Σ eWins(in) − 0.5·Σ eWins(out) over 2★-and-up moves, in WINS.
- * The half-weight on departures is replacement level — see OUT_WEIGHT.
+ * CLASS NET is Σ Rating(in) − Σ Rating(out) over 2★-and-up moves: a straight
+ * ledger of talent gained against talent lost, in Rating points.
  *
  * It used to sum PVS. The reason it does not any more is not that eWins is a
  * different opinion — measured across 535 scored portal entries the two
@@ -651,22 +651,25 @@ for (const e of entries) {
 }
 
 /**
- * How much of a departing player's eWins is charged against his old school.
+ * How much of a departing player's Rating is charged against his old school.
  *
- * It was 1.0 — a school lost exactly what walked out the door — and that
- * double-counts minutes. The possessions a departure leaves behind do not
- * vanish; somebody plays them, and on most rosters that somebody is one of the
- * arrivals already being credited at full value on the other side of the same
- * subtraction. Charging the full loss AND crediting the full gain bills the
- * same forty minutes twice.
+ * FULL WEIGHT. It ran at 0.5 for a while on a replacement-level argument — the
+ * minutes a departure leaves behind get played by somebody, often one of the
+ * arrivals already credited on the other side, so charging the whole loss and
+ * crediting the whole gain bills the same forty minutes twice.
  *
- * The honest version of this is replacement level: a departure costs a school
- * the gap between the player and whoever inherits his minutes, not his whole
- * line. Half is a deliberate round number standing in for that gap rather than
- * a fitted constant — it says "losing a starter hurts, but not as much as
- * signing an equivalent one helps, because the hole gets partly filled anyway."
+ * That argument is sound for a projection and wrong for what this table
+ * actually is: a ledger of talent in against talent out. Wake Forest brought in
+ * three players worth 18 and lost four worth 35, Juke Harris to Tennessee among
+ * them. Half weight called that +1 — a school that lost a 40-rated starter and
+ * replaced him with a 7 came out ahead — which is not a defensible reading of
+ * that off-season. At full weight it is -17, which is the number a reader would
+ * arrive at with the two columns in front of them.
+ *
+ * The replacement-level effect is real; it just belongs in a projection of next
+ * season's record, not in an accounting of who was gained and lost.
  */
-const OUT_WEIGHT = 0.5;
+const OUT_WEIGHT = 1.0;
 
 
 const POWER = new Set(["ACC", "B10", "B12", "SEC", "BE"]);
