@@ -61,6 +61,65 @@ const SR_NAME_ALIASES: Record<string, string> = {
   "miami florida": "miami fl",
   "miami oh": "miami oh",
   "miami ohio": "miami oh",
+
+  /* ------------------------------------------------------------------ *
+   * Transfer-portal feed names. The portal writes schools a third way
+   * again — registrar names ("California State University-Northridge"),
+   * broadcast shorthand ("Loyola (Chi)"), and bare ambiguous ones.
+   *
+   * THE TWO AMBIGUOUS ONES ARE NOT GUESSES. Both were resolved by taking
+   * every portal row whose ORIGIN is that string and looking up what Bart
+   * calls the team that player actually played for:
+   *   "Miami" → Miami FL, 4 of 4 resolvable rows, none for Miami OH
+   *   "USF"   → South Florida, 9 of 9, none for San Francisco
+   * Unanimous in both cases, from a source that has nothing to do with
+   * the portal feed. If a future season sends a Miami OH player through
+   * as a bare "Miami", this alias will be wrong for him — that is the
+   * cost of the feed not saying, and the monogram was wrong for everyone.
+   * ------------------------------------------------------------------ */
+  "miami": "miami fl",
+  "usf": "south florida",
+  "loyola chi": "loyola chicago",
+  "pennsylvania": "penn",
+  "college of charleston": "charleston",
+  "manhattan college": "manhattan",
+  "stonehill college": "stonehill",
+  "holy cross college": "holy cross",
+  "saint mary s college of california": "saint mary s",
+  "university of san francisco": "san francisco",
+  "university of california santa barbara": "uc santa barbara",
+  "university of california san diego": "uc san diego",
+  "university of california irvine": "uc irvine",
+  "california state university northridge": "cal st northridge",
+  "california state university bakersfield": "cal st bakersfield",
+  "california state university long beach": "long beach st",
+  "the university of texas at arlington": "ut arlington",
+  "the university of texas rio grande valley": "ut rio grande valley",
+  "university of massachusetts lowell": "umass lowell",
+  "university of north carolina wilmington": "unc wilmington",
+  "university of maryland baltimore county": "umbc",
+  "new jersey institute of technology": "njit",
+  "california state university fullerton": "cal st fullerton",
+  "university of north carolina asheville": "unc asheville",
+  "university of california riverside": "uc riverside",
+  "university of southern indiana": "southern indiana",
+  "le moyne college": "le moyne",
+  "long island university": "liu",
+  "wisconsin milwaukee": "milwaukee",
+  "arkansas little rock": "little rock",
+  "middle tennessee state": "middle tennessee",
+  "central connecticut state": "central connecticut",
+
+  /* The live scoreboard writes a fourth set of spellings again. Same defect,
+     same table. "IU Indianapolis" has no entry to point at — the school was
+     IUPUI until 2024 and cbb-team-ids predates the rename — so it stays a
+     monogram rather than borrowing another school's logo. */
+  "st francis pa": "saint francis",
+  "south carolina upstate": "usc upstate",
+  "ul monroe": "louisiana monroe",
+  "florida international": "fiu",
+  "texas a m corpus christi": "texas a m corpus chris",
+  "se louisiana": "southeastern louisiana",
 };
 
 function lookup(name: string): CbbEntry | null {

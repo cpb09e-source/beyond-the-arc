@@ -16,6 +16,13 @@ type Season = {
   games: number | null;
   notes: string | null;
   projection: number | null;
+  /**
+   * CBBD aggregates. Games started and turnovers exist nowhere in Bart's season
+   * CSV, so these two columns are the only ones on this table that depend on
+   * the CBBD join — and the only ones that go blank for 2021, which has no
+   * player box in the archive.
+   */
+  advanced_stats?: { gs?: number | null; tov?: number | null; tov_pg?: number | null } | null;
 };
 
 type View = "per_game" | "totals";
@@ -28,16 +35,13 @@ function fmtInt(x: number | null): string {
   if (x === null || x === undefined) return "—";
   return Math.round(x).toLocaleString("en-US");
 }
-// Bart stores ft_pct/fg2_pct/fg3_pct as 0..1 decimals (0.851); eFG and TS are
-// already on a 0..100 scale (43.9). Two helpers so callers don't accidentally
-// double-scale.
+// Bart stores ft_pct/fg2_pct/fg3_pct as 0..1 decimals (0.851). Every percentage
+// left on this table is one of those, so there is a single helper — the 0..100
+// composites (eFG, TS) moved to the overview panel, which is where the shooting
+// story belongs.
 function fmtPctDecimal(x: number | null): string {
   if (x === null || x === undefined) return "—";
   return (x * 100).toLocaleString("en-US", { maximumFractionDigits: 1 }) + "%";
-}
-function fmtPctScaled(x: number | null): string {
-  if (x === null || x === undefined) return "—";
-  return x.toLocaleString("en-US", { maximumFractionDigits: 1 }) + "%";
 }
 function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
@@ -110,24 +114,30 @@ export function CareerTable({
       {/* Horizontal scroll on narrow viewports — full stat line stays intact
           and swipes left/right with touch momentum instead of dropping columns. */}
       <div className="overflow-x-auto [-webkit-overflow-scrolling:touch] overscroll-x-contain">
-        <table className="w-full min-w-[46rem] text-sm">
+        <table className="w-full min-w-[58rem] text-sm">
           <thead className="bg-paper-deep/70 text-left">
             <tr>
               <Th>Season</Th>
               <Th>Team</Th>
               <Th hideUntil="sm">CL</Th>
               <Th align="right">GP</Th>
+              <Th align="right">GS</Th>
+              {/* Per-game everywhere else on this row switches to a total in
+                  Totals view, and "MPG" would be a lie about a season minute
+                  count — so this one header changes with the view. */}
+              <Th align="right">{isTotals ? "MIN" : "MPG"}</Th>
+              <Th align="right" hideUntil="md">FGM</Th>
               <Th align="right" hideUntil="md">FGA</Th>
               <Th align="right" hideUntil="sm">FG%</Th>
+              <Th align="right" hideUntil="md">3PM</Th>
               <Th align="right" hideUntil="md">3PA</Th>
               <Th align="right" hideUntil="md">3P%</Th>
-              <Th align="right" hideUntil="md">eFG</Th>
-              <Th align="right" hideUntil="md">TS</Th>
               <Th align="right" hideUntil="lg">FTA</Th>
               <Th align="right" hideUntil="md">FT%</Th>
               <Th align="right" hideUntil="lg">ORB</Th>
               <Th align="right">REB</Th>
               <Th align="right" hideUntil="sm">AST</Th>
+              <Th align="right" hideUntil="sm">TOV</Th>
               <Th align="right" hideUntil="lg">STL</Th>
               <Th align="right" hideUntil="lg">BLK</Th>
               <Th align="right">PTS</Th>
@@ -138,8 +148,8 @@ export function CareerTable({
               const row = s.raw_row;
               const g = s.games;
 
-              // Raw counts (season totals from Bart's CSV)
-              const ftMade = fromStart(row, 13);
+              // Raw counts (season totals from Bart's CSV). Col 13 is FTM,
+              // which this table has never shown — FT% carries it.
               const ftAtt = fromStart(row, 14);
               const ftPct = fromStart(row, 15);
               const fg2Made = fromStart(row, 16);
@@ -156,9 +166,17 @@ export function CareerTable({
               const rpg = fromEnd(row, 7);
               const orpg = fromEnd(row, 9);
 
-              // Composite shooting metrics from Bart's CSV (already 0..100)
-              const eFg = fromStart(row, 7);
-              const ts = fromStart(row, 8);
+              const mpg = fromStart(row, 54);
+
+              // Games started and turnovers come from the CBBD box aggregate,
+              // not from Bart — his season CSV carries neither. `tov` is the
+              // season total and `tov_pg` the rate; they use different game
+              // counts (a game missing a turnover figure is out of the rate but
+              // still in the total), so neither is derived from the other here.
+              const adv = s.advanced_stats;
+              const gs = adv?.gs ?? null;
+              const tovTotal = adv?.tov ?? null;
+              const tovPg = adv?.tov_pg ?? null;
 
               // Combined FG: 2P + 3P
               const fgAtt = fg2Att !== null && fg3Att !== null ? fg2Att + fg3Att : null;
@@ -168,12 +186,22 @@ export function CareerTable({
               // Volume cells switch shape between totals (raw counts) and
               // per-game (count / games). Rates (FG%, 3P%, eFG, TS, FT%) are
               // identical in both modes.
+              const minCell = isTotals
+                ? fmtInt(mpg !== null && g ? mpg * g : null)
+                : fmtNum(mpg, 1);
+              const fgmCell = isTotals
+                ? fmtInt(fgMade)
+                : fmtNum(fgMade !== null && g ? fgMade / g : null, 1);
               const fgaCell = isTotals
                 ? fmtInt(fgAtt)
                 : fmtNum(fgAtt !== null && g ? fgAtt / g : null, 1);
+              const tpmCell = isTotals
+                ? fmtInt(fg3Made)
+                : fmtNum(fg3Made !== null && g ? fg3Made / g : null, 1);
               const tpaCell = isTotals
                 ? fmtInt(fg3Att)
                 : fmtNum(fg3Att !== null && g ? fg3Att / g : null, 1);
+              const tovCell = isTotals ? fmtInt(tovTotal) : fmtNum(tovPg, 1);
               const ftaCell = isTotals
                 ? fmtInt(ftAtt)
                 : fmtNum(ftAtt !== null && g ? ftAtt / g : null, 1);
@@ -211,22 +239,28 @@ export function CareerTable({
                   <Td>
                     <Link href={`/teams/${teamSlug(s.team_name)}`} className="inline-flex items-center gap-2 hover:text-coral transition-colors" prefetch={false}>
                       <TeamLogo name={s.team_name} size={20} />
-                      <span className="text-ink-soft hidden sm:inline">{s.team_name}</span>
+                      {/* nowrap: the table already scrolls sideways, so there
+                          is no width to save by breaking "Robert Morris" over
+                          two lines — it only makes the row twice as tall. */}
+                      <span className="text-ink-soft hidden sm:inline whitespace-nowrap">{s.team_name}</span>
                     </Link>
                   </Td>
                   <Td className="text-ink-muted" hideUntil="sm">{s.class ?? "—"}</Td>
                   <Td align="right" className="tabular">{g ?? "—"}</Td>
+                  <Td align="right" className="tabular">{gs ?? "—"}</Td>
+                  <Td align="right" className="tabular">{minCell}</Td>
+                  <Td align="right" className="tabular" hideUntil="md">{fgmCell}</Td>
                   <Td align="right" className="tabular" hideUntil="md">{fgaCell}</Td>
                   <Td align="right" className="tabular" hideUntil="sm">{fmtPctDecimal(fgPctCalc)}</Td>
+                  <Td align="right" className="tabular" hideUntil="md">{tpmCell}</Td>
                   <Td align="right" className="tabular" hideUntil="md">{tpaCell}</Td>
                   <Td align="right" className="tabular" hideUntil="md">{fmtPctDecimal(fg3Pct)}</Td>
-                  <Td align="right" className="tabular" hideUntil="md">{fmtPctScaled(eFg)}</Td>
-                  <Td align="right" className="tabular" hideUntil="md">{fmtPctScaled(ts)}</Td>
                   <Td align="right" className="tabular" hideUntil="lg">{ftaCell}</Td>
                   <Td align="right" className="tabular" hideUntil="md">{fmtPctDecimal(ftPct)}</Td>
                   <Td align="right" className="tabular" hideUntil="lg">{orbCell}</Td>
                   <Td align="right" className="tabular">{rebCell}</Td>
                   <Td align="right" className="tabular" hideUntil="sm">{astCell}</Td>
+                  <Td align="right" className="tabular" hideUntil="sm">{tovCell}</Td>
                   <Td align="right" className="tabular" hideUntil="lg">{stlCell}</Td>
                   <Td align="right" className="tabular" hideUntil="lg">{blkCell}</Td>
                   <Td align="right" className="tabular font-medium">{ptsCell}</Td>

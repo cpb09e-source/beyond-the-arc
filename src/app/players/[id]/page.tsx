@@ -161,7 +161,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
           used to run inline as "Illinois · Fr · 6-6 · Lenexa" become a ruled
           mini-table, which is scannable and stops the meta line from wrapping
           into three rows on narrow screens. Stacks to one column below md. */}
-      <section className="mx-auto max-w-7xl px-0 sm:px-6 lg:px-10 pt-5 sm:pt-8 pb-5 sm:pb-6">
+      <section className="mx-auto max-w-[88rem] px-0 sm:px-6 lg:px-10 pt-5 sm:pt-8 pb-5 sm:pb-6">
         {/* Warm off-white rather than pure card white — the flat #fff panel read
             as a hole punched in the paper. Still lifts off the page background
             because it's a step lighter than --paper-deep, plus the border/ring. */}
@@ -243,7 +243,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
           bottom padding and nothing else, which keeps it tighter (24px) than
           the 32px between the cards below. The hero and the career ledger read
           as one block: vitals, then the record those vitals belong to. */}
-      <section className="mx-auto max-w-7xl px-6 lg:px-10">
+      <section className="mx-auto max-w-[88rem] px-6 lg:px-10">
         {/* Career ledger — heavier chrome than other cards on the page so this
             anchors the profile as the canonical record. CareerTable owns its
             own header (season count + View toggle) so the dropdown sits
@@ -259,7 +259,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       </section>
 
       {overviewOptions.length > 0 && (
-        <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8">
+        <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8">
           {/* Player Overview — ledger card matching /coaches season-by-season.
               Inner component supplies the team/year picker band + grid.
               Full-bleed edge-to-edge on mobile; framed card on lg+. */}

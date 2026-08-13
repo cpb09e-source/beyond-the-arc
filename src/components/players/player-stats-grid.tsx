@@ -76,14 +76,10 @@ const CARDS: Array<{ title: string; stats: Def[] }> = [
         info: "Points Per Possession — points scored per possession the player USED: PTS / (FGA + 0.44·FTA + TOV). Same numerator as TS%, but turnovers are in the denominator, so a possession ended with a giveaway still counts as one spent." },
     ],
   },
-  {
-    title: "Playing Time",
-    stats: [
-      { key: "gp", label: "GP", block: "m", fmt: "int" },
-      { key: "gs", label: "GS", block: "m", fmt: "int" },
-      { key: "mpg", label: "MPG", block: "m", fmt: "num1" },
-    ],
-  },
+  // Playing Time (GP / GS / MPG) used to sit here. It now lives in the career
+  // table, where it reads per season next to the rest of the line rather than
+  // as three rows of a card. The split payload still carries all three.
+  //
   // Labels are ABBREVIATIONS on purpose. "Def Rebounds /40" was ellipsizing to
   // "Def Rebound…", and an abbreviation a hoops reader already knows by heart
   // beats a truncated word. Rendered upper-case, with StatLabel keeping the
@@ -94,10 +90,15 @@ const CARDS: Array<{ title: string; stats: Def[] }> = [
       { key: "pts", label: "PTS", block: "g", fmt: "num1" },
       { key: "reb", label: "REB", block: "g", fmt: "num1" },
       { key: "orb", label: "Off Reb", block: "g", fmt: "num1" },
-      { key: "drb", label: "Def Reb", block: "g", fmt: "num1" },
       { key: "ast", label: "AST", block: "g", fmt: "num1" },
       { key: "stl", label: "STL", block: "g", fmt: "num1" },
       { key: "blk", label: "BLK", block: "g", fmt: "num1" },
+      // Sits under STL and BLK because it is the two of them added together.
+      // Season-level, like EPM: both halves are rates against OPPONENT volume
+      // (blocks per opponent 2PA, steals per opponent possession) and the game
+      // logs carry neither, so it cannot honestly be split home/away.
+      { key: "hkm_pct", label: "HKM%", block: "impact", fmt: "pct1",
+        info: "Hakeem % — BLK% + STL% added together, named after Hakeem Olajuwon. A single number for how often a player ends an opponent possession with his hands. Season-level, so it does not follow the selected split." },
       // No tooltips on these two. "Ranked so fewer is better" is the same
       // sentence twice, and the footnote under the grid already says it for
       // every stat that inverts.

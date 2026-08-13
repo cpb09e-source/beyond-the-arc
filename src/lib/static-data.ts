@@ -630,6 +630,12 @@ export async function readPlayer(bartId: number): Promise<{
     games: number | null;
     notes: string | null;
     projection: number | null;
+    /**
+     * The CBBD-derived aggregates (scripts/build-player-season-adv.mjs). Only
+     * the fields the career table reads are declared; the object carries more.
+     * Absent for 2021, which has no player box in the archive at all.
+     */
+    advanced_stats: { gs: number | null; tov: number | null; tov_pg: number | null } | null;
   }>;
 } | null> {
   try {

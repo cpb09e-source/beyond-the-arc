@@ -63,6 +63,17 @@ const MIN_SPLIT_GAMES = 4;
 
 /** Season-level, unsplittable, ranked against the (year, bucket) cohort. */
 const IMPACT_STATS = ["epm", "off_epm", "def_epm", "ewins", "on_off"];
+/**
+ * Also season-level and ranked in the same cohort, but sourced from Bart's
+ * season row rather than the EPM fit, and carried separately so a player with
+ * no EPM still gets one.
+ *
+ * HKM% is BLK% + STL%, and both of those are rates against OPPONENT volume —
+ * blocks per opponent 2PA, steals per opponent possession. The game logs here
+ * carry neither, so this genuinely cannot be split by home/away the way PTS/G
+ * can; it reads as the full-season figure under every split, like EPM.
+ */
+const SEASON_STATS = ["hkm_pct"];
 
 const norm = (s) => (s ?? "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
   .replace(/\buniversity\b|\bthe\b/g, "").replace(/\bstate\b/g, "st").replace(/[^a-z0-9]+/g, "");
@@ -149,6 +160,7 @@ function main() {
   // ---- conference lookup: player's own, and every opponent's ----
   const confByYear = new Map();     // year -> Map(normName -> conference)
   const ownConf = new Map();        // `${bid}|${year}` -> conference
+  const seasonOf = new Map();       // `${bid}|${year}` -> { hkm_pct }
   for (const y of years) {
     const tf = path.join(DATA, "teams-by-year", `${y}.json`);
     if (fs.existsSync(tf)) {
@@ -162,6 +174,17 @@ function main() {
       if (p.bart_player_id == null) continue;
       const t = Array.isArray(p.teams) ? p.teams[0] : p.teams;
       if (t?.conference) ownConf.set(`${p.bart_player_id}|${y}`, t.conference);
+      // Bart raw cols 22 and 23 are BLK% and STL%, the same two the explorer
+      // adds together for its HKM column. Read from the same place so the panel
+      // and the table can never disagree about a player's Hakeem number.
+      const raw = Array.isArray(p.player_bart_stats)
+        ? p.player_bart_stats[0]?.raw_row
+        : p.player_bart_stats?.raw_row;
+      const blkRate = num(Array.isArray(raw) ? raw[22] : null);
+      const stlRate = num(Array.isArray(raw) ? raw[23] : null);
+      if (blkRate !== null && stlRate !== null) {
+        seasonOf.set(`${p.bart_player_id}|${y}`, { hkm_pct: blkRate + stlRate });
+      }
     }
   }
 
@@ -255,9 +278,19 @@ function main() {
     const [, yStr] = key.split("|");
     const bucket = bucketOf.get(key);
     const im = impactOf.get(key);
-    if (!im) continue;
-    for (const stat of IMPACT_STATS) {
-      push(`${yStr}|_impact|${bucket}|i|${stat}`, key, num(im[stat]));
+    if (im) {
+      for (const stat of IMPACT_STATS) {
+        push(`${yStr}|_impact|${bucket}|i|${stat}`, key, num(im[stat]));
+      }
+    }
+    // Separate `if`, not an early `continue`: a player with no EPM still has a
+    // Bart season row, and folding this into the block above would have hidden
+    // HKM% from exactly the low-minute players who most need a defensive rate.
+    const se = seasonOf.get(key);
+    if (se) {
+      for (const stat of SEASON_STATS) {
+        push(`${yStr}|_impact|${bucket}|i|${stat}`, key, num(se[stat]));
+      }
     }
   }
 
@@ -304,12 +337,15 @@ function main() {
     }
 
     const im = impactOf.get(key);
-    if (im) {
+    const se = seasonOf.get(key);
+    if (im || se) {
       out.impact = {};
-      for (const stat of IMPACT_STATS) {
-        const v = num(im[stat]);
+      const put = (src, stat) => {
+        const v = num(src[stat]);
         out.impact[stat] = [r2(v), v === null ? null : pctOf.get(`${yStr}|_impact|${bucket}|i|${stat}|${key}`) ?? null];
-      }
+      };
+      if (im) for (const stat of IMPACT_STATS) put(im, stat);
+      if (se) for (const stat of SEASON_STATS) put(se, stat);
     }
     // Cohort size for the full split, for the "ranked within N" line.
     out.cohort = pools.get(`${yStr}|full|${bucket}|m|mpg`)?.length ?? null;

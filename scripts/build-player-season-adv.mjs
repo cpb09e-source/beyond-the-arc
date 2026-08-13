@@ -94,10 +94,13 @@ for (const season of SEASONS) {
       matched++;
       let a = agg.get(bartId);
       if (!a) {
-        a = { games: 0, min: 0, tov: 0, tovN: 0, usg: 0, usgN: 0, net: 0, netMin: 0, gs: 0, gsN: 0, toTov: 0, toFga: 0, toFta: 0 };
+        // `gsc` is game SCORE, `starts` is games STARTED — two different things
+        // one letter apart, so neither gets to be called `gs` here.
+        a = { games: 0, starts: 0, min: 0, tov: 0, tovN: 0, usg: 0, usgN: 0, net: 0, netMin: 0, gsc: 0, gscN: 0, toTov: 0, toFga: 0, toFta: 0 };
         agg.set(bartId, a);
       }
       a.games++;
+      if (p.starter === true) a.starts++;
       if (typeof p.minutes === "number") a.min += p.minutes;
       if (typeof p.turnovers === "number") { a.tov += p.turnovers; a.tovN++; }
       // Season totals for turnover RATE. Summed rather than averaged per game:
@@ -130,15 +133,25 @@ for (const season of SEASONS) {
         a.net += p.netRating * p.minutes;
         a.netMin += p.minutes;
       }
-      if (typeof p.gameScore === "number") { a.gs += p.gameScore; a.gsN++; }
+      if (typeof p.gameScore === "number") { a.gsc += p.gameScore; a.gscN++; }
     }
   }
 
   for (const [bartId, a] of agg) {
     out[`${bartId}|${season}`] = {
       games: a.games,
+      // Games STARTED. Nothing else on the site carries it: Bart's season CSV
+      // has no such column, so the only place it exists is the per-game
+      // `starter` flag, which this loop is already walking.
+      gs: a.starts,
       min_pg: r1(a.games > 0 ? a.min / a.games : null),
       tov_pg: r3(a.tovN > 0 ? a.tov / a.tovN : null),
+      // The season TOTAL, alongside the per-game rate. The career table's
+      // Totals view would otherwise have to multiply tov_pg back up by a games
+      // count, and the right multiplier is tovN (games with a turnover number),
+      // not `games` — so it ships as its own field rather than as a sum the
+      // caller has to reconstruct correctly.
+      tov: a.tovN > 0 ? a.tov : null,
       // Turnover rate: share of the possessions a player USES that he ends with
       // a turnover — TOV / (FGA + 0.44·FTA + TOV), the standard formulation.
       // Unlike tov_pg this is usage-adjusted, so a high-minute primary handler
@@ -156,7 +169,7 @@ for (const season of SEASONS) {
       // Below one full game of court time the number isn't an estimate of
       // anything, so it's null rather than a leaderboard-topping artifact.
       net_rtg: r1(a.netMin >= MIN_MINUTES_FOR_RATING ? a.net / a.netMin : null),
-      game_score_pg: r1(a.gsN > 0 ? a.gs / a.gsN : null),
+      game_score_pg: r1(a.gscN > 0 ? a.gsc / a.gscN : null),
     };
   }
 
