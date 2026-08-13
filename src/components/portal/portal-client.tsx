@@ -63,6 +63,9 @@ export type PortalEntry = {
   /** PIR after the conference-tier multiplier, and that term converted to wins. */
   pir_adj?: number | null;
   pir_wins?: number;
+  /** Team net rating on-floor minus off-floor, and the charge for a negative one. */
+  on_off?: number | null;
+  onoff_pen?: number;
   /** eWins + freshman development bump + tiered-PIR term, in wins. */
   value?: number | null;
   /**
@@ -332,6 +335,7 @@ export function PortalClient({
                           `${e.ewins_proj?.toFixed(2) ?? "—"} eWins${(e.dev_bump ?? 0) > 0 ? " (incl. sophomore leap)" : ""}` +
                           `  ·  ${(e.pir_wins ?? 0) >= 0 ? "+" : ""}${(e.pir_wins ?? 0).toFixed(2)} from conference-tiered PIR` +
                           `${e.pir_adj != null ? ` (PIR ${e.pir_adj.toFixed(1)} after tier)` : ""}` +
+                          `${(e.onoff_pen ?? 0) < 0 ? `  ·  ${e.onoff_pen?.toFixed(2)} for an on/off of ${e.on_off?.toFixed(1)}` : ""}` +
                           `${e.epm != null ? `  ·  EPM ${e.epm > 0 ? "+" : ""}${e.epm.toFixed(1)}` : ""}`}
                     >
                       {/* No leading "+". The rating reads as a score out of a

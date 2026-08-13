@@ -27,6 +27,9 @@ export type TCPlayer = {
   pir_adj?: number | null;
   /** The tiered-PIR term converted to wins, centred so average = 0. */
   pir_wins?: number;
+  /** Team net rating on-floor minus off-floor, and the charge for a negative one. */
+  on_off?: number | null;
+  onoff_pen?: number;
   /**
    * eWins + development bump + tiered-PIR term, in wins. THIS is the class
    * currency: `net` is the sum of these in minus HALF the sum of these out, so
@@ -260,7 +263,8 @@ function PlayerList({
                   title={p.value === null ? undefined
                     : `${p.ewins_proj?.toFixed(2) ?? "—"} eWins${(p.dev_bump ?? 0) > 0 ? " (incl. soph leap)" : ""}` +
                       `  ·  ${(p.pir_wins ?? 0) >= 0 ? "+" : ""}${(p.pir_wins ?? 0).toFixed(2)} from tiered PIR` +
-                      `${p.pir_adj != null ? ` (PIR ${p.pir_adj.toFixed(1)} after conference tier)` : ""}`}
+                      `${p.pir_adj != null ? ` (PIR ${p.pir_adj.toFixed(1)} after conference tier)` : ""}` +
+                      `${(p.onoff_pen ?? 0) < 0 ? `  ·  ${p.onoff_pen?.toFixed(2)} for an on/off of ${p.on_off?.toFixed(1)}` : ""}`}
                 >
                   {p.value === null ? "—" : `${p.value > 0 ? "+" : ""}${p.value.toFixed(2)}`}
                 </span>

@@ -193,6 +193,7 @@ function epmForYear(year) {
         epm: v.epm,
         ewins: typeof v.ewins === "number" && Number.isFinite(v.ewins) ? v.ewins : null,
         poss: typeof v.poss === "number" && Number.isFinite(v.poss) ? v.poss : null,
+        on_off: typeof v.on_off === "number" && Number.isFinite(v.on_off) ? v.on_off : null,
       });
     }
   }
@@ -275,6 +276,56 @@ const confTierAdj = (conf) => PORTAL_CONF_TIER[conf] ?? TIER_5;
 const PIR_BASELINE = 15.23;
 /** Wins per point of adjusted PIR, from the regression documented above. */
 const PIR_WEIGHT = 0.0587;
+
+/* ---------------------------------------------------------------------------
+ * THE NEGATIVE ON/OFF PENALTY.
+ *
+ * On/off is team net rating per 100 possessions with the player on the floor
+ * minus off it, luck-adjusted. A negative one says the plainest thing in the
+ * file: his team was worse when he played.
+ *
+ * WHAT THE MEASUREMENT SAYS, recorded because it does NOT support this term and
+ * that should be on the record rather than buried. Over 1,323 transfers with an
+ * on/off in the prior season, predicting next-year eWins:
+ *
+ *   Rating value alone                 R² = 0.2471
+ *   + a negative-on/off term           R² = 0.2476   (+0.0005)
+ *
+ * That is a seventh of what the conference step-up indicators bought, and those
+ * were refused. Worse, the fitted coefficient comes out the WRONG WAY: holding
+ * value equal, a more negative on/off predicts a slightly BETTER next season.
+ *
+ * The raw split looks like it argues the opposite — players with a negative
+ * on/off average 0.12 eWins the following year against 0.32 for the rest — but
+ * that gap is entirely who they are, not their on/off: the same group averages
+ * -0.26 in Rating value against +0.29. The Rating already knows they are worse.
+ * This is the sophomore-leap confound again, running the other way.
+ *
+ * WHY IT IS IN ANYWAY. The class total is not purely a projection — it is a
+ * statement about what a school got, and eWins was chosen over PVS on exactly
+ * that descriptive ground. On/off is the only raw TEAM-level fact in the file:
+ * EPM is a regularized individual estimate that deliberately strips away
+ * teammates, so a player can post a strong EPM on a team that was measurably
+ * worse whenever he played, and nothing else here would notice. Preston Edmead
+ * is the case — 16.1 ppg, EPM +2.12, a 25.7 PIR, ranked 12th of 556, and
+ * Hofstra were 6.6 points per 100 worse with him on the floor.
+ *
+ * So it is deliberately a judgement, not a fitted term, and it is sized to
+ * matter without deciding anything on its own: a typical negative (-5) costs 3
+ * rating points, and the floor caps the damage at 15. If it should come out,
+ * ONOFF_PENALTY is the only line to change.
+ *
+ * ASYMMETRIC BY DESIGN: only negatives are charged. A positive on/off is the
+ * noisiest praise in the file — on a rotation that never splits up it is a
+ * statement about the lineup, not the player — so it earns nothing.
+ * ------------------------------------------------------------------------- */
+const ONOFF_PENALTY = 0.02;
+/**
+ * Below this the number is small-sample noise rather than evidence. Only two
+ * portal entries reach it (the worst is -30.6), and a 0.6-win charge off a
+ * thin possession sample would be the tail wagging the rating.
+ */
+const ONOFF_FLOOR = -25;
 
 /* ---------------------------------------------------------------------------
  * SCHOOL NAMES, and the three bugs one bad name caused.
@@ -419,7 +470,7 @@ for (const y of [2026, 2025, 2024]) {
 const portal = JSON.parse(fs.readFileSync(PORTAL, "utf8"));
 const entries = portal.entries ?? [];
 
-let joined = 0, scored = 0, withEwins = 0, repaired = 0, renamed = 0, unhidden = 0, bumped = 0, pirScored = 0;
+let joined = 0, scored = 0, withEwins = 0, repaired = 0, renamed = 0, unhidden = 0, bumped = 0, pirScored = 0, penalised = 0;
 const repairs = [];
 for (const e of entries) {
   const hit =
@@ -477,10 +528,19 @@ for (const e of entries) {
     e.pir_adj = null;
     e.pir_wins = 0;   // no PIR is not a penalty, it is no contribution
   }
+  // Negative on/off: charged, positives ignored. See ONOFF_PENALTY.
+  const onOff = hit?.on_off ?? null;
+  e.on_off = onOff;
+  e.onoff_pen = onOff === null || onOff >= 0
+    ? 0
+    : Math.round(ONOFF_PENALTY * Math.max(ONOFF_FLOOR, onOff) * 1000) / 1000;
+  if (e.onoff_pen < 0) penalised++;
+
   // The portal value a class total is built from: measured wins, plus the
-  // freshman development bump, plus the tiered-PIR term.
+  // freshman development bump, plus the tiered-PIR term, minus the on/off
+  // penalty.
   e.value = e.ewins_proj === null ? null
-    : Math.round((e.ewins_proj + e.pir_wins) * 1000) / 1000;
+    : Math.round((e.ewins_proj + e.pir_wins + e.onoff_pen) * 1000) / 1000;
 
   const eligible =
     epm !== null && (e.gp ?? 0) >= MIN_GP && (e.mpg ?? 0) >= MIN_MPG && (e.ppg ?? 0) >= MIN_PPG;
@@ -534,6 +594,8 @@ for (const e of entries) {
     dev_bump: e.dev_bump,
     pir_adj: e.pir_adj,
     pir_wins: e.pir_wins,
+    on_off: e.on_off,
+    onoff_pen: e.onoff_pen,
     value: e.value,
     stars: e.stars,
   };
@@ -620,7 +682,7 @@ portal.scoring = {
   // quantity can be summed across players.
   metric: "ewins",
   class_formula: `sum(value in) - ${OUT_WEIGHT} * sum(value out), over 2-star-and-up moves`,
-  value_formula: `eWins + freshman dev bump + ${PIR_WEIGHT} * (PIR * conf tier - ${PIR_BASELINE})`,
+  value_formula: `eWins + freshman dev bump + ${PIR_WEIGHT} * (PIR * conf tier - ${PIR_BASELINE}) + ${ONOFF_PENALTY} * min(0, max(${ONOFF_FLOOR}, on/off))`,
   out_weight: OUT_WEIGHT,
   dev_bump: "freshman-only, band-conditional: +0.25 EPM at 0.5-2.0, +0.85 above 2.0, net of mean reversion",
   class_score_formula: `round(net eWins * ${POINTS_PER_WIN})`,
@@ -637,6 +699,6 @@ console.log(`portal rescored — stars on PVS, classes on eWins`);
 console.log(`  ${entries.length.toLocaleString()} entries · ${joined.toLocaleString()} joined an EPM · ${withEwins.toLocaleString()} joined an eWins · ${scored.toLocaleString()} cleared the baseline and were starred`);
 if (repaired) console.log(`  ${repaired} possession count(s) repaired:\n${repairs.map((r) => `    ${r}`).join("\n")}`);
 console.log(`  ${renamed} school name(s) resolved to the canonical team · ${unhidden} entr(ies) the feed's division field would have hidden`);
-console.log(`  ${bumped} freshman sophomore-leap bump(s) applied · ${pirScored} tiered-PIR terms`);
+console.log(`  ${bumped} sophomore-leap bump(s) · ${pirScored} tiered-PIR terms · ${penalised} negative-on/off penalt(ies)`);
 console.log(`  tiers  5★ ${tiers[5]}  4★ ${tiers[4]}  3★ ${tiers[3]}  2★ ${tiers[2]}  1★ ${tiers[1]}  unrated ${tiers[0]}`);
 console.log(`  ${allRows.length} schools ranked · best ${top_overall[0]?.school} ${top_overall[0]?.net.toFixed(1)} wins (score ${top_overall[0]?.score}) · worst power ${worst_power[0]?.school} ${worst_power[0]?.net.toFixed(1)} (score ${worst_power[0]?.score})`);
