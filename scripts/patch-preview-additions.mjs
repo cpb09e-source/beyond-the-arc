@@ -256,7 +256,7 @@ for (const team of TEAMS) {
 
   let html;
   try { html = curl(url); } catch (e) { console.log(`✗ ${team}: fetch failed — ${e.message}`); continue; }
-  const { players: listed, slugs, mode } = readRoster(html);
+  const { players: listed, mode } = readRoster(html);
 
   if (listed.length < MIN_POSTED) {
     console.log(`· ${team}: only ${listed.length} listed (under ${MIN_POSTED}) — roster not fully posted, left alone`);

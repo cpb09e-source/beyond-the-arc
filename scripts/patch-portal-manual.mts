@@ -45,6 +45,7 @@ import {
   computeCohortStats,
   productionFor,
   type PlayerSeason,
+  type ProductionResult,
 } from "./lib/bta-prtg.mts";
 import { overrideTeamName } from "../src/lib/team-overrides.ts";
 
@@ -80,6 +81,31 @@ const MOVES: Array<[string, string]> = [
 ];
 
 const YEARS = Array.from({ length: 14 }, (_, i) => 2013 + i);
+
+/** Only the fields this script reads off a players-by-year row. */
+type RawPlayerRow = {
+  bart_player_id: number | null;
+  name: string;
+  year: number;
+  class: string | null;
+  teams: { name?: string; conference?: string | null } | Array<{ name?: string; conference?: string | null }>;
+  player_bart_stats:
+    | { raw_row?: unknown; games?: number | null; notes?: string | null; projection?: number | null }
+    | Array<{ raw_row?: unknown; games?: number | null; notes?: string | null; projection?: number | null }>;
+};
+
+/** Only the fields this script reads or writes on a portal entry. */
+type PortalEntry = {
+  cbba_player_id: number;
+  bart_player_id: number | null;
+  name: string;
+  status: string;
+  team_from: string | null;
+  team_to: string | null;
+  conf_to: string | null;
+  rating?: number | null;
+  [k: string]: unknown;
+};
 
 const normName = (s: string | null) => (s ?? "").toLowerCase().normalize("NFKD")
   .replace(/[̀-ͯ]/g, "").replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim();
@@ -123,7 +149,7 @@ async function main() {
     try { text = await fs.readFile(path.join(OUT, "players-by-year", `${year}.json`), "utf8"); }
     catch { continue; }
     yearsLoaded++;
-    const players = JSON.parse(text) as Array<any>;
+    const players = JSON.parse(text) as RawPlayerRow[];
     for (const p of players) {
       const pid = p.bart_player_id;
       if (!pid) continue;
@@ -201,7 +227,7 @@ async function main() {
   }
 
   const doc = JSON.parse(await fs.readFile(PORTAL, "utf8"));
-  const entries: any[] = doc.entries;
+  const entries: PortalEntry[] = doc.entries;
   const byKey = new Map(entries.map((e) => [nameKey(e.name), e]));
 
   let added = 0, fixed = 0, already = 0;
@@ -221,7 +247,7 @@ async function main() {
     }
 
     const bart = resolveBart(name);
-    const prod: any = bart !== null ? productionFor(bart, playersByBartId, yearCohortStats) : null;
+    const prod: ProductionResult | null = bart !== null ? productionFor(bart, playersByBartId, yearCohortStats) : null;
     const team_from = overrideTeamName(prod?.last_team ?? null) ?? prod?.last_team ?? null;
 
     const entry = {
