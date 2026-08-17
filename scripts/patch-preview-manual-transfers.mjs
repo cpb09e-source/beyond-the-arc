@@ -146,10 +146,19 @@ for (const [name, destRaw] of MOVES) {
   if (cur && cur.team === dest) {
     const fixes = [];
     if (cur.row.status !== "transfer") { cur.row.status = "transfer"; fixes.push("status → transfer"); }
-    if (cur.row.bart_id == null && ix && !ix.ambiguous) { cur.row.bart_id = ix.id; fixes.push(`bart ${ix.id}`); }
-    if (!cur.row.from) {
-      const origin = pe?.team_from ?? (ix && ix.t !== dest ? ix.t : null);
-      if (origin) { cur.row.from = origin; fixes.push(`from ${origin}`); }
+    // portal.json outranks players-index.json here. The index is the thinner
+    // corpus — it has no Jahki Howard at all, and stops Daquan Davis at Florida
+    // St. a year before his Providence season — so a row first written from the
+    // index can name the wrong previous school. Once patch-portal-manual.mts
+    // has resolved these against players-by-year, re-running this corrects them.
+    if (cur.row.bart_id == null) {
+      const id = pe?.bart_player_id ?? (ix && !ix.ambiguous ? ix.id : null);
+      if (id != null) { cur.row.bart_id = id; fixes.push(`bart ${id}`); }
+    }
+    const origin = pe?.team_from ?? (ix && ix.t !== dest ? ix.t : null);
+    if (origin && cur.row.from !== origin) {
+      fixes.push(cur.row.from ? `from "${cur.row.from}" → "${origin}"` : `from ${origin}`);
+      cur.row.from = origin;
     }
     if (fixes.length) { moved++; lines.push(`= ${name.padEnd(21)} already on ${dest} — ${fixes.join(", ")}`); }
     else { noop++; lines.push(`· ${name.padEnd(21)} already on ${dest} as a transfer, unchanged`); }
