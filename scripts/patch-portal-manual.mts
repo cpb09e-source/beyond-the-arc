@@ -78,6 +78,9 @@ const MOVES: Array<[string, string]> = [
   ["Jamichael Stillwell", "Texas Tech"],
   ["Tavari Johnson", "Charleston"],
   ["Chauncey Wiggins", "Gonzaga"],
+  ["AJ Storr", "UNLV"],
+  ["Stephon Payne", "New Mexico St."],
+  ["Fredrick King", "Creighton"],
 ];
 
 const YEARS = Array.from({ length: 14 }, (_, i) => 2013 + i);
