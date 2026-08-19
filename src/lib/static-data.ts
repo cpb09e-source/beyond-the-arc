@@ -258,20 +258,30 @@ export async function readImpactForYear(year: number): Promise<Map<number, numbe
  * minutes. The file is static for the whole build, so one parse per year is
  * the whole cost. Matches _rankedPlayerIdsCache below.
  */
-const _impactExtrasCache = new Map<number, Map<number, { ewins: number | null; on_off: number | null }>>();
+export type ImpactExtras = {
+  ewins: number | null;
+  on_off: number | null;
+  /** Offensive and defensive halves of EPM. The player hero splits the total
+   *  into the two sides, which is the only place the sign of a defensive
+   *  contribution is visible without opening the Impact panel. */
+  off: number | null;
+  def: number | null;
+};
+
+const _impactExtrasCache = new Map<number, Map<number, ImpactExtras>>();
 
 export async function readImpactExtrasForYear(
   year: number,
-): Promise<Map<number, { ewins: number | null; on_off: number | null }>> {
+): Promise<Map<number, ImpactExtras>> {
   const cached = _impactExtrasCache.get(year);
   if (cached) return cached;
-  const out = new Map<number, { ewins: number | null; on_off: number | null }>();
+  const out = new Map<number, ImpactExtras>();
   const real = await readJson<{
-    players: Record<string, { ewins?: number | null; on_off?: number | null }>;
+    players: Record<string, { ewins?: number | null; on_off?: number | null; off?: number | null; def?: number | null }>;
   }>(`epm-${year}.json`).catch(() => null);
   if (real?.players) for (const [bid, v] of Object.entries(real.players)) {
     const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : null);
-    out.set(Number(bid), { ewins: num(v.ewins), on_off: num(v.on_off) });
+    out.set(Number(bid), { ewins: num(v.ewins), on_off: num(v.on_off), off: num(v.off), def: num(v.def) });
   }
   _impactExtrasCache.set(year, out);
   return out;
@@ -294,7 +304,14 @@ export async function readNbaDraftee(name: string | null): Promise<NbaDraftRecor
   if (!_drafteesCache) {
     _drafteesCache = await readJson<Record<string, NbaDraftRecord>>("nba-draftees.json").catch(() => ({}));
   }
-  const key = name
+  const key = normPersonName(name);
+  return _drafteesCache[key] ?? null;
+}
+
+/** Lowercase, unaccented, punctuation-free, generational suffix dropped. The
+ *  one key every name-matched lookup here uses, so they cannot disagree. */
+function normPersonName(name: string): string {
+  return name
     .toLowerCase()
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
@@ -302,7 +319,6 @@ export async function readNbaDraftee(name: string | null): Promise<NbaDraftRecor
     .trim()
     .replace(/\s+/g, " ")
     .replace(/\s+(jr|sr|ii|iii|iv|v)$/i, "");
-  return _drafteesCache[key] ?? null;
 }
 
 /**
@@ -364,6 +380,49 @@ export type PlayerRanks = {
   bartId: number;
   seasonRanks: PlayerRanksSeason[];
 };
+/**
+ * RSCI consensus high-school rank, by name.
+ *
+ * RSCI (rscihoops.com) is the consensus top-100 — the one recruiting ranking
+ * the site is cleared to print; the per-service numbers from 247/ESPN/On3 are
+ * not (docs/TODO-legal-sources.md).
+ *
+ * Coverage is the 2026 class only, which is the extent of what we hold: 324
+ * rows, none of them carrying a bart id because none of them have played a
+ * college game yet. So this resolves for almost nobody today and starts
+ * resolving as that class plays. Matched on name and only when the name is
+ * UNIQUE in the file — a rank hung on the wrong player is worse than no rank,
+ * and there is no id to fall back on.
+ *
+ * Memoized for the same reason readNbaDraftee is: ~15,700 pages, one file.
+ */
+let _rsciCache: Map<string, number | null> | null = null;
+
+export async function readRsciRank(name: string | null): Promise<number | null> {
+  if (!name) return null;
+  if (!_rsciCache) {
+    _rsciCache = new Map();
+    const body = await readJson<{ recruits: Array<{ name?: string; rsci?: number | null }> }>(
+      "recruits-2026.json",
+    ).catch(() => ({ recruits: [] }));
+    const seen = new Set<string>();
+    for (const r of body.recruits ?? []) {
+      if (typeof r.name !== "string" || typeof r.rsci !== "number") continue;
+      const k = normPersonName(r.name);
+      if (!k) continue;
+      // Second sighting of a name poisons it rather than overwriting — either
+      // entry could be the one being asked about.
+      if (seen.has(k)) _rsciCache.set(k, null);
+      else {
+        seen.add(k);
+        _rsciCache.set(k, r.rsci);
+      }
+    }
+  }
+  const hit = _rsciCache.get(normPersonName(name));
+  return typeof hit === "number" && hit >= 1 && hit <= 100 ? hit : null;
+}
+
 export async function readPlayerRanks(bartId: number): Promise<PlayerRanks | null> {
   try {
     return await readJson<PlayerRanks>(`player-ranks/${bartId}.json`);
@@ -651,6 +710,39 @@ export async function readPlayerSplits(bartId: number): Promise<PlayerSplits | n
  * entry (most recently updated) when the player has multiple — players who
  * enter and re-enter the portal across cycles can have several rows.
  */
+/**
+ * One player's full game log, every season. Read at BUILD time from
+ * public/data/ — the directory is stripped out of `out/` and served from R2 at
+ * runtime, but it is on disk while the pages are generated, so the hero can
+ * draw the season's shape without shipping a fetch.
+ *
+ * Returns [] rather than throwing: a player with no located games (pre-2024
+ * seasons, or a roster addition who has not played) still gets a hero, just
+ * without the per-game charts.
+ */
+export type PlayerGameRow = {
+  year: number;
+  game_date: string | null;
+  opp_team_market: string | null;
+  is_home: boolean | null;
+  is_neutral: boolean | null;
+  won: boolean | null;
+  mins: number | null;
+  pts_scored: number | null;
+  reb: number | null;
+  ast: number | null;
+  ts_pct: number | null;
+};
+
+export async function readPlayerGames(bartId: number): Promise<PlayerGameRow[]> {
+  try {
+    const body = await readJson<{ games: PlayerGameRow[] }>(`player-games/${bartId}.json`);
+    return Array.isArray(body.games) ? body.games : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function readPortalEntryForBartId(bartId: number): Promise<PortalEntry | null> {
   const all = await readPortal();
   const matches = all.filter((e) => e.bart_player_id === bartId);

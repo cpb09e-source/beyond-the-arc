@@ -101,3 +101,32 @@ export function ordinal(n: number): string {
     default: return `${n}th`;
   }
 }
+
+/**
+ * Basketball-Reference franchise code → the abbreviation ESPN's logo CDN uses.
+ *
+ * Deliberately incomplete. NOH (New Orleans Hornets) and pre-2015 CHA (Charlotte
+ * Bobcats) have no entry: ESPN serves the CURRENT franchise's mark at those
+ * slugs, so a 2007 Hornets pick would get a Pelicans logo sitting next to the
+ * words "New Orleans Hornets". A logo that contradicts the name beside it is
+ * worse than no logo, so those fall through to the monogram.
+ */
+const NBA_ESPN_SLUG: Record<string, string> = {
+  ATL: "atl", BOS: "bos", BRK: "bkn", CHO: "cha", CHI: "chi", CLE: "cle",
+  DAL: "dal", DEN: "den", DET: "det", GSW: "gs", HOU: "hou", IND: "ind",
+  LAC: "lac", LAL: "lal", MEM: "mem", MIA: "mia", MIL: "mil", MIN: "min",
+  NOP: "no", NYK: "ny", OKC: "okc", ORL: "orl", PHI: "phi", PHO: "phx",
+  POR: "por", SAC: "sac", SAS: "sa", TOR: "tor", UTA: "utah", WAS: "wsh",
+};
+
+/**
+ * Logo URL for a franchise code, or null when we would be showing the wrong
+ * mark. Hotlinked rather than mirrored — the CBB logos already come off a
+ * remote host the same way.
+ */
+export function nbaLogoUrl(code: string | null, year: number): string | null {
+  if (!code) return null;
+  if (code === "CHA" && year >= 2015) return "https://a.espncdn.com/i/teamlogos/nba/500/cha.png";
+  const slug = NBA_ESPN_SLUG[code];
+  return slug ? `https://a.espncdn.com/i/teamlogos/nba/500/${slug}.png` : null;
+}

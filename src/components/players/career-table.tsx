@@ -114,7 +114,7 @@ export function CareerTable({
       {/* Horizontal scroll on narrow viewports — full stat line stays intact
           and swipes left/right with touch momentum instead of dropping columns. */}
       <div className="overflow-x-auto [-webkit-overflow-scrolling:touch] overscroll-x-contain">
-        <table className="w-full min-w-[58rem] text-sm">
+        <table className="w-full min-w-[46rem] sm:min-w-[58rem] text-sm">
           <thead className="bg-paper-deep/70 text-left">
             <tr>
               <Th>Season</Th>
@@ -299,7 +299,7 @@ function Th({
   align?: "left" | "right";
   hideUntil?: "sm" | "md" | "lg";
 }) {
-  return <th className={`px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium ${align === "right" ? "text-right" : ""} ${hideClass(hideUntil)}`}>{children}</th>;
+  return <th className={`px-1.5 sm:px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium ${align === "right" ? "text-right" : ""} ${hideClass(hideUntil)}`}>{children}</th>;
 }
 function Td({
   children, align = "left", className = "", hideUntil,
@@ -309,7 +309,7 @@ function Td({
   className?: string;
   hideUntil?: "sm" | "md" | "lg";
 }) {
-  return <td className={`px-3 py-2.5 ${align === "right" ? "text-right" : ""} ${hideClass(hideUntil)} ${className}`}>{children}</td>;
+  return <td className={`px-1.5 sm:px-3 py-2.5 ${align === "right" ? "text-right" : ""} ${hideClass(hideUntil)} ${className}`}>{children}</td>;
 }
 // Mobile now swipes the full table horizontally (min-w on <table>), so every
 // column renders at every width — no more column dropping on narrow screens.

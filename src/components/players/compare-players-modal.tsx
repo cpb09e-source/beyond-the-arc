@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
+import { formatHeight } from "@/lib/height";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { pctColor } from "@/components/percentile-chip";
@@ -138,7 +139,7 @@ const ROWS: Row[] = [
   { section: "Context", key: "team", label: "Team", dir: "none", value: (_r, ctx) => ctx.team, format: fmtString },
   { key: "conf", label: "Conference", dir: "none", value: (_r, ctx) => ctx.conference ? confDisplay(ctx.conference) : null, format: fmtString },
   { key: "class", label: "Class", dir: "none", value: (_r, ctx) => ctx.class_, format: fmtString },
-  { key: "height", label: "Height", dir: "none", value: (_r, ctx) => ctx.height, format: fmtString },
+  { key: "height", label: "Height", dir: "none", value: (_r, ctx) => formatHeight(ctx.height), format: fmtString },
   { key: "gp", label: "Games played", dir: "higher", value: (_r, ctx) => ctx.games, format: fmtNum0 },
   { key: "mpg", label: "MPG", dir: "higher", value: (_r, ctx) => ctx.mpg, format: fmtNum1 },
 

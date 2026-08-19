@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { formatHeight } from "@/lib/height";
 import { PlayerName } from "@/components/player-name";
 import { NbaBadge } from "@/components/coaches/nba-badge";
 import { PercentileChip } from "@/components/percentile-chip";
@@ -178,7 +179,7 @@ export function SortableRosterTable({
                   {p.status === "newcomer" && p.rsci !== undefined && <RsciBadge rank={p.rsci} />}
                 </Td>
                 <Td className="text-ink-muted">{p.class ?? "—"}</Td>
-                <Td className="text-ink-muted whitespace-nowrap">{p.height ?? "—"}</Td>
+                <Td className="text-ink-muted whitespace-nowrap">{formatHeight(p.height) ?? "—"}</Td>
                 <StatCell value={p.epm != null ? (p.epm >= 0 ? "+" : "") + fmtNum(p.epm, 1) : "—"} pct={p.pcts?.epm ?? null} emphasized />
                 {/* Both come from the play-by-play fit only, so a box-estimate
                     player shows "—" here while still carrying an EPM. */}

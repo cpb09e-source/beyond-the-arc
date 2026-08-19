@@ -1,14 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
-import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayerIds, readImpactExtrasForYear, readNbaDraftee } from "@/lib/static-data";
-import { nbaTeamName, draftRound, ordinal } from "@/lib/nba-draftees";
-import { PlayerPhoto } from "@/components/player-photo";
+import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayerIds, readImpactExtrasForYear, readNbaDraftee, readPlayerGames, readRsciRank } from "@/lib/static-data";
+import { nbaTeamName, draftRound, nbaLogoUrl } from "@/lib/nba-draftees";
 import { CareerTable } from "@/components/players/career-table";
 import { PlayerOverview, type PlayerOverviewOption } from "@/components/players/player-overview";
 import { PlayerShotChart } from "@/components/players/player-shot-chart";
-import { RankRings } from "@/components/players/rank-rings";
-import { cn } from "@/lib/utils";
+import { PlayerAtlas } from "@/components/players/player-atlas";
 
 export async function generateStaticParams() {
   // Only emit profile pages for ranked players. Unranked players (didn't
@@ -58,19 +56,6 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 function fmtNum(x: number | null, digits = 1): string {
   if (x === null || x === undefined) return "—";
   return x.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
-}
-/** 0..1 → "55.6%". Bart stores every rate as a decimal. The hero reads as a
- *  scouting line rather than a box score, and a shooting line is spoken in
- *  percent — the leading-dot form belongs in the career table, where a column
- *  of them aligns on the decimal. */
-function fmtPct(x: number | null): string {
-  if (x === null || x === undefined || !Number.isFinite(x)) return "—";
-  return `${(x * 100).toFixed(1)}%`;
-}
-/** Signed, one decimal — for the impact numbers, where the sign IS the reading. */
-function fmtSigned(x: number | null): string {
-  if (x === null || x === undefined || !Number.isFinite(x)) return "—";
-  return `${x > 0 ? "+" : ""}${x.toFixed(1)}`;
 }
 function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
@@ -254,6 +239,14 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       fg3: sum("fg3a") ? fg3m / sum("fg3a") : null,
       ft: sum("fta") ? sum("ftm") / sum("fta") : null,
       efg: fga ? (fgm + 0.5 * fg3m) / fga : null,
+      // True shooting over the same totals, so a career TS is the real thing
+      // rather than the mean of the seasons' percentages.
+      //
+      // 0.475, not the textbook 0.44: Bart's own ts_pct column uses 0.475, and
+      // that column is what player-ranks percentiles this against and what the
+      // Overview panel prints. A hero reading 62.0% beside an Overview reading
+      // 61.2% for the same season would look like one of them was broken.
+      ts: fga + 0.475 * sum("fta") ? sum("pts") / (2 * (fga + 0.475 * sum("fta"))) : null,
       epm: weighted("epm"),
       onOff: weighted("onOff"),
       min,
@@ -261,8 +254,32 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   }
 
   const currentLine = summarize(lines.filter((l) => l.year === current.year));
-  const careerLine = summarize(lines);
-  const multiSeason = player.seasons.length > 1;
+
+  /**
+   * The season before the one the hero shows — the baseline the delta chips
+   * measure against. Found by year rather than by array position: the file is
+   * written newest-first today, but a hero that silently compares against the
+   * wrong year would be indistinguishable from a correct one.
+   */
+  const prevYear = player.seasons
+    .map((s) => s.year)
+    .filter((y) => y < current.year)
+    .sort((a, b) => b - a)[0];
+  const prevLine = prevYear !== undefined ? summarize(lines.filter((l) => l.year === prevYear)) : null;
+
+  /**
+   * The hero season's game log, oldest first — the three charts are read left
+   * to right as the season. Read at build time; the directory is served from R2
+   * at runtime but is on disk while these pages generate.
+   */
+  const heroGames = (await readPlayerGames(bartId))
+    .filter((g) => g.year === current.year)
+    .sort((a, b) => (a.game_date ?? "").localeCompare(b.game_date ?? ""));
+
+  // Offensive / defensive halves of EPM for the hero season. Present only for
+  // players the ridge fit covers; the box-score estimate has no lineup data and
+  // so no split.
+  const heroExtras = (await readImpactExtrasForYear(current.year)).get(bartId) ?? null;
 
   /**
    * NBA draft record, matched on name.
@@ -273,7 +290,27 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
    * a new school and going to the NBA in the same breath.
    */
   const draft = await readNbaDraftee(stats.name);
+  const rsci = await readRsciRank(stats.name);
   const draftTeam = draft && draft.pick !== null ? nbaTeamName(draft.team, draft.year) : null;
+
+  /**
+   * Transfer banner. The draft used to supersede it here; the draft is now a
+   * chip in the masthead, so this only has one thing to say. Kept as a banner
+   * because a portal commit IS news — it is about next season, not this one.
+   */
+  const banner = transfer ? (
+    <div className="inline-flex items-center gap-2 sm:gap-3 px-3 py-1.5 rounded-md bg-coral/10 border border-coral/30">
+      <span className="text-[0.6rem] uppercase tracking-widest text-coral font-bold whitespace-nowrap">
+        Transfer →
+      </span>
+      <Link href={`/teams/${teamSlug(transfer.to)}`} className="inline-flex items-center gap-2 group min-w-0">
+        <TeamLogo name={transfer.to} size={22} />
+        <span className="text-ink font-medium group-hover:text-coral transition-colors truncate">
+          {transfer.to}
+        </span>
+      </Link>
+    </div>
+  ) : null;
 
   return (
     // pb-20 lives on the wrapper rather than on the last section: which section
@@ -281,126 +318,39 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
     // located shots), so pinning the page's bottom gutter to any one of them
     // left some profiles ending flush against the footer.
     <div className="pb-20">
-      {/* Dossier hero — scouting-file split. Photo + vitals ride a deep-paper
-          column; name and the per-game bar take the open side. The vitals that
-          used to run inline as "Illinois · Fr · 6-6 · Lenexa" become a ruled
-          mini-table, which is scannable and stops the meta line from wrapping
-          into three rows on narrow screens. Stacks to one column below md. */}
-      <section className="mx-auto max-w-[88rem] px-0 sm:px-6 lg:px-10 pt-5 sm:pt-8 pb-5 sm:pb-6">
-        {/* Warm off-white rather than pure card white — the flat #fff panel read
-            as a hole punched in the paper. Still lifts off the page background
-            because it's a step lighter than --paper-deep, plus the border/ring. */}
-        <div className="bg-[color-mix(in_oklab,var(--card)_55%,var(--paper-deep))] border-y sm:border border-ink/10 sm:rounded-xl shadow-md overflow-hidden ring-0 sm:ring-1 ring-ink/5 grid grid-cols-1 md:grid-cols-[17rem_minmax(0,1fr)]">
-          {/* Vitals column */}
-          <div className="relative bg-paper-deep border-b md:border-b-0 md:border-r border-hairline px-6 py-6 flex flex-col items-center gap-5">
-            {/* The season eyebrow lives here, with the photo it labels, rather
-                than over the name — the vitals in this column are all "as of
-                this season", so it captions the column it belongs to. It also
-                replaces a bare corner-set year that said the same thing twice. */}
-            <div className="flex items-center gap-2.5 text-[0.55rem] uppercase tracking-[0.18em] text-coral font-bold self-start">
-              <span className="h-px w-5 bg-coral" />
-              <span>Player · {seasonLabel(current.year)}</span>
-            </div>
-            <PlayerPhoto bartPlayerId={bartId} name={stats.name ?? `Player ${bartId}`} size={132} />
-            <dl className="w-full text-xs">
-              <VitalRow label="Team">
-                <Link
-                  href={`/teams/${teamSlug(transfer ? transfer.from : current.team_name)}`}
-                  className="inline-flex items-center gap-1.5 hover:text-coral transition-colors min-w-0"
-                >
-                  <TeamLogo name={transfer ? transfer.from : current.team_name} size={16} />
-                  <span className="truncate">{transfer ? transfer.from : current.team_name}</span>
-                </Link>
-              </VitalRow>
-              <VitalRow label="Class">{current.class ?? "—"}</VitalRow>
-              <VitalRow label="Height">{stats.height ?? "—"}</VitalRow>
-              {stats.hometown && <VitalRow label="From">{stats.hometown}</VitalRow>}
-            </dl>
-          </div>
-
-          {/* Name + per-game bar */}
-          <div className="px-6 sm:px-8 lg:px-10 py-7 sm:py-8 flex flex-col justify-center min-w-0">
-            <div className="flex items-start justify-between gap-6">
-              <div className="min-w-0">
-                <h1 className="font-display text-3xl sm:text-5xl lg:text-6xl tracking-tight text-ink leading-[1.05] sm:leading-none break-words">
-                  {stats.name ?? `Player ${bartId}`}
-                </h1>
-              </div>
-              {/* Leaderboard rings, top right of the card. Server-rendered off
-                  the hero's own season rather than the Overview's picker — the
-                  hero has no year control, so they'd have nothing to track. */}
-              {heroRanks && (
-                <div className="hidden sm:block shrink-0">
-                  <RankRings season={heroRanks} size={74} />
-                </div>
-              )}
-            </div>
-
-            {/* Drafted banner. Reads the way the draft is spoken — franchise,
-                round, pick, year — rather than as a bare code and number. */}
-            {draft && draft.pick !== null && (
-              <div className="mt-3 inline-flex self-start items-center gap-2 sm:gap-3 px-3 py-1.5 rounded-md bg-court/15 border border-court/40">
-                <span className="text-[0.6rem] uppercase tracking-widest text-court-ink font-bold whitespace-nowrap">
-                  Drafted
-                </span>
-                <span className="text-ink font-medium truncate">
-                  {draftTeam ?? draft.team}
-                </span>
-                <span className="text-ink-muted text-sm whitespace-nowrap">
-                  Round {draftRound(draft.pick)} · {ordinal(draft.pick)} pick · {draft.year}
-                </span>
-              </div>
-            )}
-
-            {/* Transferred-to banner — shown when a portal commit exists, and
-                only for a player the draft has not already taken. */}
-            {!draft && transfer && (
-              <div className="mt-3 inline-flex self-start items-center gap-2 sm:gap-3 px-3 py-1.5 rounded-md bg-coral/10 border border-coral/30">
-                <span className="text-[0.6rem] uppercase tracking-widest text-coral font-bold whitespace-nowrap">
-                  Transfer →
-                </span>
-                <Link href={`/teams/${teamSlug(transfer.to)}`} className="inline-flex items-center gap-2 group min-w-0">
-                  <TeamLogo name={transfer.to} size={22} />
-                  <span className="text-ink font-medium group-hover:text-coral transition-colors truncate">
-                    {transfer.to}
-                  </span>
-                </Link>
-              </div>
-            )}
-
-            {/* Summary table — the season, then the career, on the same
-                columns. Two lines is the whole point: a rate means little
-                until you can see it against the player's own baseline, and
-                putting them one above the other makes that a glance rather
-                than a scroll to the career ledger below. A single-season
-                player gets one row, because a career line identical to the
-                season above it is noise. */}
-            <div className="mt-6 sm:mt-7 pt-5 border-t border-hairline overflow-x-auto overscroll-x-contain">
-              <table className="w-full min-w-[40rem] border-separate border-spacing-0 text-right">
-                <thead>
-                  <tr>
-                    <SumTh className="text-left w-24">Summary</SumTh>
-                    <SumTh>G</SumTh>
-                    <SumTh>PTS</SumTh>
-                    <SumTh>REB</SumTh>
-                    <SumTh>AST</SumTh>
-                    <SumTh divide>FG%</SumTh>
-                    <SumTh>3P%</SumTh>
-                    <SumTh>FT%</SumTh>
-                    <SumTh>eFG%</SumTh>
-                    <SumTh divide>EPM</SumTh>
-                    <SumTh>On/Off</SumTh>
-                  </tr>
-                </thead>
-                <tbody>
-                  <SummaryRow label={seasonLabel(current.year)} line={currentLine} lead />
-                  {multiSeason && <SummaryRow label="Career" line={careerLine} />}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </section>
+      {/* Hero — "Atlas". Six small-multiple modules instead of a stat line:
+          each headline number is drawn as well as printed, so the season's
+          shape and the player's standing read before the figures do. The
+          component owns its own section chrome. */}
+      <PlayerAtlas
+        bartId={bartId}
+        name={stats.name ?? `Player ${bartId}`}
+        year={current.year}
+        teamName={transfer ? transfer.from : current.team_name}
+        conference={current.team_conference}
+        height={stats.height}
+        weight={null}
+        hometown={stats.hometown}
+        highSchool={null}
+        rsci={rsci}
+        draft={
+          draft && draft.pick !== null
+            ? {
+                team: draftTeam ?? draft.team ?? "—",
+                logo: nbaLogoUrl(draft.team, draft.year),
+                round: draftRound(draft.pick),
+                pick: draft.pick,
+              }
+            : null
+        }
+        heroRanks={heroRanks}
+        bucket={heroRanks?.bucket ?? positionByYear[String(current.year)] ?? "G"}
+        current={currentLine}
+        prev={prevLine}
+        games={heroGames}
+        impact={heroExtras ? { off: heroExtras.off, def: heroExtras.def, onOff: currentLine.onOff } : null}
+        banner={banner}
+      />
 
       {/* No margin of its own — the gap to the hero is the hero section's own
           bottom padding and nothing else, which keeps it tighter (24px) than
@@ -449,92 +399,6 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   );
 }
 
-/**
- * SecondaryStat — display-typeset stat with the label tucked underneath.
- * Sized one step below the lede PPG so the eye picks up the hero number
- * first and reads the supporting stats as a single subordinate cluster.
- */
-/** One row of the dossier vitals table. */
-function VitalRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-3 py-1.5 border-b border-hairline last:border-b-0">
-      <dt className="text-[0.55rem] uppercase tracking-[0.16em] text-ink-muted font-semibold shrink-0">{label}</dt>
-      <dd className="text-ink-soft text-right min-w-0 truncate">{children}</dd>
-    </div>
-  );
-}
 
-/** Header cell for the hero summary table. `divide` opens a new stat group. */
-function SumTh({ children, className, divide }: { children: React.ReactNode; className?: string; divide?: boolean }) {
-  return (
-    <th
-      scope="col"
-      className={cn(
-        "pb-2 text-[0.55rem] uppercase tracking-[0.16em] text-ink-muted font-semibold whitespace-nowrap",
-        // The rule sits on the cell rather than between groups as a spacer
-        // column, so the columns stay on one grid and the header aligns with
-        // the numbers under it.
-        divide && "border-l border-hairline pl-4",
-        !divide && "pl-3",
-        className,
-      )}
-    >
-      {children}
-    </th>
-  );
-}
 
-/**
- * One line of the hero summary — a season, or the career.
- *
- * `lead` marks the current season: it carries the ink and the weight, and the
- * career line sits a step back in both, so the eye lands on the season being
- * shown and reads the career as its context rather than as a competing row.
- */
-function SummaryRow({
-  label, line, lead = false,
-}: {
-  label: string;
-  lead?: boolean;
-  line: {
-    g: number; pts: number | null; reb: number | null; ast: number | null;
-    fg: number | null; fg3: number | null; ft: number | null; efg: number | null;
-    epm: number | null; onOff: number | null;
-  };
-}) {
-  const tone = lead ? "text-ink" : "text-ink-soft";
-  return (
-    <tr>
-      <th scope="row" className={cn("py-1.5 text-left text-xs sm:text-sm font-semibold whitespace-nowrap", lead ? "text-ink" : "text-ink-muted")}>
-        {label}
-      </th>
-      <SumTd tone={tone} lead={lead}>{line.g || "—"}</SumTd>
-      <SumTd tone={tone} lead={lead}>{fmtNum(line.pts, 1)}</SumTd>
-      <SumTd tone={tone} lead={lead}>{fmtNum(line.reb, 1)}</SumTd>
-      <SumTd tone={tone} lead={lead}>{fmtNum(line.ast, 1)}</SumTd>
-      <SumTd tone={tone} lead={lead} divide>{fmtPct(line.fg)}</SumTd>
-      <SumTd tone={tone} lead={lead}>{fmtPct(line.fg3)}</SumTd>
-      <SumTd tone={tone} lead={lead}>{fmtPct(line.ft)}</SumTd>
-      <SumTd tone={tone} lead={lead}>{fmtPct(line.efg)}</SumTd>
-      <SumTd tone={tone} lead={lead} divide>{fmtSigned(line.epm)}</SumTd>
-      <SumTd tone={tone} lead={lead}>{fmtSigned(line.onOff)}</SumTd>
-    </tr>
-  );
-}
 
-function SumTd({
-  children, tone, lead, divide,
-}: { children: React.ReactNode; tone: string; lead: boolean; divide?: boolean }) {
-  return (
-    <td
-      className={cn(
-        "py-1.5 font-display tabular tracking-[-0.02em] whitespace-nowrap",
-        lead ? "text-lg sm:text-xl" : "text-sm sm:text-base",
-        tone,
-        divide ? "border-l border-hairline pl-4" : "pl-3",
-      )}
-    >
-      {children}
-    </td>
-  );
-}
