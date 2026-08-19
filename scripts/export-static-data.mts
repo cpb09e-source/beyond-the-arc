@@ -17,6 +17,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { config as loadEnv } from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 
@@ -37,7 +38,6 @@ const OUT = path.resolve("public/data");
 // Bart sometimes use different names for the same school).
 import { overrideTeamName } from "../src/lib/team-overrides.ts";
 // @ts-expect-error — plain .mjs helper shared with build-search-index.mjs
-import { aliasKeywords } from "./lib/team-aliases.mjs";
 // Data floor: 2013-14 season (year 2014) — first year with reliable
 // possession/efficiency data. Mirrors ALL_YEARS + clampYear in the app.
 // A re-export with this floor regenerates every per-entity file (profiles,
@@ -465,107 +465,24 @@ async function main() {
   }
   await fs.writeFile(path.join(OUT, "conferences.json"), JSON.stringify(confsByYear));
 
-  // Search index — slim entries the navbar ⌘K dialog loads lazily.
-  // Mirrors scripts/build-search-index.mjs (standalone one-off variant).
+  /**
+   * Search index — delegated to scripts/build-search-index.mjs.
+   *
+   * This used to be a second implementation of that script, and the two drifted
+   * the way duplicated code does. The copy here built its player list from
+   * playersByBartId and then required a name read back out of
+   * player/<id>.json, dropping anyone whose per-player file it could not read.
+   * Measured against the standalone builder on the same corpus, that silently
+   * lost 10,774 of 25,474 players from search — 1,761 of them from 2025-26
+   * alone — which is why people who plainly exist could not be found. It also
+   * predates the interned-schools encoding and the search-stats.json sidecar,
+   * so running it would have quietly reverted both.
+   *
+   * One implementation, invoked. It reads files this script has just written,
+   * so it has to run after them, which is where it already sat.
+   */
   console.log("\n🔎 Search index…");
-  const searchTeamByName = new Map<string, { name: string; year: number; conf: string | null }>();
-  for (const t of teams) {
-    const cur = searchTeamByName.get(t.name);
-    if (!cur || t.year > cur.year) searchTeamByName.set(t.name, { name: t.name, year: t.year, conf: t.conference });
-  }
-  const searchTeams = [...searchTeamByName.values()]
-    .map((t) => {
-      const k = aliasKeywords(t.name);
-      return {
-        t: "t" as const,
-        n: t.name,
-        s: slug(t.name),
-        // `t.conf` — this read `t.conference` (never set on the map value) for
-        // a while, silently nulling every team's conference in the dialog.
-        c: t.conf ?? null,
-        // Colloquial aliases ("uconn", "ole miss") the dialog also matches on.
-        ...(k ? { k } : {}),
-      };
-    })
-    .sort((a, b) => a.n.localeCompare(b.n));
-  const latestByBart = new Map<number, { name: string; year: number; team: string; bartId: number }>();
-  for (const [bartId, seasons] of playersByBartId.entries()) {
-    // seasons already sorted newest-first earlier in the per-player loop
-    const latest = seasons[0]!;
-    latestByBart.set(bartId, { name: "", year: latest.year, team: latest.team_name, bartId });
-  }
-  // Need name — wasn't captured in seasons. Pull from the latest year's players file.
-  // Cheaper: read the per-player JSON we just wrote.
-  for (const bartId of latestByBart.keys()) {
-    try {
-      const obj = JSON.parse(await fs.readFile(path.join(OUT, "player", `${bartId}.json`), "utf8"));
-      const row = obj.seasons?.[0]?.raw_row;
-      if (Array.isArray(row) && typeof row[0] === "string") {
-        const e = latestByBart.get(bartId)!;
-        e.name = row[0];
-      }
-    } catch {}
-  }
-  const searchPlayers = [...latestByBart.values()]
-    .filter((p) => p.name)
-    .map((p) => ({ t: "p" as const, n: p.name, b: p.bartId, tm: p.team, y: p.year }))
-    .sort((a, b) => a.n.localeCompare(b.n));
-
-  // Coaches: one entry per unique name. Reads coach-history.json (historical
-  // SR scrape) + team-coaches.json (ESPN current snapshot) — both already loaded
-  // earlier in this script but we re-read here to avoid scope plumbing.
-  type CoachLatest = { team: string; year: number };
-  const coachLatest = new Map<string, CoachLatest>();
-  try {
-    const history = JSON.parse(await fs.readFile(path.resolve("src/data/coach-history.json"), "utf8")) as Record<string, Record<string, { name: string }>>;
-    for (const [team, byYear] of Object.entries(history)) {
-      for (const [yearStr, s] of Object.entries(byYear)) {
-        const year = parseInt(yearStr, 10);
-        const cur = coachLatest.get(s.name);
-        if (!cur || year > cur.year) coachLatest.set(s.name, { team: overrideTeamName(team), year });
-      }
-    }
-  } catch {}
-  try {
-    const espn = JSON.parse(await fs.readFile(path.resolve("src/data/team-coaches.json"), "utf8")) as Record<string, { name: string }>;
-    for (const [team, c] of Object.entries(espn)) {
-      const cur = coachLatest.get(c.name);
-      if (!cur || LATEST_YEAR > cur.year) coachLatest.set(c.name, { team: overrideTeamName(team), year: LATEST_YEAR });
-    }
-  } catch {}
-  // Dedupe by SLUG — the sources can spell one coach two ways ("Donte
-  // Jackson" / "Donte' Jackson") that collide after slugging, which shipped
-  // duplicate React keys in the search dialog. Keep the shorter (SR/ASCII)
-  // spelling and the freshest team/year. Mirrors build-search-index.mjs.
-  const coachBySlug = new Map<string, { name: string; info: CoachLatest }>();
-  for (const [name, info] of coachLatest.entries()) {
-    const s = slug(name);
-    const cur = coachBySlug.get(s);
-    if (!cur) {
-      coachBySlug.set(s, { name, info });
-    } else {
-      coachBySlug.set(s, {
-        name: cur.name.length <= name.length ? cur.name : name,
-        info: {
-          team: info.year >= cur.info.year ? info.team : cur.info.team,
-          year: Math.max(cur.info.year, info.year),
-        },
-      });
-    }
-  }
-  const searchCoaches = [...coachBySlug.entries()]
-    .map(([s, { name, info }]) => ({
-      t: "c" as const,
-      n: name,
-      s,
-      tm: info.team,
-      a: info.year === LATEST_YEAR ? 1 : 0,
-    }))
-    .sort((a, b) => a.n.localeCompare(b.n));
-
-  const searchAll = [...searchTeams, ...searchCoaches, ...searchPlayers];
-  await fs.writeFile(path.join(OUT, "search-index.json"), JSON.stringify(searchAll));
-  console.log(`   ${searchTeams.length} teams + ${searchCoaches.length} coaches + ${searchPlayers.length.toLocaleString()} players → search-index.json`);
+  execFileSync(process.execPath, [path.resolve("scripts/build-search-index.mjs")], { stdio: "inherit" });
 
   console.log("\n📜 SSG manifest…");
   const teamSlugs = [...byName.keys()].map((n) => slug(n));

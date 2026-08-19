@@ -4,11 +4,18 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
+import { pctBg, pctColor } from "@/components/percentile-chip";
 import { cn } from "@/lib/utils";
 
-// Compact-keyed entries from /data/search-index.json (kept short to shrink the
-// wire payload — see scripts/build-search-index.mjs for the writer). Teams may
-// carry `k`: colloquial aliases ("uconn", "ole miss") that also match.
+/**
+ * Compact-keyed entries from /data/search-index.json — see
+ * scripts/build-search-index.mjs for the writer.
+ *
+ * `tm` arrives as an INDEX into the file's `schools` array, not a string: the
+ * same ~370 school names were being written out on 26k rows and were the
+ * largest thing in the payload. It is resolved to a string in the same pass
+ * that stamps the match keys, so nothing downstream knows the difference.
+ */
 type TeamEntry = { t: "t"; n: string; s: string; c: string | null; k?: string };
 type CoachEntry = { t: "c"; n: string; s: string; tm: string; a: 0 | 1 };
 type PlayerEntry = { t: "p"; n: string; b: number; tm: string; y: number };
@@ -17,6 +24,25 @@ type PlayerEntry = { t: "p"; n: string; b: number; tm: string; y: number };
 // nothing, and "st johns" still finds "St. John's" ("ajahni" → "A'Jahni").
 // (Not in the wire format — it would double the payload.)
 type Entry = (TeamEntry | CoachEntry | PlayerEntry) & { l?: string; d?: string };
+
+type RawEntry = Omit<Entry, "tm"> & { tm?: number };
+type IndexDoc = { schools: string[]; e: RawEntry[] };
+
+/**
+ * The stat lines, from the /data/search-stats.json sidecar.
+ *
+ * Fetched SEPARATELY and never awaited before results render. Matching needs
+ * names and nothing else; folding the numbers into the index would have taken
+ * the file the first keystroke waits on from 1.0 MB to 2.3 MB to decorate at
+ * most eight visible rows. Until it lands (and for anyone it has no line for)
+ * the stat columns show an em dash, which is the same thing they show for a
+ * player whose season we genuinely lack.
+ *
+ * Fixed-point ints, -1 for unknown:
+ *   players  [ppg*10, rpg*10, apg*10, ts*1000, tsPercentile]
+ *   teams    [rank, wins, losses, net*10]
+ */
+type StatsDoc = { p: Record<string, number[]>; t: Record<string, number[]> };
 
 // Lowercase + drop everything that isn't a letter, digit, or space.
 function stripPunct(s: string): string {
@@ -31,18 +57,17 @@ function urlFor(e: Entry): string {
 function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
 }
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
-  return (parts[0]![0] + parts[parts.length - 1]![0]).toUpperCase();
-}
 function keyFor(e: Entry): string {
   return e.t === "p" ? `p-${e.b}` : `${e.t}-${(e as TeamEntry | CoachEntry).s}`;
 }
 
-// Per-group caps. The panel is height-bounded, so each entity type gets a fixed
-// budget instead of the biggest group starving the others.
-const MAX_P = 8, MAX_T = 5, MAX_C = 5;
+type Tab = "all" | "p" | "t" | "c";
+
+// Per-group caps. On "all" the panel is height-bounded so each entity type gets
+// a fixed budget instead of the biggest group starving the others; on a single
+// entity's own tab that type gets the whole budget.
+const MAX_P = 6, MAX_T = 4, MAX_C = 3;
+const MAX_SOLO = 14;
 
 type Group = { key: "p" | "t" | "c"; label: string; items: Entry[]; total: number };
 
@@ -51,33 +76,82 @@ const LISTBOX_ID = "bta-search-results";
 const optionId = (e: Entry) => `bta-opt-${keyFor(e)}`;
 
 /**
- * Navbar search. No modal and no scrim: the trigger pill swaps to a live input
- * in the same navbar slot, and the results ease down in a panel anchored under
- * it. Everything stays where it was.
+ * Navbar search — a centered command palette over the page.
  *
- * ONE COLUMN, GROUPED — not three side-by-side columns. The three-column build
- * this replaced was a table pretending to be a menu: it needed hard borders to
- * separate the columns, a 2px ink rule to cap them, zebra striping to track
- * rows across the width, and a permanent hint bar to explain that Tab moved
- * between them. Every one of those devices existed to prop up the column
- * layout, and together they were most of what made the panel look a decade old.
- * Stacked and grouped, the rows need none of it: quiet headings, rounded rows,
- * one soft shadow, and ↑↓ that goes where it looks like it goes.
+ * EVERY ROW CARRIES ITS NUMBERS. On an analytics site the name is rarely the
+ * question: searching a player is the first step of looking up how he played,
+ * and a list of bare names makes you open a page to find out whether it was
+ * even the right man. So a player row shows PPG / RPG / APG with a TS%
+ * percentile chip in the site's own ramp, and a team row its rank, record and
+ * net rating. The dash is honest — it means we have no line for that season,
+ * not that the number is zero.
  *
- * Keyboard: ↑↓ move through every result in order, ↵ opens, Esc closes.
- * ⌘K / Ctrl+K toggles. Lazy-loads the ~1.8 MB index on first open and caches it
- * for the session.
+ * NO BACKDROP BLUR, deliberately. A `backdrop-filter` over a full-page scrim
+ * re-filters the whole viewport every frame the panel is up, which is the one
+ * effect here expensive enough to be felt while typing; a flat scrim costs
+ * nothing and reads the same. The panel keeps a single static shadow — it never
+ * animates, so it is painted once and does not participate in keystrokes.
+ *
+ * Keyboard: ↑↓ move through every result in order, ↵ opens, Esc closes,
+ * ⌘K / Ctrl+K toggles, Tab cycles the entity tabs. The ~1.5 MB index is
+ * lazy-loaded on the first open — or on hover/focus of the trigger, which is
+ * usually a few hundred ms of head start — and cached for the session.
  */
 export function SearchDialog() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState<Entry[] | null>(null);
+  const [stats, setStats] = useState<StatsDoc | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [cursor, setCursor] = useState(0);
+  const [tab, setTab] = useState<Tab>("all");
   const inputRef = useRef<HTMLInputElement>(null);
-  const mobileInputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  // Guards the fetch against a second trigger (hover then click) starting it twice.
+  const started = useRef(false);
+
+  /**
+   * Load the index, and the stat sidecar behind it.
+   *
+   * Callable from hover/focus as well as open: the index is the only thing
+   * between a keystroke and a result, and starting it while the pointer is
+   * still travelling to the trigger hides most of that.
+   */
+  function loadIndex() {
+    if (started.current) return;
+    started.current = true;
+    fetch("/data/search-index.json")
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      // Stamp the lowercased + punctuation-stripped names once, at load — the
+      // scan runs per keystroke and per-entry toLowerCase() was 26k throwaway
+      // strings each time. `d` only exists where it differs, so the common case
+      // stays one string per entry. School names are resolved from the interned
+      // table in the same pass.
+      .then((doc: IndexDoc | Entry[]) => {
+        const schools = Array.isArray(doc) ? [] : doc.schools;
+        const raw = Array.isArray(doc) ? (doc as RawEntry[]) : doc.e;
+        const out = raw as unknown as Entry[];
+        for (let i = 0; i < raw.length; i++) {
+          const e = raw[i]!;
+          if (typeof e.tm === "number") {
+            (e as unknown as { tm: string }).tm = schools[e.tm] ?? "—";
+          }
+          const l = e.n.toLowerCase();
+          e.l = l;
+          const d = stripPunct(l);
+          if (d !== l) e.d = d;
+        }
+        setIndex(out);
+      })
+      .catch((e) => setLoadErr(e.message));
+
+    // Separate request, never awaited: results render without it.
+    fetch("/data/search-stats.json")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: StatsDoc | null) => { if (d) setStats(d); })
+      .catch(() => { /* stat columns stay em dashes */ });
+  }
 
   // Global ⌘K / Ctrl+K toggle + Esc close.
   useEffect(() => {
@@ -102,48 +176,32 @@ export function SearchDialog() {
     return () => window.removeEventListener("bta:open-search", onOpenSearch);
   }, []);
 
-  // Click-away close — this is a dropdown, not a modal, so there's no backdrop
-  // to catch the click. Anything outside the root wrapper closes it.
+  // Focus the field on open; start the fetch if a hover didn't already.
   useEffect(() => {
     if (!open) return;
-    function onDown(e: PointerEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("pointerdown", onDown);
-    return () => document.removeEventListener("pointerdown", onDown);
+    loadIndex();
+    requestAnimationFrame(() => inputRef.current?.focus());
+    /**
+     * Lock the page behind the modal — and pay back the scrollbar's width.
+     *
+     * `overflow: hidden` alone removes the vertical scrollbar, which widens the
+     * viewport by its width; every centered or right-anchored thing on the page
+     * then jumps a few pixels right as the panel opens, and jumps back on
+     * close. Holding that width as padding keeps the layout still. It is
+     * measured rather than assumed because it is 0 on overlay-scrollbar
+     * platforms (macOS default, touch) and ~15px on Windows, where the jump is
+     * plainly visible.
+     */
+    const gap = window.innerWidth - document.documentElement.clientWidth;
+    const prevOverflow = document.body.style.overflow;
+    const prevPad = document.body.style.paddingRight;
+    document.body.style.overflow = "hidden";
+    if (gap > 0) document.body.style.paddingRight = `${gap}px`;
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.paddingRight = prevPad;
+    };
   }, [open]);
-
-  // Focus whichever input is visible on open (the inline one on md+, the
-  // panel's own row on mobile).
-  useEffect(() => {
-    if (!open) return;
-    requestAnimationFrame(() => {
-      const el = inputRef.current && inputRef.current.offsetParent !== null
-        ? inputRef.current
-        : mobileInputRef.current;
-      el?.focus();
-    });
-  }, [open]);
-
-  // Lazy-load index on first open.
-  useEffect(() => {
-    if (!open || index || loadErr) return;
-    fetch("/data/search-index.json")
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      // Stamp the lowercased + punctuation-stripped names once, at load — the
-      // scan runs per keystroke and per-entry toLowerCase() was 26k throwaway
-      // strings each time. `d` only exists where it differs, so the common case
-      // stays one string per entry.
-      .then((arr: Entry[]) => {
-        for (const e of arr) {
-          e.l = e.n.toLowerCase();
-          const d = stripPunct(e.l);
-          if (d !== e.l) e.d = d;
-        }
-        setIndex(arr);
-      })
-      .catch((e) => setLoadErr(e.message));
-  }, [open, index, loadErr]);
 
   // The list renders against a DEFERRED copy of the query. The keystroke's own
   // commit then contains only the input echo (sub-ms) and the result list
@@ -154,9 +212,13 @@ export function SearchDialog() {
   // Players lead: they are what gets searched most, so they take the first
   // group and the first stop for the keyboard cursor.
   const groups: Group[] = useMemo(() => {
+    // Fixed order: teams, then players, then coaches. There are ~370 teams
+    // against 25k players, so a team match is the rarer and more specific
+    // thing — putting them first is what stops six substring hits on player
+    // names burying the school the reader typed the name of.
     const out: Group[] = [
-      { key: "p", label: "Players", items: [], total: 0 },
       { key: "t", label: "Teams", items: [], total: 0 },
+      { key: "p", label: "Players", items: [], total: 0 },
       { key: "c", label: "Coaches", items: [], total: 0 },
     ];
     if (!index) return out;
@@ -171,29 +233,42 @@ export function SearchDialog() {
     // at the group budget (only that many can ever be shown); totals count
     // everything. Full scan, no early break — the counts shown are TRUE match
     // counts, and the whole pass is ~1ms over 26k entries.
-    const caps = { p: MAX_P, t: MAX_T, c: MAX_C } as const;
-    const buckets: Record<"t" | "c" | "p", [Entry[], Entry[], Entry[]]> = {
-      t: [[], [], []], c: [[], [], []], p: [[], [], []],
+    const solo = tab !== "all";
+    const caps = {
+      p: solo ? MAX_SOLO : MAX_P,
+      t: solo ? MAX_SOLO : MAX_T,
+      c: solo ? MAX_SOLO : MAX_C,
+    } as const;
+    // Four tiers: exact whole-name, name-start, word-start, bare substring.
+    const buckets: Record<"t" | "c" | "p", [Entry[], Entry[], Entry[], Entry[]]> = {
+      t: [[], [], [], []], c: [[], [], [], []], p: [[], [], [], []],
     };
-    const by = { p: out[0]!, t: out[1]!, c: out[2]! };
+    const by = { t: out[0]!, p: out[1]!, c: out[2]! };
     for (const e of index) {
       const l = e.l ?? e.n.toLowerCase();
       let at = l.indexOf(q);
       let hay = l;
-      if (at < 0 && e.t === "t" && e.k && e.k.includes(q)) { at = 0; hay = ""; }
-      if (at < 0 && e.d && qd) { at = e.d.indexOf(qd); hay = e.d; }
+      let exact = l === q;
+      if (at < 0 && e.t === "t" && e.k && e.k.includes(q)) {
+        at = 0; hay = "";
+        // An alias the reader typed in full IS the name to them.
+        exact = e.k.split(" ").includes(q);
+      }
+      if (at < 0 && e.d && qd) { at = e.d.indexOf(qd); hay = e.d; exact = e.d === qd; }
       if (at < 0) continue;
       by[e.t].total++;
-      const rank = at === 0 ? 0 : /[^a-z0-9]/.test(hay[at - 1]!) ? 1 : 2;
-      const b = buckets[e.t][rank];
+      // Totals stay true for every tab — the counts sit on the tabs themselves,
+      // so a hidden group still has to be counted.
+      if (solo && e.t !== tab) continue;
+      const rank = exact ? 0 : at === 0 ? 1 : /[^a-z0-9]/.test(hay[at - 1]!) ? 2 : 3;
+      const b = buckets[e.t][rank]!;
       if (b.length < caps[e.t]) b.push(e);
     }
     for (const k of ["p", "t", "c"] as const) by[k].items = buckets[k].flat().slice(0, caps[k]);
     return out;
-  }, [index, deferredQuery]);
+  }, [index, deferredQuery, tab]);
 
-  // One flat list in render order, which is what ↑↓ walks. A single sequence is
-  // the whole reason the Tab-between-columns hint could go.
+  // One flat list in render order, which is what ↑↓ walks.
   const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);
   const shown = groups.filter((g) => g.items.length > 0);
   const totalMatches = groups.reduce((n, g) => n + g.total, 0);
@@ -204,11 +279,23 @@ export function SearchDialog() {
   // the stale cursor first, which on a fast typist paints the highlight on the
   // previous query's row.
   const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) { setWasOpen(open); if (!open) setQuery(""); setCursor(0); }
+  if (open !== wasOpen) { setWasOpen(open); if (!open) { setQuery(""); setTab("all"); } setCursor(0); }
   const [lastQ, setLastQ] = useState(deferredQuery);
   if (deferredQuery !== lastQ) { setLastQ(deferredQuery); setCursor(0); }
+  const [lastTab, setLastTab] = useState(tab);
+  if (tab !== lastTab) { setLastTab(tab); setCursor(0); }
 
   const active = Math.min(cursor, Math.max(0, flat.length - 1));
+
+  // By KEY, not position: the groups array is re-ordered by match quality, so
+  // reading groups[0] as "players" swapped the counts the moment a team led.
+  const totalOf = (k: "p" | "t" | "c") => groups.find((g) => g.key === k)?.total ?? 0;
+  const TABS: Array<{ k: Tab; label: string; n: number }> = [
+    { k: "all", label: "All", n: totalMatches },
+    { k: "p", label: "Players", n: totalOf("p") },
+    { k: "t", label: "Teams", n: totalOf("t") },
+    { k: "c", label: "Coaches", n: totalOf("c") },
+  ];
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "ArrowDown") {
@@ -220,6 +307,14 @@ export function SearchDialog() {
     } else if (e.key === "Enter") {
       const hit = flat[active];
       if (hit) pick(hit);
+    } else if (e.key === "Tab") {
+      // Tab cycles the entity tabs rather than leaving the field — there is
+      // nothing else in the panel to tab to, and it is the fastest way to
+      // narrow 19 mixed matches to the 1 team you meant.
+      e.preventDefault();
+      const order: Tab[] = ["all", "p", "t", "c"];
+      const i = order.indexOf(tab);
+      setTab(order[(i + (e.shiftKey ? order.length - 1 : 1)) % order.length]!);
     }
   }
 
@@ -228,130 +323,144 @@ export function SearchDialog() {
     setOpen(false);
   }
 
-  const inputProps = {
-    type: "text" as const,
-    value: query,
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value),
-    onKeyDown,
-    placeholder: "Search",
-    "aria-label": "Search teams, coaches, and players",
-  };
-
   // `aria-expanded` alone is invalid on a plain textbox. The full combobox
   // relationship is what makes the state legible to a screen reader: the input
   // owns the listbox below it, and `aria-activedescendant` names the row ↑↓ is
   // currently on without moving focus off the field.
-  //
-  // Written out literally at both call sites rather than spread: jsx-a11y only
-  // reads literal JSX attributes, so anything arriving through a spread is
-  // invisible to it and it flags the (correct) markup as broken.
   const activeId = flat[active] ? optionId(flat[active]!) : undefined;
 
   return (
-    // The wrapper spans both the navbar slot and the dropped panel so the
-    // click-away check has one root to test against.
     <div ref={rootRef} className="contents">
-      {/* Navbar slot: a search-field-shaped pill when closed, the real input
-          when open. Same slot, same shape — it just slides wider. Rounded to a
-          full pill and filled rather than outlined; a hairline rectangle around
-          a field is the most dated shape in the whole header. */}
-      {!open ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label="Open search"
-          aria-expanded={false}
-          className="hidden md:inline-flex items-center gap-2.5 h-9 w-44 lg:w-52 pl-3.5 pr-3 rounded-full bg-paper-deep ring-1 ring-ink/8 hover:ring-ink/20 transition-shadow"
-        >
-          <Glass className="w-3.5 h-3.5 text-ink-muted shrink-0" />
-          <span className="text-sm text-ink-muted">Search</span>
-          <kbd className="ml-auto hidden lg:inline text-[0.62rem] text-ink-muted font-mono">⌘K</kbd>
-        </button>
-      ) : (
-        <div className="hidden md:flex items-center relative">
-          <Glass className="absolute left-3.5 w-3.5 h-3.5 text-ink-muted pointer-events-none" />
-          <input
-            ref={inputRef}
-            {...inputProps}
-            role="combobox"
-            aria-controls={LISTBOX_ID}
-            aria-expanded={open}
-            aria-autocomplete="list"
-            aria-activedescendant={activeId}
-            className="bta-search-grow h-9 w-72 lg:w-96 pl-9 pr-12 rounded-full bg-paper-deep ring-1 ring-coral/40 text-ink text-sm placeholder:text-ink-muted focus:outline-none"
-          />
-          <kbd className="absolute right-3.5 text-[0.62rem] text-ink-muted font-mono pointer-events-none">esc</kbd>
-        </div>
-      )}
+      {/* Navbar trigger. Hovering it starts the index download, so the field is
+          usually ready to search the moment it opens. */}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        onPointerEnter={loadIndex}
+        onFocus={loadIndex}
+        aria-label="Open search"
+        aria-expanded={open}
+        className="hidden md:inline-flex items-center gap-2.5 h-9 w-44 lg:w-52 pl-3.5 pr-3 rounded-full bg-paper-deep ring-1 ring-ink/8 hover:ring-ink/20 transition-shadow"
+      >
+        <Glass className="w-3.5 h-3.5 text-ink-muted shrink-0" />
+        <span className="text-sm text-ink-muted">Search</span>
+        <kbd className="ml-auto hidden lg:inline text-[0.62rem] text-ink-muted font-mono">⌘K</kbd>
+      </button>
 
-      {/* The panel. Anchored to the header container (which is relative),
-          right-aligned under the input on desktop, full-bleed on mobile.
-          Shadow and a hairline ring rather than a border — a 1px box around a
-          floating surface reads as a window, not a menu. */}
       {open && (
-        <div
-          aria-label="Search results"
-          className="bta-search-drop absolute top-16 inset-x-0 md:inset-x-auto md:top-[3.9rem] md:right-6 lg:right-16 md:w-[30rem] md:max-w-[calc(100vw-3rem)] z-50 bg-paper md:rounded-xl shadow-xl ring-1 ring-ink/8 border-y border-hairline md:border-0 overflow-hidden"
-        >
-          {/* Mobile gets its own input row — the navbar has no room for an
-              inline one. */}
-          <div className="md:hidden flex items-center gap-3 px-4 h-12 border-b border-hairline">
-            <Glass className="w-4 h-4 text-ink-muted shrink-0" />
-            <input
-              ref={mobileInputRef}
-              {...inputProps}
-              role="combobox"
-              aria-controls={LISTBOX_ID}
-              aria-expanded={open}
-              aria-autocomplete="list"
-              aria-activedescendant={activeId}
-              className="flex-1 h-full bg-transparent text-ink text-base placeholder:text-ink-muted focus:outline-none"
-            />
-          </div>
+        <div className="fixed inset-0 z-50">
+          {/* Flat scrim — no backdrop-filter. See the note on the component. */}
+          <div
+            className="absolute inset-0 bg-ink/35"
+            onPointerDown={() => setOpen(false)}
+            aria-hidden
+          />
 
-          <div className="max-h-[60vh] md:max-h-[50vh] overflow-y-auto">
-            {loadErr ? (
-              <Note>Couldn&apos;t load search: {loadErr}</Note>
-            ) : !index ? (
-              <Note>Loading…</Note>
-            ) : !hasQuery ? (
-              <Note>Teams, coaches, players.</Note>
-            ) : flat.length === 0 ? (
-              <Note>No matches for &ldquo;{deferredQuery}&rdquo;</Note>
-            ) : (
-              <div className="p-2" id={LISTBOX_ID} role="listbox" aria-label="Search results">
-                {shown.map((g, gi) => {
-                  // Each group's offset into the flat cursor space, computed up
-                  // front — a counter mutated while mapping is wrong the moment
-                  // React re-renders this subtree on its own.
-                  const start = shown.slice(0, gi).reduce((n, x) => n + x.items.length, 0);
-                  return (
-                    <div key={g.key} className="mb-1 last:mb-0">
-                      <div className="flex items-baseline gap-2 px-3 pt-2 pb-1">
-                        <span className="text-[0.58rem] uppercase tracking-[0.16em] font-bold text-ink-muted">{g.label}</span>
-                        <span className="text-[0.58rem] tabular text-ink-muted/60">{g.total.toLocaleString()}</span>
-                      </div>
-                      {g.items.map((e, i) => (
-                        <Row
-                          key={keyFor(e)}
-                          e={e}
-                          active={active === start + i}
-                          onPick={() => pick(e)}
-                          onHover={() => setCursor(start + i)}
-                        />
-                      ))}
-                    </div>
-                  );
-                })}
-                {/* The overflow count, where it is actually useful — at the end
-                    of the list you just read, not in a header bar above it. */}
-                {totalMatches > flat.length && (
-                  <p className="px-3 py-2 text-[0.62rem] text-ink-muted">
-                    Showing {flat.length} of {totalMatches.toLocaleString()} matches.
-                  </p>
-                )}
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Search"
+            className="absolute left-1/2 -translate-x-1/2 top-[8vh] w-[min(42rem,calc(100vw-1.5rem))] max-h-[80vh] flex flex-col bg-paper rounded-xl shadow-xl ring-1 ring-ink/10 overflow-hidden"
+          >
+            {/* Query */}
+            <div className="flex items-center gap-3 px-4 h-13 py-3.5 border-b border-hairline shrink-0">
+              <Glass className="w-4 h-4 text-ink-muted shrink-0" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder="Search players, teams, coaches"
+                aria-label="Search teams, coaches, and players"
+                role="combobox"
+                aria-controls={LISTBOX_ID}
+                aria-expanded={open}
+                aria-autocomplete="list"
+                aria-activedescendant={activeId}
+                className="flex-1 min-w-0 bg-transparent text-ink text-base placeholder:text-ink-muted focus:outline-none"
+              />
+              <kbd className="text-[0.62rem] text-ink-muted font-mono shrink-0">esc</kbd>
+            </div>
+
+            {/* Entity tabs — only once there's something to narrow. */}
+            {hasQuery && totalMatches > 0 && (
+              <div className="flex gap-1.5 px-3 py-2.5 border-b border-hairline shrink-0" role="tablist" aria-label="Filter by type">
+                {TABS.map((t) => (
+                  <button
+                    key={t.k}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === t.k}
+                    onClick={() => { setTab(t.k); inputRef.current?.focus(); }}
+                    disabled={t.n === 0 && t.k !== "all"}
+                    className={cn(
+                      "px-3 py-1 rounded-full text-xs transition-colors",
+                      tab === t.k ? "bg-ink text-paper font-semibold" : "bg-paper-deep text-ink-muted hover:text-ink",
+                      t.n === 0 && t.k !== "all" && "opacity-40 pointer-events-none",
+                    )}
+                  >
+                    {t.label} <span className="tabular opacity-70">{t.n.toLocaleString()}</span>
+                  </button>
+                ))}
               </div>
             )}
+
+            <div className="overflow-y-auto overscroll-contain">
+              {loadErr ? (
+                <Note>Couldn&apos;t load search: {loadErr}</Note>
+              ) : !index ? (
+                <Note>Loading…</Note>
+              ) : !hasQuery ? (
+                <Note>Players, teams, coaches — with their numbers.</Note>
+              ) : flat.length === 0 ? (
+                <Note>No matches for &ldquo;{deferredQuery}&rdquo;</Note>
+              ) : (
+                <div id={LISTBOX_ID} role="listbox" aria-label="Search results">
+                  {shown.map((g, gi) => {
+                    // Each group's offset into the flat cursor space, computed up
+                    // front — a counter mutated while mapping is wrong the moment
+                    // React re-renders this subtree on its own.
+                    const start = shown.slice(0, gi).reduce((n, x) => n + x.items.length, 0);
+                    return (
+                      <div key={g.key}>
+                        <div className="flex items-baseline px-4 pt-3 pb-1.5">
+                          <span className="text-[0.58rem] uppercase tracking-[0.16em] font-bold text-court-ink">{g.label}</span>
+                          {/* Column captions, on the same widths as the cells
+                              below them — see the note on PLAYER_COLS. */}
+                          <span className="ml-auto">
+                            {g.key === "p" && <StatHead cols={PLAYER_COLS} />}
+                            {g.key === "t" && <StatHead cols={TEAM_COLS} />}
+                          </span>
+                        </div>
+                        {g.items.map((e, i) => (
+                          <Row
+                            key={keyFor(e)}
+                            e={e}
+                            stats={stats}
+                            active={active === start + i}
+                            onPick={() => pick(e)}
+                            onHover={() => setCursor(start + i)}
+                          />
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center gap-3 px-4 py-2 border-t border-hairline shrink-0">
+              <span className="text-[0.62rem] text-ink-muted tabular">
+                {hasQuery && flat.length > 0
+                  ? `${flat.length} of ${totalMatches.toLocaleString()} · stats from most recent season`
+                  : " "}
+              </span>
+              <span className="ml-auto hidden sm:flex items-center gap-3 font-mono text-[0.6rem] text-ink-muted">
+                <span>↑↓ move</span><span>↵ open</span><span>⇥ filter</span>
+              </span>
+            </div>
           </div>
         </div>
       )}
@@ -371,9 +480,52 @@ function Note({ children }: { children: React.ReactNode }) {
   return <div className="px-5 py-10 text-center text-ink-muted text-sm">{children}</div>;
 }
 
+/**
+ * The stat columns, as ONE spec used by both the group caption and the rows.
+ *
+ * They were two independent pieces of markup — a right-aligned caption string
+ * over a row of fixed-width cells — so the labels sat wherever the caption's
+ * own spacing put them and never lined up with the numbers underneath. Sharing
+ * the widths is what makes a heading actually head its column.
+ */
+const PLAYER_COLS = [
+  { key: "ppg", label: "PPG", w: "w-12" },
+  { key: "rpg", label: "RPG", w: "w-12" },
+  { key: "apg", label: "APG", w: "w-12" },
+  { key: "ts", label: "TS%", w: "w-16" },
+] as const;
+const TEAM_COLS = [
+  { key: "rk", label: "RK", w: "w-12" },
+  { key: "rec", label: "REC", w: "w-16" },
+  { key: "net", label: "NET", w: "w-14" },
+] as const;
+
+function StatHead({ cols }: { cols: readonly { key: string; label: string; w: string }[] }) {
+  return (
+    <span className="flex items-center font-mono text-[0.56rem] tracking-[0.1em] text-ink-muted">
+      {cols.map((c) => (
+        <span key={c.key} className={cn("text-right shrink-0", c.w)}>{c.label}</span>
+      ))}
+    </span>
+  );
+}
+
+/** One right-aligned stat cell. Fixed widths so the columns line up down the list. */
+function Stat({ v, w }: { v: string; w: string }) {
+  return <span className={cn("text-right tabular shrink-0", w)}>{v}</span>;
+}
+
+const DASH = "—";
+const one = (n: number) => (n / 10).toFixed(1);
+
 function Row({
-  e, active, onPick, onHover,
-}: { e: Entry; active: boolean; onPick: () => void; onHover: () => void }) {
+  e, stats, active, onPick, onHover,
+}: { e: Entry; stats: StatsDoc | null; active: boolean; onPick: () => void; onHover: () => void }) {
+  const px = e.t === "p" ? stats?.p[String(e.b)] : undefined;
+  const tx = e.t === "t" ? stats?.t[e.n] : undefined;
+  const ts = px && px[3] !== -1 ? px[3]! : null;
+  const tsPct = px && px[4] !== -1 ? px[4]! : null;
+
   return (
     <button
       type="button"
@@ -382,31 +534,66 @@ function Row({
       aria-selected={active}
       onClick={onPick}
       onMouseEnter={onHover}
-      // A rounded wash, not a full-bleed bar with an inset rail. Inside a
-      // rounded panel the row can afford to be a shape of its own.
       className={cn(
-        "w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
+        "w-full text-left flex items-center gap-3 px-4 py-2 transition-colors",
         active ? "bg-ink/6" : "hover:bg-ink/4",
       )}
     >
-      {e.t === "t" && <TeamLogo name={e.n} size={22} />}
-      {e.t === "c" && (
-        <span className="inline-flex items-center justify-center w-[22px] h-[22px] rounded-full bg-paper-deep text-[0.55rem] font-semibold text-ink-muted shrink-0">
-          {initials(e.n)}
-        </span>
-      )}
+      {e.t === "t" && <TeamLogo name={e.n} size={24} />}
+      {/* A coach's mark is his SCHOOL's, not his initials. The two-letter
+          monogram identified nothing — every coach row looked the same — while
+          the crest is the thing a reader actually recognises, and it is the
+          same mark the team row above uses for the same school. */}
+      {e.t === "c" && <TeamLogo name={e.tm} size={24} />}
       {/* eager: a lazy image loses the race against typing — see PlayerPhoto. */}
-      {e.t === "p" && <PlayerPhoto bartPlayerId={e.b} name={e.n} size={22} eager />}
-      <span className="text-ink text-sm truncate">{e.n}</span>
-      <span className="ml-auto text-ink-muted text-[0.7rem] tabular whitespace-nowrap flex items-center gap-1.5 shrink-0">
-        {e.t === "t" && (e.c ?? "")}
-        {e.t === "c" && (
+      {e.t === "p" && <PlayerPhoto bartPlayerId={e.b} name={e.n} size={24} eager />}
+
+      <span className="flex flex-col min-w-0 leading-tight">
+        <span className="text-ink text-sm truncate">{e.n}</span>
+        <span className="text-ink-muted text-[0.68rem] truncate">
+          {e.t === "t" && (e.c ?? "Team")}
+          {e.t === "c" && (
+            <>
+              {e.a === 1 && <span className="inline-block w-1.5 h-1.5 rounded-full bg-coral mr-1.5 align-middle" aria-label="Active" />}
+              {e.tm}
+            </>
+          )}
+          {e.t === "p" && <>{e.tm} · {seasonLabel(e.y)}</>}
+        </span>
+      </span>
+
+      {/* Numbers. Widths match the group's column captions above. */}
+      <span className="ml-auto flex items-center font-mono text-[0.72rem] text-ink-soft shrink-0">
+        {e.t === "p" && (
           <>
-            {e.a === 1 && <span className="inline-block w-1.5 h-1.5 rounded-full bg-coral" aria-label="Active" />}
-            {e.tm}
+            <Stat v={px && px[0] !== -1 ? one(px[0]!) : DASH} w="w-12" />
+            <Stat v={px && px[1] !== -1 ? one(px[1]!) : DASH} w="w-12" />
+            <Stat v={px && px[2] !== -1 ? one(px[2]!) : DASH} w="w-12" />
+            <span className="w-16 flex justify-end">
+              {ts !== null ? (
+                <span
+                  className="rounded px-1.5 py-0.5 tabular text-[0.7rem]"
+                  style={{ background: pctBg(tsPct), color: tsPct !== null ? pctColor(tsPct) : undefined }}
+                >
+                  {(ts / 1000).toFixed(3).replace(/^0/, "")}
+                </span>
+              ) : (
+                <span className="pr-1.5">{DASH}</span>
+              )}
+            </span>
           </>
         )}
-        {e.t === "p" && <>{e.tm} · {seasonLabel(e.y)}</>}
+        {e.t === "t" && (
+          <>
+            <Stat v={tx ? `#${tx[0]}` : DASH} w="w-12" />
+            <Stat v={tx ? `${tx[1]}–${tx[2]}` : DASH} w="w-16" />
+            <Stat
+              v={tx && tx[3] !== -9999 ? `${tx[3]! > 0 ? "+" : ""}${(tx[3]! / 10).toFixed(1)}` : DASH}
+              w="w-14"
+            />
+          </>
+        )}
+        {e.t === "c" && <span className="text-ink-muted text-[0.7rem] pr-1">{e.a === 1 ? "active" : ""}</span>}
       </span>
     </button>
   );
