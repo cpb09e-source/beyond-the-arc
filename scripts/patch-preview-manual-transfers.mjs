@@ -88,6 +88,7 @@ const MOVES = [
   // 2026-08-19
   ["Reed Bailey", "St. John's"],
   ["Braxton Stacker", "UNC Greensboro"],
+  ["Jordan Pope", "Texas A&M"],
 ];
 
 /** Common shorthand → the name season-preview.json uses. */

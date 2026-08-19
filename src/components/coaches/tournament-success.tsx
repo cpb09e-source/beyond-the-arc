@@ -194,7 +194,7 @@ function TourneyStat({ label, value, sub, rank, tone = "default" }: { label: str
 function RoundOutcome({ round }: { round: TourneyRound | null }) {
   if (!round) {
     return (
-      <span className="text-xs text-ink-muted tabular shrink-0 text-right">qualified · result unknown</span>
+      <span className="text-xs text-ink-muted shrink-0 text-right">qualified · result unknown</span>
     );
   }
   const depth = ROUND_DEPTH[round];

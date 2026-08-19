@@ -184,7 +184,7 @@ export function PlayerStatsGrid({
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-4">
-        <span className="text-sm text-ink-muted tabular">
+        <span className="text-sm text-ink-muted">
           {n} game{n === 1 ? "" : "s"} in this split
         </span>
         <div className="flex flex-wrap items-center gap-3">

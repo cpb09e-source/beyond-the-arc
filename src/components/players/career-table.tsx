@@ -105,7 +105,7 @@ export function CareerTable({
             Click a season to open the player&apos;s game log.
           </p>
         </div>
-        <span className="text-xs tabular text-ink-muted whitespace-nowrap">
+        <span className="text-xs text-ink-muted whitespace-nowrap">
           <span className="font-display text-2xl text-ink tabular leading-none">{seasons.length}</span>{" "}
           {seasons.length === 1 ? "season" : "seasons"}
         </span>

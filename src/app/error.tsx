@@ -34,7 +34,7 @@ export default function GlobalError({
         Something went wrong rendering this page. Try again, or head somewhere else.
       </p>
       {error.digest && (
-        <p className="text-xs text-ink-muted tabular mb-8">Error ID: {error.digest}</p>
+        <p className="text-xs text-ink-muted mb-8">Error ID: <span className="tabular">{error.digest}</span></p>
       )}
       <div className="flex flex-wrap items-center justify-center gap-3 mt-6">
         <button

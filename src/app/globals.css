@@ -153,21 +153,63 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Display headlines — Roboto Slab at 400.
-   Slab serifs carry more ink per glyph than a grotesk, so Moneta's nominal 700
-   rendered far heavier once the family changed under it. Regular is enough:
-   the slab's serifs already separate display from Geist body copy, so weight
-   does not have to do that work as well. */
+/* Display headlines — Schibsted Grotesk at 700.
+   Display and body are the SAME family now, so weight and tracking are what
+   separate them; there is no second text face to load. 700 rather than the
+   slab's 400 because a grotesk carries less ink per glyph, and a headline has
+   to hold the top of the page on its own. */
 .font-display {
-  font-family: var(--font-display), Rockwell, Georgia, serif;
-  font-weight: 400;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display), "Helvetica Neue", Arial, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.025em;
 }
 
-/* Tabular numerals on stats */
+/* Numbers.
+   This single rule is what puts the whole site's figures in IBM Plex Mono: 305
+   places already ask for `tabular`, and every one of them is a stat cell, a
+   record, a rank or a percentage. Routing the face here rather than editing
+   those 305 call sites means the numerals stay consistent by construction — a
+   new stat cell gets the right face by asking for tabular alignment, which it
+   was going to ask for anyway.
+   font-size is left alone: a mono at the same nominal size as the surrounding
+   grotesk reads slightly larger, and the stat tables are already tuned. */
 .tabular {
+  font-family: var(--font-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
+  letter-spacing: -0.01em;
+}
+
+/* Big pull-out figures stay in the DISPLAY face.
+   `.tabular` is declared after `.font-display`, so on the 35 elements that
+   carry both it was winning the family and setting hero numbers — a player's
+   22.5 PPG, a team's NET badge — in mono. That is the wrong end of the
+   distinction: the mono earns its place in a COLUMN, where a slashed zero and
+   a fixed advance width make 26,000 rows scannable. One number pulled out at
+   48px has no column to align to, and the mono's mechanical rhythm reads as a
+   receipt rather than a headline.
+   A two-class selector outranks either single class, so this needs no !important
+   and no edits at the 35 call sites. Lining tabular figures are kept — the
+   grotesk has them, and a stat block still wants its digits the same width. */
+.font-display.tabular {
+  font-family: var(--font-display), "Helvetica Neue", Arial, sans-serif;
+  font-variant-numeric: tabular-nums lining;
+  letter-spacing: -0.025em;
+}
+
+/* Uppercase micro-labels — the column captions, section eyebrows and chip
+   headings that carry the site's structure.
+   There are 18 hand-set sizes under 1rem across 313 places and 10 different
+   letter-spacings doing this one job; every pair of them is a fraction of a
+   pixel apart and none is on a scale. This is the one true version. Reach for
+   it on new work rather than picking another arbitrary size. */
+.label {
+  font-size: 0.625rem;
+  line-height: 1.1;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 600;
+  color: var(--ink-muted);
 }
 
 /* Navbar search opening: the pill swaps to an input in the same slot, and
@@ -306,10 +348,13 @@ body {
   opacity: 0.45;
 }
 
-/* Magazine pull-quote stat */
+/* Magazine pull-quote stat.
+   A pull-quote stat is a NUMBER, so it takes the mono like every other figure —
+   at this size Plex Mono's slashed zero is the whole point of the treatment. */
 .lede-stat {
-  font-family: var(--font-display), Rockwell, Georgia, serif;
-  font-weight: 400;
+  font-family: var(--font-mono), ui-monospace, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
   font-size: clamp(3rem, 8vw, 6rem);
   line-height: 0.95;
   letter-spacing: -0.04em;
