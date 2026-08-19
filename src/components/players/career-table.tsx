@@ -237,7 +237,14 @@ export function CareerTable({
                     </button>
                   </Td>
                   <Td>
-                    <Link href={`/teams/${teamSlug(s.team_name)}`} className="inline-flex items-center gap-2 hover:text-coral transition-colors" prefetch={false}>
+                    {/* The SEASON's team page, not the team's default one.
+                        A career row is a statement about one year — clicking
+                        the crest on the 24-25 line and landing on Vanderbilt's
+                        current roster answers a question nobody asked. Every
+                        (team, year) pair a career row can name has a generated
+                        page: generateStaticParams walks teams-all.json, and
+                        all 63,128 player-season rows resolve against it. */}
+                    <Link href={`/teams/${teamSlug(s.team_name)}/${s.year}/`} className="inline-flex items-center gap-2 hover:text-coral transition-colors" prefetch={false} title={`${s.team_name} — ${seasonLabel(s.year)}`}>
                       <TeamLogo name={s.team_name} size={20} />
                       {/* nowrap: the table already scrolls sideways, so there
                           is no width to save by breaking "Robert Morris" over
