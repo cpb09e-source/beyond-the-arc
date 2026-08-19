@@ -91,6 +91,31 @@ async function loadEpm(): Promise<void> {
   console.log(`   EPM: ${epmByYear.size} seasons (${real} play-by-play, rest estimated), ${total.toLocaleString()} player-seasons`);
 }
 
+// ---------- eWins ----------
+// The leaderboard basis. Read ONLY from epm-<year>.json, with no box-score
+// fallback, because there is nothing to fall back to: eWins is
+// (epm / 100) * possessions / 30, and the box fit carries no possession count.
+// A season either has real eWins for its players or it has none at all, and
+// ratingForYear() below picks the basis accordingly.
+const ewinsByYear = new Map<number, Map<number, number>>();
+async function loadEwins(): Promise<void> {
+  const files = await fs.readdir(DATA_DIR);
+  for (const f of files.filter((x) => /^epm-\d{4}\.json$/.test(x))) {
+    const year = Number(f.slice("epm-".length, -".json".length));
+    const j = JSON.parse(await fs.readFile(path.join(DATA_DIR, f), "utf8")) as {
+      players: Record<string, { ewins?: number | null }>;
+    };
+    const m = new Map<number, number>();
+    for (const [id, v] of Object.entries(j.players ?? {})) {
+      if (typeof v?.ewins !== "number" || !Number.isFinite(v.ewins)) continue;
+      m.set(Number(id), v.ewins);
+    }
+    if (m.size > 0) ewinsByYear.set(year, m);
+  }
+  const total = [...ewinsByYear.values()].reduce((n, m) => n + m.size, 0);
+  console.log(`   eWins: ${ewinsByYear.size} seasons, ${total.toLocaleString()} player-seasons`);
+}
+
 // ---------- Position bucket mapping ----------
 const BUCKET_BY_NOTE: Record<string, "G" | "F" | "C"> = {
   "Pure PG": "G", "Scoring PG": "G", "Combo G": "G", "Wing G": "G",
@@ -249,6 +274,7 @@ async function main() {
 
   console.log("📂 loading box EPM…");
   await loadEpm();
+  await loadEwins();
 
   console.log("📂 scanning player files…");
   const playerFiles = await fs.readdir(PLAYER_DIR);
@@ -339,8 +365,8 @@ async function main() {
   //   - rank overall across all eligible D-I players (#5 overall)
   //   - rank within non-power-conference cohort (#2 mid-major) — only
   //     populated for players whose own conference is NOT a power league
-  // All three are sorted by EPM desc. Players without an epm for the year are
-  // excluded (their season ranks just won't carry these fields). POWER_CONFS
+  // All three are sorted by the season's rating desc — see ratingForYear.
+  // Players without one for that year are excluded (their season ranks just won't carry these fields). POWER_CONFS
   // lives in src/lib/conf-tiers.ts.
   //
   // These used to sort by BTA PRTG, which put the player page's headline rings
@@ -349,13 +375,171 @@ async function main() {
   // page (97th percentile PRTG vs 100th percentile EPM). EPM is the site's
   // headline impact metric everywhere else now — the stat tiles, the transfer
   // portal's PVS — and the rings were the last holdout.
-  console.log("\n📊 computing EPM ranks (bucket + overall + mid-major)…");
+  console.log("\n📊 computing eWins ranks (bucket + overall + mid-major)…");
+  /**
+   * Extra gates the TOP-100 BOARDS apply on top of cohort eligibility.
+   *
+   * Cohort eligibility (18g / 15mpg / 5.3ppg) exists to decide who gets a page
+   * and a percentile at all, and it is deliberately loose. A leaderboard is a
+   * different question — it is a claim about the best players in the country,
+   * and a rate stat over a short or low-usage season is not evidence for that
+   * claim. These four are the floor a season has to clear before it can be
+   * ranked at all:
+   *
+   *   PIR   > 15      produced something, by the box line — OR, failing that,
+   *                   STL + BLK > 2.4 per game
+   *                   Outside the power conferences the bar rises and gains a
+   *                   third way over it: PIR > 21.5, or STL + BLK > 2.6, or
+   *                   TS% > 64. A box line is made against the defenses that
+   *                   allowed it, and a 16 PIR in the Horizon is not a 16 PIR
+   *                   in the Big 12 — the overall board is one list for
+   *                   everybody, so the weaker schedule pays for itself at the
+   *                   door. Shooting is the exception the third clause makes:
+   *                   64% true shooting is rare against anybody, and it is a
+   *                   rate rather than a volume score, so a smaller role at a
+   *                   smaller school does not depress it the way PIR is
+   *                   depressed.
+   *   Usage ≥ 17.2%   carried a real share of the offense rather than spot duty
+   *   Games > 18      a season, not a stretch of one
+   *   MPG   > 23      a rotation starter's minutes
+   *
+   * Guards clear a second set on top, because the shape of a guard season that
+   * flatters a rate stat is specific and well known — a low-usage, non-shooting
+   * guard posts a clean line by never taking a hard shot:
+   *
+   *   3P%   > 25%     can be left open without the offense breaking
+   *   Usage ≥ 18.5%   stricter than the 17.2% everyone else clears
+   *   and if usage < 22%, 3P% > 30%   — carrying less means shooting better
+   *
+   * The last one is a sliding requirement, not a third floor: a guard at 21%
+   * usage has to shoot 30% from three, a guard at 25% only 25%.
+   *
+   * BOTH three-point conditions are waived for a guard who takes fewer than 12%
+   * of his shots from three. The rules exist to catch a guard who cannot shoot
+   * and is left open for it; a guard who almost never shoots one is not that
+   * player, and judging him on a percentage drawn from a handful of attempts is
+   * judging noise. The usage floor still applies — the waiver is about the
+   * shot, not the role.
+   *
+   * The PIR escape hatch exists because PIR is a box-score production score and
+   * a defensive big's production is largely not in the box. Motiejus Krivas is
+   * the case: 14.04 PIR, which fails, but 0.72 steals and 1.87 blocks a game,
+   * which is a rim protector doing the job PIR cannot see. It rescues 28 of
+   * 2,233 seasons in 2026 — a hatch, not a second door.
+   *
+   * Strictly greater everywhere EXCEPT the general usage floor, which is
+   * inclusive. The number was picked to admit a specific player — Trevon
+   * Brazile, whose usage is exactly 17.2 — and a strict comparison would have
+   * excluded the one season the change was made for.
+   *
+   * Otherwise strictly greater, as specified. A season that misses any one
+   * of them is left off all three boards — it keeps its page, its percentiles
+   * and its stat tiles, it just cannot be called top 100.
+   */
+  const BOARD_MIN_PIR = 15;
+  const BOARD_MIN_STOCKS = 2.4; // steals + blocks per game, the PIR escape hatch
+  const BOARD_MIN_PIR_MID = 21.5;   // non-power conferences
+  const BOARD_MIN_STOCKS_MID = 2.6; // and their hatch
+  const BOARD_MIN_TS_MID = 64;      // …or shoot their way over it. ts_pct is a
+                                    // percent number, not a decimal.
+  const BOARD_MIN_USAGE = 17.2; // inclusive — see above
+  const BOARD_MIN_GAMES = 18;
+  const BOARD_MIN_MPG = 23;
+  const GUARD_MIN_FG3 = 0.25;          // raw_row[21] is a decimal, not a percent
+  const GUARD_MIN_USAGE = 18.5; // inclusive, like the general floor
+  const GUARD_LOW_USAGE = 22;
+  const GUARD_MIN_FG3_LOW_USAGE = 0.30;
+  // tpar is 3PA / FGA — a share, not a percent.
+  const GUARD_MAX_TPAR_EXEMPT = 0.12;
+
+  function boardEligible(
+    bartId: number,
+    year: number,
+    bucket: "G" | "F" | "C",
+    midMajor: boolean,
+    stats: Record<string, { value: number }>,
+  ): boolean {
+    const minPir = midMajor ? BOARD_MIN_PIR_MID : BOARD_MIN_PIR;
+    const minStocks = midMajor ? BOARD_MIN_STOCKS_MID : BOARD_MIN_STOCKS;
+    const pir = stats.pir?.value;
+    if (typeof pir !== "number" || !(pir > minPir)) {
+      // Under the PIR floor: still allowed on the defensive line, but only if
+      // both halves of it are actually measured. A missing steal or block count
+      // is not a zero here — it is a season we cannot judge this way.
+      const stl = stats.stl_pg?.value;
+      const blk = stats.blk_pg?.value;
+      const stocksOk =
+        typeof stl === "number" && typeof blk === "number" && stl + blk > minStocks;
+      // Third way over, non-power only: elite true shooting.
+      const ts = stats.ts_pct?.value;
+      const tsOk = midMajor && typeof ts === "number" && ts > BOARD_MIN_TS_MID;
+      if (!stocksOk && !tsOk) return false;
+    }
+    const usage = stats.usage?.value;
+    if (typeof usage !== "number" || !(usage >= BOARD_MIN_USAGE)) return false;
+
+    if (bucket === "G") {
+      if (!(usage >= GUARD_MIN_USAGE)) return false;
+
+      // A guard who barely shoots threes is not judged on how he shoots them.
+      // A missing rate is not a waiver — that is an unknown share, not a small
+      // one, so it falls through to the percentage tests below.
+      const tpar = stats.tpar?.value;
+      const barelyShootsThrees = typeof tpar === "number" && tpar < GUARD_MAX_TPAR_EXEMPT;
+
+      if (!barelyShootsThrees) {
+        const fg3 = stats.fg3_pct?.value;
+        if (typeof fg3 !== "number" || !(fg3 > GUARD_MIN_FG3)) return false;
+        if (usage < GUARD_LOW_USAGE && !(fg3 > GUARD_MIN_FG3_LOW_USAGE)) return false;
+      }
+    }
+
+    const season = allByBartId.get(bartId)?.find((x) => x.year === year);
+    if (!season) return false;
+    const games = num(season.games);
+    if (games == null || !(games > BOARD_MIN_GAMES)) return false;
+    const mpg = fromStart(season.raw_row as RawRow, 54);
+    if (mpg == null || !(mpg > BOARD_MIN_MPG)) return false;
+    return true;
+  }
+
+  /**
+   * The number the boards sort on.
+   *
+   * eWins where the season has it (2024+, wherever a play-by-play fit exists),
+   * EPM everywhere else. Two reasons for the switch, one for the fallback.
+   *
+   * eWins is value DELIVERED — (epm / 100) * possessions / 30 — where EPM is a
+   * per-100 rate. A board titled "top 100 players" ranked on a rate puts a
+   * 15-minute specialist above a 34-minute star, which is not what anyone means
+   * by it. The two orderings agree on 84 of the top 100 in 2026; the 16 that
+   * differ are exactly the low-minute cases.
+   *
+   * The fallback is arithmetic, not preference: eWins needs a possession count
+   * and the box-score fit has none, so a pre-2024 season can only be ranked on
+   * EPM. Mixing the two WITHIN a season would be nonsense — an EPM of 5 would
+   * outrank every eWins figure on the board — so a player in an eWins season
+   * who has only the box estimate is left off the board entirely rather than
+   * ranked on the wrong scale. Six players in 2026.
+   */
+  function ratingForYear(year: number, bartId: number, epm: number | null): number | null {
+    const ew = ewinsByYear.get(year);
+    if (ew) return ew.get(bartId) ?? null;
+    return epm;
+  }
+
   type RatingEntry = { bartId: number; bucket: "G" | "F" | "C"; rating: number; conf: string | null };
   const ratingsByYear = new Map<number, RatingEntry[]>();
+  let gatedOut = 0;
   for (const [bartId, byYear] of playerRanks) {
     for (const [year, info] of byYear) {
-      const rating = info.stats.epm?.value;
+      const rating = ratingForYear(year, bartId, info.stats.epm?.value ?? null);
       if (typeof rating !== "number") continue;
+      // Same test the mid-major board uses, so a player cannot be non-power for
+      // one purpose and power for the other.
+      const conf = confByBartYear.get(`${bartId}|${year}`) ?? null;
+      const midMajor = conf == null || !POWER_CONFS.has(conf);
+      if (!boardEligible(bartId, year, info.bucket, midMajor, info.stats)) { gatedOut++; continue; }
       if (!ratingsByYear.has(year)) ratingsByYear.set(year, []);
       ratingsByYear.get(year)!.push({
         bartId,
@@ -365,6 +549,9 @@ async function main() {
       });
     }
   }
+  console.log(`   board gates (PIR>${BOARD_MIN_PIR} or STL+BLK>${BOARD_MIN_STOCKS}; non-power PIR>${BOARD_MIN_PIR_MID} or STL+BLK>${BOARD_MIN_STOCKS_MID} or TS>${BOARD_MIN_TS_MID}%, USG>=${BOARD_MIN_USAGE}%, G>${BOARD_MIN_GAMES}, MPG>${BOARD_MIN_MPG}`
+    + `; guards also 3P>${GUARD_MIN_FG3 * 100}%, USG>=${GUARD_MIN_USAGE}%, 3P>${GUARD_MIN_FG3_LOW_USAGE * 100}% under ${GUARD_LOW_USAGE}% usage, both waived under ${GUARD_MAX_TPAR_EXEMPT * 100}% 3PA rate)`
+    + `: ${gatedOut.toLocaleString()} player-seasons excluded`);
   const yearLeaderRanks = new Map<
     number,
     Map<number, {

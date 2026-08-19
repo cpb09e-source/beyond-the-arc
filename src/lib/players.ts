@@ -77,6 +77,14 @@ export type PlayerSummary = {
    */
   has_page: boolean;
   /**
+   * Position on the overall leaderboard for THIS season, or null if the season
+   * did not clear the board's eligibility gates (PIR, usage, games, minutes,
+   * plus a separate set for guards). Carried in the payload rather than derived
+   * client-side so the explorer's top-100 mark and the player page's seal can
+   * never disagree about who is on the board.
+   */
+  rank_overall: number | null;
+  /**
    * Whether this player's SEASON has EPM data at all.
    *
    * Set per season by the explorer, not by the payload. Players under the
@@ -182,7 +190,7 @@ export type PlayerSummary = {
   /**
    * BTA's own points over replacement per game, built from CBBD primitives by
    * scripts/build-bta-porpag.mjs — per-game offensive rating and usage, credited
-   * for the defence actually faced, minus a replacement rate set from the data.
+   * for the defense actually faced, minus a replacement rate set from the data.
    *
    * Shipped alongside Bart's rather than replacing it: the two agree at
    * r = 0.947, which is the evidence the construction is sound, and keeping
@@ -250,7 +258,7 @@ export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
   // ── Advanced ─────────────────────────────────────────────
   { key: "ppp",      label: "PPP",      desc: "Points Per Possession — points scored per possession the player USED: PTS / (FGA + 0.44·FTA + TOV). Same numerator as TS%, but turnovers are in the denominator, so a possession ended with a giveaway still counts as one spent.", group: "advanced", format: "num2", field: "ppp" },
   { key: "pir",      label: "PIR",      desc: "EuroLeague Performance Index Rating (per game, minus TOV)",                              group: "advanced", format: "num1", field: "pir" },
-  { key: "bta_porpag", label: "PORP",   desc: "BTA Points Over Replacement per game — points produced above a replacement-level player on the same possessions, credited for the defence actually faced. Built from per-game data, so a big night against the country's best defence counts as one.", group: "advanced", format: "num2", field: "bta_porpag" },
+  { key: "bta_porpag", label: "PORP",   desc: "BTA Points Over Replacement per game — points produced above a replacement-level player on the same possessions, credited for the defense actually faced. Built from per-game data, so a big night against the country's best defense counts as one.", group: "advanced", format: "num2", field: "bta_porpag" },
   { key: "net_rtg",  label: "Net Rtg",  desc: "Individual offensive rating minus defensive rating, per 100 possessions",               group: "advanced", format: "num1", field: "net_rtg" },
   { key: "ast_tov",  label: "AST/TOV",  desc: "Assist-to-turnover ratio (assists per game ÷ turnovers per game)",                       group: "advanced", format: "num2", field: "ast_to_tov" },
 

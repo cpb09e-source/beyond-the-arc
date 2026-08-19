@@ -59,6 +59,7 @@ export const FIELDS = [
   "fg3_pct", "fg2_pct", "ft_pct", "ts_pct", "efg_pct", "fta_rate", "orb_pg",
   "tov_pg", "tov_pct", "usage_pct", "net_rtg", "ast_to_tov", "drb_pg",
   "hkm_pct", "pir", "porpag", "bta_porpag", "fg3_made", "fg3_att", "ppp",
+  "rank_overall",
 ];
 
 /**
@@ -91,6 +92,32 @@ function btaPorpagFor(year) {
 const FRESHMAN_SCAN_START_YEAR = 2013;
 const LATEST_PLAYER_YEAR = 2026;
 const MANUAL_PROFILE_IDS = [73737]; // Tommy Murr (Lipscomb) — requested by hand
+
+/**
+ * Overall leaderboard rank per (bartId, year), for the top-100 mark in the
+ * explorer's name column.
+ *
+ * Read from the same player-ranks files rankedPlayerIds() already walks, in a
+ * second pass that parses them rather than just counting them. The rank is
+ * carried in the row instead of being recomputed client-side because the board
+ * has eligibility gates of its own — PIR, usage, games, minutes, and a separate
+ * set for guards — and duplicating those in the browser is how the two would
+ * drift apart.
+ */
+function rankOverallByKey() {
+  const out = new Map();
+  const ranksDir = path.resolve("public/data/player-ranks");
+  if (!fs.existsSync(ranksDir)) return out;
+  for (const f of fs.readdirSync(ranksDir)) {
+    if (!f.endsWith(".json")) continue;
+    let doc;
+    try { doc = JSON.parse(fs.readFileSync(path.join(ranksDir, f), "utf8")); } catch { continue; }
+    for (const s of doc.seasonRanks ?? []) {
+      if (typeof s?.rankOverall === "number") out.set(`${doc.bartId}|${s.year}`, s.rankOverall);
+    }
+  }
+  return out;
+}
 
 function rankedPlayerIds() {
   const ids = new Set();
@@ -304,6 +331,7 @@ function main() {
     .sort();
 
   const ranked = rankedPlayerIds();
+  const rankByKey = rankOverallByKey();
   console.log(`  ${ranked.size.toLocaleString()} players have a profile page; the rest render as plain text.\n`);
 
   let rawBefore = 0, rawAfter = 0, gzBefore = 0, gzAfter = 0, linked = 0, unlinked = 0;
@@ -316,6 +344,9 @@ function main() {
     const rows = players.map((p) => {
       const s = transformPlayer(p);
       s.has_page = s.bart_player_id != null && ranked.has(s.bart_player_id);
+      s.rank_overall = s.bart_player_id != null
+        ? rankByKey.get(`${s.bart_player_id}|${s.year}`) ?? null
+        : null;
       if (s.has_page) linked++; else unlinked++;
       s.bta_porpag = btaPor && s.bart_player_id != null
         ? btaPor[String(s.bart_player_id)]?.porpag ?? null

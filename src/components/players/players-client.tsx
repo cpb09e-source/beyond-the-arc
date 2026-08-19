@@ -3,6 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { formatHeight } from "@/lib/height";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
@@ -1019,7 +1020,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                               <TeamLogo name={p.team_name} size={14} />
                             </Link>
                             {p.height && (
-                              <span>· {p.height.replace(/^(\d+)-(\d+)$/, "$1'$2\"")}</span>
+                              <span>· {formatHeight(p.height)}</span>
                             )}
                             {/* Class and season are the two facts that identify WHICH
                                 season of a player this row is, so they read as pills
@@ -1042,6 +1043,11 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                             )}
                           </span>
                         </span>
+                        {/* Sits beside the whole two-line block rather than at
+                            the end of the name line. Stacked, the chip is taller
+                            than one line of type, so inside the name line it
+                            grew that line and crowded the class pill under it. */}
+                        <TopHundredMark rank={p.rank_overall} />
                       </span>
                     </td>
                     {[...dynamicCols, ...GRID_COLS].map((c, ci) => {
@@ -1313,6 +1319,47 @@ function HScrollRail({ target }: { target: React.RefObject<HTMLDivElement | null
 
 // Copy-name button — appears on row hover next to the player name; flashes a
 // check for a beat after copying.
+/**
+ * Top-100 mark for the explorer's name column.
+ *
+ * A rectangular chip stacking TOP over 100. Two rows rather than one keeps it
+ * narrow — the name column is the widest frozen column in the table and the one
+ * a phone can least afford to grow. Membership, not position — it carries no
+ * numeral. The RK column beside it
+ * already holds a number, and that number is the row's place in whatever sort
+ * and filter is currently applied, which is a different quantity from the
+ * board rank. Two numerals that agree on the default view and diverge the
+ * moment you filter to one conference would read as a bug. The exact rank is
+ * on the tooltip.
+ *
+ * Only the overall board gets a mark here. The mid-major board still exists and
+ * still shows on the player page, but two marks in a table cell is more chrome
+ * than a name column can carry.
+ */
+function TopHundredMark({ rank }: { rank: number | null }) {
+  if (rank === null || rank > 100) return null;
+  return (
+    <span
+      className="inline-flex flex-col items-center shrink-0 rounded-[3px] uppercase font-bold select-none whitespace-nowrap"
+      style={{
+        padding: "2px 4px",
+        fontSize: 7,
+        lineHeight: 1.12,
+        letterSpacing: "0.11em",
+        textIndent: "0.11em",
+        color: "var(--court-ink)",
+        background: "color-mix(in oklab, var(--court) 16%, transparent)",
+        boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--court) 72%, transparent)",
+      }}
+      title={`Top 100 overall — ranked ${rank}`}
+      aria-label={`Top 100 overall, ranked ${rank}`}
+    >
+      <span>Top</span>
+      <span>100</span>
+    </span>
+  );
+}
+
 function CopyName({ name }: { name: string }) {
   const [copied, setCopied] = useState(false);
   return (
