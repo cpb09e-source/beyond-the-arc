@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
  * 90% of coaches sit inside about seven possessions of pace, so 68.4 means
  * nothing to a reader. Only the rank against the field does. Bars therefore run
  * from the centre — left of the median or right of it, by percentile — which
- * makes "extreme in both directions" (Bennett: slowest tempo, best defence)
+ * makes "extreme in both directions" (Bennett: slowest tempo, best defense)
  * read instantly, and makes the majority look boringly central, which is true.
  *
  * A RADAR, deliberately, having previously argued against one here. The old

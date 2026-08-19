@@ -46,7 +46,7 @@ const CARDS: Array<{ title: string; stats: Def[] }> = [
     title: "Impact",
     stats: [
       { key: "epm", label: "EPM", block: "impact", fmt: "signed1",
-        info: "Estimated Plus-Minus — points per 100 possessions versus an average D-I player, offence and defence combined. Fit over a whole season of play-by-play, so it does not split; this stays the full-season figure whatever slice is selected." },
+        info: "Estimated Plus-Minus — points per 100 possessions versus an average D-I player, offense and defense combined. Fit over a whole season of play-by-play, so it does not split; this stays the full-season figure whatever slice is selected." },
       { key: "off_epm", label: "Off EPM", block: "impact", fmt: "signed1" },
       { key: "def_epm", label: "Def EPM", block: "impact", fmt: "signed1" },
       { key: "ewins", label: "eWins", block: "impact", fmt: "num2",

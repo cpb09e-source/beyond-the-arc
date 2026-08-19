@@ -48,14 +48,14 @@ const OVERRIDES: Record<string, Omit<GlossaryEntry, "category">> = {
     aka: ["plus minus", "impact", "all-in-one", "rapm"],
     body:
       "Our headline all-in-one rating: how many points per 100 possessions a player is worth "
-      + "compared with an average Division I player, offence and defence combined. Zero is average; "
+      + "compared with an average Division I player, offense and defense combined. Zero is average; "
       + "the best players in the country land somewhere around +8. It is built from play-by-play — "
       + "every stretch of game time where the same ten players are on the floor becomes an "
       + "observation, and a regression solves for how much each individual is worth once teammates "
       + "and opponents are accounted for. That regression starts from a box-score estimate of the "
       + "player and adjusts it toward what the scoreboard actually did while he played. "
       + "That box-score estimate is read in the context of the schedule behind it: the same line "
-      + "counts for more against the defences a player actually had to face, and less against a soft "
+      + "counts for more against the defenses a player actually had to face, and less against a soft "
       + "slate. Three-point and free-throw variance is removed first, because nobody on the floor "
       + "controls whether an open look drops. Non-conference games count for more, since they are "
       + "the only games that connect one conference to another.",
@@ -66,7 +66,7 @@ const OVERRIDES: Record<string, Omit<GlossaryEntry, "category">> = {
   "Off EPM": {
     term: "Off EPM",
     original: true,
-    body: "The offensive half of EPM: points per 100 possessions added on offence versus an average player.",
+    body: "The offensive half of EPM: points per 100 possessions added on offense versus an average player.",
   },
   "Def EPM": {
     term: "Def EPM",
@@ -74,7 +74,7 @@ const OVERRIDES: Record<string, Omit<GlossaryEntry, "category">> = {
     body:
       "The defensive half of EPM, per 100 possessions, signed so that positive is always better. "
       + "A +3 defender saves three points per 100 possessions against an average one.",
-    caveat: "Defence is the noisier half of any plus-minus metric, here and everywhere else.",
+    caveat: "Defense is the noisier half of any plus-minus metric, here and everywhere else.",
   },
   Box: {
     term: "Box — box-score EPM",
@@ -121,9 +121,9 @@ const OVERRIDES: Record<string, Omit<GlossaryEntry, "category">> = {
     aka: ["porpag", "replacement"],
     body:
       "Points produced per game above what a freely available replacement-level player would have "
-      + "managed on the same number of possessions, credited for the quality of defence actually "
-      + "faced. Built game by game, so a big night against the best defence in the country counts "
-      + "for more than the same line against the worst. Offence only — it says nothing about the "
+      + "managed on the same number of possessions, credited for the quality of defense actually "
+      + "faced. Built game by game, so a big night against the best defense in the country counts "
+      + "for more than the same line against the worst. Offense only — it says nothing about the "
       + "other end.",
   },
 };
@@ -201,21 +201,21 @@ const MANUAL: GlossaryEntry[] = [
     category: "Team ratings",
     aka: ["adjo", "ortg", "offensive efficiency"],
     body:
-      "Points scored per 100 possessions, adjusted for the strength of the defences faced. The "
+      "Points scored per 100 possessions, adjusted for the strength of the defenses faced. The "
       + "adjustment is what makes a mid-major's number comparable to a high-major's.",
   },
   {
     term: "Adjusted Defensive Rating",
     category: "Team ratings",
     aka: ["adjd", "drtg", "defensive efficiency"],
-    body: "Points allowed per 100 possessions, adjusted for the offences faced. Lower is better.",
+    body: "Points allowed per 100 possessions, adjusted for the offenses faced. Lower is better.",
   },
   {
     term: "Adjusted Net Rating",
     category: "Team ratings",
     aka: ["net", "adjem", "efficiency margin"],
     body:
-      "Adjusted offence minus adjusted defence — the single number for how good a team is. Roughly, "
+      "Adjusted offense minus adjusted defense — the single number for how good a team is. Roughly, "
       + "the margin per 100 possessions you would expect against an average opponent on a neutral "
       + "floor.",
   },

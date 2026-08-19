@@ -77,7 +77,7 @@ TRAIN_MIN_PG, TRAIN_MIN_GP = 10.0, 13
 # column is 0 and zeroing its coefficient leaves overall calibration intact.
 #
 # Cost, stated plainly: DEF train R2 against the RAPM labels falls from 0.55 to
-# 0.18. That is the honest number — box-score defence barely predicts defensive
+# 0.18. That is the honest number — box-score defense barely predicts defensive
 # RAPM once you stop letting it read the team's rating off the scoreboard, and
 # the old fit was mostly team quality wearing a disguise.
 TEAM_FEATURE = "team_adj_net"

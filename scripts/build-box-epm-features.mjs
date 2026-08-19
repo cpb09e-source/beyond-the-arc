@@ -66,10 +66,10 @@ const FEATURES = [
   // team_adj_net says how good your team is, and letting the prior read it made
   // EPM a readout of who you played for. This says how hard your schedule was,
   // which is the context needed to read a box score at all: 18 points against
-  // the country's best defence is not 18 points against its worst.
+  // the country's best defense is not 18 points against its worst.
   //
-  // SPLIT rather than combined on purpose. Offence is fit against the DEFENCES
-  // faced and defence against the OFFENCES faced, and a single net SOS blurs
+  // SPLIT rather than combined on purpose. Offense is fit against the DEFENCES
+  // faced and defense against the OFFENCES faced, and a single net SOS blurs
   // the two. Measured, the split is most of the gain — combined `sos` alone was
   // worth +0.0014 to lean OFF, the split +0.0065.
   //
@@ -80,7 +80,7 @@ const FEATURES = [
   // at, and it moved most.
   //
   // Direction, per standard deviation of schedule strength: facing better
-  // defences is worth +0.118 OFF, facing better offences +0.166 DEF. Tougher
+  // defenses is worth +0.118 OFF, facing better offenses +0.166 DEF. Tougher
   // schedule buys credit for the same line, so high-major production is marked
   // up and easy-schedule production marked down — which is the correction the
   // mid-major stat-stuffers on the leaderboard have needed.
@@ -110,7 +110,7 @@ function normTeam(s) {
  *
  * It was built and measured: mean opponent adjusted net from game-logs-by-year
  * joined to team-ratings-<year>, 100% coverage on all 13 seasons. The ridge
- * gave it a coefficient of +0.005 on offence and -0.003 on defence — rank 22 of
+ * gave it a coefficient of +0.005 on offense and -0.003 on defense — rank 22 of
  * 23 features, indistinguishable from zero — and the board did not move. Top-50
  * high-major stayed 40/50, the lean era's top 25 stayed 16/25, Rafferty stayed
  * 12th.
@@ -133,8 +133,8 @@ function loadTeamRatings(year) {
 
 /**
  * Schedule strength by team-season, from team-adjusted-ratings.json — one file
- * keyed "<Team>|<Year>", covering 2014-2026. o_sos is the average offence
- * faced, d_sos the average defence faced, both on the raw 100-possession scale.
+ * keyed "<Team>|<Year>", covering 2014-2026. o_sos is the average offense
+ * faced, d_sos the average defense faced, both on the raw 100-possession scale.
  *
  * Read once and indexed by normalized name + year, matching loadTeamRatings so
  * a team that joins in one place joins in the other.
@@ -278,7 +278,7 @@ const CBBD_FEATURES = [
   // CBBD's own per-game efficiency, minutes/possession weighted
   "c_ortg", "c_drtg", "c_usg", "c_efg", "c_ts", "c_ftr", "c_orb", "c_ato",
   "fouls40", "gs40", "gs40_sd", "start_pct",
-  // shot diet — where the offence actually comes from
+  // shot diet — where the offense actually comes from
   "dunk_rate", "layup_rate", "tip_rate", "rim_rate", "mid_rate", "tp_rate",
   "rim_pct", "mid_pct",
   // self-creation — the share he generated himself, overall and by zone

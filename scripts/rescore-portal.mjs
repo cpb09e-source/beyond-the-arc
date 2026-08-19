@@ -209,7 +209,7 @@ function epmForYear(year) {
  * PIR is the box-score composite — points + rebounds + assists + steals +
  * blocks, minus missed shots — and unlike EPM it carries NO opponent
  * adjustment at all. A 20-PIR season in the Sun Belt and a 20-PIR season in the
- * SEC are the same number against wildly different defences, which is exactly
+ * SEC are the same number against wildly different defenses, which is exactly
  * the case for tiering it and exactly why EPM is NOT tiered anywhere in this
  * file: the adjustment is already inside EPM, and applying it twice would
  * double-count level of competition.
@@ -351,7 +351,7 @@ const ONOFF_FLOOR = -25;
  * Ten percent off the Rating of anyone whose last season was outside the ACC,
  * Big Ten, Big 12, SEC or Big East. It is a second conference adjustment on top
  * of the one already inside the PIR term, and the two do different jobs: the
- * PIR tier grades a box-score line against the defences that allowed it, and
+ * PIR tier grades a box-score line against the defenses that allowed it, and
  * touches roughly 40% of the Rating's magnitude; this one discounts the whole
  * number, EPM and eWins included, on the view that a mid-major season is a
  * weaker read on a player full stop.

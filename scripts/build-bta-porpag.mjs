@@ -19,7 +19,7 @@
  *
  * The opponent term is the "adjusted" part and is where this can beat a
  * season-average adjustment: we know the opponent on every single game, so a
- * line against the best defence in the country is credited as such on the day
+ * line against the best defense in the country is credited as such on the day
  * it happened.
  *
  * REPLACEMENT LEVEL is the 20th percentile of SEASON offensive ratings among

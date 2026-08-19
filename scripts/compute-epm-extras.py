@@ -48,7 +48,7 @@ def main():
     # Deviation from a team's own season rate is treated as luck; the rate
     # itself is treated as skill. A team that shoots 40% all year keeps the
     # credit — only the game-to-game wobble around 40% comes out. The shooting
-    # team's baseline is used on both ends, so a defence is not rewarded for
+    # team's baseline is used on both ends, so a defense is not rewarded for
     # opponents happening to go cold either.
     #
     # This is the "L" in LEBRON (Luck-adjusted player Estimate using a Box prior
