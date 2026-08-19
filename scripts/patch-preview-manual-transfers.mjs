@@ -89,6 +89,7 @@ const MOVES = [
   ["Reed Bailey", "St. John's"],
   ["Braxton Stacker", "UNC Greensboro"],
   ["Jordan Pope", "Texas A&M"],
+  ["Kenny Noland", "Michigan"],
 ];
 
 /** Common shorthand → the name season-preview.json uses. */

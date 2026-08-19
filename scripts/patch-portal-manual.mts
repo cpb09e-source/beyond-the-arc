@@ -105,6 +105,7 @@ const BATCHES: Array<{ confirmed: string; moves: Array<[string, string]> }> = [
       ["Reed Bailey", "St. John's"],
       ["Braxton Stacker", "UNC Greensboro"],
       ["Jordan Pope", "Texas A&M"],
+      ["Kenny Noland", "Michigan"],
     ],
   },
 ];
