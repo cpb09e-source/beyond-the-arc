@@ -46,8 +46,13 @@ const INDEX = path.join(DATA, "players-index.json");
 const DRY = process.argv.includes("--dry");
 
 /**
- * Confirmed by hand 2026-08-17. Destination is written the way we name teams;
- * the shorthand a human types ("UNC", "Cincy") is mapped in DEST_ALIAS below.
+ * Confirmed by hand, in the order the batches were added — 22 on 2026-08-17,
+ * three on 2026-08-18, two on 2026-08-19. Keep in step with the BATCHES list in
+ * patch-portal-manual.mts: a move added to one and not the other leaves the
+ * portal table and the team pages disagreeing about where the player is.
+ *
+ * Destination is written the way we name teams; the shorthand a human types
+ * ("UNC", "Cincy") is mapped in DEST_ALIAS below.
  */
 const MOVES = [
   ["BJ Edwards", "Oklahoma"],
@@ -72,6 +77,17 @@ const MOVES = [
   ["Jamichael Stillwell", "Texas Tech"],
   ["Tavari Johnson", "Charleston"],
   ["Chauncey Wiggins", "Gonzaga"],
+  // 2026-08-18 — these three were added to patch-portal-manual.mts and written
+  // into portal.json without being added here, so the portal knew about the
+  // move and the team pages did not: AJ Storr was still listed on Mississippi,
+  // and Payne and King were on no roster at all. The two lists have to be
+  // edited together.
+  ["AJ Storr", "UNLV"],
+  ["Stephon Payne", "New Mexico St."],
+  ["Fredrick King", "Creighton"],
+  // 2026-08-19
+  ["Reed Bailey", "St. John's"],
+  ["Braxton Stacker", "UNC Greensboro"],
 ];
 
 /** Common shorthand → the name season-preview.json uses. */

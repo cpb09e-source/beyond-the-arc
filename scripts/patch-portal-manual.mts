@@ -53,35 +53,64 @@ const OUT = path.resolve("public/data");
 const PORTAL = path.join(OUT, "portal.json");
 const DRY = process.argv.includes("--dry");
 
-/** Confirmed by hand 2026-08-17 — same list as patch-preview-manual-transfers.mjs. */
-const CONFIRMED_AT = "2026-08-17T00:00:00";
-const MOVES: Array<[string, string]> = [
-  ["BJ Edwards", "Oklahoma"],
-  ["Kaleb Banks", "Tulsa"],
-  ["Skyy Clark", "LSU"],
-  ["Brody Robinson", "Creighton"],
-  ["Seth Trimble", "Louisville"],
-  ["Javon Bennett", "Gonzaga"],
-  ["Amarri Monroe", "Syracuse"],
-  ["Chendall Weaver", "Houston"],
-  ["Cameron Fens", "North Carolina"],
-  ["Jalen Washington", "Tennessee"],
-  ["L.J. Cason", "Miami FL"],
-  ["RJ Godfrey", "Arizona"],
-  ["MJ Collins Jr.", "Cincinnati"],
-  ["Jahki Howard", "LIU"],
-  ["Curtis Williams Jr.", "High Point"],
-  ["Daquan Davis", "LIU"],
-  ["Chris Johnson", "Oregon St."],
-  ["Skylar Wicks", "Gonzaga"],
-  ["Malique Ewin", "Oregon"],
-  ["Jamichael Stillwell", "Texas Tech"],
-  ["Tavari Johnson", "Charleston"],
-  ["Chauncey Wiggins", "Gonzaga"],
-  ["AJ Storr", "UNLV"],
-  ["Stephon Payne", "New Mexico St."],
-  ["Fredrick King", "Creighton"],
+/**
+ * Hand-confirmed moves, in dated batches — the same list as
+ * patch-preview-manual-transfers.mjs, which must be kept in step with it.
+ *
+ * BATCHED BY DATE, not pooled, because date_entered is what the portal table's
+ * default sort orders on. A move confirmed today but stamped with the first
+ * batch's date sorts as though it had been known for days, which is the one
+ * thing that field is read for. Add new moves as a NEW batch; never append to
+ * an older one.
+ */
+const BATCHES: Array<{ confirmed: string; moves: Array<[string, string]> }> = [
+  {
+    confirmed: "2026-08-17T00:00:00",
+    moves: [
+      ["BJ Edwards", "Oklahoma"],
+      ["Kaleb Banks", "Tulsa"],
+      ["Skyy Clark", "LSU"],
+      ["Brody Robinson", "Creighton"],
+      ["Seth Trimble", "Louisville"],
+      ["Javon Bennett", "Gonzaga"],
+      ["Amarri Monroe", "Syracuse"],
+      ["Chendall Weaver", "Houston"],
+      ["Cameron Fens", "North Carolina"],
+      ["Jalen Washington", "Tennessee"],
+      ["L.J. Cason", "Miami FL"],
+      ["RJ Godfrey", "Arizona"],
+      ["MJ Collins Jr.", "Cincinnati"],
+      ["Jahki Howard", "LIU"],
+      ["Curtis Williams Jr.", "High Point"],
+      ["Daquan Davis", "LIU"],
+      ["Chris Johnson", "Oregon St."],
+      ["Skylar Wicks", "Gonzaga"],
+      ["Malique Ewin", "Oregon"],
+      ["Jamichael Stillwell", "Texas Tech"],
+      ["Tavari Johnson", "Charleston"],
+      ["Chauncey Wiggins", "Gonzaga"],
+    ],
+  },
+  {
+    confirmed: "2026-08-18T00:00:00",
+    moves: [
+      ["AJ Storr", "UNLV"],
+      ["Stephon Payne", "New Mexico St."],
+      ["Fredrick King", "Creighton"],
+    ],
+  },
+  {
+    confirmed: "2026-08-19T00:00:00",
+    moves: [
+      ["Reed Bailey", "St. John's"],
+      ["Braxton Stacker", "UNC Greensboro"],
+    ],
+  },
 ];
+
+const MOVES: Array<[string, string, string]> = BATCHES.flatMap(
+  (b) => b.moves.map(([name, dest]) => [name, dest, b.confirmed] as [string, string, string]),
+);
 
 const YEARS = Array.from({ length: 14 }, (_, i) => 2013 + i);
 
@@ -236,7 +265,7 @@ async function main() {
   let added = 0, fixed = 0, already = 0;
   const lines: string[] = [];
 
-  for (const [name, destRaw] of MOVES) {
+  for (const [name, destRaw, confirmedAt] of MOVES) {
     const team_to = overrideTeamName(destRaw) ?? destRaw;
     const existing = byKey.get(nameKey(name));
 
@@ -244,6 +273,14 @@ async function main() {
       const fixes: string[] = [];
       if (existing.team_to !== team_to) { existing.team_to = team_to; existing.conf_to = confFor(team_to); fixes.push(`team_to → ${team_to}`); }
       if (existing.status !== "Transferred") { existing.status = "Transferred"; fixes.push("status → Transferred"); }
+      // A manual row appended to an older batch carries that batch's date, so
+      // it sorts as older news than it is. Only ever correct rows this script
+      // wrote — an On3 row's date is the feed's to state, not ours.
+      if (existing.source === "manual" && existing.date_entered !== confirmedAt) {
+        existing.date_entered = confirmedAt;
+        existing.date_updated = confirmedAt;
+        fixes.push(`confirmed → ${confirmedAt.slice(0, 10)}`);
+      }
       if (fixes.length) { fixed++; lines.push(`~ ${name.padEnd(21)} ${fixes.join(", ")}`); }
       else { already++; lines.push(`· ${name.padEnd(21)} already correct (${existing.team_to}, rating ${existing.rating})`); }
       continue;
@@ -264,8 +301,8 @@ async function main() {
       division: isD1(team_from) ? 1 : null,
       division_from: isD1(team_from) ? 1 : 2,
       division_to: isD1(team_to) ? 1 : 2,
-      date_entered: CONFIRMED_AT,
-      date_updated: CONFIRMED_AT,
+      date_entered: confirmedAt,
+      date_updated: confirmedAt,
       team_from,
       conf_from: confFor(team_from),
       team_to,
