@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
-import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayerIds, readImpactExtrasForYear } from "@/lib/static-data";
+import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayerIds, readImpactExtrasForYear, readNbaDraftee } from "@/lib/static-data";
+import { nbaTeamName, draftRound, ordinal } from "@/lib/nba-draftees";
 import { PlayerPhoto } from "@/components/player-photo";
 import { CareerTable } from "@/components/players/career-table";
 import { PlayerOverview, type PlayerOverviewOption } from "@/components/players/player-overview";
@@ -175,36 +176,104 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   };
 
   /**
-   * Shooting + impact for the hero's own season.
+   * One derived line per season, plus the career aggregate.
    *
-   * The rates are derived from the raw MADE/ATTEMPTED counts rather than read
-   * from Bart's pre-computed columns, for the same reason CareerTable does it:
-   * there is no combined-FG column, only 2P and 3P, so FG% and eFG% have to be
-   * built from the parts — and building all four the same way means the hero
-   * and the career row below it can never disagree about a player's season.
+   * Rates are built from the raw MADE/ATTEMPTED counts, not from Bart's
+   * precomputed rate columns, for two reasons. There is no combined-FG column —
+   * only 2P and 3P — so FG% and eFG% have to be assembled from parts anyway.
+   * And a career rate is only correct as total-makes over total-attempts: the
+   * average of four seasons' percentages is not the career percentage unless
+   * every season had identical attempts, which is never true.
    */
-  const ftPct = fromStart(row, 15);
-  const fg2Made = fromStart(row, 16);
-  const fg2Att = fromStart(row, 17);
-  const fg3Made = fromStart(row, 19);
-  const fg3Att = fromStart(row, 20);
-  const fgMade = fg2Made !== null && fg3Made !== null ? fg2Made + fg3Made : null;
-  const fgAtt = fg2Att !== null && fg3Att !== null ? fg2Att + fg3Att : null;
-  const shooting = {
-    fg: fgMade !== null && fgAtt ? fgMade / fgAtt : null,
-    fg3: fg3Made !== null && fg3Att ? fg3Made / fg3Att : null,
-    ft: ftPct,
-    // (FGM + 0.5 × 3PM) / FGA — a three counts for one and a half twos.
-    efg: fgMade !== null && fg3Made !== null && fgAtt ? (fgMade + 0.5 * fg3Made) / fgAtt : null,
-  };
+  const epmByYear = new Map<number, number>();
+  for (const r of ranks?.seasonRanks ?? []) {
+    const v = r.stats?.epm?.value;
+    if (typeof v === "number") epmByYear.set(r.year, v);
+  }
+  // on/off is a lineup quantity, so it lives only in epm-<year>.json. One read
+  // per season, memoized across the ~15,700 pages this route generates.
+  const onOffByYear = new Map<number, number>();
+  for (const season of player.seasons) {
+    const extras = await readImpactExtrasForYear(season.year);
+    const v = extras.get(bartId)?.on_off;
+    if (typeof v === "number") onOffByYear.set(season.year, v);
+  }
 
-  // EPM rides the rank file the rings already use. On/off lives only in
-  // epm-<year>.json (it is a lineup quantity, not a box one), and that read is
-  // memoized per year — see readImpactExtrasForYear.
-  const heroEpm = heroRanks?.stats?.epm?.value ?? null;
-  const heroOnOff = heroRanks
-    ? (await readImpactExtrasForYear(heroRanks.year)).get(bartId)?.on_off ?? null
-    : null;
+  const lines = player.seasons.map((season) => {
+    const r = season.raw_row;
+    const g = season.games ?? 0;
+    const ftm = fromStart(r, 13), fta = fromStart(r, 14);
+    const fg2m = fromStart(r, 16), fg2a = fromStart(r, 17);
+    const fg3m = fromStart(r, 19), fg3a = fromStart(r, 20);
+    const mpg = fromStart(r, 54);
+    return {
+      year: season.year,
+      g,
+      min: mpg !== null ? mpg * g : 0,
+      // Bart's per-game rates × games recovers the season total, which is what
+      // a career line has to sum. He carries no season point total.
+      pts: (fromEnd(r, 3) ?? 0) * g,
+      reb: (fromEnd(r, 7) ?? 0) * g,
+      ast: (fromEnd(r, 6) ?? 0) * g,
+      ftm: ftm ?? 0, fta: fta ?? 0,
+      fgm: (fg2m ?? 0) + (fg3m ?? 0),
+      fga: (fg2a ?? 0) + (fg3a ?? 0),
+      fg3m: fg3m ?? 0, fg3a: fg3a ?? 0,
+      epm: epmByYear.get(season.year) ?? null,
+      onOff: onOffByYear.get(season.year) ?? null,
+    };
+  });
+
+  type Totals = (typeof lines)[number];
+  /** A summary row: per-game rates and shooting percentages over a set of seasons. */
+  function summarize(rows: Totals[]) {
+    const g = rows.reduce((n, r) => n + r.g, 0);
+    const min = rows.reduce((n, r) => n + r.min, 0);
+    const sum = (k: "pts" | "reb" | "ast" | "ftm" | "fta" | "fgm" | "fga" | "fg3m" | "fg3a") =>
+      rows.reduce((n, r) => n + r[k], 0);
+    const fgm = sum("fgm"), fga = sum("fga"), fg3m = sum("fg3m");
+    /**
+     * EPM and on/off are per-100 RATES, so a career figure is the
+     * minutes-weighted mean of the seasons that HAVE one — not a plain average,
+     * which would let a 6-minute freshman year pull as hard as a 34-minute
+     * senior year. Seasons without the stat are excluded from both the numerator
+     * and the weight rather than counted as zero.
+     */
+    const weighted = (k: "epm" | "onOff") => {
+      const have = rows.filter((r) => r[k] !== null && r.min > 0);
+      if (!have.length) return null;
+      const w = have.reduce((n, r) => n + r.min, 0);
+      return w > 0 ? have.reduce((n, r) => n + (r[k] as number) * r.min, 0) / w : null;
+    };
+    return {
+      g,
+      pts: g ? sum("pts") / g : null,
+      reb: g ? sum("reb") / g : null,
+      ast: g ? sum("ast") / g : null,
+      fg: fga ? fgm / fga : null,
+      fg3: sum("fg3a") ? fg3m / sum("fg3a") : null,
+      ft: sum("fta") ? sum("ftm") / sum("fta") : null,
+      efg: fga ? (fgm + 0.5 * fg3m) / fga : null,
+      epm: weighted("epm"),
+      onOff: weighted("onOff"),
+      min,
+    };
+  }
+
+  const currentLine = summarize(lines.filter((l) => l.year === current.year));
+  const careerLine = summarize(lines);
+  const multiSeason = player.seasons.length > 1;
+
+  /**
+   * NBA draft record, matched on name.
+   *
+   * A drafted player has left college, so this SUPERSEDES the transfer banner
+   * rather than stacking with it: a portal entry from an earlier cycle is stale
+   * the moment a player is drafted, and showing both would have him arriving at
+   * a new school and going to the NBA in the same breath.
+   */
+  const draft = await readNbaDraftee(stats.name);
+  const draftTeam = draft && draft.pick !== null ? nbaTeamName(draft.team, draft.year) : null;
 
   return (
     // pb-20 lives on the wrapper rather than on the last section: which section
@@ -224,9 +293,14 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         <div className="bg-[color-mix(in_oklab,var(--card)_55%,var(--paper-deep))] border-y sm:border border-ink/10 sm:rounded-xl shadow-md overflow-hidden ring-0 sm:ring-1 ring-ink/5 grid grid-cols-1 md:grid-cols-[17rem_minmax(0,1fr)]">
           {/* Vitals column */}
           <div className="relative bg-paper-deep border-b md:border-b-0 md:border-r border-hairline px-6 py-6 flex flex-col items-center gap-5">
-            <span className="absolute top-3 right-4 text-[0.55rem] uppercase tracking-[0.2em] text-ink-muted font-bold tabular">
-              {seasonLabel(current.year)}
-            </span>
+            {/* The season eyebrow lives here, with the photo it labels, rather
+                than over the name — the vitals in this column are all "as of
+                this season", so it captions the column it belongs to. It also
+                replaces a bare corner-set year that said the same thing twice. */}
+            <div className="flex items-center gap-2.5 text-[0.55rem] uppercase tracking-[0.18em] text-coral font-bold self-start">
+              <span className="h-px w-5 bg-coral" />
+              <span>Player · {seasonLabel(current.year)}</span>
+            </div>
             <PlayerPhoto bartPlayerId={bartId} name={stats.name ?? `Player ${bartId}`} size={132} />
             <dl className="w-full text-xs">
               <VitalRow label="Team">
@@ -248,10 +322,6 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
           <div className="px-6 sm:px-8 lg:px-10 py-7 sm:py-8 flex flex-col justify-center min-w-0">
             <div className="flex items-start justify-between gap-6">
               <div className="min-w-0">
-                <div className="flex items-center gap-3 text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-2.5">
-                  <span className="h-px w-6 bg-coral" />
-                  <span>Player · {seasonLabel(current.year)}</span>
-                </div>
                 <h1 className="font-display text-3xl sm:text-5xl lg:text-6xl tracking-tight text-ink leading-[1.05] sm:leading-none break-words">
                   {stats.name ?? `Player ${bartId}`}
                 </h1>
@@ -266,8 +336,25 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
               )}
             </div>
 
-            {/* Transferred-to banner — shown when a portal commit exists. */}
-            {transfer && (
+            {/* Drafted banner. Reads the way the draft is spoken — franchise,
+                round, pick, year — rather than as a bare code and number. */}
+            {draft && draft.pick !== null && (
+              <div className="mt-3 inline-flex self-start items-center gap-2 sm:gap-3 px-3 py-1.5 rounded-md bg-court/15 border border-court/40">
+                <span className="text-[0.6rem] uppercase tracking-widest text-court-ink font-bold whitespace-nowrap">
+                  Drafted
+                </span>
+                <span className="text-ink font-medium truncate">
+                  {draftTeam ?? draft.team}
+                </span>
+                <span className="text-ink-muted text-sm whitespace-nowrap">
+                  Round {draftRound(draft.pick)} · {ordinal(draft.pick)} pick · {draft.year}
+                </span>
+              </div>
+            )}
+
+            {/* Transferred-to banner — shown when a portal commit exists, and
+                only for a player the draft has not already taken. */}
+            {!draft && transfer && (
               <div className="mt-3 inline-flex self-start items-center gap-2 sm:gap-3 px-3 py-1.5 rounded-md bg-coral/10 border border-coral/30">
                 <span className="text-[0.6rem] uppercase tracking-widest text-coral font-bold whitespace-nowrap">
                   Transfer →
@@ -281,35 +368,35 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
               </div>
             )}
 
-            {/* The season line, in three groups.
-                Per game shrank to make room: it used to run at text-4xl as the
-                only numbers here, which is a lot of size to spend on five stats
-                a reader has to leave the page to put in context. Shooting and
-                impact next to them is the context — and the three groups are
-                ruled apart rather than merged into one long row so the eye can
-                tell a rate from a per-game figure without reading the label. */}
-            <div className="mt-6 sm:mt-7 pt-5 border-t border-hairline flex flex-wrap gap-x-8 sm:gap-x-10 gap-y-5">
-              <StatGroup label="Per game">
-                <HeroStat label="PTS" value={fmtNum(stats.pts, 1)} />
-                <HeroStat label="REB" value={fmtNum(stats.reb, 1)} />
-                <HeroStat label="AST" value={fmtNum(stats.ast, 1)} />
-                <HeroStat label="STL" value={fmtNum(stats.stl, 1)} />
-                <HeroStat label="BLK" value={fmtNum(stats.blk, 1)} />
-              </StatGroup>
-
-              <StatGroup label="Shooting">
-                <HeroStat label="FG%"  value={fmtPct(shooting.fg)} />
-                <HeroStat label="3P%"  value={fmtPct(shooting.fg3)} />
-                <HeroStat label="FT%"  value={fmtPct(shooting.ft)} />
-                <HeroStat label="eFG%" value={fmtPct(shooting.efg)} />
-              </StatGroup>
-
-              {(heroEpm !== null || heroOnOff !== null) && (
-                <StatGroup label="Impact">
-                  <HeroStat label="EPM"    value={fmtSigned(heroEpm)} />
-                  <HeroStat label="On/Off" value={fmtSigned(heroOnOff)} />
-                </StatGroup>
-              )}
+            {/* Summary table — the season, then the career, on the same
+                columns. Two lines is the whole point: a rate means little
+                until you can see it against the player's own baseline, and
+                putting them one above the other makes that a glance rather
+                than a scroll to the career ledger below. A single-season
+                player gets one row, because a career line identical to the
+                season above it is noise. */}
+            <div className="mt-6 sm:mt-7 pt-5 border-t border-hairline overflow-x-auto overscroll-x-contain">
+              <table className="w-full min-w-[40rem] border-separate border-spacing-0 text-right">
+                <thead>
+                  <tr>
+                    <SumTh className="text-left w-24">Summary</SumTh>
+                    <SumTh>G</SumTh>
+                    <SumTh>PTS</SumTh>
+                    <SumTh>REB</SumTh>
+                    <SumTh>AST</SumTh>
+                    <SumTh divide>FG%</SumTh>
+                    <SumTh>3P%</SumTh>
+                    <SumTh>FT%</SumTh>
+                    <SumTh>eFG%</SumTh>
+                    <SumTh divide>EPM</SumTh>
+                    <SumTh>On/Off</SumTh>
+                  </tr>
+                </thead>
+                <tbody>
+                  <SummaryRow label={seasonLabel(current.year)} line={currentLine} lead />
+                  {multiSeason && <SummaryRow label="Career" line={careerLine} />}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -377,44 +464,77 @@ function VitalRow({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
-/**
- * A captioned cluster of hero stats — per game, shooting, impact.
- *
- * The caption sits above the row rather than beside it so the groups keep a
- * shared baseline: an inline caption makes each group a different height and
- * the numbers stop lining up across the strip.
- */
-function StatGroup({ label, children }: { label: string; children: React.ReactNode }) {
+/** Header cell for the hero summary table. `divide` opens a new stat group. */
+function SumTh({ children, className, divide }: { children: React.ReactNode; className?: string; divide?: boolean }) {
   return (
-    <div className="min-w-0">
-      <div className="text-[0.55rem] uppercase tracking-[0.2em] text-ink-muted font-semibold mb-2.5">{label}</div>
-      <div className="flex items-end gap-x-5 sm:gap-x-6 gap-y-4 flex-wrap">{children}</div>
-    </div>
+    <th
+      scope="col"
+      className={cn(
+        "pb-2 text-[0.55rem] uppercase tracking-[0.16em] text-ink-muted font-semibold whitespace-nowrap",
+        // The rule sits on the cell rather than between groups as a spacer
+        // column, so the columns stay on one grid and the header aligns with
+        // the numbers under it.
+        divide && "border-l border-hairline pl-4",
+        !divide && "pl-3",
+        className,
+      )}
+    >
+      {children}
+    </th>
   );
 }
 
 /**
- * One number in the hero strip.
+ * One line of the hero summary — a season, or the career.
  *
- * Points used to take a `lead` treatment: coral, and a clamp running to 3.5rem
- * against the 2.25rem everything else got. Two problems, one of them invisible
- * until you look for it. The colour made it read as a different KIND of number
- * rather than as the same stat with more weight, and the extra size broke the
- * row: the flex line aligns on `items-end`, so the taller box pushed its digits
- * up off the shared baseline and Points floated above its own neighbours.
- *
- * Every figure here is the same size and the same ink, so the baseline is a
- * baseline and the groups can sit alongside each other.
+ * `lead` marks the current season: it carries the ink and the weight, and the
+ * career line sits a step back in both, so the eye lands on the season being
+ * shown and reads the career as its context rather than as a competing row.
  */
-function HeroStat({ label, value }: { label: string; value: string }) {
+function SummaryRow({
+  label, line, lead = false,
+}: {
+  label: string;
+  lead?: boolean;
+  line: {
+    g: number; pts: number | null; reb: number | null; ast: number | null;
+    fg: number | null; fg3: number | null; ft: number | null; efg: number | null;
+    epm: number | null; onOff: number | null;
+  };
+}) {
+  const tone = lead ? "text-ink" : "text-ink-soft";
   return (
-    <div>
-      <div className="font-display tabular leading-none tracking-[-0.03em] text-ink text-xl sm:text-2xl">
-        {value}
-      </div>
-      <div className="mt-1.5 text-[0.5rem] sm:text-[0.55rem] uppercase tracking-[0.16em] text-ink-muted font-medium">
+    <tr>
+      <th scope="row" className={cn("py-1.5 text-left text-xs sm:text-sm font-semibold whitespace-nowrap", lead ? "text-ink" : "text-ink-muted")}>
         {label}
-      </div>
-    </div>
+      </th>
+      <SumTd tone={tone} lead={lead}>{line.g || "—"}</SumTd>
+      <SumTd tone={tone} lead={lead}>{fmtNum(line.pts, 1)}</SumTd>
+      <SumTd tone={tone} lead={lead}>{fmtNum(line.reb, 1)}</SumTd>
+      <SumTd tone={tone} lead={lead}>{fmtNum(line.ast, 1)}</SumTd>
+      <SumTd tone={tone} lead={lead} divide>{fmtPct(line.fg)}</SumTd>
+      <SumTd tone={tone} lead={lead}>{fmtPct(line.fg3)}</SumTd>
+      <SumTd tone={tone} lead={lead}>{fmtPct(line.ft)}</SumTd>
+      <SumTd tone={tone} lead={lead}>{fmtPct(line.efg)}</SumTd>
+      <SumTd tone={tone} lead={lead} divide>{fmtSigned(line.epm)}</SumTd>
+      <SumTd tone={tone} lead={lead}>{fmtSigned(line.onOff)}</SumTd>
+    </tr>
+  );
+}
+
+function SumTd({
+  children, tone, lead, divide,
+}: { children: React.ReactNode; tone: string; lead: boolean; divide?: boolean }) {
+  return (
+    <td
+      className={cn(
+        "py-1.5 font-display tabular tracking-[-0.02em] whitespace-nowrap",
+        lead ? "text-lg sm:text-xl" : "text-sm sm:text-base",
+        tone,
+        divide ? "border-l border-hairline pl-4" : "pl-3",
+      )}
+    >
+      {children}
+    </td>
   );
 }

@@ -274,6 +274,7 @@ export function CareerTable({
                 </tr>
               );
             })}
+            {seasons.length > 1 && <CareerRow seasons={seasons} isTotals={isTotals} />}
           </tbody>
         </table>
       </div>
@@ -316,4 +317,77 @@ function Td({
 // no longer hides anything.
 function hideClass(_hideUntil?: "sm" | "md" | "lg"): string {
   return "";
+}
+
+
+/**
+ * The career line, under the seasons it sums.
+ *
+ * EVERY RATE IS TOTALS OVER TOTALS, never a mean of the season rates. A player
+ * who shot 3-for-4 as a freshman and 300-for-700 as a senior did not shoot 59%
+ * for his career, which is what averaging the two percentages claims; he shot
+ * 43%. The same applies to per-game figures, which are weighted by games here
+ * rather than averaged across seasons of wildly different length.
+ *
+ * Totals mode sums the counts instead, so the row means the same thing the
+ * rows above it mean in whichever mode the table is in.
+ */
+function CareerRow({ seasons, isTotals }: { seasons: Season[]; isTotals: boolean }) {
+  let g = 0, gs = 0, min = 0, pts = 0, reb = 0, orb = 0, ast = 0, stl = 0, blk = 0, tov = 0;
+  let ftm = 0, fta = 0, fgm = 0, fga = 0, fg3m = 0, fg3a = 0;
+  let sawGs = false, sawTov = false;
+
+  for (const s of seasons) {
+    const r = s.raw_row;
+    const n = s.games ?? 0;
+    g += n;
+    min += (fromStart(r, 54) ?? 0) * n;
+    pts += (fromEnd(r, 3) ?? 0) * n;
+    blk += (fromEnd(r, 4) ?? 0) * n;
+    stl += (fromEnd(r, 5) ?? 0) * n;
+    ast += (fromEnd(r, 6) ?? 0) * n;
+    reb += (fromEnd(r, 7) ?? 0) * n;
+    orb += (fromEnd(r, 9) ?? 0) * n;
+    ftm += fromStart(r, 13) ?? 0;
+    fta += fromStart(r, 14) ?? 0;
+    fgm += (fromStart(r, 16) ?? 0) + (fromStart(r, 19) ?? 0);
+    fga += (fromStart(r, 17) ?? 0) + (fromStart(r, 20) ?? 0);
+    fg3m += fromStart(r, 19) ?? 0;
+    fg3a += fromStart(r, 20) ?? 0;
+    const adv = s.advanced_stats;
+    if (adv?.gs != null) { gs += adv.gs; sawGs = true; }
+    if (adv?.tov != null) { tov += adv.tov; sawTov = true; }
+  }
+
+  const perG = (total: number) => (g ? total / g : null);
+  const rate = (made: number, att: number) => (att ? made / att : null);
+  // A count column reads as the career total in totals mode and the career
+  // per-game in per-game mode — the same rule the season rows follow.
+  const count = (total: number) => (isTotals ? fmtInt(total) : fmtNum(perG(total), 1));
+
+  return (
+    <tr className="border-t-2 border-ink/15 bg-paper-deep/40 font-medium">
+      <Td className="font-semibold text-ink">Career</Td>
+      <Td className="text-ink-muted">—</Td>
+      <Td className="text-ink-muted" hideUntil="sm">—</Td>
+      <Td align="right" className="tabular">{g || "—"}</Td>
+      <Td align="right" className="tabular">{sawGs ? fmtInt(gs) : "—"}</Td>
+      <Td align="right" className="tabular">{isTotals ? fmtInt(min) : fmtNum(perG(min), 1)}</Td>
+      <Td align="right" className="tabular" hideUntil="md">{count(fgm)}</Td>
+      <Td align="right" className="tabular" hideUntil="md">{count(fga)}</Td>
+      <Td align="right" className="tabular" hideUntil="sm">{fmtPctDecimal(rate(fgm, fga))}</Td>
+      <Td align="right" className="tabular" hideUntil="md">{count(fg3m)}</Td>
+      <Td align="right" className="tabular" hideUntil="md">{count(fg3a)}</Td>
+      <Td align="right" className="tabular" hideUntil="sm">{fmtPctDecimal(rate(fg3m, fg3a))}</Td>
+      <Td align="right" className="tabular" hideUntil="md">{count(fta)}</Td>
+      <Td align="right" className="tabular" hideUntil="md">{fmtPctDecimal(rate(ftm, fta))}</Td>
+      <Td align="right" className="tabular" hideUntil="lg">{count(orb)}</Td>
+      <Td align="right" className="tabular">{count(reb)}</Td>
+      <Td align="right" className="tabular" hideUntil="sm">{count(ast)}</Td>
+      <Td align="right" className="tabular" hideUntil="sm">{sawTov ? count(tov) : "—"}</Td>
+      <Td align="right" className="tabular" hideUntil="lg">{count(stl)}</Td>
+      <Td align="right" className="tabular" hideUntil="lg">{count(blk)}</Td>
+      <Td align="right" className="tabular font-semibold text-ink">{count(pts)}</Td>
+    </tr>
+  );
 }

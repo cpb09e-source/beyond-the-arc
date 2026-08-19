@@ -278,6 +278,34 @@ export async function readImpactExtrasForYear(
 }
 
 /**
+ * NBA draft record for a college player, by name.
+ *
+ * Memoized for the same reason readImpactExtrasForYear is: the player page is
+ * generated ~15,700 times and this file would otherwise be read and parsed once
+ * per page. Keyed on the same normalized name the client-side pill uses, so the
+ * hero and the roster pill can never disagree about who was drafted.
+ */
+export type NbaDraftRecord = { year: number; pick: number | null; team: string | null; college: string | null };
+
+let _drafteesCache: Record<string, NbaDraftRecord> | null = null;
+
+export async function readNbaDraftee(name: string | null): Promise<NbaDraftRecord | null> {
+  if (!name) return null;
+  if (!_drafteesCache) {
+    _drafteesCache = await readJson<Record<string, NbaDraftRecord>>("nba-draftees.json").catch(() => ({}));
+  }
+  const key = name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\s+(jr|sr|ii|iii|iv|v)$/i, "");
+  return _drafteesCache[key] ?? null;
+}
+
+/**
  * One transfer-portal entry for a specific player. Surface this on the
  * player profile hero when the player has committed elsewhere — we strike
  * through their current school and show the new destination.
