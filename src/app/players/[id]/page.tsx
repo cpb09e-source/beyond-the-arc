@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
-import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayerIds } from "@/lib/static-data";
+import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayerIds, readImpactExtrasForYear } from "@/lib/static-data";
 import { PlayerPhoto } from "@/components/player-photo";
 import { CareerTable } from "@/components/players/career-table";
 import { PlayerOverview, type PlayerOverviewOption } from "@/components/players/player-overview";
@@ -58,6 +58,19 @@ function fmtNum(x: number | null, digits = 1): string {
   if (x === null || x === undefined) return "—";
   return x.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
+/** 0..1 → "55.6%". Bart stores every rate as a decimal. The hero reads as a
+ *  scouting line rather than a box score, and a shooting line is spoken in
+ *  percent — the leading-dot form belongs in the career table, where a column
+ *  of them aligns on the decimal. */
+function fmtPct(x: number | null): string {
+  if (x === null || x === undefined || !Number.isFinite(x)) return "—";
+  return `${(x * 100).toFixed(1)}%`;
+}
+/** Signed, one decimal — for the impact numbers, where the sign IS the reading. */
+function fmtSigned(x: number | null): string {
+  if (x === null || x === undefined || !Number.isFinite(x)) return "—";
+  return `${x > 0 ? "+" : ""}${x.toFixed(1)}`;
+}
 function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
 }
@@ -80,6 +93,17 @@ const POSITION_BUCKET: Record<string, "G" | "F" | "C"> = {
 function fromEnd(row: Array<string | number | null> | null, offset: number): number | null {
   if (!row || row.length <= offset) return null;
   const v = row[row.length - 1 - offset];
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function fromStart(row: Array<string | number | null> | null, idx: number): number | null {
+  if (!row || row.length <= idx) return null;
+  const v = row[idx];
   if (typeof v === "number") return v;
   if (typeof v === "string") {
     const n = Number(v);
@@ -149,6 +173,38 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
     height: typeof row?.[26] === "string" ? row[26] : null,
     hometown: typeof row?.[33] === "string" ? row[33] : null,
   };
+
+  /**
+   * Shooting + impact for the hero's own season.
+   *
+   * The rates are derived from the raw MADE/ATTEMPTED counts rather than read
+   * from Bart's pre-computed columns, for the same reason CareerTable does it:
+   * there is no combined-FG column, only 2P and 3P, so FG% and eFG% have to be
+   * built from the parts — and building all four the same way means the hero
+   * and the career row below it can never disagree about a player's season.
+   */
+  const ftPct = fromStart(row, 15);
+  const fg2Made = fromStart(row, 16);
+  const fg2Att = fromStart(row, 17);
+  const fg3Made = fromStart(row, 19);
+  const fg3Att = fromStart(row, 20);
+  const fgMade = fg2Made !== null && fg3Made !== null ? fg2Made + fg3Made : null;
+  const fgAtt = fg2Att !== null && fg3Att !== null ? fg2Att + fg3Att : null;
+  const shooting = {
+    fg: fgMade !== null && fgAtt ? fgMade / fgAtt : null,
+    fg3: fg3Made !== null && fg3Att ? fg3Made / fg3Att : null,
+    ft: ftPct,
+    // (FGM + 0.5 × 3PM) / FGA — a three counts for one and a half twos.
+    efg: fgMade !== null && fg3Made !== null && fgAtt ? (fgMade + 0.5 * fg3Made) / fgAtt : null,
+  };
+
+  // EPM rides the rank file the rings already use. On/off lives only in
+  // epm-<year>.json (it is a lineup quantity, not a box one), and that read is
+  // memoized per year — see readImpactExtrasForYear.
+  const heroEpm = heroRanks?.stats?.epm?.value ?? null;
+  const heroOnOff = heroRanks
+    ? (await readImpactExtrasForYear(heroRanks.year)).get(bartId)?.on_off ?? null
+    : null;
 
   return (
     // pb-20 lives on the wrapper rather than on the last section: which section
@@ -225,15 +281,35 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
               </div>
             )}
 
-            <div className="mt-6 sm:mt-7 pt-5 border-t border-hairline">
-              <div className="text-[0.55rem] uppercase tracking-[0.2em] text-ink-muted font-semibold mb-3">Per game</div>
-              <div className="flex items-end gap-x-7 sm:gap-x-9 lg:gap-x-11 gap-y-5 flex-wrap">
-                <PerGameStat label="Points"   value={fmtNum(stats.pts, 1)} />
-                <PerGameStat label="Rebounds" value={fmtNum(stats.reb, 1)} />
-                <PerGameStat label="Assists"  value={fmtNum(stats.ast, 1)} />
-                <PerGameStat label="Steals"   value={fmtNum(stats.stl, 1)} />
-                <PerGameStat label="Blocks"   value={fmtNum(stats.blk, 1)} />
-              </div>
+            {/* The season line, in three groups.
+                Per game shrank to make room: it used to run at text-4xl as the
+                only numbers here, which is a lot of size to spend on five stats
+                a reader has to leave the page to put in context. Shooting and
+                impact next to them is the context — and the three groups are
+                ruled apart rather than merged into one long row so the eye can
+                tell a rate from a per-game figure without reading the label. */}
+            <div className="mt-6 sm:mt-7 pt-5 border-t border-hairline flex flex-wrap gap-x-8 sm:gap-x-10 gap-y-5">
+              <StatGroup label="Per game">
+                <HeroStat label="PTS" value={fmtNum(stats.pts, 1)} />
+                <HeroStat label="REB" value={fmtNum(stats.reb, 1)} />
+                <HeroStat label="AST" value={fmtNum(stats.ast, 1)} />
+                <HeroStat label="STL" value={fmtNum(stats.stl, 1)} />
+                <HeroStat label="BLK" value={fmtNum(stats.blk, 1)} />
+              </StatGroup>
+
+              <StatGroup label="Shooting">
+                <HeroStat label="FG%"  value={fmtPct(shooting.fg)} />
+                <HeroStat label="3P%"  value={fmtPct(shooting.fg3)} />
+                <HeroStat label="FT%"  value={fmtPct(shooting.ft)} />
+                <HeroStat label="eFG%" value={fmtPct(shooting.efg)} />
+              </StatGroup>
+
+              {(heroEpm !== null || heroOnOff !== null) && (
+                <StatGroup label="Impact">
+                  <HeroStat label="EPM"    value={fmtSigned(heroEpm)} />
+                  <HeroStat label="On/Off" value={fmtSigned(heroOnOff)} />
+                </StatGroup>
+              )}
             </div>
           </div>
         </div>
@@ -301,9 +377,24 @@ function VitalRow({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
-/** Per-game figure. `lead` marks points, which carries the accent + extra size. */
 /**
- * One number in the hero's per-game strip.
+ * A captioned cluster of hero stats — per game, shooting, impact.
+ *
+ * The caption sits above the row rather than beside it so the groups keep a
+ * shared baseline: an inline caption makes each group a different height and
+ * the numbers stop lining up across the strip.
+ */
+function StatGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[0.55rem] uppercase tracking-[0.2em] text-ink-muted font-semibold mb-2.5">{label}</div>
+      <div className="flex items-end gap-x-5 sm:gap-x-6 gap-y-4 flex-wrap">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * One number in the hero strip.
  *
  * Points used to take a `lead` treatment: coral, and a clamp running to 3.5rem
  * against the 2.25rem everything else got. Two problems, one of them invisible
@@ -312,15 +403,16 @@ function VitalRow({ label, children }: { label: string; children: React.ReactNod
  * row: the flex line aligns on `items-end`, so the taller box pushed its digits
  * up off the shared baseline and Points floated above its own neighbours.
  *
- * All five are the same size and the same ink now, so the baseline is a baseline.
+ * Every figure here is the same size and the same ink, so the baseline is a
+ * baseline and the groups can sit alongside each other.
  */
-function PerGameStat({ label, value }: { label: string; value: string }) {
+function HeroStat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="font-display tabular leading-none tracking-[-0.03em] text-ink text-2xl sm:text-3xl lg:text-4xl">
+      <div className="font-display tabular leading-none tracking-[-0.03em] text-ink text-xl sm:text-2xl">
         {value}
       </div>
-      <div className="mt-2 text-[0.55rem] sm:text-[0.6rem] uppercase tracking-[0.18em] text-ink-muted font-medium">
+      <div className="mt-1.5 text-[0.5rem] sm:text-[0.55rem] uppercase tracking-[0.16em] text-ink-muted font-medium">
         {label}
       </div>
     </div>

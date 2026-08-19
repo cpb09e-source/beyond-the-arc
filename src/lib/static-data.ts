@@ -251,9 +251,20 @@ export async function readImpactForYear(year: number): Promise<Map<number, numbe
  * here and renders as "—", which is the same thing the player-page Impact panel
  * does with these two.
  */
+/**
+ * Memoized per year. epm-<year>.json is ~280 KB and this is now read from the
+ * PLAYER page, which is generated ~15,700 times — re-reading and re-parsing it
+ * per page would add gigabytes of parsing to a build that already takes seven
+ * minutes. The file is static for the whole build, so one parse per year is
+ * the whole cost. Matches _rankedPlayerIdsCache below.
+ */
+const _impactExtrasCache = new Map<number, Map<number, { ewins: number | null; on_off: number | null }>>();
+
 export async function readImpactExtrasForYear(
   year: number,
 ): Promise<Map<number, { ewins: number | null; on_off: number | null }>> {
+  const cached = _impactExtrasCache.get(year);
+  if (cached) return cached;
   const out = new Map<number, { ewins: number | null; on_off: number | null }>();
   const real = await readJson<{
     players: Record<string, { ewins?: number | null; on_off?: number | null }>;
@@ -262,6 +273,7 @@ export async function readImpactExtrasForYear(
     const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : null);
     out.set(Number(bid), { ewins: num(v.ewins), on_off: num(v.on_off) });
   }
+  _impactExtrasCache.set(year, out);
   return out;
 }
 
