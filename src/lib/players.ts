@@ -329,7 +329,12 @@ export type PlayerListSpec = {
    */
   cols: string[];
   sortBy: "pir" | "bta_porpag" | "pts" | "reb" | "ast" | "fg_pct" | "fg3_pct" | "ts_pct" | "games" | "name"
-    | "epm" | "off_epm" | "def_epm" | "ewins" | "ppp" | "min" | "usage" | "orb" | "drb" | "tov" | "tov_pct" | "stl" | "blk" | "hkm";
+    | "epm" | "off_epm" | "def_epm" | "ewins" | "ppp" | "min" | "usage" | "orb" | "drb" | "tov" | "tov_pct" | "stl" | "blk" | "hkm"
+    // Stats that could be ADDED as a column but never sorted on. A pinned
+    // column with no entry here rendered as dead text, so the eight below use
+    // their PLAYER_STAT_COLUMNS key verbatim rather than inventing a second
+    // name for the same stat, which is what stranded the others.
+    | "on_off" | "box_epm" | "net_rtg" | "ast_tov" | "fg2_pct" | "ft_pct" | "efg_pct" | "fta_rate";
   sortDir: "asc" | "desc";
   limit: number;
 };
@@ -352,6 +357,7 @@ export const VALID_SORTS: PlayerListSpec["sortBy"][] = [
   "pir", "bta_porpag", "pts", "reb", "ast", "fg_pct", "fg3_pct",
   "ts_pct", "games", "name", "epm", "off_epm", "def_epm", "ewins", "ppp", "min", "usage",
   "orb", "drb", "tov", "tov_pct", "stl", "blk", "hkm",
+  "on_off", "box_epm", "net_rtg", "ast_tov", "fg2_pct", "ft_pct", "efg_pct", "fta_rate",
 ];
 
 export const DEFAULT_PLAYER_SPEC: PlayerListSpec = {

@@ -19,7 +19,6 @@ import {
   // PLAYER_COLS is gone from here: the raw_row offsets it names are now read
   // only by scripts/build-players-explorer.mjs, at build time.
   PLAYER_STAT_COLUMNS,
-  VALID_SORTS,
   parsePlayerSpec,
   EWINS_FIRST_YEAR,
   passesPlayerFilter,
@@ -278,21 +277,49 @@ function filterSpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSumma
   return out;
 }
 
+/**
+ * Sort key → the PlayerSummary field it orders on.
+ *
+ * Module-level because two places need the same answer: applySpec, which does
+ * the sorting, and the header, which has to decide whether a pinned column can
+ * be sorted at all.
+ */
+const SORT_FIELD: Record<PlayerListSpec["sortBy"], keyof PlayerSummary> = {
+  pir: "pir",
+  bta_porpag: "bta_porpag",
+  pts: "pts_pg", reb: "reb_pg", ast: "ast_pg",
+  fg_pct: "fg_pct", fg3_pct: "fg3_pct", ts_pct: "ts_pct",
+  games: "games",
+  name: "name",
+  epm: "epm", off_epm: "off_epm", def_epm: "def_epm", ewins: "ewins", ppp: "ppp",
+  min: "min_pg", usage: "usage_pct", orb: "orb_pg", drb: "drb_pg",
+  tov: "tov_pg", tov_pct: "tov_pct", stl: "stl_pg", blk: "blk_pg", hkm: "hkm_pct",
+  on_off: "on_off", box_epm: "box_epm", net_rtg: "net_rtg", ast_tov: "ast_to_tov",
+  fg2_pct: "fg2_pct", ft_pct: "ft_pct", efg_pct: "efg_pct", fta_rate: "fta_rate",
+};
+
+/**
+ * The same map read backwards: PlayerSummary field → the sort key that orders
+ * it.
+ *
+ * A pinned column used to be matched to a sort key by comparing the stat's own
+ * key against VALID_SORTS, and the two lists do not share a vocabulary — the
+ * sort layer says "pts", "min", "usage", "gp"; the column layer says "ppg",
+ * "mpg", "usg_pct", "games". Nineteen columns therefore rendered as plain text
+ * that could not be clicked, even though eleven of them were already fully
+ * sortable under another name. Matching on the FIELD is what makes the two
+ * vocabularies stop mattering: whatever a stat is called, it resolves to one
+ * column of PlayerSummary, and that is what the sort actually reads.
+ */
+const SORT_KEY_BY_FIELD = new Map<string, PlayerListSpec["sortBy"]>(
+  (Object.entries(SORT_FIELD) as Array<[PlayerListSpec["sortBy"], keyof PlayerSummary]>)
+    .map(([sortKey, field]) => [field as string, sortKey]),
+);
+
 function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummary[] {
   const out = filterSpec(players, spec);
 
-  const sortKeyMap: Record<PlayerListSpec["sortBy"], keyof PlayerSummary> = {
-    pir: "pir",
-    bta_porpag: "bta_porpag",
-    pts: "pts_pg", reb: "reb_pg", ast: "ast_pg",
-    fg_pct: "fg_pct", fg3_pct: "fg3_pct", ts_pct: "ts_pct",
-    games: "games",
-    name: "name",
-    epm: "epm", off_epm: "off_epm", def_epm: "def_epm", ewins: "ewins", ppp: "ppp",
-    min: "min_pg", usage: "usage_pct", orb: "orb_pg", drb: "drb_pg",
-    tov: "tov_pg", tov_pct: "tov_pct", stl: "stl_pg", blk: "blk_pg", hkm: "hkm_pct",
-  };
-  const key = sortKeyMap[spec.sortBy];
+  const key = SORT_FIELD[spec.sortBy];
   const dir = spec.sortDir === "asc" ? 1 : -1;
   // `out` is already a fresh array from filterSpec, so sort in place.
   out.sort((a, b) => {
@@ -723,11 +750,12 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         // games + plus/minus display as whole numbers.
         fmt: col.field === "games" ? "int" : col.format === "pct1" ? "pct1" : "num1",
         pct: (PCT_KEYS as readonly string[]).includes(col.field as string) ? (col.field as PctKey) : null,
-        // Sortable when the stat's key is one the spec accepts, so a pinned
-        // column behaves like a built-in one rather than being read-only.
-        sortKey: (VALID_SORTS as readonly string[]).includes(col.key)
-          ? (col.key as PlayerListSpec["sortBy"])
-          : undefined,
+        // Sortable when the FIELD this stat displays is one the sort can
+        // order on, so a pinned column behaves like a built-in one rather than
+        // being read-only. Resolved by field, not by key — see the note on
+        // SORT_KEY_BY_FIELD for why the key comparison this replaced left most
+        // pinned columns unclickable.
+        sortKey: SORT_KEY_BY_FIELD.get(col.field as string),
       });
     };
     for (const key of spec.cols) add(key, true);
