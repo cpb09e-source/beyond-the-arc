@@ -10,6 +10,7 @@ import {
   Th,
   Td,
 } from "@/components/box/game-box-modal";
+import { AskStatus } from "@/components/calc/ask-status";
 import { type SearchableOption } from "@/components/explorer/searchable-select";
 import { Select } from "@/components/select";
 import {
@@ -617,8 +618,14 @@ export function CalcClient({
       {/* Natural-language entry. Fills the form below; never runs the query
           itself — the user reviews and presses Calculate. */}
       <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-4 lg:p-5">
-        <label htmlFor="calc-ask" className="block text-xs uppercase tracking-widest text-ink-muted mb-2">
-          Ask in plain English
+        {/* Named, because the pricing page sells it by name. A reader who buys
+            "Ask the Calculator" and lands on a box labelled something else has
+            to work out for themselves that they are the same feature. */}
+        <label htmlFor="calc-ask" className="block mb-2">
+          <span className="text-xs uppercase tracking-widest text-ink font-semibold">
+            Ask the Calculator
+          </span>
+          <span className="text-xs text-ink-muted"> — in plain English</span>
         </label>
         <div className="flex flex-col sm:flex-row gap-2">
           <input
@@ -640,17 +647,16 @@ export function CalcClient({
             disabled={asking || ask.trim().length < 3}
             className="h-10 shrink-0 text-sm font-medium bg-ink text-paper px-5 rounded hover:bg-ink/85 disabled:opacity-40 transition-colors inline-flex items-center justify-center gap-2"
           >
-            {asking && (
-              // aria-hidden: the button text already announces the state, so the
-              // spinner would just be a second, redundant announcement.
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                <path className="opacity-90" fill="currentColor" d="M12 2a10 10 0 0 1 10 10h-3a7 7 0 0 0-7-7V2Z" />
-              </svg>
-            )}
+            {/* No spinner in here any more. The status orb below is the one
+                moving thing while a parse runs, and two indicators for one wait
+                read as two waits. */}
             {asking ? "Reading…" : "Fill filters"}
           </button>
         </div>
+
+        {/* Sits in the slot the result line will occupy, so the panel does not
+            jump when the parse lands. */}
+        {asking && <AskStatus />}
 
         {askErr && <p className="mt-2 text-sm text-coral">{askErr}</p>}
 

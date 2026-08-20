@@ -810,3 +810,34 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .highlight-swipe { animation: none; }
 }
+
+/* Indeterminate sweep under the Ask box (components/calc/ask-status.tsx).
+   A parse is one round trip with no progress to report, so this is honestly
+   indeterminate: a segment that crosses and restarts, never a bar that fills.
+   The gradient's transparent ends keep it from reading as a block sliding
+   along a track — it enters and leaves the rule rather than butting against
+   its own edges. */
+@keyframes ask-sweep {
+  from { transform: translateX(-105%); }
+  to   { transform: translateX(400%); }
+}
+.ask-sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 34%;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--coral) 22%,
+    var(--coral) 78%,
+    transparent
+  );
+  animation: ask-sweep 1500ms cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+/* Reduced motion still needs to look like something is happening, so the
+   segment parks mid-track rather than vanishing. */
+@media (prefers-reduced-motion: reduce) {
+  .ask-sweep::after { animation: none; transform: translateX(95%); }
+}

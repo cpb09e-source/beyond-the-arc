@@ -194,7 +194,22 @@ export default async (req: Request, _context: Context) => {
     const response = await client.messages.stream({
       model: "claude-opus-5",
       max_tokens: 2048,
-      system: SYSTEM,
+      // CACHED. SYSTEM is ~2,900 tokens of stat reference and disambiguation
+      // rules, byte-identical on every request, and it dwarfs the question
+      // itself — the user's query is rarely more than 20 tokens. Caching bills
+      // a repeat read of that prefix at a tenth of the rate.
+      //
+      // The default five-minute TTL is the right one here rather than "1h",
+      // because of how the feature is actually used: somebody working the Win
+      // Calculator asks three or ten questions in a sitting, and those all land
+      // inside one window. A longer TTL costs twice the standard rate to write
+      // and would need better than half of all requests to hit before it paid
+      // for itself, which sporadic traffic will not deliver.
+      //
+      // Caching is a PREFIX match over tools -> system -> messages, so nothing
+      // volatile may precede this block. It does not: the schema below is a
+      // frozen literal and the query goes in `messages`, after it.
+      system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
       // effort "low" keeps this cheap — it's a bounded extraction, not a
       // reasoning problem. Thinking stays at its adaptive default: disabling it
       // was measured at roughly half the latency with clean output, but the
@@ -207,6 +222,16 @@ export default async (req: Request, _context: Context) => {
       },
       messages,
     }).finalMessage();
+
+    // A hit costs a tenth of a fresh read, so this is the number that says
+    // whether the block above is doing anything. If it sits at zero across
+    // consecutive requests, something upstream of the system block has started
+    // varying and the cache is being invalidated every time.
+    const u = response.usage;
+    console.log(
+      `[parse-query] cache read=${u.cache_read_input_tokens ?? 0} `
+      + `write=${u.cache_creation_input_tokens ?? 0} fresh=${u.input_tokens} out=${u.output_tokens}`,
+    );
 
     if (response.stop_reason === "refusal") return { refused: true as const };
     const text = response.content.find((b) => b.type === "text");
