@@ -1,7 +1,7 @@
 # Beyond the Arc — Monetization & Competitive Strategy
 
 **Drafted:** 2026-07-25
-**Status:** Research complete, decisions proposed — not yet approved or implemented.
+**Status:** Research complete. §5 decisions taken and partly built — see [Decisions taken](#decisions-taken-2026-08-20) at the end.
 **Related:** [`TODO-legal-sources.md`](TODO-legal-sources.md) (must land before/with launch)
 
 ---
@@ -335,3 +335,86 @@ Verified directly from live sites or app bundles: all EvanMiya tier prices, all 
 Secondary/directional: RPM ranges (no credible primary source exists for "sports AdSense RPM" — all top results are content farms), churn and conversion benchmarks (beehiiv, Recurly, Piano, INMA), dynamic-paywall lift figures (vendor-adjacent marketing — treat magnitudes as optimistic, direction as sound).
 
 Unverified: X/Twitter follower counts (x.com blocks fetching), TeamRankings Similarweb figures, CBBD basketball rate limits, CBB Analytics `MIDMAJOR` discount code.
+
+---
+
+## Decisions taken (2026-08-20)
+
+What moved from proposed to decided, and what shipped with it. Everything above
+this line is the research that argued for it; this section is the record of what
+was actually chosen.
+
+### Tiers — three, not one
+
+§7 recommended a single tier at launch. Built as three, because the Ramp-style
+pricing layout the design follows needs three columns and §6's B2B tail supplies
+the third honestly:
+
+| Tier | Price | Role |
+|---|---|---|
+| Free | $0 | The funnel. Deliberately generous, per §5.3 |
+| Season Pass | $34/yr, or $8/mo | The only thing actually being sold |
+| Program | Quote | §6's B2B tail — staff seats, feed, bulk export |
+
+Season Pass carries the "most popular" mark. Ramp shows no such badge and lets
+the middle column's copy do that work, but Ramp is selling all three columns;
+here the outer two are a funnel and a mailto.
+
+### Ask the Calculator
+
+The plain-English query box on `/calc` — previously unnamed, labelled only
+"Ask in plain English" — is now **Ask the Calculator**, named in both the
+pricing page and the calculator itself.
+
+Sold as a paid feature with a monthly quota:
+
+| Plan | Calls per month |
+|---|---|
+| Free | none |
+| Monthly billing | 100 |
+| Season Pass | 300 |
+| Program | set per contract |
+
+Two things the copy commits to, deliberately:
+
+- **It proposes, never answers.** It fills the filters and stops; the reader
+  presses Calculate. This is what the function already does and why —
+  "a wrong parse that silently returned a number would be worse than no
+  feature at all."
+- **Pressing Calculate is free and always will be.** The quota is on turning
+  English into filters, not on running queries. Without that stated, "300
+  questions a month" reads as though the Win Calculator itself is metered.
+
+**Why this feature is the one to gate first.** It is the only thing on the site
+with a marginal cost per use — every call is a `claude-opus-5` request on our
+key — and it is the only gate that is enforceable today, because the function is
+real server code that can check a session before it spends money. The data
+paywall still needs the payload split described in §8.4. It was also, until
+gated, an open unauthenticated LLM proxy on a public domain: no auth, no rate
+limit, no origin check.
+
+**Unit economics.** At roughly 2,900 input and ~300 output tokens per call,
+uncached Opus 5 is about $0.022 a call — 300 of those is ~$6.60 a month against
+the $2.83 a month a Season Pass brings in. Two levers close that gap:
+
+1. **Prompt caching — done.** The system prompt is static and dwarfs the
+   question, so it is now sent as a cached block. Cache counters are logged on
+   every call; watch `cache read=` in the function log.
+2. **A cheaper model — not done, and deliberately left as a decision.** This is
+   rigid schema extraction, which is what the small models are for, and it is
+   the difference between breakeven and comfortable margin. It is a quality
+   trade against the prompt's ambiguity rules ("shot more threes" -> attempts,
+   winning the turnover battle -> `tov_diff < 0`), so it wants an eval against
+   real questions before it is made.
+
+### Still open
+
+- `/pricing` is reachable by URL only — not in the nav, and the Season Pass
+  button points at `/pricing/checkout`, which does not exist.
+- No accounts, no Stripe, no quota enforcement yet. §5.4's build order still
+  holds: free accounts first, they convert at ~10x anonymous.
+- The API tier D&3 sells at $250/yr does not price across to college
+  basketball — CBBD already sells a CBB API at $1-10/month, and some of our own
+  data comes from them. Any API product has to be sold on the derived metrics
+  (EPM, Box-EPM, eWins, PIR, the boards, coach data), and redistribution is a
+  separate ToS question from display — see `TODO-legal-sources.md`.

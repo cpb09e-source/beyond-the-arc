@@ -794,3 +794,19 @@ body {
   .honour-f4-paper    { background-color: color-mix(in srgb, var(--court) 20%, var(--paper)); }
   .honour-f4-card     { background-color: color-mix(in srgb, var(--court) 20%, var(--card)); }
 }
+
+/* Marker swipe behind a figure (components/highlight.tsx).
+   Drawn left to right, the direction a hand moves, and scaled on the X axis
+   only so the stroke's height never animates. transform-origin has to be the
+   left edge or the swipe grows out of its own middle, which reads as a fade. */
+@keyframes highlight-swipe {
+  from { transform: rotate(var(--swipe-tilt, -0.7deg)) scaleX(0); }
+  to   { transform: rotate(var(--swipe-tilt, -0.7deg)) scaleX(1); }
+}
+.highlight-swipe {
+  transform-origin: left center;
+  animation: highlight-swipe 460ms cubic-bezier(0.22, 1, 0.36, 1) 260ms backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .highlight-swipe { animation: none; }
+}
