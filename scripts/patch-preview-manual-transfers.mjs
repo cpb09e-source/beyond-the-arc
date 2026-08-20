@@ -90,6 +90,10 @@ const MOVES = [
   ["Braxton Stacker", "UNC Greensboro"],
   ["Jordan Pope", "Texas A&M"],
   ["Kenny Noland", "Michigan"],
+  // 2026-08-20
+  ["Lamar Washington", "Boise St."],
+  ["Duke Brennan", "Oklahoma"],
+  ["Jerald Colonel", "FIU"],
 ];
 
 /** Common shorthand → the name season-preview.json uses. */

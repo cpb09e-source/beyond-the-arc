@@ -108,6 +108,14 @@ const BATCHES: Array<{ confirmed: string; moves: Array<[string, string]> }> = [
       ["Kenny Noland", "Michigan"],
     ],
   },
+  {
+    confirmed: "2026-08-20T00:00:00",
+    moves: [
+      ["Lamar Washington", "Boise St."],
+      ["Duke Brennan", "Oklahoma"],
+      ["Jerald Colonel", "FIU"],
+    ],
+  },
 ];
 
 const MOVES: Array<[string, string, string]> = BATCHES.flatMap(
