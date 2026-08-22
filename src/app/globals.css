@@ -238,9 +238,27 @@ body {
   transition: grid-template-rows 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .bta-drawer.is-open { grid-template-rows: 1fr; }
-.bta-drawer > * { overflow: hidden; }
+
+/* The row growing is not, on its own, motion anyone notices: it reveals the
+   panel from the top down while the controls themselves sit still at their
+   final positions from the first frame. The slide is what makes it read as
+   opening — the height carries the page below, the transform carries the
+   panel. Safe on this element despite the clip: the note in TeamStatFilters
+   confirms nothing inside is sticky or positioned against an outer ancestor,
+   and the one absolute popover resolves against its own relative parent. */
+.bta-drawer > * {
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-0.625rem);
+  transition: opacity 220ms ease, transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.bta-drawer.is-open > * {
+  opacity: 1;
+  transform: translateY(0);
+}
 @media (prefers-reduced-motion: reduce) {
   .bta-drawer { transition: none; }
+  .bta-drawer > * { transition: none; }
 }
 
 @keyframes bta-search-drop {
@@ -270,15 +288,15 @@ body {
  */
 .bta-burger {
   position: relative;
-  width: 17px;
-  height: 13px;
+  width: 15px;
+  height: 10px;
 }
 .bta-burger span {
   display: block;
   position: absolute;
   left: 0;
   width: 100%;
-  height: 2px;
+  height: 1.5px;
   border-radius: 9px;
   background: currentColor;
   opacity: 1;
@@ -302,7 +320,7 @@ body {
   opacity: 0;
 }
 .bta-burger[data-open="true"] span:nth-of-type(3) {
-  top: 15px;
+  top: 12px;
   left: 2px;
   transform: rotate(-45deg);
 }

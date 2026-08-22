@@ -7,6 +7,7 @@ import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { Select } from "@/components/select";
 import { cn } from "@/lib/utils";
+import { Collapse } from "@/components/filters/collapse";
 import {
   TransferClassesPanel,
   TransferClassModal,
@@ -204,7 +205,11 @@ export function PortalClient({
           </span>
           <ChevronDown className={cn("w-4 h-4 text-ink-muted transition-transform", filterOpen && "rotate-180")} aria-hidden />
         </button>
-        <div className={cn(filterOpen ? "block" : "hidden", "lg:block mt-3 lg:mt-0")}>
+        <Collapse
+          open={filterOpen}
+          desktop={{ outer: "lg:block", inner: "lg:overflow-visible", content: "lg:opacity-100 lg:translate-y-0" }}
+          className="mt-3 lg:mt-0"
+        >
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Destination">
             <Select value={confTo} onChange={(v) => { setConfTo(v); setPage(1); }} className="min-w-40">
@@ -244,11 +249,11 @@ export function PortalClient({
             Reset
           </button>
         </div>
-        </div>
+        </Collapse>
       </div>
 
       {/* Three-column layout: Top transfer classes (sticky) · transfers table · Worst (sticky) */}
-      <div className="grid grid-cols-1 xl:grid-cols-[16rem_minmax(0,1fr)_16rem] gap-4 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[16rem_minmax(0,1fr)_16rem] gap-x-4 xl:gap-y-4 items-start">
         {transferClasses ? (
           <aside className="order-1 xl:order-0 xl:sticky xl:top-20 xl:self-start xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:[scrollbar-width:none] xl:[&::-webkit-scrollbar]:hidden">
             <TransferClassesPanel
@@ -261,7 +266,7 @@ export function PortalClient({
         ) : <div />}
 
         {/* Entries table — last on mobile (after both class panels), center column on xl. */}
-        <div className="order-3 xl:order-0 bg-paper-deep/25 border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden min-w-0 -mx-6 lg:mx-0">
+        <div className="order-3 xl:order-0 max-xl:mt-4 bg-paper-deep/25 border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden min-w-0 -mx-6 lg:mx-0">
           <div className="flex items-end justify-between gap-4 px-4 lg:px-5 py-3 border-b border-hairline bg-paper-deep/70">
             <div className="flex items-baseline gap-3">
               <span className="font-display text-xl text-ink tabular">{sorted.length.toLocaleString()}</span>

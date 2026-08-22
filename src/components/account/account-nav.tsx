@@ -51,7 +51,7 @@ export function AccountNav() {
         </Link>
         <Link
           href="/pricing/"
-          className="hidden xl:inline-flex items-center justify-center h-9 shrink-0 whitespace-nowrap rounded-full bg-coral px-4 text-[0.8125rem] font-semibold text-white hover:bg-coral-soft transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral focus-visible:ring-offset-2"
+          className="hidden xl:inline-flex items-center justify-center h-9 shrink-0 whitespace-nowrap rounded-lg bg-coral px-4 text-[0.8125rem] font-semibold text-white hover:bg-coral-soft transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral focus-visible:ring-offset-2"
         >
           Sign up
         </Link>

@@ -790,7 +790,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       {/* Headline ledger — coral accent rule, ring + shadow, big display
           title. Mirrors /coaches "Head coaches" and /teams "By season" cards
           so the look reads consistently across the site. */}
-      <div id="players-leaderboard" className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-6 scroll-mt-6 -mx-6 lg:mx-0">
+      <div id="players-leaderboard" className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-6 max-md:mt-2 scroll-mt-6 -mx-6 lg:mx-0">
         {/* Compact D&3-style toolbar: search + count + compare on the left,
             sort/order/show on the right — one row, table starts below. */}
         <div className="px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 flex items-center justify-between gap-3 flex-wrap">

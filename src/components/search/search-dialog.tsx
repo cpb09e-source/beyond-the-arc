@@ -340,7 +340,7 @@ export function SearchDialog() {
         onFocus={loadIndex}
         aria-label="Open search"
         aria-expanded={open}
-        className="hidden md:inline-flex items-center gap-2.5 h-9 w-44 lg:w-52 pl-3.5 pr-3 rounded-full bg-paper-deep ring-1 ring-ink/8 hover:ring-ink/20 transition-shadow"
+        className="hidden md:inline-flex items-center gap-2.5 h-9 w-44 lg:w-52 pl-3.5 pr-3 rounded-lg bg-paper-deep ring-1 ring-ink/8 hover:ring-ink/20 transition-shadow"
       >
         <Glass className="w-3.5 h-3.5 text-ink-muted shrink-0" />
         <span className="text-sm text-ink-muted">Search</span>
@@ -356,11 +356,40 @@ export function SearchDialog() {
             aria-hidden
           />
 
+          {/* FULL WIDTH BELOW `md`, palette above it.
+              A centered 42rem sheet floating at 8vh is a desktop shape: on a
+              phone it kept ~12px of scrim down each side, which reads as a
+              dialog you have to aim at rather than as part of the page.
+
+              `top-16` IS THE HEADER'S OWN HEIGHT — the panel opens exactly
+              where the score ticker sits, so search reads as taking the
+              ticker's place for as long as it is up, rather than as a slab
+              dropped over the page.
+
+              SQUARE ON MOBILE, all four corners. Full width means the left and
+              right edges are off-screen, so a rounded bottom was the only
+              curve on the thing — one corner treatment at the bottom and a
+              different one at the top reads as a mistake. Square top to square
+              bottom, and it reads as a panel the header extends into.
+
+              Min height so it opens as a real surface rather than a stub, max
+              so it stops short of the bottom edge — full width, not full
+              height. Between the two it takes the height its results want.
+
+              The `md:` half restores exactly what was there before, so the
+              desktop command palette is untouched. `md:inset-x-auto` is what
+              releases the mobile `inset-x-0`. */}
           <div
             role="dialog"
             aria-modal="true"
             aria-label="Search"
-            className="absolute left-1/2 -translate-x-1/2 top-[8vh] w-[min(42rem,calc(100vw-1.5rem))] max-h-[80vh] flex flex-col bg-paper rounded-xl shadow-xl ring-1 ring-ink/10 overflow-hidden"
+            className={cn(
+              "absolute inset-x-0 top-16 flex flex-col",
+              "bg-paper overflow-hidden shadow-xl ring-1 ring-ink/10",
+              "max-md:min-h-[26rem] max-md:max-h-[82vh]",
+              "md:inset-x-auto md:left-1/2 md:-translate-x-1/2 md:top-[8vh]",
+              "md:w-[min(42rem,calc(100vw-1.5rem))] md:max-h-[80vh] md:rounded-xl",
+            )}
           >
             {/* Query */}
             <div className="flex items-center gap-3 px-4 h-13 py-3.5 border-b border-hairline shrink-0">
@@ -380,7 +409,22 @@ export function SearchDialog() {
                 aria-activedescendant={activeId}
                 className="flex-1 min-w-0 bg-transparent text-ink text-base placeholder:text-ink-muted focus:outline-none"
               />
-              <kbd className="text-[0.62rem] text-ink-muted font-mono shrink-0">esc</kbd>
+              {/* Two ways out, one per input method. The `esc` hint is a hint,
+                  not a control — it tells a keyboard user what already works.
+                  A phone has no Esc key, so below `md` it is replaced by a real
+                  button. Tapping the scrim closes it too, but that is not
+                  discoverable, and an undiscoverable exit is not an exit. */}
+              <kbd className="hidden md:inline text-[0.62rem] text-ink-muted font-mono shrink-0">esc</kbd>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close search"
+                className="md:hidden inline-flex items-center justify-center w-9 h-9 -mr-1.5 shrink-0 rounded-lg bg-ink/[0.07] text-ink hover:bg-ink/[0.12] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral"
+              >
+                <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
             </div>
 
             {/* Entity tabs — only once there's something to narrow. */}
@@ -406,13 +450,13 @@ export function SearchDialog() {
               </div>
             )}
 
-            <div className="overflow-y-auto overscroll-contain">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
               {loadErr ? (
                 <Note>Couldn&apos;t load search: {loadErr}</Note>
               ) : !index ? (
                 <Note>Loading…</Note>
               ) : !hasQuery ? (
-                <Note>Players, teams, coaches — with their numbers.</Note>
+                <Note>Players, teams, coaches</Note>
               ) : flat.length === 0 ? (
                 <Note>No matches for &ldquo;{deferredQuery}&rdquo;</Note>
               ) : (

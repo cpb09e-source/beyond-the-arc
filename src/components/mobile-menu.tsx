@@ -102,7 +102,7 @@ export function MobileMenu({
           aria-label="Close menu"
           className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-ink/[0.07] text-ink hover:bg-ink/[0.12] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral"
         >
-          <svg viewBox="0 0 24 24" width={17} height={17} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width={16} height={16} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
             <path d="M6 6l12 12M18 6L6 18" />
           </svg>
         </button>
@@ -121,8 +121,8 @@ export function MobileMenu({
               aria-current={active ? "page" : undefined}
               className={cn(
                 "flex items-center justify-between py-5 border-b border-hairline",
-                "text-lg tracking-tight transition-colors",
-                active ? "text-coral font-medium" : "text-ink hover:text-coral",
+                "text-base tracking-tight transition-colors",
+                active ? "text-coral font-semibold" : "text-ink font-medium hover:text-coral",
               )}
             >
               {item.label}

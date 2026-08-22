@@ -152,17 +152,22 @@ export function SiteHeader() {
             type="button"
             onClick={() => window.dispatchEvent(new Event("bta:open-search"))}
             aria-label="Open search"
+            /* Tinted chip, thin glyph. The chip is what makes it read as a
+               control in a header that is otherwise all type; the Clerk pass
+               was about the MARK inside it, which is now 16px at 1.75 rather
+               than 18px at 2. The 36px box stays as the tap target either way. */
             className="lg:hidden inline-flex items-center justify-center w-9 h-9 rounded-lg bg-ink/[0.07] text-ink hover:bg-ink/[0.12] transition-colors"
           >
-            <Search size={18} />
+            <Search size={16} strokeWidth={1.75} />
           </button>
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            /* Same tinted box as the close button inside the menu, and the
-               same 44px. The hamburger IS the X once the panel opens, so
-               giving them one shape makes the swap read as a single control
-               changing state rather than two different buttons. */
+            /* Same chip as the search button beside it and as the close button
+               inside the menu. The hamburger IS that X once the panel opens, so
+               one shape across all three makes the swap read as a single
+               control changing state rather than as different buttons. The bars
+               themselves are 15x10 at 1.5px now, down from 17x13 at 2px. */
             className="lg:hidden inline-flex items-center justify-center w-9 h-9 rounded-lg bg-ink/[0.07] text-ink hover:bg-ink/[0.12] transition-colors"
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}

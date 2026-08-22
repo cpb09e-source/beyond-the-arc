@@ -399,7 +399,7 @@ export function ExplorerClient({
 
       {/* Same card shell as the /players leaderboard, down to the edge-to-edge
           treatment on mobile and the rounded card + ring on desktop. */}
-      <div id="teams-table" className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-6 scroll-mt-6 -mx-6 lg:mx-0">
+      <div id="teams-table" className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-6 max-md:mt-2 scroll-mt-6 -mx-6 lg:mx-0">
         {/* Compact toolbar, matching /players: search + compare on the left,
             sort/order/show on the right, one row, table starts immediately
             below. Replaces a "headline ledger" (accent rule, display-font

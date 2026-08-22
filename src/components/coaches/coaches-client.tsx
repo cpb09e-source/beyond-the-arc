@@ -406,7 +406,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
           heading, big count and coral gradient rule that used to sit here
           were exactly what made this page read as a different product from
           the /teams and /players tables it sits beside in the nav. */}
-      <div id="coaches-table" className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-6 -mx-6 lg:mx-0">
+      <div id="coaches-table" className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-6 max-md:mt-2 -mx-6 lg:mx-0">
         <div className="px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center flex-wrap gap-2.5 min-w-0">
             {/* Desktop search */}

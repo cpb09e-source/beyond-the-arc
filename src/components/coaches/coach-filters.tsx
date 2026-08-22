@@ -295,7 +295,11 @@ export function CoachStatFilters({
                 )}
                 <StatChipStrip chips={chips} onRemove={removeStat} ariaLabel="Stat filters being edited" />
               </div>
-              <p className="mt-1.5 text-xs text-ink-muted leading-snug">
+              {/* Desktop only. Two lines of instruction above the sliders is a
+                  fair trade on a wide screen; on a phone it is the first thing
+                  in a drawer opened by someone who has already worked out that
+                  the sliders are sliders, and it pushes them off the fold. */}
+              <p className="hidden md:block mt-1.5 text-xs text-ink-muted leading-snug">
                 Drag a slider to narrow the field. Play style is the career average of the
                 teams a coach actually ran — pace, shot diet, the glass, and what they force.
               </p>

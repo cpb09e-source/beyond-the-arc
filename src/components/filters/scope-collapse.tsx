@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { SlidersHorizontal, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Collapse } from "@/components/filters/collapse";
 
 /**
  * Mobile collapse for the scope row on /teams and /players.
@@ -56,9 +57,15 @@ export function ScopeCollapse({
           aria-hidden
         />
       </button>
-      <div className={cn(open ? "flex max-md:pt-2 max-md:pb-1" : "hidden", "md:flex flex-wrap items-end gap-2")}>
+      {/* Animated rather than toggled — see Collapse. The padding lives on the
+          content box so it grows with the region instead of appearing under it. */}
+      <Collapse
+        open={open}
+        desktop={{ outer: "md:block", inner: "md:overflow-visible", content: "md:opacity-100 md:translate-y-0" }}
+        className="flex flex-wrap items-end gap-2 max-md:pt-2 max-md:pb-1"
+      >
         {children}
-      </div>
+      </Collapse>
     </div>
   );
 }
