@@ -99,6 +99,9 @@ const MOVES = [
   ["Lance Waddles", "Campbell"],
   ["Cooper Noard", "Samford"],
   ["Treysen Eaglestaff", "UC San Diego"],
+  ["Kimani Hamilton", "Mississippi St."],
+  // 2026-08-22
+  ["Donovan Dent", "LSU"],
 ];
 
 /** Common shorthand → the name season-preview.json uses. */

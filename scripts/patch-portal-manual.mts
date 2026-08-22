@@ -123,6 +123,13 @@ const BATCHES: Array<{ confirmed: string; moves: Array<[string, string]> }> = [
       ["Lance Waddles", "Campbell"],
       ["Cooper Noard", "Samford"],
       ["Treysen Eaglestaff", "UC San Diego"],
+      ["Kimani Hamilton", "Mississippi St."],
+    ],
+  },
+  {
+    confirmed: "2026-08-22T00:00:00",
+    moves: [
+      ["Donovan Dent", "LSU"],
     ],
   },
 ];
