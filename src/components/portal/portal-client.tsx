@@ -207,7 +207,7 @@ export function PortalClient({
         </button>
         <Collapse
           open={filterOpen}
-          desktop={{ outer: "lg:block", inner: "lg:overflow-visible", content: "lg:opacity-100 lg:translate-y-0" }}
+          desktop={{ outer: "lg:block", inner: "lg:overflow-visible", content: "lg:opacity-100 lg:translate-none" }}
           className="mt-3 lg:mt-0"
         >
         <div className="flex flex-wrap items-end gap-3">
@@ -284,7 +284,7 @@ export function PortalClient({
               </Select>
             </label>
           </div>
-        <div className="overflow-x-auto overscroll-x-contain">
+        <div className="overflow-x-auto overscroll-x-contain [touch-action:pan-x_pinch-zoom]">
           <table className="w-full text-sm">
             <thead className="bg-paper-deep/70">
               <tr className="border-b border-hairline text-left">

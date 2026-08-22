@@ -10,6 +10,7 @@ import {
   type RangeStat, type RangeState,
 } from "@/components/filters/range-row";
 import { StatChipStrip, buildStatChips, type StatChip } from "@/components/filters/stat-chips";
+import { FilterGroup } from "@/components/filters/filter-group";
 import {
   parseSpec, specToParams, teamStatColumn,
   type StatFilter, type TeamFilterSpec, type TeamStatKey,
@@ -252,49 +253,14 @@ export function TeamStatFilters({
   }, [open, setOpen]);
 
   /**
-   * Bring the drawer to the top of the screen when it opens on a phone.
-   *
-   * The toolbar hides itself below sm while this is open (see explorer-client),
-   * so the panel takes over that space — but the page can be scrolled anywhere
-   * when Filters is tapped, and the drawer would open off-screen. This parks it
-   * at the top of the viewport.
-   *
-   * Scrolls the SLOT, not the trigger: the trigger is inside the row that just
-   * went `hidden`, and a display:none element has no box to scroll to. The slot
-   * sits outside that row, which is why the panel survives the row hiding at
-   * all. Reading it from the DOM here rather than using the render-time `slot`
-   * keeps this correct if the portal target is remounted.
-   *
-   * Only below sm: on a wide screen the toolbar stays put and the panel is
-   * already in view, where moving the page would be the surprising thing. The
-   * site header is `relative`, not sticky, so there is no offset to clear.
+   * NO SCROLL ANCHORING. This used to scrollIntoView the panel on open and
+   * the trigger on close, because the drawer expanded inline and could open
+   * off-screen. Below md it is now a modal over a frozen page, so there is
+   * nothing to scroll to — and the old close-side scroll actively hurt: it
+   * moved you away from wherever you had scrolled to before opening it.
    */
   const triggerRef = useRef<HTMLDivElement>(null);
-  const wasOpen = useRef(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const phone = !window.matchMedia("(min-width: 640px)").matches;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const behavior: ScrollBehavior = reduce ? "auto" : "smooth";
 
-    if (open && phone) {
-      // Park the panel at the top of the viewport.
-      document.getElementById(TEAM_DRAWER_SLOT_ID)?.scrollIntoView({ block: "start", behavior });
-    } else if (!open && wasOpen.current && phone) {
-      // CLOSING. The panel was filling the screen and the toolbar was hidden;
-      // both reverse at once, so without this the reader is left wherever the
-      // panel used to be — which is partway down the table, with the filters
-      // they were just using scrolled off the top. Put the toolbar back under
-      // them instead.
-      //
-      // Guarded on wasOpen so this cannot fire on mount, where `open` is
-      // already false and scrolling the page would be inexplicable.
-      triggerRef.current?.scrollIntoView({ block: "start", behavior });
-    }
-    // A ref, not state: this only has to survive to the next run, and writing
-    // state here would re-render the drawer on every open and close.
-    wasOpen.current = open;
-  }, [open]);
 
   // The drawer renders into a slot the page puts directly under the toolbar, so
   // it expands the card and pushes the table down instead of floating over it.
@@ -428,10 +394,44 @@ export function TeamStatFilters({
     setOpen(false);
   };
 
+
+  // A modal over the page must freeze the page. Below md only: at md+ this is
+  // still an inline drawer and the page behind it is the point.
+  useEffect(() => {
+    if (!open) return;
+    const phone = window.matchMedia("(max-width: 47.99rem)");
+    if (!phone.matches) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
   const panel = (
-    <div className={cn("bta-drawer border-b border-hairline bg-paper-deep/20", open && "is-open")}>
-      <div>
-        <div id={DRAWER_PANEL_ID} role="region" aria-label="Stat filters" className="flex flex-col">
+    <>
+      {/* PHONE: a scrim, so the panel reads as over the page rather than
+          as part of it. Tapping it closes, same as the X. */}
+      {open && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-ink/40 bta-backdrop-in"
+          onClick={() => setOpen(false)}
+          aria-hidden
+        />
+      )}
+      <div className={cn(
+        // md+: the inline drawer, unchanged. Below md: a full-screen sheet,
+        // which is what kills the anchoring problem outright — a panel that
+        // covers the viewport never needs the page scrolled to reach it.
+        "bta-sheet md:border-b md:border-hairline md:bg-paper-deep/20",
+        open && "is-open",
+        // Starts BELOW the header, not at the top of the screen: the header
+        // stays visible through the scrim, so the panel reads as something
+        // over this page rather than as a new screen. top-16 is the header's
+        // own height — the same anchor the search sheet uses.
+        "max-md:fixed max-md:inset-x-0 max-md:top-16 max-md:bottom-0 max-md:z-50 max-md:bg-card max-md:border-t max-md:border-hairline",
+        !open && "max-md:hidden",
+      )}>
+      <div className="max-md:flex max-md:flex-col max-md:h-full">
+        <div id={DRAWER_PANEL_ID} role="region" aria-label="Stat filters" className="flex flex-col max-md:flex-1 max-md:min-h-0">
           {/* Header */}
           <div className="flex items-start justify-between gap-3 px-4 lg:px-5 pt-4 pb-3">
             <div className="min-w-0 flex-1">
@@ -526,9 +526,11 @@ export function TeamStatFilters({
 
           {/* Body. Capped so a drawer opened on a long table cannot push the
               results entirely off the screen; it scrolls past that. */}
-          {/* order-last on phones puts the action bar (below) above this
-              scrolling region instead of under it — see the footer's note. */}
-          <div className="order-last sm:order-none max-h-[60vh] overflow-y-auto px-4 lg:px-5 pb-5 space-y-6">
+          {/* Natural order now. The old `order-last` lifted the action bar
+              above this region because the drawer expanded inline and the bar
+              could otherwise land mid-screen; the sheet pins it to the foot of
+              a fixed-height column instead. */}
+          <div className="max-md:flex-1 max-md:min-h-0 max-md:max-h-none md:max-h-[60vh] overflow-y-auto px-4 lg:px-5 pb-5 space-y-6">
             {RANGE_GROUPS.map((g) => {
               const gc = g.stats.reduce((n, s) => n + (isBoundActive(draft[s.key]) ? 1 : 0), 0);
               return (
@@ -538,13 +540,7 @@ export function TeamStatFilters({
                 // dropped frames a drag, against 16.8ms and ~1.5 once each group is
                 // contained. Safe here because a group holds only static rows; nothing
                 // inside is sticky or absolutely positioned against an outer ancestor.
-                <section key={g.label} className="[contain:layout_style]">
-                  <div className="flex items-center gap-2 mb-3 min-h-5">
-                    <h4 className="text-[0.62rem] uppercase tracking-[0.18em] font-semibold text-ink-soft">{g.label}</h4>
-                    {gc > 0 && (
-                      <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-coral/15 text-coral text-[0.58rem] font-bold tabular">{gc}</span>
-                    )}
-                  </div>
+                <FilterGroup key={g.label} label={g.label} count={gc}>
                   {/* Two up on phones. Seven groups of one-per-row meant the
                       panel was mostly scroll: aNET to the Wins group was five
                       screens. The row goes dense below sm so a half-width cell
@@ -565,7 +561,7 @@ export function TeamStatFilters({
                       />
                     ))}
                   </div>
-                </section>
+                </FilterGroup>
               );
             })}
           </div>
@@ -574,14 +570,11 @@ export function TeamStatFilters({
               there, so Submit stays reachable without scrolling back down
               through seven groups.
 
-              On a phone that stickiness fought the page: the drawer opens
-              inline above a long table, so the bar could sit mid-screen with
-              stats above AND below it. Here it moves above the scrolling
-              region instead (the body takes order-last), which puts Submit and
-              the live match count in a fixed spot right under the title — no
-              stickiness needed, because the stats scroll inside their own box
-              and the bar never moves. */}
-          <div className="px-4 lg:px-5 py-3 border-b sm:border-b-0 sm:border-t border-hairline bg-paper-deep/60 backdrop-blur-sm flex items-center gap-3 sm:sticky sm:bottom-0">
+              On a phone it is pinned to the foot of the sheet, which is a
+              fixed-height flex column: the stats scroll in their own box above
+              it and the bar never moves, so Submit and the live match count
+              are always on screen without any stickiness. */}
+          <div className="px-4 lg:px-5 py-3 max-md:pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] border-b sm:border-b-0 sm:border-t max-md:border-b-0 max-md:border-t border-hairline bg-paper-deep/60 backdrop-blur-sm flex items-center gap-3 sm:sticky sm:bottom-0 max-md:shrink-0">
             {matches !== null && (
               <div className="text-sm text-ink-soft leading-none">
                 <span className="text-lg font-bold text-ink tabular">{matches.toLocaleString()}</span>
@@ -608,11 +601,12 @@ export function TeamStatFilters({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 
   return (
-    <div className="relative scroll-mt-4" ref={triggerRef}>
+    <div className="relative" ref={triggerRef}>
       <button
         type="button"
         onClick={() => setOpen(!open)}

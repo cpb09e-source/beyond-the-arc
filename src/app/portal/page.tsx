@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { PortalClient, type PortalEntry } from "@/components/portal/portal-client";
 import type { TransferClassRow } from "@/components/portal/transfer-classes";
+import { PageHeading } from "@/components/page-heading";
 
 type PortalFile = {
   competition_id: number;
@@ -35,6 +36,10 @@ export default async function PortalPage() {
       {/* 108rem — same shell as the team explorer, per Colin. The extra width
           all lands on the centre transfers table (the sidebars are fixed). */}
       <section className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-4 lg:pt-5 pb-4">
+        <PageHeading
+          label="Transfer portal"
+          sub="Every logged move, rated on what the player actually produced — and the class ledger each one adds to."
+        />
         {data === null ? (
           <div className="bg-card border border-hairline rounded-lg p-10 text-center text-ink-muted">
             <p>Portal data isn&apos;t exported yet.</p>

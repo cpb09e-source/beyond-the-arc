@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/auth/auth-provider";
 import { SiteHeader } from "@/components/site-header";
 import { ScoreTicker } from "@/components/scoreboard/score-ticker";
+import { SHOW_SCORE_TICKER } from "@/lib/flags";
 import { SiteFooter } from "@/components/site-footer";
 
 /**
@@ -113,7 +114,7 @@ export default function RootLayout({
             it reads one baked static file rather than the function, so having
             it on every page costs a cached asset instead of a CBBD round trip
             (see src/lib/flags.ts). */}
-        <ScoreTicker />
+        {SHOW_SCORE_TICKER && <ScoreTicker />}
         <main className="flex-1">{children}</main>
         <SiteFooter />
         </AuthProvider>

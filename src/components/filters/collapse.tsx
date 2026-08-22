@@ -86,7 +86,16 @@ export function Collapse({
             // the standalone `translate` property, so a transition list naming
             // only `transform` animates nothing and the slide silently drops.
             "transition-[opacity,translate] ease-out motion-reduce:transition-none",
-            open ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2.5",
+            // AND IT MUST LAND ON `none`, NOT ON ZERO. Any non-none `translate`
+            // makes this a stacking context, and the team picker's menu — z-50,
+            // and taller than the region it hangs out of — then gets trapped
+            // inside it and painted over by the table's z-40 sticky header. So
+            // the resting state drops the property entirely. Safe to swap at
+            // settle: the transition has already finished at 0, and 0 to none
+            // is not a visible change.
+            open
+              ? (settled ? "opacity-100 translate-none" : "opacity-100 translate-y-0")
+              : "opacity-0 -translate-y-2.5",
             desktop.content,
             className,
           )}

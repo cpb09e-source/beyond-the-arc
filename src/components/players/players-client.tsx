@@ -829,7 +829,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               </svg>
               Compare
             </button>
-            <span className="text-xs text-ink-muted tabular whitespace-nowrap">
+            <span className="hidden sm:inline text-xs text-ink-muted tabular whitespace-nowrap">
               {loading ? "loading…" : count > players.length
                 ? `${players.length.toLocaleString()} of ${count.toLocaleString()}`
                 : `${count.toLocaleString()}`}
@@ -847,27 +847,32 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               ariaLabel="Applied columns and filters"
             />
           </div>
-          <div className="relative flex items-center gap-2 w-full sm:w-auto justify-end">
+          {/* `w-auto`, not `w-full sm:w-auto`: full width forced this group onto
+              its own line under Filters and Compare. It now shares that line,
+              and the count takes the line below — matching /teams, which is the
+              layout this toolbar was built to mirror in the first place. */}
+          <div className="relative flex items-center gap-2 w-auto justify-end">
             {/* Sort/order live on the column headers; only the row-count select
-                remains here. */}
-            <span className="hidden sm:inline text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Show</span>
-            <Select value={String(spec.limit)} onChange={(v) => updateSpec({ ...spec, limit: Number(v) })} ariaLabel="Result count" compact className="w-16 lg:w-18">
-              {LIMIT_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
-            </Select>
-            {/* Mobile search icon */}
+                remains here. Search is FIRST so the phone reads left-to-right as
+                "find one / show many". */}
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
               aria-label="Search players"
-              className="lg:hidden shrink-0 h-9 w-9 inline-flex items-center justify-center rounded-md border border-ink/15 bg-card text-ink-muted hover:text-ink hover:border-ink/25 shadow-sm transition-colors"
+              className="lg:hidden shrink-0 h-8 w-8 inline-flex items-center justify-center rounded-md border border-ink/15 bg-card text-ink-muted hover:text-ink hover:border-ink/25 shadow-sm transition-colors"
             >
               <SearchGlass className="w-4 h-4" />
             </button>
-            {/* Mobile sliding search — text-base (16px) avoids iOS zoom on focus */}
+            <span className="hidden sm:inline text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Show</span>
+            <Select value={String(spec.limit)} onChange={(v) => updateSpec({ ...spec, limit: Number(v) })} ariaLabel="Result count" compact className="w-16 lg:w-18">
+              {LIMIT_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+            </Select>
+            {/* Mobile sliding search. text-sm by request; iOS zooms the page on
+                focus below 16px, which text-base was there to prevent. */}
             <div
               ref={searchPanelRef}
               className={cn(
-                "lg:hidden absolute inset-y-0 right-0 w-full flex items-center gap-2 bg-card transition-transform duration-200 ease-out",
+                "lg:hidden absolute inset-y-0 left-0 right-0 flex items-center gap-2 bg-card px-3 transform-gpu transition-transform duration-200 ease-out",
                 searchOpen ? "translate-x-0" : "translate-x-[105%] pointer-events-none",
               )}
             >
@@ -881,7 +886,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Search players…"
                   aria-label="Search players by name"
-                  className="h-9 w-full pl-9 pr-3 rounded-md border border-ink/15 bg-card text-ink text-base placeholder:text-ink-muted shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40"
+                  className="h-9 w-full pl-9 pr-3 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40"
                 />
               </div>
               <button
@@ -894,6 +899,14 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               </button>
             </div>
           </div>
+          {/* PHONE ONLY: the count, on its own line under the controls. */}
+          <span className="sm:hidden basis-full text-xs text-ink-muted tabular whitespace-nowrap">
+            {loading ? "loading…" : count > players.length
+              ? `${players.length.toLocaleString()} of ${count.toLocaleString()}`
+              : `${count.toLocaleString()}`}
+            {!loading && spec.conf.length > 0 && <> · {spec.conf.length === 1 ? spec.conf[0] : `${spec.conf.length} confs`}</>}
+            {!loading && spec.cls.length > 0 && <> · {spec.cls.length === 1 ? (CLASS_LABEL[spec.cls[0]!] ?? spec.cls[0]) : `${spec.cls.length} classes`}</>}
+          </span>
         </div>
         {/* Where the Filters drawer expands. It portals in here so it sits in
             normal flow between the toolbar and the table — opening it grows the
@@ -908,7 +921,15 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         <div className="relative">
         <div
           ref={gridScrollRef}
-          className="overflow-auto overscroll-x-contain max-h-[calc(100vh-1.5rem)] players-scroll cursor-grab"
+          
+          // Below `md` this must NOT be its own vertical scroll pane. The max-h
+          // that gives the sticky headers a scrollport also means a finger put
+          // anywhere in the data area scrolls the TABLE rather than the page,
+          // which on a phone reads as the contents sliding around loose inside
+          // a frame. So the height cap starts at md, and touch-action hands
+          // vertical gestures back to the page while keeping the horizontal
+          // swipe that reaching the stat columns depends on. pinch-zoom stays.
+          className="overflow-auto overscroll-x-contain players-scroll cursor-grab md:max-h-[calc(100vh-1.5rem)] max-md:[touch-action:pan-x_pinch-zoom]"
           {...panHandlers}
         >
           <table className="w-full text-sm border-separate border-spacing-0">

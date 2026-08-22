@@ -31,6 +31,16 @@
  * netlify/functions/scoreboard.mts, and delete public/data/demo-*.json.
  * `npx tsx scripts/check-schedule.mts` says when CBBD is ready.
  */
+/**
+ * Score rail on/off, sitewide.
+ *
+ * Off for now. The rail is the only thing on the page that arrives after
+ * first paint and changes the page height when it does, so it pushes
+ * everything below it down a second or two in. Flip to true to bring it
+ * back; nothing else has to change.
+ */
+export const SHOW_SCORE_TICKER = false;
+
 export const SCOREBOARD_MODE: "demo" | "live" = "demo";
 
 export const IS_DEMO = SCOREBOARD_MODE === "demo";

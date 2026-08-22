@@ -61,7 +61,7 @@ export function ScopeCollapse({
           content box so it grows with the region instead of appearing under it. */}
       <Collapse
         open={open}
-        desktop={{ outer: "md:block", inner: "md:overflow-visible", content: "md:opacity-100 md:translate-y-0" }}
+        desktop={{ outer: "md:block", inner: "md:overflow-visible", content: "md:opacity-100 md:translate-none" }}
         className="flex flex-wrap items-end gap-2 max-md:pt-2 max-md:pb-1"
       >
         {children}

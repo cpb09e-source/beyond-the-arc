@@ -98,7 +98,7 @@ function TeamBox({
         <span className="ml-auto font-display text-2xl tabular" style={{ color }}>{side.points ?? "—"}</span>
       </div>
 
-      <div className="overflow-x-auto overscroll-x-contain">
+      <div className="overflow-x-auto overscroll-x-contain [touch-action:pan-x_pinch-zoom]">
         <table className="w-full text-[0.74rem] tabular min-w-[44rem]">
           <thead>
             <tr className="text-[0.52rem] uppercase tracking-[0.08em] text-ink-muted border-b border-hairline">

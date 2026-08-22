@@ -113,7 +113,7 @@ export function CareerTable({
 
       {/* Horizontal scroll on narrow viewports — full stat line stays intact
           and swipes left/right with touch momentum instead of dropping columns. */}
-      <div className="overflow-x-auto [-webkit-overflow-scrolling:touch] overscroll-x-contain">
+      <div className="overflow-x-auto [-webkit-overflow-scrolling:touch] overscroll-x-contain [touch-action:pan-x_pinch-zoom]">
         <table className="w-full min-w-[46rem] sm:min-w-[58rem] text-sm">
           <thead className="bg-paper-deep/70 text-left">
             <tr>

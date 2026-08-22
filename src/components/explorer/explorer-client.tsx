@@ -421,7 +421,9 @@ export function ExplorerClient({
           // panel sitting inside the toolbar. Anchored here it is 105% of the
           // whole row, which clears the card edge as intended.
           "relative px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 items-center justify-between gap-3 flex-wrap",
-          filtersOpen ? "hidden sm:flex" : "flex",
+          // (was: hidden while the drawer was open, back when the drawer
+          // expanded inline and needed the room. It is a modal below md now.)
+          "flex",
         )}>
           {/* Wraps on narrow screens. Without it the row is one unbreakable
               line and "View Conference Rankings", which is whitespace-nowrap,
@@ -525,6 +527,20 @@ export function ExplorerClient({
                 the table header already does was part of what made these pages
                 feel unrelated. Only the row-count select remains, same position
                 and shape as the one on /players. */}
+            {/* Mobile search icon. FIRST in the group: on a phone the two
+                controls read left-to-right as "find one / show many", and the
+                row-count select is the one that wants to sit closest to the
+                count it governs on the line below. On desktop this is hidden
+                and the group is just Show + Select, unchanged. */}
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search teams"
+              className="lg:hidden shrink-0 h-8 w-8 inline-flex items-center justify-center rounded-md border border-ink/15 bg-card text-ink-muted hover:text-ink hover:border-ink/25 shadow-sm transition-colors"
+            >
+              <SearchGlass className="w-4 h-4" />
+            </button>
+
             <span className="hidden sm:inline text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Show</span>
             <Select
               value={String(spec.limit)}
@@ -539,19 +555,12 @@ export function ExplorerClient({
               {LIMIT_OPTIONS.map((n) => <option key={n} value={n}>{limitLabel(n)}</option>)}
             </Select>
 
-            {/* Mobile search icon */}
-            <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              aria-label="Search teams"
-              className="lg:hidden shrink-0 h-8 w-8 inline-flex items-center justify-center rounded-md border border-ink/15 bg-card text-ink-muted hover:text-ink hover:border-ink/25 shadow-sm transition-colors"
-            >
-              <SearchGlass className="w-4 h-4" />
-            </button>
-
           </div>
           {/* Mobile sliding search — slides over the row from the right on tap.
-              text-base (16px) keeps iOS from zooming the page on focus. */}
+              text-sm by request. NOTE: iOS zooms the page when a focused
+              input is under 16px, so focusing this now nudges the viewport;
+              text-base was the only thing preventing that. Put it back if the
+              zoom is worse than the type size. */}
           <div
             ref={searchPanelRef}
             className={cn(
@@ -573,7 +582,7 @@ export function ExplorerClient({
                 onChange={(e) => setTableSearch(e.target.value)}
                 placeholder="Search team…"
                 aria-label="Search teams in table"
-                className="h-8 w-full pl-8 pr-3 rounded-md border border-ink/15 bg-card text-ink text-base placeholder:text-ink-muted shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40"
+                className="h-8 w-full pl-8 pr-3 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40"
               />
             </div>
             <button
@@ -606,7 +615,15 @@ export function ExplorerClient({
             page. Sizing it to the viewport gives them a scrollport. */}
         <div
           ref={gridScrollRef}
-          className="overflow-auto overscroll-x-contain max-h-[calc(100vh-1.5rem)] cursor-grab"
+          
+          // Below `md` this must NOT be its own vertical scroll pane. The max-h
+          // that gives the sticky headers a scrollport also means a finger put
+          // anywhere in the data area scrolls the TABLE rather than the page,
+          // which on a phone reads as the contents sliding around loose inside
+          // a frame. So the height cap starts at md, and touch-action hands
+          // vertical gestures back to the page while keeping the horizontal
+          // swipe that reaching the stat columns depends on. pinch-zoom stays.
+          className="overflow-auto overscroll-x-contain cursor-grab md:max-h-[calc(100vh-1.5rem)] max-md:[touch-action:pan-x_pinch-zoom]"
           {...panHandlers}
         >
           <table className="w-full text-sm border-separate border-spacing-0">

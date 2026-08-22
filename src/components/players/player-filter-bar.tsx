@@ -10,6 +10,7 @@ import {
   type RangeStat, type RangeState,
 } from "@/components/filters/range-row";
 import { StatChipStrip, buildStatChips, type StatChip } from "@/components/filters/stat-chips";
+import { FilterGroup } from "@/components/filters/filter-group";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { ScopeCollapse, scopeSummary } from "@/components/filters/scope-collapse";
@@ -126,13 +127,10 @@ export function PlayerFilterBar({
     startTransition(() =>
       router.replace(p ? `/players?${p}` : "/players", { scroll: false }),
     );
-    // On mobile, jump to the leaderboard so the filtered rows are visible
-    // without scrolling past the filter card.
-    if (typeof window !== "undefined" && window.innerWidth < 768) {
-      requestAnimationFrame(() => {
-        document.getElementById("players-leaderboard")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    }
+    // No jump to the leaderboard. Submitting used to scroll the page for you,
+    // which is the same "it moved under me" complaint as the filter drawer's
+    // old anchoring — and the rows it was scrolling to are already the next
+    // thing on the screen.
   }
   function reset() {
     setDraft({
@@ -623,6 +621,16 @@ export function PlayerStatFilters({
   const committed = useMemo(() => filtersToRanges(urlSpec.filters), [urlSpec.filters]);
   const activeCommitted = ALL_RANGE_STATS.reduce((n, s) => n + (isBoundActive(committed[s.key]) ? 1 : 0), 0);
 
+  // A modal over the page must freeze the page. Below md only: at md+ this is
+  // still an inline drawer and the page behind it is the point.
+  useEffect(() => {
+    if (!open) return;
+    if (!window.matchMedia("(max-width: 47.99rem)").matches) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
   const submit = () => {
     const p = playerSpecToParams({ ...urlSpec, filters: draftFilters, cols: pins }).toString();
     startTransition(() => router.replace(p ? `/players?${p}` : "/players", { scroll: false }));
@@ -630,9 +638,32 @@ export function PlayerStatFilters({
   };
 
   const panel = (
-    <div className={cn("bta-drawer border-b border-hairline bg-paper-deep/20", open && "is-open")}>
-      <div>
-        <div id={DRAWER_PANEL_ID} role="region" aria-label="Stat filters">
+    <>
+      {/* PHONE: a scrim, so the panel reads as over the page rather than
+          as part of it. Tapping it closes, same as the X. */}
+      {open && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-ink/40 bta-backdrop-in"
+          onClick={() => setOpen(false)}
+          aria-hidden
+        />
+      )}
+      <div className={cn(
+        // md+: the inline drawer, unchanged. Below md: a full-screen sheet,
+        // which is what kills the anchoring problem outright — a panel that
+        // covers the viewport never needs the page scrolled to reach it.
+        "bta-sheet md:border-b md:border-hairline md:bg-paper-deep/20",
+        open && "is-open",
+        // Starts BELOW the header, not at the top of the screen: the header
+        // stays visible through the scrim, so the panel reads as something
+        // over this page rather than as a new screen. top-16 is the header's
+        // own height — the same anchor the search sheet uses.
+        "max-md:fixed max-md:inset-x-0 max-md:top-16 max-md:bottom-0 max-md:z-50 max-md:bg-card max-md:border-t max-md:border-hairline",
+        !open && "max-md:hidden",
+      )}>
+      <div className="max-md:flex max-md:flex-col max-md:h-full">
+      <div className="max-md:flex max-md:flex-col max-md:flex-1 max-md:min-h-0">
+        <div id={DRAWER_PANEL_ID} role="region" aria-label="Stat filters" className="max-md:flex max-md:flex-col max-md:flex-1 max-md:min-h-0">
           {/* Header */}
           <div className="flex items-start justify-between gap-3 px-4 lg:px-5 pt-4 pb-3">
             <div className="min-w-0 flex-1">
@@ -727,7 +758,7 @@ export function PlayerStatFilters({
 
           {/* Body. Capped so a drawer opened on a long table cannot push the
               results entirely off the screen; it scrolls past that. */}
-          <div className="max-h-[60vh] overflow-y-auto px-4 lg:px-5 pb-5 space-y-6">
+          <div className="max-md:flex-1 max-md:min-h-0 md:max-h-[60vh] overflow-y-auto px-4 lg:px-5 pb-5 space-y-6">
             {RANGE_GROUPS.map((g) => {
               const gc = g.stats.reduce((n, s) => n + (isBoundActive(draft[s.key]) ? 1 : 0), 0);
               return (
@@ -737,13 +768,7 @@ export function PlayerStatFilters({
                 // dropped frames a drag, against 16.8ms and ~1.5 once each group is
                 // contained. Safe here because a group holds only static rows; nothing
                 // inside is sticky or absolutely positioned against an outer ancestor.
-                <section key={g.label} className="[contain:layout_style]">
-                  <div className="flex items-center gap-2 mb-3 min-h-5">
-                    <h4 className="text-[0.62rem] uppercase tracking-[0.18em] font-semibold text-ink-soft">{g.label}</h4>
-                    {gc > 0 && (
-                      <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-coral/15 text-coral text-[0.58rem] font-bold tabular">{gc}</span>
-                    )}
-                  </div>
+                <FilterGroup key={g.label} label={g.label} count={gc}>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                     {g.stats.map((st) => (
                       <RangeRow
@@ -757,14 +782,14 @@ export function PlayerStatFilters({
                       />
                     ))}
                   </div>
-                </section>
+                </FilterGroup>
               );
             })}
           </div>
 
           {/* Footer. Sticky to the bottom of the scrolling body so Submit stays
               reachable without scrolling back down through seven groups. */}
-          <div className="sticky bottom-0 px-4 lg:px-5 py-3 border-t border-hairline bg-paper-deep/60 backdrop-blur-sm flex items-center gap-3">
+          <div className="sticky bottom-0 max-md:static max-md:shrink-0 px-4 lg:px-5 py-3 max-md:pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] border-t border-hairline bg-paper-deep/60 backdrop-blur-sm flex items-center gap-3">
             {matches !== null && (
               <div className="text-sm text-ink-soft leading-none">
                 <span className="text-lg font-bold text-ink tabular">{matches.toLocaleString()}</span>
@@ -792,6 +817,8 @@ export function PlayerStatFilters({
         </div>
       </div>
     </div>
+      </div>
+    </>
   );
 
   return (

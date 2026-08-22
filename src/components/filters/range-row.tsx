@@ -156,7 +156,13 @@ export const RangeRow = memo(function RangeRow({
           />
         </div>
       </div>
-      <RangeDual st={st} lo={lo} hi={hi} onChange={onChange} />
+      {/* PHONE: number boxes only. A dual-thumb track is a pointer control —
+          at phone width the two thumbs sit within a few pixels of each other
+          and grabbing the one you meant is a coin flip, while the boxes above
+          already set the same two numbers exactly. Returns from `md` up. */}
+      <div className="hidden md:block">
+        <RangeDual st={st} lo={lo} hi={hi} onChange={onChange} />
+      </div>
     </div>
   );
 });
