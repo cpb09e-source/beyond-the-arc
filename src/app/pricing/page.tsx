@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PLANS, FAQ, COMPARISON, type Plan } from "@/lib/pricing";
 import { Highlight } from "@/components/highlight";
+import { SeasonPassCta } from "@/components/pricing/season-pass-cta";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -23,7 +24,7 @@ export const metadata: Metadata = {
  * Program is quote-only.
  *
  * Prices come from docs/monetization-strategy.md §5.1-5.2, which argues them at
- * length: $34/yr against KenPom's $24.95 and EvanMiya's $30, annual-first
+ * length: annual-first against KenPom's $24.95 and EvanMiya's $30,
  * because sports subscribers churn at 7.76%/month and annual removes the
  * offseason churn event, and a monthly option deliberately priced so that five
  * months of it costs more than the year.
@@ -159,34 +160,42 @@ function PlanCard({ plan }: { plan: Plan }) {
         )}
       </div>
 
-      <div className="flex items-baseline gap-1.5">
-        <span
-          className={cn(
-            "font-display leading-none text-ink",
-            plan.period ? "tabular text-4xl sm:text-[2.75rem]" : "text-3xl sm:text-[2rem]",
+      {plan.customCta ? (
+        /* The Season Pass carries a period toggle, so it owns its own price
+           block and button rather than taking them from the plan record. */
+        <SeasonPassCta />
+      ) : (
+        <>
+          <div className="flex items-baseline gap-1.5">
+            <span
+              className={cn(
+                "font-display leading-none text-ink",
+                plan.period ? "tabular text-4xl sm:text-[2.75rem]" : "text-3xl sm:text-[2rem]",
+              )}
+            >
+              {plan.price}
+            </span>
+            {plan.period && (
+              <span className="text-sm text-ink-muted">{plan.period}</span>
+            )}
+          </div>
+          {plan.priceNote && (
+            <div className="-mt-3 text-xs text-ink-muted">{plan.priceNote}</div>
           )}
-        >
-          {plan.price}
-        </span>
-        {plan.period && (
-          <span className="text-sm text-ink-muted">{plan.period}</span>
-        )}
-      </div>
-      {plan.priceNote && (
-        <div className="-mt-3 text-xs text-ink-muted">{plan.priceNote}</div>
-      )}
 
-      <Link
-        href={plan.ctaHref}
-        className={cn(
-          "inline-flex items-center justify-center rounded-md px-4 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral focus-visible:ring-offset-2",
-          featured
-            ? "bg-coral text-white hover:bg-coral-soft"
-            : "border border-ink/15 text-ink hover:bg-paper-deep",
-        )}
-      >
-        {plan.cta}
-      </Link>
+          <Link
+            href={plan.ctaHref}
+            className={cn(
+              "inline-flex items-center justify-center rounded-md px-4 py-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral focus-visible:ring-offset-2",
+              featured
+                ? "bg-coral text-white hover:bg-coral-soft"
+                : "border border-ink/15 text-ink hover:bg-paper-deep",
+            )}
+          >
+            {plan.cta}
+          </Link>
+        </>
+      )}
 
       <div className="pt-1 border-t border-hairline">
         {plan.inherits && (

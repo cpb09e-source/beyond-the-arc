@@ -7,7 +7,12 @@ const BASE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://beyond-the-arc.ne
 
 export default function robots(): MetadataRoute.Robots {
   return {
-    rules: { userAgent: "*", allow: "/" },
+    // Everything stays crawlable except the account pages, which render
+    // nothing without a browser session — following D&3's pattern, where the
+    // only Disallow lines are the login page and the API. Keeping the data
+    // pages indexable matters more here than usual: the closest competitor has
+    // a two-year SEO head start (see docs/monetization-strategy.md 5.2b).
+    rules: { userAgent: "*", allow: "/", disallow: "/account/" },
     sitemap: `${BASE_URL}/sitemap.xml`,
     host: BASE_URL,
   };

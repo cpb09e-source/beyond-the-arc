@@ -353,8 +353,28 @@ the third honestly:
 | Tier | Price | Role |
 |---|---|---|
 | Free | $0 | The funnel. Deliberately generous, per §5.3 |
-| Season Pass | $34/yr, or $8/mo | The only thing actually being sold |
+| Season Pass | $50/yr, or $8/mo | The only thing actually being sold |
 | Program | Quote | §6's B2B tail — staff seats, feed, bulk export |
+
+**Price revised to $50/yr on 2026-08-21** (from the $34 argued in 5.1). This is
+a deliberate move away from the anchor-hugging position that section reasoned
+to: KenPom is $24.95 and EvanMiya Basic is $30, so $50 is roughly double the
+cheaper anchor rather than "just above both". The analysis in 5.1-5.2 and the
+revenue projections in 6 still quote $34 and have NOT been recomputed — they
+are the reasoning as it stood, and 1,000 subscribers now implies $50k rather
+than $34k.
+
+Two knock-on facts, both arithmetic rather than opinion:
+
+- The monthly break-even moved. At $34, five months of $8 beat the year; at $50
+  it takes seven ($56 against $50, where six is $48 and still cheaper). Every
+  place that sentence appears has been updated — the pricing card and the FAQ.
+- The annual saving is now 48%, not 65% ($96 against $50).
+
+**The Stripe price object must be changed to match.** The page states $50; what
+a customer is actually charged is whatever `STRIPE_PRICE_YEARLY` points at, and
+that price was created for the old figure. Until it is updated in Stripe, the
+page and the checkout disagree.
 
 Season Pass carries the "most popular" mark. Ramp shows no such badge and lets
 the middle column's copy do that work, but Ramp is selling all three columns;

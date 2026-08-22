@@ -2,8 +2,8 @@
  * Pricing content, in one place.
  *
  * Every number here is a decision from docs/monetization-strategy.md, not a
- * placeholder — §5.1 argues $34/yr, §5.2 argues annual-first with monthly
- * priced so five months of it beats the year, §5.3 sets the free/paid split and
+ * placeholder — §5.1 argues the yearly price, §5.2 argues annual-first with
+ * monthly priced so a partial year beats it, §5.3 sets the free/paid split and
  * §6 sizes the B2B tail. Keeping them in a module rather than in the page means
  * a price change is one edit and the comparison table cannot drift out of sync
  * with the cards.
@@ -24,6 +24,8 @@ export type Plan = {
   ctaHref: string;
   /** Named tier whose features this one includes without restating them. */
   inherits?: string;
+  /** This card renders its own price and CTA (the Season Pass period toggle). */
+  customCta?: boolean;
   features: string[];
   accent: string;
   featured?: boolean;
@@ -36,8 +38,8 @@ export const PLANS: Plan[] = [
     tagline: "The whole site, this season",
     price: "$0",
     period: "forever",
-    cta: "Browse the site",
-    ctaHref: "/players",
+    cta: "Create a free account",
+    ctaHref: "/account/signup/?plan=free",
     accent: "var(--ink-muted)",
     features: [
       "Every player, team and coach page",
@@ -52,13 +54,13 @@ export const PLANS: Plan[] = [
     id: "season",
     name: "Season Pass",
     tagline: "For the person who opens ten tabs",
-    price: "$34",
+    price: "$50",
     period: "/year",
-    priceNote: "or $8/month — five months costs more than the year",
     cta: "Get the Season Pass",
-    ctaHref: "/pricing/checkout",
+    ctaHref: "/account/signup/?plan=yearly",
     accent: "var(--coral)",
     featured: true,
+    customCta: true,
     inherits: "Free",
     features: [
       "All thirteen seasons, back to 2013-14",
@@ -165,7 +167,7 @@ export const FAQ: Array<{ q: string; a: string }> = [
     q: "Why annual rather than monthly?",
     a: "College basketball has an offseason and subscriptions do not. Annual means you are not "
       + "deciding whether to keep paying in July. Monthly exists if you want it, priced so that "
-      + "the five months you would actually use cost more than the year.",
+      + "the seven months you would actually use cost more than the year.",
   },
   {
     q: "When does it renew?",

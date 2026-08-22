@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Schibsted_Grotesk, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/lib/auth/auth-provider";
 import { SiteHeader } from "@/components/site-header";
 import { ScoreTicker } from "@/components/scoreboard/score-ticker";
 import { SiteFooter } from "@/components/site-footer";
@@ -102,6 +103,10 @@ export default function RootLayout({
             palette with no control left to leave it. */}
       </head>
       <body className="min-h-full flex flex-col bg-paper text-ink">
+        {/* Session state for the whole site. Mounted here so the header can
+            show who is signed in on every page; it holds no secrets, only the
+            token the browser already has. */}
+        <AuthProvider>
         <SiteHeader />
         {/* Score rail, under the nav on every page. Renders nothing when there
             are no games, so it costs zero height in the offseason. In demo mode
@@ -111,6 +116,7 @@ export default function RootLayout({
         <ScoreTicker />
         <main className="flex-1">{children}</main>
         <SiteFooter />
+        </AuthProvider>
       </body>
     </html>
   );
