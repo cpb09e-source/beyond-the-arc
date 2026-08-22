@@ -267,8 +267,18 @@ export function ExplorerClient({
   // Click-and-drag panning over the stat columns, same gesture as /players.
   const gridScrollRef = useRef<HTMLDivElement>(null);
   const panHandlers = useDragPan(gridScrollRef);
-  // The # column is sized by content, not by its `w-12` (see useMeasuredWidth),
-  // so the Team column's sticky offset is measured off it rather than assumed.
+  // The Team column's sticky offset is measured off the # column rather than
+  // assumed — see useMeasuredWidth for why a width utility alone does not hold
+  // in auto table layout.
+  //
+  // The # cells also carry `min-w-12`, which is what makes the 48px starting
+  // value TRUE rather than merely hopeful. Without it the column settled near
+  // 38.5px, so the server-rendered `left: 48px` was wrong by ~9.5px and painted
+  // a gap between the two frozen columns until hydration measured and corrected
+  // it — visible for as long as hydration takes. A minimum the browser cannot
+  // shrink past means the first paint is already right, and the measurement
+  // below becomes a safety net for cases it cannot be (very narrow viewports,
+  // a four-digit rank).
   const [rankThRef, rankW] = useMeasuredWidth<HTMLTableCellElement>(48);
   const teamLeft = { left: `${rankW}px` };
   // Focus the input on open WITHOUT letting the browser scroll it into view
@@ -403,7 +413,14 @@ export function ExplorerClient({
             filtersOpen and brings the row straight back. Untouched from sm up,
             where both fit on screen together. */}
         <div className={cn(
-          "px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 items-center justify-between gap-3 flex-wrap",
+          // `relative` anchors the mobile sliding search panel, which used to
+          // hang off the right-hand group. That group is no longer full width
+          // on phones — the row-count select and the search button now share a
+          // line with Filters and Compare — and the panel parks at
+          // translate-x-[105%], so 105% of a ~90px group left the "closed"
+          // panel sitting inside the toolbar. Anchored here it is 105% of the
+          // whole row, which clears the card edge as intended.
+          "relative px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 items-center justify-between gap-3 flex-wrap",
           filtersOpen ? "hidden sm:flex" : "flex",
         )}>
           {/* Wraps on narrow screens. Without it the row is one unbreakable
@@ -449,7 +466,14 @@ export function ExplorerClient({
               Compare
             </button>
 
-            <span className="text-xs text-ink-muted whitespace-nowrap tabular">
+            {/* Desktop only. On phones the count renders as its own row after
+                the controls — see the mobile copy at the end of this toolbar.
+                It is two elements rather than one because the two layouts want
+                it in different places: inline beside the rankings link here,
+                and on its own line there. Trying to do both with flex-basis
+                made this group full-width, which pushed the select and the
+                search button onto a third row. */}
+            <span className="hidden sm:inline text-xs text-ink-muted whitespace-nowrap tabular">
               <span className="text-ink font-medium">{rows.length.toLocaleString()}</span>
               {count > rows.length && <> of {count.toLocaleString()}</>} teams
               {/* A season the reader just added is a fetch away, not on the
@@ -495,28 +519,12 @@ export function ExplorerClient({
               second magnifier and a stray "Done" sat visible in the toolbar.
               Full-width pushes it past the card edge, where the card's
               overflow-hidden clips it. */}
-          <div className="relative flex items-center gap-2 lg:gap-3 w-full sm:w-auto justify-end min-w-0">
+          <div className="flex items-center gap-2 lg:gap-3 w-auto justify-end min-w-0">
             {/* No sort-by / order selects. Sorting happens by clicking a column
                 header, which is how /players works — two controls doing a job
                 the table header already does was part of what made these pages
                 feel unrelated. Only the row-count select remains, same position
                 and shape as the one on /players. */}
-            {/* PHONE ONLY. On a phone the left group wraps and this was landing
-                on a line of its own, directly above a row that was itself
-                mostly empty. mr-auto pins it to the left of that row so the two
-                share one line instead of stacking two half-empty ones — which
-                is exactly the reason it can't simply move up to sit beside the
-                count at every width. From sm up the copy above takes over. */}
-            {conferenceRankings.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowRankings(true)}
-                className="sm:hidden mr-auto text-xs text-coral hover:underline whitespace-nowrap inline-flex items-center min-h-11 py-2"
-              >
-                View Conference Rankings →
-              </button>
-            )}
-
             <span className="hidden sm:inline text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Show</span>
             <Select
               value={String(spec.limit)}
@@ -541,38 +549,48 @@ export function ExplorerClient({
               <SearchGlass className="w-4 h-4" />
             </button>
 
-            {/* Mobile sliding search — slides over the row from the right on tap.
-                text-base (16px) keeps iOS from zooming the page on focus. */}
-            <div
-              ref={searchPanelRef}
-              className={cn(
-                "lg:hidden absolute inset-y-0 right-0 w-full flex items-center gap-2 bg-card transform-gpu transition-transform duration-200 ease-out",
-                searchOpen ? "translate-x-0" : "translate-x-[105%] pointer-events-none",
-              )}
-            >
-              <div className="relative flex-1">
-                <SearchGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none" />
-                <input
-                  ref={searchInputRef}
-                  type="search"
-                  inputMode="search"
-                  value={tableSearch}
-                  onChange={(e) => setTableSearch(e.target.value)}
-                  placeholder="Search team…"
-                  aria-label="Search teams in table"
-                  className="h-8 w-full pl-8 pr-3 rounded-md border border-ink/15 bg-card text-ink text-base placeholder:text-ink-muted shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => { setSearchOpen(false); setTableSearch(""); }}
-                aria-label="Close search"
-                className="shrink-0 h-8 px-2.5 text-sm font-medium text-coral hover:text-ink"
-              >
-                Done
-              </button>
-            </div>
           </div>
+          {/* Mobile sliding search — slides over the row from the right on tap.
+              text-base (16px) keeps iOS from zooming the page on focus. */}
+          <div
+            ref={searchPanelRef}
+            className={cn(
+              // Pinned by insets rather than w-full. As a child of the row, `w-full`
+                // resolved against a box wider than the visible row and ran the
+                // input and its Done button ~80px past the right edge; left-0
+                // right-0 makes the panel exactly the row it slides over.
+                "lg:hidden absolute inset-y-0 left-0 right-0 flex items-center gap-2 bg-card px-3 transform-gpu transition-transform duration-200 ease-out",
+              searchOpen ? "translate-x-0" : "translate-x-[105%] pointer-events-none",
+            )}
+          >
+            <div className="relative flex-1">
+              <SearchGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none" />
+              <input
+                ref={searchInputRef}
+                type="search"
+                inputMode="search"
+                value={tableSearch}
+                onChange={(e) => setTableSearch(e.target.value)}
+                placeholder="Search team…"
+                aria-label="Search teams in table"
+                className="h-8 w-full pl-8 pr-3 rounded-md border border-ink/15 bg-card text-ink text-base placeholder:text-ink-muted shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => { setSearchOpen(false); setTableSearch(""); }}
+              aria-label="Close search"
+              className="shrink-0 h-8 px-2.5 text-sm font-medium text-coral hover:text-ink"
+            >
+              Done
+            </button>
+          </div>
+          {/* PHONE ONLY: the count, on its own line under the controls. */}
+          <span className="sm:hidden basis-full text-xs text-ink-muted whitespace-nowrap tabular">
+            <span className="text-ink font-medium">{rows.length.toLocaleString()}</span>
+            {count > rows.length && <> of {count.toLocaleString()}</>} teams
+            {loadingSeasons && <span className="ml-1.5 text-coral">· loading season…</span>}
+          </span>
         </div>
 
         {/* Where the Filters drawer expands. It portals in here so it sits in
@@ -600,7 +618,7 @@ export function ExplorerClient({
               {/* Band row — group captions only, no borders, sticky above the
                   header row. Same two-tier treatment as /players. */}
               <tr>
-                <th className="sticky top-0 left-0 z-40 w-12 bg-paper-deep h-6 p-0" />
+                <th className="sticky top-0 left-0 z-40 w-12 min-w-12 bg-paper-deep h-6 p-0" />
                 <th style={teamLeft} className="sticky top-0 z-40 bg-paper-deep h-6 p-0 border-r border-hairline" />
                 {/* Spacers for Conf / Season / Rec. These MIRROR the column
                     row below one cell at a time rather than collapsing into a
@@ -629,7 +647,7 @@ export function ExplorerClient({
                 </th>
               </tr>
               <tr>
-                <th ref={rankThRef} className="sticky top-6 left-0 z-40 w-12 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
+                <th ref={rankThRef} className="sticky top-6 left-0 z-40 w-12 min-w-12 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
                 <th style={teamLeft} className="sticky top-6 z-40 bg-paper-deep border-b border-r border-hairline px-2 sm:px-3 py-3 sm:py-2 text-xs uppercase tracking-wide sm:tracking-widest text-ink-muted font-medium text-left align-middle">Team</th>
                 <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle hidden sm:table-cell">Conf</th>
                 {multiYear && <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Season</th>}
@@ -705,7 +723,7 @@ export function ExplorerClient({
                   <tr key={`${r.team_id}-${r.team_year}`} className={cn("group", zebra)}>
                     <td
                       title={honourTitle}
-                      className={cn("sticky left-0 z-20 w-12 px-1 sm:px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER, honourCell)}
+                      className={cn("sticky left-0 z-20 w-12 min-w-12 px-1 sm:px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER, honourCell)}
                     >
                       {(spec.limit === -1 ? 0 : (pageSafe - 1) * spec.limit) + i + 1}
                     </td>

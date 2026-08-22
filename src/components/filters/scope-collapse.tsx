@@ -19,6 +19,12 @@ import { cn } from "@/lib/utils";
  *
  * The collapsed state still says what the current scope IS — a bare "Filters"
  * button hides whether you're looking at one season or five.
+ *
+ * COLLAPSED, IT IS DELIBERATELY SMALL. The row is 32px rather than the 44px
+ * touch-target guideline, which is aimed at small controls — this one spans the
+ * full width of the screen, so it stays easy to hit while costing almost
+ * nothing above the table it exists to filter. Expanded, the padding comes back:
+ * the controls inside are ordinary-sized and do want the room.
  */
 export function ScopeCollapse({
   summary,
@@ -33,12 +39,12 @@ export function ScopeCollapse({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className={cn("relative mb-3", pending && "opacity-70")}>
+    <div className={cn("relative mb-3 md:mb-3 max-md:mb-1", pending && "opacity-70")}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="md:hidden w-full min-h-11 flex items-center justify-between gap-2 py-2 text-left"
+        className="md:hidden w-full min-h-8 flex items-center justify-between gap-2 py-0.5 text-left"
       >
         <span className="inline-flex items-center gap-2 min-w-0 text-sm font-medium text-ink">
           <SlidersHorizontal className="w-4 h-4 shrink-0 text-ink-muted" aria-hidden />
@@ -50,7 +56,7 @@ export function ScopeCollapse({
           aria-hidden
         />
       </button>
-      <div className={cn(open ? "flex" : "hidden", "md:flex flex-wrap items-end gap-2")}>
+      <div className={cn(open ? "flex max-md:pt-2 max-md:pb-1" : "hidden", "md:flex flex-wrap items-end gap-2")}>
         {children}
       </div>
     </div>

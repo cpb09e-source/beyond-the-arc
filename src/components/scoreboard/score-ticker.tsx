@@ -29,6 +29,9 @@ import {
  */
 export function ScoreTicker() {
   const [slate, setSlate] = useState<Slate>(EMPTY_SLATE);
+  // Whether the first fetch has come back. Until it has, the rail holds its
+  // height instead of occupying none — see the note on the placeholder below.
+  const [resolved, setResolved] = useState(false);
   const railRef = useRef<HTMLDivElement>(null);
   // Same click-and-drag gesture as the teams and players tables, so the rail
   // behaves the way every other horizontally scrolling surface here does.
@@ -48,6 +51,7 @@ export function ScoreTicker() {
       const next = await fetchSlate(undefined, ctrl.signal);
       if (cancelled) return;
       setSlate(next);
+      setResolved(true);
       // Stop once every game is final — the answer can't change until tomorrow,
       // and a poll a minute through the night is pure waste against the quota.
       if (!slateIsSettled(next)) timer = setTimeout(tick, POLL_MS);
@@ -73,6 +77,26 @@ export function ScoreTicker() {
     };
   }, []);
 
+  // HOLD THE SPACE UNTIL THE ANSWER IS KNOWN.
+  //
+  // The slate arrives from a fetch, so this used to render nothing, then a
+  // 53px rail, and everything below it jumped down a second later — on every
+  // page of the site, since this is chrome. Reserving the height means the
+  // scores land into space that was already theirs.
+  //
+  // The trade is deliberate and one-directional: an EMPTY slate now collapses
+  // 53px once, instead of a full slate pushing the page down once. That is the
+  // better way round — an empty slate happens in the offseason and on a dark
+  // Monday, a full one happens every game night, and a collapse upward is far
+  // less disruptive than content appearing under the reader's eye mid-read.
+  if (!resolved) {
+    return (
+      <div
+        className="border-b border-hairline bg-paper-deep/40 h-[53px]"
+        aria-hidden
+      />
+    );
+  }
   if (slate.games.length === 0) return null;
 
   const liveCount = slate.games.filter(isLive).length;

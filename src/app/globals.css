@@ -270,8 +270,8 @@ body {
  */
 .bta-burger {
   position: relative;
-  width: 20px;
-  height: 16px;
+  width: 17px;
+  height: 13px;
 }
 .bta-burger span {
   display: block;
@@ -840,4 +840,17 @@ body {
    segment parks mid-track rather than vanishing. */
 @media (prefers-reduced-motion: reduce) {
   .ask-sweep::after { animation: none; transform: translateX(95%); }
+}
+
+/* Full-screen mobile menu (components/mobile-menu.tsx). Rises rather than
+   fades so the panel reads as arriving from the control that opened it. */
+@keyframes bta-menu-in {
+  from { opacity: 0; transform: translateY(-0.75rem); }
+  to   { opacity: 1; transform: none; }
+}
+.bta-menu-in {
+  animation: bta-menu-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .bta-menu-in { animation: none; }
 }

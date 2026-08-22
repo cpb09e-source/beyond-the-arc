@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { Search } from "lucide-react";
 import { SearchDialog } from "@/components/search/search-dialog";
+import { AccountNav } from "@/components/account/account-nav";
+import { MobileMenu } from "@/components/mobile-menu";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -17,6 +19,11 @@ const NAV = [
   { href: "/calc", label: "Win Calc" },
   { href: "/portal", label: "Transfer Portal" },
 ];
+
+// The mobile menu carries one extra entry. Pricing is a real page that the
+// desktop row has no width for — seven labels already fill it — so without
+// this the only route to it is a URL someone was given.
+const MOBILE_NAV = [...NAV, { href: "/pricing", label: "Pricing" }];
 
 // Active-route detection. The home route ("/") must match EXACTLY — otherwise
 // every page starts with "/" and the home link would always read active.
@@ -71,15 +78,17 @@ export function SiteHeader() {
           className="flex items-center group shrink-0"
           onClick={() => setOpen(false)}
         >
+          {/* One file, not the light/dark pair: the new mark ships as a single
+              asset and dark mode is off site-wide. If dark returns, add the
+              dark variant back alongside it with the ttz-nav-logo-* classes.
+
+              h-8, not h-10. The mark is 1200x320 (3.75:1) where the original
+              was 2.5:1, so height buys width faster here — h-8 renders 120px
+              against the old logo's 100px. */}
           <img
-            src="/images/bta_nav_logo_light-01.svg"
+            src="/images/btalogo_final-01.svg"
             alt="Beyond the Arc"
-            className="ttz-nav-logo-light h-10 w-auto group-hover:opacity-80 transition-opacity"
-          />
-          <img
-            src="/images/bta_nav_logo_dark-01.svg"
-            alt="Beyond the Arc"
-            className="ttz-nav-logo-dark h-10 w-auto group-hover:opacity-80 transition-opacity"
+            className="h-8 w-auto group-hover:opacity-80 transition-opacity"
           />
         </Link>
 
@@ -135,19 +144,26 @@ export function SiteHeader() {
           {/* SearchDialog renders its own desktop trigger (hidden on mobile) and
               the modal. Kept un-wrapped so the modal works on mobile too. */}
           <SearchDialog />
+          {/* Account sits with search rather than in NAV — see the note on that
+              array about the row's width budget. */}
+          <AccountNav />
           {/* Mobile search — opens the same dialog via a custom event. */}
           <button
             type="button"
             onClick={() => window.dispatchEvent(new Event("bta:open-search"))}
             aria-label="Open search"
-            className="lg:hidden inline-flex items-center justify-center w-9 h-9 rounded-md text-ink hover:bg-paper-deep transition-colors"
+            className="lg:hidden inline-flex items-center justify-center w-9 h-9 rounded-lg bg-ink/[0.07] text-ink hover:bg-ink/[0.12] transition-colors"
           >
-            <Search size={20} />
+            <Search size={18} />
           </button>
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="lg:hidden inline-flex items-center justify-center w-9 h-9 rounded-md text-ink hover:bg-paper-deep transition-colors"
+            /* Same tinted box as the close button inside the menu, and the
+               same 44px. The hamburger IS the X once the panel opens, so
+               giving them one shape makes the swap read as a single control
+               changing state rather than two different buttons. */
+            className="lg:hidden inline-flex items-center justify-center w-9 h-9 rounded-lg bg-ink/[0.07] text-ink hover:bg-ink/[0.12] transition-colors"
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
             aria-controls="mobile-nav"
@@ -163,38 +179,15 @@ export function SiteHeader() {
         </div>
       </div>
 
-      {/* Mobile slide-down drawer */}
-      {open && (
-        <div id="mobile-nav" className="lg:hidden bg-paper">
-          <nav className="px-6 py-4 flex flex-col">
-            {NAV.map((item) => {
-              const active = isCurrent(pathname, item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={active ? "page" : undefined}
-                  onClick={() => setOpen(false)}
-                  className={cn(
-                    "group relative py-3 text-[0.75rem] uppercase tracking-[0.18em] font-medium transition-colors",
-                    active ? "text-ink" : "text-ink-muted hover:text-ink",
-                  )}
-                >
-                  {item.label}
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "pointer-events-none absolute left-0 bottom-2 h-px bg-coral origin-left",
-                      "transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
-                      active ? "w-8 scale-x-100" : "w-8 scale-x-0",
-                    )}
-                  />
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-      )}
+      {/* Full-screen menu, replacing the old slide-down drawer. */}
+      <MobileMenu
+        open={open}
+        onClose={() => setOpen(false)}
+        items={MOBILE_NAV}
+        isCurrent={isCurrent}
+        pathname={pathname}
+      />
+
     </header>
   );
 }

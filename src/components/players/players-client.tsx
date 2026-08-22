@@ -434,6 +434,12 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   // these table cells), so we measure its real width and drive the Player
   // column's sticky `left` off it — the pinned position then exactly equals the
   // natural flow position (no gap, no 1px shimmy when panning).
+  // min-w-10 on the RK cells makes this 40px starting value true at first
+  // paint. The column was previously sized purely by content, so the
+  // server-rendered `left` on the sticky player column was wrong until
+  // hydration measured it and painted a gap between the two frozen columns in
+  // the meantime. A minimum floors the shrink; the measurement still handles
+  // the grow case, such as a four-digit rank.
   const [rkThRef, rkW] = useMeasuredWidth<HTMLTableCellElement>(40);
   const playerLeft = { left: `${rkW}px` };
 
@@ -932,7 +938,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               </tr>
               {/* Column row — search lives in the Player cell (D&3-style). */}
               <tr>
-                <th ref={rkThRef} className="sticky top-6 left-0 z-40 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">RK</th>
+                <th ref={rkThRef} className="sticky top-6 left-0 z-40 w-10 min-w-10 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">RK</th>
                 <th style={playerLeft} className="sticky top-6 z-40 bg-paper-deep border-b border-hairline px-1.5 sm:px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Player</th>
                 {[...dynamicCols, ...GRID_COLS].map((c, i) =>
                   c.sortKey ? (
@@ -980,7 +986,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                   return (
                   <tr key={p.id} className={cn("group", zebra)}>
                     {/* RK — rank within the CURRENT sort */}
-                    <td className={cn("sticky left-0 z-20 px-1 sm:px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
+                    <td className={cn("sticky left-0 z-20 w-10 min-w-10 px-1 sm:px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
                       {(pageSafe - 1) * spec.limit + i + 1}
                     </td>
                     {/* Player — photo + name + team/class/height meta */}
