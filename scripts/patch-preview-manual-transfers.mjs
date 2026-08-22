@@ -94,6 +94,11 @@ const MOVES = [
   ["Lamar Washington", "Boise St."],
   ["Duke Brennan", "Oklahoma"],
   ["Jerald Colonel", "FIU"],
+  // 2026-08-21
+  ["Jaxon Kohler", "BYU"],
+  ["Lance Waddles", "Campbell"],
+  ["Cooper Noard", "Samford"],
+  ["Treysen Eaglestaff", "UC San Diego"],
 ];
 
 /** Common shorthand → the name season-preview.json uses. */
