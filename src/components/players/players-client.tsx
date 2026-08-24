@@ -926,13 +926,23 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         <div
           ref={gridScrollRef}
           
-          // Below `md` this must NOT be its own vertical scroll pane. The max-h
-          // that gives the sticky headers a scrollport also means a finger put
-          // anywhere in the data area scrolls the TABLE rather than the page,
-          // which on a phone reads as the contents sliding around loose inside
-          // a frame. So the height cap starts at md; with no cap the content
-          // height equals the box height, nothing scrolls vertically here, and
-          // the page takes the gesture on its own.
+          // The cap is on at EVERY width now. The headers have to stay put
+          // while you scroll the rows on a phone, and a sticky header can only
+          // stick to a scrollport — with no cap the content height equals the
+          // box height, nothing scrolls vertically here, and the header rode
+          // off the top with the page.
+          //
+          // That is the trade this box refused on 2026-08-22: a finger inside
+          // the data area now scrolls the TABLE rather than the page. In
+          // practice it settles into the right thing — the page scrolls the
+          // toolbar away, the box top lands just under the wordmark (the site
+          // header is `relative`, not sticky, so it goes with it), and from
+          // there the table takes the gesture with its headers pinned.
+          // Overscroll still chains at the ends, so the footer is reachable.
+          //
+          // svh, not dvh or vh: the small-viewport unit is measured with the
+          // URL bar OUT, so the box never runs past the visible area and its
+          // height does not animate mid-scroll as the bar collapses.
           //
           // DO NOT ADD `touch-action: pan-x` HERE. It looks like the tidy way
           // to say "horizontal is mine, vertical is the page's", but
@@ -941,7 +951,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           // removes pan-y for the whole gesture and the page cannot scroll
           // from any finger that lands on the table. Shipped exactly that on
           // 2026-08-22 and had to pull it.
-          className="overflow-auto overscroll-x-contain players-scroll cursor-grab md:max-h-[calc(100vh-1.5rem)]"
+          className="overflow-auto overscroll-x-contain players-scroll cursor-grab max-h-[calc(100svh-1.5rem)] md:max-h-[calc(100vh-1.5rem)]"
           {...panHandlers}
         >
           <table className="w-full text-sm border-separate border-spacing-0">

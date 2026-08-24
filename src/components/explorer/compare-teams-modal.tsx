@@ -476,7 +476,10 @@ export function CompareTeamsModal({
               Head to head
             </div>
             <h2 className="font-display text-3xl text-ink leading-none tracking-tight">Compare teams</h2>
-            <p className="text-sm text-ink-muted mt-2 max-w-2xl">
+            {/* Three lines of instruction is a fair trade on a wide screen and
+                a third of the fold on a phone, where the colour legend is
+                right there in the numbers anyway. */}
+            <p className="hidden md:block text-sm text-ink-muted mt-2 max-w-2xl">
               Pick up to four team-seasons. Best mark per row in{" "}
               <span className="text-emerald-700 font-medium">green</span>, worst in{" "}
               <span className="text-coral font-medium">coral</span>. Ties get neither.
@@ -901,9 +904,9 @@ function SlotPicker({
               onKeyDown={onInputKey}
               placeholder="Search team or season (e.g. duke 25)…"
               autoFocus
-              className="w-full h-9 px-3 rounded border border-hairline bg-card text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40"
+              className="w-full h-9 px-3 rounded border border-hairline bg-card text-ink text-base md:text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40"
             />
-            <div className="mt-1.5 text-[0.6rem] text-ink-muted px-1">
+            <div className="hidden md:block mt-1.5 text-[0.6rem] text-ink-muted px-1">
               ↑↓ to navigate · Enter or Tab to select &amp; jump to next slot
             </div>
           </div>

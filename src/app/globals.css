@@ -382,6 +382,31 @@ body {
   }
 }
 
+/* iOS zoom floor on text fields.
+ *
+ * Mobile Safari zooms the page in whenever a focused text field is set below
+ * 16px, and it does not zoom back out. That misreads as two separate bugs:
+ * the page "jumps" on tap, and any full-width overlay starts bleeding off the
+ * right edge — because the box is still inset-x-0 on the LAYOUT viewport
+ * while the zoom has shrunk the VISUAL viewport around it. Both symptoms,
+ * one cause.
+ *
+ * The site's field styles are 14px (text-sm) and the range boxes are 12px, so
+ * essentially every input on a phone triggered it. Rather than patch each
+ * call site, put the floor here: 16px below md, back to the authored size at
+ * md and up where no zoom rule exists and the smaller text reads better.
+ *
+ * type="range" is excluded — it has no text and a font-size on it would only
+ * disturb the track metrics. Buttons and checkboxes never zoom.
+ */
+@media (max-width: 47.99rem) {
+  input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 /* Court-line divider — for section breaks */
 .court-divider {
   height: 1px;

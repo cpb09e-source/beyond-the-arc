@@ -7,6 +7,7 @@ import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
 import { formatHeight } from "@/lib/height";
 import { confDisplay } from "@/lib/conf-display";
+import { dataUrl } from "@/lib/data-url";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { pctColor } from "@/components/percentile-chip";
 import { STAT_META, fmtValue, seasonLabel } from "./where-they-rank";
@@ -214,6 +215,8 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
   useEffect(() => {
     if (!open || index || indexLoading) return;
     setIndexLoading(true);
+    // players-index.json is a top-level file and stays in /public, so this
+    // one is correct as a bare path. dataUrl() would return it unchanged.
     fetch("/data/players-index.json")
       .then((r) => r.json())
       .then((data: IndexEntry[]) => {
@@ -276,7 +279,12 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
       if (!Number.isFinite(bartId)) continue;
       if (ranksByBart[bartId] !== undefined) continue;
       setRanksByBart((prev) => ({ ...prev, [bartId]: "loading" }));
-      fetch(`/data/player-ranks/${bartId}.json`)
+      // dataUrl(), NOT the bare path. player-ranks is one of the eight dirs
+      // stripped out of `out/` and mirrored to R2 — the raw path is a 404 in
+      // production, which is why every Production and Box Score row in this
+      // modal rendered an em dash while the Context rows (players-index.json,
+      // which does ship) filled in fine.
+      fetch(dataUrl(`/data/player-ranks/${bartId}.json`))
         .then((r) => {
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           return r.json();
@@ -481,7 +489,10 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
               Head to head
             </div>
             <h2 className="font-display text-3xl text-ink leading-none tracking-tight">Compare players</h2>
-            <p className="text-sm text-ink-muted mt-2 max-w-2xl">
+            {/* Three lines of instruction is a fair trade on a wide screen and
+                a third of the fold on a phone, where the colour legend is
+                right there in the numbers anyway. */}
+            <p className="hidden md:block text-sm text-ink-muted mt-2 max-w-2xl">
               Pick up to four player-seasons. Best mark per row in{" "}
               <span className="text-emerald-700 font-medium">green</span>, worst in{" "}
               <span className="text-coral font-medium">coral</span>. Ties get neither.
@@ -910,9 +921,9 @@ function SlotPicker({
               onKeyDown={onInputKey}
               placeholder="Search player or season (e.g. flagg 25)…"
               autoFocus
-              className="w-full h-9 px-3 rounded border border-hairline bg-card text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40"
+              className="w-full h-9 px-3 rounded border border-hairline bg-card text-ink text-base md:text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40"
             />
-            <div className="mt-1.5 text-[0.6rem] text-ink-muted px-1">
+            <div className="hidden md:block mt-1.5 text-[0.6rem] text-ink-muted px-1">
               ↑↓ to navigate · Enter or Tab to select &amp; jump to next slot
             </div>
           </div>

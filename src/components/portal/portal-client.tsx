@@ -284,10 +284,19 @@ export function PortalClient({
               </Select>
             </label>
           </div>
-        <div className="overflow-x-auto overscroll-x-contain">
-          <table className="w-full text-sm">
-            <thead className="bg-paper-deep/70">
-              <tr className="border-b border-hairline text-left">
+        {/* Vertical bound + sticky <th>s: same pairing as the teams and
+            players tables. The cap is what gives the header row a
+            scrollport; without it this box never scrolls vertically and
+            `sticky top-0` has nothing to hold on to. svh keeps the box
+            inside the visible area with the URL bar out. */}
+        <div className="overflow-auto overscroll-x-contain max-h-[calc(100svh-1.5rem)] md:max-h-[calc(100vh-1.5rem)]">
+          {/* border-separate so the header cells carry their own bottom
+              rule — a collapsed border belongs to the table and scrolls
+              away underneath a sticky cell. Nothing in the body draws a
+              border, so separating costs nothing elsewhere. */}
+          <table className="w-full text-sm border-separate border-spacing-0">
+            <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-30 [&_th]:bg-paper-deep [&_th]:border-b [&_th]:border-hairline [&_th:has(button)]:hover:bg-paper-deep/60">
+              <tr className="text-left">
                 <Th className="w-10 text-center">#</Th>
                 <Th className="w-12">{""}</Th>
                 <ThSort label="Player" active={sortBy==="name"} dir={sortDir} onClick={() => toggleSort("name","asc")} align="left" className="pr-1" />
