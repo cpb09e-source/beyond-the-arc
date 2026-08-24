@@ -289,7 +289,7 @@ export function PortalClient({
             scrollport; without it this box never scrolls vertically and
             `sticky top-0` has nothing to hold on to. svh keeps the box
             inside the visible area with the URL bar out. */}
-        <div className="overflow-auto overscroll-x-contain max-h-[calc(100svh-1.5rem)] md:max-h-[calc(100vh-1.5rem)]">
+        <div className="overflow-auto [overscroll-behavior:none] max-h-[calc(100svh-14rem)] md:[overscroll-behavior:contain_auto] md:max-h-[calc(100vh-1.5rem)]">
           {/* border-separate so the header cells carry their own bottom
               rule — a collapsed border belongs to the table and scrolls
               away underneath a sticky cell. Nothing in the body draws a

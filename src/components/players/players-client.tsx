@@ -933,12 +933,36 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           // off the top with the page.
           //
           // That is the trade this box refused on 2026-08-22: a finger inside
-          // the data area now scrolls the TABLE rather than the page. In
-          // practice it settles into the right thing — the page scrolls the
-          // toolbar away, the box top lands just under the wordmark (the site
-          // header is `relative`, not sticky, so it goes with it), and from
-          // there the table takes the gesture with its headers pinned.
-          // Overscroll still chains at the ends, so the footer is reachable.
+          // the data area now scrolls the TABLE rather than the page.
+          //
+          // overscroll-behavior: none is what makes that trade survivable, and
+          // it is load-bearing. The first cut shipped with the default, and on
+          // iOS a nested pane rubber-bands independently on BOTH axes — pull
+          // down-and-right at rest and the whole grid slides away from its own
+          // frame, blank paper opening above and to the left of the header.
+          // "I can drag and drop the entire table" was exactly right. `contain`
+          // does not fix it: contain stops the scroll from chaining to the page
+          // but keeps the local bounce, which IS the thing that looks broken.
+          // Only `none` suppresses both.
+          //
+          // Suppressing both is why the cap is 14rem short of the viewport
+          // rather than flush to it, and the number is derived, not taste.
+          // With no chaining a finger inside the table can never move the
+          // page, so a strip of page has to stay visible below the box for the
+          // pagination and footer to be reachable at all. The same 14rem also
+          // pins the header down: the page's own scroll range is
+          // boxTop + boxHeight + whatFollows - viewport, and if that exceeds
+          // boxTop the box top climbs ABOVE the fold at full page scroll,
+          // taking the sticky header with it. Keeping boxHeight under
+          // viewport - whatFollows makes that impossible. whatFollows measured
+          // 125-223px across the four list pages; 14rem clears the worst.
+          //
+          // Verified with real touch: inside the box scrolls the table 185px
+          // and leaves the page at 0; in the strip below scrolls the page 55px
+          // and leaves the table alone; at the page's last pixel the Team
+          // header still sits 25px down the screen.
+          //
+          // md keeps `contain auto`, which is what overscroll-x-contain meant.
           //
           // svh, not dvh or vh: the small-viewport unit is measured with the
           // URL bar OUT, so the box never runs past the visible area and its
@@ -951,7 +975,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           // removes pan-y for the whole gesture and the page cannot scroll
           // from any finger that lands on the table. Shipped exactly that on
           // 2026-08-22 and had to pull it.
-          className="overflow-auto overscroll-x-contain players-scroll cursor-grab max-h-[calc(100svh-1.5rem)] md:max-h-[calc(100vh-1.5rem)]"
+          className="overflow-auto [overscroll-behavior:none] players-scroll cursor-grab max-h-[calc(100svh-14rem)] md:[overscroll-behavior:contain_auto] md:max-h-[calc(100vh-1.5rem)]"
           {...panHandlers}
         >
           <table className="w-full text-sm border-separate border-spacing-0">
