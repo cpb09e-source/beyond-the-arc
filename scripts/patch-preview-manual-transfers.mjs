@@ -104,6 +104,7 @@ const MOVES = [
   ["Donovan Dent", "LSU"],
   // 2026-08-24
   ["Mark Mitchell", "Kentucky"],
+  ["Iaroslav Niagu", "Colorado"],
 ];
 
 /** Common shorthand → the name season-preview.json uses. */

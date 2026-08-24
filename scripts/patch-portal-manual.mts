@@ -136,6 +136,7 @@ const BATCHES: Array<{ confirmed: string; moves: Array<[string, string]> }> = [
     confirmed: "2026-08-24T00:00:00",
     moves: [
       ["Mark Mitchell", "Kentucky"],
+      ["Iaroslav Niagu", "Colorado"],
     ],
   },
 ];
