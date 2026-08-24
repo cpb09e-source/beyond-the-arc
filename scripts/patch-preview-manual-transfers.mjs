@@ -102,6 +102,8 @@ const MOVES = [
   ["Kimani Hamilton", "Mississippi St."],
   // 2026-08-22
   ["Donovan Dent", "LSU"],
+  // 2026-08-24
+  ["Mark Mitchell", "Kentucky"],
 ];
 
 /** Common shorthand → the name season-preview.json uses. */
@@ -128,6 +130,51 @@ const NULL_STATS = {
   reb: null, rebP: null, ast: null, astP: null, fg3: null, fg3P: null, ft: null, ftP: null,
   ts: null, tsP: null, usg: null, usgP: null, ewins: null, on_off: null, ewinsP: null, on_offP: null,
 };
+
+/**
+ * The carried stat line for a bart id, read the way build-season-preview reads
+ * it — player-ranks/<id>.json, the PREV_SEASON entry, same keys and the same
+ * 0-100 -> 0-1 conversions.
+ *
+ * WHY THIS EXISTS. A row built by the branch below used to be written with
+ * NULL_STATS and left there: stats only ever survived for a player who was
+ * already carried on some other team's preview roster and got MOVED across.
+ * Anyone the preview had dropped — which is everyone who entered the portal,
+ * since that is exactly what removes them from their old roster — landed on
+ * their new team with an empty line. Treysen Eaglestaff is the case that
+ * surfaced it: 9.8 / 4.6 / 1.4 on 51.3% TS at West Virginia, and the roster
+ * showed him as a row of dashes, while his rank file had every figure.
+ *
+ * eWins and on/off are deliberately left null here. They are pool-relative —
+ * their percentiles are ranked across every bart id in the season — so they
+ * are stamped by patch-preview-impact.mjs afterwards, over the whole file at
+ * once, rather than guessed at per row.
+ */
+function carriedStats(bartId) {
+  if (bartId == null) return null;
+  let j;
+  try {
+    j = JSON.parse(fs.readFileSync(path.join(DATA, "player-ranks", `${bartId}.json`), "utf8"));
+  } catch { return null; }
+  const s = ((j.seasonRanks || []).find((x) => x.year === PREV_SEASON) || {}).stats || {};
+  const v = (k) => (typeof s[k]?.value === "number" ? s[k].value : null);
+  const pc = (k) => (typeof s[k]?.percentile === "number" ? s[k].percentile : null);
+  const r1 = (x) => (x == null ? null : Math.round(x * 10) / 10);
+  // Stored 0-100 on the rank file, 0-1 on the roster row.
+  const frac = (k) => { const x = v(k); return x == null ? null : x > 1.5 ? x / 100 : x; };
+  if (v("epm") === null && v("pts_pg") === null) return null;
+  return {
+    epm: r1(v("epm")), epmP: pc("epm"),
+    pir: r1(v("pir")), pirP: pc("pir"),
+    pts: r1(v("pts_pg")), ptsP: pc("pts_pg"),
+    reb: r1(v("reb_pg")), rebP: pc("reb_pg"),
+    ast: r1(v("ast_pg")), astP: pc("ast_pg"),
+    fg3: frac("fg3_pct"), fg3P: pc("fg3_pct"),
+    ft: frac("ft_pct"), ftP: pc("ft_pct"),
+    ts: frac("ts_pct"), tsP: pc("ts_pct"),
+    usg: frac("usage"), usgP: pc("usage"),
+  };
+}
 
 const doc = JSON.parse(fs.readFileSync(PREVIEW, "utf8"));
 const portalRaw = JSON.parse(fs.readFileSync(PORTAL, "utf8"));
@@ -190,6 +237,13 @@ for (const [name, destRaw] of MOVES) {
       fixes.push(cur.row.from ? `from "${cur.row.from}" → "${origin}"` : `from ${origin}`);
       cur.row.from = origin;
     }
+    // Backfill: rows written by an earlier run of this script carry NULL_STATS
+    // for the reason described on carriedStats. Fill them in place rather than
+    // making anyone notice a roster of dashes and come asking.
+    if (cur.row.epm == null && cur.row.pts == null) {
+      const st = carriedStats(cur.row.bart_id);
+      if (st) { Object.assign(cur.row, st); fixes.push(`stats from rank file (epm ${st.epm}, ${st.pts} ppg)`); }
+    }
     if (fixes.length) { moved++; lines.push(`= ${name.padEnd(21)} already on ${dest} — ${fixes.join(", ")}`); }
     else { noop++; lines.push(`· ${name.padEnd(21)} already on ${dest} as a transfer, unchanged`); }
     continue;
@@ -221,6 +275,7 @@ for (const [name, destRaw] of MOVES) {
     status: "transfer",
     link: false,                 // refresh-preview-links.mjs decides this properly
     ...NULL_STATS,
+    ...(carriedStats(bart) ?? {}),
   };
   if (origin) row.from = origin;
   t.roster.push(row);

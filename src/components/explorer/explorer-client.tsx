@@ -534,7 +534,14 @@ export function ExplorerClient({
                 and the group is just Show + Select, unchanged. */}
             <button
               type="button"
-              onClick={() => setSearchOpen(true)}
+              onClick={() => {
+                setSearchOpen(true);
+                // Inside the gesture: iOS raises the keyboard only for a
+                // focus() made while the tap is still being handled. The effect
+                // below runs after commit, which focused the field but left the
+                // keyboard down — hence having to tap the field again.
+                searchInputRef.current?.focus({ preventScroll: true });
+              }}
               aria-label="Search teams"
               className="lg:hidden shrink-0 h-8 w-8 inline-flex items-center justify-center rounded-md border border-ink/15 bg-card text-ink-muted hover:text-ink hover:border-ink/25 shadow-sm transition-colors"
             >

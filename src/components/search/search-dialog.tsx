@@ -1,6 +1,7 @@
 "use client";
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
@@ -171,7 +172,19 @@ export function SearchDialog() {
   // External open trigger (the mobile header search icon) — keyboard shortcuts
   // don't exist on touch devices, so a button dispatches this event.
   useEffect(() => {
-    function onOpenSearch() { setOpen(true); }
+    function onOpenSearch() {
+      // FOCUS HAS TO HAPPEN INSIDE THE GESTURE. iOS only raises the keyboard
+      // for a focus() made while the user's tap is still being handled; a
+      // focus from an effect (which is what this used to rely on) lands after
+      // commit, outside that window, so the field took focus and the keyboard
+      // stayed down — you had to tap the field a second time.
+      //
+      // The event is dispatched synchronously from the header button's click,
+      // so flushSync renders the panel here and now, and the field exists to
+      // be focused before the gesture ends.
+      flushSync(() => setOpen(true));
+      inputRef.current?.focus();
+    }
     window.addEventListener("bta:open-search", onOpenSearch);
     return () => window.removeEventListener("bta:open-search", onOpenSearch);
   }, []);
@@ -180,7 +193,11 @@ export function SearchDialog() {
   useEffect(() => {
     if (!open) return;
     loadIndex();
-    requestAnimationFrame(() => inputRef.current?.focus());
+    // Fallback for the ⌘K path, which has no tap to stay inside. Harmless when
+    // the open came from a button, where the field is already focused.
+    if (document.activeElement !== inputRef.current) {
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
     /**
      * Lock the page behind the modal — and pay back the scrollbar's width.
      *
@@ -335,7 +352,7 @@ export function SearchDialog() {
           usually ready to search the moment it opens. */}
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => { flushSync(() => setOpen(true)); inputRef.current?.focus(); }}
         onPointerEnter={loadIndex}
         onFocus={loadIndex}
         aria-label="Open search"

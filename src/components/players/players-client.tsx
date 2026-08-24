@@ -857,7 +857,11 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                 "find one / show many". */}
             <button
               type="button"
-              onClick={() => setSearchOpen(true)}
+              onClick={() => {
+                setSearchOpen(true);
+                // Inside the gesture — see the note on the teams explorer.
+                searchInputRef.current?.focus({ preventScroll: true });
+              }}
               aria-label="Search players"
               className="lg:hidden shrink-0 h-8 w-8 inline-flex items-center justify-center rounded-md border border-ink/15 bg-card text-ink-muted hover:text-ink hover:border-ink/25 shadow-sm transition-colors"
             >
