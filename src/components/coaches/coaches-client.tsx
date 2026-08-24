@@ -181,7 +181,11 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
       if (teamSet && !(r.all_teams ?? []).some((t) => teamSet.has(t))) continue;
       if (confSet && (!r.current_conference || !confSet.has(r.current_conference))) continue;
       if (tier !== "All") {
-        const isPower = r.current_conference ? POWER_CONFS.has(r.current_conference) : false;
+        // Unknown is unknown. `Mid Major` used to mean "not power", which
+        // quietly asserted mid-major status for anyone we had no conference
+        // for; a coach we cannot place belongs in neither tier.
+        if (!r.current_conference) continue;
+        const isPower = POWER_CONFS.has(r.current_conference);
         if (tier === "Power" && !isPower) continue;
         if (tier === "Mid Major" && isPower) continue;
       }
@@ -209,7 +213,9 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
       }
       if (confSet && (!r.current_conference || !confSet.has(r.current_conference))) return false;
       if (tier !== "All") {
-        const isPower = r.current_conference ? POWER_CONFS.has(r.current_conference) : false;
+        // See the note on the count above: no conference means neither tier.
+        if (!r.current_conference) return false;
+        const isPower = POWER_CONFS.has(r.current_conference);
         if (tier === "Power" && !isPower) return false;
         if (tier === "Mid Major" && isPower) return false;
       }
@@ -540,7 +546,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                 <ThSort label="Conf W%" active={effectiveSort==="conf_winpct"} dir={sortDir} onClick={() => toggle("conf_winpct","desc")} className="hidden md:table-cell" />
                 <ThSort label="Adj Net" active={effectiveSort==="adj_net"} dir={sortDir} onClick={() => toggle("adj_net","desc")} className="hidden md:table-cell" />
                 <ThSort label="March" active={effectiveSort==="tourney"} dir={sortDir} onClick={() => toggle("tourney","desc")} />
-                <ThSort label="NCAA Rec" active={effectiveSort==="tourney_rec"} dir={sortDir} onClick={() => toggle("tourney_rec","desc")} />
+                <ThSort label="Composite" active={effectiveSort==="composite"} dir={sortDir} onClick={() => toggle("composite","desc")} />
                 {statCols.map((c) => (
                   <ThSort
                     key={c.key}
@@ -550,7 +556,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                     onClick={() => toggle(`stat:${c.key}`, "desc")}
                   />
                 ))}
-                <ThSort label="Composite" active={effectiveSort==="composite"} dir={sortDir} onClick={() => toggle("composite","desc")} />
+                <ThSort label="NCAA Rec" active={effectiveSort==="tourney_rec"} dir={sortDir} onClick={() => toggle("tourney_rec","desc")} />
                 <ThSort label="Per Szn" active={effectiveSort==="composite_per_season"} dir={sortDir} onClick={() => toggle("composite_per_season","desc")} className="hidden lg:table-cell" />
                 <ThSort label="Seasons" active={effectiveSort==="seasons"} dir={sortDir} onClick={() => toggle("seasons","desc")} />
                 <ThSort label="Record" active={effectiveSort==="career_wins"} dir={sortDir} onClick={() => toggle("career_wins","desc")} />
@@ -607,8 +613,8 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                     </Td>
                     <Td className="text-right">
                       <ValueChip
-                        value={r.ncaa_appearances > 0 ? `${r.tourney_wins}-${r.tourney_losses}` : "—"}
-                        pct={pcts.tourneyWins.get(r.slug)}
+                        value={r.composite_score != null ? r.composite_score.toFixed(1) : "—"}
+                        pct={pcts.composite.get(r.slug)}
                       />
                     </Td>
                     {statCols.map((c) => (
@@ -621,8 +627,8 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                     ))}
                     <Td className="text-right">
                       <ValueChip
-                        value={r.composite_score != null ? r.composite_score.toFixed(1) : "—"}
-                        pct={pcts.composite.get(r.slug)}
+                        value={r.ncaa_appearances > 0 ? `${r.tourney_wins}-${r.tourney_losses}` : "—"}
+                        pct={pcts.tourneyWins.get(r.slug)}
                       />
                     </Td>
                     <Td className="hidden lg:table-cell text-right">

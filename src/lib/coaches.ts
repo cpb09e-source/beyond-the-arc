@@ -651,6 +651,18 @@ function profilesFromSeasons(seasons: SeasonWithCoach[], raw: RawSourceData): Co
     const current = list[0]!;
     const is_active = current.year === LATEST_YEAR;
 
+    // The conference of the LAST SEASON THAT KNOWS ONE, not simply the last
+    // season. The corpus has `conference: null` on the window's edge years —
+    // 2013 and 2021 — so a coach whose final season is one of those had no
+    // conference at all: Roy Williams finished at North Carolina in 2021 and
+    // came out with current_conference null, as did Lon Kruger at Oklahoma.
+    // That is not a small display nit. The Tier filter reads
+    // `POWER_CONFS.has(current_conference)`, so a null read as "not power" and
+    // dropped 68 coaches — Williams, Kruger, Wojciechowski, Leitao — into Mid
+    // Major. Their own earlier seasons say ACC, B12, BE.
+    const current_conference =
+      current.conference ?? (list.find((s) => s.conference != null)?.conference ?? null);
+
     // Per-school stints (handle re-tenures by summing all years at that school).
     const byTeam = new Map<string, SeasonWithCoach[]>();
     for (const s of list) {
@@ -712,7 +724,7 @@ function profilesFromSeasons(seasons: SeasonWithCoach[], raw: RawSourceData): Co
       name,
       slug: coachSlug(name),
       current_team: current.team,
-      current_conference: current.conference,
+      current_conference,
       current_year: current.year,
       is_active,
       career_wins,

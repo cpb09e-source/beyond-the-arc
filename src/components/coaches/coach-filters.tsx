@@ -9,6 +9,7 @@ import {
   type RangeStat, type RangeState,
 } from "@/components/filters/range-row";
 import { StatChipStrip, buildStatChips, type StatChip } from "@/components/filters/stat-chips";
+import { FilterGroup } from "@/components/filters/filter-group";
 import type { CoachRow } from "@/app/coaches/page";
 
 /**
@@ -279,10 +280,39 @@ export function CoachStatFilters({
     return () => document.removeEventListener("keydown", h);
   }, [open, onOpenChange]);
 
+  // A modal over the page must freeze the page. Below md only: at md+ this is
+  // still an inline drawer and the page behind it is the point.
+  useEffect(() => {
+    if (!open) return;
+    if (!window.matchMedia("(max-width: 47.99rem)").matches) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
   const panel = (
-    <div className={cn("bta-drawer border-b border-hairline bg-paper-deep/20", open && "is-open")}>
-      <div>
-        <div id={PANEL_ID} role="region" aria-label="Coach filters">
+    <>
+      {/* PHONE: a scrim, so the panel reads as over the page rather than as
+          part of it. Tapping it closes, same as the X. */}
+      {open && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-ink/40 bta-backdrop-in"
+          onClick={() => onOpenChange(false)}
+          aria-hidden
+        />
+      )}
+      <div className={cn(
+        // Same treatment as the teams and players drawers: the inline collapse
+        // at md+, a sheet anchored under the header below it. This page kept
+        // the old always-inline .bta-drawer after those two moved, so /coaches
+        // was opening a different way from the rest of the site.
+        "bta-sheet md:border-b md:border-hairline md:bg-paper-deep/20",
+        open && "is-open",
+        "max-md:fixed max-md:inset-x-0 max-md:top-16 max-md:bottom-0 max-md:z-50 max-md:bg-card max-md:border-t max-md:border-hairline",
+        !open && "max-md:hidden",
+      )}>
+      <div className="max-md:flex max-md:flex-col max-md:h-full">
+        <div id={PANEL_ID} role="region" aria-label="Coach filters" className="max-md:flex max-md:flex-col max-md:flex-1 max-md:min-h-0">
           <div className="flex items-start justify-between gap-3 px-4 lg:px-5 pt-4 pb-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center flex-wrap gap-2 min-h-6">
@@ -350,17 +380,11 @@ export function CoachStatFilters({
             </button>
           </div>
 
-          <div className="max-h-[60vh] overflow-y-auto px-4 lg:px-5 pb-5 space-y-6">
+          <div className="max-md:flex-1 max-md:min-h-0 md:max-h-[60vh] overflow-y-auto px-4 lg:px-5 pb-5 space-y-6">
             {GROUPS.map((g) => {
               const gc = g.stats.reduce((n, s) => n + (isBoundActive(draft[s.key]) ? 1 : 0), 0);
               return (
-                <section key={g.label} className="[contain:layout_style]">
-                  <div className="flex items-center gap-2 mb-3 min-h-5">
-                    <h4 className="text-[0.62rem] uppercase tracking-[0.18em] font-semibold text-ink-soft">{g.label}</h4>
-                    {gc > 0 && (
-                      <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-coral/15 text-coral text-[0.58rem] font-bold tabular">{gc}</span>
-                    )}
-                  </div>
+                <FilterGroup key={g.label} label={g.label} count={gc}>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                     {g.stats.map((st) => (
                       <div key={st.key} id={`coachrow-${st.key}`}>
@@ -373,12 +397,12 @@ export function CoachStatFilters({
                       </div>
                     ))}
                   </div>
-                </section>
+                </FilterGroup>
               );
             })}
           </div>
 
-          <div className="sticky bottom-0 px-4 lg:px-5 py-3 border-t border-hairline bg-paper-deep/60 backdrop-blur-sm flex items-center gap-3">
+          <div className="sticky bottom-0 max-md:static max-md:shrink-0 px-4 lg:px-5 py-3 max-md:pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] border-t border-hairline bg-paper-deep/60 backdrop-blur-sm flex items-center gap-3">
             <div className="text-sm text-ink-soft leading-none">
               <span className="text-lg font-bold text-ink tabular">{matches.toLocaleString()}</span>
               <span className="ml-1.5 text-xs text-ink-muted">{matches === 1 ? "coach" : "coaches"}</span>
@@ -392,7 +416,8 @@ export function CoachStatFilters({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 
   return (

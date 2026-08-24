@@ -98,10 +98,7 @@ export default async function HomePage() {
       {/* Same padding rhythm as /players so the two tables sit at the same
           height on the page. */}
       <section className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-3 pb-8 lg:pt-9 lg:pb-10">
-        <PageHeading
-          label="Team ratings"
-          sub="Every Division I team. Sort any column, Filter on any stat."
-        />
+        <PageHeading label="Team ratings" />
         <Suspense fallback={<div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-10 text-center text-ink-muted">Loading teams…</div>}>
           <ExplorerClient
             initialTeams={initialTeams}
