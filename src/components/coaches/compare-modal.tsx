@@ -614,7 +614,22 @@ function SlotPicker({
       )}
 
       {open && !coach && (
-        <div className="absolute top-full left-0 mt-1 w-72 bg-card border border-hairline rounded-lg shadow-lg z-30 overflow-hidden">
+        <>
+        {/* Phone: a scrim under the sheet, so a tap outside closes it and the
+            list reads as sitting over the modal rather than inside a slot. */}
+        <div
+          className="md:hidden fixed inset-0 z-[55] bg-ink/30"
+          onClick={() => onOpenChange(false)}
+          aria-hidden
+        />
+        <div className={cn(
+          "bg-card border border-hairline shadow-lg overflow-hidden",
+          // PHONE: bottom sheet, pinned to the viewport.
+          "max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-[60] max-md:rounded-t-xl",
+          "max-md:pb-[env(safe-area-inset-bottom,0px)]",
+          // md+: the dropdown, exactly as before.
+          "md:absolute md:top-full md:left-0 md:mt-1 md:w-72 md:rounded-lg md:z-30",
+        )}>
           <div className="p-2 border-b border-hairline">
             <input
               type="search"
@@ -629,7 +644,7 @@ function SlotPicker({
               ↑↓ to navigate · Enter or Tab to select &amp; jump to next slot
             </div>
           </div>
-          <div ref={listRef} className="max-h-72 overflow-y-auto overscroll-contain py-1">
+          <div ref={listRef} className="max-md:max-h-[50vh] md:max-h-72 overflow-y-auto overscroll-contain py-1">
             {filtered.length === 0 ? (
               <div className="px-3 py-6 text-center text-xs text-ink-muted">No matches.</div>
             ) : (
@@ -652,6 +667,7 @@ function SlotPicker({
             )}
           </div>
         </div>
+        </>
       )}
     </div>
   );
