@@ -620,10 +620,18 @@ export function ExplorerClient({
           // that gives the sticky headers a scrollport also means a finger put
           // anywhere in the data area scrolls the TABLE rather than the page,
           // which on a phone reads as the contents sliding around loose inside
-          // a frame. So the height cap starts at md, and touch-action hands
-          // vertical gestures back to the page while keeping the horizontal
-          // swipe that reaching the stat columns depends on. pinch-zoom stays.
-          className="overflow-auto overscroll-x-contain cursor-grab md:max-h-[calc(100vh-1.5rem)] max-md:[touch-action:pan-x_pinch-zoom]"
+          // a frame. So the height cap starts at md; with no cap the content
+          // height equals the box height, nothing scrolls vertically here, and
+          // the page takes the gesture on its own.
+          //
+          // DO NOT ADD `touch-action: pan-x` HERE. It looks like the tidy way
+          // to say "horizontal is mine, vertical is the page's", but
+          // touch-action RESTRICTS rather than delegates: the effective value
+          // is the intersection down the ancestor chain, so pan-x on this box
+          // removes pan-y for the whole gesture and the page cannot scroll
+          // from any finger that lands on the table. Shipped exactly that on
+          // 2026-08-22 and had to pull it.
+          className="overflow-auto overscroll-x-contain cursor-grab md:max-h-[calc(100vh-1.5rem)]"
           {...panHandlers}
         >
           <table className="w-full text-sm border-separate border-spacing-0">

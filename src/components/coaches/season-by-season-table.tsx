@@ -103,7 +103,7 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
     // Horizontal scroll on narrow viewports — 9 columns can't fit a phone, so
     // the table keeps real column widths (min-w) and swipes left/right instead
     // of collapsing into overlapping text.
-    <div className="overflow-x-auto overscroll-x-contain [touch-action:pan-x_pinch-zoom]">
+    <div className="overflow-x-auto overscroll-x-contain">
     {/* Content-sized on phones. The percentage colgroup below was authored
         for the desktop layout, where SCHOOL holds a logo AND the spelled-out
         team name — but the name is `hidden sm:inline`, so on a phone that 13%

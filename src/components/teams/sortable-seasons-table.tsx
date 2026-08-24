@@ -105,7 +105,7 @@ export function SortableSeasonsTable({
 
   return (
     <div className="border border-hairline rounded-xl shadow-sm overflow-hidden bg-paper-deep/25">
-      <div className="overflow-x-auto overscroll-x-contain [touch-action:pan-x_pinch-zoom]">
+      <div className="overflow-x-auto overscroll-x-contain">
         <table className="w-full text-sm">
           <thead className="bg-paper-deep/70 text-left">
             <tr>

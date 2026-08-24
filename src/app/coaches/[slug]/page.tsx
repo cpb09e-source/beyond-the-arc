@@ -337,7 +337,7 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
               <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium mb-1">Program breakdown</div>
               <h2 className="font-display text-2xl text-ink">By the school</h2>
             </div>
-            <div className="overflow-x-auto overscroll-x-contain [touch-action:pan-x_pinch-zoom]">
+            <div className="overflow-x-auto overscroll-x-contain">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-hairline text-left">
