@@ -460,14 +460,21 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
       role="dialog"
       aria-modal
       aria-label="Compare players"
-      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 p-4 pt-[5vh] overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 md:p-4 md:pt-[5vh] md:overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="bg-card border border-hairline rounded-xl shadow-xl w-full max-w-6xl flex flex-col overflow-hidden"
+        className={cn(
+          // PHONE: the whole screen. A centred max-w-6xl card holding a table
+          // whose Category column alone is 224px leaves the entity columns
+          // nothing on a 390px screen — they ran off the right edge.
+          "bg-card flex flex-col overflow-hidden w-full",
+          "max-md:fixed max-md:inset-0 max-md:h-full",
+          "md:border md:border-hairline md:rounded-xl md:shadow-xl md:max-w-6xl",
+        )}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-end justify-between px-6 py-5 border-b border-hairline bg-paper-deep/30">
+        <div className="flex items-end justify-between gap-3 px-4 md:px-6 py-3 md:py-5 border-b border-hairline bg-paper-deep/30 shrink-0">
           <div>
             <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
               <span className="h-px w-6 bg-coral" />
@@ -508,11 +515,11 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
           </div>
         </div>
 
-        <div className="px-6 py-5 border-b border-hairline">
+        <div className="px-4 md:px-6 py-3 md:py-5 border-b border-hairline shrink-0">
           {indexLoading && !index ? (
             <div className="py-6 text-center text-sm text-ink-muted">Loading players…</div>
           ) : (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3">
               {slots.map((slot, i) => {
                 const opt = slot ? optionByKey.get(slot) ?? null : null;
                 const excluded = new Set(slots.filter((s, j) => s && j !== i) as string[]);
@@ -547,7 +554,7 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
           )}
         </div>
 
-        <div ref={scrollerRef} className="min-h-[60vh] max-h-[65vh] overflow-y-auto overscroll-contain">
+        <div ref={scrollerRef} className="max-md:flex-1 max-md:min-h-0 md:min-h-[60vh] md:max-h-[65vh] overflow-y-auto overscroll-contain">
           {!showCompare ? (
             <div className="px-6 py-24 text-center text-ink-muted text-sm">
               Pick at least <span className="text-ink font-medium">2 player-seasons</span> to start comparing.
@@ -555,6 +562,95 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
           ) : anyLoading ? (
             <div className="px-6 py-24 text-center text-ink-muted text-sm">Loading stats…</div>
           ) : (
+          <>
+          {/* ================= PHONE =================
+              See the teams modal: the desktop table spends 224px of a 390px
+              screen on the category column, so the label moves above the row
+              and the width goes to the numbers. Players are named once in a
+              sticky strip; surname only, because four full names do not fit
+              and the logo already says which team. */}
+          <div className="md:hidden">
+            <div
+              className="sticky top-0 z-10 grid gap-px bg-hairline border-b border-hairline"
+              style={{ gridTemplateColumns: `repeat(${filledSlots.length}, minmax(0, 1fr))` }}
+            >
+              {filledSlots.map((s) => (
+                <div key={s.key} className="bg-paper-deep px-1.5 py-2 flex flex-col items-center gap-1 min-w-0">
+                  <TeamLogo name={s.opt.t} size={22} />
+                  <Link
+                    href={`/players/${s.opt.id}/`}
+                    prefetch={false}
+                    className="text-[0.66rem] font-semibold text-ink leading-tight text-center truncate w-full hover:text-coral transition-colors"
+                  >
+                    {s.opt.n.split(" ").slice(-1)[0]}
+                  </Link>
+                  <span className="text-[0.58rem] text-ink-muted tabular leading-none">{seasonLabel(s.opt.y)}</span>
+                </div>
+              ))}
+            </div>
+
+            {ROWS.map((row) => {
+              const { bestKey, worstKey } = rowExtremes(row);
+              return (
+                <Fragment key={row.key}>
+                  {row.section && (
+                    <div className="bg-paper-deep/40 px-4 pt-3 pb-1.5 text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold">
+                      <span className="inline-flex items-center gap-2">
+                        <span className="h-px w-4 bg-coral" />
+                        {row.section}
+                      </span>
+                    </div>
+                  )}
+                  <div className="border-b border-hairline/60">
+                    <div className="px-4 pt-2 pb-1 text-[0.56rem] uppercase tracking-[0.14em] text-ink-muted font-semibold">
+                      {row.label}
+                    </div>
+                    <div
+                      className="grid gap-px bg-hairline/40"
+                      style={{ gridTemplateColumns: `repeat(${filledSlots.length}, minmax(0, 1fr))` }}
+                    >
+                      {filledSlots.map((s) => {
+                        const raw = row.value(s.season, s.ctx);
+                        const pct = row.percentileKey && s.season
+                          ? s.season.stats[row.percentileKey]?.percentile ?? null
+                          : null;
+                        return (
+                          <div
+                            key={s.key}
+                            className={cn(
+                              "bg-card px-1 py-2 text-center tabular text-[0.9rem] leading-tight text-ink break-words",
+                              bestKey === s.key && "bg-emerald-50 text-emerald-900 font-semibold",
+                              worstKey === s.key && "bg-coral/10 text-coral font-medium",
+                            )}
+                          >
+                            {row.cellRender ? (
+                              row.cellRender(s.season, s.ctx)
+                            ) : (
+                              <>
+                                {row.format ? row.format(raw) : raw == null ? "—" : String(raw)}
+                                {typeof pct === "number" && (
+                                  <span
+                                    className="ml-1 text-[0.56rem] tabular font-bold tabular-nums"
+                                    style={{ color: pctColor(pct) }}
+                                    aria-label={`${pct}th percentile`}
+                                  >
+                                    {pct}
+                                  </span>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </Fragment>
+              );
+            })}
+          </div>
+
+          {/* ================= DESKTOP ================= */}
+          <div className="hidden md:block">
             <table ref={captureRef} className="w-full text-sm">
               <thead className="sticky top-0 bg-paper-deep/80 backdrop-blur z-10">
                 <tr className="border-b border-hairline">
@@ -649,6 +745,8 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
                 })}
               </tbody>
             </table>
+          </div>
+          </>
           )}
         </div>
       </div>
@@ -778,17 +876,30 @@ function SlotPicker({
       )}
 
       {open && !picked && (
+<>
+        {/* Phone: a scrim under the sheet, so a tap outside closes it. */}
+        <div
+          className="md:hidden fixed inset-0 z-[55] bg-ink/30"
+          onClick={() => onOpenChange(false)}
+          aria-hidden
+        />
         <div
           className={cn(
-            "absolute top-full mt-1 w-80 bg-card border border-hairline rounded-lg shadow-lg z-30 overflow-hidden",
-            // Grid is grid-cols-2 below lg, grid-cols-4 at lg+. Slot 3 sits
-            // in the rightmost column at every breakpoint → always anchor
-            // right. Slot 1 is rightmost only below lg → flip below lg.
+            "bg-card border border-hairline shadow-lg overflow-hidden",
+            // PHONE: bottom sheet. As a dropdown this is 320px hanging off a
+            // ~187px slot, which pushed the modal sideways and clipped it —
+            // and the right/left flipping below only ever chose which edge it
+            // spilled over.
+            "max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-[60] max-md:rounded-t-xl",
+            "max-md:pb-[env(safe-area-inset-bottom,0px)]",
+            "md:absolute md:top-full md:mt-1 md:w-80 md:rounded-lg md:z-30",
+            // Which edge it hangs from, at the widths where it is a dropdown.
+            // Slot 3 is rightmost at every breakpoint; slot 1 only below lg.
             index === 3
-              ? "right-0"
+              ? "md:right-0"
               : index === 1
-                ? "right-0 lg:right-auto lg:left-0"
-                : "left-0",
+                ? "md:right-0 lg:md:right-auto lg:left-0"
+                : "md:left-0",
           )}
         >
           <div className="p-2 border-b border-hairline">
@@ -805,7 +916,7 @@ function SlotPicker({
               ↑↓ to navigate · Enter or Tab to select &amp; jump to next slot
             </div>
           </div>
-          <div ref={listRef} className="max-h-72 overflow-y-auto overscroll-contain py-1">
+          <div ref={listRef} className="max-md:max-h-[50vh] md:max-h-72 overflow-y-auto overscroll-contain py-1">
             {filtered.length === 0 ? (
               <div className="px-3 py-6 text-center text-xs text-ink-muted">No matches.</div>
             ) : (
@@ -830,6 +941,7 @@ function SlotPicker({
             )}
           </div>
         </div>
+        </>
       )}
     </div>
   );
