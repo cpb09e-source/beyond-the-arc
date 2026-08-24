@@ -215,6 +215,22 @@ export function CompareModal({
   }
 
   // Per-row best/worst lookup for highlighting.
+  /**
+   * One cell's text. Extracted because the phone and desktop bodies are two
+   * different layouts over the same numbers, and the composite row's "(#12)"
+   * suffix is exactly the sort of thing that goes stale in one copy.
+   */
+  function displayFor(row: Row, c: CoachRow): string {
+    const raw = row.value(c);
+    if (row.key === "comp") {
+      if (typeof raw !== "number") return "—";
+      const rank = compositeRankBySlug.get(c.slug);
+      return rank != null ? `${raw.toFixed(1)} (#${rank})` : raw.toFixed(1);
+    }
+    if (row.format) return row.format(raw);
+    return raw == null ? "—" : String(raw);
+  }
+
   function rowExtremes(row: Row): { bestKey: string | null; worstKey: string | null } {
     if (row.dir === "none") return { bestKey: null, worstKey: null };
     const entries = filledCoaches.map((c) => ({ slug: c.slug, raw: row.value(c) }));
@@ -249,22 +265,33 @@ export function CompareModal({
       role="dialog"
       aria-modal
       aria-label="Compare coaches"
-      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 p-4 pt-[5vh] overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-ink/40 md:p-4 md:pt-[5vh] md:overflow-y-auto"
       onClick={onClose}
     >
       <div
-        className="bg-card border border-hairline rounded-xl shadow-xl w-full max-w-6xl flex flex-col overflow-hidden"
+        className={cn(
+          // PHONE: the whole screen. The card was a centred max-w-6xl sheet
+          // with 16px of scrim around it, holding a table whose first column
+          // alone is 224px — at 390 the coach columns had nowhere to go and
+          // ran off the right edge with the names clipped mid-word.
+          "bg-card flex flex-col overflow-hidden w-full",
+          "max-md:fixed max-md:inset-0 max-md:h-full",
+          "md:border md:border-hairline md:rounded-xl md:shadow-xl md:max-w-6xl",
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-end justify-between px-6 py-5 border-b border-hairline bg-paper-deep/30">
-          <div>
-            <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
+        <div className="flex items-end justify-between gap-3 px-4 md:px-6 py-3 md:py-5 border-b border-hairline bg-paper-deep/30 shrink-0">
+          <div className="min-w-0">
+            <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1 md:mb-1.5 flex items-center gap-2">
               <span className="h-px w-6 bg-coral" />
               Head to head
             </div>
-            <h2 className="font-display text-3xl text-ink leading-none tracking-tight">Compare coaches</h2>
-            <p className="text-sm text-ink-muted mt-2 max-w-2xl">
+            <h2 className="font-display text-xl md:text-3xl text-ink leading-none tracking-tight">Compare coaches</h2>
+            {/* Three lines of instruction is a fair trade on a wide screen and
+                a third of the fold on a phone, where the colour legend is
+                right there in the numbers anyway. */}
+            <p className="hidden md:block text-sm text-ink-muted mt-2 max-w-2xl">
               Pick up to four coaches. Best mark per row in <span className="text-emerald-700 font-medium">green</span>, worst in <span className="text-coral font-medium">coral</span>.
               Ties get neither.
             </p>
@@ -298,8 +325,10 @@ export function CompareModal({
         </div>
 
         {/* Slot pickers */}
-        <div className="px-6 py-5 border-b border-hairline">
-          <div className="grid grid-cols-4 gap-3">
+        <div className="px-4 md:px-6 py-3 md:py-5 border-b border-hairline shrink-0">
+          {/* Two up below md. Four slots across a 390px screen is ~80px each,
+              which is a logo and nothing else. */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
             {slots.map((slug, i) => {
               const coach = slug ? coachBySlug.get(slug) ?? null : null;
               const excluded = new Set(slots.filter((s, j) => s && j !== i) as string[]);
@@ -341,12 +370,80 @@ export function CompareModal({
         {/* Comparison body — min-h keeps the modal at its "full" size from
             the moment it opens, so picking coaches doesn't visually resize
             the modal mid-interaction. */}
-        <div className="min-h-[60vh] max-h-[65vh] overflow-y-auto overscroll-contain">
+        <div className="max-md:flex-1 max-md:min-h-0 md:min-h-[60vh] md:max-h-[65vh] overflow-y-auto overscroll-contain">
           {!showCompare ? (
-            <div className="px-6 py-24 text-center text-ink-muted text-sm">
+            <div className="px-6 py-16 md:py-24 text-center text-ink-muted text-sm">
               Pick at least <span className="text-ink font-medium">2 coaches</span> to start comparing.
             </div>
           ) : (
+          <>
+          {/* ================= PHONE =================
+              The desktop layout is a table whose first column is the category
+              name at 224px. On a 390px screen that is well over half the width
+              spent on labels, leaving the coaches to share what is left — which
+              is how four columns ended up running off the edge.
+
+              So the label comes OUT of the row and sits above it, full width,
+              and the whole width goes to the numbers. The coaches are named
+              once, in a strip that sticks to the top of the scroll, and every
+              block below lines up with it. Same colouring: best green, worst
+              coral, ties neither. */}
+          <div className="md:hidden">
+            <div
+              className="sticky top-0 z-10 grid gap-px bg-hairline border-b border-hairline"
+              style={{ gridTemplateColumns: `repeat(${filledCoaches.length}, minmax(0, 1fr))` }}
+            >
+              {filledCoaches.map((c) => (
+                <div key={c.slug} className="bg-paper-deep px-2 py-2 flex flex-col items-center gap-1 min-w-0">
+                  {c.current_team && <TeamLogo name={c.current_team} size={22} />}
+                  <Link
+                    href={`/coaches/${c.slug}/`}
+                    prefetch={false}
+                    className="text-[0.68rem] font-semibold text-ink leading-tight text-center truncate w-full hover:text-coral transition-colors"
+                  >
+                    {/* Surname only: "Wojciechowski" does not fit beside three
+                        others, and the logo above already says which team. */}
+                    {c.name.split(" ").slice(-1)[0]}
+                  </Link>
+                </div>
+              ))}
+            </div>
+
+            {ROWS.map((row) => {
+              const { bestKey, worstKey } = rowExtremes(row);
+              return (
+                <div key={row.key} className="border-b border-hairline/60">
+                  <div className="px-4 pt-2.5 pb-1 text-[0.58rem] uppercase tracking-[0.14em] text-ink-muted font-semibold">
+                    {row.label}
+                  </div>
+                  <div
+                    className="grid gap-px bg-hairline/40"
+                    style={{ gridTemplateColumns: `repeat(${filledCoaches.length}, minmax(0, 1fr))` }}
+                  >
+                    {filledCoaches.map((c) => {
+                      const isBest = bestKey === c.slug;
+                      const isWorst = worstKey === c.slug;
+                      return (
+                        <div
+                          key={c.slug}
+                          className={cn(
+                            "bg-card px-1.5 py-2 text-center tabular text-[0.95rem] leading-tight text-ink break-words",
+                            isBest && "bg-emerald-50 text-emerald-900 font-semibold",
+                            isWorst && "bg-coral/10 text-coral font-medium",
+                          )}
+                        >
+                          {displayFor(row, c)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ================= DESKTOP ================= */}
+          <div className="hidden md:block">
             <table ref={captureRef} className="w-full text-sm">
               <thead className="sticky top-0 bg-paper-deep/80 backdrop-blur z-10">
                 <tr className="border-b border-hairline">
@@ -376,21 +473,7 @@ export function CompareModal({
                     <tr key={row.key} className={cn("border-b border-hairline/60", ri % 2 === 0 ? "bg-paper/40" : "")}>
                       <td className="px-5 py-3 text-ink-soft text-xs uppercase tracking-widest font-medium">{row.label}</td>
                       {filledCoaches.map((c) => {
-                        const raw = row.value(c);
-                        let display: string;
-                        if (row.key === "comp") {
-                          // Composite score row — append global ranking in parens.
-                          if (typeof raw === "number") {
-                            const rank = compositeRankBySlug.get(c.slug);
-                            display = rank != null ? `${raw.toFixed(1)} (#${rank})` : raw.toFixed(1);
-                          } else {
-                            display = "—";
-                          }
-                        } else if (row.format) {
-                          display = row.format(raw);
-                        } else {
-                          display = raw == null ? "—" : String(raw);
-                        }
+                        const display = displayFor(row, c);
                         const isBest = bestKey === c.slug;
                         const isWorst = worstKey === c.slug;
                         return (
@@ -411,6 +494,8 @@ export function CompareModal({
                 })}
               </tbody>
             </table>
+          </div>
+          </>
           )}
         </div>
       </div>

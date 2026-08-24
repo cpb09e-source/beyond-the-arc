@@ -413,7 +413,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
           were exactly what made this page read as a different product from
           the /teams and /players tables it sits beside in the nav. */}
       <div id="coaches-table" className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-6 max-md:mt-2 -mx-6 lg:mx-0">
-        <div className="px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 flex items-center justify-between gap-3 flex-wrap">
+        <div className="relative px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center flex-wrap gap-2.5 min-w-0">
             {/* Desktop search */}
             <div className="relative hidden lg:block">
@@ -452,7 +452,11 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
               Compare
             </button>
 
-            <span className="text-xs text-ink-muted tabular whitespace-nowrap">
+            {/* Two elements, not one: the phone wants this on its own line
+                under the controls and the desktop wants it inline, and
+                flex-basis cannot do both — trying it on /teams made the left
+                group full width and pushed the select onto a third row. */}
+            <span className="hidden sm:inline text-xs text-ink-muted tabular whitespace-nowrap">
               {sorted.length.toLocaleString()}
               {sorted.length !== rows.length && <> of {rows.length.toLocaleString()}</>}
               {" "}{sorted.length === 1 ? "coach" : "coaches"}
@@ -476,9 +480,27 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
             />
           </div>
 
-          <div className="relative flex items-center gap-2 w-full sm:w-auto justify-end">
+          {/* `w-auto`, not `w-full sm:w-auto`: full width forced this group onto
+              its own line under Filters. It shares that line now and the count
+              takes the line below — matching /teams and /players. */}
+          <div className="flex items-center gap-2 w-auto justify-end">
             {/* Sort by / Order are gone: every column head sorts, which is how
-                /teams and /players work. Only the row count stays. */}
+                /teams and /players work. Only the row count stays. Search is
+                FIRST so a phone reads left-to-right as "find one / show many". */}
+            <button
+              type="button"
+              onClick={() => {
+                setSearchOpen(true);
+                // Inside the gesture — iOS raises the keyboard only for a
+                // focus() made while the tap is still being handled.
+                searchInputRef.current?.focus({ preventScroll: true });
+              }}
+              aria-label="Search coaches"
+              className="lg:hidden shrink-0 h-8 w-8 inline-flex items-center justify-center rounded-md border border-ink/15 bg-card text-ink-muted hover:text-ink hover:border-ink/25 shadow-sm transition-colors"
+            >
+              <SearchGlass className="w-4 h-4" />
+            </button>
+
             <span className="hidden sm:inline text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Show</span>
             <Select value={String(pageSize)} onChange={(v) => { setPageSize(Number(v)); setPage(1); }} ariaLabel="Result count" compact className="w-16 lg:w-18">
               <option value="50">50</option>
@@ -486,21 +508,11 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
               <option value="250">250</option>
             </Select>
 
-            {/* Mobile search icon */}
-            <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              aria-label="Search coaches"
-              className="lg:hidden shrink-0 h-9 w-9 inline-flex items-center justify-center rounded-md border border-ink/15 bg-card text-ink-muted hover:text-ink hover:border-ink/25 shadow-sm transition-colors"
-            >
-              <SearchGlass className="w-4 h-4" />
-            </button>
-
             {/* Mobile sliding search — text-base (16px) avoids iOS zoom on focus */}
             <div
               ref={searchPanelRef}
               className={cn(
-                "lg:hidden absolute inset-y-0 right-0 w-full flex items-center gap-2 bg-card transform-gpu transition-transform duration-200 ease-out",
+                "lg:hidden absolute inset-y-0 left-0 right-0 flex items-center gap-2 bg-card px-3 transform-gpu transition-transform duration-200 ease-out",
                 searchOpen ? "translate-x-0" : "translate-x-[105%] pointer-events-none",
               )}
             >
@@ -514,7 +526,7 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
                   onChange={(e) => { setQuery(e.target.value); setPage(1); }}
                   placeholder="Search coach or team"
                   aria-label="Search coach or team"
-                  className="h-9 w-full pl-9 pr-3 rounded-md border border-ink/15 bg-card text-ink text-base placeholder:text-ink-muted shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40"
+                  className="h-9 w-full pl-9 pr-3 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40"
                 />
               </div>
               <button
@@ -527,6 +539,12 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
               </button>
             </div>
           </div>
+          {/* PHONE ONLY: the count, on its own line under the controls. */}
+          <span className="sm:hidden basis-full text-xs text-ink-muted tabular whitespace-nowrap">
+            {sorted.length.toLocaleString()}
+            {sorted.length !== rows.length && <> of {rows.length.toLocaleString()}</>}
+            {" "}{sorted.length === 1 ? "coach" : "coaches"}
+          </span>
         </div>
         {/* Where the Filters drawer expands — in flow, pushing the table down. */}
         <div id={COACH_DRAWER_SLOT_ID} />
