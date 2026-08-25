@@ -148,16 +148,65 @@ curl -s -o /dev/null -w "%{http_code}\n" -u "$KEY:" https://api.stripe.com/v1/pr
 Test-mode and live-mode price ids are both `price_…` and the same length, so
 SHAPE CANNOT TELL THEM APART. A 404 from the live key is the only real test.
 
-Still open, both small:
+**All four are now flagged secret** (2026-08-25). Use
+`netlify env:set <KEY> --secret --force` — it converts an EXISTING variable in
+place and needs no value argument, so there is no read-back-and-rewrite step to
+corrupt. Verified through the API rather than the CLI, because the CLI masks
+secrets and a masked read cannot distinguish "set" from "wiped":
 
-- **Stripe vars are not flagged secret in Netlify.** All four are plain env
-  vars. Flag them.
-- **`NEXT_PUBLIC_SITE_URL` is not set at all.** `siteOrigin()` falls back to
-  the request origin and then to `https://btacbb.xyz`, so Stripe return URLs
-  work today, but a function called from a deploy-preview domain would send
-  people back to the preview.
+```sh
+TOKEN=$(node -e "const c=require(process.env.APPDATA+'/netlify/Config/config.json');\
+const u=c.users;process.stdout.write(u[Object.keys(u)[0]].auth.token)")
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://api.netlify.com/api/v1/accounts/cpb09e/env?site_id=$SITE_ID"
+```
 
-### 5. Enforcement layer — RESEARCH DONE, PLAN STILL OWED
+That returns `is_secret` plus a per-context list of which contexts hold a
+value. Note every secret's value reads as 20 characters there regardless of its
+real length — that is the mask, not the value.
+
+**Flagging EMPTIES the `dev` context.** Netlify refuses to hand secrets to
+local dev, so all four now read `dev:EMPTY` while `production`,
+`deploy-preview`, `branch-deploy` and `dev-server` keep their values. `.env.local`
+already carries `STRIPE_PRICE_MONTHLY` and `STRIPE_PRICE_YEARLY`, but NOT
+`STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET` — so `npm run dev` can no longer
+exercise checkout. Add TEST-mode values for those two to `.env.local` if that
+matters; do not put the live key there.
+
+
+### 5. Canonical host — FIXED IN THE REPO, NEEDS A REBUILD TO LAND
+
+Found 2026-08-25 while checking `NEXT_PUBLIC_SITE_URL`. The variable was not
+set anywhere, and the fallback is NOT the real domain:
+
+```
+src/app/layout.tsx:61   metadataBase  ->  https://beyond-the-arc.netlify.app
+src/app/robots.ts:6     Host, Sitemap ->  https://beyond-the-arc.netlify.app
+src/app/sitemap.ts:23   every <loc>   ->  https://beyond-the-arc.netlify.app
+netlify/shared/billing.mts:102  Stripe return URLs (runtime, req origin)
+```
+
+The site's actual custom domain is `btacbb.xyz`. Both hosts answered HTTP 200
+with no redirect between them, so all 30,000 pages were live and indexable
+twice, and the live `robots.txt` was naming the WRONG one as `Host`.
+
+Three parts, two of them done:
+
+1. `.env.local` now sets `NEXT_PUBLIC_SITE_URL=https://btacbb.xyz`. This is the
+   one that matters most and the one easiest to get wrong: the first three
+   consumers are BUILD-time, builds run LOCALLY, and a local build does not
+   read the Netlify dashboard. Setting it only in Netlify would have fixed
+   nothing about the sitemap.
+2. `netlify.toml` gained a `force = true` 301 from the subdomain to the custom
+   domain. `force` is required — a redirect without it loses to an existing
+   file, and every matching path exists in the export.
+3. Netlify also has the variable now, for `siteOrigin()` in the functions.
+
+**None of this is live.** The built `out/` still contains the old sitemap,
+robots.txt and metadataBase. It takes a rebuild plus a deploy, so do not
+consider the SEO issue closed until both have run.
+
+### 6. Enforcement layer — RESEARCH DONE, PLAN STILL OWED
 
 Nothing gates anything. `describeMembership()` still has one consumer, the
 account badge. The decisive constraint has not changed: prebuilt pages EMBED
@@ -167,16 +216,20 @@ The tab split makes option 3 more attractive than it was — gating by DEPTH
 rather than by SEASON is now a routing decision, and the deep tabs (Lineups,
 On/Off, School History) are exactly the surfaces nobody needs indexed.
 
-### 6. The production deploy itself
+### 7. The production deploy itself
 
 The build is not the risk; the upload is. Sequence, when authorized:
 
+0. The current `out/` is STALE for SEO — it predates the
+   `NEXT_PUBLIC_SITE_URL` fix, so its sitemap, robots.txt and metadataBase all
+   still say `beyond-the-arc.netlify.app`. Rebuild, do not deploy what is there.
 1. `node scripts/build-with-r2-stash.mjs` — the entry point netlify.toml names.
    The 8m12s measurement used `npm run build` instead. Same strip runs either
    way (`postbuild` fires it), but the wrapper does it inside the build's own
    Node process, and the wrapper is what has been proven on this project.
 2. Confirm the strip: `out/data/lineup-stats` and `out/data/team-seasons` must
-   NOT exist, alongside the nine older R2 dirs.
+   NOT exist, alongside the nine older R2 dirs. Confirm the host too —
+   `head -8 out/robots.txt` should say `btacbb.xyz`, not the netlify.app one.
 3. `netlify deploy --prod --dir=out --no-build`, run BACKGROUNDED. A 10-minute
    Bash timeout once killed the CLI mid-upload and orphaned a deploy stuck at
    `uploading`.
