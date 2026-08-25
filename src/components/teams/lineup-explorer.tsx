@@ -264,6 +264,7 @@ export function LineupExplorer({
               // yet, which is what an empty selection means.
               emptyLabel="Select On-Court Players"
               ariaLabel="Players required on the court"
+              inlineSearch
               disabledValues={offIds.size ? new Set(offCourt) : undefined}
             />
             <Chips ids={onCourt} nameOf={nameOf} onRemove={(v) => setOnCourt(onCourt.filter((x) => x !== v))} accent={accent} />
@@ -277,6 +278,7 @@ export function LineupExplorer({
               placeholder="Search players…"
               emptyLabel="Select Off-Court Players"
               ariaLabel="Players required off the court"
+              inlineSearch
               disabledValues={onIds.size ? new Set(onCourt) : undefined}
             />
             <Chips ids={offCourt} nameOf={nameOf} onRemove={(v) => setOffCourt(offCourt.filter((x) => x !== v))} accent={accent} />

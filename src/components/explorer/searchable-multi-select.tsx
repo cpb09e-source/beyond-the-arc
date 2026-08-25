@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { SearchableOption } from "./searchable-select";
 
@@ -21,6 +21,7 @@ export function SearchableMultiSelect({
   disabledValues,
   groupLabels,
   align = "left",
+  inlineSearch = false,
 }: {
   /** Selected values. Empty array = "All". */
   value: string[];
@@ -42,6 +43,20 @@ export function SearchableMultiSelect({
    *  of a narrow viewport (e.g. mobile grid right column) to keep the 288px
    *  popover from overflowing. */
   align?: "left" | "right";
+  /**
+   * Type in the TRIGGER instead of in a search box inside the popover.
+   *
+   * Opt-in, because the default two-part shape is right for the explorer's
+   * filter bar, where a trigger has to keep showing which conferences are
+   * selected while the list is open. It is wrong for a picker that IS the
+   * question being asked: there, the field you clicked and the field you type
+   * into being different boxes reads as two controls stacked by accident.
+   *
+   * The popover also drops to the trigger's own width in this mode and skips
+   * the viewport-shift measurement, since a full-width trigger cannot overflow
+   * the way a 240px panel hanging off a narrow control can.
+   */
+  inlineSearch?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -51,6 +66,9 @@ export function SearchableMultiSelect({
   const [shiftX, setShiftX] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Ties the inline combobox to the list it controls. useId so two pickers on
+  // one page never collide.
+  const listboxId = useId();
 
   useEffect(() => {
     if (open) {
@@ -145,40 +163,70 @@ export function SearchableMultiSelect({
     triggerLabel = `${value.length} selected`;
   }
 
+  const FIELD =
+    "h-10 w-full px-3 pr-8 rounded-md border text-ink text-sm text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors relative";
+
   return (
-    <div ref={containerRef} className={cn("relative inline-block", className)}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-label={ariaLabel}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        className="h-10 w-full px-3 pr-8 rounded-md border border-ink/15 bg-card text-ink text-sm text-left shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors relative"
-      >
-        <span className="truncate block">{triggerLabel}</span>
-        <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted text-[0.7rem]">▾</span>
-      </button>
+    <div ref={containerRef} className={cn("relative", inlineSearch ? "block w-full" : "inline-block", className)}>
+      {inlineSearch && open ? (
+        // The trigger becomes the search field in place, keeping its box, its
+        // height and its position so nothing moves when it is clicked. The
+        // caret lands where the label was.
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder={placeholder}
+          aria-label={ariaLabel}
+          // A text input that owns a popup list is a combobox, and the role has
+          // to be explicit: without it the implicit role is textbox, which does
+          // not support aria-expanded, so assistive tech is told the field is
+          // expandable by an attribute it will ignore.
+          role="combobox"
+          aria-expanded={true}
+          aria-controls={listboxId}
+          aria-autocomplete="list"
+          className={cn(FIELD, "bg-card border-coral/40")}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-label={ariaLabel}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          className={cn(FIELD, "bg-card border-ink/15 hover:border-ink/25")}
+        >
+          <span className="truncate block">{triggerLabel}</span>
+          <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted text-[0.7rem]">▾</span>
+        </button>
+      )}
 
       {open && (
         <div
           className={cn(
-            "absolute z-50 top-full mt-1 w-60 max-w-[calc(100vw-2rem)] bg-card border border-hairline rounded-lg shadow-lg overflow-hidden",
-            align === "right" ? "right-0" : "left-0",
+            "absolute z-50 top-full mt-1 max-w-[calc(100vw-2rem)] bg-card border border-hairline rounded-lg shadow-lg overflow-hidden",
+            inlineSearch ? "w-full left-0" : cn("w-60", align === "right" ? "right-0" : "left-0"),
           )}
-          style={shiftX ? { transform: `translateX(${shiftX}px)` } : undefined}
+          id={listboxId}
+          style={!inlineSearch && shiftX ? { transform: `translateX(${shiftX}px)` } : undefined}
           role="listbox"
         >
-          <div className="p-2 border-b border-hairline">
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder={placeholder}
-              className="w-full h-8 px-2 text-sm rounded border border-hairline bg-paper text-ink focus:outline-none focus:ring-2 focus:ring-coral/40"
-            />
-          </div>
+          {!inlineSearch && (
+            <div className="p-2 border-b border-hairline">
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={onKeyDown}
+                placeholder={placeholder}
+                className="w-full h-8 px-2 text-sm rounded border border-hairline bg-paper text-ink focus:outline-none focus:ring-2 focus:ring-coral/40"
+              />
+            </div>
+          )}
           <div className="max-h-72 overflow-y-auto py-1">
             {filtered.length === 0 ? (
               <div className="px-3 py-4 text-sm text-ink-muted text-center">No matches</div>
