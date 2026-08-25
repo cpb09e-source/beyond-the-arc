@@ -54,6 +54,11 @@ export type SeasonGridRow = {
   /** Drives the seed chip on the Season cell. There is no Tournament column. */
   tourneySeed: number | null;
   coach: string | null;
+  /**
+   * This team's aNET rank that season, 1 = best in D-I. The same number the
+   * hero shows as "NET #202"; see netRanksForTeam().
+   */
+  netRank: number | null;
   /** Stat values, keyed by TeamCol.total. */
   vals: Record<string, number | null>;
   /** Percentiles, keyed by TeamCol.pct. Baked — see build-team-seasons.mts. */
@@ -65,7 +70,7 @@ export type SeasonGridRow = {
  * their own keys; every stat column sorts by its TeamCol.sortKey. Conf and
  * Coach do not sort at all — see the header row.
  */
-type SortKey = "year" | "record" | "confRecord" | string;
+type SortKey = "year" | "record" | "confRecord" | "netRank" | string;
 
 function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
@@ -111,6 +116,10 @@ export function SeasonGrid({
         case "year":        return r.year;
         case "record":      return winsOf(r.record);
         case "confRecord":  return winsOf(r.confRecord);
+        // Rank 1 is best, so a missing rank must sort as the worst possible
+        // value rather than null — nulls sink in BOTH directions below, which
+        // would park an unranked season at the top of an ascending sort.
+        case "netRank":     return r.netRank ?? Number.POSITIVE_INFINITY;
         default:            return r.vals[sortBy] ?? null;
       }
     };
@@ -161,6 +170,7 @@ export function SeasonGrid({
             <th className="bg-paper-deep h-6 p-0 hidden md:table-cell" />
             <th className="bg-paper-deep h-6 p-0 hidden md:table-cell" />
             <th className="bg-paper-deep h-6 p-0 hidden lg:table-cell" />
+            <th className="bg-paper-deep h-6 p-0" />
             <th colSpan={RATING_COLS.length} className="bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-ink-muted text-center border-l border-hairline align-middle">
               Ratings <span className="text-ink-muted/70">(ADJUSTED)</span>
             </th>
@@ -186,6 +196,16 @@ export function SeasonGrid({
                 jump left as the viewport shrinks. */}
             <HeadCell label="Conf" className="hidden md:table-cell" />
             <HeadCell label="Coach" className="hidden lg:table-cell" />
+            {/* Last in the identity group, so it sits directly against NET:
+                the rank and the rating it comes from read as one pair. It is
+                not in the shared band model because the explorer renders those
+                same bands and has no per-row rank to put here. */}
+            <HeadCell
+              label="NET Rk"
+              align="right"
+              title="This team's adjusted net rating rank in Division I that season, 1 = best"
+              sort={{ active: sortBy === "netRank", dir: sortDir, onClick: () => toggle("netRank", "asc") }}
+            />
             {DEFAULT_COLS.map((c, i) => (
               <HeadCell
                 key={c.sortKey}
@@ -251,6 +271,11 @@ export function SeasonGrid({
                 </td>
                 <td className={cn("px-3 py-1 text-ink-muted whitespace-nowrap transition-colors hidden lg:table-cell", ROW_HOVER)}>
                   {r.coach ?? "—"}
+                </td>
+                <td className={cn("px-2 sm:px-3 py-1 text-right tabular whitespace-nowrap transition-colors", ROW_HOVER)}>
+                  {r.netRank !== null
+                    ? <span className="text-ink-soft">#<span className="text-ink font-medium">{r.netRank}</span></span>
+                    : <span className="text-ink-muted">—</span>}
                 </td>
                 {DEFAULT_COLS.map((c, ci) => {
                   const total = r.vals[c.total as string] ?? null;

@@ -35,6 +35,8 @@ function num(v: unknown): number | null {
 export function toSeasonGridRows(
   baked: TeamGridSeason[],
   confRecords: Map<number, ConfRecord>,
+  /** year -> this team's aNET rank that season, from netRanksForTeam(). */
+  netRanks: Record<number, number> = {},
 ): SeasonGridRow[] {
   return baked.map((b) => {
     const cr = confRecords.get(b.team_year);
@@ -53,6 +55,7 @@ export function toSeasonGridRows(
         cr && cr.wins !== null && cr.losses !== null ? `${cr.wins}-${cr.losses}` : null,
       tourneySeed: cr?.tourneySeed ?? null,
       coach: cr?.coachName ?? null,
+      netRank: netRanks[b.team_year] ?? null,
       vals,
       pct,
     };

@@ -124,7 +124,7 @@ export async function loadTeamPageData(slug: string, year?: number) {
   // By season renders the explorer's grid when this team has been baked, and
   // the older seasons table when it has not. See readTeamSeasonGrid().
   const bakedSeasons = await readTeamSeasonGrid(slug);
-  const seasonGrid = bakedSeasons ? toSeasonGridRows(bakedSeasons, confRecords) : null;
+  const seasonGrid = bakedSeasons ? toSeasonGridRows(bakedSeasons, confRecords, netRanks) : null;
 
   // Five-man lineups and the league field they are ranked against. Both null
   // before 2024, where the play feed carries no onFloor — see readLineupStats.
