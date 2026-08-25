@@ -310,10 +310,6 @@ export function LineupExplorer({
             </div>
           </Field>
         </div>
-
-        <p className="mt-4 text-sm text-ink-soft leading-relaxed">
-          <Summary size={size} onCourt={onCourt} offCourt={offCourt} nameOf={nameOf} count={visible.length} hidden={rows.length - visible.length} />
-        </p>
       </div>
 
       {/* ---- column views. Pills, not the underline the page tabs use: this
@@ -497,45 +493,6 @@ function Chips({
         </button>
       ))}
     </div>
-  );
-}
-
-/** Plain-language restatement of the filter, so the table never needs decoding. */
-function Summary({
-  size, onCourt, offCourt, nameOf, count, hidden,
-}: {
-  size: number;
-  onCourt: string[];
-  offCourt: string[];
-  nameOf: Map<number, string>;
-  count: number;
-  /** Matching combinations that fell under the possession floor. */
-  hidden: number;
-}) {
-  const list = (ids: string[]) => {
-    const names = ids.map((v) => nameOf.get(Number(v)) ?? v);
-    if (names.length <= 1) return names[0] ?? "";
-    if (names.length === 2) return `${names[0]} and ${names[1]}`;
-    return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-  };
-  const noun = `${size}-player ${size === 5 ? "lineups" : "combinations"}`;
-  return (
-    <>
-      <span className="tabular font-medium text-ink">{count.toLocaleString()}</span>{" "}
-      {noun}
-      {onCourt.length > 0 && <> with <strong className="font-semibold text-ink">{list(onCourt)}</strong> on the court</>}
-      {offCourt.length > 0 && <>{onCourt.length > 0 ? ", and " : " with "}<strong className="font-semibold text-ink">{list(offCourt)}</strong> off the court</>}
-      {hidden > 0 && (
-        <>
-          {" "}
-          <span className="text-ink-muted">
-            (<span className="tabular">{hidden.toLocaleString()}</span> more played
-            under <span className="tabular">{MIN_POSS}</span> possessions and are not listed)
-          </span>
-        </>
-      )}
-      . Totals cover every matching possession, including the combinations too small to list.
-    </>
   );
 }
 
