@@ -16,6 +16,7 @@ import { SortableRosterTable } from "@/components/teams/sortable-roster-table";
 import { DistributionPanel, type DistributionRank } from "@/components/teams/distribution-panel";
 import { AssistNetworkPanel } from "@/components/teams/assist-network-panel";
 import { ClockSplitsPanel } from "@/components/teams/clock-splits-panel";
+import { TeamLineups } from "@/components/teams/team-lineups";
 import type { AssistNetwork, ClockSplits } from "@/lib/static-data";
 import { ScheduleTicker } from "@/components/teams/schedule-ticker";
 import { TeamStatsPanel, type TeamSplits } from "@/components/teams/team-stats-panel";
@@ -373,8 +374,10 @@ export function TeamPageView({
   const show = {
     overview: showAll || tab === "overview",
     roster:   showAll || tab === "roster",
+    history:  showAll || tab === "history",
     shooting: showAll || tab === "shooting",
-    pbp:      showAll || tab === "pbp",
+    lineups:  showAll || tab === "lineups",
+    onoff:    showAll || tab === "onoff",
   };
   // Preview pages keep the single-page layout and get no strip. Their sections
   // are reordered around a blurred, game-less season, so a tab that promised
@@ -524,11 +527,6 @@ export function TeamPageView({
         />
       )}
 
-      {/* On a preview page the ranks move BELOW the roster — see the note
-          where they render. Everywhere else they open Overview. */}
-      {show.overview && !preview && (
-        <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8">{ranksBlock}</section>
-      )}
 
       {/* PREVIEW ORDER: schedule, then the roster, then everything else.
           Nobody arrives at a 0-0 team for its rankings — the season hasn't
@@ -557,9 +555,21 @@ export function TeamPageView({
           Deliberately tighter than a normal section break (the hero's own pb-8
           already contributes 32px) because the two belong together. */}
       {show.overview && teamSplits && (
-        <section id={TAB_ANCHORS.overview} className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-2 scroll-mt-20">
+        <section id={TAB_ANCHORS.overview} className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8 scroll-mt-20">
           <TeamStatsPanel splits={teamSplits} blurBody={preview} />
         </section>
+      )}
+
+      {/* The rank barbell sits BELOW Team Stats now. Team Stats is the whole
+          season in six cards; the barbell is the five things that stand out in
+          it. Reading the summary before its highlights is the wrong way round,
+          and the barbell's five rows made a thin opening for a page whose
+          first real block is a grid.
+
+          On a preview page it moves below the roster instead — see the note
+          where that renders. */}
+      {show.overview && !preview && (
+        <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8">{ranksBlock}</section>
       )}
 
       {/* Preview rosters render above, right under the schedule. */}
@@ -588,47 +598,15 @@ export function TeamPageView({
       {/* Shooting + Four Factors sit BELOW the roster now. They are a closing
           detail on the season, not the way into it — the reader wants the team,
           then the players, then the breakdown. */}
-      {show.shooting && (
-      <section id={TAB_ANCHORS.shooting} className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8 scroll-mt-20">
-        <DistributionPanel title="Shooting" ranks={shootingRanks} blurBody={preview} />
-        <DistributionPanel title="Four Factors" ranks={fourFactorRanks} blurBody={preview}>
-          {current.four_factor_record && current.four_factor_record.games > 0 && (
-            <>
-              <div className="text-xs uppercase tracking-widest text-ink-muted font-medium mb-1">
-                Record when all three positive
-              </div>
-              <div className="flex items-baseline gap-3">
-                <span className="font-display text-5xl text-ink tabular leading-none">
-                  {current.four_factor_record.wins}-{current.four_factor_record.losses}
-                </span>
-                <span className="text-xs text-ink-muted">
-                  {`across ${current.four_factor_record.games} game${current.four_factor_record.games === 1 ? "" : "s"} where REB Diff > 0, FBP Diff > 0, 3PM Diff > 0`}
-                </span>
-              </div>
-            </>
-          )}
-        </DistributionPanel>
-      </section>
-      )}
+      {/* SCHOOL HISTORY — the full ledger, every season we hold. Mirrors the
+          coach page's "Season by season" treatment so cross-page recognition
+          is consistent.
 
-      {/* Play-by-play derivatives. Both are reconstructed from the CBBD plays
-          archive rather than reported by anyone, and both are absent before
-          2014 where there is no play-by-play — so the section disappears
-          entirely rather than rendering two empty frames. */}
-      {show.pbp && (clockSplits || assistNetwork) && (
-        <section id={TAB_ANCHORS.pbp} className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8 scroll-mt-20">
-          {clockSplits ? <ClockSplitsPanel splits={clockSplits} /> : <div />}
-          {assistNetwork ? <AssistNetworkPanel network={assistNetwork} /> : <div />}
-        </section>
-      )}
-
-      {/* Top 5-man lineups removed for now. TeamLineups and lineups-<year>.json
-          are both still here — this is one JSX block away from returning. */}
-
-      {/* BY SEASON — headline ledger. Mirrors the coach page's "Season by
-          season" treatment so cross-page recognition is consistent. */}
-      {show.overview && (
-      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-12 mb-20">
+          Its own tab rather than the foot of Overview: it is the one section
+          that is not about the season in the URL, and a reader who wants it
+          wants the whole run, not a glance at it under everything else. */}
+      {show.history && (
+      <section id={TAB_ANCHORS.history} className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-12 mb-20 scroll-mt-20">
         <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
           {/* Top accent rule — coral bar marks this table as the headline. */}
           <div
@@ -672,6 +650,83 @@ export function TeamPageView({
         </div>
       </section>
       )}
+
+      {show.shooting && (
+      <section id={TAB_ANCHORS.shooting} className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8 scroll-mt-20">
+        <DistributionPanel title="Shooting" ranks={shootingRanks} blurBody={preview} />
+        <DistributionPanel title="Four Factors" ranks={fourFactorRanks} blurBody={preview}>
+          {current.four_factor_record && current.four_factor_record.games > 0 && (
+            <>
+              <div className="text-xs uppercase tracking-widest text-ink-muted font-medium mb-1">
+                Record when all three positive
+              </div>
+              <div className="flex items-baseline gap-3">
+                <span className="font-display text-5xl text-ink tabular leading-none">
+                  {current.four_factor_record.wins}-{current.four_factor_record.losses}
+                </span>
+                <span className="text-xs text-ink-muted">
+                  {`across ${current.four_factor_record.games} game${current.four_factor_record.games === 1 ? "" : "s"} where REB Diff > 0, FBP Diff > 0, 3PM Diff > 0`}
+                </span>
+              </div>
+            </>
+          )}
+        </DistributionPanel>
+      </section>
+      )}
+
+      {/* Play-by-play derivatives. Both are reconstructed from the CBBD plays
+          archive rather than reported by anyone, and both are absent before
+          2014 where there is no play-by-play — so the section disappears
+          entirely rather than rendering two empty frames. */}
+      {/* Shot clock and assist network live under Shooting rather than a tab
+          of their own. Both are shot-selection questions — when in the
+          possession the shot went up, and who created it — so they belong with
+          the shooting splits above rather than in a "play-by-play" tab named
+          after where the data came from instead of what it says. */}
+      {show.shooting && (clockSplits || assistNetwork) && (
+        <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {clockSplits ? <ClockSplitsPanel splits={clockSplits} /> : <div />}
+          {assistNetwork ? <AssistNetworkPanel network={assistNetwork} /> : <div />}
+        </section>
+      )}
+
+      {/* LINEUPS. TeamLineups client-fetches /data/lineups-<year>.json, which
+          only exists for seasons with play-by-play stint data (2025 onward),
+          so most older seasons render its empty state. `standalone` is what
+          makes it say so rather than render nothing — see the note there. */}
+      {show.lineups && !preview && (
+        <section id={TAB_ANCHORS.lineups} className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8 scroll-mt-20">
+          <TeamLineups teamName={team.name} year={current.year} standalone />
+        </section>
+      )}
+
+      {/* ON/OFF — tab exists, content does not yet. There is no team on/off
+          dataset in public/data at all; the only on-off numbers we hold are
+          the per-player ones the roster table already shows.
+
+          Shipped as a stated placeholder rather than held back, because the
+          tab strip is the thing being reviewed and a gap in it reads as a bug.
+          When the data lands this block is the only thing that changes. */}
+      {show.onoff && !preview && (
+        <section id={TAB_ANCHORS.onoff} className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8 mb-20 scroll-mt-20">
+          <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
+            <div className="h-1 w-full bg-gradient-to-r from-[color:var(--accent,#ed5a4f)] via-[color:var(--accent,#ed5a4f)] to-transparent" />
+            <div className="px-5 lg:px-7 py-5 border-b border-hairline bg-paper-deep/30">
+              <div className="text-[0.6rem] uppercase tracking-[0.18em] text-[color:var(--accent,#0c6bd6)] font-bold mb-1.5 flex items-center gap-2">
+                <span className="h-px w-6 bg-[color:var(--accent,#0c6bd6)]" />
+                With and without
+              </div>
+              <h2 className="font-display text-2xl lg:text-3xl text-ink leading-none tracking-tight">On/Off</h2>
+            </div>
+            <p className="px-5 lg:px-7 py-8 text-sm text-ink-muted">
+              Coming soon — how the team scores and defends with each player on
+              the floor against off it.
+            </p>
+          </div>
+        </section>
+      )}
+
+
     </div>
   );
 }

@@ -15,9 +15,9 @@ export async function generateMetadata({
   return tabMetadata({
     slug,
     yearStr: year,
-    tabLabel: "Play-by-play",
-    segment: "pbp",
-    describe: "shot-clock splits and the assist network, both reconstructed from play-by-play.",
+    tabLabel: "On/Off",
+    segment: "on-off",
+    describe: "how the team performs with each player on the floor against off it.",
   });
 }
 
@@ -33,5 +33,5 @@ export default async function TeamTabPage({
   const data = await loadTeamPageData(slug, year);
   if (!data) notFound();
 
-  return <TeamPageView {...data} tab="pbp" />;
+  return <TeamPageView {...data} tab="onoff" />;
 }

@@ -14,7 +14,22 @@ type Unit = { players: string[]; poss: number; off: number; def: number; net: nu
 const normTeam = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
   .replace(/\buniversity\b|\bthe\b/g, "").replace(/\bstate\b/g, "st").replace(/[^a-z0-9]+/g, "");
 
-export function TeamLineups({ teamName, year }: { teamName: string; year: number }) {
+export function TeamLineups({
+  teamName,
+  year,
+  standalone = false,
+}: {
+  teamName: string;
+  year: number;
+  /**
+   * True when this card IS the page (the Lineups tab) rather than one block
+   * among many. Returning null is right for a section that is simply absent
+   * from a page full of other things; it is wrong for a tab, where it leaves
+   * a reader who clicked "Lineups" looking at nothing and unable to tell the
+   * difference between no data and a broken page.
+   */
+  standalone?: boolean;
+}) {
   const [units, setUnits] = useState<Unit[] | null>(null);
 
   useEffect(() => {
@@ -26,7 +41,24 @@ export function TeamLineups({ teamName, year }: { teamName: string; year: number
     return () => { cancelled = true; };
   }, [teamName, year]);
 
-  if (!units || units.length === 0) return null;
+  if (!units || units.length === 0) {
+    if (!standalone) return null;
+    return (
+      <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
+        <div className="h-1 w-full bg-gradient-to-r from-[color:var(--accent,#ed5a4f)] via-[color:var(--accent,#ed5a4f)] to-transparent" />
+        <div className="px-5 lg:px-7 py-5 border-b border-hairline bg-paper-deep/30">
+          <div className="text-[0.6rem] uppercase tracking-[0.18em] text-[color:var(--accent,#0c6bd6)] font-bold mb-1.5 flex items-center gap-2">
+            <span className="h-px w-6 bg-[color:var(--accent,#0c6bd6)]" />
+            Five-man units
+          </div>
+          <h2 className="font-display text-2xl lg:text-3xl text-ink leading-none tracking-tight">Top Lineups</h2>
+        </div>
+        <p className="px-5 lg:px-7 py-8 text-sm text-ink-muted">
+          {units ? "No five-man unit reached 40 possessions this season." : "Loading lineups…"}
+        </p>
+      </div>
+    );
+  }
 
   const sign = (v: number) => (v >= 0 ? "+" : "") + v.toLocaleString("en-US", { maximumFractionDigits: 1 });
 

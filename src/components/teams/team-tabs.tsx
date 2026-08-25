@@ -10,9 +10,9 @@ import { cn } from "@/lib/utils";
  * in-page anchors instead.
  *
  * That split is a build-cost decision, not a design one. There are 5,009 team
- * pages; giving all four tabs a real URL on every season takes that to roughly
- * 20,000 and close to doubles the site build. Restricting real routes to the
- * current season caps it near 6,500 — and it matches how the pages are read,
+ * pages; giving all six tabs a real URL on every season takes that to roughly
+ * 25,000 and more than doubles the site build. Restricting real routes to the
+ * current season caps it near 6,800 — and it matches how the pages are read,
  * since the current season is the one people explore and older ones are
  * glanced at. The anchor mode exists so the older seasons do not look like a
  * different product: same strip, same order, same active state, and every
@@ -23,21 +23,31 @@ import { cn } from "@/lib/utils";
  * address bar.
  */
 
-export type TeamTab = "overview" | "roster" | "shooting" | "pbp";
+export type TeamTab = "overview" | "roster" | "history" | "shooting" | "lineups" | "onoff";
 
 /** Anchor ids, also used as the section ids in team-page-view. */
 export const TAB_ANCHORS: Record<TeamTab, string> = {
   overview: "overview",
   roster: "roster",
+  history: "school-history",
   shooting: "shooting",
-  pbp: "play-by-play",
+  lineups: "lineups",
+  onoff: "on-off",
 };
 
+/**
+ * Tab order is also the order the sections appear in on a single-page season.
+ * They have to match: in anchor mode the strip is a table of contents for the
+ * page below it, and a table of contents in a different order than its
+ * contents is worse than none.
+ */
 const TABS: Array<{ key: TeamTab; label: string; segment: string }> = [
-  { key: "overview", label: "Overview",     segment: "" },
-  { key: "roster",   label: "Roster",       segment: "roster" },
-  { key: "shooting", label: "Shooting",     segment: "shooting" },
-  { key: "pbp",      label: "Play-by-play", segment: "pbp" },
+  { key: "overview", label: "Overview",       segment: "" },
+  { key: "roster",   label: "Roster",         segment: "roster" },
+  { key: "history",  label: "School History", segment: "history" },
+  { key: "shooting", label: "Shooting",       segment: "shooting" },
+  { key: "lineups",  label: "Lineups",        segment: "lineups" },
+  { key: "onoff",    label: "On/Off",         segment: "on-off" },
 ];
 
 export function TeamTabs({
@@ -66,8 +76,10 @@ export function TeamTabs({
       className="border-b border-hairline"
     >
       <div className="mx-auto max-w-[88rem] px-6 lg:px-10">
-        {/* Scrolls rather than wraps: four labels fit a phone only just, and a
-            second row of tabs reads as two groups. overscroll-x-contain and
+        {/* Scrolls rather than wraps: six labels are well past a phone's
+            width, and a second row of tabs reads as two groups. The strip
+            scrolls horizontally instead, so the first two or three are always
+            visible and the rest are one swipe away. overscroll-x-contain and
             NOT `none` — `none` on a container that also scrolls vertically
             stops the page scrolling from any finger that lands here. Same rule
             as the tables; see the note in season-grid. */}

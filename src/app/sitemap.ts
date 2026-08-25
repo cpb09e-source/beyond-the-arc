@@ -87,7 +87,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const slug = slugForTeam(t.name);
     if (seenCurrent.has(slug)) continue;
     seenCurrent.add(slug);
-    for (const seg of ["roster", "shooting", "pbp"]) {
+    for (const seg of ["roster", "history", "shooting", "lineups", "on-off"]) {
       entries.push({
         url: `${BASE_URL}/teams/${slug}/${latestYear}/${seg}/`,
         lastModified: now,
