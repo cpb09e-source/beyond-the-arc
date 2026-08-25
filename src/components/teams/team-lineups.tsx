@@ -54,7 +54,7 @@ export function TeamLineups({
           <h2 className="font-display text-2xl lg:text-3xl text-ink leading-none tracking-tight">Top Lineups</h2>
         </div>
         <p className="px-5 lg:px-7 py-8 text-sm text-ink-muted">
-          {units ? "No five-man unit reached 40 possessions this season." : "Loading lineups…"}
+          {units ? "No five-man unit reached 30 possessions this season." : "Loading lineups…"}
         </p>
       </div>
     );
@@ -71,7 +71,7 @@ export function TeamLineups({
           Five-man units
         </div>
         <h2 className="font-display text-2xl lg:text-3xl text-ink leading-none tracking-tight">Top Lineups</h2>
-        <p className="mt-1.5 text-xs text-ink-muted">Best five-man combinations by net rating (points per 100 possessions), min 40 possessions.</p>
+        <p className="mt-1.5 text-xs text-ink-muted">Best five-man combinations by net rating (points per 100 possessions), min 30 possessions.</p>
       </div>
       <div className="overflow-x-auto overscroll-x-contain">
         <table className="w-full text-sm border-separate border-spacing-0">

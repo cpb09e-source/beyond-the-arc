@@ -18,7 +18,7 @@ from collections import defaultdict
 
 ROOT = Path(__file__).resolve().parent.parent
 PTS_PER_WIN = 30.0          # approx college points-of-margin per marginal win
-LINEUP_MIN_POSS = 40        # unit possession floor for a stable rating
+LINEUP_MIN_POSS = 30        # unit possession floor for a stable rating
 
 def load_players(d):
     m = {}
@@ -255,7 +255,13 @@ def main():
             "net": round(net(acc), 1) if net(acc) is not None else None,
         })
     lineups.sort(key=lambda x: (x["net"] is None, -(x["net"] or 0)))
-    (d / "lineups.json").write_text(json.dumps({"season": args.season, "lineups": lineups[:1000]}))
+    # The 1000 cap is a global top-N by net rating, not a per-team one, so it
+    # silently decides WHICH teams get lineups at all. Lowering the possession
+    # floor to 30 puts 5,361 units over the line league-wide, so the cap now
+    # discards two thirds of them — and discards them by net rating, which
+    # means the teams it drops are the ones whose best unit is merely average.
+    # Raised to hold everything that qualifies; the file is still small.
+    (d / "lineups.json").write_text(json.dumps({"season": args.season, "lineups": lineups}))
 
     print(f"season {args.season}: {rows} players, {len(lineups)} qualified lineups (>= {LINEUP_MIN_POSS} poss)")
     # smell test — top eWins
