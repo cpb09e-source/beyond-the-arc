@@ -18,7 +18,10 @@ export function AuthShell({
   title: string;
   intro: string;
   children: React.ReactNode;
-  footer: React.ReactNode;
+  /** Optional. A transient state (checking a link, confirming a change) has
+   *  nowhere useful to send anyone, and an empty ruled-off strip under it reads
+   *  as something that failed to load. */
+  footer?: React.ReactNode;
 }) {
   return (
     <div className="mx-auto max-w-[26rem] px-6 py-12 sm:py-16">
@@ -27,9 +30,11 @@ export function AuthShell({
       </h1>
       <p className="mt-2 text-sm text-ink-soft leading-relaxed">{intro}</p>
       <div className="mt-7">{children}</div>
-      <div className="mt-6 pt-5 border-t border-hairline text-sm text-ink-muted">
-        {footer}
-      </div>
+      {footer && (
+        <div className="mt-6 pt-5 border-t border-hairline text-sm text-ink-muted">
+          {footer}
+        </div>
+      )}
     </div>
   );
 }

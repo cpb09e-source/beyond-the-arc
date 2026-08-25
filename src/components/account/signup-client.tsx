@@ -23,6 +23,8 @@ export function SignupClient() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  /** Confirmations are on and the link is in their inbox. */
+  const [awaitingEmail, setAwaitingEmail] = useState(false);
   // Captured on arrival, before anything can replace the URL, and falling back
   // to whatever is already parked — so a reload mid-signup does not quietly
   // downgrade someone who picked the Season Pass.
@@ -63,6 +65,14 @@ export function SignupClient() {
     const { data, error: err } = await supabase.auth.signUp({
       email: email.trim(),
       password,
+      options: {
+        // Only used when email confirmation is ON. Harmless when it is off, and
+        // it means turning the setting on does not also require a code change.
+        // The plan rides in the query because sessionStorage does not survive
+        // the trip out to an inbox and back, which is frequently another
+        // device entirely.
+        emailRedirectTo: `${window.location.origin}/account/confirm/${plan ? `?plan=${plan}` : ""}`,
+      },
     });
     setPending(false);
 
@@ -71,16 +81,36 @@ export function SignupClient() {
       return;
     }
 
-    // Email confirmation is currently OFF on this project, so signUp returns a
-    // live session and the user is already signed in. Handling the other case
-    // anyway: if confirmations are ever switched on, `session` comes back null
-    // and sending them to the dashboard would show a signed-out page with no
-    // explanation.
+    // Email confirmation is OFF on this project today, so signUp returns a live
+    // session and the redirect effect above takes it from here. When it is
+    // switched on, `session` comes back null instead — which is a SUCCESS, not
+    // a failure, and showing it in the red error slot (as this did) reads as
+    // "your signup did not work" at the exact moment it did.
     if (!data.session) {
-      setError("Check your email for a confirmation link, then sign in.");
+      setAwaitingEmail(true);
       return;
     }
     // Deliberately no navigation here — the effect above owns it.
+  }
+
+  if (awaitingEmail) {
+    return (
+      <AuthShell
+        title="Confirm your email"
+        intro={`We sent a link to ${email.trim()}. Open it and you are in.`}
+        footer={
+          <>
+            Wrong address?{" "}
+            <AuthLink href="/account/signup/">Start again</AuthLink>
+          </>
+        }
+      >
+        <p className="text-sm text-ink-soft leading-relaxed">
+          The link signs you in on the device you open it on. If it is not there
+          in a minute, check spam.
+        </p>
+      </AuthShell>
+    );
   }
 
   return (

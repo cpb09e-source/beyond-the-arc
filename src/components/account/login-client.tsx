@@ -98,6 +98,12 @@ export function LoginClient() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
+        {/* Under the password, where someone who has just failed to remember
+            it is already looking. A reset link in the footer is a reset link
+            nobody finds. */}
+        <div className="-mt-1 text-right">
+          <AuthLink href="/account/forgot/">Forgot your password?</AuthLink>
+        </div>
         <FormError message={error} />
         <SubmitButton pending={pending} pendingLabel="Signing you in…">
           Sign in

@@ -257,6 +257,52 @@ export async function readAssistNetwork(
   return _assistCache?.[`${teamName}|${year}`] ?? null;
 }
 
+export type AssistPlayerSeason = {
+  team: string;
+  /** [otherBartId, count] — who this player set up, biggest first. */
+  fed: [number, number][];
+  /** [otherBartId, count] — who set this player up. */
+  fed_by: [number, number][];
+  fgm: number;
+  ast_given: number;
+  ast_rate: number | null;
+  rim_ast_rate: number | null;
+  mid_ast_rate: number | null;
+  three_ast_rate: number | null;
+};
+
+type AssistPlayersFile = {
+  names: Record<string, string>;
+  players: Record<string, AssistPlayerSeason>;
+};
+
+/** year → the whole season's player view, parsed once per build. */
+const _assistPlayersCache = new Map<number, AssistPlayersFile | null>();
+
+/**
+ * One player's assist connections for one season, with the names of everyone
+ * on the other end of them.
+ *
+ * Keyed by year rather than by player because the per-player alternative is
+ * 12,000-odd files for a panel that is a dozen rows — the year file is read
+ * once for the build and every player page in that season shares the parse.
+ */
+export async function readAssistForPlayer(
+  year: number,
+  bartId: number,
+): Promise<{ season: AssistPlayerSeason; names: Record<string, string> } | null> {
+  if (!_assistPlayersCache.has(year)) {
+    _assistPlayersCache.set(
+      year,
+      await readJson<AssistPlayersFile>(`assist-players/${year}.json`).catch(() => null),
+    );
+  }
+  const file = _assistPlayersCache.get(year);
+  const season = file?.players?.[String(bartId)];
+  if (!file || !season) return null;
+  return { season, names: file.names };
+}
+
 /** Shot selection and efficiency by shot-clock position. Null before 2014. */
 export async function readClockSplits(
   year: number,
