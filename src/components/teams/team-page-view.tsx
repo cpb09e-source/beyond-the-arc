@@ -24,7 +24,7 @@ import { TeamStatsPanel, type TeamSplits } from "@/components/teams/team-stats-p
 import { FindGameTrigger } from "@/components/teams/find-game-trigger";
 import { TourneyTimeline } from "@/components/teams/tourney-timeline";
 import { PlayerHeadshotStrip } from "@/components/teams/player-headshot-strip";
-import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog } from "@/lib/static-data";
+import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog, RankedStat } from "@/lib/static-data";
 import { confDisplay } from "@/lib/conf-display";
 import { getTeamColors } from "@/lib/team-colors";
 
@@ -273,6 +273,7 @@ export function TeamPageView({
   assistNetwork,
   clockSplits,
   seasonGrid,
+  nationalRanks,
   lineupStats,
   lineupBenchmarks,
   tab = "all",
@@ -303,6 +304,12 @@ export function TeamPageView({
    * to leave the site in rather than a broken one.
    */
   seasonGrid: SeasonGridRow[] | null;
+  /**
+   * The stats this team ranks best and worst at, computed at build time from
+   * the season cohort rather than read from the baked five — see
+   * national-ranks.ts for why.
+   */
+  nationalRanks: { top: RankedStat[]; bottom: RankedStat[] } | null;
   /** Five-man lineups for the Lineups tab. Null before 2024 — no onFloor. */
   lineupStats: unknown | null;
   /** That season's league percentile field for lineup stats. */
@@ -359,11 +366,11 @@ export function TeamPageView({
   // season carries no national ranks. Rendered inside the hero on a normal
   // season and below the roster on a preview — one definition, two positions.
   const ranksBlock =
-    current.national_ranks && (current.national_ranks.top.length > 0 || current.national_ranks.bottom.length > 0) ? (
+    nationalRanks && (nationalRanks.top.length > 0 || nationalRanks.bottom.length > 0) ? (
       <NationalRanks
-        top={current.national_ranks.top}
-        bottom={current.national_ranks.bottom}
-        total={current.national_ranks.top[0]?.total ?? current.national_ranks.bottom[0]?.total ?? 0}
+        top={nationalRanks.top}
+        bottom={nationalRanks.bottom}
+        total={nationalRanks.top[0]?.total ?? nationalRanks.bottom[0]?.total ?? 0}
         blurBody={preview}
       />
     ) : (

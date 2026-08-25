@@ -44,137 +44,141 @@ resize rather than guessing at what an image shows.
 
 ## Open work
 
-### 1. Teams page soft redesign — AWAITING COLIN'S DECISION
+The team page redesign landed. Six tabs — Overview, Roster, School History,
+Shooting, Lineups, On/Off — with real routes on the recent seasons plus every
+Vermont season, and an anchor fallback everywhere else.
 
-He asked "thoughts?" on splitting the team page into an Overview tab plus
-sub-pages, modelled loosely on CBB Analytics (whose visual design he dislikes
-— explicitly no Conference Comparison logo graphs).
+### 1. Redesign the Shooting tab — AGREED, NOT STARTED
 
-His proposed Overview: schedule ticker, where they rank best, where they rank
-worst, Team Stats, By Season. Sub-pages: Roster and everything else.
+The one tab that was only relocated, never rethought. It is still the two
+DistributionPanels (Shooting, Four Factors) plus the clock-splits and
+assist-network panels that used to be a separate Play-by-play tab.
 
-**My recommendation, already given to him:**
+It is also where the new play-by-play columns belong and do not yet appear:
+`rima`/`rimm`/`mida`/`midm` are in every lineup row, so rim rate, rim FG% and
+mid-range splits are already computed per five-man unit and per player, and the
+Shooting tab shows none of them.
 
-The page stacks ELEVEN sections today, two of which were added last session
-(assist network, shot clock). It is past the point where a reader can find
-anything. His split is right.
+### 2. Bake the remaining 367 teams for School History
 
-The constraint he cannot see is build cost. There are **5,009 team pages**
-today out of 21,551 total. Real sub-routes for three tabs takes team pages to
-roughly 20,000 and close to doubles the build.
+`npx tsx scripts/build-team-seasons.mts` with no flags. Only Vermont is baked,
+so every other team still renders the older SortableSeasonsTable. Nothing is
+broken; the tab just does not gain the new grid until this runs.
 
-So: **real routes for the current season only, single page for history.**
-`/teams/duke/roster/` gets a URL; `/teams/duke/2015/roster/` does not — 2015
-stays one long page. Caps the increase at ~1,100 pages instead of ~15,000,
-and matches how people read: current season gets explored, old seasons get
-glanced at.
+DO NOT run it with `--team` and expect the benchmarks to survive. That flag
+filters the accumulation, and a single-team run used to overwrite the season's
+league percentile field with one team's units. Guarded now — a `--team` run
+leaves benchmarks alone and says so — but the same shape of bug is easy to
+reintroduce in any script that writes a shared artifact.
 
-The alternative — client-side tabs, zero build cost — hides the roster from
-Google entirely, and those pages are presumably part of how people find the
-site.
+### 3. Measure a real production build
 
-**The part worth deciding alongside it:** sub-pages are a natural paywall
-boundary. "Overview free, deeper tabs paid" is a far cleaner story than
-"2 seasons free, 13 paid", and much easier to enforce — a tab that never
-renders is a tab whose data never ships. See section 5.
+Every build and deploy number in this session was extrapolated from dev-server
+renders, never a real build. What is known:
 
-He has not answered yet. Do not start building this.
+- team-ish pages went from 5,009 to roughly 14,000 (tab routes on the recent
+  seasons plus all of Vermont)
+- `public/data/lineup-stats/` is 29 MB across 2,008 files
+- two hot reads were uncached and now are: `readAllTeams` (12 MB, 51 ms a call)
+  and `readPlayersForYear` (~4 MB, 19 ms), together ~72 ms per team page
 
-### 2. "By Season should show a view like this" — BLOCKED ON A SCREENSHOT
+The first deploy after this is the risk, not the build. Run it BACKGROUNDED and
+verify with `netlify api listSiteDeploys`; the 10-minute Bash timeout that
+orphaned a deploy once will be much easier to hit now.
 
-Colin sent a screenshot that exceeded the size limit and could not be read.
-Ask for it again resized under 2000px.
+### 4. DESIGN.md is wrong about the accent colour
 
-### 3. "Remove FTA Rate and 3PA Rate" — NEEDS DISAMBIGUATION
+It documents `--coral` as `#c8553d`, "basketball-leather". globals.css line 21
+says `--coral: #0c6bd6` — azure. So `text-coral` is the site's blue, and the
+theme lifts it to `#4d9bff` where contrast needs it. Anything reading DESIGN.md
+to pick a colour will pick the wrong one.
 
-These do NOT appear in the team page's By Season table. They live in five
-places:
+### 5. The on/off caveat is nowhere
 
-- `src/components/coaches/coach-filters.tsx:38-39`
-- `src/components/teams/compare-teams-modal.tsx:109-110`
-- `src/components/teams/explorer-client.tsx:92,94`
-- `src/components/table/sortable-th.tsx:45-46`
-- `src/components/teams/team-stat-filters.tsx:71,73`
+The On/Off tab's footnote was removed on request. It was the only place saying
+that an on/off split is not a rating of the player — it is what the team did
+with him and without him, which also carries whoever replaced him and whoever
+he shared the floor with. A collapsed `<details>` is the pattern the rest of
+the site uses for methodology, if it should come back.
 
-Ask which surface he means before touching any of them.
+### 6. Smaller, carried over
 
-### 4. "Put a Coach column in the conf, season, record section" — ALREADY EXISTS
+- **Footer is 80rem**, team content is 88rem and the two data tabs are 96rem
+  and 100rem. The footer reads inset on team pages.
+- **`lineup-stats/` (29 MB) is an R2 candidate**, alongside the directories
+  already mirrored there.
+- **Three pre-existing lint errors** in `searchable-multi-select.tsx`
+  (setState-in-effect at 75, 84, 127). Confirmed pre-existing, not introduced.
+- **`useSearchParams` refactor** — `/` and `/players/` still ship zero `<tr>`
+  and blank the table for 1-2s while JS boots.
+- **`assist-network.json` is 12 MB and committed** — probably belongs in R2 like
+  `assist-players/`.
+- **Nine files still use fixed Tailwind palette colours** that cannot follow
+  dark mode: `schedule-ticker`, `overview-tab`, `season-by-season-table`,
+  `find-game-modal`, `where-they-rank`, `seed-chip` and three others.
 
-`src/components/teams/sortable-seasons-table.tsx:112-120` already renders:
-Season · Conf · Record · Conf Rec · Tournament · **Coach** · BTA Rank ·
-Adj ORtg · Adj DRtg.
+### 7. Stripe — SET UP, NOT VERIFIED
 
-He is looking at a different table. Ask which page.
+Unchanged from before. Four env vars in Netlify, `STRIPE_SECRET_KEY` is
+`sk_live_…`, and the products may have been created in TEST mode. Test-mode
+price IDs do not work with a live key. Verify before any checkout is exercised.
+`STRIPE_PRODUCT_ID`, `STRIPE_PRICE_3MONTH` and `STRIPE_PRICE_6MONTH` are still
+read by nothing. Stripe keys are not flagged secret in Netlify and should be.
 
-### 5. Enforcement layer — RESEARCH DONE, PLAN OWED
+### 8. Enforcement layer — RESEARCH DONE, PLAN STILL OWED
 
-Promised twice, never written. What the investigation established:
+Nothing gates anything. `describeMembership()` still has one consumer, the
+account badge. The decisive constraint has not changed: prebuilt pages EMBED
+old-season data in their HTML, so gating the JSON fetches would not hold.
 
-**Nothing gates anything today.** `describeMembership()` has exactly ONE
-consumer — `src/components/account/account-client.tsx`. It renders a badge.
-No content anywhere checks it. All 19 seasons ship publicly while the pricing
-page sells "2 seasons free, 13 paid".
-
-**The decisive constraint:** prebuilt pages EMBED old-season data in their
-HTML. Verified directly — a player page server-renders a Career table naming
-2017 and 2021 through 2025. So gating the JSON fetches would not hold; the
-data is already in the markup before any JS runs.
-
-That leaves three real options:
-
-1. **Don't prebuild gated seasons.** Old-season pages become client-fetched
-   shells. Cuts the build substantially. Loses SEO on historical pages.
-2. **Move gated data to an authenticated edge function.** Pages prebuild
-   without it; a Netlify function checks the Supabase JWT and serves the
-   payload. Keeps SEO for the free surface, adds a runtime dependency.
-3. **Change what is sold.** Gate by DEPTH rather than by SEASON — the
-   sub-page split in section 1 does this naturally, and the deep tabs are
-   exactly the surfaces nobody needs indexed.
-
-Option 3 is the one to argue for. It converts a hard technical problem into
-a routing decision he is already half-way to making.
-
-### 6. Stripe — SET UP, NOT VERIFIED
-
-Four env vars are in Netlify. `STRIPE_SECRET_KEY` is `sk_live_…`.
-
-**The open risk:** the products and prices were created while walking through
-the dashboard in TEST mode, but the secret key is LIVE. Test-mode price IDs
-do not work with a live key. **Verify before any checkout is exercised.**
-
-Also outstanding:
-- `STRIPE_PRODUCT_ID`, `STRIPE_PRICE_3MONTH`, `STRIPE_PRICE_6MONTH` are read
-  by NOTHING in the codebase.
-- The publishable key is read by nothing either — checkout is redirect-based,
-  so this is correct, not a bug.
-- Stripe keys are NOT flagged secret in Netlify and are readable in
-  plaintext. Should be flagged.
-
-### 7. Nine files use fixed Tailwind palette colors that cannot follow dark mode
-
-`schedule-ticker.tsx`, `overview-tab.tsx`, `season-by-season-table.tsx`,
-`find-game-modal.tsx`, `where-they-rank.tsx`, `seed-chip.tsx`, plus three
-others. They need to move to the CSS custom properties in `globals.css`.
-
-### 8. Dark-mode nav SVG
-
-Colin said he would supply one. The wordmark is already handled —
-`src/components/site-logo.tsx` swaps `newbtalogo-white-01.svg` in via CSS
-`display:none` on two `<img>` tags, so exactly one is in the a11y tree.
-
-### 9. `useSearchParams` refactor
-
-`/` and `/players/` ship zero `<tr>` elements and blank the table for 1–2s
-while JS boots.
-
-### 10. Open decision: `assist-network.json` is 12MB and committed to the repo
-
-Should probably go to R2 like the other eight directories. `assist-players/`
-(~17MB) is already gitignored with the reasoning written into `.gitignore`.
-
----
+The tab split makes option 3 more attractive than it was — gating by DEPTH
+rather than by SEASON is now a routing decision, and the deep tabs (Lineups,
+On/Off, School History) are exactly the surfaces nobody needs indexed.
 
 ## Things learned the hard way — do not re-derive these
+
+**The CBBD plays endpoint buckets by UTC, so 21.3% of games appear in TWO
+daily files.** Measured on 2026: 1,337 of 6,263. Any builder that walks
+`plays-*.json.gz` must dedupe by gameId or every count from that fifth is
+doubled. `cbbd-build-stints.mjs` always did; `build-assist-network.mjs` and
+`build-clock-splits.mjs` did not, and shipped inflated for a long time. Rates
+survive it only partly — each game's own numerator and denominator double
+together, but a season rate is a weighted average and the duplicated games
+carry double weight in it. About 1% on Vermont's early-clock eFG.
+
+**Turnovers do NOT undercount in the play-by-play.** `Lost Ball Turnover` is
+CBBD's single catch-all; there is no separate travel or offensive-foul type.
+With dedup it matches the box score 99.8% exactly. Do not go looking for
+missing turnover types — the discrepancy was always the duplicate games.
+
+**`onFloor` is on EVERY play from 2024 and on NONE before it.** 100% coverage
+in 2024-26, 0.0% in 2022 and 2023. That single field is why lineups, combos and
+on/off exist at all, and why they stop at 2024. Both those seasons produce zero
+valid stints; there is nothing to salvage without a different source.
+
+**A translucent background on a sticky cell lets the scrolled columns show
+through it.** Highlight rows must MIX the accent against the opaque surface
+(`color-mix(in oklab, accent 10%, var(--card))`), never lay it over at 8%
+alpha. Hit twice now: the explorer's honour cells first, then the Totals row in
+the lineup grid and the current-season row in School History.
+
+**Tailwind Preflight resets `text-transform: none` on `button`.** A `<th>` with
+`uppercase` whose label sits inside a button renders mixed-case. Anchors are
+unaffected, which is why the explorer's sortable headers never showed it. Repeat
+`uppercase` on the button.
+
+**A JSX comment cannot sit inside `{cond && (` before the element.** It has to
+go above the guard. Costs a parse error that reads as an unclosed tag.
+
+**Percentiles must be ranked against a distribution of the SAME KIND of
+number.** An on/off difference is not a rating: a +7 net rating is a good
+lineup, a +7 net swing is enormous. `lineup-stats` ships two distributions,
+`q` for values and `qd` for differences, and `percentileOf` takes which one.
+
+**Counting stats cannot be ranked across aggregation levels.** +/- and GP scale
+with playing time, so a 3-man combo pools several lineups and chips at 100 on
+every row. Rank the per-100 form instead, and suppress GP on any pooled row —
+it counts unit-games and read 573 for a team that played 34.
 
 **`touch-action` RESTRICTS, it does not delegate.** The effective value is
 the INTERSECTION down the whole ancestor chain. Do not reintroduce `pan-x`

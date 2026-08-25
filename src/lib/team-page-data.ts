@@ -34,6 +34,7 @@ import {
   readLineupBenchmarks,
 } from "@/lib/static-data";
 import { toSeasonGridRows } from "@/lib/season-grid-rows";
+import { nationalRanksForTeam } from "@/lib/national-ranks";
 import {
   buildRoster,
   attachRosterRanks,
@@ -94,6 +95,9 @@ export async function loadTeamPageData(slug: string, year?: number) {
   const assistNetwork = await readAssistNetwork(effYear, team.name);
   const clockSplits = await readClockSplits(effYear, team.name);
   const yearCohort = allTeams.filter((t) => t.year === effYear);
+  // Computed here rather than read from the baked national_ranks, so how many
+  // show is an argument instead of a data re-export. See national-ranks.ts.
+  const nationalRanks = nationalRanksForTeam(yearCohort, current, 8);
   const shootingRanks = buildShootingRanks(current, yearCohort);
   const fourFactorRanks = buildFourFactorRanks(current, yearCohort);
   const allGames = await readGameLogsForYear(effYear);
@@ -146,6 +150,7 @@ export async function loadTeamPageData(slug: string, year?: number) {
     assistNetwork,
     clockSplits,
     seasonGrid,
+    nationalRanks,
     lineupStats,
     lineupBenchmarks,
     preview: isPreview,
