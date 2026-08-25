@@ -30,6 +30,16 @@ const DIRS = [
   // which looks similar but IS fetched client-side by the Win Calculator and
   // the box-score modal, so it has to stay.)
   "data/team-splits",
+  // Same reasoning again, and the two largest additions yet. Both are read at
+  // BUILD time and reach the browser as PROPS on the team page, so no request
+  // can ask for either:
+  //   lineup-stats  29 MB / 2,008 files  (readLineupStats, readLineupBenchmarks)
+  //   team-seasons  7.6 MB / 368 files   (readTeamSeasonGrid)
+  // They stay in public/ because the build reads them from there. Shipping
+  // them would put ~37 MB of unreachable JSON into every deploy — which is the
+  // upload timeout R2 was set up to avoid, arriving by a different door.
+  "data/lineup-stats",
+  "data/team-seasons",
 ];
 
 /**

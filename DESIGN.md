@@ -4,29 +4,36 @@ Design system for Beyond the Arc. Source of truth: [src/app/globals.css](src/app
 
 ## Color
 
-Editorial paper palette with a single basketball-leather accent. Restrained color strategy: tinted neutrals carry 90%+ of the surface, coral ≤10% as the accent.
+Editorial paper palette with a single azure accent. Restrained color strategy: tinted neutrals carry 90%+ of the surface, the accent ≤10%.
+
+**`--coral` IS NOT CORAL.** It is azure `#0c6bd6`. The name is left over from the original leather-orange identity and stayed when the accent changed, because roughly 390 call sites use it. Read `--coral` and `text-coral` as "the accent", never as a hue. The old `#c8553d` cleared only 4.07:1 on paper and 2.0:1 against `--ink`; the azure clears 4.81:1 and 3.08:1, and the second number is why it reads as an accent at all — separation from the surrounding navy, not saturation.
 
 | Token | Hex | Role |
 |---|---|---|
 | `--paper` | `#faf7f2` | warm off-white page background |
-| `--paper-deep` | `#f1ece2` | one shade deeper for cards, dividers, hover surfaces |
+| `--paper-deep` | `#f1ece2` | one shade deeper for dividers, hover surfaces, table headers |
+| `--card` | `#fdfbf6` | warm ivory card surface. NOT `#fff` — a pure-white panel on warm paper reads as a hole punched in the page |
 | `--ink` | `#1a2238` | deep navy display ink (headlines, primary body emphasis) |
 | `--ink-soft` | `#3a425c` | 70% navy, body copy |
 | `--ink-muted` | `#6b7280` | neutral grey, secondary text, captions |
 | `--hairline` | `#e7e2d5` | paper-toned divider, never `border-gray-200` |
-| `--coral` | `#c8553d` | basketball-leather accent (kickers, accent rule, hover ink) |
-| `--coral-soft` | `#e08a76` | hover/secondary accent |
-| `--court` | `#d4a574` | hardwood, used in dashed `court-divider` |
+| `--coral` | `#0c6bd6` | **azure accent** (kickers, accent rule, links, hover ink). Lifts to `#4d9bff` where contrast needs it |
+| `--coral-soft` | `#3f8ee6` | hover/secondary accent |
+| `--court` | `#d4a574` | hardwood, used in dashed `court-divider` and tournament-honour tints |
+| `--court-ink` | `#8a6224` | hardwood dark enough to set text on a court tint |
 | `--good` | `#4a7c59` | chart positive (forest green, not bright) |
 | `--bad` | `#b94c4c` | chart negative (muted red, not saturated) |
 
+`--accent` aliases `--coral` by default and is OVERRIDDEN PER TEAM on team pages, where it becomes that school's primary colour. Anything inside a team page that wants the accent should read `var(--accent)` with `var(--color-coral)` as the fallback, not `text-coral` directly, or it will stay azure on a page themed green.
+
 **Rules:**
 
-- Never use `#000` or `#fff` for surfaces. Use `--ink` and `--paper`/white-cards.
-- All neutrals are tinted toward paper warmth (very low chroma toward coral hue). Don't introduce `text-gray-500`.
-- Coral above 10% surface area is wrong. It's an accent, not a brand color.
+- Never use `#000` or `#fff` for surfaces. Use `--ink`, `--paper` and `--card`.
+- All neutrals are tinted toward paper warmth. Don't introduce `text-gray-500`.
+- The accent above 10% surface area is wrong. It's an accent, not a brand color.
 - Good/bad are for charts, never for UI affordances (success/error toasts, if needed, use `--ink` body + a left badge, not green/red panels).
 - No gradient surfaces. The only gradient allowed: the 1px `from-coral via-coral to-coral/60` top-rule on headline cards.
+- **A tint on a STICKY cell must be opaque.** Mix the accent against the surface (`color-mix(in oklab, var(--accent) 10%, var(--card))`) rather than laying it over at low alpha — a translucent sticky cell lets the scrolled columns show straight through it. This has been hit twice; see the notes in `explorer-client.tsx` and `lineup-explorer.tsx`.
 
 ## Typography
 

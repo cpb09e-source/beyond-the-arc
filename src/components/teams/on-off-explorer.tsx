@@ -374,6 +374,46 @@ export function OnOffExplorer({
         </section>
       ))}
 
+      {/* Collapsed, not inline. The prose version of this sat under the table
+          and was removed for being a wall of text nobody asked for — but it is
+          the only place saying what an on/off split is not, and a table that
+          invites a wrong reading with no way to check it is worse than a
+          slightly longer page. <details> is the pattern the rest of the site
+          uses for methodology: present, closed, one click. */}
+      <details className="mt-6 mx-4 lg:mx-0 group">
+        <summary className="cursor-pointer list-none inline-flex items-center gap-2 text-xs uppercase tracking-widest text-ink-muted font-medium hover:text-ink transition-colors">
+          <span aria-hidden className="text-[0.7rem] transition-transform group-open:rotate-90">▸</span>
+          How to read this
+        </summary>
+        <div className="mt-3 text-xs text-ink-muted leading-relaxed max-w-3xl space-y-2">
+          <p>
+            <span className="text-ink-soft font-medium">An on/off split is not a rating of the player.</span>{" "}
+            It is what the team did with him on the floor and with him off it, which also
+            carries whoever replaced him, whoever he played alongside, and who the opponent
+            had out there at the time. Two players on the same team can trade the same
+            minutes and both look good, or both look bad, for reasons neither controls.
+          </p>
+          <p>
+            Players need <span className="tabular">{ON_OFF_MIN_POSS}</span> possessions both
+            on and off the floor to appear. Both sides, not either: a starter who never sits
+            has no off-court sample, and his difference would be the team measured against
+            nothing.
+          </p>
+          <p>
+            In ON/OFF Difference, percentage columns are shown as points of difference, and
+            each row is ranked against every qualifying player in Division I
+            {benchmarks?.nd ? <> ({benchmarks.nd.toLocaleString()} of them)</> : null} rather
+            than against team ratings — a +7 net rating is a good lineup, a +7 net swing is
+            an enormous one. Player ON and Player OFF are ranked against Division I five-man
+            units instead, because those are ordinary team rates.
+          </p>
+          <p>
+            Sorting any of the three tables reorders all three, so a player stays on the same
+            line throughout.
+          </p>
+        </div>
+      </details>
+
     </div>
   );
 }
