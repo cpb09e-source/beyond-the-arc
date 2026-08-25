@@ -111,10 +111,6 @@ export default async function HomePage() {
         </Suspense>
       </section>
 
-      <div className="mx-auto max-w-[108rem] px-6 lg:px-10 my-4">
-        <div className="court-divider" />
-      </div>
-
       {/* The aNET / SOS footnote that sat here is gone — those definitions
           belong on the glossary page, not repeated under one table. Every
           column head still carries its own `title`, so the meaning is a hover

@@ -183,6 +183,7 @@ export function TeamLogo({
   size = 24,
   className,
   local = false,
+  eager = false,
 }: {
   name: string;
   size?: number;
@@ -191,6 +192,11 @@ export function TeamLogo({
   // Needed wherever the node gets rasterized by html-to-image (the 32-0 share
   // card) — the GCS host sends no CORS headers, which taints the canvas.
   local?: boolean;
+  // Load immediately instead of lazily. The share card is rendered 20,000px
+  // off-screen so it can be rasterized, and a lazy image there is never near
+  // enough to the viewport for the browser to bother fetching it — the crest
+  // came out as an empty gap above the team name every time.
+  eager?: boolean;
 }) {
   const entry = lookup(name);
   const [errored, setErrored] = useState(false);
@@ -210,7 +216,7 @@ export function TeamLogo({
         alt={`${name} logo`}
         width={size}
         height={size}
-        loading="lazy"
+        loading={eager ? "eager" : "lazy"}
         onError={() => setErrored(true)}
         className={cn("inline-block object-contain shrink-0", className)}
         style={{ width: size, height: size }}

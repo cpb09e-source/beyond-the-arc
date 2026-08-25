@@ -5,6 +5,8 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
+import { ShareScreenshotSheet } from "@/components/share-screenshot";
+import { CompareShareCard, type ShareRow } from "@/components/share/compare-share-card";
 import { formatHeight } from "@/lib/height";
 import { confDisplay } from "@/lib/conf-display";
 import { dataUrl } from "@/lib/data-url";
@@ -333,6 +335,27 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
     })
     .filter((x): x is FilledSlot => x !== null);
   const showCompare = filledSlots.length >= 2;
+  // COLLAPSE THE PICKER ONCE THERE IS SOMETHING TO READ. On a phone the slot
+  // grid is two rows of chips — around 450px, most of the fold — and it has
+  // done its job the moment the comparison exists. It folds itself away the
+  // first time the table appears and reopens on demand. Phone only: on a wide
+  // modal the same row costs one line and losing it would be a regression.
+  // DERIVED, not synchronised. This began as an effect watching showCompare
+  // and calling setPicksOpen — which is a cascading render, and needed
+  // matchMedia to avoid collapsing the desktop panel too. Neither is
+  // necessary: the collapsed state is a pure function of "is there a
+  // comparison yet" plus "has the reader said otherwise", and the phone-only
+  // part is already carried by the classes (the toggle is md:hidden, the grid
+  // hides under max-md:hidden), so a collapsed value is inert above md.
+  //
+  // Below two picks it is forced open, which also stops the reader stranding
+  // themselves: the toggle only exists while showCompare is true, so a
+  // remembered "collapsed" would otherwise hide the picker with no way back.
+  const [picksCollapsed, setPicksCollapsed] = useState<boolean | null>(null);
+  const picksOpen = showCompare ? !(picksCollapsed ?? true) : true;
+  const setPicksOpen = (fn: (o: boolean) => boolean) =>
+    setPicksCollapsed(!fn(picksOpen));
+
   const anyLoading = filledSlots.some((s) => s.loading);
 
   function setSlot(i: number, key: string | null) {
@@ -380,14 +403,31 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
   // Screenshot — same approach as compare-teams: swap cross-origin images to
   // data URLs before capture, strip backdrop-filter via body attribute, fall
   // back to placeholder for image failures.
-  const captureRef = useRef<HTMLTableElement | null>(null);
+  const shareCardRef = useRef<HTMLDivElement | null>(null);
+  // True only for the handful of frames the off-screen card needs to exist.
+  const [buildingCard, setBuildingCard] = useState(false);
   const [capturing, setCapturing] = useState(false);
+  // The finished PNG, waiting to be shared. Null while there isn't one.
+  const [shareBlob, setShareBlob] = useState<Blob | null>(null);
   async function takeScreenshot() {
-    const root = captureRef.current;
-    if (!root || capturing) return;
+    if (capturing) return;
+    // Mount the off-screen share card and let it lay out before photographing
+    // it. It is not in the tree the rest of the time — it is 1080px of DOM
+    // that exists only to become a PNG.
+    setBuildingCard(true);
+    await new Promise<void>((res) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => res()));
+    });
+    const root = shareCardRef.current;
+    if (!root) {
+      setBuildingCard(false);
+      return;
+    }
     setCapturing(true);
     const restore: Array<() => void> = [];
     try {
+      // 1. Pre-fetch every cross-origin image and swap its src to a data URL
+      //    so html-to-image doesn't have to re-fetch it from inside a sandbox.
       const imgs = Array.from(root.querySelectorAll("img")) as HTMLImageElement[];
       await Promise.all(imgs.map(async (img) => {
         const src = img.src;
@@ -407,6 +447,18 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
           restore.push(() => { img.src = originalSrc; });
         } catch { /* leave as-is */ }
       }));
+      // 1b. Wait for every image to be decoded. The pre-fetch sets the src; it
+      //     does not guarantee the browser has finished with it, and
+      //     html-to-image rasterizes whatever is decoded at that instant. On
+      //     a card sitting 20,000px off-screen that is routinely nothing.
+      await Promise.all(
+        (Array.from(root.querySelectorAll("img")) as HTMLImageElement[]).map((img) =>
+          img.complete && img.naturalWidth > 0
+            ? Promise.resolve()
+            : img.decode().catch(() => undefined),
+        ),
+      );
+
       document.body.setAttribute("data-screenshot-capturing", "true");
       // Force a reflow + wait two frames so the CSS override (`.truncate →
       // white-space: normal`) actually re-lays out before html-to-image
@@ -427,9 +479,12 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
         imagePlaceholder,
       });
       if (!blob) throw new Error("html-to-image returned a null blob");
-      const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener,noreferrer");
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      // Hand the PNG to the share sheet rather than opening it. window.open()
+      // here is several awaits past the tap that started the capture, so iOS
+      // treats it as an unsolicited popup and drops it — the button looked
+      // broken on every phone. ShareScreenshotSheet shows the image in place
+      // and puts the platform share behind a fresh tap of its own.
+      setShareBlob(blob);
     } catch (e) {
       const msg = e instanceof Error ? e.message : typeof e === "string" ? e : JSON.stringify(e);
       console.error("Compare-players screenshot failed:", msg, e);
@@ -438,7 +493,33 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
       for (const r of restore) r();
       document.body.removeAttribute("data-screenshot-capturing");
       setCapturing(false);
+      setBuildingCard(false);
     }
+  }
+
+  /** The comparison flattened for the share card. Derived from the same ROWS
+   *  and rowExtremes() as the table so the picture cannot disagree with the
+   *  screen. cellRender rows (the stacked rank badges) fall back to their raw
+   *  value — a card cell is one line, not a two-storey badge. */
+  function buildShareRows(): ShareRow[] {
+    return ROWS.map((row, ri) => {
+      const { bestKey, worstKey } = rowExtremes(row);
+      return {
+        section: row.section && row.section !== ROWS[ri - 1]?.section ? row.section : undefined,
+        label: row.label,
+        cells: filledSlots.map((s) => {
+          const raw = row.value(s.season, s.ctx);
+          return {
+            display: row.format ? row.format(raw) : raw == null ? "—" : String(raw),
+            pct: row.percentileKey && s.season
+              ? s.season.stats[row.percentileKey]?.percentile ?? null
+              : null,
+            best: bestKey === s.key,
+            worst: worstKey === s.key,
+          };
+        }),
+      };
+    });
   }
 
   function rowExtremes(row: Row): { bestKey: string | null; worstKey: string | null } {
@@ -488,7 +569,7 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
               <span className="h-px w-6 bg-coral" />
               Head to head
             </div>
-            <h2 className="font-display text-3xl text-ink leading-none tracking-tight">Compare players</h2>
+            <h2 className="font-display text-xl md:text-3xl text-ink leading-none tracking-tight">Compare players</h2>
             {/* Three lines of instruction is a fair trade on a wide screen and
                 a third of the fold on a phone, where the colour legend is
                 right there in the numbers anyway. */}
@@ -526,7 +607,24 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
           </div>
         </div>
 
-        <div className="px-4 md:px-6 py-3 md:py-5 border-b border-hairline shrink-0">
+        <div className="border-b border-hairline shrink-0">
+          {showCompare && (
+            <button
+              type="button"
+              onClick={() => setPicksOpen((o) => !o)}
+              aria-expanded={picksOpen}
+              className="md:hidden w-full flex items-center justify-between gap-2 px-4 py-2.5 text-left"
+            >
+              <span className="text-[0.62rem] uppercase tracking-[0.18em] font-semibold text-ink-soft">
+                {filledSlots.length} players
+              </span>
+              <span className="text-[0.62rem] uppercase tracking-[0.15em] font-semibold text-coral inline-flex items-center gap-1">
+                {picksOpen ? "Done" : "Change"}
+                <span aria-hidden className={cn("transition-transform text-[0.7rem] leading-none", picksOpen && "rotate-180")}>▾</span>
+              </span>
+            </button>
+          )}
+          <div className={cn("px-4 md:px-6 py-3 md:py-5", showCompare && !picksOpen && "max-md:hidden")}>
           {indexLoading && !index ? (
             <div className="py-6 text-center text-sm text-ink-muted">Loading players…</div>
           ) : (
@@ -563,6 +661,7 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
               })}
             </div>
           )}
+          </div>
         </div>
 
         <div ref={scrollerRef} className="max-md:flex-1 max-md:min-h-0 md:min-h-[60vh] md:max-h-[65vh] overflow-y-auto overscroll-contain">
@@ -600,11 +699,14 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
               ))}
             </div>
 
-            {ROWS.map((row) => {
+            {ROWS.map((row, ri) => {
               const { bestKey, worstKey } = rowExtremes(row);
+              // See the note in the desktop table below: the caption marks the
+              // start of a group, not every row that belongs to one.
+              const opensSection = row.section && row.section !== ROWS[ri - 1]?.section;
               return (
                 <Fragment key={row.key}>
-                  {row.section && (
+                  {opensSection && (
                     <div className="bg-paper-deep/40 px-4 pt-3 pb-1.5 text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold">
                       <span className="inline-flex items-center gap-2">
                         <span className="h-px w-4 bg-coral" />
@@ -630,7 +732,7 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
                             key={s.key}
                             className={cn(
                               "bg-card px-1 py-2 text-center tabular text-[0.9rem] leading-tight text-ink break-words",
-                              bestKey === s.key && "bg-emerald-50 text-emerald-900 font-semibold",
+                              bestKey === s.key && "bg-[color-mix(in_srgb,var(--good)_14%,transparent)] text-good font-semibold",
                               worstKey === s.key && "bg-coral/10 text-coral font-medium",
                             )}
                           >
@@ -662,7 +764,7 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
 
           {/* ================= DESKTOP ================= */}
           <div className="hidden md:block">
-            <table ref={captureRef} className="w-full text-sm">
+            <table className="w-full text-sm">
               <thead className="sticky top-0 bg-paper-deep/80 backdrop-blur z-10">
                 <tr className="border-b border-hairline">
                   <th className="px-5 py-3 text-left text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium w-56">
@@ -690,9 +792,14 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
               <tbody>
                 {ROWS.map((row, ri) => {
                   const { bestKey, worstKey } = rowExtremes(row);
+                  // The caption belongs to the GROUP, and `section` is set on every
+                  // row in it, so this has to fire on the boundary rather than on
+                  // the mere presence of a section — otherwise Ratings announces
+                  // itself once for NET, again for ORTG and again for DRTG.
+                  const opensSection = row.section && row.section !== ROWS[ri - 1]?.section;
                   return (
                     <Fragment key={row.key}>
-                      {row.section && (
+                      {opensSection && (
                         <tr
                           ref={(el) => {
                             if (el) sectionRefs.current.set(row.section!, el);
@@ -727,7 +834,7 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
                               key={s.key}
                               className={cn(
                                 "px-4 py-3 tabular text-base text-ink",
-                                isBest && "bg-emerald-50 text-emerald-900 font-semibold",
+                                isBest && "bg-[color-mix(in_srgb,var(--good)_14%,transparent)] text-good font-semibold",
                                 isWorst && "bg-coral/10 text-coral font-medium",
                               )}
                             >
@@ -760,6 +867,44 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
           </>
           )}
         </div>
+
+        {/* Mounted INSIDE the card, not beside the scrim. A portal still
+            bubbles its events through the React tree, so a tap on the share
+            sheet would otherwise reach the scrim's onClick and close the
+            comparison underneath it. The card already stops propagation. */}
+        {/* The share card. Off-screen rather than hidden: html-to-image
+            measures what it photographs, and a display:none element measures
+            0x0 and comes back as a null blob. Fixed 1080px so a phone and a
+            desktop produce exactly the same picture. */}
+        {buildingCard && (
+          <div
+            aria-hidden
+            style={{ position: "fixed", left: -20000, top: 0, pointerEvents: "none" }}
+          >
+            <CompareShareCard
+              ref={shareCardRef}
+              kicker="Compare players"
+              entities={filledSlots.map((s) => ({
+                name: s.opt.n,
+                sub: [seasonLabel(s.opt.y), s.opt.t].filter(Boolean).join(" · "),
+                // `local` serves the same-origin crest — the GCS host sends no
+                // CORS headers and would taint the canvas outright.
+                logo: <TeamLogo name={s.opt.t} size={72} local eager />,
+              }))}
+              rows={buildShareRows()}
+              footnote="College basketball analytics"
+            />
+          </div>
+        )}
+
+        {shareBlob && (
+          <ShareScreenshotSheet
+            blob={shareBlob}
+            filename="bta-compare-players.png"
+            caption={filledSlots.map((s) => s.opt.n).join(" vs ")}
+            onClose={() => setShareBlob(null)}
+          />
+        )}
       </div>
     </div>
   );

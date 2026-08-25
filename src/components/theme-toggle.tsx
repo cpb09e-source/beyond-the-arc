@@ -21,7 +21,11 @@ function writeTheme(t: Theme) {
     document.documentElement.removeAttribute("data-theme");
   }
   try {
-    localStorage.setItem("bta-theme", t);
+    // v2, not the original key. The old 'bta-theme' was written automatically
+    // for every phone under 768px by a pre-hydration script that has since been
+    // removed, so its value cannot be trusted to mean "the reader chose this".
+    // A v2 entry can only exist because somebody pressed this control.
+    localStorage.setItem("bta-theme-v2", t);
   } catch {
     // Storage blocked (private mode, etc.) — theme still applies for this session.
   }

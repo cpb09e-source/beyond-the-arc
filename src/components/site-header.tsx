@@ -7,6 +7,7 @@ import { Search } from "lucide-react";
 import { SearchDialog } from "@/components/search/search-dialog";
 import { AccountNav } from "@/components/account/account-nav";
 import { MobileMenu } from "@/components/mobile-menu";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -141,6 +142,9 @@ export function SiteHeader() {
 
         {/* Right cluster: search on desktop, hamburger on mobile. */}
         <div className="flex items-center gap-2.5 shrink-0">
+          {/* Theme switch. Desktop only here — below lg the header row has no
+              spare width, and the same control is in the hamburger sheet. */}
+          <ThemeToggle className="hidden lg:inline-flex" />
           {/* SearchDialog renders its own desktop trigger (hidden on mobile) and
               the modal. Kept un-wrapped so the modal works on mobile too. */}
           <SearchDialog />

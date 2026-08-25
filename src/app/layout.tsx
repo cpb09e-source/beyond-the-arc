@@ -95,13 +95,28 @@ export default function RootLayout({
       className={`${sans.variable} ${mono.variable} ${display.variable} h-full antialiased`}
     >
       <head>
-        {/* Dark mode is off for now. The palette lives on in globals.css
-            under [data-theme="dark"] and ThemeToggle still exists, so turning
-            it back on means restoring this script and re-mounting the control.
-            Nothing sets data-theme any more — which matters, because this
-            script used to default EVERY phone (<768px) to dark, and a stored
-            'bta-theme=dark' would otherwise strand a returning visitor in a
-            palette with no control left to leave it. */}
+        {/* Dark mode, applied before first paint so nobody who chose it sees a
+            frame of light tokens.
+
+            THE LEGACY VALUE IS DELIBERATELY IGNORED. An earlier version of
+            this script defaulted EVERY phone under 768px to dark and wrote
+            that to localStorage, so there are returning visitors carrying
+            'bta-theme=dark' who never chose it — reading the old key back
+            would silently strand them in a theme they did not pick. The key is
+            versioned instead: only 'bta-theme-v2', which can only exist
+            because somebody used the control, counts as a preference. The old
+            key is left where it is; it is inert and not worth a migration.
+
+            No OS-preference fallback yet, on purpose. dark mode is going in
+            so it can be looked at, and defaulting the whole audience into a
+            palette that has not been audited is not the way to do that. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{if(localStorage.getItem('bta-theme-v2')==='dark')" +
+              "document.documentElement.setAttribute('data-theme','dark')}catch(e){}",
+          }}
+        />
       </head>
       <body className="min-h-full flex flex-col bg-paper text-ink">
         {/* Session state for the whole site. Mounted here so the header can

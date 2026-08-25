@@ -51,39 +51,72 @@
   --input: var(--hairline);
   --ring: var(--coral);
 
+
+  /* Percentile ramp — the seven bands from percentile-chip.tsx, lifted out of
+   * the component so the dark theme can restate them. The light values are
+   * unchanged: pastel fills carrying dark text, authored in OKLCH and baked.
+   * See that file for why it is banded rather than a continuous sweep. */
+  --pct-bg-1: #ff9c91; --pct-fg-1: #7d231f;
+  --pct-bg-2: #ffc1a2; --pct-fg-2: #8d3a0c;
+  --pct-bg-3: #fce1c3; --pct-fg-3: #814600;
+  --pct-bg-4: #f4f1e7; --pct-fg-4: #6d5400;
+  --pct-bg-5: #dfecc8; --pct-fg-5: #486100;
+  --pct-bg-6: #b4e3a9; --pct-fg-6: #2a661b;
+  --pct-bg-7: #7dd591; --pct-fg-7: #00591e;
+
   --radius: 0.5rem;
 }
 
 /* ------------------------------------------------------------------
- * Dark theme — "After Hours". The brand identity is preserved by
- * flipping the editorial roles of navy and cream: navy becomes the
- * page (background), cream becomes the ink. The accent keeps its job,
- * lifted a few steps so it still carries on the darker
- * ground. Cards and popovers drop their hardcoded white in favor of
- * an elevated navy so depth still reads.
+ * Dark theme — "Azure After Hours".
+ *
+ * The ground is #1C1C1C, a TRUE NEUTRAL, and that is what makes this a
+ * rewrite rather than a tint. The previous dark theme was navy #0e1320 and
+ * kept the brand by swapping editorial roles — navy became the page, cream
+ * became the ink. On a neutral ground that trick is unavailable, so the
+ * accent has to carry the identity by itself.
+ *
+ * Azure was chosen over four other directions for continuity: --coral keeps
+ * meaning what it means at all ~390 call sites and only needs lifting.
+ * #0c6bd6 reaches just 2.4:1 on this ground; #4d9bff clears AA.
  * ----------------------------------------------------------------- */
 [data-theme="dark"] {
-  --paper: #0e1320;          /* page — deepest navy, near-black */
-  --paper-deep: #171d2d;     /* elevated surfaces (cards, banners) */
-  --ink: #ebe6da;            /* primary text — warm cream */
-  --ink-soft: #b9b3a4;       /* body copy — softened cream */
-  --ink-muted: #807a6b;      /* secondary text — warm muted */
-  --hairline: #262c3b;       /* dividers — just-visible navy */
-  /* Dormant while dark mode is off, but kept coherent: #0c6bd6 only reaches
-   * 2.4:1 on the near-black navy page, so the dark accent is lifted. */
-  --coral: #4b93ea;          /* accent — lifted to carry on dark */
-  --coral-soft: #7db3f0;
+  --paper: #1C1C1C;          /* page */
+  --paper-deep: #242424;     /* elevated surfaces (cards, banners) */
+  --ink: #ece8e0;            /* primary text — warm cream */
+  --ink-soft: #a6a29a;       /* body copy */
+  --ink-muted: #736f68;      /* secondary text */
+  --hairline: #333331;       /* dividers */
+
+  --coral: #4d9bff;          /* the accent, lifted to carry on #1C1C1C */
+  --coral-soft: #84baff;
   --court: #b88a52;
   --court-ink: #d9ae6e;      /* lighter than --court here — it sets text on a dark tint */
-  --good: #6da57a;
-  --bad: #d96868;
+  --good: #5fb87a;
+  --bad: #e2706e;
 
-  --card: #171d2d;           /* no more white — elevated navy */
+  --card: #242424;
   --card-foreground: var(--ink);
-  --popover: #1b2233;
+  --popover: #2b2b2b;
   --popover-foreground: var(--ink);
-  --accent-foreground: #faf7f2;
+  --accent-foreground: #0b1a2e;
   --destructive-foreground: #faf7f2;
+
+  /* The ramp, re-baked. THIS IS NOT OPTIONAL. The light bands are pastel
+   * fills chosen to be light enough that their type never flips to white —
+   * drop those same fills on #1C1C1C and every chip becomes a headlight, on
+   * pages that are mostly chips. Inverted here: deep fills, light type, and
+   * the same rule the light ramp keeps — band 4 drops nearly all its chroma
+   * so "average" recedes instead of shouting. Authored in OKLCH at
+   * L .285-.365 / C .012-.095 across hue 27-150 and baked to sRGB, exactly as
+   * the light ramp is, so nothing depends on oklch() support. */
+  --pct-bg-1: #682621; --pct-fg-1: #ffc5ba;
+  --pct-bg-2: #542917; --pct-fg-2: #ffc9a9;
+  --pct-bg-3: #3f2c19; --pct-fg-3: #ffd098;
+  --pct-bg-4: #2c2a23; --pct-fg-4: #e2ded3;
+  --pct-bg-5: #303319; --pct-fg-5: #dee698;
+  --pct-bg-6: #273e16; --pct-fg-6: #c3eda9;
+  --pct-bg-7: #084c21; --pct-fg-7: #aef1bb;
 }
 
 @theme inline {
@@ -405,19 +438,6 @@ body {
   select {
     font-size: 16px;
   }
-}
-
-/* Court-line divider — for section breaks */
-.court-divider {
-  height: 1px;
-  background: repeating-linear-gradient(
-    to right,
-    var(--court) 0,
-    var(--court) 8px,
-    transparent 8px,
-    transparent 16px
-  );
-  opacity: 0.45;
 }
 
 /* Magazine pull-quote stat.

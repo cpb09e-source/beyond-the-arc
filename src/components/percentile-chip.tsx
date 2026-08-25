@@ -33,14 +33,23 @@ import { cn } from "@/lib/utils";
 //   oklch(L C H):  .800/.128/27  .868/.092/44  .925/.050/70  .958/.014/95
 //                  .925/.050/124 .868/.092/140 .800/.128/150
 //   text is the same hue at L .400 (ends) / .455 (rest), C .125
+// THE VALUES NOW LIVE IN globals.css, not here. They had to move the moment
+// dark mode came back: these are pastel fills chosen to stay light enough that
+// their type never flips to white, and on the #1C1C1C ground every one of them
+// reads as a small headlight — on pages that are mostly chips. A CSS variable
+// is the only way one component can hold both ramps, because the theme is an
+// attribute on <html> and this colour is applied as an inline style.
+//
+// The light values are unchanged. The dark set is the same seven bands
+// inverted — deep fills, light type — and is documented where it is defined.
 const BANDS: Array<{ upto: number; bg: string; fg: string }> = [
-  { upto: 14,  bg: "#ff9c91", fg: "#7d231f" },
-  { upto: 29,  bg: "#ffc1a2", fg: "#8d3a0c" },
-  { upto: 43,  bg: "#fce1c3", fg: "#814600" },
-  { upto: 57,  bg: "#f4f1e7", fg: "#6d5400" },
-  { upto: 71,  bg: "#dfecc8", fg: "#486100" },
-  { upto: 86,  bg: "#b4e3a9", fg: "#2a661b" },
-  { upto: 101, bg: "#7dd591", fg: "#00591e" },
+  { upto: 14,  bg: "var(--pct-bg-1)", fg: "var(--pct-fg-1)" },
+  { upto: 29,  bg: "var(--pct-bg-2)", fg: "var(--pct-fg-2)" },
+  { upto: 43,  bg: "var(--pct-bg-3)", fg: "var(--pct-fg-3)" },
+  { upto: 57,  bg: "var(--pct-bg-4)", fg: "var(--pct-fg-4)" },
+  { upto: 71,  bg: "var(--pct-bg-5)", fg: "var(--pct-fg-5)" },
+  { upto: 86,  bg: "var(--pct-bg-6)", fg: "var(--pct-fg-6)" },
+  { upto: 101, bg: "var(--pct-bg-7)", fg: "var(--pct-fg-7)" },
 ];
 
 function band(pct: number) {

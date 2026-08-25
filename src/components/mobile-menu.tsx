@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { cn } from "@/lib/utils";
@@ -138,6 +139,16 @@ export function MobileMenu({
         className="shrink-0 px-6 pt-4 border-t border-hairline"
         style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
       >
+        {/* Theme, above the account actions. It is a setting rather than a
+            destination, so it sits with the other chrome at the foot of the
+            sheet instead of in the nav list. */}
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-[0.62rem] uppercase tracking-[0.18em] font-semibold text-ink-soft">
+            Theme
+          </span>
+          <ThemeToggle />
+        </div>
+
         {signedIn ? (
           <>
             {email && (
