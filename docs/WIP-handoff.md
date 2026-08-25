@@ -59,19 +59,7 @@ It is also where the new play-by-play columns belong and do not yet appear:
 mid-range splits are already computed per five-man unit and per player, and the
 Shooting tab shows none of them.
 
-### 2. Bake the remaining 367 teams for School History
-
-`npx tsx scripts/build-team-seasons.mts` with no flags. Only Vermont is baked,
-so every other team still renders the older SortableSeasonsTable. Nothing is
-broken; the tab just does not gain the new grid until this runs.
-
-DO NOT run it with `--team` and expect the benchmarks to survive. That flag
-filters the accumulation, and a single-team run used to overwrite the season's
-league percentile field with one team's units. Guarded now — a `--team` run
-leaves benchmarks alone and says so — but the same shape of bug is easy to
-reintroduce in any script that writes a shared artifact.
-
-### 3. Build measured — DEPLOY is the risk, not the build
+### 2. Build measured — DEPLOY is the risk, not the build
 
 Measured 2026-08-25 with `npm run build` on this machine, after the full bake:
 
@@ -114,29 +102,13 @@ entry point `node scripts/build-with-r2-stash.mjs`. The wrapper additionally
 strips `data/players-by-year` (48 MB), so a production build is marginally
 smaller than the number above.
 
-### 4. DESIGN.md is wrong about the accent colour
+### 3. Smaller, carried over
 
-It documents `--coral` as `#c8553d`, "basketball-leather". globals.css line 21
-says `--coral: #0c6bd6` — azure. So `text-coral` is the site's blue, and the
-theme lifts it to `#4d9bff` where contrast needs it. Anything reading DESIGN.md
-to pick a colour will pick the wrong one.
-
-### 5. The on/off caveat is nowhere
-
-The On/Off tab's footnote was removed on request. It was the only place saying
-that an on/off split is not a rating of the player — it is what the team did
-with him and without him, which also carries whoever replaced him and whoever
-he shared the floor with. A collapsed `<details>` is the pattern the rest of
-the site uses for methodology, if it should come back.
-
-### 6. Smaller, carried over
-
-- **Footer is 80rem**, team content is 88rem and the two data tabs are 96rem
-  and 100rem. The footer reads inset on team pages.
-- **`lineup-stats/` (29 MB) is an R2 candidate**, alongside the directories
-  already mirrored there.
-- **Three pre-existing lint errors** in `searchable-multi-select.tsx`
-  (setState-in-effect at 75, 84, 127). Confirmed pre-existing, not introduced.
+- **`npx eslint src scripts` reports 45 errors and 60 warnings**, measured
+  2026-08-25. Nearly all are `react-hooks/set-state-in-effect`, spread across
+  `searchable-multi-select.tsx`, `theme-toggle.tsx` and others. All
+  pre-existing. Lint does NOT gate the build — `next build` passes — so this is
+  cleanup, not a deploy blocker.
 - **`useSearchParams` refactor** — `/` and `/players/` still ship zero `<tr>`
   and blank the table for 1-2s while JS boots.
 - **`assist-network.json` is 12 MB and committed** — probably belongs in R2 like
@@ -145,15 +117,47 @@ the site uses for methodology, if it should come back.
   dark mode: `schedule-ticker`, `overview-tab`, `season-by-season-table`,
   `find-game-modal`, `where-they-rank`, `seed-chip` and three others.
 
-### 7. Stripe — SET UP, NOT VERIFIED
+### 4. Stripe — VERIFIED WORKING 2026-08-25
 
-Unchanged from before. Four env vars in Netlify, `STRIPE_SECRET_KEY` is
-`sk_live_…`, and the products may have been created in TEST mode. Test-mode
-price IDs do not work with a live key. Verify before any checkout is exercised.
-`STRIPE_PRODUCT_ID`, `STRIPE_PRICE_3MONTH` and `STRIPE_PRICE_6MONTH` are still
-read by nothing. Stripe keys are not flagged secret in Netlify and should be.
+Previously recorded here as "set up, not verified", with a guess that the
+products were made in TEST mode and a list of env vars (`STRIPE_PRODUCT_ID`,
+`STRIPE_PRICE_3MONTH`, `STRIPE_PRICE_6MONTH`) that DO NOT EXIST. That whole
+section was wrong. Measured against the live API:
 
-### 8. Enforcement layer — RESEARCH DONE, PLAN STILL OWED
+```
+STRIPE_SECRET_KEY      sk_live_…  (107 chars)
+STRIPE_PRICE_MONTHLY   price_…    GET /v1/prices/{id}  ->  200   livemode  $8/month
+STRIPE_PRICE_YEARLY    price_…    GET /v1/prices/{id}  ->  200   livemode  $50/year
+```
+
+Both price ids resolve against the LIVE key, so they are live-mode prices, and
+the amounts match the copy in `account-client.tsx` exactly. `PAID_PLANS` in
+`netlify/shared/billing.mts` maps `monthly`/`yearly` to those two var names and
+nothing else. Checkout is reachable in production: `/pricing` is in MOBILE_NAV,
+which routes to `/account` and its "Continue to payment" button.
+
+Verify without printing secrets — read the values into shell vars, print only
+prefixes and lengths, and let curl report the status code:
+
+```sh
+KEY=$(netlify env:get STRIPE_SECRET_KEY --context production | tr -d '\r\n ')
+PM=$(netlify env:get STRIPE_PRICE_MONTHLY --context production | tr -d '\r\n ')
+curl -s -o /dev/null -w "%{http_code}\n" -u "$KEY:" https://api.stripe.com/v1/prices/$PM
+```
+
+Test-mode and live-mode price ids are both `price_…` and the same length, so
+SHAPE CANNOT TELL THEM APART. A 404 from the live key is the only real test.
+
+Still open, both small:
+
+- **Stripe vars are not flagged secret in Netlify.** All four are plain env
+  vars. Flag them.
+- **`NEXT_PUBLIC_SITE_URL` is not set at all.** `siteOrigin()` falls back to
+  the request origin and then to `https://btacbb.xyz`, so Stripe return URLs
+  work today, but a function called from a deploy-preview domain would send
+  people back to the preview.
+
+### 5. Enforcement layer — RESEARCH DONE, PLAN STILL OWED
 
 Nothing gates anything. `describeMembership()` still has one consumer, the
 account badge. The decisive constraint has not changed: prebuilt pages EMBED
@@ -162,6 +166,25 @@ old-season data in their HTML, so gating the JSON fetches would not hold.
 The tab split makes option 3 more attractive than it was — gating by DEPTH
 rather than by SEASON is now a routing decision, and the deep tabs (Lineups,
 On/Off, School History) are exactly the surfaces nobody needs indexed.
+
+### 6. The production deploy itself
+
+The build is not the risk; the upload is. Sequence, when authorized:
+
+1. `node scripts/build-with-r2-stash.mjs` — the entry point netlify.toml names.
+   The 8m12s measurement used `npm run build` instead. Same strip runs either
+   way (`postbuild` fires it), but the wrapper does it inside the build's own
+   Node process, and the wrapper is what has been proven on this project.
+2. Confirm the strip: `out/data/lineup-stats` and `out/data/team-seasons` must
+   NOT exist, alongside the nine older R2 dirs.
+3. `netlify deploy --prod --dir=out --no-build`, run BACKGROUNDED. A 10-minute
+   Bash timeout once killed the CLI mid-upload and orphaned a deploy stuck at
+   `uploading`.
+4. `netlify api listSiteDeploys` until `ready`. NEVER trust the exit code.
+
+Budget 45 minutes or more. File count went ~215k -> 319,479. Netlify dedupes by
+content hash, so a normal incremental deploy runs under 2 min, but nearly every
+team page changed in this redesign — this one behaves like a first deploy.
 
 ## Things learned the hard way — do not re-derive these
 
