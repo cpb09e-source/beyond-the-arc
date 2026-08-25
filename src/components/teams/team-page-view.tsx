@@ -12,6 +12,9 @@ import { NationalRanks } from "@/components/teams/national-ranks";
 import { SortableSeasonsTable } from "@/components/teams/sortable-seasons-table";
 import { SortableRosterTable } from "@/components/teams/sortable-roster-table";
 import { DistributionPanel, type DistributionRank } from "@/components/teams/distribution-panel";
+import { AssistNetworkPanel } from "@/components/teams/assist-network-panel";
+import { ClockSplitsPanel } from "@/components/teams/clock-splits-panel";
+import type { AssistNetwork, ClockSplits } from "@/lib/static-data";
 import { ScheduleTicker } from "@/components/teams/schedule-ticker";
 import { TeamStatsPanel, type TeamSplits } from "@/components/teams/team-stats-panel";
 import { FindGameTrigger } from "@/components/teams/find-game-trigger";
@@ -255,6 +258,8 @@ export function TeamPageView({
   scheduleGames,
   netRanks,
   teamSplits,
+  assistNetwork,
+  clockSplits,
   preview = false,
 }: {
   team: { name: string; seasons: StaticTeamSeasonRow[] };
@@ -270,6 +275,10 @@ export function TeamPageView({
   netRanks: Record<number, number>;
   /** Eight-way stat splits for the season on screen; null before 2014. */
   teamSplits: TeamSplits | null;
+  /** Who assisted whom this season. Null before 2014 — no play-by-play. */
+  assistNetwork: AssistNetwork | null;
+  /** Shot selection by shot-clock position. Null before 2014. */
+  clockSplits: ClockSplits | null;
   // Preview mode — renders the last-completed-season layout with game-dependent
   // sections blurred, the roster swapped for the upcoming-season client roster,
   // record shown as 0-0 and BTA rank as TBD.
@@ -524,6 +533,17 @@ export function TeamPageView({
           )}
         </DistributionPanel>
       </section>
+
+      {/* Play-by-play derivatives. Both are reconstructed from the CBBD plays
+          archive rather than reported by anyone, and both are absent before
+          2014 where there is no play-by-play — so the section disappears
+          entirely rather than rendering two empty frames. */}
+      {(clockSplits || assistNetwork) && (
+        <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {clockSplits ? <ClockSplitsPanel splits={clockSplits} /> : <div />}
+          {assistNetwork ? <AssistNetworkPanel network={assistNetwork} /> : <div />}
+        </section>
+      )}
 
       {/* Top 5-man lineups removed for now. TeamLineups and lineups-<year>.json
           are both still here — this is one JSX block away from returning. */}

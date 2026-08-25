@@ -68,8 +68,8 @@ const FEATURES = [
   // which is the context needed to read a box score at all: 18 points against
   // the country's best defense is not 18 points against its worst.
   //
-  // SPLIT rather than combined on purpose. Offense is fit against the DEFENCES
-  // faced and defense against the OFFENCES faced, and a single net SOS blurs
+  // SPLIT rather than combined on purpose. Offense is fit against the DEFENSES
+  // faced and defense against the OFFENSES faced, and a single net SOS blurs
   // the two. Measured, the split is most of the gain — combined `sos` alone was
   // worth +0.0014 to lean OFF, the split +0.0065.
   //

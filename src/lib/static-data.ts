@@ -209,6 +209,65 @@ export async function readTeamSplits(year: number, teamName: string) {
   return { season: file.season, splits: file.splits, stats: file.stats, groups: file.groups, rows };
 }
 
+/* ------------------------------------------------------------------ *
+ * Play-by-play derivatives: the assist network and the shot-clock splits.
+ *
+ * Both are ONE file for every team-season rather than one per year, and both
+ * are read at BUILD time — a team page is prebuilt, so the whole file is
+ * parsed once for the run and only the team's own slice reaches the HTML. The
+ * file's size is therefore a build concern, not a payload concern, which is
+ * what lets the assist network keep sixty edges per team-season.
+ * ------------------------------------------------------------------ */
+
+export type AssistNetwork = {
+  games: number;
+  /** [passerBartId, shooterBartId, total, rim, mid, three] */
+  edges: [number, number, number, number, number, number][];
+  players: Record<string, {
+    fgm: number;
+    ast_given: number;
+    ast_rate: number | null;
+    rim_ast_rate: number | null;
+    mid_ast_rate: number | null;
+    three_ast_rate: number | null;
+  }>;
+  names: Record<string, string>;
+};
+
+export type ClockSplits = {
+  clock_games: number;
+  dropped_rate: number | null;
+  early_rate: number | null; mid_rate: number | null; late_rate: number | null;
+  early_efg: number | null; mid_efg: number | null; late_efg: number | null;
+  early_rate_def: number | null; mid_rate_def: number | null; late_rate_def: number | null;
+  early_efg_def: number | null; mid_efg_def: number | null; late_efg_def: number | null;
+};
+
+let _assistCache: Record<string, AssistNetwork> | null | undefined;
+let _clockCache: Record<string, ClockSplits> | null | undefined;
+
+/** Who fed whom, for one team-season. Null before 2014 (no play-by-play). */
+export async function readAssistNetwork(
+  year: number,
+  teamName: string,
+): Promise<AssistNetwork | null> {
+  if (_assistCache === undefined) {
+    _assistCache = await readJson<Record<string, AssistNetwork>>("assist-network.json").catch(() => null);
+  }
+  return _assistCache?.[`${teamName}|${year}`] ?? null;
+}
+
+/** Shot selection and efficiency by shot-clock position. Null before 2014. */
+export async function readClockSplits(
+  year: number,
+  teamName: string,
+): Promise<ClockSplits | null> {
+  if (_clockCache === undefined) {
+    _clockCache = await readJson<Record<string, ClockSplits>>("clock-splits.json").catch(() => null);
+  }
+  return _clockCache?.[`${teamName}|${year}`] ?? null;
+}
+
 export async function readTeam(slug: string): Promise<{ name: string; seasons: StaticTeamSeasonRow[] } | null> {
   try {
     const t = await readJson<{ name: string; seasons: StaticTeamSeasonRow[] }>(`team/${slug}.json`);

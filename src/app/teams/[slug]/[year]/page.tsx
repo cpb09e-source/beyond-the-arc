@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { readPlayersForYear, readImpactForYear, readImpactExtrasForYear, readTeam, readAllTeams, netRanksForTeam, readTeamSplits, readRankedPlayerIds, readConfRecordsByTeam, readGameLogsForYear } from "@/lib/static-data";
+import { readPlayersForYear, readImpactForYear, readImpactExtrasForYear, readTeam, readAllTeams, netRanksForTeam, readTeamSplits, readRankedPlayerIds, readConfRecordsByTeam, readGameLogsForYear, readAssistNetwork, readClockSplits } from "@/lib/static-data";
 import { TeamPageView, buildRoster, attachRosterRanks, PREVIEW_SEASON_YEAR, PREVIEW_SEASON_LABEL } from "@/components/teams/team-page-view";
 import { buildShootingRanks, buildFourFactorRanks } from "@/components/teams/distribution-panel";
 import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches";
@@ -134,6 +134,8 @@ export default async function TeamSeasonPage({
   // Eight-way stat splits for the season on screen. Season file is read once
   // and cached, so all ~365 team pages for a year share one parse.
   const teamSplits = await readTeamSplits(effYear, team.name);
+  const assistNetwork = await readAssistNetwork(effYear, team.name);
+  const clockSplits = await readClockSplits(effYear, team.name);
   const yearCohort = allTeams.filter((t) => t.year === effYear);
   const shootingRanks = buildShootingRanks(current, yearCohort);
   const fourFactorRanks = buildFourFactorRanks(current, yearCohort);
@@ -175,6 +177,8 @@ export default async function TeamSeasonPage({
       scheduleGames={scheduleGames}
       netRanks={netRanks}
       teamSplits={teamSplits}
+      assistNetwork={assistNetwork}
+      clockSplits={clockSplits}
       preview={isPreview}
     />
   );

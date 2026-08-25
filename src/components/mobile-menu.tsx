@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SiteLogo } from "@/components/site-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth/auth-provider";
@@ -91,11 +92,7 @@ export function MobileMenu({
       <div className="flex items-center justify-between px-6 h-16 shrink-0 border-b border-hairline">
         <Link href="/" onClick={onClose} className="flex items-center shrink-0">
           {/* Same single-file mark as the header, same height. */}
-          <img
-            src="/images/btalogo_final-01.svg"
-            alt="Beyond the Arc"
-            className="h-8 w-auto"
-          />
+          <SiteLogo className="h-8 w-auto" />
         </Link>
         <button
           type="button"

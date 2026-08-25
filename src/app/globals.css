@@ -390,6 +390,16 @@ body {
   .bta-burger span { transition: none; }
 }
 
+/* Wordmark, one file per ground.
+ *
+ * The mark is flat artwork with its fill baked in, so it cannot be recoloured
+ * from outside an <img>. Both files ship and this picks; see site-logo.tsx for
+ * why that beats inlining the SVG or swapping the src in JS.
+ */
+.bta-logo-dark { display: none; }
+[data-theme="dark"] .bta-logo-light { display: none; }
+[data-theme="dark"] .bta-logo-dark { display: block; }
+
 /* Mobile legibility floor.
  *
  * The design leans on small tracked type, which reads fine on a desktop

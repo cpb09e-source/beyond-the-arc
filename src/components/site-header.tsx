@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SiteLogo } from "@/components/site-logo";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { Search } from "lucide-react";
@@ -86,11 +87,7 @@ export function SiteHeader() {
               h-8, not h-10. The mark is 1200x320 (3.75:1) where the original
               was 2.5:1, so height buys width faster here — h-8 renders 120px
               against the old logo's 100px. */}
-          <img
-            src="/images/btalogo_final-01.svg"
-            alt="Beyond the Arc"
-            className="h-8 w-auto group-hover:opacity-80 transition-opacity"
-          />
+          <SiteLogo className="h-8 w-auto group-hover:opacity-80 transition-opacity" />
         </Link>
 
         {/* Desktop nav as a SEGMENTED CONTROL: the links sit in a recessed

@@ -81,3 +81,10 @@ supabase/.temp/
 /public/data/game-players/
 __pycache__/
 /data/derived/
+
+# Per-player assist connections (public/data/assist-players) — regenerable with
+# `node scripts/build-assist-network.mjs`, and nothing reads it yet. Held out of
+# history deliberately: it is ~17 MB across thirteen seasons, and the decision
+# about whether these derivatives ship in the repo or via R2 has not been made.
+# The team-level assist-network.json IS tracked, because a panel already reads it.
+/public/data/assist-players/

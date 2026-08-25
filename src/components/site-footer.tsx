@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { SiteLogo } from "@/components/site-logo";
 
 export function SiteFooter() {
   // The /32-0 exemption that used to live here went with the game itself. If it
@@ -18,11 +19,7 @@ export function SiteFooter() {
 
               h-9 against the header's h-8. The mark is 3.75:1, so at the
               bottom of a page it can afford the extra eighth. */}
-          <img
-            src="/images/btalogo_final-01.svg"
-            alt="Beyond the Arc"
-            className="h-9 w-auto group-hover:opacity-80 transition-opacity"
-          />
+          <SiteLogo className="h-9 w-auto group-hover:opacity-80 transition-opacity" />
         </Link>
         <span className="hidden sm:inline text-ink-muted">·</span>
         <span className="text-xs sm:text-sm">
