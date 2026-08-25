@@ -55,17 +55,17 @@ type Mode = "on" | "off" | "diff";
 const SECTIONS: Array<{ key: Mode; title: string; blurb: string }> = [
   {
     key: "diff",
-    title: "On/Off Difference",
+    title: "ON/OFF Difference",
     blurb: "How the team's numbers change with each player on the floor. Ranked against every qualifying player in Division I.",
   },
   {
     key: "on",
-    title: "Team stats, player on court",
+    title: "Player ON",
     blurb: "What the team did while each player was on the floor.",
   },
   {
     key: "off",
-    title: "Team stats, player off court",
+    title: "Player OFF",
     blurb: "What the team did while each player sat.",
   },
 ];
