@@ -167,11 +167,31 @@ real length — that is the mask, not the value.
 
 **Flagging EMPTIES the `dev` context.** Netlify refuses to hand secrets to
 local dev, so all four now read `dev:EMPTY` while `production`,
-`deploy-preview`, `branch-deploy` and `dev-server` keep their values. `.env.local`
-already carries `STRIPE_PRICE_MONTHLY` and `STRIPE_PRICE_YEARLY`, but NOT
-`STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET` — so `npm run dev` can no longer
-exercise checkout. Add TEST-mode values for those two to `.env.local` if that
-matters; do not put the live key there.
+`deploy-preview`, `branch-deploy` and `dev-server` keep their values.
+
+`.env.local` carries `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_YEARLY` and
+`STRIPE_PRODUCT_ID`, but NOT `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET`, so
+local checkout is now broken. Confirmed rather than assumed:
+
+```
+POST http://localhost:9999/api/create-checkout-session
+503 {"error":"Payments are not configured on this deploy
+     (STRIPE_SECRET_KEY missing or not an API key)."}
+```
+
+That is `getStripe()`'s shape check doing its job — a clear config error instead
+of a confusing 401. To restore local checkout, put a TEST-mode secret key and
+TEST-mode price ids in `.env.local`. Do NOT put the live key there; a local dev
+server pointed at live Stripe creates real checkout sessions.
+
+**Flagging a var secret makes it UNREADABLE, including to you.** `netlify
+env:get` returns a mask afterwards, so the live secret key can no longer be
+recovered from Netlify by CLI. If it is ever needed again it comes from the
+Stripe dashboard, not from here.
+
+**Functions are served on custom paths, not the default.** Every one declares
+`export const config = { path: "/api/<name>" }`, so
+`/.netlify/functions/<name>` 404s. Hit `/api/create-checkout-session`.
 
 
 ### 5. Canonical host — FIXED AND BUILT, NOT YET DEPLOYED
@@ -247,6 +267,13 @@ content hash, so a normal incremental deploy runs under 2 min, but nearly every
 team page changed in this redesign — this one behaves like a first deploy.
 
 ## Things learned the hard way — do not re-derive these
+
+**A production build clobbers a RUNNING dev server.** `next build` writes to
+`.next/`, which `next dev` is reading from. After the 2026-08-25 build the dev
+server still held ports 3000, 8899 and 9999 but served NOTHING — every route
+timed out at 90 seconds with a zero-byte body. A port check says "up"; only a
+real request says "serving". Kill the tree and restart:
+`taskkill /PID <npm run dev pid> /F /T` takes all six processes with it.
 
 **`next build` SURVIVES its parent dying; the wrapper does not.** A build
 launched through `scripts/build-with-r2-stash.mjs` was orphaned when the
