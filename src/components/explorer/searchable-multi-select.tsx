@@ -145,10 +145,16 @@ export function SearchableMultiSelect({
       const picked = filtered[activeIdx];
       if (picked) toggle(picked.value);
       setQuery("");
-      // Enter commits the selection AND closes the dropdown. If the user
-      // wants to add more, they can reopen. Matches typical autocomplete
-      // behavior (type → arrow → enter → done).
-      setOpen(false);
+      setActiveIdx(0);
+      // Enter closes the dropdown in the default shape: type → arrow → enter →
+      // done, which is what a filter you set once wants.
+      //
+      // It stays OPEN in inlineSearch mode, with the caret still in the field.
+      // That picker is a list you build — two or three players on the court,
+      // one off it — and closing after each pick meant reopening between every
+      // name, losing the typing position each time. Escape and clicking away
+      // both still close it.
+      if (!inlineSearch) setOpen(false);
     }
   }
 

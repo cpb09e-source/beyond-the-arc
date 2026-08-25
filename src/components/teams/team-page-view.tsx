@@ -490,17 +490,6 @@ export function TeamPageView({
             </div>
           </div>
 
-          {/* Overview only. It rode above the strip on every tab for a while,
-              on the theory that the season at a glance is wanted wherever you
-              are — but it is the single largest repeated block on the page,
-              and repeating it across six tabs roughly doubled the bytes stored
-              per team-season for something a reader is one click from anyway. */}
-          {show.overview && scheduleGames.length > 0 && (
-            <div className="mt-8">
-              <ScheduleTicker games={scheduleGames} teamName={team.name} blurBody={preview} />
-            </div>
-          )}
-
           {/* NCAA Tournament timeline — parked. Component still imported so
               re-enabling is one line change. Keeping the data flow (confRecords
               already carries tourneyRound/tourneySeed) ready. */}
@@ -532,6 +521,25 @@ export function TeamPageView({
           year={current.year}
           overviewHref={overviewHref}
         />
+      )}
+
+      {/* The schedule sits BELOW the tab strip, not above it with the identity
+          block.
+
+          It renders on Overview only, so above the strip it made the strip sit
+          one ticker lower on Overview than on the other five tabs — the tabs
+          moved every time you left or came back to Overview. Everything above
+          the strip is the same height on every tab now, which is what lets the
+          strip hold still.
+
+          Still Overview-only rather than on all six: it is the single largest
+          repeated block on the page, and repeating it six times roughly doubled
+          the bytes stored per team-season for something a reader is one click
+          from. */}
+      {show.overview && scheduleGames.length > 0 && (
+        <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-6">
+          <ScheduleTicker games={scheduleGames} teamName={team.name} blurBody={preview} />
+        </section>
       )}
 
 
@@ -609,8 +617,14 @@ export function TeamPageView({
           itself now, in the same hairline the roster table uses — px-4 here
           rather than px-6 for the same reason, so the full-bleed edge below lg
           lines up between the two tabs. */}
+      {/* WIDER than the page's 88rem shell. School History and Lineups are the
+          two tabs that are nothing but a wide grid, and every rem here is a
+          column that does not need scrolling to. 96rem is still well inside the
+          site header's 108rem, so the page does not look like it broke its own
+          margins. The rest of the page stays at 88rem: prose and panels do not
+          want the extra width. */}
       {show.history && (
-      <section id={TAB_ANCHORS.history} className="mx-auto max-w-[88rem] px-4 lg:px-10 mt-5 mb-20 scroll-mt-20">
+      <section id={TAB_ANCHORS.history} className="mx-auto max-w-[96rem] px-4 lg:px-10 mt-5 mb-20 scroll-mt-20">
         {seasonGrid ? (
           <SeasonGrid
             rows={seasonGrid}
@@ -676,8 +690,13 @@ export function TeamPageView({
           play, and CBBD did not populate it earlier — 0.0% coverage in 2022
           and 2023 against 98.5%+ from 2024. Older seasons get a stated empty
           rather than a table that looks broken. */}
+      {/* 100rem, a step past School History's 96rem. This grid carries more
+          columns than any other on the site even in its narrowest view, so it
+          is the one place where the extra 64px is the difference between a
+          column being visible and being scrolled to. Still inside the site
+          header's 108rem. */}
       {show.lineups && !preview && (
-        <section id={TAB_ANCHORS.lineups} className="mx-auto max-w-[88rem] px-4 lg:px-10 mt-5 mb-20 scroll-mt-20">
+        <section id={TAB_ANCHORS.lineups} className="mx-auto max-w-[100rem] px-4 lg:px-10 mt-5 mb-20 scroll-mt-20">
           {lineupStats ? (
             <LineupExplorer
               data={lineupStats as LineupFile}

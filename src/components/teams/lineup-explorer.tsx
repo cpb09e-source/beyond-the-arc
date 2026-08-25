@@ -569,7 +569,7 @@ function StatTh({
           w-full/h-full fills only the content box and the tappable area is the
           text alone. `uppercase` is repeated because Preflight resets
           text-transform on button. Both documented in season-grid.tsx. */}
-      <button type="button" onClick={onClick} className="block w-full h-full uppercase px-1.5 sm:px-3 py-3 sm:py-2 text-right">
+      <button type="button" onClick={onClick} className="block w-full h-full uppercase px-1.5 sm:px-2 py-3 sm:py-2 text-right">
         <span className="inline-flex items-center gap-1 justify-end">
           {stat.label}
           {active ? (
@@ -596,17 +596,24 @@ function StatRow({
 }) {
   const qualified = totals.poss >= MIN_POSS;
   const bg = emphasis ? "" : "bg-paper odd:bg-card";
-  const rowStyle = emphasis && accent ? { backgroundColor: `${accent}14` } : undefined;
+  // OPAQUE, mixed against the card surface rather than laid over it at 8%
+  // alpha. This cell is sticky: a translucent fill lets the stat columns scroll
+  // visibly through it, so POSS and MINS smeared across the lineup name as soon
+  // as the table was scrolled right. Same trap the explorer's honour cells hit
+  // — see the note in explorer-client.tsx.
+  const rowStyle = emphasis
+    ? { backgroundColor: `color-mix(in oklab, ${accent ?? "var(--color-coral)"} 10%, var(--card))` }
+    : undefined;
   return (
     <tr
-      className={cn("group transition-colors", bg, emphasis && !accent && "bg-coral/10")}
+      className={cn("group transition-colors", bg)}
       style={rowStyle}
     >
       <td
         style={rowStyle}
         className={cn(
           "sticky left-0 z-20 px-2 sm:px-3 py-1.5 border-r border-hairline whitespace-nowrap transition-colors",
-          emphasis ? (accent ? "" : "bg-coral/10") : "bg-paper group-odd:bg-card",
+          !emphasis && "bg-paper group-odd:bg-card",
           emphasis && "border-b border-hairline",
         )}
       >
@@ -620,7 +627,10 @@ function StatRow({
           <td
             key={s.key}
             className={cn(
-              "px-1 sm:px-2 py-1.5 text-right tabular whitespace-nowrap transition-colors",
+              // px-1.5 rather than px-2: at thirteen columns those 4px each
+              // put the default Four Factors view 9px over its shell, which
+              // bought a horizontal scrollbar for nothing.
+              "px-1 sm:px-1.5 py-1.5 text-right tabular whitespace-nowrap transition-colors",
               bandStart && "border-l border-hairline",
               emphasis && "border-b border-hairline",
             )}

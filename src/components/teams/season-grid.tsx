@@ -207,8 +207,15 @@ export function SeasonGrid({
             // The current season's tint replaces the zebra rather than layering
             // over it — a translucent fill on a sticky cell lets the stat
             // columns show through as they scroll underneath.
-            const rowBg = isCurrent ? (accentColor ? "" : "bg-coral/10") : zebra;
-            const rowStyle = isCurrent && accentColor ? { backgroundColor: `${accentColor}1a` } : undefined;
+            const rowBg = isCurrent ? "" : zebra;
+            // OPAQUE, mixed against the card surface rather than laid over it at 8%
+            // alpha. This cell is sticky: a translucent fill lets the stat columns scroll
+            // visibly through it, so POSS and MINS smeared across the lineup name as soon
+            // as the table was scrolled right. Same trap the explorer's honour cells hit
+            // — see the note in explorer-client.tsx.
+            const rowStyle = isCurrent
+              ? { backgroundColor: `color-mix(in oklab, ${accentColor ?? "var(--color-coral)"} 12%, var(--card))` }
+              : undefined;
             return (
               <tr key={r.year} className={cn("group", rowBg)} style={rowStyle}>
                 <td style={rowStyle} className={cn("sticky left-0 z-20 px-2 sm:px-3 py-1 border-r border-hairline transition-colors", rowBg, ROW_HOVER)}>
