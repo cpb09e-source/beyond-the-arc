@@ -27,11 +27,14 @@ import type { LineupFile } from "@/components/teams/lineup-explorer";
  * summed as counts and then divided. The same operation the Lineups tab runs
  * for its filters, asked once per player instead of once per filter.
  *
- * THREE MODES OVER ONE TABLE. On, Off and Diff are the same columns showing
- * different numbers, rather than three columns per stat. Every stat tripled
- * would put four of them on a screen; a reader comparing rebounding with and
- * without a player can click twice instead of scrolling past twenty columns
- * they did not ask for.
+ * THREE STACKED TABLES, not three columns per stat. Difference first, then
+ * On-Court, then Off-Court, each the same columns over the same players.
+ * Tripling every column would put four stats on a screen; stacking keeps every
+ * column full width and puts the comparison a scroll away rather than a click.
+ *
+ * ONE COLUMN CONTROL FOR ALL THREE. They are the same table asked three ways,
+ * so letting them fall out of step — Four Factors above, Shooting below —
+ * would break the only thing that makes them comparable.
  *
  * DIFFS RANK AGAINST DIFFS. A +7 net rating is a good lineup; a +7 net on/off
  * swing is an enormous one. The season file carries a second distribution
@@ -47,11 +50,29 @@ import type { LineupFile } from "@/components/teams/lineup-explorer";
 
 type Mode = "on" | "off" | "diff";
 
-const MODES: Array<{ key: Mode; label: string }> = [
-  { key: "on", label: "On court" },
-  { key: "off", label: "Off court" },
-  { key: "diff", label: "Difference" },
+const SECTIONS: Array<{ key: Mode; kicker: string; title: string; blurb: string }> = [
+  {
+    key: "diff",
+    kicker: "With minus without",
+    title: "On/Off Difference",
+    blurb: "How the team's numbers change with each player on the floor. Ranked against every qualifying player in Division I.",
+  },
+  {
+    key: "on",
+    kicker: "With him",
+    title: "Team stats, player on court",
+    blurb: "What the team did while each player was on the floor.",
+  },
+  {
+    key: "off",
+    kicker: "Without him",
+    title: "Team stats, player off court",
+    blurb: "What the team did while each player sat.",
+  },
 ];
+
+/** Share of the team's possessions this player was on the floor for. */
+const share = (r: Row): number => (r.on.poss + r.off.poss > 0 ? r.on.poss / (r.on.poss + r.off.poss) : 0);
 
 type Row = {
   id: number;
@@ -70,10 +91,15 @@ export function OnOffExplorer({
   benchmarks: LineupBenchmarks | null;
   accentColor?: string | null;
 }) {
-  const [mode, setMode] = useState<Mode>("diff");
   const [view, setView] = useState<LineupView>(LINEUP_VIEWS[0]!);
-  const [sortKey, setSortKey] = useState<string>("net");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  // Sorting is shared across the three tables and carries which one was
+  // clicked: sorting the Difference table by Net Rtg reorders On-Court and
+  // Off-Court to match, so a player stays on the same line in all three. Three
+  // independent orders would make them impossible to read against each other,
+  // which is the entire reason they are stacked.
+  const [sort, setSort] = useState<{ key: string; mode: Mode; dir: "asc" | "desc" }>({
+    key: "net", mode: "diff", dir: "desc",
+  });
 
   const accent = accentColor ?? undefined;
 
@@ -127,32 +153,36 @@ export function OnOffExplorer({
   // useCallback so the sort memo can depend on it honestly. Left as a plain
   // function it was recreated every render, and the memo either lied about its
   // dependencies or re-sorted on every keystroke elsewhere on the page.
-  const valueOf = useCallback((r: Row, stat: LineupStat): number | null => {
-    if (mode === "on") return stat.value(r.on);
-    if (mode === "off") return stat.value(r.off);
+  const valueOf = useCallback((r: Row, stat: LineupStat, m: Mode): number | null => {
+    if (m === "on") return stat.value(r.on);
+    if (m === "off") return stat.value(r.off);
     const a = stat.value(r.on), b = stat.value(r.off);
     return a === null || b === null ? null : a - b;
-  }, [mode]);
+  }, []);
 
   const sorted = useMemo(() => {
-    const stat = cols.find((s) => s.key === sortKey) ?? cols[0];
-    const dir = sortDir === "asc" ? 1 : -1;
+    const stat = cols.find((s) => s.key === sort.key);
+    const dir = sort.dir === "asc" ? 1 : -1;
     return [...rows].sort((a, b) => {
-      if (sortKey === "onPoss") return (a.on.poss - b.on.poss) * dir;
-      if (sortKey === "offPoss") return (a.off.poss - b.off.poss) * dir;
-      if (sortKey === "name") return a.name.localeCompare(b.name) * dir;
+      if (sort.key === "onPoss") return (a.on.poss - b.on.poss) * dir;
+      if (sort.key === "offPoss") return (a.off.poss - b.off.poss) * dir;
+      if (sort.key === "share") return (share(a) - share(b)) * dir;
+      if (sort.key === "name") return a.name.localeCompare(b.name) * dir;
       if (!stat) return 0;
-      const av = valueOf(a, stat), bv = valueOf(b, stat);
+      const av = valueOf(a, stat, sort.mode), bv = valueOf(b, stat, sort.mode);
       if (av === null && bv === null) return 0;
       if (av === null) return 1;
       if (bv === null) return -1;
       return (av - bv) * dir;
     });
-  }, [rows, sortKey, sortDir, cols, valueOf]);
+  }, [rows, sort, cols, valueOf]);
 
-  function toggleSort(k: string, defaultDir: "asc" | "desc") {
-    if (sortKey === k) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortKey(k); setSortDir(defaultDir); }
+  function toggleSort(key: string, mode: Mode, defaultDir: "asc" | "desc") {
+    setSort((s) =>
+      s.key === key && s.mode === mode
+        ? { key, mode, dir: s.dir === "asc" ? "desc" : "asc" }
+        : { key, mode, dir: defaultDir },
+    );
   }
 
   if (rows.length === 0) {
@@ -167,35 +197,8 @@ export function OnOffExplorer({
 
   return (
     <div>
-      {/* Two controls, two rows, different jobs: the first says which numbers
-          you are reading, the second which columns they fill. Kept apart
-          rather than merged into one strip because switching mode changes
-          every value in the table and switching view changes none of them. */}
+      {/* One column control for all three tables — see the note at the top. */}
       <div className="flex flex-wrap items-center gap-2 px-4 lg:px-0">
-        <span className="text-xs uppercase tracking-widest text-ink-muted font-medium shrink-0 mr-1">
-          Showing
-        </span>
-        {MODES.map((m) => {
-          const active = m.key === mode;
-          return (
-            <button
-              key={m.key}
-              type="button"
-              onClick={() => setMode(m.key)}
-              aria-pressed={active}
-              className={cn(
-                "shrink-0 px-3 py-1.5 rounded-md text-sm font-medium border transition-colors",
-                active ? "text-white border-transparent" : "text-ink-muted border-ink/15 bg-card hover:text-ink hover:border-ink/30",
-              )}
-              style={active ? { backgroundColor: accent ?? "var(--color-coral)" } : undefined}
-            >
-              {m.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2 px-4 lg:px-0">
         <span className="text-xs uppercase tracking-widest text-ink-muted font-medium shrink-0 mr-1">
           Columns
         </span>
@@ -219,105 +222,127 @@ export function OnOffExplorer({
         })}
       </div>
 
-      <div className="mt-4 border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-4 lg:mx-0">
-        {/* overscroll-x-contain ONLY — `none` also kills the vertical
-            rubber-band and this box scrolls in both axes. Documented at the
-            other grids. */}
-        <div className="overflow-x-auto overscroll-x-contain">
-          <table className="w-full text-sm border-separate border-spacing-0">
-            <thead>
-              <tr>
-                <th className="sticky left-0 z-30 bg-paper-deep h-6 p-0 border-r border-hairline" />
-                <th colSpan={2} className="bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-ink-muted text-center align-middle">
-                  Possessions
-                </th>
-                {bands.map((b, bi) => (
-                  <th
-                    key={`${b.key}-${bi}`}
-                    colSpan={b.span}
-                    className={cn(
-                      "bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-center border-l border-hairline align-middle",
-                      b.accent ? "text-coral" : "text-ink-muted",
-                    )}
-                    style={b.accent && accent ? { color: accent } : undefined}
-                  >
-                    {b.label}
-                  </th>
-                ))}
-              </tr>
-              <tr>
-                <Th sticky label="Player" align="left" active={sortKey === "name"} dir={sortDir} onClick={() => toggleSort("name", "asc")} />
-                <Th label="On" align="right" title="Possessions with this player on the floor" active={sortKey === "onPoss"} dir={sortDir} onClick={() => toggleSort("onPoss", "desc")} />
-                <Th label="Off" align="right" title="Possessions with this player off the floor" active={sortKey === "offPoss"} dir={sortDir} onClick={() => toggleSort("offPoss", "desc")} />
-                {cols.map((s, i) => (
-                  <Th
-                    key={s.key}
-                    label={s.label}
-                    align="right"
-                    title={s.title}
-                    active={sortKey === s.key}
-                    dir={sortDir}
-                    onClick={() => toggleSort(s.key, s.lowerBetter && mode !== "diff" ? "asc" : "desc")}
-                    bandStart={i === 0 || cols[i - 1]!.group !== s.group}
-                  />
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((r) => (
-                <tr key={r.id} className="group transition-colors bg-paper odd:bg-card">
-                  <td className="sticky left-0 z-20 px-2 sm:px-3 py-1.5 border-r border-hairline whitespace-nowrap transition-colors bg-paper group-odd:bg-card">
-                    {r.bart != null ? (
-                      <Link href={`/players/${r.bart}/`} prefetch={false} className="text-ink hover:text-coral transition-colors">
-                        {r.name}
-                      </Link>
-                    ) : (
-                      <span className="text-ink">{r.name}</span>
-                    )}
-                  </td>
-                  <td className="px-2 sm:px-3 py-1.5 text-right tabular text-ink-soft whitespace-nowrap">
-                    {Math.round(r.on.poss).toLocaleString()}
-                  </td>
-                  <td className="px-2 sm:px-3 py-1.5 text-right tabular text-ink-muted whitespace-nowrap">
-                    {Math.round(r.off.poss).toLocaleString()}
-                  </td>
-                  {cols.map((s, i) => {
-                    const v = valueOf(r, s);
-                    const pct = percentileOf(s, v, benchmarks, mode === "diff" ? "diff" : "value");
-                    return (
-                      <td
-                        key={s.key}
-                        className={cn(
-                          "px-1 sm:px-1.5 py-1.5 text-right tabular whitespace-nowrap transition-colors",
-                          (i === 0 || cols[i - 1]!.group !== s.group) && "border-l border-hairline",
-                        )}
-                      >
-                        <span className="inline-flex flex-col items-end gap-0.5 leading-tight">
-                          <span className={cn(s.key === "net" && "font-semibold text-ink")}>
-                            {mode === "diff" ? formatDiff(v, s.format) : formatStat(v, s.format)}
-                          </span>
-                          {pct !== null ? <PercentileChip pct={pct} /> : (
-                            <span className="text-[0.6rem] uppercase tracking-wider text-ink-muted/60">—</span>
-                          )}
-                        </span>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {SECTIONS.map((sec) => (
+        <section key={sec.key} className="mt-8 first:mt-6">
+          <div className="px-4 lg:px-0 mb-3">
+            <div
+              className="text-[0.6rem] uppercase tracking-[0.18em] font-bold mb-1.5 flex items-center gap-2"
+              style={{ color: accent ?? "var(--color-coral)" }}
+            >
+              <span className="h-px w-6" style={{ backgroundColor: accent ?? "var(--color-coral)" }} />
+              {sec.kicker}
+            </div>
+            <h3 className="font-display text-2xl lg:text-3xl text-ink leading-none tracking-tight">
+              {sec.title}
+            </h3>
+            <p className="mt-1.5 text-xs text-ink-muted max-w-2xl leading-relaxed">{sec.blurb}</p>
+          </div>
 
-      <p className="mt-3 px-4 lg:px-0 text-xs text-ink-muted leading-relaxed max-w-4xl">
+          <div className="border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-4 lg:mx-0">
+            {/* overscroll-x-contain ONLY — `none` also kills the vertical
+                rubber-band and this box scrolls in both axes. Documented at the
+                other grids. */}
+            <div className="overflow-x-auto overscroll-x-contain">
+              <table className="w-full text-sm border-separate border-spacing-0">
+                <thead>
+                  <tr>
+                    <th className="sticky left-0 z-30 bg-paper-deep h-6 p-0 border-r border-hairline" />
+                    <th colSpan={3} className="bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-ink-muted text-center align-middle">
+                      Possessions
+                    </th>
+                    {bands.map((b, bi) => (
+                      <th
+                        key={`${b.key}-${bi}`}
+                        colSpan={b.span}
+                        className={cn(
+                          "bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-center border-l border-hairline align-middle",
+                          b.accent ? "text-coral" : "text-ink-muted",
+                        )}
+                        style={b.accent && accent ? { color: accent } : undefined}
+                      >
+                        {b.label}
+                      </th>
+                    ))}
+                  </tr>
+                  <tr>
+                    <Th sticky label="Player" align="left" active={sort.key === "name"} dir={sort.dir} onClick={() => toggleSort("name", sec.key, "asc")} />
+                    <Th label="On" title="Possessions with this player on the floor" active={sort.key === "onPoss"} dir={sort.dir} onClick={() => toggleSort("onPoss", sec.key, "desc")} />
+                    <Th label="Off" title="Possessions with this player off the floor" active={sort.key === "offPoss"} dir={sort.dir} onClick={() => toggleSort("offPoss", sec.key, "desc")} />
+                    <Th label="Pct" title="Share of team possessions this player was on the floor for" active={sort.key === "share"} dir={sort.dir} onClick={() => toggleSort("share", sec.key, "desc")} />
+                    {cols.map((st, i) => (
+                      <Th
+                        key={st.key}
+                        label={st.label}
+                        title={st.title}
+                        active={sort.key === st.key && sort.mode === sec.key}
+                        dir={sort.dir}
+                        onClick={() => toggleSort(st.key, sec.key, st.lowerBetter && sec.key !== "diff" ? "asc" : "desc")}
+                        bandStart={i === 0 || cols[i - 1]!.group !== st.group}
+                      />
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.map((r) => (
+                    <tr key={r.id} className="group transition-colors bg-paper odd:bg-card">
+                      <td className="sticky left-0 z-20 px-2 sm:px-3 py-1.5 border-r border-hairline whitespace-nowrap transition-colors bg-paper group-odd:bg-card">
+                        {r.bart != null ? (
+                          <Link href={`/players/${r.bart}/`} prefetch={false} className="text-ink hover:text-coral transition-colors">
+                            {r.name}
+                          </Link>
+                        ) : (
+                          <span className="text-ink">{r.name}</span>
+                        )}
+                      </td>
+                      <td className="px-2 sm:px-3 py-1.5 text-right tabular text-ink-soft whitespace-nowrap">
+                        {Math.round(r.on.poss).toLocaleString()}
+                      </td>
+                      <td className="px-2 sm:px-3 py-1.5 text-right tabular text-ink-muted whitespace-nowrap">
+                        {Math.round(r.off.poss).toLocaleString()}
+                      </td>
+                      <td className="px-2 sm:px-3 py-1.5 text-right tabular text-ink-muted whitespace-nowrap">
+                        {(share(r) * 100).toFixed(1)}%
+                      </td>
+                      {cols.map((st, i) => {
+                        const v = valueOf(r, st, sec.key);
+                        const pct = percentileOf(st, v, benchmarks, sec.key === "diff" ? "diff" : "value");
+                        return (
+                          <td
+                            key={st.key}
+                            className={cn(
+                              "px-1 sm:px-1.5 py-1.5 text-right tabular whitespace-nowrap transition-colors",
+                              (i === 0 || cols[i - 1]!.group !== st.group) && "border-l border-hairline",
+                            )}
+                          >
+                            <span className="inline-flex flex-col items-end gap-0.5 leading-tight">
+                              <span className={cn(st.key === "net" && "font-semibold text-ink")}>
+                                {sec.key === "diff" ? formatDiff(v, st.format) : formatStat(v, st.format)}
+                              </span>
+                              {pct !== null ? <PercentileChip pct={pct} /> : (
+                                <span className="text-[0.6rem] uppercase tracking-wider text-ink-muted/60">—</span>
+                              )}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      ))}
+
+      <p className="mt-6 px-4 lg:px-0 text-xs text-ink-muted leading-relaxed max-w-4xl">
         Players need <span className="tabular">{ON_OFF_MIN_POSS}</span> possessions both on
         and off the floor to appear
-        {hidden > 0 && <> ({hidden} did not)</>}. In Difference, percentage columns are shown
-        as points of difference and each row is ranked against every qualifying player in
-        Division I
-        {benchmarks?.nd ? <> ({benchmarks.nd.toLocaleString()} of them)</> : null}; in On and
-        Off they are ranked against D-I five-man units.
+        {hidden > 0 && <> ({hidden} did not)</>}. Sorting any of the three tables reorders all
+        three, so a player stays on the same line throughout. In On/Off Difference, percentage
+        columns are points of difference and each row is ranked against every qualifying
+        player in Division I
+        {benchmarks?.nd ? <> ({benchmarks.nd.toLocaleString()} of them)</> : null}; the other
+        two are ranked against D-I five-man units.
         {" "}
         <span className="text-ink-soft">
           An on/off split is not a rating of the player. It is what the team did with him and
