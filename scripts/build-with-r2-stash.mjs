@@ -51,7 +51,20 @@ const STRIP_DIRS = [
  * since /players moved to the slim players-explorer payload nothing fetches it
  * over the network any more.
  */
-const BUILD_ONLY_DIRS = ["data/players-by-year"];
+const BUILD_ONLY_DIRS = [
+  "data/players-by-year",
+  // Added with the lineups/on-off work. Both are read by the server at build
+  // time and reach the browser as PROPS on the team page, so no request can
+  // ask for either — same category as players-by-year above.
+  //   lineup-stats  29 MB / 2,008 files
+  //   team-seasons  7.6 MB / 368 files
+  // strip-r2-mirrored-from-out.mjs also lists them, and npm run build fires it
+  // as a postbuild hook, so in practice they are removed twice. Listed here
+  // anyway because this file is the one that reliably runs on Netlify — the
+  // header explains why the postbuild hook could not be trusted there.
+  "data/lineup-stats",
+  "data/team-seasons",
+];
 
 async function main() {
   // Regenerate the per-season shards the home page fetches at runtime BEFORE

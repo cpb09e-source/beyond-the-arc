@@ -71,20 +71,48 @@ league percentile field with one team's units. Guarded now — a `--team` run
 leaves benchmarks alone and says so — but the same shape of bug is easy to
 reintroduce in any script that writes a shared artifact.
 
-### 3. Measure a real production build
+### 3. Build measured — DEPLOY is the risk, not the build
 
-Every build and deploy number in this session was extrapolated from dev-server
-renders, never a real build. What is known:
+Measured 2026-08-25 with `npm run build` on this machine, after the full bake:
 
-- team-ish pages went from 5,009 to roughly 14,000 (tab routes on the recent
-  seasons plus all of Vermont)
-- `public/data/lineup-stats/` is 29 MB across 2,008 files
-- two hot reads were uncached and now are: `readAllTeams` (12 MB, 51 ms a call)
-  and `readPlayersForYear` (~4 MB, 19 ms), together ~72 ms per team page
+```
+build time      8m 12s
+HTML pages      30,649
+files in out/   319,479
+out/ size       11.34 GB
+```
 
-The first deploy after this is the risk, not the build. Run it BACKGROUNDED and
-verify with `netlify api listSiteDeploys`; the 10-minute Bash timeout that
-orphaned a deploy once will be much easier to hit now.
+**The 60-75 minute estimate given earlier in that session was wrong by roughly
+8x.** It came from extrapolating dev-server render times (~125 ms/page), which
+do not resemble build-time prerendering at all — dev compiles per request and
+caches nothing between them. Never estimate a build from dev renders again;
+the documented expectation of ~7 min was right and 8m12s is consistent with it.
+
+Where the size goes:
+
+```
+.txt   267,975 files   5.73 GB   RSC payloads, ~8 per route
+.html   30,649 files   5.03 GB   ~164 KB average
+.webp   20,198 files   0.29 GB
+teams/  149,763 files  5.85 GB
+players/141,488 files  4.75 GB
+```
+
+The `.txt` files are LOAD-BEARING — see the standing note about the May 2026
+infinite-404 incident. Do not strip them.
+
+**What actually changed:** file count went from ~215k to 319k. The deploy memory
+records ~30 min for the first upload of 215k files after a clean CDN cache, with
+Netlify deduping by content hash so later deploys push only what changed
+(typically under 2 min). Most team pages changed here, so the next deploy is
+closer to a first deploy than an incremental one — budget 45 min or more, run it
+BACKGROUNDED, and verify with `netlify api listSiteDeploys` rather than the exit
+code.
+
+Note the measured build used `npm run build`, not the documented production
+entry point `node scripts/build-with-r2-stash.mjs`. The wrapper additionally
+strips `data/players-by-year` (48 MB), so a production build is marginally
+smaller than the number above.
 
 ### 4. DESIGN.md is wrong about the accent colour
 
