@@ -51,6 +51,8 @@ import {
   EMPTY_TOTALS,
   LINEUP_STATS,
   MIN_POSS,
+  ON_OFF_MIN_POSS,
+  sumTotals,
   type LineupTotals,
 } from "@/lib/lineup-stats";
 import { teamSlug } from "@/lib/team-slug";
@@ -183,9 +185,57 @@ function main() {
     for (const teamMap of byTeam.values()) {
       for (const acc of teamMap.values()) if (acc.poss >= MIN_POSS) qualifying.push(acc);
     }
+    /**
+     * On/off differences for every qualifying player in the league, so the
+     * On/Off tab can rank a swing rather than just print it.
+     *
+     * Built here rather than on the page because it needs every team at once:
+     * a player's +7.6 net swing is only meaningful against the spread of
+     * swings across D-I, and no single team's file can know that.
+     */
+    const diffs: Array<Record<string, number>> = [];
+    for (const teamMap of byTeam.values()) {
+      const all = [...teamMap.values()];
+      const byPlayer = new Map<string, { on: LineupTotals[]; off: LineupTotals[] }>();
+      for (const acc of all) {
+        for (const id of acc.__ids) {
+          if (!byPlayer.has(id)) byPlayer.set(id, { on: [], off: [] });
+        }
+      }
+      for (const [id, bucket] of byPlayer) {
+        for (const acc of all) (acc.__ids.includes(id) ? bucket.on : bucket.off).push(acc);
+      }
+      for (const bucket of byPlayer.values()) {
+        const on = sumTotals(bucket.on);
+        const off = sumTotals(bucket.off);
+        if (on.poss < ON_OFF_MIN_POSS || off.poss < ON_OFF_MIN_POSS) continue;
+        const row: Record<string, number> = {};
+        for (const stat of LINEUP_STATS) {
+          if (!stat.ranked) continue;
+          const a = stat.value(on), b = stat.value(off);
+          if (a === null || b === null || !Number.isFinite(a) || !Number.isFinite(b)) continue;
+          row[stat.key] = a - b;
+        }
+        diffs.push(row);
+      }
+    }
+
     const q: Record<string, number[]> = {};
+    const qd: Record<string, number[]> = {};
     for (const stat of LINEUP_STATS) {
       if (!stat.ranked) continue;
+      const dv = diffs
+        .map((d) => d[stat.key])
+        .filter((v): v is number => v !== undefined && Number.isFinite(v))
+        .sort((a, b) => a - b);
+      if (dv.length >= 20) {
+        qd[stat.key] = Array.from({ length: 51 }, (_, i) => {
+          const pos = (i / 50) * (dv.length - 1);
+          const lo = Math.floor(pos), hi = Math.ceil(pos);
+          const v = lo === hi ? dv[lo]! : dv[lo]! + (dv[hi]! - dv[lo]!) * (pos - lo);
+          return Number(v.toFixed(4));
+        });
+      }
       const vals = qualifying
         .map((t) => stat.value(t))
         .filter((v): v is number => v !== null && Number.isFinite(v))
@@ -217,7 +267,7 @@ function main() {
     } else {
       fs.writeFileSync(
         path.join(OUT_DIR, `benchmarks-${season}.json`),
-        JSON.stringify({ season, n: qualifying.length, q }),
+        JSON.stringify({ season, n: qualifying.length, q, nd: diffs.length, qd }),
       );
     }
 
@@ -265,7 +315,7 @@ function main() {
       wroteFiles++;
       wroteLineups += lineups.length;
     }
-    console.log(`  ${season}: ${byTeam.size} teams, ${qualifying.length.toLocaleString()} qualifying units`);
+    console.log(`  ${season}: ${byTeam.size} teams, ${qualifying.length.toLocaleString()} qualifying units, ${diffs.length.toLocaleString()} on/off players`);
   }
 
   const pct = totalPlayers ? ((linkedPlayers / totalPlayers) * 100).toFixed(1) : "0";

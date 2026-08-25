@@ -155,12 +155,33 @@ export const STAT_BY_KEY = new Map(LINEUP_STATS.map((s) => [s.key, s]));
  */
 export const MIN_POSS = 30;
 
+/**
+ * Possessions a player needs BOTH on and off the floor to get an on/off row.
+ *
+ * Higher than the lineup floor, and it has to be: an on/off split is a
+ * difference of two estimates, so it carries the noise of both. Vermont's
+ * Trey Woodyard reads -20.5 net on 46 on-court possessions, which would sit in
+ * the table looking exactly like a finding.
+ */
+export const ON_OFF_MIN_POSS = 100;
+
 /** Percentile breakpoints for one season's qualifying lineups, per stat key. */
 export type LineupBenchmarks = {
   season: number;
   n: number;
-  /** stat key -> 101 ascending values, index i = the i-th percentile. */
+  /** stat key -> ascending breakpoints, evenly spaced across the percentile range. */
   q: Record<string, number[]>;
+  /**
+   * The same, for ON/OFF DIFFERENCES across every qualifying player in D-I.
+   *
+   * A separate field because a difference lives on a different scale from the
+   * value it is a difference of: a +7 net rating is a good lineup, a +7 net
+   * on/off swing is an enormous one. Ranking a diff against `q` would put
+   * almost every player in the bottom decile.
+   */
+  qd?: Record<string, number[]>;
+  /** Players behind `qd`. */
+  nd?: number;
 };
 
 /**
@@ -178,9 +199,11 @@ export function percentileOf(
   stat: LineupStat,
   value: number | null,
   benchmarks: LineupBenchmarks | null,
+  /** Rank against the on/off difference distribution instead of the value one. */
+  mode: "value" | "diff" = "value",
 ): number | null {
   if (!stat.ranked || value === null || !Number.isFinite(value) || !benchmarks) return null;
-  const arr = benchmarks.q[stat.key];
+  const arr = mode === "diff" ? benchmarks.qd?.[stat.key] : benchmarks.q[stat.key];
   if (!arr || arr.length < 2) return null;
   let lo = 0, hi = arr.length - 1;
   while (lo < hi) {
@@ -192,6 +215,21 @@ export function percentileOf(
   // Low is good for these, so flip the scale rather than the comparison — the
   // chip's colour reads "better" at high numbers everywhere on the page.
   return stat.lowerBetter ? 100 - pct : pct;
+}
+
+/**
+ * An on/off difference, always signed.
+ *
+ * Percentage stats are shown as POINTS of difference rather than a percentage
+ * of a percentage: a team going from 50% to 53% eFG with a player on the floor
+ * is "+3.0", not "+6%". The footnote says so; the alternative is a number
+ * whose units change depending on which column it is in.
+ */
+export function formatDiff(v: number | null, fmt: StatFormat): string {
+  if (v === null || !Number.isFinite(v)) return "—";
+  const n = fmt === "pct1" ? v * 100 : v;
+  const digits = fmt === "int" || fmt === "signed" ? 0 : 1;
+  return (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(digits);
 }
 
 export function formatStat(v: number | null, fmt: StatFormat): string {

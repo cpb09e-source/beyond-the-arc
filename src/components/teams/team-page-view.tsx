@@ -17,6 +17,7 @@ import { DistributionPanel, type DistributionRank } from "@/components/teams/dis
 import { AssistNetworkPanel } from "@/components/teams/assist-network-panel";
 import { ClockSplitsPanel } from "@/components/teams/clock-splits-panel";
 import { LineupExplorer, type LineupFile } from "@/components/teams/lineup-explorer";
+import { OnOffExplorer } from "@/components/teams/on-off-explorer";
 import type { AssistNetwork, ClockSplits } from "@/lib/static-data";
 import { ScheduleTicker } from "@/components/teams/schedule-ticker";
 import { TeamStatsPanel, type TeamSplits } from "@/components/teams/team-stats-panel";
@@ -713,29 +714,25 @@ export function TeamPageView({
         </section>
       )}
 
-      {/* ON/OFF — tab exists, content does not yet. There is no team on/off
-          dataset in public/data at all; the only on-off numbers we hold are
-          the per-player ones the roster table already shows.
-
-          Shipped as a stated placeholder rather than held back, because the
-          tab strip is the thing being reviewed and a gap in it reads as a bug.
-          When the data lands this block is the only thing that changes. */}
+      {/* ON/OFF — what the team did with each player on the floor against off
+          it, read out of the same lineup file the Lineups tab uses: ON is
+          every five-man unit containing the player, OFF every unit without
+          him. Null before 2024 for the same reason Lineups is. */}
       {show.onoff && !preview && (
-        <section id={TAB_ANCHORS.onoff} className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8 mb-20 scroll-mt-20">
-          <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
-            <div className="h-1 w-full bg-gradient-to-r from-[color:var(--accent,#ed5a4f)] via-[color:var(--accent,#ed5a4f)] to-transparent" />
-            <div className="px-5 lg:px-7 py-5 border-b border-hairline bg-paper-deep/30">
-              <div className="text-[0.6rem] uppercase tracking-[0.18em] text-[color:var(--accent,#0c6bd6)] font-bold mb-1.5 flex items-center gap-2">
-                <span className="h-px w-6 bg-[color:var(--accent,#0c6bd6)]" />
-                With and without
-              </div>
-              <h2 className="font-display text-2xl lg:text-3xl text-ink leading-none tracking-tight">On/Off</h2>
-            </div>
-            <p className="px-5 lg:px-7 py-8 text-sm text-ink-muted">
-              Coming soon — how the team scores and defends with each player on
-              the floor against off it.
+        <section id={TAB_ANCHORS.onoff} className="mx-auto max-w-[100rem] px-4 lg:px-10 mt-5 mb-20 scroll-mt-20">
+          {lineupStats ? (
+            <OnOffExplorer
+              data={lineupStats as LineupFile}
+              benchmarks={(lineupBenchmarks ?? null) as never}
+              accentColor={accentColor}
+            />
+          ) : (
+            <p className="text-sm text-ink-muted leading-relaxed max-w-2xl">
+              No on/off data for {seasonLabel(current.year)}. It is built from the
+              players on the floor at each play, which the play-by-play only began
+              carrying in 2023-24.
             </p>
-          </div>
+          )}
         </section>
       )}
 
