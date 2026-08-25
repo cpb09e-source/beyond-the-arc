@@ -214,8 +214,17 @@ export function SeasonGrid({
                     <TourneyBadge teamName={r.teamName} year={r.year} />
                   </Link>
                 </td>
-                <td className={cn("px-3 py-1 text-ink-muted whitespace-nowrap transition-colors hidden sm:table-cell", ROW_HOVER)}>
-                  {confDisplay(r.conference)}
+                {/* Bart's raw code ("AE", "BW", "B10") rather than the display
+                    name. On a single team's page the column is twelve rows of
+                    the same value in the narrowest identity slot, so the full
+                    name was spending width to say one thing twelve times. The
+                    display name is the title, for anyone who does not know the
+                    code. */}
+                <td
+                  title={confDisplay(r.conference)}
+                  className={cn("px-3 py-1 text-ink-muted whitespace-nowrap transition-colors hidden sm:table-cell", ROW_HOVER)}
+                >
+                  {r.conference ?? "—"}
                 </td>
                 <td className={cn("px-1.5 sm:px-3 py-1 tabular font-semibold text-ink whitespace-nowrap transition-colors", ROW_HOVER)}>
                   {r.record ?? "—"}
