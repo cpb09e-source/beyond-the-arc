@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
 import { TeamPageView } from "@/components/teams/team-page-view";
 import { loadTeamPageData } from "@/lib/team-page-data";
-import { allSeasonParams, tabMetadata } from "@/lib/team-tab-route";
+import { tabbedSeasonParams, tabMetadata } from "@/lib/team-tab-route";
 
-// Every season, preview year excluded — see the note in team-tab-route.ts.
-export const generateStaticParams = allSeasonParams;
+// The tabbed window plus the review teams — see team-tab-route.ts.
+export const generateStaticParams = tabbedSeasonParams;
 
 export async function generateMetadata({
   params,

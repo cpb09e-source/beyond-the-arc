@@ -516,11 +516,12 @@ export function TeamPageView({
           strip underneath, the ranks read as part of the masthead rather than
           as the first thing the tab is showing you.
 
-          Every season gets the same strip and the same routes — see the note
-          in team-tabs.tsx. */}
+          A season without real tab routes gets the same strip scrolling to
+          anchors instead — see team-tabs.tsx. */}
       {showTabs && (
         <TeamTabs
           active={tab === "all" ? "overview" : tab}
+          mode={tab === "all" ? "anchors" : "routes"}
           slug={slug}
           year={current.year}
           overviewHref={overviewHref}
@@ -575,12 +576,6 @@ export function TeamPageView({
       {/* Preview rosters render above, right under the schedule. */}
       {!preview && show.roster && (
       <section id={TAB_ANCHORS.roster} className="mx-auto max-w-[88rem] px-4 lg:px-10 mt-5 scroll-mt-20">
-        {/* px-2 on top of the section's px-4 lands the heading on the same 24px
-            margin as every other block on the page — see the note in
-            season-preview.tsx for why the section itself can't just be px-6. */}
-        <div className="mb-2 sm:mb-4 px-2 lg:px-0">
-          <h2 className="font-display text-3xl text-ink whitespace-nowrap">Roster — {seasonLabel(current.year)}</h2>
-        </div>
         {/* Player headshot strip — faces + names before the spreadsheet. */}
         {roster.length > 0 && (
           <div className="mb-3 sm:mb-5">
@@ -598,47 +593,26 @@ export function TeamPageView({
       {/* Shooting + Four Factors sit BELOW the roster now. They are a closing
           detail on the season, not the way into it — the reader wants the team,
           then the players, then the breakdown. */}
-      {/* SCHOOL HISTORY — the full ledger, every season we hold. Mirrors the
-          coach page's "Season by season" treatment so cross-page recognition
-          is consistent.
+      {/* SCHOOL HISTORY — the full ledger, every season we hold.
 
-          Its own tab rather than the foot of Overview: it is the one section
-          that is not about the season in the URL, and a reader who wants it
-          wants the whole run, not a glance at it under everything else. */}
+          No card around it. It carried an accent bar, a "Full record" kicker,
+          a heading and a season count when it lived at the foot of Overview,
+          where that treatment marked it as the page's headline among six other
+          blocks. On its own tab it is the only thing there, so the frame was
+          announcing it to an audience that had already arrived. It frames
+          itself now, in the same hairline the roster table uses — px-4 here
+          rather than px-6 for the same reason, so the full-bleed edge below lg
+          lines up between the two tabs. */}
       {show.history && (
-      <section id={TAB_ANCHORS.history} className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-12 mb-20 scroll-mt-20">
-        <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
-          {/* Top accent rule — coral bar marks this table as the headline. */}
-          <div
-            className="h-1 w-full"
-            style={{
-              backgroundImage: accentColor
-                ? `linear-gradient(to right, var(--accent), var(--accent), color-mix(in srgb, var(--accent) 60%, transparent))`
-                : "linear-gradient(to right, var(--color-coral), var(--color-coral), color-mix(in srgb, var(--color-coral) 60%, transparent))",
-            }}
+      <section id={TAB_ANCHORS.history} className="mx-auto max-w-[88rem] px-4 lg:px-10 mt-5 mb-20 scroll-mt-20">
+        {seasonGrid ? (
+          <SeasonGrid
+            rows={seasonGrid}
+            currentYear={current.year}
+            slug={slug}
+            accentColor={accentColor}
           />
-          <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-3">
-            <div>
-              <div className="text-[0.6rem] uppercase tracking-[0.18em] font-bold mb-1.5 flex items-center gap-2"
-                   style={{ color: accentColor ?? undefined }}>
-                <span className="h-px w-6" style={{ backgroundColor: accentColor ?? "var(--color-coral)" }} />
-                Full record
-              </div>
-              <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">By season</h2>
-            </div>
-            <span className="text-xs tabular text-ink-muted whitespace-nowrap">
-              <span className="font-display text-2xl text-ink tabular leading-none">{chronological.length}</span>{" "}
-              {chronological.length === 1 ? "season" : "seasons"}
-            </span>
-          </div>
-          {seasonGrid ? (
-            <SeasonGrid
-              rows={seasonGrid}
-              currentYear={current.year}
-              slug={slug}
-              accentColor={accentColor}
-            />
-          ) : (
+        ) : (
           <SortableSeasonsTable
             seasons={chronological}
             currentYear={current.year}
@@ -646,8 +620,7 @@ export function TeamPageView({
             confRecords={confRecords}
             accentColor={accentColor}
           />
-          )}
-        </div>
+        )}
       </section>
       )}
 

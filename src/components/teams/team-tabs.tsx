@@ -4,21 +4,21 @@ import { cn } from "@/lib/utils";
 /**
  * The tab strip under a team page's hero.
  *
- * EVERY SEASON IS THE SAME PAGE. Each tab is a real route on every
- * team-season — `/teams/vermont/2019/roster/` as much as
- * `/teams/vermont/2026/roster/` — so picking an older year out of the season
- * dropdown lands you on a page shaped exactly like the current one.
+ * TWO MODES, ONE APPEARANCE. Where a season has real tab routes each tab is a
+ * link and only that tab's sections render. Where it does not, the whole page
+ * renders as one scroll and the tabs are in-page anchors instead.
  *
- * This carried an anchor mode for a while, where older seasons rendered every
- * section on one page and the tabs scrolled to them instead of navigating.
- * It saved about 25,000 pages of build. It was removed because the saving was
- * not worth what it cost the reader: an older season that looked different
- * read as a lesser page rather than the same page about a different year. If
- * the build ever needs that 25,000 back, this is the thing to reinstate, and
- * the section ids below are still what it would scroll to.
+ * Which seasons get which is decided in team-tab-route.ts, and the split is
+ * forced by `output: "export"`: with no server at runtime, a season outside
+ * the prebuilt set cannot render a tab route on demand, so the anchor mode is
+ * what stops it 404ing. It also stops it looking like a lesser page — same
+ * strip, same order, same active state, every section present and indexable.
+ * Only the URL stays put.
  *
- * Preview pages are the one exception and get no strip at all — see the note
- * in team-tab-route.ts.
+ * If the two modes ever LOOK different, that is the bug — a reader moving
+ * between them should not notice until they watch the address bar.
+ *
+ * Preview pages get no strip at all — see the note in team-tab-route.ts.
  */
 
 export type TeamTab = "overview" | "roster" | "history" | "shooting" | "lineups" | "onoff";
@@ -50,11 +50,14 @@ const TABS: Array<{ key: TeamTab; label: string; segment: string }> = [
 
 export function TeamTabs({
   active,
+  mode,
   slug,
   year,
   overviewHref,
 }: {
   active: TeamTab;
+  /** "routes" = real sub-pages. "anchors" = one-page scroll. */
+  mode: "routes" | "anchors";
   slug: string;
   year: number;
   /**
@@ -82,7 +85,9 @@ export function TeamTabs({
           {TABS.map((t) => {
             const isActive = t.key === active;
             const href =
-              t.key === "overview"
+              mode === "anchors"
+                ? `#${TAB_ANCHORS[t.key]}`
+                : t.key === "overview"
                 ? overviewHref ?? `/teams/${slug}/${year}/`
                 : `/teams/${slug}/${year}/${t.segment}/`;
             return (

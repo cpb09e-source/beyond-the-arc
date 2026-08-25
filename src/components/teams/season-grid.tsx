@@ -138,8 +138,15 @@ export function SeasonGrid({
     // any finger that lands on the table. Do not add touch-action: pan-x
     // either; it restricts rather than delegates. Both are documented at the
     // explorer's copy of this container.
-    <div className="overflow-x-auto overscroll-x-contain">
-      <table className="w-full text-sm border-separate border-spacing-0">
+    // Frames itself, the way SortableRosterTable does, and with the same
+    // border: a hairline that goes full-bleed below lg and rounds off above
+    // it. The card treatment this replaced — accent bar, header block, ring
+    // and drop shadow — made By season look like the page's headline, which it
+    // was when it lived at the foot of Overview. On its own tab it is simply
+    // the content, and it should read like the roster does.
+    <div className="border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-4 lg:mx-0">
+      <div className="overflow-x-auto overscroll-x-contain">
+        <table className="w-full text-sm border-separate border-spacing-0">
         <thead>
           {/* Band row — group captions only. Spacers MIRROR the header row
               below one cell at a time rather than collapsing into a single
@@ -284,7 +291,8 @@ export function SeasonGrid({
             );
           })}
         </tbody>
-      </table>
+        </table>
+      </div>
     </div>
   );
 }

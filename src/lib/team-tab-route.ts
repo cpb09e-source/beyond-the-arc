@@ -2,20 +2,54 @@
  * Shared plumbing for the team sub-page routes — Roster, School History,
  * Shooting, Lineups and On/Off.
  *
- * EVERY SEASON GETS THESE ROUTES. This started as current-season-only, on the
- * grounds that five extra routes across 5,009 team-seasons is about 25,000
- * pages and more than doubles the site build. That was the right trade until
- * you actually used it: picking 18-19 out of the season dropdown and landing
- * on a page shaped differently from 25-26 — no tabs, the roster somewhere down
- * a long scroll — reads as the older season being a lesser page rather than
- * the same page about a different year. The build cost is real and is the
- * price of that consistency.
+ * THE RECENT SEASONS GET THESE ROUTES, plus every season of the review teams.
+ * Older seasons of everyone else render all their sections on the season page
+ * itself, with the tab strip scrolling to anchors instead of navigating.
  *
- * The preview year is the exception and keeps the single-page layout: its
- * sections are reordered around a game-less season and most of them are
+ * THERE IS NO THIRD OPTION. next.config sets `output: "export"` — a full
+ * static export with no server at runtime — so a route generateStaticParams
+ * does not emit is a 404, not an on-demand render. Restricting the prebuild
+ * therefore REQUIRES a fallback for the seasons left out, and the anchor mode
+ * in team-tabs.tsx is that fallback. The two settings below cannot be tightened
+ * without it.
+ *
+ * The cost, measured from teams-all.json — five tab pages per team-season:
+ *
+ *   seasons kept    tab pages     vs all 12
+ *   ------------    ---------     ---------
+ *    1 (25-26)          1,825       -19,540
+ *    5 (21-22 on)       9,060       -12,305   <- current setting
+ *    8 (18-19 on)      12,590        -8,775
+ *   12 (all)           21,365             0
+ *
+ * The preview year is separately excluded and keeps the single-page layout:
+ * its sections are reordered around a game-less season and most of them are
  * blurred, so a Roster route pointing at one would open on a page that had
  * already moved its roster somewhere else.
  */
+
+/**
+ * How many of the most recent seasons get real tab routes, for every team.
+ * See the table above. Excluded seasons (COVID 2021) do not count against it —
+ * this is a count of seasons we actually hold, newest first.
+ */
+export const TABBED_SEASONS = 5;
+
+/**
+ * Teams that get real tab routes on EVERY season they have, regardless of the
+ * window.
+ *
+ * Vermont is the review team for this redesign — it is also the only team with
+ * a baked season grid (scripts/build-team-seasons.mts --team Vermont) — so
+ * every part of the rebuild can be clicked through end to end on one team
+ * without paying for all 368 of them.
+ *
+ * COST: about 35 extra pages per team listed, so this is cheap to extend and
+ * cheap to leave. It is not a permanent mechanism though — once the window is
+ * settled, this should either empty out or be replaced by widening
+ * TABBED_SEASONS.
+ */
+export const FULLY_TABBED_SLUGS: ReadonlySet<string> = new Set(["vermont"]);
 import { readAllTeams, readTeam } from "@/lib/static-data";
 import { teamSlug } from "@/lib/team-slug";
 
@@ -31,18 +65,40 @@ export async function latestSeasonYear(): Promise<number> {
   return latest;
 }
 
+/** The most recent TABBED_SEASONS seasons we hold, newest first. */
+export async function tabbedSeasonYears(): Promise<number[]> {
+  const all = await readAllTeams();
+  const years = [...new Set(all.map((t) => t.year))].sort((a, b) => b - a);
+  return years.slice(0, TABBED_SEASONS);
+}
+
 /**
- * (slug, year) for every team-season we hold.
+ * Whether one team-season has real tab routes, or falls back to the one-page
+ * anchor layout.
+ *
+ * The page and the sitemap BOTH go through this. They have to agree exactly:
+ * a sitemap listing a season the build did not emit is a list of 404s, and a
+ * page rendering route-mode tabs for one is a strip of links that all 404.
+ */
+export async function isTabbedSeason(slug: string, year: number): Promise<boolean> {
+  if (FULLY_TABBED_SLUGS.has(slug)) return true;
+  return (await tabbedSeasonYears()).includes(year);
+}
+
+/**
+ * (slug, year) for every team-season that gets real tab routes.
  *
  * Deliberately does NOT include the preview year, which the [year] route adds
  * for itself — see the note above.
  */
-export async function allSeasonParams(): Promise<Array<{ slug: string; year: string }>> {
+export async function tabbedSeasonParams(): Promise<Array<{ slug: string; year: string }>> {
   const all = await readAllTeams();
+  const keep = new Set(await tabbedSeasonYears());
   const seen = new Set<string>();
   const out: Array<{ slug: string; year: string }> = [];
   for (const t of all) {
     const slug = teamSlug(t.name);
+    if (!keep.has(t.year) && !FULLY_TABBED_SLUGS.has(slug)) continue;
     const key = `${slug}|${t.year}`;
     if (seen.has(key)) continue;
     seen.add(key);

@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { tabbedSeasonParams } from "@/lib/team-tab-route";
 import { readIndex, readAllTeams } from "@/lib/static-data";
 import { loadAllCoachProfiles } from "@/lib/coaches";
 
@@ -74,24 +75,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
-  // /teams/<slug>/<year>/{roster,history,shooting,lineups,on-off} — every
-  // team-season's tabs. Indexing them is the entire reason they are routes
-  // rather than client-side tabs, so they belong here.
+  // /teams/<slug>/<year>/{roster,history,shooting,lineups,on-off} — the tab
+  // routes. Indexing them is the entire reason they are routes rather than
+  // client-side tabs, so they belong here.
   //
-  // SIZE: this is five entries per team-season on top of the one above, so the
-  // sitemap grows by roughly 25,000 URLs. A sitemap file caps at 50,000, and
-  // this takes the total to somewhere near 46,000 — under it, but no longer
-  // comfortably. The next thing that adds a per-team-season route should split
-  // this into a sitemap index rather than another block here.
-  const seenTabs = new Set<string>();
-  for (const t of allTeams) {
-    const slug = slugForTeam(t.name);
-    const key = `${slug}|${t.year}`;
-    if (seenTabs.has(key)) continue;
-    seenTabs.add(key);
+  // MUST MATCH tabbedSeasonParams() EXACTLY. Only some team-seasons are
+  // prebuilt (see team-tab-route.ts); the rest render every section on the
+  // season page, which is already listed above. Listing a season the build did
+  // not emit would be a sitemap full of 404s, so both sides go through the
+  // same helper rather than reimplementing the rule.
+  for (const { slug, year } of await tabbedSeasonParams()) {
     for (const seg of ["roster", "history", "shooting", "lineups", "on-off"]) {
       entries.push({
-        url: `${BASE_URL}/teams/${slug}/${t.year}/${seg}/`,
+        url: `${BASE_URL}/teams/${slug}/${year}/${seg}/`,
         lastModified: now,
         changeFrequency: "monthly",
         priority: 0.4,
