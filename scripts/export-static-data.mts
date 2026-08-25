@@ -534,7 +534,7 @@ const RANKABLE: RankableDef[] = [
   { key: "fg3_pct",       source: "cbb",   label: "3P%",          format: "pct1",    higherBetter: true  },
   { key: "tov_pct",       source: "cbb",   label: "TOV%",         format: "pct1",    higherBetter: false },
   { key: "orb_pct",       source: "cbb",   label: "OREB%",        format: "pct1",    higherBetter: true  },
-  { key: "fta_rate",      source: "cbb",   label: "FTA Rate",     format: "pct1",    higherBetter: true  },
+  { key: "fta_rate",      source: "cbb",   label: "FTAR",         format: "pct1",    higherBetter: true  },
   { key: "ast_pct",       source: "cbb",   label: "AST%",         format: "pct1",    higherBetter: true  },
   { key: "fbpts_pct",     source: "cbb",   label: "FB Pts %",     format: "pct1",    higherBetter: true  },
   { key: "pitp_pct",      source: "cbb",   label: "Paint Pts %",  format: "pct1",    higherBetter: true  },

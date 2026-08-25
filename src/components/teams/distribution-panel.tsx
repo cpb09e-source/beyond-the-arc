@@ -33,8 +33,8 @@ const SHOOTING_STATS: StatDef[] = [
   { key: "ts_pct",    label: "True Shooting %", format: "pct" },
   { key: "efg_pct",   label: "Effective FG %",  format: "pct" },
   { key: "fg3_pct",   label: "3-Point %",       format: "pct" },
-  { key: "fg3a_rate", label: "3PA Rate",        format: "pct" },
-  { key: "fta_rate",  label: "FTA Rate",        format: "pct" },
+  { key: "fg3a_rate", label: "3PAR",            format: "pct" },
+  { key: "fta_rate",  label: "FTAR",            format: "pct" },
   { key: "ast_pct",   label: "Assist %",        format: "pct" },
 ];
 

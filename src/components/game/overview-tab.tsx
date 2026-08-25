@@ -300,9 +300,9 @@ function TeamStatsPanel({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }
     { label: "Effective FG%", a: a.fourFactors.effectiveFieldGoalPct, h: h.fourFactors.effectiveFieldGoalPct, unit: "%" },
     // Rate stats, both denominated in field-goal attempts, which is what makes
     // them comparable between teams that played at different speeds.
-    { label: "3PA Rate", a: rate(a.threePointFieldGoals.attempted, a.fieldGoals.attempted),
+    { label: "3PAR", a: rate(a.threePointFieldGoals.attempted, a.fieldGoals.attempted),
       h: rate(h.threePointFieldGoals.attempted, h.fieldGoals.attempted), unit: "%" },
-    { label: "FTA Rate", a: a.fourFactors.freeThrowRate, h: h.fourFactors.freeThrowRate, unit: "%" },
+    { label: "FTAR", a: a.fourFactors.freeThrowRate, h: h.fourFactors.freeThrowRate, unit: "%" },
     { label: "Largest Lead", a: a.points.largestLead, h: h.points.largestLead },
   ];
   if (led) rows.push({ label: "Percent Led", a: led.away, h: led.home, unit: "%" });

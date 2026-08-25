@@ -19,6 +19,14 @@ import {
   type StatFilter,
   type TeamFilterSpec,
 } from "@/lib/team-filters";
+import {
+  RATING_COLS,
+  FOUR_FACTOR_COLS,
+  SHOOTING_COLS,
+  DEFAULT_COLS,
+  fmtColValue,
+  type TeamCol,
+} from "@/lib/team-grid-columns";
 import { Select } from "@/components/select";
 import { FilterBar, ConferenceRankingsModal } from "@/components/explorer/filter-bar";
 import { TEAM_DRAWER_SLOT_ID, TeamStatFilters, teamStatChipsFromSpec } from "@/components/explorer/team-stat-filters";
@@ -40,61 +48,6 @@ function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
 }
 
-/**
- * The default column set, in display order.
- *
- * Deliberately mirrors the /players grid: one entry per column, a band label
- * spanning a group, a percentile chip under every value. Same shape, same
- * visual language, so moving between the two pages feels like one product.
- *
- * `total` is the hero value and `perGame` the small figure beneath it. Only the
- * Four Factors carry both — a rating is already a rate, but a differential reads
- * naturally either way, and seeing "+416" with "10.95/g" under it answers both
- * "how big was the edge" and "how big per night" at once.
- *
- * CHIPS RANK ON THE PER-GAME VALUE. Fast-break totals exist for ~1,500
- * team-seasons but the per-game figure for ~3,800, so ranking on the total would
- * place a team against a biased slice of its own era instead of the whole era.
- */
-type TeamCol = {
-  label: string;
-  total: keyof TeamRow;
-  perGame?: keyof TeamRow;
-  /** Key into `row.pct` — the percentile the chip renders. */
-  pct: string;
-  sortKey: string;
-  /** Sorting ascending is the "good" direction (defensive rating, turnovers). */
-  lowerBetter?: boolean;
-  fmt: "num1" | "signed" | "pct1";
-  title: string;
-};
-
-// Labels drop the "a" prefix — the band caption says "(ADJUSTED)" once, which
-// is less noisy than repeating it on every column head.
-const RATING_COLS: TeamCol[] = [
-  { label: "NET",  total: "a_net",   pct: "a_net",   sortKey: "a_net",   fmt: "num1", title: "Schedule-adjusted net rating — points per 100 possessions vs an average D-I opponent on a neutral floor" },
-  { label: "ORTG", total: "a_ortg",  pct: "a_ortg",  sortKey: "a_ortg",  fmt: "num1", title: "Schedule-adjusted offensive rating — points scored per 100 possessions" },
-  { label: "DRTG", total: "a_drtg",  pct: "a_drtg",  sortKey: "a_drtg",  fmt: "num1", lowerBetter: true, title: "Schedule-adjusted defensive rating — points allowed per 100 possessions (lower is better)" },
-  { label: "SOS",  total: "adj_sos", pct: "adj_sos", sortKey: "adj_sos", fmt: "num1", title: "Strength of schedule — average opponent adjusted net rating" },
-  { label: "PACE", total: "cbb_pace", pct: "cbb_pace", sortKey: "cbb_pace", fmt: "num1", title: "Possessions per game" },
-];
-
-const FOUR_FACTOR_COLS: TeamCol[] = [
-  { label: "REB",  total: "reb_diff_ct",  perGame: "reb_diff_pg",   pct: "reb_diff_pg",   sortKey: "reb_diff_ct",  fmt: "signed", title: "Rebounds − opponent rebounds" },
-  { label: "3PM",  total: "fg3m_diff_ct", perGame: "fg3m_diff_pg",  pct: "fg3m_diff_pg",  sortKey: "fg3m_diff_ct", fmt: "signed", title: "3-pointers made − allowed" },
-  { label: "FBP",  total: "fbpts_diff",   perGame: "fbpts_diff_pg", pct: "fbpts_diff_pg", sortKey: "fbpts_diff",   fmt: "signed", title: "Fast-break points − allowed. The season total needs 90% of games to have tracked the split, so it is blank on older seasons where the per-game figure still stands." },
-  { label: "TOV",  total: "tov_diff_ct",  perGame: "tov_diff_pg",   pct: "tov_diff_pg",   sortKey: "tov_diff_ct",  fmt: "signed", lowerBetter: true, title: "Turnovers − opponent turnovers (negative is good)" },
-];
-
-const SHOOTING_COLS: TeamCol[] = [
-  { label: "eFG%",  total: "cbb_efg",     pct: "cbb_efg",     sortKey: "cbb_efg",     fmt: "pct1", title: "Effective field-goal % — (FGM + 0.5 × 3PM) / FGA" },
-  { label: "3P%",   total: "cbb_fg3",     pct: "cbb_fg3",     sortKey: "cbb_fg3",     fmt: "pct1", title: "3-point %" },
-  { label: "3PA Rate",  total: "cbb_fg3rate", pct: "cbb_fg3rate", sortKey: "cbb_fg3rate", fmt: "pct1", title: "3-point attempt rate — 3PA / FGA, how much of the offense comes from deep" },
-  { label: "FT%",   total: "cbb_ft",      pct: "cbb_ft",      sortKey: "cbb_ft",      fmt: "pct1", title: "Free-throw %" },
-  { label: "FTA Rate",  total: "cbb_ftarate", pct: "cbb_ftarate", sortKey: "cbb_ftarate", fmt: "pct1", title: "Free-throw attempt rate — FTA / FGA, how often the team gets to the line" },
-];
-
-const DEFAULT_COLS = [...RATING_COLS, ...FOUR_FACTOR_COLS, ...SHOOTING_COLS];
 const DEFAULT_COL_BY_KEY = new Map(DEFAULT_COLS.map((c) => [c.total as string, c]));
 
 /**
@@ -128,12 +81,6 @@ const ROW_HOVER = "group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card
 /** Resting tint marking the Four Factors band, mirroring the EPM band on /players. */
 const FF_BAND_TINT = "bg-[color-mix(in_oklab,var(--coral)_3%,transparent)]";
 
-function fmtColValue(v: number | null | undefined, fmt: TeamCol["fmt"]): string {
-  if (v === null || v === undefined) return "—";
-  if (fmt === "pct1") return (v * 100).toFixed(1) + "%";
-  if (fmt === "signed") return (v > 0 ? "+" : "") + v.toLocaleString("en-US", { maximumFractionDigits: 0 });
-  return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-}
 
 
 /** Names and years for every team-season, without the stat rows. See page.tsx. */
@@ -673,6 +620,7 @@ export function ExplorerClient({
                 <th className="sticky top-0 z-30 bg-paper-deep h-6 p-0 hidden sm:table-cell" />
                 {multiYear && <th className="sticky top-0 z-30 bg-paper-deep h-6 p-0" />}
                 <th className="sticky top-0 z-30 bg-paper-deep h-6 p-0" />
+                <th className="sticky top-0 z-30 bg-paper-deep h-6 p-0 hidden lg:table-cell" />
                 {P > 0 && (
                   <th colSpan={P} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-coral text-center border-l border-hairline align-middle">
                     Your columns
@@ -700,6 +648,16 @@ export function ExplorerClient({
                   <span className="sm:hidden">Rec</span>
                   <span className="hidden sm:inline">Record</span>
                 </th>
+                {/* Coach. Last in the identity group, matching the order the
+                    team page's By season table has always used.
+
+                    hidden lg: — a coach name is the widest thing in this group
+                    by some distance ("Steve Pikiell" against "28-6"), and the
+                    group already spends its phone budget on Team and Record.
+                    Conf drops at sm for the same reason; this one has to go
+                    sooner because it is wider. The band-row spacer above
+                    mirrors this breakpoint exactly — see the note there. */}
+                <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle hidden lg:table-cell">Coach</th>
                 {cols.map((c, i) => (
                   <SortableTh
                     // Index-qualified: a pinned stat that is also a default
@@ -724,7 +682,7 @@ export function ExplorerClient({
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={(multiYear ? 5 : 4) + cols.length} className="px-4 py-12 text-center text-ink-muted">
+                  <td colSpan={(multiYear ? 6 : 5) + cols.length} className="px-4 py-12 text-center text-ink-muted">
                     No teams match these filters.
                   </td>
                 </tr>
@@ -790,6 +748,9 @@ export function ExplorerClient({
                     <td className={cn("px-3 py-1 text-ink-muted hidden sm:table-cell transition-colors", ROW_HOVER)}>{confDisplay(r.team_conference)}</td>
                     {multiYear && <td className={cn("px-3 py-1 text-ink-muted tabular transition-colors", ROW_HOVER)}>{seasonLabel(r.team_year)}</td>}
                     <td className={cn("px-1.5 sm:px-3 py-1 tabular text-ink-muted whitespace-nowrap transition-colors", ROW_HOVER)}>{r.record ?? "—"}</td>
+                    <td className={cn("px-3 py-1 text-ink-muted whitespace-nowrap transition-colors hidden lg:table-cell", ROW_HOVER)}>
+                      {coachByTeamYear[`${r.team_name}|${r.team_year}`] ?? "—"}
+                    </td>
                     {cols.map((c, ci) => {
                       // TeamRow has no index signature, and the column model
                       // addresses it by key — a narrow cast here beats widening

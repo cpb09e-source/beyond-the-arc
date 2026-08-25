@@ -30,32 +30,18 @@ import { cn } from "@/lib/utils";
  * initial metric works without anyone remembering this file exists.
  */
 /**
- * Labels that are too wide for a phone column, and the abbreviation to use
- * there instead.
+ * The responsive-abbreviation branch that used to live here is gone.
  *
- * These two are the only ones that are two WORDS of tracking-widest caps —
- * everything else in the header row is already an abbreviation — so they set
- * the column's minimum width and push the whole table wider than it needs to
- * be. "3PAR" and "FTAR" are the standard short forms.
+ * It existed for exactly two labels — "3PA Rate" and "FTA Rate" — which were
+ * the only two-WORD labels in a header row of tracking-widest caps, so they set
+ * the column's minimum width and pushed the whole table wider than it needed to
+ * be. It rendered "3PAR"/"FTAR" below sm and the long form above it.
  *
- * Both forms render and CSS picks one, the same technique as PlayerName: a
- * header cannot be measured before it has already laid out.
+ * Both stats are now NAMED 3PAR and FTAR everywhere, so the short form is the
+ * only form and there is nothing left to switch between. Nothing else in the
+ * header row was ever wide enough to need this.
  */
-const SHORT_ON_MOBILE: Record<string, string> = {
-  "3PA Rate": "3PAR",
-  "FTA Rate": "FTAR",
-};
-
 export function StatLabel({ label }: { label: string }) {
-  const short = SHORT_ON_MOBILE[label];
-  if (short) {
-    return (
-      <>
-        <span className="sm:hidden">{short}</span>
-        <span className="hidden sm:inline">{label}</span>
-      </>
-    );
-  }
   if (!/^[a-z][A-Z]/.test(label)) return <>{label}</>;
   return <span className="normal-case">{label[0] + label.slice(1).toUpperCase()}</span>;
 }

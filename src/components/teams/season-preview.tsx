@@ -105,7 +105,7 @@ export function SeasonPreview({ teamName }: { teamName: string }) {
   const shortLabel = data!.label.split("-").map((y) => y.slice(-2)).join("-");
 
   return (
-    <section className="mx-auto max-w-7xl px-4 lg:px-10 mt-5">
+    <section className="mx-auto max-w-[88rem] px-4 lg:px-10 mt-5">
       {/* px-2 on top of the section's px-4 puts the heading on the same 24px
           margin as the hero above it. The section can't simply use px-6: the
           table inside bleeds to the screen edge with -mx-4, and that number is

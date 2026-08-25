@@ -886,3 +886,42 @@ export async function readConferences(year: number): Promise<string[]> {
   const all = await readJson<Record<string, string[]>>("conferences.json");
   return all[String(year)] ?? [];
 }
+
+/**
+ * One team's seasons with percentiles already computed, or null if that team
+ * has not been baked yet.
+ *
+ * Written by scripts/build-team-seasons.mts — see the long note at the top of
+ * that file for why the percentiles cannot be computed here. The short version
+ * is that a chip ranks a team-season against all ~360 teams from its year, and
+ * readAllTeams() above has no cache, so doing it per page would re-parse a
+ * 12 MB file on each of 5,009 team pages.
+ *
+ * NULL IS A NORMAL ANSWER, not an error. The bake accepts a --team flag so a
+ * change can be tried on one team before it is committed to all 368, and a team
+ * that has not been baked simply falls back to the older seasons table. That
+ * makes a partial bake a safe state for the site to be in rather than a broken
+ * one, which is the whole point of allowing it.
+ */
+export async function readTeamSeasonGrid(slug: string): Promise<TeamGridSeason[] | null> {
+  try {
+    return await readJson<TeamGridSeason[]>(`team-seasons/${slug}.json`);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A baked team-season row. This is `TeamRow` from team-filters, but declared
+ * structurally here so static-data does not have to import the explorer's
+ * module graph — only the fields the By season grid reads are named, and the
+ * index signature carries the rest of the stat columns the grid addresses by
+ * key from the shared column model.
+ */
+export type TeamGridSeason = {
+  team_name: string;
+  team_conference: string | null;
+  team_year: number;
+  record: string | null;
+  pct: Record<string, number | null>;
+} & Record<string, unknown>;

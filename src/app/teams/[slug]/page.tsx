@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { readIndex, readPlayersForYear, readImpactForYear, readImpactExtrasForYear, readTeam, readRankedPlayerIds, readConfRecordsByTeam, readAllTeams, netRanksForTeam, readTeamSplits, readGameLogsForYear, readAssistNetwork, readClockSplits } from "@/lib/static-data";
+import { readIndex, readPlayersForYear, readImpactForYear, readImpactExtrasForYear, readTeam, readRankedPlayerIds, readConfRecordsByTeam, readAllTeams, netRanksForTeam, readTeamSplits, readGameLogsForYear, readAssistNetwork, readClockSplits, readTeamSeasonGrid } from "@/lib/static-data";
+import { toSeasonGridRows } from "@/lib/season-grid-rows";
 import { TeamPageView, buildRoster, attachRosterRanks } from "@/components/teams/team-page-view";
 import { buildShootingRanks, buildFourFactorRanks } from "@/components/teams/distribution-panel";
 import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches";
@@ -99,6 +100,11 @@ export default async function TeamPage({ params }: { params: Promise<{ slug: str
       return round ? { ...g, tournamentRound: round } : g;
     });
 
+  // By season renders the explorer's grid when this team has been baked, and
+  // the older seasons table when it has not. See readTeamSeasonGrid().
+  const bakedSeasons = await readTeamSeasonGrid(slug);
+  const seasonGrid = bakedSeasons ? toSeasonGridRows(bakedSeasons, confRecords) : null;
+
   return (
     <TeamPageView
       team={team}
@@ -114,6 +120,7 @@ export default async function TeamPage({ params }: { params: Promise<{ slug: str
       teamSplits={teamSplits}
       assistNetwork={assistNetwork}
       clockSplits={clockSplits}
+      seasonGrid={seasonGrid}
     />
   );
 }

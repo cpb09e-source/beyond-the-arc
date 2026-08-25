@@ -35,8 +35,8 @@ const GROUPS: Group[] = [
     label: "Play style",
     stats: [
       { key: "pace",      label: "Pace",            min: 55, max: 80, step: 0.5 },
-      { key: "fg3a_rate", label: "3PA Rate",        min: 20, max: 55, step: 0.5 },
-      { key: "fta_rate",  label: "FTA Rate",        min: 20, max: 50, step: 0.5 },
+      { key: "fg3a_rate", label: "3PAR",            min: 20, max: 55, step: 0.5 },
+      { key: "fta_rate",  label: "FTAR",            min: 20, max: 50, step: 0.5 },
       { key: "orb_pct",   label: "OREB Rate",       min: 15, max: 45, step: 0.5 },
       { key: "tov_pct",   label: "Turnover Rate",   min: 10, max: 25, step: 0.5 },
       { key: "ast_pct",   label: "Assist Rate",     min: 40, max: 70, step: 0.5 },

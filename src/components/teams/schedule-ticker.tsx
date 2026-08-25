@@ -46,7 +46,7 @@ export function ScheduleTicker({
   games,
   teamName,
   eyebrow = "Schedule",
-  helpText = "click + drag to scroll · click a game for details",
+  helpText = "click + drag to scroll · click a game for box score",
   helpTextMobile = "swipe to scroll · tap a game",
   showSeasonLabels = false,
   blurBody = false,

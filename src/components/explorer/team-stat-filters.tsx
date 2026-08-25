@@ -68,9 +68,9 @@ const RANGE_GROUPS_RAW: RangeGroup[] = [
     stats: [
       { key: "cbb_efg",     label: "eFG",      min: 35, max: 65, step: 0.5, pct: true },
       { key: "cbb_fg3",     label: "3P",       min: 25, max: 45, step: 0.5, pct: true },
-      { key: "cbb_fg3rate", label: "3PA Rate", min: 15, max: 60, step: 0.5, pct: true },
+      { key: "cbb_fg3rate", label: "3PAR", min: 15, max: 60, step: 0.5, pct: true },
       { key: "cbb_ft",      label: "FT",       min: 55, max: 85, step: 0.5, pct: true },
-      { key: "cbb_ftarate", label: "FTA Rate", min: 15, max: 60, step: 0.5, pct: true },
+      { key: "cbb_ftarate", label: "FTAR", min: 15, max: 60, step: 0.5, pct: true },
       { key: "cbb_ts",      label: "True shooting", min: 40, max: 65, step: 0.5, pct: true },
     ],
   },

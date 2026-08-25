@@ -279,7 +279,7 @@ export const PLAYER_STAT_COLUMNS: PlayerStatColumn[] = [
   { key: "ft_pct",   label: "FT%",       desc: "Free-throw %",                                            group: "shooting", format: "pct1", field: "ft_pct" },
   { key: "ts_pct",   label: "TS%",       desc: "True shooting %: PTS / (2 × (FGA + 0.44 × FTA))",         group: "shooting", format: "pct1", field: "ts_pct" },
   { key: "efg_pct",  label: "eFG%",      desc: "Effective FG%: (FGM + 0.5 × 3PM) / FGA",                  group: "shooting", format: "pct1", field: "efg_pct" },
-  { key: "fta_rate", label: "FTA Rate",  desc: "Free-throw attempts / FG attempts (line-drawing volume)", group: "shooting", format: "pct1", field: "fta_rate" },
+  { key: "fta_rate", label: "FTAR",      desc: "Free-throw attempts / FG attempts (line-drawing volume)", group: "shooting", format: "pct1", field: "fta_rate" },
   // Shooting profile (CBBD) — 0–100 values, filter-only. See PlayerSummary.
   { key: "rim_pct",  label: "Rim%",      desc: "Field goal % at the rim (dunks + layups + tip-ins)",            group: "shooting", format: "num1", field: "rim_pct",      filterOnly: true },
   { key: "mid_pct",  label: "Mid%",      desc: "Mid-range (2-point jumper) field goal %",                       group: "shooting", format: "num1", field: "mid_pct",      filterOnly: true },

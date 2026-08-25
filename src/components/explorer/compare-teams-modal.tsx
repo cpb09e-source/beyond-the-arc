@@ -106,8 +106,8 @@ const ROWS: Row[] = [
   { key: "tov_diff_ct", label: "TOV Diff", dir: "lower", value: (t) => t.tov_diff_ct, format: fmtNum0Signed, pctKey: "tov_diff_ct" },
 
   // ── Style ───────────────────────────────────────────
-  { section: "Style", key: "fg3rate", label: "3PA Rate", dir: "none", value: (t) => t.cbb_fg3rate, format: fmtPct1 },
-  { key: "ftarate", label: "FTA Rate", dir: "none", value: (t) => t.cbb_ftarate, format: fmtPct1 },
+  { section: "Style", key: "fg3rate", label: "3PAR", dir: "none", value: (t) => t.cbb_fg3rate, format: fmtPct1 },
+  { key: "ftarate", label: "FTAR", dir: "none", value: (t) => t.cbb_ftarate, format: fmtPct1 },
   { key: "ast", label: "Assist %", dir: "none", value: (t) => t.cbb_ast, format: fmtPct1 },
   { key: "pitp", label: "Paint Pts %", dir: "none", value: (t) => t.cbb_pitp, format: fmtPct1 },
   { key: "fbpts", label: "FB Pts %", dir: "none", value: (t) => t.cbb_fbpts, format: fmtPct1 },

@@ -10,6 +10,7 @@ export const PREVIEW_SEASON_LABEL = "2026-27";
 import { SeasonSwitcher } from "@/components/teams/season-switcher";
 import { NationalRanks } from "@/components/teams/national-ranks";
 import { SortableSeasonsTable } from "@/components/teams/sortable-seasons-table";
+import { SeasonGrid, type SeasonGridRow } from "@/components/teams/season-grid";
 import { SortableRosterTable } from "@/components/teams/sortable-roster-table";
 import { DistributionPanel, type DistributionRank } from "@/components/teams/distribution-panel";
 import { AssistNetworkPanel } from "@/components/teams/assist-network-panel";
@@ -246,6 +247,14 @@ export function buildRoster(
     .sort((a, b) => (b.epm ?? -Infinity) - (a.epm ?? -Infinity));
 }
 
+/**
+ * PAGE WIDTH. Every section on this page shares one shell —
+ * `mx-auto max-w-[88rem] px-6 lg:px-10` — and the eight copies of it have to
+ * stay in step, including the one in season-preview.tsx, which lines its
+ * heading up against this exact gutter (see the note there). Widened from
+ * max-w-7xl (80rem) on request; the By season grid gained columns and wanted
+ * the room. Changing it means changing all eight.
+ */
 export function TeamPageView({
   team,
   current,
@@ -260,6 +269,7 @@ export function TeamPageView({
   teamSplits,
   assistNetwork,
   clockSplits,
+  seasonGrid,
   preview = false,
 }: {
   team: { name: string; seasons: StaticTeamSeasonRow[] };
@@ -279,6 +289,13 @@ export function TeamPageView({
   assistNetwork: AssistNetwork | null;
   /** Shot selection by shot-clock position. Null before 2014. */
   clockSplits: ClockSplits | null;
+  /**
+   * By-season rows with baked percentiles, or null if this team has not been
+   * baked yet — see readTeamSeasonGrid(). Null falls back to the older seasons
+   * table, which is what makes a partial bake (`--team Vermont`) a safe state
+   * to leave the site in rather than a broken one.
+   */
+  seasonGrid: SeasonGridRow[] | null;
   // Preview mode — renders the last-completed-season layout with game-dependent
   // sections blurred, the roster swapped for the upcoming-season client roster,
   // record shown as 0-0 and BTA rank as TBD.
@@ -334,7 +351,7 @@ export function TeamPageView({
     <div style={cssVars}>
       {/* Hero */}
       <section>
-        <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-10 pb-8">
+        <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-10 pb-8">
           <div className="flex flex-wrap items-center gap-6 lg:gap-10">
             <TeamLogo name={current.name} size={96} className="rounded-md" />
             <div className="flex-1 min-w-0">
@@ -472,7 +489,7 @@ export function TeamPageView({
           {/* mb-6 stands in for the hero's pb-8: the panel below opens with
               mt-2 on the assumption that whatever precedes it already paid for
               the gap, and here that is this section rather than the hero. */}
-          <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8 mb-6">{ranksBlock}</section>
+          <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8 mb-6">{ranksBlock}</section>
         </>
       )}
 
@@ -482,14 +499,14 @@ export function TeamPageView({
           Deliberately tighter than a normal section break (the hero's own pb-8
           already contributes 32px) because the two belong together. */}
       {teamSplits && (
-        <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-2">
+        <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-2">
           <TeamStatsPanel splits={teamSplits} blurBody={preview} />
         </section>
       )}
 
       {/* Preview rosters render above, right under the schedule. */}
       {!preview && (
-      <section className="mx-auto max-w-7xl px-4 lg:px-10 mt-5">
+      <section className="mx-auto max-w-[88rem] px-4 lg:px-10 mt-5">
         {/* px-2 on top of the section's px-4 lands the heading on the same 24px
             margin as every other block on the page — see the note in
             season-preview.tsx for why the section itself can't just be px-6. */}
@@ -513,7 +530,7 @@ export function TeamPageView({
       {/* Shooting + Four Factors sit BELOW the roster now. They are a closing
           detail on the season, not the way into it — the reader wants the team,
           then the players, then the breakdown. */}
-      <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8">
         <DistributionPanel title="Shooting" ranks={shootingRanks} blurBody={preview} />
         <DistributionPanel title="Four Factors" ranks={fourFactorRanks} blurBody={preview}>
           {current.four_factor_record && current.four_factor_record.games > 0 && (
@@ -539,7 +556,7 @@ export function TeamPageView({
           2014 where there is no play-by-play — so the section disappears
           entirely rather than rendering two empty frames. */}
       {(clockSplits || assistNetwork) && (
-        <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
           {clockSplits ? <ClockSplitsPanel splits={clockSplits} /> : <div />}
           {assistNetwork ? <AssistNetworkPanel network={assistNetwork} /> : <div />}
         </section>
@@ -550,7 +567,7 @@ export function TeamPageView({
 
       {/* BY SEASON — headline ledger. Mirrors the coach page's "Season by
           season" treatment so cross-page recognition is consistent. */}
-      <section className="mx-auto max-w-7xl px-6 lg:px-10 mt-12 mb-20">
+      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-12 mb-20">
         <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
           {/* Top accent rule — coral bar marks this table as the headline. */}
           <div
@@ -575,6 +592,14 @@ export function TeamPageView({
               {chronological.length === 1 ? "season" : "seasons"}
             </span>
           </div>
+          {seasonGrid ? (
+            <SeasonGrid
+              rows={seasonGrid}
+              currentYear={current.year}
+              slug={slug}
+              accentColor={accentColor}
+            />
+          ) : (
           <SortableSeasonsTable
             seasons={chronological}
             currentYear={current.year}
@@ -582,6 +607,7 @@ export function TeamPageView({
             confRecords={confRecords}
             accentColor={accentColor}
           />
+          )}
         </div>
       </section>
     </div>
