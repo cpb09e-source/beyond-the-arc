@@ -98,7 +98,11 @@ export function OnOffExplorer({
   // independent orders would make them impossible to read against each other,
   // which is the entire reason they are stacked.
   const [sort, setSort] = useState<{ key: string; mode: Mode; dir: "asc" | "desc" }>({
-    key: "net", mode: "diff", dir: "desc",
+    // On-court possessions, descending: the rotation in the order it actually
+    // played. Opening on a stat instead put whoever had the largest swing on
+    // top, which on a table where sample size decides whether a swing means
+    // anything is the wrong thing to lead with.
+    key: "onPoss", mode: "diff", dir: "desc",
   });
 
   const accent = accentColor ?? undefined;
