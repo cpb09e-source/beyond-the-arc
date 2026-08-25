@@ -28,6 +28,24 @@
 # Serverless functions ship alongside the static export. The site itself is
 # `output: "export"` with no server, so this is the only place server-side
 # secrets (ANTHROPIC_API_KEY) can live — they are never bundled into the client.
+# Canonical host. The site answered 200 on BOTH btacbb.xyz and
+# beyond-the-arc.netlify.app — Netlify keeps the generated subdomain serving
+# even after a custom domain is set, and does not 301 it by default. Two live
+# copies of 30,000 pages is a duplicate-content split, and robots.txt was
+# making it worse by naming the subdomain as Host.
+#
+# `force = true` is required: without it a redirect loses to an existing file,
+# and every one of these paths exists in the export.
+#
+# Deploy previews are unaffected — they are served from
+# deploy-preview-<n>--beyond-the-arc.netlify.app, which does not match this
+# `from` host.
+[[redirects]]
+  from   = "https://beyond-the-arc.netlify.app/*"
+  to     = "https://btacbb.xyz/:splat"
+  status = 301
+  force  = true
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
