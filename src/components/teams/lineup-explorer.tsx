@@ -6,13 +6,16 @@ import { PercentileChip } from "@/components/percentile-chip";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
 import {
   LINEUP_STATS,
+  LINEUP_VIEWS,
   MIN_POSS,
+  statsForView,
   formatStat,
   percentileOf,
   sumTotals,
   type LineupBenchmarks,
   type LineupStat,
   type LineupTotals,
+  type LineupView,
 } from "@/lib/lineup-stats";
 
 /**
@@ -89,8 +92,28 @@ export function LineupExplorer({
   const [onCourt, setOnCourt] = useState<string[]>([]);
   const [offCourt, setOffCourt] = useState<string[]>([]);
   const [size, setSize] = useState<ComboSize>(5);
+  const [view, setView] = useState<LineupView>(LINEUP_VIEWS[0]!);
   const [sortKey, setSortKey] = useState<string>("poss");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  /** The columns this view shows, in its order. */
+  const cols = useMemo(() => statsForView(view), [view]);
+
+  /**
+   * Band spans for the header, computed from the visible columns rather than
+   * the full model. A view that shows two of the four shooting columns must
+   * caption two, or the band row and the header row stop lining up.
+   */
+  const bands = useMemo(() => {
+    const out: Array<{ key: LineupStat["group"]; label: string; span: number; accent: boolean }> = [];
+    for (const c of cols) {
+      const last = out[out.length - 1];
+      if (last && last.key === c.group) { last.span++; continue; }
+      const meta = BANDS.find((b) => b.key === c.group);
+      out.push({ key: c.group, label: meta?.label ?? "", span: 1, accent: !!meta?.accent });
+    }
+    return out;
+  }, [cols]);
 
   const nameOf = useMemo(
     () => new Map(data.players.map((p) => [p.id, p.name])),
@@ -287,8 +310,43 @@ export function LineupExplorer({
         </p>
       </div>
 
+      {/* ---- column views. Pills, not the underline the page tabs use: this
+              switches what the table shows, the strip above switches the page,
+              and two identical-looking strips a few hundred pixels apart would
+              read as one navigation with an arbitrary split.
+
+              It sits attached to the table rather than in the control bar
+              above because it changes the table's shape, not the set of rows
+              in it. The controls answer "which units"; this answers "which
+              numbers about them". */}
+      <div className="mt-6 flex items-center gap-2 overflow-x-auto overscroll-x-contain px-4 lg:px-0 pb-1">
+        <span className="text-xs uppercase tracking-widest text-ink-muted font-medium shrink-0 mr-1">
+          Columns
+        </span>
+        {LINEUP_VIEWS.map((v) => {
+          const active = v.key === view.key;
+          return (
+            <button
+              key={v.key}
+              type="button"
+              onClick={() => setView(v)}
+              aria-pressed={active}
+              className={cn(
+                "shrink-0 px-3 py-1.5 rounded-md text-sm font-medium border transition-colors",
+                active
+                  ? "text-white border-transparent"
+                  : "text-ink-muted border-ink/15 bg-card hover:text-ink hover:border-ink/30",
+              )}
+              style={active ? { backgroundColor: accent ?? "var(--color-coral)" } : undefined}
+            >
+              {v.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* ---- table */}
-      <div className="mt-5 border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-4 lg:mx-0">
+      <div className="mt-3 border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-4 lg:mx-0">
         {visible.length === 0 ? (
           <p className="px-5 lg:px-7 py-12 text-sm text-ink-muted max-w-2xl leading-relaxed">
             {rows.length === 0
@@ -309,12 +367,11 @@ export function LineupExplorer({
               <thead>
                 <tr>
                   <th className="sticky left-0 z-30 bg-paper-deep h-6 p-0 border-r border-hairline" />
-                  {BANDS.map((b) => {
-                    const n = LINEUP_STATS.filter((s) => s.group === b.key).length;
+                  {bands.map((b, bi) => {
                     return (
                       <th
-                        key={b.key}
-                        colSpan={n}
+                        key={`${b.key}-${bi}`}
+                        colSpan={b.span}
                         className={cn(
                           "bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-center border-l border-hairline align-middle",
                           b.accent ? "text-coral" : "text-ink-muted",
@@ -330,14 +387,14 @@ export function LineupExplorer({
                   <th className="sticky left-0 z-30 bg-paper-deep border-b border-r border-hairline px-2 sm:px-3 py-3 sm:py-2 text-xs uppercase tracking-wide sm:tracking-widest text-ink-muted font-medium text-left align-middle">
                     {size === 5 ? "Lineup" : `${size}-man`}
                   </th>
-                  {LINEUP_STATS.map((s, i) => (
+                  {cols.map((s, i) => (
                     <StatTh
                       key={s.key}
                       stat={s}
                       active={sortKey === s.key}
                       dir={sortDir}
                       onClick={() => toggleSort(s.key, s.lowerBetter ? "asc" : "desc")}
-                      bandStart={i === 0 || LINEUP_STATS[i - 1]!.group !== s.group}
+                      bandStart={i === 0 || cols[i - 1]!.group !== s.group}
                     />
                   ))}
                 </tr>
@@ -349,11 +406,11 @@ export function LineupExplorer({
                     visible rows would multiply the season. */}
                 <StatRow
                   label={<span className="font-semibold text-ink">Totals</span>}
+                  cols={cols}
                   totals={totals}
                   benchmarks={benchmarks}
                   accent={accent}
                   emphasis
-                  aggregate
                 />
                 {sorted.map((r) => (
                   <StatRow
@@ -363,10 +420,10 @@ export function LineupExplorer({
                         {r.ids.map((id) => shortOf.get(id) ?? `#${id}`).join(" · ")}
                       </span>
                     }
+                    cols={cols}
                     totals={r.totals}
                     benchmarks={benchmarks}
                     accent={accent}
-                    aggregate={size !== 5}
                   />
                 ))}
               </tbody>
@@ -514,18 +571,15 @@ function StatTh({
 }
 
 function StatRow({
-  label, totals, benchmarks, accent, emphasis = false, aggregate = false,
+  label, cols, totals, benchmarks, accent, emphasis = false,
 }: {
   label: React.ReactNode;
+  /** The active view's columns, so every row matches the header exactly. */
+  cols: LineupStat[];
   totals: LineupTotals;
   benchmarks: LineupBenchmarks | null;
   accent?: string;
   emphasis?: boolean;
-  /**
-   * True when this row pools several stored lineups: the Totals row, and every
-   * row at a combo size below five. Only GP cares — see where it is used.
-   */
-  aggregate?: boolean;
 }) {
   const qualified = totals.poss >= MIN_POSS;
   const bg = emphasis ? "" : "bg-paper odd:bg-card";
@@ -545,17 +599,10 @@ function StatRow({
       >
         {label}
       </td>
-      {LINEUP_STATS.map((s, i) => {
-        // GP counts UNIT-games, which is right for one stored lineup and wrong
-        // for anything that pools several: a 3-man combo reported 135 for a
-        // team that played 34, because each of the five-man lineups those
-        // three appeared in contributed its own game count. Deduplicating
-        // would need every lineup's game list, many times the size of the
-        // stats themselves, so a pooled row declines to answer instead. POSS
-        // and MINS are the honest volume columns there and do sum correctly.
-        const v = aggregate && s.key === "gp" ? null : s.value(totals);
+      {cols.map((s, i) => {
+        const v = s.value(totals);
         const pct = qualified ? percentileOf(s, v, benchmarks) : null;
-        const bandStart = i === 0 || LINEUP_STATS[i - 1]!.group !== s.group;
+        const bandStart = i === 0 || cols[i - 1]!.group !== s.group;
         return (
           <td
             key={s.key}

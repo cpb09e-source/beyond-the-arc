@@ -42,12 +42,9 @@ export const EMPTY_TOTALS: LineupTotals = {
 /**
  * Sum any set of lineups into one totals object.
  *
- * `gp` is summed rather than deduplicated, so it reads as unit-games, not
- * team-games: five units that each played the same game sum to 5, not 1. On a
- * single lineup row it is the games that unit appeared in, which is what a
- * reader expects; on an aggregate it is a coarse volume signal and the honest
- * columns to read are POSS and MINS. Deduplicating would need every lineup's
- * game list in the payload, which is many times the size of the stats.
+ * Every field is additive, which is the property the whole page rests on. `gp`
+ * is the one that does not mean what it looks like once summed — see the note
+ * where the volume columns are defined — and is not displayed for that reason.
  */
 export function sumTotals(rows: LineupTotals[]): LineupTotals {
   const out: LineupTotals = { ...EMPTY_TOTALS };
@@ -84,7 +81,14 @@ const per100 = (a: number, poss: number): number | null => (poss > 0 ? (a / poss
  */
 export const LINEUP_STATS: LineupStat[] = [
   // ---- volume: context, never ranked. A lineup is not "good" for playing more.
-  { key: "gp", label: "GP", group: "volume", title: "Games this unit appeared in. On a filtered total it counts unit-games, not team-games.", format: "int", ranked: false, value: (t) => t.gp },
+  //
+  // No GP column. It counts UNIT-games, which is right for one stored lineup
+  // and wrong for anything pooling several: a 3-man combo read 135 for a team
+  // that played 34, because each five-man lineup those three appeared in
+  // contributed its own count. Deduplicating needs every lineup's game list,
+  // many times the size of the stats. POSS and MINS answer the same question
+  // and sum correctly, so they carry it alone. `gp` stays in the payload and
+  // in LineupTotals — it is still summed, just not shown.
   { key: "poss", label: "POSS", group: "volume", title: "Offensive possessions (FGA − OREB + TO + 0.475·FTA)", format: "int", ranked: false, value: (t) => t.poss },
   { key: "mins", label: "MINS", group: "volume", title: "Minutes on the floor together", format: "int", ranked: false, value: (t) => t.secs / 60 },
 
@@ -196,4 +200,62 @@ export function formatStat(v: number | null, fmt: StatFormat): string {
   if (fmt === "signed") return (v > 0 ? "+" : "") + Math.round(v).toLocaleString("en-US");
   if (fmt === "int") return Math.round(v).toLocaleString("en-US");
   return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+/**
+ * Column sets, so the grid is a handful of readable tables rather than one
+ * 2,147px scroll.
+ *
+ * All 26 columns at once meant nobody saw the right-hand third without
+ * dragging, and dragging loses the row you were reading. Each view answers one
+ * question and fits a laptop.
+ *
+ * THREE COLUMNS ARE IN EVERY VIEW: POSS, MINS and Net Rtg. Sample size and
+ * bottom line are the context for reading anything else, and switching views
+ * should change the subject, not make you re-find your bearings.
+ *
+ * A stat may appear in more than one view. eFG% is a four factor and a
+ * shooting number; asking a reader to switch views to see it in the other
+ * context would be a filing decision imposed on them.
+ */
+const PINNED = ["poss", "mins", "net"];
+
+export type LineupView = { key: string; label: string; stats: string[] };
+
+export const LINEUP_VIEWS: LineupView[] = [
+  {
+    key: "four",
+    label: "Four Factors",
+    stats: [...PINNED, "ortg", "drtg", "efg", "oreb", "tov", "ftar", "oppEfg", "dreb", "oppTov", "oppFtar"],
+  },
+  {
+    key: "offense",
+    label: "Offense",
+    stats: [...PINNED, "ortg", "plusMinus", "pace", "efg", "oreb", "tov", "ftar", "astr", "astto"],
+  },
+  {
+    key: "defense",
+    label: "Defense",
+    stats: [...PINNED, "drtg", "oppEfg", "dreb", "oppTov", "oppFtar", "stlr", "blkr", "hakeem", "pfr"],
+  },
+  {
+    // eFG% and FTAR sit together ahead of the shooting detail, rather than
+    // FTAR trailing FT% where it reads more naturally. A view's columns have
+    // to stay contiguous by band or the caption row splits: interleaved, this
+    // rendered "Four Factors" twice, once over a single column each side of
+    // the shooting group, which looks like a bug in the header.
+    key: "shooting",
+    label: "Shooting",
+    stats: [...PINNED, "efg", "ftar", "fg3ar", "fg3", "rimr", "rimfg", "ft", "oppEfg"],
+  },
+  {
+    key: "all",
+    label: "Everything",
+    stats: LINEUP_STATS.map((s) => s.key),
+  },
+];
+
+/** The stats in one view, in the view's order. Unknown keys are skipped. */
+export function statsForView(view: LineupView): LineupStat[] {
+  return view.stats.map((k) => STAT_BY_KEY.get(k)).filter((s): s is LineupStat => !!s);
 }
