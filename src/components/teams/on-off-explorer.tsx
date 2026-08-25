@@ -4,6 +4,8 @@ import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { PercentileChip } from "@/components/percentile-chip";
+import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
+import { PlayerChips } from "@/components/teams/player-chips";
 import {
   LINEUP_VIEWS,
   ON_OFF_MIN_POSS,
@@ -50,22 +52,19 @@ import type { LineupFile } from "@/components/teams/lineup-explorer";
 
 type Mode = "on" | "off" | "diff";
 
-const SECTIONS: Array<{ key: Mode; kicker: string; title: string; blurb: string }> = [
+const SECTIONS: Array<{ key: Mode; title: string; blurb: string }> = [
   {
     key: "diff",
-    kicker: "With minus without",
     title: "On/Off Difference",
     blurb: "How the team's numbers change with each player on the floor. Ranked against every qualifying player in Division I.",
   },
   {
     key: "on",
-    kicker: "With him",
     title: "Team stats, player on court",
     blurb: "What the team did while each player was on the floor.",
   },
   {
     key: "off",
-    kicker: "Without him",
     title: "Team stats, player off court",
     blurb: "What the team did while each player sat.",
   },
@@ -92,6 +91,7 @@ export function OnOffExplorer({
   accentColor?: string | null;
 }) {
   const [view, setView] = useState<LineupView>(LINEUP_VIEWS[0]!);
+  const [picked, setPicked] = useState<string[]>([]);
   // Sorting is shared across the three tables and carries which one was
   // clicked: sorting the Difference table by Net Rtg reorders On-Court and
   // Off-Court to match, so a player stays on the same line in all three. Three
@@ -130,7 +130,7 @@ export function OnOffExplorer({
     return out;
   }, [cols]);
 
-  const { rows, hidden } = useMemo(() => {
+  const { rows } = useMemo(() => {
     const idx = data.cols;
     const lineups = data.lineups.map((l) => {
       const t = {} as Record<string, number>;
@@ -177,6 +177,24 @@ export function OnOffExplorer({
     });
   }, [rows, sort, cols, valueOf]);
 
+  /**
+   * Options are the players who actually have a row, not the whole roster.
+   * Offering someone below the possession floor would let a reader pick a name
+   * and get an empty table, with nothing to say why.
+   */
+  const options = useMemo(
+    () => rows.map((r) => ({ value: String(r.id), label: r.name }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+    [rows],
+  );
+  const nameOf = useMemo(() => new Map(rows.map((r) => [r.id, r.name])), [rows]);
+
+  const shown = useMemo(() => {
+    if (picked.length === 0) return sorted;
+    const keep = new Set(picked.map(Number));
+    return sorted.filter((r) => keep.has(r.id));
+  }, [sorted, picked]);
+
   function toggleSort(key: string, mode: Mode, defaultDir: "asc" | "desc") {
     setSort((s) =>
       s.key === key && s.mode === mode
@@ -197,6 +215,31 @@ export function OnOffExplorer({
 
   return (
     <div>
+      {/* Player picker, same control the Lineups tab uses: type in the field
+          itself, chips underneath for what is chosen. Empty means everyone,
+          which is the useful default here — the question is usually "how does
+          this team look by player", and only sometimes "these two". */}
+      <div className="px-4 lg:px-0 mb-5 max-w-md">
+        <div className="text-xs uppercase tracking-widest text-ink-muted font-medium mb-1.5">
+          Players
+        </div>
+        <SearchableMultiSelect
+          value={picked}
+          options={options}
+          onChange={setPicked}
+          placeholder="Search players…"
+          emptyLabel="Select Players"
+          ariaLabel="Players to show"
+          inlineSearch
+        />
+        <PlayerChips
+          ids={picked}
+          nameOf={nameOf}
+          onRemove={(v) => setPicked(picked.filter((x) => x !== v))}
+          accent={accent}
+        />
+      </div>
+
       {/* One column control for all three tables — see the note at the top. */}
       <div className="flex flex-wrap items-center gap-2 px-4 lg:px-0">
         <span className="text-xs uppercase tracking-widest text-ink-muted font-medium shrink-0 mr-1">
@@ -225,13 +268,6 @@ export function OnOffExplorer({
       {SECTIONS.map((sec) => (
         <section key={sec.key} className="mt-8 first:mt-6">
           <div className="px-4 lg:px-0 mb-3">
-            <div
-              className="text-[0.6rem] uppercase tracking-[0.18em] font-bold mb-1.5 flex items-center gap-2"
-              style={{ color: accent ?? "var(--color-coral)" }}
-            >
-              <span className="h-px w-6" style={{ backgroundColor: accent ?? "var(--color-coral)" }} />
-              {sec.kicker}
-            </div>
             <h3 className="font-display text-2xl lg:text-3xl text-ink leading-none tracking-tight">
               {sec.title}
             </h3>
@@ -283,7 +319,7 @@ export function OnOffExplorer({
                   </tr>
                 </thead>
                 <tbody>
-                  {sorted.map((r) => (
+                  {shown.map((r) => (
                     <tr key={r.id} className="group transition-colors bg-paper odd:bg-card">
                       <td className="sticky left-0 z-20 px-2 sm:px-3 py-1.5 border-r border-hairline whitespace-nowrap transition-colors bg-paper group-odd:bg-card">
                         {r.bart != null ? (
@@ -334,22 +370,6 @@ export function OnOffExplorer({
         </section>
       ))}
 
-      <p className="mt-6 px-4 lg:px-0 text-xs text-ink-muted leading-relaxed max-w-4xl">
-        Players need <span className="tabular">{ON_OFF_MIN_POSS}</span> possessions both on
-        and off the floor to appear
-        {hidden > 0 && <> ({hidden} did not)</>}. Sorting any of the three tables reorders all
-        three, so a player stays on the same line throughout. In On/Off Difference, percentage
-        columns are points of difference and each row is ranked against every qualifying
-        player in Division I
-        {benchmarks?.nd ? <> ({benchmarks.nd.toLocaleString()} of them)</> : null}; the other
-        two are ranked against D-I five-man units.
-        {" "}
-        <span className="text-ink-soft">
-          An on/off split is not a rating of the player. It is what the team did with him and
-          without him, which also carries whoever replaced him, whoever he played alongside,
-          and who the opponent had on the floor.
-        </span>
-      </p>
     </div>
   );
 }

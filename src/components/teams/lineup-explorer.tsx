@@ -5,6 +5,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { PercentileChip } from "@/components/percentile-chip";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
+import { PlayerChips } from "@/components/teams/player-chips";
 import {
   LINEUP_STATS,
   LINEUP_VIEWS,
@@ -274,7 +275,7 @@ export function LineupExplorer({
               inlineSearch
               disabledValues={offIds.size ? new Set(offCourt) : undefined}
             />
-            <Chips ids={onCourt} nameOf={nameOf} onRemove={(v) => setOnCourt(onCourt.filter((x) => x !== v))} accent={accent} />
+            <PlayerChips ids={onCourt} nameOf={nameOf} onRemove={(v) => setOnCourt(onCourt.filter((x) => x !== v))} accent={accent} />
           </Field>
 
           <Field label="Off the court">
@@ -288,7 +289,7 @@ export function LineupExplorer({
               inlineSearch
               disabledValues={onIds.size ? new Set(onCourt) : undefined}
             />
-            <Chips ids={offCourt} nameOf={nameOf} onRemove={(v) => setOffCourt(offCourt.filter((x) => x !== v))} accent={accent} />
+            <PlayerChips ids={offCourt} nameOf={nameOf} onRemove={(v) => setOffCourt(offCourt.filter((x) => x !== v))} accent={accent} />
           </Field>
 
           {/* Segmented, not a select. Four fixed options that the reader
@@ -506,46 +507,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <div className="text-xs uppercase tracking-widest text-ink-muted font-medium mb-1.5">{label}</div>
       {children}
-    </div>
-  );
-}
-
-/**
- * Selected players, as removable chips under their picker.
- *
- * The picker's own trigger summarises a selection as a count, which is right
- * for a filter you set once. Here the two lists ARE the question being asked,
- * and reading it back has to be instant: who is on, who is off, and one click
- * to drop either.
- */
-function Chips({
-  ids, nameOf, onRemove, accent,
-}: {
-  ids: string[];
-  nameOf: Map<number, string>;
-  onRemove: (v: string) => void;
-  accent?: string;
-}) {
-  if (ids.length === 0) return null;
-  return (
-    <div className="flex flex-wrap gap-1.5 mt-2">
-      {ids.map((v) => (
-        <button
-          key={v}
-          type="button"
-          onClick={() => onRemove(v)}
-          className="group inline-flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded text-xs font-medium bg-card border border-ink/15 text-ink hover:border-ink/30 transition-colors"
-        >
-          <span
-            aria-hidden
-            className="h-1.5 w-1.5 rounded-full"
-            style={{ backgroundColor: accent ?? "var(--color-coral)" }}
-          />
-          {nameOf.get(Number(v)) ?? v}
-          <span aria-hidden className="text-ink-muted group-hover:text-ink transition-colors">×</span>
-          <span className="sr-only">Remove</span>
-        </button>
-      ))}
     </div>
   );
 }
