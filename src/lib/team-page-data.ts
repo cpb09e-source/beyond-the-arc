@@ -30,6 +30,8 @@ import {
   readAssistNetwork,
   readClockSplits,
   readTeamSeasonGrid,
+  readLineupStats,
+  readLineupBenchmarks,
 } from "@/lib/static-data";
 import { toSeasonGridRows } from "@/lib/season-grid-rows";
 import {
@@ -124,6 +126,11 @@ export async function loadTeamPageData(slug: string, year?: number) {
   const bakedSeasons = await readTeamSeasonGrid(slug);
   const seasonGrid = bakedSeasons ? toSeasonGridRows(bakedSeasons, confRecords) : null;
 
+  // Five-man lineups and the league field they are ranked against. Both null
+  // before 2024, where the play feed carries no onFloor — see readLineupStats.
+  const lineupStats = await readLineupStats(slug, effYear);
+  const lineupBenchmarks = lineupStats ? await readLineupBenchmarks(effYear) : null;
+
   return {
     team,
     current,
@@ -139,6 +146,8 @@ export async function loadTeamPageData(slug: string, year?: number) {
     assistNetwork,
     clockSplits,
     seasonGrid,
+    lineupStats,
+    lineupBenchmarks,
     preview: isPreview,
   };
 }

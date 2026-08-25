@@ -16,7 +16,7 @@ import { SortableRosterTable } from "@/components/teams/sortable-roster-table";
 import { DistributionPanel, type DistributionRank } from "@/components/teams/distribution-panel";
 import { AssistNetworkPanel } from "@/components/teams/assist-network-panel";
 import { ClockSplitsPanel } from "@/components/teams/clock-splits-panel";
-import { TeamLineups } from "@/components/teams/team-lineups";
+import { LineupExplorer, type LineupFile } from "@/components/teams/lineup-explorer";
 import type { AssistNetwork, ClockSplits } from "@/lib/static-data";
 import { ScheduleTicker } from "@/components/teams/schedule-ticker";
 import { TeamStatsPanel, type TeamSplits } from "@/components/teams/team-stats-panel";
@@ -272,6 +272,8 @@ export function TeamPageView({
   assistNetwork,
   clockSplits,
   seasonGrid,
+  lineupStats,
+  lineupBenchmarks,
   tab = "all",
   overviewHref,
   preview = false,
@@ -300,6 +302,10 @@ export function TeamPageView({
    * to leave the site in rather than a broken one.
    */
   seasonGrid: SeasonGridRow[] | null;
+  /** Five-man lineups for the Lineups tab. Null before 2024 — no onFloor. */
+  lineupStats: unknown | null;
+  /** That season's league percentile field for lineup stats. */
+  lineupBenchmarks: unknown | null;
   /**
    * Which tab to render. "all" is the whole page in one scroll — every older
    * season, and every preview page — and is what this component did before the
@@ -663,13 +669,28 @@ export function TeamPageView({
         </section>
       )}
 
-      {/* LINEUPS. TeamLineups client-fetches /data/lineups-<year>.json, which
-          only exists for seasons with play-by-play stint data (2025 onward),
-          so most older seasons render its empty state. `standalone` is what
-          makes it say so rather than render nothing — see the note there. */}
+      {/* LINEUPS. Every five-man unit the team played, filtered by who was on
+          the floor and who was not, and re-cut as 2-, 3- and 4-man combos.
+
+          Null before 2024: the lineup attribution reads `onFloor` off each
+          play, and CBBD did not populate it earlier — 0.0% coverage in 2022
+          and 2023 against 98.5%+ from 2024. Older seasons get a stated empty
+          rather than a table that looks broken. */}
       {show.lineups && !preview && (
-        <section id={TAB_ANCHORS.lineups} className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8 scroll-mt-20">
-          <TeamLineups teamName={team.name} year={current.year} standalone />
+        <section id={TAB_ANCHORS.lineups} className="mx-auto max-w-[88rem] px-4 lg:px-10 mt-5 mb-20 scroll-mt-20">
+          {lineupStats ? (
+            <LineupExplorer
+              data={lineupStats as LineupFile}
+              benchmarks={(lineupBenchmarks ?? null) as never}
+              accentColor={accentColor}
+            />
+          ) : (
+            <p className="text-sm text-ink-muted leading-relaxed max-w-2xl">
+              No lineup data for {seasonLabel(current.year)}. Five-man units are
+              reconstructed from the players on the floor at each play, which the
+              play-by-play only began carrying in 2023-24.
+            </p>
+          )}
         </section>
       )}
 

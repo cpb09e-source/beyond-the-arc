@@ -954,3 +954,39 @@ export type TeamGridSeason = {
   record: string | null;
   pct: Record<string, number | null>;
 } & Record<string, unknown>;
+
+/**
+ * One team-season's five-man lineups, or null if that team-season has none.
+ *
+ * NULL IS NORMAL for anything before 2024: the lineup attribution comes from
+ * `onFloor` on each play, and CBBD did not populate it earlier — 0.0% coverage
+ * in 2022 and 2023 against 98.5%+ from 2024. Those seasons render the tab's
+ * empty state rather than a broken table.
+ */
+export async function readLineupStats(slug: string, year: number): Promise<unknown | null> {
+  try {
+    return await readJson(`lineup-stats/${slug}-${year}.json`);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The season's league percentile breakpoints for lineup stats.
+ *
+ * Shared by every team in that season, so it is read once per page and cached
+ * here rather than bundled into each team's file — one copy of the numbers,
+ * 365 pages reading it.
+ */
+const _lineupBenchmarkCache = new Map<number, unknown | null>();
+export async function readLineupBenchmarks(year: number): Promise<unknown | null> {
+  if (_lineupBenchmarkCache.has(year)) return _lineupBenchmarkCache.get(year) ?? null;
+  let out: unknown | null = null;
+  try {
+    out = await readJson(`lineup-stats/benchmarks-${year}.json`);
+  } catch {
+    out = null;
+  }
+  _lineupBenchmarkCache.set(year, out);
+  return out;
+}
