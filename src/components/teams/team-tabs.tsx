@@ -4,23 +4,21 @@ import { cn } from "@/lib/utils";
 /**
  * The tab strip under a team page's hero.
  *
- * TWO MODES, ONE APPEARANCE. On the current season each tab is a real route
- * (`/teams/vermont/2026/roster/`) and only that tab's sections render. On every
- * older season the whole page still renders as one scroll and the tabs are
- * in-page anchors instead.
+ * EVERY SEASON IS THE SAME PAGE. Each tab is a real route on every
+ * team-season — `/teams/vermont/2019/roster/` as much as
+ * `/teams/vermont/2026/roster/` — so picking an older year out of the season
+ * dropdown lands you on a page shaped exactly like the current one.
  *
- * That split is a build-cost decision, not a design one. There are 5,009 team
- * pages; giving all six tabs a real URL on every season takes that to roughly
- * 25,000 and more than doubles the site build. Restricting real routes to the
- * current season caps it near 6,800 — and it matches how the pages are read,
- * since the current season is the one people explore and older ones are
- * glanced at. The anchor mode exists so the older seasons do not look like a
- * different product: same strip, same order, same active state, and every
- * section is still on the page and still indexable. Only the URL stays put.
+ * This carried an anchor mode for a while, where older seasons rendered every
+ * section on one page and the tabs scrolled to them instead of navigating.
+ * It saved about 25,000 pages of build. It was removed because the saving was
+ * not worth what it cost the reader: an older season that looked different
+ * read as a lesser page rather than the same page about a different year. If
+ * the build ever needs that 25,000 back, this is the thing to reinstate, and
+ * the section ids below are still what it would scroll to.
  *
- * If the two modes ever LOOK different, that is the bug — a reader moving from
- * 2026 to 2017 should not notice which one they are on until they watch the
- * address bar.
+ * Preview pages are the one exception and get no strip at all — see the note
+ * in team-tab-route.ts.
  */
 
 export type TeamTab = "overview" | "roster" | "history" | "shooting" | "lineups" | "onoff";
@@ -52,14 +50,11 @@ const TABS: Array<{ key: TeamTab; label: string; segment: string }> = [
 
 export function TeamTabs({
   active,
-  mode,
   slug,
   year,
   overviewHref,
 }: {
   active: TeamTab;
-  /** "routes" = real sub-pages (current season). "anchors" = one-page scroll. */
-  mode: "routes" | "anchors";
   slug: string;
   year: number;
   /**
@@ -87,9 +82,7 @@ export function TeamTabs({
           {TABS.map((t) => {
             const isActive = t.key === active;
             const href =
-              mode === "anchors"
-                ? `#${TAB_ANCHORS[t.key]}`
-                : t.key === "overview"
+              t.key === "overview"
                 ? overviewHref ?? `/teams/${slug}/${year}/`
                 : `/teams/${slug}/${year}/${t.segment}/`;
             return (

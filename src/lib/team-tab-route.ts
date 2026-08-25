@@ -1,18 +1,20 @@
 /**
- * Shared plumbing for the team sub-page routes (Roster, Shooting,
- * Play-by-play).
+ * Shared plumbing for the team sub-page routes — Roster, School History,
+ * Shooting, Lineups and On/Off.
  *
- * ONLY THE CURRENT SEASON GETS THESE ROUTES. Every team-season would be
- * roughly 15,000 extra pages on top of the 5,009 that exist, close to doubling
- * the site build; the latest season alone is about 1,100. Older seasons render
- * every section on one page with the tab strip in anchor mode instead, so
- * nothing is unreachable or unindexed — see the note at the top of
- * team-tabs.tsx.
+ * EVERY SEASON GETS THESE ROUTES. This started as current-season-only, on the
+ * grounds that five extra routes across 5,009 team-seasons is about 25,000
+ * pages and more than doubles the site build. That was the right trade until
+ * you actually used it: picking 18-19 out of the season dropdown and landing
+ * on a page shaped differently from 25-26 — no tabs, the roster somewhere down
+ * a long scroll — reads as the older season being a lesser page rather than
+ * the same page about a different year. The build cost is real and is the
+ * price of that consistency.
  *
- * Note this is the latest season we hold RESULTS for, not the preview year.
- * Preview pages keep the single-page layout (their sections are reordered
- * around a game-less season and most of them are blurred), so a Roster route
- * pointing at one would open on a page that had already moved its roster.
+ * The preview year is the exception and keeps the single-page layout: its
+ * sections are reordered around a game-less season and most of them are
+ * blurred, so a Roster route pointing at one would open on a page that had
+ * already moved its roster somewhere else.
  */
 import { readAllTeams, readTeam } from "@/lib/static-data";
 import { teamSlug } from "@/lib/team-slug";
@@ -29,19 +31,22 @@ export async function latestSeasonYear(): Promise<number> {
   return latest;
 }
 
-/** (slug, year) for every team active in the most recent season. */
-export async function currentSeasonParams(): Promise<Array<{ slug: string; year: string }>> {
+/**
+ * (slug, year) for every team-season we hold.
+ *
+ * Deliberately does NOT include the preview year, which the [year] route adds
+ * for itself — see the note above.
+ */
+export async function allSeasonParams(): Promise<Array<{ slug: string; year: string }>> {
   const all = await readAllTeams();
-  let latest = 0;
-  for (const t of all) latest = Math.max(latest, t.year);
   const seen = new Set<string>();
   const out: Array<{ slug: string; year: string }> = [];
   for (const t of all) {
-    if (t.year !== latest) continue;
     const slug = teamSlug(t.name);
-    if (seen.has(slug)) continue;
-    seen.add(slug);
-    out.push({ slug, year: String(latest) });
+    const key = `${slug}|${t.year}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ slug, year: String(t.year) });
   }
   return out;
 }

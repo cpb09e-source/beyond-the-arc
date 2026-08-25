@@ -2,7 +2,6 @@ import { notFound } from "next/navigation";
 import { readTeam, readAllTeams } from "@/lib/static-data";
 import { TeamPageView, PREVIEW_SEASON_YEAR, PREVIEW_SEASON_LABEL } from "@/components/teams/team-page-view";
 import { loadTeamPageData } from "@/lib/team-page-data";
-import { latestSeasonYear } from "@/lib/team-tab-route";
 
 
 function slugFor(name: string): string {
@@ -97,11 +96,7 @@ export default async function TeamSeasonPage({
   const data = await loadTeamPageData(slug, year);
   if (!data) notFound();
 
-  // Only the current season is split into tabs. Older seasons render every
-  // section on one page, with the strip scrolling to anchors instead of
-  // navigating; preview pages get no strip at all. See team-tabs.tsx.
-  const latest = await latestSeasonYear();
-  const tab = !data.preview && year === latest ? "overview" : "all";
-
-  return <TeamPageView {...data} tab={tab} />;
+  // Every season is split into tabs. Preview pages are the exception and keep
+  // the single-page layout with no strip — see team-tab-route.ts.
+  return <TeamPageView {...data} tab={data.preview ? "all" : "overview"} />;
 }

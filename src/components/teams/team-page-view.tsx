@@ -516,11 +516,11 @@ export function TeamPageView({
           strip underneath, the ranks read as part of the masthead rather than
           as the first thing the tab is showing you.
 
-          In "all" mode these are anchors into the same page — see team-tabs. */}
+          Every season gets the same strip and the same routes — see the note
+          in team-tabs.tsx. */}
       {showTabs && (
         <TeamTabs
           active={tab === "all" ? "overview" : tab}
-          mode={tab === "all" ? "anchors" : "routes"}
           slug={slug}
           year={current.year}
           overviewHref={overviewHref}

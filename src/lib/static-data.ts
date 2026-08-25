@@ -132,9 +132,28 @@ export async function readIndex(): Promise<StaticIndex> {
 // site-wide window defined in src/lib/seasons.ts — floor 2013-14 plus the
 // excluded 2020-21 COVID season.
 
+/**
+ * CACHED, because this is the single most expensive read in the build.
+ *
+ * teams-all.json is 12 MB and takes ~51 ms to read and parse — measured — and
+ * every team page calls this once. At 5,009 team pages that was already about
+ * six minutes of the build spent re-parsing one unchanging file; with the tab
+ * split taking team-ish pages past 30,000 it would have been thirty.
+ *
+ * The cache holds the FILTERED array, so callers cannot mutate the shared copy
+ * through a filter of their own. Note they can still sort it in place — the
+ * same caveat processTeams() documents about its own cohort cache.
+ *
+ * Memory: one parse of a 12 MB document, held for the life of the process.
+ * That is a build-time process with --max-old-space-size set well above it,
+ * and a long-lived server would want this file behind a revalidate anyway.
+ */
+let _allTeamsCache: StaticTeamSeasonRow[] | null = null;
 export async function readAllTeams(): Promise<StaticTeamSeasonRow[]> {
+  if (_allTeamsCache) return _allTeamsCache;
   const all = await readJson<StaticTeamSeasonRow[]>("teams-all.json");
-  return all.filter((t) => isUsableSeason(t.year));
+  _allTeamsCache = all.filter((t) => isUsableSeason(t.year));
+  return _allTeamsCache;
 }
 
 /**
@@ -323,8 +342,18 @@ export async function readTeam(slug: string): Promise<{ name: string; seasons: S
   }
 }
 
+/**
+ * CACHED per season — ~19 ms a parse, and every team page for a season reads
+ * the same file. Keyed by year rather than held as one blob so a build that
+ * only touches recent seasons never parses the older ones.
+ */
+const _playersByYearCache = new Map<number, StaticPlayerRow[]>();
 export async function readPlayersForYear(year: number): Promise<StaticPlayerRow[]> {
-  return readJson<StaticPlayerRow[]>(`players-by-year/${year}.json`);
+  const hit = _playersByYearCache.get(year);
+  if (hit) return hit;
+  const rows = await readJson<StaticPlayerRow[]>(`players-by-year/${year}.json`);
+  _playersByYearCache.set(year, rows);
+  return rows;
 }
 
 /**

@@ -74,25 +74,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
-  // /teams/<slug>/<year>/{roster,shooting,pbp} — the current season's tabs.
-  // Only the current season has these as real routes; on older seasons the
-  // same content is on the season page itself, which is already listed above.
-  // See team-tab-route.ts for why. Indexing them is the entire reason they are
-  // routes rather than client-side tabs, so they belong here.
-  let latestYear = 0;
-  for (const t of allTeams) latestYear = Math.max(latestYear, t.year);
-  const seenCurrent = new Set<string>();
+  // /teams/<slug>/<year>/{roster,history,shooting,lineups,on-off} — every
+  // team-season's tabs. Indexing them is the entire reason they are routes
+  // rather than client-side tabs, so they belong here.
+  //
+  // SIZE: this is five entries per team-season on top of the one above, so the
+  // sitemap grows by roughly 25,000 URLs. A sitemap file caps at 50,000, and
+  // this takes the total to somewhere near 46,000 — under it, but no longer
+  // comfortably. The next thing that adds a per-team-season route should split
+  // this into a sitemap index rather than another block here.
+  const seenTabs = new Set<string>();
   for (const t of allTeams) {
-    if (t.year !== latestYear) continue;
     const slug = slugForTeam(t.name);
-    if (seenCurrent.has(slug)) continue;
-    seenCurrent.add(slug);
+    const key = `${slug}|${t.year}`;
+    if (seenTabs.has(key)) continue;
+    seenTabs.add(key);
     for (const seg of ["roster", "history", "shooting", "lineups", "on-off"]) {
       entries.push({
-        url: `${BASE_URL}/teams/${slug}/${latestYear}/${seg}/`,
+        url: `${BASE_URL}/teams/${slug}/${t.year}/${seg}/`,
         lastModified: now,
-        changeFrequency: "weekly",
-        priority: 0.5,
+        changeFrequency: "monthly",
+        priority: 0.4,
       });
     }
   }
