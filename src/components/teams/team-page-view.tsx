@@ -484,12 +484,12 @@ export function TeamPageView({
             </div>
           </div>
 
-          {/* The schedule sits ABOVE the tab strip, so it is on every tab
-              rather than only Overview. It is the season at a glance and the
-              way into any single box score, which a reader wants just as much
-              while looking at the roster as while looking at the ranks — and
-              a strip that changed height between tabs made the tabs jump. */}
-          {scheduleGames.length > 0 && (
+          {/* Overview only. It rode above the strip on every tab for a while,
+              on the theory that the season at a glance is wanted wherever you
+              are — but it is the single largest repeated block on the page,
+              and repeating it across six tabs roughly doubled the bytes stored
+              per team-season for something a reader is one click from anyway. */}
+          {show.overview && scheduleGames.length > 0 && (
             <div className="mt-8">
               <ScheduleTicker games={scheduleGames} teamName={team.name} blurBody={preview} />
             </div>
