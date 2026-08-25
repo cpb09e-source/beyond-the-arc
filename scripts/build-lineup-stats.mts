@@ -54,6 +54,8 @@ import {
   type LineupTotals,
 } from "@/lib/lineup-stats";
 import { teamSlug } from "@/lib/team-slug";
+// @ts-expect-error — plain JS helper shared with the other CBBD builders.
+import { norm, buildPlayerIndex, resolvePlayer } from "./lib/cbbd-join.mjs";
 
 const args = process.argv.slice(2);
 const opt = (n: string) => { const i = args.indexOf(`--${n}`); return i > -1 ? args[i + 1] : null; };
@@ -86,7 +88,7 @@ const OPP: Array<[keyof LineupTotals, string]> = [
 
 function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
-  let wroteFiles = 0, wroteLineups = 0;
+  let wroteFiles = 0, wroteLineups = 0, linkedPlayers = 0, totalPlayers = 0;
 
   for (let season = FROM; season <= TO; season++) {
     const dir = path.resolve("data/cbbd", String(season));
@@ -96,6 +98,21 @@ function main() {
       console.warn(`  skip ${season}: no stints/players on disk`);
       continue;
     }
+
+    /**
+     * CBBD player id -> bart player id, so a name in the grid can link to its
+     * player page (those routes are keyed on bart ids, not CBBD's).
+     *
+     * Uses the shared resolver rather than matching names by hand. `norm` here
+     * is the TEAM normaliser from cbbd-join and rewrites "St." to "state"; a
+     * hand-rolled one left 18.8% of teams unresolved when the assist builder
+     * tried it.
+     */
+    const bartIdx = (() => {
+      const fp = path.resolve("public/data/players-by-year", `${season}.json`);
+      if (!fs.existsSync(fp)) return buildPlayerIndex([]);
+      return buildPlayerIndex(JSON.parse(fs.readFileSync(fp, "utf8")));
+    })();
 
     const players = new Map<string, { name: string; team: string }>();
     for (const line of zlib.gunzipSync(fs.readFileSync(playersPath)).toString().split("\n").slice(1)) {
@@ -189,10 +206,20 @@ function main() {
         return Number(v.toFixed(4));
       });
     }
-    fs.writeFileSync(
-      path.join(OUT_DIR, `benchmarks-${season}.json`),
-      JSON.stringify({ season, n: qualifying.length, q }),
-    );
+    // NOT written on a --team run. ONLY_TEAM filters the accumulation, so
+    // `qualifying` would hold one team's units and the season's league field
+    // would be silently replaced by thirteen rows — every chip on every other
+    // team's page then reads against the wrong distribution. A single-team run
+    // is for iterating on one team's file; the benchmarks are a season-level
+    // artifact and only a full run may write them.
+    if (ONLY_TEAM) {
+      console.log(`  ${season}: --team set, leaving benchmarks-${season}.json alone`);
+    } else {
+      fs.writeFileSync(
+        path.join(OUT_DIR, `benchmarks-${season}.json`),
+        JSON.stringify({ season, n: qualifying.length, q }),
+      );
+    }
 
     for (const [team, teamMap] of byTeam) {
       const roster = new Map<string, string>();
@@ -217,17 +244,33 @@ function main() {
       const possAt = COLS.indexOf("poss");
       lineups.sort((a, b) => b.s[possAt]! - a.s[possAt]!);
 
+      const tk = norm(team);
+      let linked = 0;
+      const rosterOut = [...roster.entries()]
+        .map(([id, name]) => {
+          // null when the name does not resolve — the grid renders those as
+          // plain text rather than a link to a page that does not exist.
+          const bart = resolvePlayer(bartIdx, tk, name) as number | null;
+          if (bart != null) linked++;
+          return { id: Number(id), name, b: bart };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+      linkedPlayers += linked;
+      totalPlayers += rosterOut.length;
+
       fs.writeFileSync(
         path.join(OUT_DIR, `${teamSlug(team)}-${season}.json`),
-        JSON.stringify({ season, team, cols: COLS, players: [...roster.entries()].map(([id, name]) => ({ id: Number(id), name })).sort((a, b) => a.name.localeCompare(b.name)), lineups }),
+        JSON.stringify({ season, team, cols: COLS, players: rosterOut, lineups }),
       );
       wroteFiles++;
       wroteLineups += lineups.length;
     }
-    console.log(`  ${season}: ${byTeam.size} teams, ${qualifying.length.toLocaleString()} qualifying units benchmarked`);
+    console.log(`  ${season}: ${byTeam.size} teams, ${qualifying.length.toLocaleString()} qualifying units`);
   }
 
+  const pct = totalPlayers ? ((linkedPlayers / totalPlayers) * 100).toFixed(1) : "0";
   console.log(`wrote ${wroteFiles} team files, ${wroteLineups.toLocaleString()} lineups`);
+  console.log(`  ${linkedPlayers.toLocaleString()} of ${totalPlayers.toLocaleString()} players resolved to a bart id (${pct}%)`);
 }
 
 main();

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { PercentileChip } from "@/components/percentile-chip";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
@@ -62,7 +63,8 @@ export type LineupFile = {
   season: number;
   team: string;
   cols: string[];
-  players: Array<{ id: number; name: string }>;
+  /** `b` is the bart player id, or null when the name did not resolve. */
+  players: Array<{ id: number; name: string; b: number | null }>;
   lineups: Array<{ p: number[]; s: number[] }>;
 };
 
@@ -121,26 +123,31 @@ export function LineupExplorer({
   );
 
   /**
-   * Surname-only labels for the lineup cell, with an initial added ONLY where
-   * two players on this roster share a surname.
+   * "G. Yalden" — initial and surname, for every player rather than only where
+   * a roster has two of the same surname.
    *
    * Five full names run about sixty characters and the column was taking half
-   * the table's width, pushing the stats — the reason anyone opened the tab —
-   * off the right edge. Surnames are also how the sport actually refers to
-   * players. The full name stays on the cell's title for the ambiguous cases
-   * this cannot reach, like two players who share a surname AND an initial.
+   * the table's width, pushing the stats off the right edge. Adding the initial
+   * only on a collision was more compact still, but it made the label format
+   * depend on who else happens to be on the roster: the same player read
+   * "Yalden" one season and "G. Yalden" the next. One shape everywhere is
+   * worth the two characters. The full name stays on each link's title.
    */
   const shortOf = useMemo(() => {
-    const surname = (n: string) => n.trim().split(/\s+/).slice(1).join(" ") || n;
-    const counts = new Map<string, number>();
-    for (const p of data.players) counts.set(surname(p.name), (counts.get(surname(p.name)) ?? 0) + 1);
     const out = new Map<number, string>();
     for (const p of data.players) {
-      const last = surname(p.name);
-      out.set(p.id, (counts.get(last) ?? 0) > 1 ? `${p.name.trim()[0]}. ${last}` : last);
+      const parts = p.name.trim().split(/\s+/);
+      const last = parts.slice(1).join(" ");
+      out.set(p.id, last ? `${parts[0]![0]}. ${last}` : p.name.trim());
     }
     return out;
   }, [data.players]);
+
+  /** CBBD id -> bart id, for linking a name to its player page. */
+  const bartOf = useMemo(
+    () => new Map(data.players.map((p) => [p.id, p.b])),
+    [data.players],
+  );
 
   /** Unpack the flat `s` array once, against the file's own column order. */
   const base = useMemo(() => {
@@ -417,11 +424,7 @@ export function LineupExplorer({
                 {sorted.map((r) => (
                   <StatRow
                     key={r.ids.join("|")}
-                    label={
-                      <span className="text-ink" title={r.ids.map((id) => nameOf.get(id) ?? `#${id}`).join(", ")}>
-                        {r.ids.map((id) => shortOf.get(id) ?? `#${id}`).join(" · ")}
-                      </span>
-                    }
+                    label={<LineupNames ids={r.ids} shortOf={shortOf} nameOf={nameOf} bartOf={bartOf} />}
                     cols={cols}
                     totals={r.totals}
                     benchmarks={benchmarks}
@@ -444,6 +447,53 @@ export function LineupExplorer({
         lineup are not comparable on them.
       </p>
     </div>
+  );
+}
+
+/**
+ * A lineup's players, each linking to its own page.
+ *
+ * Unresolved names render as plain text rather than a dead link. About 2% of
+ * D-I players do not resolve to a bart id, and effectively all of a non-D-I
+ * opponent's roster does not — those have no player page to point at.
+ *
+ * The separator sits outside the links so a click cannot land on it, and it is
+ * marked aria-hidden: read aloud, "Hurley middot Long" is worse than the pause
+ * the surrounding elements already imply.
+ */
+function LineupNames({
+  ids, shortOf, nameOf, bartOf,
+}: {
+  ids: number[];
+  shortOf: Map<number, string>;
+  nameOf: Map<number, string>;
+  bartOf: Map<number, number | null>;
+}) {
+  return (
+    <span className="text-ink">
+      {ids.map((id, i) => {
+        const short = shortOf.get(id) ?? `#${id}`;
+        const full = nameOf.get(id) ?? short;
+        const bart = bartOf.get(id);
+        return (
+          <span key={id}>
+            {i > 0 && <span aria-hidden className="text-ink-muted/60"> · </span>}
+            {bart != null ? (
+              <Link
+                href={`/players/${bart}/`}
+                prefetch={false}
+                title={full}
+                className="hover:text-coral hover:underline underline-offset-2 transition-colors"
+              >
+                {short}
+              </Link>
+            ) : (
+              <span title={full}>{short}</span>
+            )}
+          </span>
+        );
+      })}
+    </span>
   );
 }
 
