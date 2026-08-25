@@ -45,7 +45,8 @@ export const RATING_COLS: TeamCol[] = [
   { label: "ORTG", total: "a_ortg",  pct: "a_ortg",  sortKey: "a_ortg",  fmt: "num1", title: "Schedule-adjusted offensive rating — points scored per 100 possessions" },
   { label: "DRTG", total: "a_drtg",  pct: "a_drtg",  sortKey: "a_drtg",  fmt: "num1", lowerBetter: true, title: "Schedule-adjusted defensive rating — points allowed per 100 possessions (lower is better)" },
   { label: "SOS",  total: "adj_sos", pct: "adj_sos", sortKey: "adj_sos", fmt: "num1", title: "Strength of schedule — average opponent adjusted net rating" },
-  { label: "PACE", total: "cbb_pace", pct: "cbb_pace", sortKey: "cbb_pace", fmt: "num1", title: "Possessions per game" },
+  // PACE was here and was removed on request. It stays a filterable and
+  // pinnable stat in TEAM_STAT_COLUMNS, and its percentile is still baked.
 ];
 
 export const FOUR_FACTOR_COLS: TeamCol[] = [

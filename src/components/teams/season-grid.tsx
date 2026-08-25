@@ -6,6 +6,7 @@ import { TeamLogo } from "@/components/team-logo";
 import { TourneyBadge } from "@/components/tourney-badge";
 import { SeedChip } from "@/components/coaches/seed-chip";
 import { PercentileChip } from "@/components/percentile-chip";
+import { StatLabel } from "@/components/explorer/sortable-th";
 import { confDisplay } from "@/lib/conf-display";
 import { cn } from "@/lib/utils";
 import {
@@ -14,7 +15,6 @@ import {
   SHOOTING_COLS,
   DEFAULT_COLS,
   fmtColValue,
-  type TeamCol,
 } from "@/lib/team-grid-columns";
 
 /**
@@ -60,8 +60,12 @@ export type SeasonGridRow = {
   pct: Record<string, number | null>;
 };
 
-/** Identity columns are sorted by their own keys; stats sort by TeamCol.sortKey. */
-type SortKey = "year" | "conference" | "record" | "confRecord" | "coach" | string;
+/**
+ * "year" is the order the table opens in. Season, Record and Conf Rec sort by
+ * their own keys; every stat column sorts by its TeamCol.sortKey. Conf and
+ * Coach do not sort at all — see the header row.
+ */
+type SortKey = "year" | "record" | "confRecord" | string;
 
 function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
@@ -105,12 +109,8 @@ export function SeasonGrid({
     const key = (r: SeasonGridRow): number | string | null => {
       switch (sortBy) {
         case "year":        return r.year;
-        case "conference":  return (r.conference ?? "").toLowerCase();
         case "record":      return winsOf(r.record);
         case "confRecord":  return winsOf(r.confRecord);
-        // "zzz" rather than null so teams with no coach on file sort to the
-        // bottom of an A-Z rather than jumping to the top of a Z-A.
-        case "coach":       return r.coach?.toLowerCase() ?? "zzz";
         default:            return r.vals[sortBy] ?? null;
       }
     };
@@ -165,18 +165,23 @@ export function SeasonGrid({
             </th>
           </tr>
           <tr>
-            <IdTh label="Season"  active={sortBy==="year"}       dir={sortDir} onClick={() => toggle("year","desc")} className="sticky left-0 z-30 border-r border-hairline" />
-            <IdTh label="Conf"    active={sortBy==="conference"} dir={sortDir} onClick={() => toggle("conference","asc")} className="hidden sm:table-cell" />
-            <IdTh label="Record"  active={sortBy==="record"}     dir={sortDir} onClick={() => toggle("record","desc")} />
-            <IdTh label="Conf Rec" active={sortBy==="confRecord"} dir={sortDir} onClick={() => toggle("confRecord","desc")} className="hidden md:table-cell" />
-            <IdTh label="Coach"   active={sortBy==="coach"}      dir={sortDir} onClick={() => toggle("coach","asc")} className="hidden lg:table-cell" />
+            {/* Conf and Coach do not sort. For a single team both are very
+                nearly constant — twelve rows of "America East" and twelve of
+                "John Becker" — so the control would reorder nothing a reader
+                could see. Season does sort, and is also how you get back to
+                the order the table opened in after sorting by a stat. */}
+            <HeadCell label="Season" sort={{ active: sortBy==="year", dir: sortDir, onClick: () => toggle("year","desc") }} className="sticky left-0 z-30 border-r border-hairline" />
+            <HeadCell label="Conf" className="hidden sm:table-cell" />
+            <HeadCell label="Record"   sort={{ active: sortBy==="record",     dir: sortDir, onClick: () => toggle("record","desc") }} />
+            <HeadCell label="Conf Rec" sort={{ active: sortBy==="confRecord", dir: sortDir, onClick: () => toggle("confRecord","desc") }} className="hidden md:table-cell" />
+            <HeadCell label="Coach" className="hidden lg:table-cell" />
             {DEFAULT_COLS.map((c, i) => (
-              <StatTh
+              <HeadCell
                 key={c.sortKey}
-                col={c}
-                active={sortBy === c.sortKey}
-                dir={sortDir}
-                onClick={() => toggle(c.sortKey, c.lowerBetter ? "asc" : "desc")}
+                label={c.label}
+                title={c.title}
+                align="right"
+                sort={{ active: sortBy === c.sortKey, dir: sortDir, onClick: () => toggle(c.sortKey, c.lowerBetter ? "asc" : "desc") }}
                 className={cn(GROUP_STARTS.has(i) && "border-l border-hairline")}
               />
             ))}
@@ -272,54 +277,77 @@ export function SeasonGrid({
   );
 }
 
-/** Identity-column header. Left-aligned, plain label. */
-function IdTh({
-  label, active, dir, onClick, className = "",
+/**
+ * A header cell, sortable or not.
+ *
+ * Visually this is the explorer's SortableTh — same typography, same coral
+ * arrow when active, same faint idle "↑↓" affordance — but it drives local
+ * state instead of the URL, so it cannot simply be that component. Keep the
+ * two in step by eye; they sit above the same grid and a reader moves between
+ * them.
+ *
+ * PADDING LIVES ON THE BUTTON, NOT THE CELL. On the <th> the button's
+ * `w-full h-full` fills only the content box, leaving the tappable area at the
+ * 16px-tall text with the surrounding padding inert — a third of the 44px
+ * touch-target guideline. Inside, the whole cell is tappable, and the extra
+ * vertical padding below `sm` takes a phone tap from 16px to 40px. This is the
+ * same bug and the same fix as the note in sortable-th.tsx.
+ */
+function HeadCell({
+  label, title, align = "left", sort, className = "",
 }: {
-  label: string; active: boolean; dir: "asc" | "desc"; onClick: () => void; className?: string;
+  label: string;
+  title?: string;
+  align?: "left" | "right";
+  /** Omit to render a static, non-sortable header. */
+  sort?: { active: boolean; dir: "asc" | "desc"; onClick: () => void };
+  className?: string;
 }) {
+  const base = "bg-paper-deep border-b border-hairline p-0 text-xs uppercase tracking-wide sm:tracking-widest font-medium select-none align-middle whitespace-nowrap transition-colors";
+  const alignClass = align === "right" ? "text-right" : "text-left";
+  const tone = sort?.active ? "text-ink" : "text-ink-muted";
+  const pad = "px-1.5 sm:px-3 py-3 sm:py-2";
+
+  const inner = (
+    <span className={cn("inline-flex items-center gap-1", align === "right" ? "justify-end" : "justify-start")}>
+      {/* StatLabel, not the raw string. The `uppercase` on this cell would
+          otherwise flatten "eFG%" to "EFG%" — StatLabel detects a
+          lowercase-initial label, opts it out of the CSS transform and
+          uppercases the tail by hand. Same component the explorer's headers
+          use, so the two rows capitalise identically. */}
+      <span><StatLabel label={label} /></span>
+      {sort && (
+        sort.active ? (
+          <span className="text-coral text-[0.65rem] leading-none">{sort.dir === "asc" ? "↑" : "↓"}</span>
+        ) : (
+          <span className="text-ink-muted/50 text-[0.6rem] leading-none tracking-tighter" aria-hidden>↑↓</span>
+        )
+      )}
+    </span>
+  );
+
+  if (!sort) {
+    return (
+      <th title={title ?? label} className={cn(base, alignClass, tone, pad, className)}>
+        {inner}
+      </th>
+    );
+  }
   return (
     <th
-      className={cn(
-        "bg-paper-deep border-b border-hairline px-2 sm:px-3 py-3 sm:py-2 text-xs uppercase tracking-widest font-medium text-left align-middle whitespace-nowrap",
-        active ? "text-ink" : "text-ink-muted",
-        className,
-      )}
-      aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
+      title={title ?? label}
+      className={cn(base, alignClass, tone, "cursor-pointer hover:bg-paper-deep/60", className)}
+      aria-sort={sort.active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
     >
-      <button type="button" onClick={onClick} className="inline-flex items-center gap-1 hover:text-coral transition-colors">
-        {label}
-        <SortArrow active={active} dir={dir} />
+      {/* `uppercase` is repeated here on purpose. Preflight resets
+          `text-transform: none` on button (normalize's fix for Firefox and
+          Edge not inheriting it), which silently undid the cell's uppercase
+          and left the sortable headers in mixed case beside the static ones —
+          "Record" against "SEASON". The explorer's version is an anchor and
+          never hit this. */}
+      <button type="button" onClick={sort.onClick} className={cn("block w-full h-full uppercase", pad, alignClass)}>
+        {inner}
       </button>
     </th>
   );
-}
-
-/** Stat-column header. Right-aligned to sit over the tabular values. */
-function StatTh({
-  col, active, dir, onClick, className = "",
-}: {
-  col: TeamCol; active: boolean; dir: "asc" | "desc"; onClick: () => void; className?: string;
-}) {
-  return (
-    <th
-      title={col.title}
-      className={cn(
-        "bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest font-medium text-right align-middle whitespace-nowrap",
-        active ? "text-ink" : "text-ink-muted",
-        className,
-      )}
-      aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
-    >
-      <button type="button" onClick={onClick} className="inline-flex items-center gap-1 hover:text-coral transition-colors">
-        {col.label}
-        <SortArrow active={active} dir={dir} />
-      </button>
-    </th>
-  );
-}
-
-function SortArrow({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
-  if (!active) return <span aria-hidden className="text-ink-muted/40">↕</span>;
-  return <span aria-hidden>{dir === "asc" ? "↑" : "↓"}</span>;
 }
