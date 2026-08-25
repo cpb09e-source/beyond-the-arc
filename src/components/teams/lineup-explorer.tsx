@@ -258,7 +258,11 @@ export function LineupExplorer({
               options={options}
               onChange={setOnCourt}
               placeholder="Search players…"
-              emptyLabel="Anyone"
+              // The trigger states the action rather than the current value.
+              // "Anyone" is accurate but reads as a filter already set to a
+              // permissive value; this reads as a control you have not used
+              // yet, which is what an empty selection means.
+              emptyLabel="Select On-Court Players"
               ariaLabel="Players required on the court"
               disabledValues={offIds.size ? new Set(offCourt) : undefined}
             />
@@ -271,7 +275,7 @@ export function LineupExplorer({
               options={options}
               onChange={setOffCourt}
               placeholder="Search players…"
-              emptyLabel="Nobody"
+              emptyLabel="Select Off-Court Players"
               ariaLabel="Players required off the court"
               disabledValues={onIds.size ? new Set(onCourt) : undefined}
             />
