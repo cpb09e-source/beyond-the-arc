@@ -174,7 +174,7 @@ exercise checkout. Add TEST-mode values for those two to `.env.local` if that
 matters; do not put the live key there.
 
 
-### 5. Canonical host — FIXED IN THE REPO, NEEDS A REBUILD TO LAND
+### 5. Canonical host — FIXED AND BUILT, NOT YET DEPLOYED
 
 Found 2026-08-25 while checking `NEXT_PUBLIC_SITE_URL`. The variable was not
 set anywhere, and the fallback is NOT the real domain:
@@ -202,9 +202,16 @@ Three parts, two of them done:
    file, and every matching path exists in the export.
 3. Netlify also has the variable now, for `siteOrigin()` in the functions.
 
-**None of this is live.** The built `out/` still contains the old sitemap,
-robots.txt and metadataBase. It takes a rebuild plus a deploy, so do not
-consider the SEO issue closed until both have run.
+Rebuilt 2026-08-25 and verified in `out/`:
+
+```
+robots.txt   Host: https://btacbb.xyz   Sitemap: https://btacbb.xyz/sitemap.xml
+sitemap.xml  40,022 <loc> on btacbb.xyz,  0 on beyond-the-arc.netlify.app
+og:url       https://btacbb.xyz/teams/vermont/2026/   (deep pages too)
+```
+
+**Still not live** — it takes the deploy. The 301 in netlify.toml also only
+takes effect once deployed, so until then both hosts keep answering 200.
 
 ### 6. Enforcement layer — RESEARCH DONE, PLAN STILL OWED
 
@@ -220,9 +227,9 @@ On/Off, School History) are exactly the surfaces nobody needs indexed.
 
 The build is not the risk; the upload is. Sequence, when authorized:
 
-0. The current `out/` is STALE for SEO — it predates the
-   `NEXT_PUBLIC_SITE_URL` fix, so its sitemap, robots.txt and metadataBase all
-   still say `beyond-the-arc.netlify.app`. Rebuild, do not deploy what is there.
+0. `out/` was rebuilt 2026-08-25 after the canonical-host fix and is current.
+   Rebuild anyway if anything in `src/`, `public/data/` or `.env.local` has
+   changed since.
 1. `node scripts/build-with-r2-stash.mjs` — the entry point netlify.toml names.
    The 8m12s measurement used `npm run build` instead. Same strip runs either
    way (`postbuild` fires it), but the wrapper does it inside the build's own
@@ -240,6 +247,41 @@ content hash, so a normal incremental deploy runs under 2 min, but nearly every
 team page changed in this redesign — this one behaves like a first deploy.
 
 ## Things learned the hard way — do not re-derive these
+
+**`next build` SURVIVES its parent dying; the wrapper does not.** A build
+launched through `scripts/build-with-r2-stash.mjs` was orphaned when the
+controlling process exited. The `next build` child kept running to completion
+on its own, but the wrapper and the npm lifecycle runner were both gone — so
+NEITHER the wrapper's own strip NOR the `postbuild` hook fired. The export
+finished looking healthy while carrying ~90 MB that should have been removed.
+
+After any interrupted build, check for a live `next build` before starting
+another one — a second build would clear `out/` from under the first:
+
+```sh
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
+  Where-Object { $_.CommandLine -like '*next*build*' }
+```
+
+If it is still running, wait for it and then run the strips BY HAND. There are
+TWO lists and `strip-r2-mirrored-from-out.mjs` only covers one of them:
+
+```sh
+node scripts/strip-r2-mirrored-from-out.mjs   # the 11 R2-mirrored dirs
+rm -rf out/data/players-by-year               # BUILD_ONLY_DIRS, wrapper-only, 50 MB
+```
+
+`public/data/players-by-year` must SURVIVE — 19 pipeline scripts and
+`readPlayersForYear()` read it off disk. Only the `out/` copy goes.
+
+**A build's `out/` is destroyed the moment the next build starts.** Next clears
+the export directory before writing. An interrupted build therefore leaves NO
+deployable artifact — not the new one and not the previous one. Do not treat a
+half-populated `out/` as a fallback.
+
+**Never pipe a long build through `tail`.** `tail` buffers everything until the
+process exits, so a killed build leaves a ZERO-BYTE log and no clue how far it
+got. Redirect straight to the file instead.
 
 **The CBBD plays endpoint buckets by UTC, so 21.3% of games appear in TWO
 daily files.** Measured on 2026: 1,337 of 6,263. Any builder that walks
