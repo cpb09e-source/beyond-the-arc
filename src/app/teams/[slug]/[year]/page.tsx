@@ -1,23 +1,9 @@
 import { notFound } from "next/navigation";
-import { readPlayersForYear, readImpactForYear, readImpactExtrasForYear, readTeam, readAllTeams, netRanksForTeam, readTeamSplits, readRankedPlayerIds, readConfRecordsByTeam, readGameLogsForYear, readAssistNetwork, readClockSplits, readTeamSeasonGrid } from "@/lib/static-data";
-import { toSeasonGridRows } from "@/lib/season-grid-rows";
-import { TeamPageView, buildRoster, attachRosterRanks, PREVIEW_SEASON_YEAR, PREVIEW_SEASON_LABEL } from "@/components/teams/team-page-view";
-import { buildShootingRanks, buildFourFactorRanks } from "@/components/teams/distribution-panel";
-import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches";
+import { readTeam, readAllTeams } from "@/lib/static-data";
+import { TeamPageView, PREVIEW_SEASON_YEAR, PREVIEW_SEASON_LABEL } from "@/components/teams/team-page-view";
+import { loadTeamPageData } from "@/lib/team-page-data";
+import { latestSeasonYear } from "@/lib/team-tab-route";
 
-// Same SHORT_ROUND mapping the coach page uses for tournament-round badges,
-// so a March-Madness game in the schedule ticker reads as "R1 / R2 / S16…"
-// matching the coach-resume tickers.
-const SHORT_ROUND: Record<string, string> = {
-  "First Four": "FF",
-  "R64": "R1",
-  "R32": "R2",
-  "Sweet 16": "S16",
-  "Elite Eight": "E8",
-  "Final Four": "F4",
-  "Runner-up": "NC",
-  "Champion": "NC",
-};
 
 function slugFor(name: string): string {
   return name
@@ -108,85 +94,14 @@ export default async function TeamSeasonPage({
   const year = Number(yearStr);
   if (!Number.isFinite(year)) notFound();
 
-  const team = await readTeam(slug);
-  if (!team) notFound();
+  const data = await loadTeamPageData(slug, year);
+  if (!data) notFound();
 
-  // Next-season preview — renders the last-completed-season layout with the
-  // game-dependent sections blurred (no 2026-27 games played yet). We hand
-  // TeamPageView the most-recent completed season for structure + the projected
-  // record/T-Rank for the hero.
-  const isPreview = year === PREVIEW_SEASON_YEAR;
-  const effYear = isPreview ? (team.seasons[0]?.year ?? year) : year;
+  // Only the current season is split into tabs. Older seasons render every
+  // section on one page, with the strip scrolling to anchors instead of
+  // navigating; preview pages get no strip at all. See team-tabs.tsx.
+  const latest = await latestSeasonYear();
+  const tab = !data.preview && year === latest ? "overview" : "all";
 
-  const current = team.seasons.find((s) => s.year === effYear);
-  if (!current) notFound();
-
-  const rosterPool = await readPlayersForYear(effYear);
-  const epmByBart = await readImpactForYear(effYear);
-  const extrasByBart = await readImpactExtrasForYear(effYear);
-  const rosterBase = buildRoster(rosterPool, current.id, effYear, epmByBart, extrasByBart);
-  const rankedPlayerIds = await readRankedPlayerIds();
-  const roster = attachRosterRanks(rosterBase, current.roster_ranks);
-  const confRecordsAll = await readConfRecordsByTeam();
-  const confRecords = confRecordsAll.get(team.name) ?? new Map();
-  const allTeams = await readAllTeams();
-  // Headline badge + the five-year average both read aNET position in D-I.
-  const netRanks = netRanksForTeam(allTeams, team.name, team.seasons.map((s) => s.year));
-  // Eight-way stat splits for the season on screen. Season file is read once
-  // and cached, so all ~365 team pages for a year share one parse.
-  const teamSplits = await readTeamSplits(effYear, team.name);
-  const assistNetwork = await readAssistNetwork(effYear, team.name);
-  const clockSplits = await readClockSplits(effYear, team.name);
-  const yearCohort = allTeams.filter((t) => t.year === effYear);
-  const shootingRanks = buildShootingRanks(current, yearCohort);
-  const fourFactorRanks = buildFourFactorRanks(current, yearCohort);
-  const allGames = await readGameLogsForYear(effYear);
-  // Tag any of this team's games that match a March Madness date so the
-  // ticker shows the round (R1, S16, NC, etc.) above the W/L pill.
-  const tourneyGamesAll = await loadTournamentGames();
-  const tourneyLookup = buildGamesByTeamYear(tourneyGamesAll);
-  const teamTourneyGames = gamesForTeamYear(tourneyLookup, team.name, effYear);
-  const roundByDate = new Map<string, string>();
-  for (const tg of teamTourneyGames) {
-    if (!tg.date) continue;
-    roundByDate.set(tg.date, SHORT_ROUND[tg.round] ?? tg.round);
-  }
-  const scheduleGames = allGames
-    // Join on name, NOT id. The CBBD migration re-keyed game_logs.team_id to
-    // CBBD's ids while team/*.json kept the bart id (Florida: 87 vs 3228), so
-    // `g.team_id === current.id` matched nothing and the ticker silently
-    // rendered as absent rather than broken. Names are exact across both
-    // exports — checked all 2,158 team-seasons, zero unmatched. Same rule
-    // find-game-trigger already follows.
-    .filter((g) => g.team_name === team.name)
-    .sort((a, b) => (a.game_date ?? "").localeCompare(b.game_date ?? ""))
-    .map((g) => {
-      const round = g.game_date ? roundByDate.get(g.game_date) : undefined;
-      return round ? { ...g, tournamentRound: round } : g;
-    });
-
-  // By season renders the explorer's grid when this team has been baked, and
-  // the older seasons table when it has not. See readTeamSeasonGrid().
-  const bakedSeasons = await readTeamSeasonGrid(slug);
-  const seasonGrid = bakedSeasons ? toSeasonGridRows(bakedSeasons, confRecords) : null;
-
-  return (
-    <TeamPageView
-      team={team}
-      current={current}
-      roster={roster}
-      slug={slug}
-      rankedPlayerIds={rankedPlayerIds}
-      confRecords={confRecords}
-      shootingRanks={shootingRanks}
-      fourFactorRanks={fourFactorRanks}
-      scheduleGames={scheduleGames}
-      netRanks={netRanks}
-      teamSplits={teamSplits}
-      assistNetwork={assistNetwork}
-      clockSplits={clockSplits}
-      seasonGrid={seasonGrid}
-      preview={isPreview}
-    />
-  );
+  return <TeamPageView {...data} tab={tab} />;
 }

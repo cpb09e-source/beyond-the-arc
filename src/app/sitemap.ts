@@ -74,6 +74,29 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
+  // /teams/<slug>/<year>/{roster,shooting,pbp} — the current season's tabs.
+  // Only the current season has these as real routes; on older seasons the
+  // same content is on the season page itself, which is already listed above.
+  // See team-tab-route.ts for why. Indexing them is the entire reason they are
+  // routes rather than client-side tabs, so they belong here.
+  let latestYear = 0;
+  for (const t of allTeams) latestYear = Math.max(latestYear, t.year);
+  const seenCurrent = new Set<string>();
+  for (const t of allTeams) {
+    if (t.year !== latestYear) continue;
+    const slug = slugForTeam(t.name);
+    if (seenCurrent.has(slug)) continue;
+    seenCurrent.add(slug);
+    for (const seg of ["roster", "shooting", "pbp"]) {
+      entries.push({
+        url: `${BASE_URL}/teams/${slug}/${latestYear}/${seg}/`,
+        lastModified: now,
+        changeFrequency: "weekly",
+        priority: 0.5,
+      });
+    }
+  }
+
   // /players/<bartId> — long tail; lower priority but worth indexing
   for (const id of idx.playerIds) {
     entries.push({

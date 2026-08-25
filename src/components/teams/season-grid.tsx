@@ -150,8 +150,8 @@ export function SeasonGrid({
               cannot fix it — the structures have to match. */}
           <tr>
             <th className="sticky left-0 z-30 bg-paper-deep h-6 p-0 border-r border-hairline" />
-            <th className="bg-paper-deep h-6 p-0 hidden sm:table-cell" />
             <th className="bg-paper-deep h-6 p-0" />
+            <th className="bg-paper-deep h-6 p-0 hidden md:table-cell" />
             <th className="bg-paper-deep h-6 p-0 hidden md:table-cell" />
             <th className="bg-paper-deep h-6 p-0 hidden lg:table-cell" />
             <th colSpan={RATING_COLS.length} className="bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-ink-muted text-center border-l border-hairline align-middle">
@@ -171,9 +171,13 @@ export function SeasonGrid({
                 could see. Season does sort, and is also how you get back to
                 the order the table opened in after sorting by a stat. */}
             <HeadCell label="Season" sort={{ active: sortBy==="year", dir: sortDir, onClick: () => toggle("year","desc") }} className="sticky left-0 z-30 border-r border-hairline" />
-            <HeadCell label="Conf" className="hidden sm:table-cell" />
             <HeadCell label="Record"   sort={{ active: sortBy==="record",     dir: sortDir, onClick: () => toggle("record","desc") }} />
             <HeadCell label="Conf Rec" sort={{ active: sortBy==="confRecord", dir: sortDir, onClick: () => toggle("confRecord","desc") }} className="hidden md:table-cell" />
+            {/* Conf drops at the SAME breakpoint as Conf Rec, not a smaller
+                one. It sits to their right now, and a column that survives to
+                a narrower screen than the column on its left would appear to
+                jump left as the viewport shrinks. */}
+            <HeadCell label="Conf" className="hidden md:table-cell" />
             <HeadCell label="Coach" className="hidden lg:table-cell" />
             {DEFAULT_COLS.map((c, i) => (
               <HeadCell
@@ -214,23 +218,22 @@ export function SeasonGrid({
                     <TourneyBadge teamName={r.teamName} year={r.year} />
                   </Link>
                 </td>
-                {/* Bart's raw code ("AE", "BW", "B10") rather than the display
-                    name. On a single team's page the column is twelve rows of
-                    the same value in the narrowest identity slot, so the full
-                    name was spending width to say one thing twelve times. The
-                    display name is the title, for anyone who does not know the
-                    code. */}
-                <td
-                  title={confDisplay(r.conference)}
-                  className={cn("px-3 py-1 text-ink-muted whitespace-nowrap transition-colors hidden sm:table-cell", ROW_HOVER)}
-                >
-                  {r.conference ?? "—"}
-                </td>
                 <td className={cn("px-1.5 sm:px-3 py-1 tabular font-semibold text-ink whitespace-nowrap transition-colors", ROW_HOVER)}>
                   {r.record ?? "—"}
                 </td>
                 <td className={cn("px-3 py-1 tabular text-ink-soft whitespace-nowrap transition-colors hidden md:table-cell", ROW_HOVER)}>
                   {r.confRecord ?? "—"}
+                </td>
+                {/* Bart's raw code ("AE", "BW", "B10") rather than the display
+                    name. On a single team's page this is twelve rows of the
+                    same value, so the full name was spending width to say one
+                    thing twelve times. The display name is the title, for
+                    anyone who does not know the code. */}
+                <td
+                  title={confDisplay(r.conference)}
+                  className={cn("px-3 py-1 text-ink-muted whitespace-nowrap transition-colors hidden md:table-cell", ROW_HOVER)}
+                >
+                  {r.conference ?? "—"}
                 </td>
                 <td className={cn("px-3 py-1 text-ink-muted whitespace-nowrap transition-colors hidden lg:table-cell", ROW_HOVER)}>
                   {r.coach ?? "—"}

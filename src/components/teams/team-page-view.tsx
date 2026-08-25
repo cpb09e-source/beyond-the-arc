@@ -11,6 +11,7 @@ import { SeasonSwitcher } from "@/components/teams/season-switcher";
 import { NationalRanks } from "@/components/teams/national-ranks";
 import { SortableSeasonsTable } from "@/components/teams/sortable-seasons-table";
 import { SeasonGrid, type SeasonGridRow } from "@/components/teams/season-grid";
+import { TeamTabs, TAB_ANCHORS, type TeamTab } from "@/components/teams/team-tabs";
 import { SortableRosterTable } from "@/components/teams/sortable-roster-table";
 import { DistributionPanel, type DistributionRank } from "@/components/teams/distribution-panel";
 import { AssistNetworkPanel } from "@/components/teams/assist-network-panel";
@@ -270,6 +271,8 @@ export function TeamPageView({
   assistNetwork,
   clockSplits,
   seasonGrid,
+  tab = "all",
+  overviewHref,
   preview = false,
 }: {
   team: { name: string; seasons: StaticTeamSeasonRow[] };
@@ -296,6 +299,22 @@ export function TeamPageView({
    * to leave the site in rather than a broken one.
    */
   seasonGrid: SeasonGridRow[] | null;
+  /**
+   * Which tab to render. "all" is the whole page in one scroll — every older
+   * season, and every preview page — and is what this component did before the
+   * split. The four named tabs each render the hero plus their own sections.
+   *
+   * The tab strip appears in BOTH cases; on "all" it scrolls to anchors rather
+   * than navigating. See team-tabs.tsx for why only the current season gets
+   * real routes.
+   */
+  tab?: TeamTab | "all";
+  /**
+   * Where the Overview tab points. The bare /teams/<slug> route renders the
+   * same content as /teams/<slug>/<year>, so it passes its own URL rather than
+   * sending a reader already on Overview to a second address for it.
+   */
+  overviewHref?: string;
   // Preview mode — renders the last-completed-season layout with game-dependent
   // sections blurred, the roster swapped for the upcoming-season client roster,
   // record shown as 0-0 and BTA rank as TBD.
@@ -346,6 +365,21 @@ export function TeamPageView({
         <StatTile label="Adj Tempo" value={fmtNum(currentTrank?.adjt ?? null, 1)} sub="possessions / 40 min" />
       </div>
     );
+
+  // Which sections this render is responsible for. "all" is one long scroll
+  // (older seasons, and every preview page); a named tab renders the hero plus
+  // its own sections and nothing else.
+  const showAll = tab === "all";
+  const show = {
+    overview: showAll || tab === "overview",
+    roster:   showAll || tab === "roster",
+    shooting: showAll || tab === "shooting",
+    pbp:      showAll || tab === "pbp",
+  };
+  // Preview pages keep the single-page layout and get no strip. Their sections
+  // are reordered around a blurred, game-less season, so a tab that promised
+  // "Shooting" would open on a blurred panel.
+  const showTabs = !preview;
 
   return (
     <div style={cssVars}>
@@ -447,6 +481,11 @@ export function TeamPageView({
             </div>
           </div>
 
+          {/* The schedule sits ABOVE the tab strip, so it is on every tab
+              rather than only Overview. It is the season at a glance and the
+              way into any single box score, which a reader wants just as much
+              while looking at the roster as while looking at the ranks — and
+              a strip that changed height between tabs made the tabs jump. */}
           {scheduleGames.length > 0 && (
             <div className="mt-8">
               <ScheduleTicker games={scheduleGames} teamName={team.name} blurBody={preview} />
@@ -465,12 +504,31 @@ export function TeamPageView({
               />
             </div>
           )}
-
-          {/* On a preview page this block moves BELOW the roster — see the
-              note where it renders. Everywhere else it closes the hero. */}
-          {!preview && <div className="mt-5">{ranksBlock}</div>}
         </div>
       </section>
+
+      {/* The strip sits under the masthead — identity and schedule, the two
+          things every tab shows — and above everything it switches between.
+          The rank barbell is Overview content and moved below it: with the
+          strip underneath, the ranks read as part of the masthead rather than
+          as the first thing the tab is showing you.
+
+          In "all" mode these are anchors into the same page — see team-tabs. */}
+      {showTabs && (
+        <TeamTabs
+          active={tab === "all" ? "overview" : tab}
+          mode={tab === "all" ? "anchors" : "routes"}
+          slug={slug}
+          year={current.year}
+          overviewHref={overviewHref}
+        />
+      )}
+
+      {/* On a preview page the ranks move BELOW the roster — see the note
+          where they render. Everywhere else they open Overview. */}
+      {show.overview && !preview && (
+        <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8">{ranksBlock}</section>
+      )}
 
       {/* PREVIEW ORDER: schedule, then the roster, then everything else.
           Nobody arrives at a 0-0 team for its rankings — the season hasn't
@@ -498,15 +556,15 @@ export function TeamPageView({
           things worth knowing, this is the rest of it on demand.
           Deliberately tighter than a normal section break (the hero's own pb-8
           already contributes 32px) because the two belong together. */}
-      {teamSplits && (
-        <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-2">
+      {show.overview && teamSplits && (
+        <section id={TAB_ANCHORS.overview} className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-2 scroll-mt-20">
           <TeamStatsPanel splits={teamSplits} blurBody={preview} />
         </section>
       )}
 
       {/* Preview rosters render above, right under the schedule. */}
-      {!preview && (
-      <section className="mx-auto max-w-[88rem] px-4 lg:px-10 mt-5">
+      {!preview && show.roster && (
+      <section id={TAB_ANCHORS.roster} className="mx-auto max-w-[88rem] px-4 lg:px-10 mt-5 scroll-mt-20">
         {/* px-2 on top of the section's px-4 lands the heading on the same 24px
             margin as every other block on the page — see the note in
             season-preview.tsx for why the section itself can't just be px-6. */}
@@ -530,7 +588,8 @@ export function TeamPageView({
       {/* Shooting + Four Factors sit BELOW the roster now. They are a closing
           detail on the season, not the way into it — the reader wants the team,
           then the players, then the breakdown. */}
-      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {show.shooting && (
+      <section id={TAB_ANCHORS.shooting} className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8 scroll-mt-20">
         <DistributionPanel title="Shooting" ranks={shootingRanks} blurBody={preview} />
         <DistributionPanel title="Four Factors" ranks={fourFactorRanks} blurBody={preview}>
           {current.four_factor_record && current.four_factor_record.games > 0 && (
@@ -550,13 +609,14 @@ export function TeamPageView({
           )}
         </DistributionPanel>
       </section>
+      )}
 
       {/* Play-by-play derivatives. Both are reconstructed from the CBBD plays
           archive rather than reported by anyone, and both are absent before
           2014 where there is no play-by-play — so the section disappears
           entirely rather than rendering two empty frames. */}
-      {(clockSplits || assistNetwork) && (
-        <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {show.pbp && (clockSplits || assistNetwork) && (
+        <section id={TAB_ANCHORS.pbp} className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8 scroll-mt-20">
           {clockSplits ? <ClockSplitsPanel splits={clockSplits} /> : <div />}
           {assistNetwork ? <AssistNetworkPanel network={assistNetwork} /> : <div />}
         </section>
@@ -567,6 +627,7 @@ export function TeamPageView({
 
       {/* BY SEASON — headline ledger. Mirrors the coach page's "Season by
           season" treatment so cross-page recognition is consistent. */}
+      {show.overview && (
       <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-12 mb-20">
         <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
           {/* Top accent rule — coral bar marks this table as the headline. */}
@@ -610,6 +671,7 @@ export function TeamPageView({
           )}
         </div>
       </section>
+      )}
     </div>
   );
 }

@@ -1,20 +1,8 @@
 import { notFound } from "next/navigation";
-import { readIndex, readPlayersForYear, readImpactForYear, readImpactExtrasForYear, readTeam, readRankedPlayerIds, readConfRecordsByTeam, readAllTeams, netRanksForTeam, readTeamSplits, readGameLogsForYear, readAssistNetwork, readClockSplits, readTeamSeasonGrid } from "@/lib/static-data";
-import { toSeasonGridRows } from "@/lib/season-grid-rows";
-import { TeamPageView, buildRoster, attachRosterRanks } from "@/components/teams/team-page-view";
-import { buildShootingRanks, buildFourFactorRanks } from "@/components/teams/distribution-panel";
-import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches";
+import { readIndex, readTeam } from "@/lib/static-data";
+import { TeamPageView } from "@/components/teams/team-page-view";
+import { loadTeamPageData } from "@/lib/team-page-data";
 
-const SHORT_ROUND: Record<string, string> = {
-  "First Four": "FF",
-  "R64": "R1",
-  "R32": "R2",
-  "Sweet 16": "S16",
-  "Elite Eight": "E8",
-  "Final Four": "F4",
-  "Runner-up": "NC",
-  "Champion": "NC",
-};
 
 export async function generateStaticParams() {
   const idx = await readIndex();
@@ -51,76 +39,18 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   };
 }
 
-export default async function TeamPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function TeamPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
   const { slug } = await params;
-  const team = await readTeam(slug);
-  if (!team || team.seasons.length === 0) notFound();
 
-  // Default to the team's most recent season.
-  const current = team.seasons[0]!;
-  const rosterPool = await readPlayersForYear(current.year);
-  const epmByBart = await readImpactForYear(current.year);
-  const extrasByBart = await readImpactExtrasForYear(current.year);
-  const rosterBase = buildRoster(rosterPool, current.id, current.year, epmByBart, extrasByBart);
-  const rankedPlayerIds = await readRankedPlayerIds();
-  const roster = attachRosterRanks(rosterBase, current.roster_ranks);
-  const confRecordsAll = await readConfRecordsByTeam();
-  const confRecords = confRecordsAll.get(team.name) ?? new Map();
-  const allTeams = await readAllTeams();
-  // Headline badge + the five-year average both read aNET position in D-I.
-  const netRanks = netRanksForTeam(allTeams, team.name, team.seasons.map((s) => s.year));
-  // Eight-way stat splits for the season on screen. Season file is read once
-  // and cached, so all ~365 team pages for a year share one parse.
-  const teamSplits = await readTeamSplits(current.year, team.name);
-  // Both read one shared file per dataset, cached for the whole build — see
-  // the note on the readers. Only this team's slice reaches the HTML.
-  const assistNetwork = await readAssistNetwork(current.year, team.name);
-  const clockSplits = await readClockSplits(current.year, team.name);
-  const yearCohort = allTeams.filter((t) => t.year === current.year);
-  const shootingRanks = buildShootingRanks(current, yearCohort);
-  const fourFactorRanks = buildFourFactorRanks(current, yearCohort);
-  const allGames = await readGameLogsForYear(current.year);
-  // Tag March Madness games with their round label so the ticker shows
-  // "R1 / R2 / S16…" above the W/L pill. Match by (team, year, date).
-  const tourneyGamesAll = await loadTournamentGames();
-  const tourneyLookup = buildGamesByTeamYear(tourneyGamesAll);
-  const teamTourneyGames = gamesForTeamYear(tourneyLookup, team.name, current.year);
-  const roundByDate = new Map<string, string>();
-  for (const tg of teamTourneyGames) {
-    if (!tg.date) continue;
-    roundByDate.set(tg.date, SHORT_ROUND[tg.round] ?? tg.round);
-  }
-  const scheduleGames = allGames
-    // Name join — see the note on the [year] route. game_logs.team_id is CBBD's
-    // id space; team/*.json carries the bart id, so they never match.
-    .filter((g) => g.team_name === team.name)
-    .sort((a, b) => (a.game_date ?? "").localeCompare(b.game_date ?? ""))
-    .map((g) => {
-      const round = g.game_date ? roundByDate.get(g.game_date) : undefined;
-      return round ? { ...g, tournamentRound: round } : g;
-    });
+  // No year in the URL: the most recent season, which is also the only one
+  // split into tabs. overviewHref keeps the Overview tab pointing at this URL
+  // rather than sending a reader already on it to /teams/<slug>/<year>/.
+  const data = await loadTeamPageData(slug);
+  if (!data) notFound();
 
-  // By season renders the explorer's grid when this team has been baked, and
-  // the older seasons table when it has not. See readTeamSeasonGrid().
-  const bakedSeasons = await readTeamSeasonGrid(slug);
-  const seasonGrid = bakedSeasons ? toSeasonGridRows(bakedSeasons, confRecords) : null;
-
-  return (
-    <TeamPageView
-      team={team}
-      current={current}
-      roster={roster}
-      slug={slug}
-      rankedPlayerIds={rankedPlayerIds}
-      confRecords={confRecords}
-      shootingRanks={shootingRanks}
-      fourFactorRanks={fourFactorRanks}
-      scheduleGames={scheduleGames}
-      netRanks={netRanks}
-      teamSplits={teamSplits}
-      assistNetwork={assistNetwork}
-      clockSplits={clockSplits}
-      seasonGrid={seasonGrid}
-    />
-  );
+  return <TeamPageView {...data} tab="overview" overviewHref={`/teams/${slug}/`} />;
 }
