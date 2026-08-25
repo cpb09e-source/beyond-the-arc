@@ -483,7 +483,11 @@ function LineupNames({
                 href={`/players/${bart}/`}
                 prefetch={false}
                 title={full}
-                className="hover:text-coral hover:underline underline-offset-2 transition-colors"
+                // Colour shift only, no underline — the same treatment the
+                // roster table one tab over gives a player link. Five links to
+                // a cell and thirteen cells to a screen, an underline on each
+                // turns the column into a ruled block on hover.
+                className="hover:text-coral transition-colors"
               >
                 {short}
               </Link>
