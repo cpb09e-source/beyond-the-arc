@@ -125,6 +125,14 @@ function run(season) {
   const totals = new Map();
   let shots = 0, dropped = 0;
 
+  // The API's /plays/date buckets by UTC, so a 7pm-ET game appears in BOTH its
+  // ET date's pull and the next UTC day's. Measured on 2026: 1,337 of 6,263
+  // games (21.3%) are present twice. Without this every count from those games
+  // was doubled. Rates survived it — numerator and denominator doubled
+  // together — which is why it went unnoticed, but any total did not.
+  // cbbd-build-stints.mjs has always guarded this; these two did not.
+  const seenGames = new Set();
+
   for (const f of files) {
     let rows;
     try {
@@ -140,6 +148,8 @@ function run(season) {
     const byGame = new Map();
     for (const p of rows) {
       if (eligible && !eligible.has(p.gameId)) continue;
+      // Already walked in an earlier file — see the note above.
+      if (seenGames.has(p.gameId) && !byGame.has(p.gameId)) continue;
       let g = byGame.get(p.gameId);
       if (!g) { g = []; byGame.set(p.gameId, g); }
       g.push({
@@ -155,7 +165,8 @@ function run(season) {
     }
     rows = null;
 
-    for (const [, raw] of byGame) {
+    for (const [gid, raw] of byGame) {
+      seenGames.add(gid);
       const plays = chronological(raw);
       let period = null;
       let clockStart = null;   // secondsRemaining at the last shot-clock reset
