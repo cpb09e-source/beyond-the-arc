@@ -26,6 +26,14 @@ import { cn } from "@/lib/utils";
  * fetched them stays, because the conference split still needs to know who the
  * opponent was.
  *
+ * ITS TOTALS CAN DIFFER FROM THE CAREER TABLE'S BY A HAIR, and that is the
+ * sources disagreeing rather than a bug here. This table sums the CBBD box
+ * archive game by game; the career table reads Bart's season row. Measured on
+ * Bradley's 25-26: both say 170 makes, the box archive says 368 attempts and
+ * Bart says 367, so 46.2% against 46.3%. Do not "fix" one to match the other —
+ * each is internally consistent, and the game log has to add up to its own rows
+ * or the totals line is a lie about the table it sits under.
+ *
  * The percentile heat-map shading a commercial box score puts behind these
  * numbers is deliberately absent. It ranks a player against a cohort, and this
  * table is one player against himself across a season; the same 39% would be
@@ -336,8 +344,6 @@ export function PlayerGameLog({
     );
   }
 
-  const splitLabel = SPLITS.find((s) => s.key === split)?.label ?? "";
-
   return (
     <>
       {/* The heading shares the control band rather than sitting in a tinted
@@ -400,16 +406,6 @@ export function PlayerGameLog({
             </Select>
           </label>
         </div>
-      </div>
-
-      {/* Its own row under the controls. Sharing their line meant it sat level
-          with a select on a phone and read as a third field rather than as a
-          result. Always states what the split left, because eleven rows where
-          there were thirty-one reads as a fault otherwise. */}
-      <div className="px-5 lg:px-6 pt-1.5 pb-3.5 text-xs text-ink-muted">
-        <span className="tabular text-ink font-semibold">{shown.length}</span>
-        {shown.length === 1 ? " game" : " games"}
-        {split !== "all" && <> · {splitLabel.toLowerCase()}</>}
       </div>
 
       <div className="overflow-x-auto [-webkit-overflow-scrolling:touch] overscroll-x-contain">
@@ -496,9 +492,8 @@ export function PlayerGameLog({
               <tr className="border-t-2 border-ink/15 bg-paper-deep/40 font-medium">
                 <Td className="font-semibold text-ink">Totals</Td>
                 <Td align="center" className="text-ink-muted">—</Td>
-                {/* Blank. The game count is already stated in the control
-                    band above the table, and repeating it in the opponent
-                    column read as though it were an opponent. */}
+                {/* Blank. A count here read as though it were an opponent,
+                    and the row is already labelled Totals. */}
                 <Td />
                 <Td align="right" className="tabular">{fmtInt(t.mins)}</Td>
                 {cols.map((c) => (
