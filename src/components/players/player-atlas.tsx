@@ -2,6 +2,7 @@ import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { TopHundredSeal } from "@/components/players/top-hundred-seal";
+import type { StatLine } from "@/lib/player-stat-line";
 import { NbaTeamLogo } from "@/components/nba-team-logo";
 import type { PlayerRanksSeason } from "@/lib/static-data";
 import { formatHeight } from "@/lib/height";
@@ -135,6 +136,80 @@ type DraftChip = { team: string; logo: string | null; round: number; pick: numbe
 
 /** The vitals run, rendered once and placed twice — under the name on desktop,
  *  full width under the photo on a phone. */
+/**
+ * The stat band — seven figures for the season on screen. Counting stats on the
+ * first row, shooting on the second.
+ *
+ * BELOW xl ONLY, and the breakpoint is the whole argument. The career table
+ * under this hero is the canonical record, and where it shows all twenty of its
+ * columns at once a summary above it is twelve numbers repeated a card apart —
+ * which is exactly why this band was taken out once already. But that table
+ * swipes sideways whenever it does not fit, and MEASURED, it needs about 1293px
+ * of wrapper to lay out: at 1440 it fits exactly, at 1280 it is 13px short, and
+ * at 1024 it overflows by 269px because it bottoms out on its own 58rem minimum
+ * and the reader is left with three or four columns of a twenty-column row.
+ *
+ * xl is 1280 — the last breakpoint where the table is within a hairline of
+ * answering for itself. lg was the obvious guess and it is wrong by 256px.
+ *
+ * THE SEASON ONLY. A career figure under each of these was tried and dropped:
+ * it doubled the band's height for a line the career table states in full a
+ * card below, and on a 390px phone "45.2 CAREER" measured 79px against a 75px
+ * cell, so the shooting row clipped where the counting row did not. The band is
+ * the answer to "what is this player doing this year"; the table answers the
+ * rest.
+ */
+function StatBand({ now }: { now: StatLine }) {
+  // ORDER IS THE LAYOUT. Four counting stats then three shooting rates, in a
+  // grid four wide — so a phone gets games/PPG/RPG/APG on one line and
+  // FG%/3P%/FT% on the next without either row being declared. The split is
+  // also the right one to read on: the first four are how much a player did and
+  // the last three are how well he did it, and they do not compare to each
+  // other. From md the grid opens to seven and they all sit on one line.
+  const cells = [
+    { unit: "Games", value: int(now.games) },
+    { unit: "PPG", value: one(now.ppg) },
+    { unit: "RPG", value: one(now.rpg) },
+    { unit: "APG", value: one(now.apg) },
+    { unit: "FG%", value: one(now.fgPct) },
+    { unit: "3P%", value: one(now.fg3Pct) },
+    { unit: "FT%", value: one(now.ftPct) },
+  ];
+
+  return (
+    <div
+      // A hairline, not the 2px rule the masthead used to carry — that one read
+      // as a stray border once nothing followed it. Here something does follow
+      // it, and the band needs separating from the vitals it sits under.
+      className="xl:hidden mt-5 pt-4 border-t border-ink/10 grid grid-cols-4 md:grid-cols-7 gap-x-3 gap-y-4 md:gap-0"
+    >
+      {cells.map((c) => (
+        <div
+          key={c.unit}
+          // Rules only from md, where all seven are on one line. Below that the
+          // band wraps, and a left border on a cell that has become first of its
+          // row draws a rule down the middle of the block.
+          className="min-w-0 md:border-l md:border-ink/10 md:first:border-l-0 md:px-3.5 md:first:pl-0"
+        >
+          <div className="label">{c.unit}</div>
+          <div className="tabular text-ink leading-[1.1] mt-1 text-[1.5rem] sm:text-[1.75rem] font-medium tracking-[-0.035em]">
+            {c.value}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function int(x: number | null): string {
+  return x === null || x === undefined ? "—" : Math.round(x).toLocaleString("en-US");
+}
+function one(x: number | null): string {
+  return x === null || x === undefined
+    ? "—"
+    : x.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
 function Vitals({
   vitals, draft, bucket, playerClass,
 }: {
@@ -197,6 +272,7 @@ export function PlayerAtlas({
   highSchool,
   rsci,
   playerClass,
+  statNow,
   draft,
   heroRanks,
   bucket,
@@ -224,6 +300,9 @@ export function PlayerAtlas({
   rsci: number | null;
   /** Fr | So | Jr | Sr for the season on screen. Null where the source has none. */
   playerClass: string | null;
+  /** The seven-figure line for the season on screen. Only rendered below xl —
+   *  see the note on StatBand. */
+  statNow: StatLine;
   /** Rendered as a chip beside the vitals — being drafted is a permanent fact
    *  about the player, so it belongs with the identity rather than in a banner
    *  that reads as news. */
@@ -328,6 +407,8 @@ export function PlayerAtlas({
             </div>
           )}
         </div>
+
+        <StatBand now={statNow} />
 
         {banner && <div className="pt-4">{banner}</div>}
 

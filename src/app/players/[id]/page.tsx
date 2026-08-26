@@ -7,6 +7,7 @@ import { CareerTable } from "@/components/players/career-table";
 import { PlayerOverview, type PlayerOverviewOption } from "@/components/players/player-overview";
 import { PlayerShotChart } from "@/components/players/player-shot-chart";
 import { PlayerAtlas } from "@/components/players/player-atlas";
+import { seasonLine } from "@/lib/player-stat-line";
 
 export async function generateStaticParams() {
   // Only emit profile pages for ranked players. Unranked players (didn't
@@ -203,6 +204,10 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         highSchool={null}
         rsci={rsci}
         playerClass={current.class}
+        // Straight off Bart's season row, so the band and the career table's
+        // own top row are reading the same columns through the same
+        // arithmetic. See the note in player-stat-line.
+        statNow={seasonLine(current)}
         draft={
           draft && draft.pick !== null
             ? {
