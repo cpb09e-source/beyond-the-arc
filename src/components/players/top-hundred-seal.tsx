@@ -31,10 +31,15 @@ export function TopHundredSeal({
   size?: number;
   /**
    * The small variant, for a phone. Drops the board label and stacks TOP over
-   * 100 — at 60px a one-line "TOP 100" would have to set at about 4.5px to fit
-   * the inner circle, which is not type any more. Stacking buys the words their
-   * size back, and the colour still says which board it is: gold overall, blue
-   * mid-major, the same everywhere.
+   * 100 — at this diameter a one-line "TOP 100" would have to set at about
+   * 4.5px to fit the inner circle, which is not type any more. Stacking buys
+   * the words their size back, and the colour still says which board it is:
+   * gold overall, blue mid-major, the same everywhere.
+   *
+   * The stacked label sets at 0.155 of the diameter, not 0.12. At the original
+   * 54px mark that ratio put "TOP" and "100" at 6.5px — present, but not
+   * readable at arm's length on a phone, which is the only place this variant
+   * renders.
    */
   compact?: boolean;
   className?: string;
@@ -45,16 +50,30 @@ export function TopHundredSeal({
   const mid = season.rankNonPower !== null && season.rankNonPower <= CUTOFF ? season.rankNonPower : null;
   if (overall === null && mid === null) return null;
 
+  // A PAIR SHARES THE ROOM; ONE MARK TAKES IT.
+  //
+  // On a phone these sit on the name's line, right-aligned, so every pixel they
+  // take comes off the name. One seal at full size leaves a comfortable line.
+  // Two at full size do not: measured at 390px, a player holding both boards
+  // had "Nolan Minessale" down to 85px and wrapping to three lines. The pair
+  // steps down instead — still well clear of the 6.5px label this mark used to
+  // set at, and the name gets its line back.
+  //
+  // Desktop is unaffected: there the mark sits in its own column with room for
+  // two at full size.
+  const both = overall !== null && mid !== null;
+  const each = compact && both ? Math.round(size * 0.8) : size;
+
   return (
     // Tighter gap in the compact pair: on a 400px phone a player who holds both
     // marks has them, a headshot and their name competing for one line, and the
     // gap is the cheapest thing to give up.
     <div className={cn("flex items-center", compact ? "gap-1.5" : "gap-3", className)}>
       {overall !== null && (
-        <Seal rank={overall} label="Overall" of={season.cohortOverall} size={size} compact={compact} />
+        <Seal rank={overall} label="Overall" of={season.cohortOverall} size={each} compact={compact} />
       )}
       {mid !== null && (
-        <Seal rank={mid} label="Mid-major" of={season.cohortNonPower} size={size} compact={compact} mid />
+        <Seal rank={mid} label="Mid-major" of={season.cohortNonPower} size={each} compact={compact} mid />
       )}
     </div>
   );
@@ -85,7 +104,10 @@ function Seal({
   // column of type than the desktop one does in a smaller circle. It gets a
   // thinner margin between the two rings to buy that column its clearance —
   // at the desktop inset the rank's cap was landing on the inner ring.
-  const inner = size - (compact ? 10 : 14);
+  // 8 rather than 10 on the compact mark: the ring margin is the cheapest
+  // place to find room for the label now that it sets larger, and at this
+  // diameter a 4px band still reads as two rings rather than one thick one.
+  const inner = size - (compact ? 8 : 14);
 
   return (
     <div
@@ -101,13 +123,13 @@ function Seal({
           <>
             <span
               className="font-bold uppercase leading-none"
-              style={{ fontSize: size * 0.12, letterSpacing: "0.14em", color: accent, textIndent: "0.14em" }}
+              style={{ fontSize: size * 0.155, letterSpacing: "0.12em", color: accent, textIndent: "0.12em" }}
             >
               Top
             </span>
             <span
               className="font-bold uppercase leading-none"
-              style={{ fontSize: size * 0.12, letterSpacing: "0.06em", color: accent, textIndent: "0.06em", marginTop: size * 0.012 }}
+              style={{ fontSize: size * 0.155, letterSpacing: "0.04em", color: accent, textIndent: "0.04em", marginTop: size * 0.01 }}
             >
               100
             </span>

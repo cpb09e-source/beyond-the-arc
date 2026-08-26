@@ -485,7 +485,7 @@ export function PlayerAtlas({
                 name. Compact: no board label, TOP over 100. */}
             {heroRanks && (
               <div className="md:hidden ml-auto shrink-0">
-                <TopHundredSeal season={heroRanks} size={54} compact />
+                <TopHundredSeal season={heroRanks} size={72} compact />
               </div>
             )}
           </div>
