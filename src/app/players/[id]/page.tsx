@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
-import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayerIds, readNbaDraftee, readRsciRank, readPlayerBoxScores, readTeamGameScores, teamGameKey } from "@/lib/static-data";
+import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayerIds, readNbaDraftee, readRsciRank, readPlayerBoxScores, readTeamGameScores, teamGameKey, readGamePercentiles } from "@/lib/static-data";
 import { nbaTeamName, draftRound, nbaLogoUrl } from "@/lib/nba-draftees";
 import { CareerTable } from "@/components/players/career-table";
 import { PlayerOverview, type PlayerOverviewOption } from "@/components/players/player-overview";
@@ -190,6 +190,26 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
     .sort((a, b) => (b.game_date ?? "").localeCompare(a.game_date ?? ""));
 
   /**
+   * National percentile ladders for the game log's shooting chips, narrowed to
+   * the position the player was listed at IN EACH SEASON.
+   *
+   * Per season rather than once: a player who arrives as a guard and finishes
+   * as a forward should have each year's nights ranked against the players he
+   * was actually on the floor as. The bucket comes from Bart's own role note
+   * for that year, falling back to the hero's bucket and then to G.
+   *
+   * The whole file is a few hundred KB and read once for the build; only the
+   * seasons this player has are handed to the client.
+   */
+  const gamePct = await readGamePercentiles();
+  const logLadders: Record<string, Record<string, number[]>> = {};
+  for (const y of new Set(logRows.map((r) => r.year))) {
+    const bucket = positionByYear[String(y)] ?? heroRanks?.bucket ?? "G";
+    const forYear = gamePct?.seasons?.[String(y)]?.[bucket];
+    if (forYear) logLadders[String(y)] = forYear;
+  }
+
+  /**
    * NBA draft record, matched on name.
    *
    * A drafted player has left college, so this SUPERSEDES the transfer banner
@@ -304,7 +324,12 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         log={
           <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-6">
             <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
-              <PlayerGameLog rows={logRows} playerName={stats.name ?? `Player ${bartId}`} />
+              <PlayerGameLog
+                rows={logRows}
+                playerName={stats.name ?? `Player ${bartId}`}
+                ladders={logLadders}
+                minAtt={gamePct?.min_att ?? 2}
+              />
             </div>
           </section>
         }

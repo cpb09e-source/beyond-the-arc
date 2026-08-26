@@ -980,6 +980,31 @@ export async function readTeamGameScores(year: number): Promise<Map<string, Team
   return out;
 }
 
+/**
+ * National percentile ladders for a single game's shooting rates.
+ *
+ * Built by scripts/build-game-percentiles.mjs over every D-I player-game in a
+ * season — see the note there for why the population cannot be read at render
+ * time. Shape is season -> position bucket -> stat -> 101 ascending
+ * breakpoints, so index IS the percentile.
+ *
+ * One read for the whole site: the file is single digits of KB per season and
+ * the player route generates ~15,700 pages off it.
+ */
+export type GamePercentiles = {
+  min_att: number;
+  steps: number;
+  seasons: Record<string, Record<string, Record<string, number[]>>>;
+};
+
+let _gamePctCache: GamePercentiles | null | undefined;
+
+export async function readGamePercentiles(): Promise<GamePercentiles | null> {
+  if (_gamePctCache !== undefined) return _gamePctCache;
+  _gamePctCache = await readJson<GamePercentiles>("game-percentiles.json").catch(() => null);
+  return _gamePctCache;
+}
+
 export async function readPortalEntryForBartId(bartId: number): Promise<PortalEntry | null> {
   const all = await readPortal();
   const matches = all.filter((e) => e.bart_player_id === bartId);

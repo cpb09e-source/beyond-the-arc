@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
 import { Select } from "@/components/select";
-import { pctBg } from "@/components/percentile-chip";
+import { PercentileChip } from "@/components/percentile-chip";
 import { cn } from "@/lib/utils";
 
 /**
@@ -35,11 +35,13 @@ import { cn } from "@/lib/utils";
  * each is internally consistent, and the game log has to add up to its own rows
  * or the totals line is a lie about the table it sits under.
  *
- * The percentile heat-map shading a commercial box score puts behind these
- * numbers is deliberately absent. It ranks a player against a cohort, and this
- * table is one player against himself across a season; the same 39% would be
- * green in one cohort and red in another, which is a claim the table has no
- * business making.
+ * THE CHIPS ARE NATIONAL, and only on the shooting rates. Each one ranks that
+ * NIGHT against every D-I player-game of the same season and position bucket —
+ * the same thing the Player Overview chips do for a season, one level down. A
+ * shading of the cell was tried first and does not work at this ramp: its
+ * middle bands are near-paper by design, so an average night read as no
+ * shading, and a tint says "good" without saying how good. The chip prints the
+ * number.
  */
 
 export type GameLogRow = {
@@ -270,60 +272,22 @@ function sub(a: number | null, b: number | null): number | null {
   return a === null || b === null ? null : a - b;
 }
 
-/** 1st, 2nd, 3rd, 4th — and 11th/12th/13th, which are the ones a naive
- *  last-digit rule gets wrong. */
-function ordinal(n: number): string {
-  const tens = n % 100;
-  if (tens >= 11 && tens <= 13) return `${n}th`;
-  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
-}
-
-/** A night has to have this many attempts before its rate is shaded. */
-const MIN_ATT = 2;
-
 /**
- * Percentile ladders for the shaded columns, over the games actually on screen.
+ * Where a rate sits on the national ladder for its season and position, 0-100.
  *
- * Recomputed per split on purpose: inside "conference games", a night should
- * rank against the other conference nights, not against a full season the
- * reader has filtered away.
- *
- * Games under MIN_ATT attempts are excluded from the ladder as well as from the
- * shading. Leaving them in would drag the distribution — a run of 0-for-1
- * nights makes an ordinary 45% look like a career game.
+ * The ladder is 101 ascending breakpoints, so the index IS the percentile — a
+ * scan for the last breakpoint at or below the value gives the answer with no
+ * arithmetic. Built by scripts/build-game-percentiles.mjs over every D-I
+ * player-game; see that file for why it cannot be computed here.
  */
-function buildLadders(rows: GameLogRow[], cols: Col[]): Map<string, number[]> {
-  const out = new Map<string, number[]>();
-  for (const c of cols) {
-    if (!c.shade) continue;
-    const vals: number[] = [];
-    for (const r of rows) {
-      const att = c.shade.att(r);
-      const v = c.sortVal(r);
-      if (att !== null && att >= MIN_ATT && typeof v === "number") vals.push(v);
-    }
-    out.set(c.key, vals.sort((a, b) => a - b));
+function nationalPct(ladder: number[] | undefined, v: number | null): number | null {
+  if (!ladder || ladder.length === 0 || v === null) return null;
+  let lo = 0;
+  for (let i = 0; i < ladder.length; i++) {
+    if (ladder[i]! <= v) lo = i;
+    else break;
   }
-  return out;
-}
-
-/**
- * Where a value sits in its ladder, 0-100.
- *
- * Ties take the MIDPOINT of the tied block rather than its top: three 50%
- * nights should all read the same, and counting "values at or below" would rank
- * the last of them above the first two for no reason. Under five eligible games
- * nothing is shaded — a percentile over four numbers is a ranking with a
- * percent sign on it.
- */
-function percentileIn(ladder: number[] | undefined, v: number | null): number | null {
-  if (!ladder || ladder.length < 5 || v === null) return null;
-  let below = 0, equal = 0;
-  for (const x of ladder) {
-    if (x < v) below++;
-    else if (x === v) equal++;
-  }
-  return Math.round(((below + equal / 2) / ladder.length) * 100);
+  return lo;
 }
 
 function applySplit(rows: GameLogRow[], split: SplitKey): GameLogRow[] {
@@ -368,10 +332,20 @@ function seasonLabel(y: number): string {
 export function PlayerGameLog({
   rows,
   playerName,
+  ladders,
+  minAtt,
 }: {
   /** Every logged game the player has, newest first. */
   rows: GameLogRow[];
   playerName: string;
+  /**
+   * season -> stat -> 101 breakpoints, already narrowed to this player's
+   * position bucket on the server. Empty when the season predates the box
+   * archive, in which case no chips render.
+   */
+  ladders: Record<string, Record<string, number[]>>;
+  /** Attempts a night needs before it gets a chip. Matches the ladder's own. */
+  minAtt: number;
 }) {
   const years = useMemo(
     () => [...new Set(rows.map((r) => r.year))].sort((a, b) => b - a),
@@ -405,7 +379,7 @@ export function PlayerGameLog({
     );
   }
   const t = useMemo(() => totalsOf(shown), [shown]);
-  const ladders = useMemo(() => buildLadders(shown, cols), [shown, cols]);
+  const seasonLadder = ladders[String(year)] ?? {};
 
   if (rows.length === 0) {
     return (
@@ -495,14 +469,19 @@ export function PlayerGameLog({
                 </Th>
               ))}
               {cols.map((c) => (
-                <Th
-                  key={c.key}
-                  align="right"
-                  sort={sort.key === c.key ? sort.dir : null}
-                  onSort={() => toggleSort(c.key, true)}
-                >
-                  {c.label}
-                </Th>
+                <Fragment key={c.key}>
+                  <Th
+                    align="right"
+                    sort={sort.key === c.key ? sort.dir : null}
+                    onSort={() => toggleSort(c.key, true)}
+                  >
+                    {c.label}
+                  </Th>
+                  {/* The chip's column has no heading of its own — it belongs
+                      to the rate on its left and a second label would read as a
+                      second stat. Desktop only, with the cells. */}
+                  {c.shade && <th className="hidden lg:table-cell" aria-label={`${c.label} national percentile`} />}
+                </Fragment>
               ))}
             </tr>
           </thead>
@@ -550,30 +529,34 @@ export function PlayerGameLog({
                   const att = c.shade ? c.shade.att(r) : null;
                   const v = c.shade ? c.sortVal(r) : null;
                   const pct =
-                    c.shade && att !== null && att >= MIN_ATT && typeof v === "number"
-                      ? percentileIn(ladders.get(c.key), v)
+                    c.shade && att !== null && att >= minAtt && typeof v === "number"
+                      ? nationalPct(seasonLadder[c.key], v)
                       : null;
                   return (
-                    <Td
-                      key={c.key}
-                      align="right"
-                      className="tabular"
-                      // lg and up only. The ramp's middle bands sit a shade off
-                      // paper, which is what makes them recede on a desktop and
-                      // what makes them muddy on a phone where the same cell is
-                      // a third the width and already carrying a scroll.
-                      shade={pct === null ? undefined : pctBg(pct)}
-                      shadeTitle={pct === null ? undefined : `${ordinal(pct)} percentile of his ${ladders.get(c.key)?.length ?? 0} qualifying games in this split`}
-                    >
-                      {c.get(r)}
-                    </Td>
+                    <Fragment key={c.key}>
+                      <Td align="right" className="tabular">{c.get(r)}</Td>
+                      {/* The chip is its own cell, not a background on the
+                          number. A tinted cell says "good" without saying how
+                          good, and this ramp's middle bands are near-paper by
+                          design — a 55th-percentile night would have looked
+                          like no shading at all. The figure prints. */}
+                      {c.shade && (
+                        <Td align="right" className="hidden lg:table-cell pl-0">
+                          {pct === null ? (
+                            <span className="text-[0.6875rem] text-ink-muted">—</span>
+                          ) : (
+                            <PercentileChip pct={pct} />
+                          )}
+                        </Td>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tr>
             ))}
             {shown.length === 0 && (
               <tr>
-                <td colSpan={4 + cols.length} className="px-3 py-6 text-center text-sm text-ink-muted">
+                <td colSpan={4 + cols.length + cols.filter((c) => c.shade).length} className="px-3 py-6 text-center text-sm text-ink-muted">
                   No games in this split.
                 </td>
               </tr>
@@ -589,7 +572,13 @@ export function PlayerGameLog({
                 <Td />
                 <Td align="right" className="tabular">{fmtInt(t.mins)}</Td>
                 {cols.map((c) => (
-                  <Td key={c.key} align="right" className="tabular">{totalFor(c.key, t)}</Td>
+                  <Fragment key={c.key}>
+                    <Td align="right" className="tabular">{totalFor(c.key, t)}</Td>
+                    {/* No chip on the totals row. The ladder ranks a NIGHT, and
+                        a season aggregate is not a night — placing it on the
+                        same scale would say a 46% season was a median game. */}
+                    {c.shade && <td className="hidden lg:table-cell" />}
+                  </Fragment>
                 ))}
               </tr>
             </tfoot>
@@ -680,7 +669,7 @@ function Th({
 }
 
 function Td({
-  children, align = "left", className = "", title, shade, shadeTitle,
+  children, align = "left", className = "", title,
 }: {
   /** Optional so a spacer cell can be written as <Td />. */
   children?: React.ReactNode;
@@ -688,22 +677,12 @@ function Td({
   className?: string;
   /** Used by the opponent cell, whose name is crest-only on a phone. */
   title?: string;
-  /** Percentile background for a shooting rate. Desktop only — see the note
-   *  at the call site. */
-  shade?: string;
-  shadeTitle?: string;
 }) {
   return (
     <td
-      title={shadeTitle ?? title}
-      // The colour is applied through a custom property and a lg-gated
-      // utility rather than a plain inline background: an inline style cannot
-      // be made conditional on a breakpoint, and painting it at every width
-      // then hiding it would still leave it on a phone.
-      style={shade ? ({ "--cell-shade": shade } as React.CSSProperties) : undefined}
+      title={title}
       className={cn(
         "px-1.5 sm:px-3 py-2.5",
-        shade && "lg:bg-[var(--cell-shade)]",
         align === "right" && "text-right",
         align === "center" && "text-center",
         className,
