@@ -99,20 +99,20 @@ export function CareerTable({
           </div>
           <div className="flex items-baseline gap-4 flex-wrap">
             <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Career</h2>
-            {/* Default box, one step down in type. `compact` was tried and takes
-                the height with it (32px against 40), which is more than this
-                needed — the box is the right size beside a 2xl heading, the
-                14px label inside it was not.
+            {/* Stock at every width except a phone. Below md a site-wide rule
+                floors every select at 16px so iOS Safari does not zoom the page
+                on tap — which left this one reading LARGER on a phone than the
+                14px it sets on a desktop. `field-sm-phone` is the sanctioned
+                opt-out; see the note beside that rule in globals.css for why it
+                cannot be a utility here and how the zoom guard survives it.
 
-                The override has to reach the <select>, and Select's className
-                lands on its wrapper, so it goes through a child selector. That
-                outranks the component's own .text-sm on specificity — one class
-                plus one element against one class — rather than racing it. */}
+                The box does not move at any width. `compact` was tried and
+                takes the height down with the type, 32px against 40. */}
             <Select
               value={view}
               onChange={(v) => setView(v as View)}
               ariaLabel="Career stats view"
-              className="[&>select]:text-[0.8125rem]"
+              className="field-sm-phone"
             >
               <option value="per_game">Per game</option>
               <option value="totals">Totals</option>
