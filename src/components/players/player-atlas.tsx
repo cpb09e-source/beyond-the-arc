@@ -4,11 +4,7 @@ import { PlayerPhoto } from "@/components/player-photo";
 import { TopHundredSeal } from "@/components/players/top-hundred-seal";
 import type { StatLine } from "@/lib/player-stat-line";
 import { NbaTeamLogo } from "@/components/nba-team-logo";
-import { PercentileChip, pctBg, pctColor } from "@/components/percentile-chip";
-import { GameBars } from "@/components/players/game-bars";
-import { opponentOf } from "@/lib/game-log";
-import type { PlayerGameRow, PlayerRanksSeason } from "@/lib/static-data";
-import { cn } from "@/lib/utils";
+import type { PlayerRanksSeason } from "@/lib/static-data";
 import { formatHeight } from "@/lib/height";
 
 /**
@@ -34,33 +30,6 @@ import { formatHeight } from "@/lib/height";
  * reflowing hero reads as broken rather than as adaptive.
  */
 
-export type AtlasLine = {
-  g: number;
-  min: number;
-  pts: number | null;
-  reb: number | null;
-  ast: number | null;
-  fg: number | null;
-  fg3: number | null;
-  ft: number | null;
-  efg: number | null;
-  ts: number | null;
-  epm: number | null;
-  onOff: number | null;
-};
-
-function fmt(x: number | null, digits = 1): string {
-  if (x === null || x === undefined || !Number.isFinite(x)) return "—";
-  return x.toFixed(digits);
-}
-function fmtPct(x: number | null): string {
-  if (x === null || x === undefined || !Number.isFinite(x)) return "—";
-  return `${(x * 100).toFixed(1)}%`;
-}
-function fmtSigned(x: number | null, digits = 1): string {
-  if (x === null || x === undefined || !Number.isFinite(x)) return "—";
-  return `${x > 0 ? "+" : x < 0 ? "−" : ""}${Math.abs(x).toFixed(digits)}`;
-}
 function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
 }
@@ -71,189 +40,6 @@ function teamSlug(name: string): string {
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-}
-
-/**
- * Season-over-season change, as a chip.
- *
- * Rendered only when a prior season exists AND both values are present — a
- * chip reading "+19.5" against a missing baseline would claim a jump that is
- * really a gap in the record. `pctPoints` switches the unit: a shooting rate
- * moves in percentage POINTS, and printing "+0.069" for a seven-point jump in
- * true shooting is unreadable.
- */
-function Delta({
-  now,
-  was,
-  pctPoints = false,
-  digits = 1,
-}: {
-  now: number | null;
-  was: number | null | undefined;
-  pctPoints?: boolean;
-  digits?: number;
-}) {
-  if (now === null || was === null || was === undefined) return null;
-  if (!Number.isFinite(now) || !Number.isFinite(was)) return null;
-  const raw = pctPoints ? (now - was) * 100 : now - was;
-  if (Math.abs(raw) < (pctPoints ? 0.05 : 0.05)) return null;
-  const up = raw > 0;
-  const tone = up ? "var(--good)" : "var(--bad)";
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full pl-1 pr-1.5 py-0.5 tabular text-[0.625rem] font-semibold whitespace-nowrap leading-none"
-      style={{ color: tone, background: `color-mix(in oklab, ${tone} 14%, transparent)` }}
-      title="Change from the previous season"
-    >
-      {/* A stroked arrow rather than the ▲/▼ glyphs: those are filled triangles
-          at whatever weight the system font happens to draw them, which sat
-          heavier than the figure beside them and differed per platform. */}
-      <svg viewBox="0 0 10 10" className="w-2.5 h-2.5 shrink-0" aria-hidden="true">
-        <path
-          d={up ? "M5 8.5V2M5 2L2 5M5 2l3 3" : "M5 1.5V8M5 8l-3-3M5 8l3-3"}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      {Math.abs(raw).toFixed(digits)}
-    </span>
-  );
-}
-
-/** Module shell — eyebrow, optional right-hand note, body. */
-function Module({
-  title,
-  note,
-  children,
-}: {
-  title: string;
-  note?: string | null;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="border border-hairline rounded-lg bg-paper-deep/45 px-4 py-3.5 flex flex-col gap-3 min-w-0">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="label" style={{ color: "var(--court-ink)" }}>
-          {title}
-        </span>
-        {note && (
-          <span className="tabular text-[0.625rem] text-ink-muted truncate min-w-0">{note}</span>
-        )}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-/** Headline figure for a module: value, unit, season delta, percentile chip. */
-function BigStat({
-  value,
-  unit,
-  delta,
-  pct,
-  accent = false,
-}: {
-  value: string;
-  unit: string;
-  delta?: React.ReactNode;
-  pct?: number | null;
-  accent?: boolean;
-}) {
-  return (
-    <div className="flex items-baseline gap-2 min-w-0">
-      <span
-        className={cn(
-          "font-display tabular text-[1.75rem] sm:text-[2rem] leading-none",
-          accent ? "text-coral" : "text-ink",
-        )}
-      >
-        {value}
-      </span>
-      <span className="text-[0.6875rem] text-ink-muted">{unit}</span>
-      {delta}
-      {pct != null && <PercentileChip pct={pct} className="ml-auto shrink-0" />}
-    </div>
-  );
-}
-
-/**
- * One rate on the percentile ramp.
- *
- * `fill` is the bar's own length (a shooting percentage fills by its value, so
- * 85% FT reads as a long bar) while the COLOR comes from the percentile, which
- * is the part that says whether the number is any good. Rows with no percentile
- * — a stat the cohort file doesn't rank — keep the bar in hairline and show a
- * dash, rather than borrowing a colour they haven't earned.
- */
-function RateRow({
-  label,
-  value,
-  fill,
-  pct,
-}: {
-  label: string;
-  value: string;
-  fill: number | null;
-  pct: number | null;
-}) {
-  const width = fill === null ? 0 : Math.max(0, Math.min(100, fill * 100));
-  return (
-    <div className="flex items-center gap-2.5 min-w-0">
-      <span className="text-[0.6875rem] font-semibold text-ink-muted w-11 shrink-0">{label}</span>
-      <span className="tabular text-[0.8125rem] text-ink w-12 text-right shrink-0">{value}</span>
-      <span className="flex-1 h-2 bg-paper-deep rounded-[2px] overflow-hidden min-w-0">
-        <span
-          className="block h-full rounded-[2px]"
-          style={{
-            width: `${width}%`,
-            // An unranked row still draws its bar — FG% has no cohort file of
-            // its own — but in neutral ink rather than a ramp colour it hasn't
-            // earned. Hairline was invisible against the module ground and read
-            // as a missing value rather than a missing rank.
-            background: pct === null ? "color-mix(in oklab, var(--ink-muted) 30%, transparent)" : pctBg(pct),
-            // The ramp's middle bands are near-paper ON PURPOSE — as a chip
-            // background with dark text on top, "average" is supposed to recede.
-            // With nothing written on it, a 70th-percentile bar was a pale
-            // yellow-green shape on a pale ground and a 50th was invisible. A
-            // hairline in the band's own text colour gives every band an edge
-            // without touching the fill the chips use.
-            boxShadow:
-              pct === null
-                ? undefined
-                : `inset 0 0 0 1px color-mix(in oklab, ${pctColor(pct)} 42%, transparent)`,
-          }}
-        />
-      </span>
-      {/* The figure takes the band's text colour too — it is the one part of
-          the row that reads at any band, so it carries the ranking when the
-          fill is too pale to. */}
-      <span
-        className="tabular text-[0.6875rem] w-5 text-right shrink-0 font-semibold"
-        style={{ color: pct === null ? "var(--ink-muted)" : pctColor(pct) }}
-      >
-        {pct === null ? "—" : pct}
-      </span>
-    </div>
-  );
-}
-
-/** A split of EPM (or on/off) drawn against the total, so the halves compare. */
-function ImpactBar({ label, value, scale, tone }: { label: string; value: number | null; scale: number; tone: string }) {
-  const width = value === null ? 0 : Math.max(0, Math.min(100, (Math.abs(value) / scale) * 100));
-  return (
-    <div className="flex items-center gap-2.5 min-w-0">
-      <span className="text-[0.6875rem] text-ink-muted w-14 shrink-0">{label}</span>
-      <span className="flex-1 h-2.5 bg-paper-deep rounded-[2px] overflow-hidden min-w-0">
-        <span className="block h-full rounded-[2px]" style={{ width: `${width}%`, background: tone }} />
-      </span>
-      <span className="tabular text-[0.6875rem] text-ink w-10 text-right shrink-0">
-        {fmtSigned(value, 2)}
-      </span>
-    </div>
-  );
 }
 
 /** The cohort a player is ranked in, spelled out. Bart's own role notes
@@ -486,10 +272,6 @@ export function PlayerAtlas({
   draft,
   heroRanks,
   bucket,
-  current,
-  prev,
-  games,
-  impact,
   banner,
 }: {
   bartId: number;
@@ -524,71 +306,11 @@ export function PlayerAtlas({
    *  that reads as news. */
   draft: DraftChip | null;
   heroRanks: PlayerRanksSeason | null;
-  /** Position cohort the season was ranked in. Decides which counting stat
-   *  leads the second module. */
+  /** Position cohort the season was ranked in. Only the ranked-cohort label in
+   *  the seal's tooltip needs it now that the stat modules have moved out. */
   bucket: "G" | "F" | "C";
-  current: AtlasLine;
-  prev: AtlasLine | null;
-  games: PlayerGameRow[];
-  impact: { off: number | null; def: number | null; onOff: number | null } | null;
   banner?: React.ReactNode;
 }) {
-  const pct = (k: string) => heroRanks?.stats?.[k]?.percentile ?? null;
-  const val = (k: string) => heroRanks?.stats?.[k]?.value ?? null;
-
-  const pts = games.map((g) => g.pts_scored ?? 0);
-  // Null preserved rather than zeroed: ~12% of logged games have no true
-  // shooting because the player attempted no shot, which is a different
-  // statement from shooting 0%.
-  const ts = games.map((g) => (g.ts_pct === null || g.ts_pct === undefined ? null : g.ts_pct * 100));
-  const hasLog = games.length >= 2;
-
-  /**
-   * The second module follows the position bucket. A guard's signature counting
-   * stat is assists and a big's is rebounds, and drawing the same one for both
-   * wasted the slot on whoever it didn't fit — a centre's 0.9 assists per game
-   * is 36 one-unit stubs. The stat this module takes is swapped OUT of the
-   * defensive module below, so nothing is shown twice and nothing is dropped.
-   */
-  const big = bucket === "F" || bucket === "C";
-  const second = big
-    ? {
-        title: "Rebounding",
-        unit: "REB",
-        rankKey: "reb_pg",
-        value: current.reb,
-        prev: prev?.reb,
-        series: games.map((g) => g.reb ?? 0),
-        fallbackKey: "drb_pct",
-        fallbackLabel: "DRB%",
-      }
-    : {
-        title: "Playmaking",
-        unit: "AST",
-        rankKey: "ast_pg",
-        value: current.ast,
-        prev: prev?.ast,
-        series: games.map((g) => g.ast ?? 0),
-        fallbackKey: "ast_pct",
-        fallbackLabel: "AST%",
-      };
-
-  /** "high 35 vs Indiana St." — the question a per-game average cannot answer. */
-  function highNote(series: number[]): string | null {
-    if (!series.length) return hasLog ? `${games.length} games` : null;
-    const i = series.indexOf(Math.max(...series));
-    const g = games[i];
-    return g?.opp_team_market ? `high ${series[i]} ${opponentOf(g)}` : `${games.length} games`;
-  }
-  const bestNote = highNote(pts);
-  const secondNote = second.series.length ? highNote(second.series) : null;
-  // The efficiency chart's high is a rate, so it wants the decimal the counting
-  // charts don't. Stated as a count of nights instead — "how often was he better
-  // than himself" is the reading the colours give.
-  const tsAbove = current.ts === null ? null : ts.filter((v) => v !== null && v >= current.ts! * 100).length;
-  const tsNote =
-    tsAbove === null ? "true shooting" : `${tsAbove} of ${ts.filter((v) => v !== null).length} above`;
-
   // Only the fields we actually hold. An empty vitals line renders as a single
   // em dash rather than a row of orphaned separators.
   // Position is a badge now and no longer belongs in the dotted run.
@@ -602,24 +324,6 @@ export function PlayerAtlas({
     (v): v is string => typeof v === "string" && v.trim().length > 0,
   );
   if (vitals.length === 0) vitals.push("—");
-
-
-  const hasSplit =
-    (impact?.off ?? null) !== null || (impact?.def ?? null) !== null || current.onOff !== null;
-
-  /**
-   * The two halves share one scale so they are comparable to each other and to
-   * the EPM they sum to. On/off is deliberately NOT on it: it is a raw point
-   * differential per 100 possessions, so a +10.8 on/off against a +2.8 EPM
-   * pinned the bar at full width and squashed the halves it was meant to sit
-   * beside. It reads as a figure below the bars instead.
-   */
-  const impactScale = Math.max(
-    1,
-    Math.abs(current.epm ?? 0),
-    Math.abs(impact?.off ?? 0),
-    Math.abs(impact?.def ?? 0),
-  );
 
   return (
     <section className="mx-auto max-w-[88rem] px-0 sm:px-6 lg:px-10 pt-5 sm:pt-8 pb-5 sm:pb-6">
@@ -704,127 +408,6 @@ export function PlayerAtlas({
 
         {banner && <div className="pt-4">{banner}</div>}
 
-        {/* Six modules. Two columns on tablet, three on desktop — a chart
-            narrower than about 220px stops resolving individual games. */}
-        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          <Module title="Scoring" note={bestNote}>
-            <BigStat
-              value={fmt(current.pts, 1)}
-              unit="PTS"
-              pct={pct("pts_pg")}
-              delta={<Delta now={current.pts} was={prev?.pts} />}
-            />
-            {hasLog ? (
-              <GameBars games={games} values={pts} unit="PTS" avg={current.pts} />
-            ) : (
-              <RateRow label="Rank" value={fmt(current.pts, 1)} fill={(pct("pts_pg") ?? 0) / 100} pct={pct("pts_pg")} />
-            )}
-          </Module>
-
-          <Module title={second.title} note={secondNote}>
-            <BigStat
-              value={fmt(second.value, 1)}
-              unit={second.unit}
-              pct={pct(second.rankKey)}
-              delta={<Delta now={second.value} was={second.prev} />}
-            />
-            {hasLog ? (
-              <GameBars games={games} values={second.series} unit={second.unit} avg={second.value} />
-            ) : (
-              <RateRow
-                label={second.fallbackLabel}
-                value={fmt(val(second.fallbackKey), 1)}
-                fill={(pct(second.fallbackKey) ?? 0) / 100}
-                pct={pct(second.fallbackKey)}
-              />
-            )}
-          </Module>
-
-          {/* The counting stats the module above didn't take. No chart: these are
-              the ones a per-game column renders as a row of one- and two-unit
-              stubs, so the percentile is the whole reading and the ramp carries
-              it. Title names what's actually in it — a big's version leads with
-              passing, not glass. */}
-          <Module title={big ? "Passing & defense" : "Glass & defense"} note="percentile in cohort">
-            <div className="flex flex-col gap-2 pt-0.5">
-              {big ? (
-                <RateRow label="AST" value={fmt(current.ast, 1)} fill={(pct("ast_pg") ?? 0) / 100} pct={pct("ast_pg")} />
-              ) : (
-                <RateRow label="REB" value={fmt(current.reb, 1)} fill={(pct("reb_pg") ?? 0) / 100} pct={pct("reb_pg")} />
-              )}
-              <RateRow label="STL" value={fmt(val("stl_pg"), 1)} fill={(pct("stl_pg") ?? 0) / 100} pct={pct("stl_pg")} />
-              <RateRow label="BLK" value={fmt(val("blk_pg"), 1)} fill={(pct("blk_pg") ?? 0) / 100} pct={pct("blk_pg")} />
-              <RateRow label="TOV%" value={fmt(val("tov_pct"), 1)} fill={(pct("tov_pct") ?? 0) / 100} pct={pct("tov_pct")} />
-            </div>
-          </Module>
-
-          <Module title="Efficiency" note={hasLog ? tsNote : "true shooting"}>
-            <BigStat
-              value={fmtPct(current.ts)}
-              unit="TS"
-              pct={pct("ts_pct")}
-              delta={<Delta now={current.ts} was={prev?.ts} pctPoints />}
-            />
-            {hasLog ? (
-              <GameBars
-                games={games}
-                values={ts}
-                unit="TS%"
-                decimals={1}
-                avg={current.ts === null ? null : current.ts * 100}
-              />
-            ) : (
-              <div className="flex flex-col gap-2">
-                <RateRow label="USG" value={fmt(val("usage"), 1)} fill={(pct("usage") ?? 0) / 100} pct={pct("usage")} />
-                <RateRow label="ORtg" value={fmt(val("ortg"), 1)} fill={(pct("ortg") ?? 0) / 100} pct={pct("ortg")} />
-              </div>
-            )}
-          </Module>
-
-          <Module title="Shooting" note="value · percentile">
-            <div className="flex flex-col gap-2 pt-0.5">
-              <RateRow label="FG%" value={fmtPct(current.fg)} fill={current.fg} pct={null} />
-              <RateRow label="3P%" value={fmtPct(current.fg3)} fill={current.fg3} pct={pct("fg3_pct")} />
-              <RateRow label="FT%" value={fmtPct(current.ft)} fill={current.ft} pct={pct("ft_pct")} />
-              <RateRow label="eFG%" value={fmtPct(current.efg)} fill={current.efg} pct={pct("efg_pct")} />
-            </div>
-          </Module>
-
-          <Module title="Impact" note={hasSplit ? "EPM, split off / def" : "efficiency & load"}>
-            <BigStat
-              value={fmtSigned(current.epm, 2)}
-              unit="EPM"
-              accent
-              pct={pct("epm")}
-              delta={<Delta now={current.epm} was={prev?.epm} digits={2} />}
-            />
-            {/* The off/def split and on/off are lineup quantities, so they exist
-                only for seasons the ridge fit covers. Older seasons carry the
-                box-score estimate, which has no lineup information at all —
-                three empty bars would read as a rendering fault rather than as
-                a season we never had the data for, so those seasons get the
-                rate stats the cohort file does rank. */}
-            {hasSplit ? (
-              <div className="flex flex-col gap-2">
-                <ImpactBar label="Offense" value={impact?.off ?? null} scale={impactScale} tone="var(--coral)" />
-                <ImpactBar label="Defense" value={impact?.def ?? null} scale={impactScale} tone="var(--coral-soft)" />
-                {current.onOff !== null && (
-                  <div className="flex items-baseline gap-2.5 pt-0.5">
-                    <span className="text-[0.6875rem] text-ink-muted w-14 shrink-0">On/Off</span>
-                    <span className="tabular text-[0.8125rem] text-ink">{fmtSigned(current.onOff, 1)}</span>
-                    <span className="text-[0.625rem] text-ink-muted">team net per 100 with him on</span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                <RateRow label="ORtg" value={fmt(val("ortg"), 1)} fill={(pct("ortg") ?? 0) / 100} pct={pct("ortg")} />
-                <RateRow label="USG" value={fmt(val("usage"), 1)} fill={(pct("usage") ?? 0) / 100} pct={pct("usage")} />
-                <RateRow label="PORP" value={fmt(val("porpag"), 1)} fill={(pct("porpag") ?? 0) / 100} pct={pct("porpag")} />
-              </div>
-            )}
-          </Module>
-        </div>
 
       </div>
     </section>

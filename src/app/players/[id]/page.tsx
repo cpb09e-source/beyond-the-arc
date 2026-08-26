@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
-import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayerIds, readImpactExtrasForYear, readNbaDraftee, readPlayerGames, readRsciRank } from "@/lib/static-data";
+import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayerIds, readNbaDraftee, readRsciRank } from "@/lib/static-data";
 import { nbaTeamName, draftRound, nbaLogoUrl } from "@/lib/nba-draftees";
 import { CareerTable } from "@/components/players/career-table";
 import { PlayerOverview, type PlayerOverviewOption } from "@/components/players/player-overview";
@@ -88,16 +88,6 @@ function fromEnd(row: Array<string | number | null> | null, offset: number): num
   return null;
 }
 
-function fromStart(row: Array<string | number | null> | null, idx: number): number | null {
-  if (!row || row.length <= idx) return null;
-  const v = row[idx];
-  if (typeof v === "number") return v;
-  if (typeof v === "string") {
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
-}
 
 export default async function PlayerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -160,127 +150,6 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
     height: typeof row?.[26] === "string" ? row[26] : null,
     hometown: typeof row?.[33] === "string" ? row[33] : null,
   };
-
-  /**
-   * One derived line per season, plus the career aggregate.
-   *
-   * Rates are built from the raw MADE/ATTEMPTED counts, not from Bart's
-   * precomputed rate columns, for two reasons. There is no combined-FG column —
-   * only 2P and 3P — so FG% and eFG% have to be assembled from parts anyway.
-   * And a career rate is only correct as total-makes over total-attempts: the
-   * average of four seasons' percentages is not the career percentage unless
-   * every season had identical attempts, which is never true.
-   */
-  const epmByYear = new Map<number, number>();
-  for (const r of ranks?.seasonRanks ?? []) {
-    const v = r.stats?.epm?.value;
-    if (typeof v === "number") epmByYear.set(r.year, v);
-  }
-  // on/off is a lineup quantity, so it lives only in epm-<year>.json. One read
-  // per season, memoized across the ~15,700 pages this route generates.
-  const onOffByYear = new Map<number, number>();
-  for (const season of player.seasons) {
-    const extras = await readImpactExtrasForYear(season.year);
-    const v = extras.get(bartId)?.on_off;
-    if (typeof v === "number") onOffByYear.set(season.year, v);
-  }
-
-  const lines = player.seasons.map((season) => {
-    const r = season.raw_row;
-    const g = season.games ?? 0;
-    const ftm = fromStart(r, 13), fta = fromStart(r, 14);
-    const fg2m = fromStart(r, 16), fg2a = fromStart(r, 17);
-    const fg3m = fromStart(r, 19), fg3a = fromStart(r, 20);
-    const mpg = fromStart(r, 54);
-    return {
-      year: season.year,
-      g,
-      min: mpg !== null ? mpg * g : 0,
-      // Bart's per-game rates × games recovers the season total, which is what
-      // a career line has to sum. He carries no season point total.
-      pts: (fromEnd(r, 3) ?? 0) * g,
-      reb: (fromEnd(r, 7) ?? 0) * g,
-      ast: (fromEnd(r, 6) ?? 0) * g,
-      ftm: ftm ?? 0, fta: fta ?? 0,
-      fgm: (fg2m ?? 0) + (fg3m ?? 0),
-      fga: (fg2a ?? 0) + (fg3a ?? 0),
-      fg3m: fg3m ?? 0, fg3a: fg3a ?? 0,
-      epm: epmByYear.get(season.year) ?? null,
-      onOff: onOffByYear.get(season.year) ?? null,
-    };
-  });
-
-  type Totals = (typeof lines)[number];
-  /** A summary row: per-game rates and shooting percentages over a set of seasons. */
-  function summarize(rows: Totals[]) {
-    const g = rows.reduce((n, r) => n + r.g, 0);
-    const min = rows.reduce((n, r) => n + r.min, 0);
-    const sum = (k: "pts" | "reb" | "ast" | "ftm" | "fta" | "fgm" | "fga" | "fg3m" | "fg3a") =>
-      rows.reduce((n, r) => n + r[k], 0);
-    const fgm = sum("fgm"), fga = sum("fga"), fg3m = sum("fg3m");
-    /**
-     * EPM and on/off are per-100 RATES, so a career figure is the
-     * minutes-weighted mean of the seasons that HAVE one — not a plain average,
-     * which would let a 6-minute freshman year pull as hard as a 34-minute
-     * senior year. Seasons without the stat are excluded from both the numerator
-     * and the weight rather than counted as zero.
-     */
-    const weighted = (k: "epm" | "onOff") => {
-      const have = rows.filter((r) => r[k] !== null && r.min > 0);
-      if (!have.length) return null;
-      const w = have.reduce((n, r) => n + r.min, 0);
-      return w > 0 ? have.reduce((n, r) => n + (r[k] as number) * r.min, 0) / w : null;
-    };
-    return {
-      g,
-      pts: g ? sum("pts") / g : null,
-      reb: g ? sum("reb") / g : null,
-      ast: g ? sum("ast") / g : null,
-      fg: fga ? fgm / fga : null,
-      fg3: sum("fg3a") ? fg3m / sum("fg3a") : null,
-      ft: sum("fta") ? sum("ftm") / sum("fta") : null,
-      efg: fga ? (fgm + 0.5 * fg3m) / fga : null,
-      // True shooting over the same totals, so a career TS is the real thing
-      // rather than the mean of the seasons' percentages.
-      //
-      // 0.475, not the textbook 0.44: Bart's own ts_pct column uses 0.475, and
-      // that column is what player-ranks percentiles this against and what the
-      // Overview panel prints. A hero reading 62.0% beside an Overview reading
-      // 61.2% for the same season would look like one of them was broken.
-      ts: fga + 0.475 * sum("fta") ? sum("pts") / (2 * (fga + 0.475 * sum("fta"))) : null,
-      epm: weighted("epm"),
-      onOff: weighted("onOff"),
-      min,
-    };
-  }
-
-  const currentLine = summarize(lines.filter((l) => l.year === current.year));
-
-  /**
-   * The season before the one the hero shows — the baseline the delta chips
-   * measure against. Found by year rather than by array position: the file is
-   * written newest-first today, but a hero that silently compares against the
-   * wrong year would be indistinguishable from a correct one.
-   */
-  const prevYear = player.seasons
-    .map((s) => s.year)
-    .filter((y) => y < current.year)
-    .sort((a, b) => b - a)[0];
-  const prevLine = prevYear !== undefined ? summarize(lines.filter((l) => l.year === prevYear)) : null;
-
-  /**
-   * The hero season's game log, oldest first — the three charts are read left
-   * to right as the season. Read at build time; the directory is served from R2
-   * at runtime but is on disk while these pages generate.
-   */
-  const heroGames = (await readPlayerGames(bartId))
-    .filter((g) => g.year === current.year)
-    .sort((a, b) => (a.game_date ?? "").localeCompare(b.game_date ?? ""));
-
-  // Offensive / defensive halves of EPM for the hero season. Present only for
-  // players the ridge fit covers; the box-score estimate has no lineup data and
-  // so no split.
-  const heroExtras = (await readImpactExtrasForYear(current.year)).get(bartId) ?? null;
 
   /**
    * NBA draft record, matched on name.
@@ -353,10 +222,6 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         }
         heroRanks={heroRanks}
         bucket={heroRanks?.bucket ?? positionByYear[String(current.year)] ?? "G"}
-        current={currentLine}
-        prev={prevLine}
-        games={heroGames}
-        impact={heroExtras ? { off: heroExtras.off, def: heroExtras.def, onOff: currentLine.onOff } : null}
         banner={banner}
       />
 

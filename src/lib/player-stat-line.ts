@@ -43,12 +43,18 @@ export type StatLine = {
   ftPct: number | null;
 };
 
-function fromEnd(row: StatRow, offset: number): number | null {
+/**
+ * Bart's row is positional and has grown at the FRONT over the years, while the
+ * per-game block has always been the tail — so both directions are load-bearing
+ * and neither can be expressed in terms of the other. Exported because the hero
+ * modules read the same row for a different set of columns.
+ */
+export function fromEnd(row: StatRow, offset: number): number | null {
   if (!row || row.length <= offset) return null;
   return num(row[row.length - 1 - offset]);
 }
 
-function fromStart(row: StatRow, idx: number): number | null {
+export function fromStart(row: StatRow, idx: number): number | null {
   if (!row || row.length <= idx) return null;
   return num(row[idx]);
 }
