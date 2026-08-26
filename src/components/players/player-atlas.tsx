@@ -2,6 +2,7 @@ import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { TopHundredSeal } from "@/components/players/top-hundred-seal";
+import type { StatLine } from "@/lib/player-stat-line";
 import { NbaTeamLogo } from "@/components/nba-team-logo";
 import { PercentileChip, pctBg, pctColor } from "@/components/percentile-chip";
 import { GameBars } from "@/components/players/game-bars";
@@ -349,6 +350,74 @@ type DraftChip = { team: string; logo: string | null; round: number; pick: numbe
 
 /** The vitals run, rendered once and placed twice — under the name on desktop,
  *  full width under the photo on a phone. */
+/**
+ * The stat band — six figures for the season on screen, with the career line
+ * for each sitting under it.
+ *
+ * The masthead used to say who a player was and the modules below said how he
+ * played, and the two never met: there was no line anywhere on the page that
+ * read "39 games, 13.3, 3.4, 4.4". The career was further off still, down in
+ * the season table past six modules and a shot chart, so learning that Bradley
+ * is a fourth-year player averaging 9.7 across 149 games took a scroll.
+ *
+ * THE CAREER IS A SUBORDINATE, NOT A PEER. It sets at 13px against the season's
+ * 32px and takes muted ink, which ranks the two without either needing a word
+ * of explanation. That is the whole argument for this layout over a two-row
+ * table: a table gives both rows the same column and invites the comparison,
+ * which is right when the career is the subject and wrong when it is context.
+ *
+ * A one-season player gets no second line at all. His career and his season are
+ * the same six numbers, and printing them twice reads as a bug.
+ */
+function StatBand({ now, career, seasons }: { now: StatLine; career: StatLine; seasons: number }) {
+  const showCareer = seasons > 1;
+  const cells: Array<{ unit: string; now: string; career: string }> = [
+    { unit: "Games", now: int(now.games), career: int(career.games) },
+    { unit: "PPG", now: one(now.ppg), career: one(career.ppg) },
+    { unit: "RPG", now: one(now.rpg), career: one(career.rpg) },
+    { unit: "APG", now: one(now.apg), career: one(career.apg) },
+    { unit: "FG%", now: one(now.fgPct), career: one(career.fgPct) },
+    { unit: "3P%", now: one(now.fg3Pct), career: one(career.fg3Pct) },
+  ];
+
+  return (
+    <div
+      // Rules only at lg, where all six sit on one line. Below that the band
+      // wraps to three columns and then two, and a left border on a cell that
+      // has become the first of its row draws a rule down the middle of the
+      // block. Gaps carry the separation there instead.
+      className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-6 gap-y-4 lg:gap-0"
+    >
+      {cells.map((c) => (
+        <div
+          key={c.unit}
+          className="lg:border-l lg:border-ink/10 lg:first:border-l-0 lg:px-[1.125rem] lg:first:pl-0"
+        >
+          <div className="label">{c.unit}</div>
+          <div className="tabular text-ink leading-[1.1] mt-1 text-[1.75rem] sm:text-[2rem] font-medium tracking-[-0.035em]">
+            {c.now}
+          </div>
+          {showCareer && (
+            <div className="tabular text-ink-muted text-[0.8125rem] mt-1.5">
+              {c.career}
+              <span className="label ml-1.5 align-baseline">Career</span>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function int(x: number | null): string {
+  return x === null || x === undefined ? "—" : Math.round(x).toLocaleString("en-US");
+}
+function one(x: number | null): string {
+  return x === null || x === undefined
+    ? "—"
+    : x.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
 function Vitals({
   vitals, draft, bucket, playerClass,
 }: {
@@ -411,6 +480,9 @@ export function PlayerAtlas({
   highSchool,
   rsci,
   playerClass,
+  statNow,
+  statCareer,
+  seasonCount,
   draft,
   heroRanks,
   bucket,
@@ -442,6 +514,11 @@ export function PlayerAtlas({
   rsci: number | null;
   /** Fr | So | Jr | Sr for the season on screen. Null where the source has none. */
   playerClass: string | null;
+  /** The six-figure line for the season on screen, and for every season. */
+  statNow: StatLine;
+  statCareer: StatLine;
+  /** How many seasons the career line covers. One means it says nothing new. */
+  seasonCount: number;
   /** Rendered as a chip beside the vitals — being drafted is a permanent fact
    *  about the player, so it belongs with the identity rather than in a banner
    *  that reads as news. */
@@ -622,6 +699,8 @@ export function PlayerAtlas({
             </div>
           )}
         </div>
+
+        <StatBand now={statNow} career={statCareer} seasons={seasonCount} />
 
         {banner && <div className="pt-4">{banner}</div>}
 
