@@ -933,6 +933,20 @@ body {
    Scoped to the wrapper rather than :root because the two custom properties are
    set inline on that element, and a var() in a :root rule would resolve them in
    :root's scope, where they do not exist. */
+/* Team pages render a bottom navigation bar below lg. It is fixed, so it
+   covers whatever the document ends with — and that is the site footer, which
+   is a sibling of the team page rather than a child of it, so padding the team
+   wrapper cannot clear it: the padding lands BEFORE the footer and the footer
+   is still the last thing underneath the bar. Measured at 390x844 with the
+   page scrolled to the end, the bar hid the final 50px of the footer.
+
+   :has() keys this to the pages that actually render a bar, so no other page
+   pays for it. 5rem covers the bar's 50px plus the home-indicator inset it
+   already pads itself by. */
+@media (max-width: 63.99rem) {
+  body:has(nav[data-team-bottom-bar]) footer { padding-bottom: 5rem; }
+}
+
 /* Box-score modal, same problem and same shape as .team-accent below: the two
    side colours are inline styles computed per matchup, so the dark swap needs
    !important to outrank them. Text and fill are separate pairs because a

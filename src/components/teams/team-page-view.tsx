@@ -11,7 +11,12 @@ import { SeasonSwitcher } from "@/components/teams/season-switcher";
 import { NationalRanks } from "@/components/teams/national-ranks";
 import { SortableSeasonsTable } from "@/components/teams/sortable-seasons-table";
 import { SeasonGrid, type SeasonGridRow } from "@/components/teams/season-grid";
-import { TeamTabs, TAB_ANCHORS, type TeamTab } from "@/components/teams/team-tabs";
+import {
+  TeamRail,
+  TeamBottomBar,
+  TAB_ANCHORS,
+  type TeamTab,
+} from "@/components/teams/team-tabs";
 import { SortableRosterTable } from "@/components/teams/sortable-roster-table";
 import { DistributionPanel, type DistributionRank } from "@/components/teams/distribution-panel";
 import { AssistNetworkPanel } from "@/components/teams/assist-network-panel";
@@ -252,7 +257,7 @@ export function buildRoster(
 
 /**
  * PAGE WIDTH. Every section on this page shares one shell —
- * `mx-auto max-w-[88rem] px-6 lg:px-10` — and the eight copies of it have to
+ * one shared container below the masthead — and the copies of it used to
  * stay in step, including the one in season-preview.tsx, which lines its
  * heading up against this exact gutter (see the note there). Widened from
  * max-w-7xl (80rem) on request; the By season grid gained columns and wanted
@@ -420,7 +425,14 @@ export function TeamPageView({
     <div className="team-accent" style={cssVars}>
       {/* Hero */}
       <section>
-        <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-10 pb-8">
+        {/* Same container as the row below it. The masthead used to be 88rem
+            against sections that were 88, 96 and 100 — with one width below,
+            leaving the hero narrower would put the team's name 16px inside the
+            left edge of everything under it. Only the max-width changed: the
+            px-6 mobile inset is the one it always had, and matches the text
+            sections below, which add px-2 to the row's px-4 to reach the same
+            24px. The tables stay at 16px on purpose. */}
+        <div className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-10 pb-8">
           <div className="flex flex-wrap items-center gap-6 lg:gap-10">
             <TeamLogo name={current.name} size={96} className="rounded-md" />
             <div className="flex-1 min-w-0">
@@ -537,17 +549,34 @@ export function TeamPageView({
           strip underneath, the ranks read as part of the masthead rather than
           as the first thing the tab is showing you.
 
-          A season without real tab routes gets the same strip scrolling to
+          A season without real tab routes gets the same list scrolling to
           anchors instead — see team-tabs.tsx. */}
-      {showTabs && (
-        <TeamTabs
-          active={tab === "all" ? "overview" : tab}
-          mode={tab === "all" ? "anchors" : "routes"}
-          slug={slug}
-          year={current.year}
-          overviewHref={overviewHref}
-        />
-      )}
+
+      {/* EVERYTHING BELOW THE MASTHEAD SHARES A ROW WITH THE RAIL.
+
+          The rail has to be a sibling of the content rather than a band above
+          it, because it is vertical: it needs the full height of the sections
+          to stick against. The sections keep their own mx-auto max-widths and
+          simply centre inside whatever the row leaves them, so School History
+          at 96rem and Lineups at 100rem still cap where they always did on any
+          viewport wide enough — the rail is 2.5rem of icons until 2xl, which is
+          the only width where it takes real room, and by then there is room.
+
+          `min-w-0` on the content column is load-bearing. A flex child defaults
+          to min-width:auto, which refuses to shrink below its contents, and the
+          contents here include tables that scroll horizontally — without it the
+          row grows to the widest table and the whole page scrolls sideways. */}
+      <div className="mx-auto max-w-[108rem] px-4 lg:px-10 lg:flex lg:items-start lg:gap-6">
+        {showTabs && (
+          <TeamRail
+            active={tab === "all" ? "overview" : tab}
+            mode={tab === "all" ? "anchors" : "routes"}
+            slug={slug}
+            year={current.year}
+            overviewHref={overviewHref}
+          />
+        )}
+        <div className="min-w-0 flex-1 order-1">
 
       {/* The schedule sits BELOW the tab strip, not above it with the identity
           block.
@@ -563,7 +592,7 @@ export function TeamPageView({
           the bytes stored per team-season for something a reader is one click
           from. */}
       {show.overview && scheduleGames.length > 0 && (
-        <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-6">
+        <section className="px-2 lg:px-0 mt-5">
           <ScheduleTicker games={scheduleGames} teamName={team.name} blurBody={preview} />
         </section>
       )}
@@ -586,7 +615,7 @@ export function TeamPageView({
           {/* mb-6 stands in for the hero's pb-8: the panel below opens with
               mt-2 on the assumption that whatever precedes it already paid for
               the gap, and here that is this section rather than the hero. */}
-          <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8 mb-6">{ranksBlock}</section>
+          <section className="px-2 lg:px-0 mt-8 mb-6">{ranksBlock}</section>
         </>
       )}
 
@@ -596,7 +625,7 @@ export function TeamPageView({
           Deliberately tighter than a normal section break (the hero's own pb-8
           already contributes 32px) because the two belong together. */}
       {show.overview && teamSplits && (
-        <section id={TAB_ANCHORS.overview} className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8 scroll-mt-20">
+        <section id={TAB_ANCHORS.overview} className="px-2 lg:px-0 mt-8 scroll-mt-20">
           <TeamStatsPanel splits={teamSplits} blurBody={preview} />
         </section>
       )}
@@ -610,12 +639,12 @@ export function TeamPageView({
           On a preview page it moves below the roster instead — see the note
           where that renders. */}
       {show.overview && !preview && (
-        <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8">{ranksBlock}</section>
+        <section className="px-2 lg:px-0 mt-8">{ranksBlock}</section>
       )}
 
       {/* Preview rosters render above, right under the schedule. */}
       {!preview && show.roster && (
-      <section id={TAB_ANCHORS.roster} className="mx-auto max-w-[88rem] px-4 lg:px-10 mt-5 scroll-mt-20">
+      <section id={TAB_ANCHORS.roster} className="mt-5 scroll-mt-20">
         {/* Player headshot strip — faces + names before the spreadsheet. */}
         {roster.length > 0 && (
           <div className="mb-3 sm:mb-5">
@@ -650,7 +679,7 @@ export function TeamPageView({
           margins. The rest of the page stays at 88rem: prose and panels do not
           want the extra width. */}
       {show.history && (
-      <section id={TAB_ANCHORS.history} className="mx-auto max-w-[96rem] px-4 lg:px-10 mt-5 mb-20 scroll-mt-20">
+      <section id={TAB_ANCHORS.history} className="mt-5 mb-20 scroll-mt-20">
         {seasonGrid ? (
           <SeasonGrid
             rows={seasonGrid}
@@ -671,7 +700,7 @@ export function TeamPageView({
       )}
 
       {show.shooting && (
-      <section id={TAB_ANCHORS.shooting} className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8 scroll-mt-20">
+      <section id={TAB_ANCHORS.shooting} className="px-2 lg:px-0 mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8 scroll-mt-20">
         <DistributionPanel title="Shooting" ranks={shootingRanks} blurBody={preview} />
         <DistributionPanel title="Four Factors" ranks={fourFactorRanks} blurBody={preview}>
           {current.four_factor_record && current.four_factor_record.games > 0 && (
@@ -703,7 +732,7 @@ export function TeamPageView({
           the shooting splits above rather than in a "play-by-play" tab named
           after where the data came from instead of what it says. */}
       {show.shooting && (clockSplits || assistNetwork) && (
-        <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <section className="px-2 lg:px-0 mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
           {clockSplits ? <ClockSplitsPanel splits={clockSplits} /> : <div />}
           {assistNetwork ? <AssistNetworkPanel network={assistNetwork} /> : <div />}
         </section>
@@ -722,7 +751,7 @@ export function TeamPageView({
           column being visible and being scrolled to. Still inside the site
           header's 108rem. */}
       {show.lineups && !preview && (
-        <section id={TAB_ANCHORS.lineups} className="mx-auto max-w-[100rem] px-4 lg:px-10 mt-5 mb-20 scroll-mt-20">
+        <section id={TAB_ANCHORS.lineups} className="mt-5 mb-20 scroll-mt-20">
           {lineupStats ? (
             <LineupExplorer
               data={lineupStats as LineupFile}
@@ -744,7 +773,7 @@ export function TeamPageView({
           every five-man unit containing the player, OFF every unit without
           him. Null before 2024 for the same reason Lineups is. */}
       {show.onoff && !preview && (
-        <section id={TAB_ANCHORS.onoff} className="mx-auto max-w-[100rem] px-4 lg:px-10 mt-5 mb-20 scroll-mt-20">
+        <section id={TAB_ANCHORS.onoff} className="mt-5 mb-20 scroll-mt-20">
           {lineupStats ? (
             <OnOffExplorer
               data={lineupStats as LineupFile}
@@ -761,7 +790,22 @@ export function TeamPageView({
         </section>
       )}
 
+        </div>
+      </div>
 
+      {/* Fixed, so it sits outside the row above and cannot be clipped by it.
+          The page pads itself by the same amount the bar is tall — see
+          BOTTOM_BAR_CLEARANCE, which lives beside the bar so the two cannot
+          drift apart. */}
+      {showTabs && (
+        <TeamBottomBar
+          active={tab === "all" ? "overview" : tab}
+          mode={tab === "all" ? "anchors" : "routes"}
+          slug={slug}
+          year={current.year}
+          overviewHref={overviewHref}
+        />
+      )}
     </div>
   );
 }
