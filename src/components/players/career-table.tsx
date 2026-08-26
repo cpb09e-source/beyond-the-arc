@@ -91,46 +91,40 @@ export function CareerTable({
       {/* Card header — kicker + display title with the View dropdown tucked
           alongside it. The season count sits on the right opposite the
           title row. */}
-      <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-3 flex-wrap">
-        <div>
-          {/* Desktop only, on the same reasoning as the Player Overview card
-              below: an eyebrow reading YEAR BY YEAR above a heading reading
-              Career is two labels for one thing, and a phone column is where
-              that costs most. */}
-          <div className="hidden sm:flex text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 items-center gap-2">
-            <span className="h-px w-6 bg-coral" />
-            Year by year
-          </div>
-          <div className="flex items-baseline gap-4 flex-wrap">
-            <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Career</h2>
-            {/* Stock at every width except a phone. Below md a site-wide rule
-                floors every select at 16px so iOS Safari does not zoom the page
-                on tap — which left this one reading LARGER on a phone than the
-                14px it sets on a desktop. `field-sm-phone` is the sanctioned
-                opt-out; see the note beside that rule in globals.css for why it
-                cannot be a utility here and how the zoom guard survives it.
-
-                The box does not move at any width. `compact` was tried and
-                takes the height down with the type, 32px against 40. */}
-            <Select
-              value={view}
-              onChange={(v) => setView(v as View)}
-              ariaLabel="Career stats view"
-              className="field-sm-phone"
-            >
-              <option value="per_game">Per game</option>
-              <option value="totals">Totals</option>
-            </Select>
-          </div>
-          <p className="mt-2 text-xs text-ink-muted">
-            Click a season to open the player&apos;s game log.
-          </p>
+      {/* ONE BAND, NOT TWO. The heading used to sit in its own tinted block
+          above a second band of controls, under a 4px accent strip — three
+          horizontal rules of chrome before a single number. The heading, its
+          view picker and the season count share a line now, and the caption
+          runs under them. Roughly 60px shorter on a phone, where the card has
+          to earn every one of them. */}
+      <div className="px-5 lg:px-7 py-4 border-b border-hairline flex items-center justify-between gap-x-4 gap-y-2 flex-wrap">
+        <div className="flex items-center gap-3 min-w-0">
+          <h2 className="font-display text-xl sm:text-2xl text-ink leading-none tracking-tight">Career</h2>
+          {/* Stock at every width except a phone. Below md a site-wide rule
+              floors every select at 16px so iOS Safari does not zoom the page
+              on tap — which left this one reading LARGER on a phone than the
+              14px it sets on a desktop. `field-sm-phone` is the sanctioned
+              opt-out; see the note beside that rule in globals.css. */}
+          <Select
+            value={view}
+            onChange={(v) => setView(v as View)}
+            ariaLabel="Career stats view"
+            className="field-sm-phone"
+          >
+            <option value="per_game">Per game</option>
+            <option value="totals">Totals</option>
+          </Select>
         </div>
         <span className="text-xs text-ink-muted whitespace-nowrap">
-          <span className="font-display text-2xl text-ink tabular leading-none">{seasons.length}</span>{" "}
+          <span className="tabular text-ink font-semibold">{seasons.length}</span>{" "}
           {seasons.length === 1 ? "season" : "seasons"}
         </span>
       </div>
+      {/* The caption is a hint about the rows, so it belongs against them
+          rather than inside the heading band it used to share. */}
+      <p className="px-5 lg:px-7 pt-2.5 pb-3 text-xs text-ink-muted">
+        Click a season to open the player&apos;s game log.
+      </p>
 
       {/* Horizontal scroll on narrow viewports — full stat line stays intact
           and swipes left/right with touch momentum instead of dropping columns. */}

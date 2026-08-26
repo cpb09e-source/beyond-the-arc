@@ -45,41 +45,36 @@ export function PlayerOverview({
     <>
       {/* Rank rings moved to the player-page hero (top right of the dossier
           card), so this heading is just a heading again. */}
-      <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30">
-        {/* Desktop only. On a phone the card is already stacked under the
-            career table and the heading below carries it — an eyebrow saying
-            FULL-SEASON STATS above a heading saying Player Overview is two
-            labels for one thing, and the narrow column is where that costs
-            most. */}
-        <div className="hidden sm:flex text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 items-center gap-2">
-          <span className="h-px w-6 bg-coral" />
-          Full-season stats
-        </div>
-        <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Player Overview</h2>
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 lg:px-6 py-3 border-b border-hairline bg-paper/50">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <TeamLogo name={selected.team_name} size={24} />
-          <span className="text-sm font-medium text-ink truncate">{selected.team_name}</span>
-          <span className="text-ink-muted">·</span>
-          {options.length > 1 ? (
-            <Select
-              value={String(selected.year)}
-              onChange={(v) => setSelectedYear(Number(v))}
-              ariaLabel="Select season"
-              // Same 14px as the career table's view picker at every width. The
-              // two already matched on a desktop and only diverged on a phone,
-              // where the site-wide 16px floor caught this one and not that one
-              // — see the note beside field-sm-phone in globals.css.
-              className="field-sm-phone"
-            >
-              {options.map((o) => (
-                <option key={o.year} value={o.year}>{seasonLabel(o.year)}</option>
-              ))}
-            </Select>
-          ) : (
-            <span className="text-sm text-ink tabular">{seasonLabel(selected.year)}</span>
-          )}
+      {/* One band: heading, the team and season it describes, and the cohort
+          the percentiles are against. It was two — a tinted heading block under
+          an accent strip, then a picker row — which is three horizontal rules
+          before any content. */}
+      <div className="px-5 lg:px-6 py-4 border-b border-hairline flex items-center justify-between gap-x-4 gap-y-2 flex-wrap">
+        <div className="flex items-center gap-3 min-w-0">
+          <h2 className="font-display text-xl sm:text-2xl text-ink leading-none tracking-tight whitespace-nowrap">
+            Player Overview
+          </h2>
+          <span className="flex items-center gap-2 min-w-0">
+            <TeamLogo name={selected.team_name} size={20} />
+            <span className="text-sm text-ink-soft truncate hidden sm:inline">{selected.team_name}</span>
+            {options.length > 1 ? (
+              <Select
+                value={String(selected.year)}
+                onChange={(v) => setSelectedYear(Number(v))}
+                ariaLabel="Select season"
+                // Same 14px as the career table's view picker at every width.
+                // The two already matched on a desktop and only diverged on a
+                // phone, where the site-wide 16px floor caught this one.
+                className="field-sm-phone"
+              >
+                {options.map((o) => (
+                  <option key={o.year} value={o.year}>{seasonLabel(o.year)}</option>
+                ))}
+              </Select>
+            ) : (
+              <span className="text-sm text-ink tabular">{seasonLabel(selected.year)}</span>
+            )}
+          </span>
         </div>
         <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted">
           Percentile rank within {selected.ranks.cohortSize.toLocaleString()} {bucketLabel(selected.ranks.bucket)}

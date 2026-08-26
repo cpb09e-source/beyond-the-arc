@@ -278,7 +278,6 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
             readers come to a player page for, and it reads as the continuation
             of the vitals. Player Overview follows as the single-season detail. */}
         <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
-          <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
           <CareerTable seasons={player.seasons} bartPlayerId={bartId} playerName={stats.name ?? `Player ${bartId}`} />
         </div>
       </section>
@@ -289,7 +288,6 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
               Inner component supplies the team/year picker band + grid.
               Full-bleed edge-to-edge on mobile; framed card on lg+. */}
           <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
-            <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
             {/* Heading lives inside the client component now: the rank rings
                 sit to its right and have to track the year picker. */}
             <PlayerOverview options={overviewOptions} bartPlayerId={bartId} />
@@ -302,7 +300,6 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         log={
           <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-6">
             <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
-              <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
               <PlayerGameLog rows={logRows} playerName={stats.name ?? `Player ${bartId}`} />
             </div>
           </section>

@@ -177,6 +177,13 @@ function colsFor(group: Group): Col[] {
   }
   return [
     { key: "pts", label: "PTS", get: (r) => fmtInt(r.pts_scored) , sortVal: (r) => r.pts_scored },
+    // The two headline shooting rates sit beside points, not off at the end:
+    // they are what turns 13 points into a good or a bad 13, and the reader
+    // comparing them is looking at the scoring number when he wants them.
+    // Recomputed from makes and attempts rather than read off fg_pct, so this
+    // column and the shooting group's can never disagree.
+    { key: "fgp", label: "FG%", get: (r) => fmtPct(rate(r.fgm, r.fga)), sortVal: (r) => rate(r.fgm, r.fga), wide: true },
+    { key: "3pp", label: "3P%", get: (r) => fmtPct(rate(r.fgm3, r.fga3)), sortVal: (r) => rate(r.fgm3, r.fga3), wide: true },
     { key: "ast", label: "AST", get: (r) => fmtInt(r.ast) , sortVal: (r) => r.ast },
     { key: "orb", label: "ORB", get: (r) => fmtInt(r.orb) , sortVal: (r) => r.orb },
     { key: "drb", label: "DRB", get: (r) => fmtInt(r.drb) , sortVal: (r) => r.drb },
@@ -333,20 +340,22 @@ export function PlayerGameLog({
 
   return (
     <>
-      <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30">
-        {/* Desktop only, matching the other two cards on this page. */}
-        <div className="hidden sm:flex text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 items-center gap-2">
-          <span className="h-px w-6 bg-coral" />
-          Game by game
-        </div>
-        <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">
-          Game Log
-        </h2>
-      </div>
-
+      {/* The heading shares the control band rather than sitting in a tinted
+          block above it under an accent strip. See the same note on the career
+          card: three horizontal rules of chrome before a single number is the
+          thing being fixed. */}
       {/* The three controls. They wrap on a phone rather than scrolling, so no
           control is ever off screen with nothing to say so. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 lg:px-6 py-3 border-b border-hairline bg-paper/50">
+      {/* TWO ROWS, HEADING THEN CONTROLS. The heading shared a line with the
+          pickers and read as a fourth field beside them; a card title is not a
+          control. The season picker stays on the heading's line because it says
+          WHICH game log this is, where split and columns only change how the
+          same one is shown. */}
+      <div className="px-5 lg:px-6 py-4 border-b border-hairline flex flex-col gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h2 className="font-display text-xl sm:text-2xl text-ink leading-none tracking-tight whitespace-nowrap">
+            Game Log
+          </h2>
         {years.length > 1 && (
           <label className="flex items-center gap-2">
             <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Season</span>
@@ -360,12 +369,14 @@ export function PlayerGameLog({
             </Select>
           </label>
         )}
+        </div>
+
         {/* Split and Columns share a row at every width. Below sm the caption
             moves ABOVE its select and each takes half the line — side by side
             with the captions still inline, two selects plus two captions need
             more than a 390px phone has, and the pair would wrap to two rows
             again. From sm there is room for the inline form. */}
-        <div className="flex items-end sm:items-center gap-3 flex-1 sm:flex-none min-w-0">
+        <div className="flex items-end sm:items-center gap-3 min-w-0">
           <label className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 flex-1 sm:flex-none min-w-0">
             <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Split</span>
             <Select
@@ -395,7 +406,7 @@ export function PlayerGameLog({
           with a select on a phone and read as a third field rather than as a
           result. Always states what the split left, because eleven rows where
           there were thirty-one reads as a fault otherwise. */}
-      <div className="px-5 lg:px-6 pb-3 -mt-1 text-xs text-ink-muted">
+      <div className="px-5 lg:px-6 pt-1.5 pb-3.5 text-xs text-ink-muted">
         <span className="tabular text-ink font-semibold">{shown.length}</span>
         {shown.length === 1 ? " game" : " games"}
         {split !== "all" && <> · {splitLabel.toLowerCase()}</>}
