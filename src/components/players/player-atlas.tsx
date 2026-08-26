@@ -557,8 +557,14 @@ export function PlayerAtlas({
             <PlayerPhoto bartPlayerId={bartId} name={name} size={84} />
 
             <div className="min-w-0 flex flex-col gap-1.5 md:gap-2">
+            {/* No accent rule ahead of the crest. A 20px hairline immediately
+                left of a round logo and a school name does not read as the
+                editorial rule it is elsewhere on the site — it reads as a
+                hyphen joined to the word, as though the school were called
+                "-Iowa St." The rule earns its place above a heading, where
+                nothing follows it on the same line; here the crest already
+                marks where the line starts. */}
             <div className="flex items-center gap-2 label min-w-0 flex-nowrap whitespace-nowrap" style={{ color: "var(--coral)" }}>
-              <span className="h-px w-5 bg-coral" />
               <Link
                 href={`/teams/${teamSlug(teamName)}/${year}/`}
                 // The school sets larger than the rest of this line. It is the
