@@ -105,6 +105,16 @@ const MOVES = [
   // 2026-08-24
   ["Mark Mitchell", "Kentucky"],
   ["Iaroslav Niagu", "Colorado"],
+  // 2026-08-25 — added to patch-portal-manual.mts on the day and missed here,
+  // the same drift the note above records. Ole Miss is "Mississippi" in this
+  // naming.
+  ["Keyshawn Hall", "St. John's"],
+  ["Nick Townsend", "Stanford"],
+  ["Corey Stephenson", "Mississippi"],
+  // 2026-08-26
+  ["Langston Reynolds", "Northern Colorado"],
+  ["Dominick Nelson", "Utah Valley"],
+  ["KC Ibekwe", "Portland St."],
 ];
 
 /** Common shorthand → the name season-preview.json uses. */

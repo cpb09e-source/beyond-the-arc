@@ -150,6 +150,19 @@ const BATCHES: Array<{ confirmed: string; moves: Array<[string, string]> }> = [
       ["Corey Stephenson", "Mississippi"],
     ],
   },
+  {
+    confirmed: "2026-08-26T00:00:00",
+    moves: [
+      // A return: Northern Colorado was his school for 24 and 25 before a
+      // senior year at Minnesota.
+      ["Langston Reynolds", "Northern Colorado"],
+      // Also a return — Utah Valley in 25, Iowa St. in 26, back again now.
+      ["Dominick Nelson", "Utah Valley"],
+      // "Portland St." in the Bart naming, not "Portland State"; the corpus
+      // carries a separate "Portland" and the two are different schools.
+      ["KC Ibekwe", "Portland St."],
+    ],
+  },
 ];
 
 const MOVES: Array<[string, string, string]> = BATCHES.flatMap(
