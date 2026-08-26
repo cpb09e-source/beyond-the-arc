@@ -99,11 +99,21 @@ export function CareerTable({
           </div>
           <div className="flex items-baseline gap-4 flex-wrap">
             <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Career</h2>
-            {/* Compact rather than the default size: this one sits on the same
-                line as a 2xl display heading, and at h-10/text-sm the box was
-                reading as a peer of the word "Career" instead of as its
-                control. The variant already exists — no third size. */}
-            <Select value={view} onChange={(v) => setView(v as View)} ariaLabel="Career stats view" compact>
+            {/* Default box, one step down in type. `compact` was tried and takes
+                the height with it (32px against 40), which is more than this
+                needed — the box is the right size beside a 2xl heading, the
+                14px label inside it was not.
+
+                The override has to reach the <select>, and Select's className
+                lands on its wrapper, so it goes through a child selector. That
+                outranks the component's own .text-sm on specificity — one class
+                plus one element against one class — rather than racing it. */}
+            <Select
+              value={view}
+              onChange={(v) => setView(v as View)}
+              ariaLabel="Career stats view"
+              className="[&>select]:text-[0.8125rem]"
+            >
               <option value="per_game">Per game</option>
               <option value="totals">Totals</option>
             </Select>
