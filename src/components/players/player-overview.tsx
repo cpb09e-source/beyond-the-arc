@@ -46,7 +46,12 @@ export function PlayerOverview({
       {/* Rank rings moved to the player-page hero (top right of the dossier
           card), so this heading is just a heading again. */}
       <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30">
-        <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
+        {/* Desktop only. On a phone the card is already stacked under the
+            career table and the heading below carries it — an eyebrow saying
+            FULL-SEASON STATS above a heading saying Player Overview is two
+            labels for one thing, and the narrow column is where that costs
+            most. */}
+        <div className="hidden sm:flex text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 items-center gap-2">
           <span className="h-px w-6 bg-coral" />
           Full-season stats
         </div>

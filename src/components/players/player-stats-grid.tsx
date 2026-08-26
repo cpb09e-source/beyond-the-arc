@@ -184,7 +184,10 @@ export function PlayerStatsGrid({
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 mb-4">
-        <span className="text-sm text-ink-muted">
+        {/* Desktop only. On a phone this row wraps, so the count took a whole
+            line of its own above the two pickers — and the same figure is in
+            the GP column of the career table directly above this card. */}
+        <span className="hidden sm:inline text-sm text-ink-muted">
           {n} game{n === 1 ? "" : "s"} in this split
         </span>
         <div className="flex flex-wrap items-center gap-3">
