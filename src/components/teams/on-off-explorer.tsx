@@ -278,7 +278,15 @@ export function OnOffExplorer({
             <p className="mt-1.5 text-xs text-ink-muted max-w-2xl leading-relaxed">{sec.blurb}</p>
           </div>
 
-          <div className="border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-4 lg:mx-0">
+          {/* INSET, not full-bleed. This used to run edge to edge below lg
+              (-mx-4, no side borders, square corners) while the heading, the
+              blurb, the view chips and the methodology note above and below it
+              all sat in a px-4 gutter. The result read as a heading indented
+              from its own table. It now shares that gutter and keeps its border
+              and radius at every width, which is the pattern the rest of the
+              section already used. The stats lost 32px and the section gained
+              a single left edge. */}
+          <div className="border border-hairline rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 mx-4 lg:mx-0">
             {/* overscroll-x-contain ONLY — `none` also kills the vertical
                 rubber-band and this box scrolls in both axes. Documented at the
                 other grids. */}
@@ -287,7 +295,17 @@ export function OnOffExplorer({
                 <thead>
                   <tr>
                     <th className="sticky left-0 z-30 bg-paper-deep h-6 p-0 border-r border-hairline" />
-                    <th colSpan={3} className="bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-ink-muted text-center align-middle">
+                    {/* POSSESSIONS IS DESKTOP-ONLY. On, Off and Pct are the
+                        qualification context — they say why a player is in the
+                        table, not how he played — and on a phone they were
+                        three of the first four columns, so the stats the
+                        section exists for started off-screen. The floor is
+                        still enforced and still stated in the note below the
+                        table; it just is not spending a phone's width to
+                        repeat itself. The default sort remains on-court
+                        possessions, which still orders the rotation sensibly
+                        whether or not the column is drawn. */}
+                    <th colSpan={3} className="hidden sm:table-cell bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-ink-muted text-center align-middle">
                       Possessions
                     </th>
                     {bands.map((b, bi) => (
@@ -306,9 +324,9 @@ export function OnOffExplorer({
                   </tr>
                   <tr>
                     <Th sticky label="Player" align="left" active={sort.key === "name"} dir={sort.dir} onClick={() => toggleSort("name", sec.key, "asc")} />
-                    <Th label="On" title="Possessions with this player on the floor" active={sort.key === "onPoss"} dir={sort.dir} onClick={() => toggleSort("onPoss", sec.key, "desc")} />
-                    <Th label="Off" title="Possessions with this player off the floor" active={sort.key === "offPoss"} dir={sort.dir} onClick={() => toggleSort("offPoss", sec.key, "desc")} />
-                    <Th label="Pct" title="Share of team possessions this player was on the floor for" active={sort.key === "share"} dir={sort.dir} onClick={() => toggleSort("share", sec.key, "desc")} />
+                    <Th className="hidden sm:table-cell" label="On" title="Possessions with this player on the floor" active={sort.key === "onPoss"} dir={sort.dir} onClick={() => toggleSort("onPoss", sec.key, "desc")} />
+                    <Th className="hidden sm:table-cell" label="Off" title="Possessions with this player off the floor" active={sort.key === "offPoss"} dir={sort.dir} onClick={() => toggleSort("offPoss", sec.key, "desc")} />
+                    <Th className="hidden sm:table-cell" label="Pct" title="Share of team possessions this player was on the floor for" active={sort.key === "share"} dir={sort.dir} onClick={() => toggleSort("share", sec.key, "desc")} />
                     {cols.map((st, i) => (
                       <Th
                         key={st.key}
@@ -334,13 +352,13 @@ export function OnOffExplorer({
                           <span className="text-ink">{r.name}</span>
                         )}
                       </td>
-                      <td className="px-2 sm:px-3 py-1.5 text-right tabular text-ink-soft whitespace-nowrap">
+                      <td className="hidden sm:table-cell px-2 sm:px-3 py-1.5 text-right tabular text-ink-soft whitespace-nowrap">
                         {Math.round(r.on.poss).toLocaleString()}
                       </td>
-                      <td className="px-2 sm:px-3 py-1.5 text-right tabular text-ink-muted whitespace-nowrap">
+                      <td className="hidden sm:table-cell px-2 sm:px-3 py-1.5 text-right tabular text-ink-muted whitespace-nowrap">
                         {Math.round(r.off.poss).toLocaleString()}
                       </td>
-                      <td className="px-2 sm:px-3 py-1.5 text-right tabular text-ink-muted whitespace-nowrap">
+                      <td className="hidden sm:table-cell px-2 sm:px-3 py-1.5 text-right tabular text-ink-muted whitespace-nowrap">
                         {(share(r) * 100).toFixed(1)}%
                       </td>
                       {cols.map((st, i) => {
@@ -420,6 +438,7 @@ export function OnOffExplorer({
 
 function Th({
   label, align = "right", title, active, dir, onClick, sticky = false, bandStart = false,
+  className = "",
 }: {
   label: string;
   align?: "left" | "right";
@@ -429,6 +448,8 @@ function Th({
   onClick: () => void;
   sticky?: boolean;
   bandStart?: boolean;
+  /** Extra classes — used to drop a column below a breakpoint. */
+  className?: string;
 }) {
   return (
     <th
@@ -440,6 +461,7 @@ function Th({
         active ? "text-ink" : "text-ink-muted",
         sticky && "sticky left-0 z-30 border-r",
         bandStart && "border-l border-hairline",
+        className,
       )}
     >
       {/* Padding on the button and `uppercase` repeated: Preflight resets
