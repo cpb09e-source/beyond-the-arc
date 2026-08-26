@@ -15,11 +15,52 @@ import { cn } from "@/lib/utils";
  * drawing. Everyone below the line renders nothing at all and the masthead
  * closes up around it.
  *
- * Gold is the overall board and blue is the mid-major board, everywhere and
- * without exception, so the two honours can never be mistaken for each other.
+ * THE MARK IS A DIAL — a ring of a hundred ticks, one per place, with the rank
+ * set inside it. It replaced a pair of concentric rules, which were decoration:
+ * they drew the same shape for #1 and for #97, so the ring said nothing the
+ * number inside it had not already said. The dial makes the ring carry the
+ * standing.
+ *
+ * COLOUR IS THE TIER, NOT THE BOARD. Five hues for five tiers — overall 1-10,
+ * 11-25, 26-100, mid-major 1-10, 11-100 — which means the word under the rank
+ * is the only thing separating the two boards. That is a deliberate trade: the
+ * tier is what a reader wants at a glance and the board is what they want on a
+ * second look. The values are tokens in globals.css; see the note there.
  */
 
 const CUTOFF = 100;
+
+type Tier = "ov1" | "ov2" | "ov3" | "mm1" | "mm2";
+
+function tierOf(rank: number, mid: boolean): Tier {
+  if (mid) return rank <= 10 ? "mm1" : "mm2";
+  if (rank <= 10) return "ov1";
+  if (rank <= 25) return "ov2";
+  return "ov3";
+}
+
+/**
+ * How much of the ring a rank lights, as a fraction of it.
+ *
+ * THE DIAL FILLS DOWN FROM #1, NOT UP FROM #100. The obvious model — one tick
+ * per place, so #5 lights five — runs backwards against every other coloured
+ * thing on this site, where a fuller bar means a better number. A #5 with five
+ * ticks lit reads as "barely made the list".
+ *
+ * Straight inversion (101 - rank) fixes the direction and buys a smaller
+ * problem: it spends 9% of the ring on the entire top ten, so #1 and #5 land
+ * four ticks apart and are indistinguishable at 58px. The square root spreads
+ * the top of the board out instead — the top ten take about a third of the
+ * ring, #1 fills it, #5 sits near four fifths, #10 near seven tenths — while
+ * #100 still empties out completely.
+ *
+ * The cost is that the ring stops being a literal count of places. It is an
+ * impression, and it is allowed to be one because the exact number is set in
+ * the middle of it at four times the size.
+ */
+function litFraction(rank: number) {
+  return 1 - Math.sqrt((rank - 1) / (CUTOFF - 1));
+}
 
 export function TopHundredSeal({
   season,
@@ -30,16 +71,11 @@ export function TopHundredSeal({
   season: PlayerRanksSeason;
   size?: number;
   /**
-   * The small variant, for a phone. Drops the board label and stacks TOP over
-   * 100 — at this diameter a one-line "TOP 100" would have to set at about
-   * 4.5px to fit the inner circle, which is not type any more. Stacking buys
-   * the words their size back, and the colour still says which board it is:
-   * gold overall, blue mid-major, the same everywhere.
-   *
-   * The stacked label sets at 0.155 of the diameter, not 0.12. At the original
-   * 54px mark that ratio put "TOP" and "100" at 6.5px — present, but not
-   * readable at arm's length on a phone, which is the only place this variant
-   * renders.
+   * The small variant, for a phone. Shortens the board label to TOP / MID and
+   * sets it far larger in proportion — at this diameter the desktop ratio puts
+   * "MID-MAJOR" at about 4px, which is not type any more. Three letters buy the
+   * word its size back, and the board is the one thing colour cannot say here,
+   * because colour is spent on the tier.
    */
   compact?: boolean;
   className?: string;
@@ -56,8 +92,7 @@ export function TopHundredSeal({
   // take comes off the name. One seal at full size leaves a comfortable line.
   // Two at full size do not: measured at 390px, a player holding both boards
   // had "Nolan Minessale" down to 85px and wrapping to three lines. The pair
-  // steps down instead — still well clear of the 6.5px label this mark used to
-  // set at, and the name gets its line back.
+  // steps down instead, and the compact label ratio keeps it readable there.
   //
   // Desktop is unaffected: there the mark sits in its own column with room for
   // two at full size.
@@ -94,89 +129,86 @@ function Seal({
   compact?: boolean;
   mid?: boolean;
 }) {
+  const tier = tierOf(rank, mid);
+  const tick = `var(--seal-${tier}-tick)`;
+  const ink = `var(--seal-${tier}-ink)`;
+
+  // A hundred ticks below 72px is texture rather than a count — halve the
+  // resolution there and let each tick stand for two places.
+  const total = size >= 72 ? 100 : 50;
+  const lit = Math.min(total, Math.max(1, Math.round(litFraction(rank) * total)));
+
   // Everything scales off the diameter so one `size` prop drives the whole
   // mark — the hero renders it smaller on a phone than on a desktop.
-  const accent = mid ? "var(--coral)" : "var(--court-ink)";
-  const ring = mid
-    ? "color-mix(in oklab, var(--coral) 45%, transparent)"
-    : "color-mix(in oklab, var(--court) 78%, transparent)";
-  // The compact mark stacks TOP over 100 over the rank, so it carries a taller
-  // column of type than the desktop one does in a smaller circle. It gets a
-  // thinner margin between the two rings to buy that column its clearance —
-  // at the desktop inset the rank's cap was landing on the inner ring.
-  // 8 rather than 10 on the compact mark: the ring margin is the cheapest
-  // place to find room for the label now that it sets larger, and at this
-  // diameter a 4px band still reads as two rings rather than one thick one.
-  const inner = size - (compact ? 8 : 14);
+  const outer = 47;
+  const len = size >= 72 ? 6 : 5;
+  const ticks = Array.from({ length: total }, (_, i) => {
+    const a = (i / total) * Math.PI * 2;
+    const on = i < lit;
+    const reach = outer - (on ? len : len * 0.55);
+    return {
+      x1: 50 + Math.cos(a) * outer,
+      y1: 50 + Math.sin(a) * outer,
+      x2: 50 + Math.cos(a) * reach,
+      y2: 50 + Math.sin(a) * reach,
+      on,
+    };
+  });
+
+  const boardWord = compact ? (mid ? "Mid" : "Top") : mid ? "Mid-major" : "Top 100";
+  // Nine characters of MID-MAJOR have to fit a chord of the inner circle, so
+  // the long label steps down where the short one does not.
+  const labelSize = compact ? size * 0.13 : size * (mid ? 0.068 : 0.078);
 
   return (
     <div
-      className="rounded-full flex items-center justify-center shrink-0 bg-paper"
-      style={{ width: size, height: size, boxShadow: `inset 0 0 0 1.5px ${ring}` }}
+      className="relative grid place-items-center shrink-0"
+      style={{ width: size, height: size }}
       title={`Top 100 ${label.toLowerCase()}${of ? ` — ranked ${rank} of ${of.toLocaleString("en-US")}` : ` — ranked ${rank}`}`}
     >
-      <div
-        className="rounded-full flex flex-col items-center justify-center"
-        style={{ width: inner, height: inner, boxShadow: `inset 0 0 0 1px ${ring}` }}
+      {/* Rotated a quarter turn so the dial opens at twelve and fills clockwise. */}
+      <svg
+        viewBox="0 0 100 100"
+        aria-hidden="true"
+        className="absolute inset-0 h-full w-full"
+        style={{ transform: "rotate(-90deg)" }}
       >
-        {compact ? (
-          <>
-            <span
-              className="font-bold uppercase leading-none"
-              style={{ fontSize: size * 0.155, letterSpacing: "0.12em", color: accent, textIndent: "0.12em" }}
-            >
-              Top
-            </span>
-            <span
-              className="font-bold uppercase leading-none"
-              style={{ fontSize: size * 0.155, letterSpacing: "0.04em", color: accent, textIndent: "0.04em", marginTop: size * 0.01 }}
-            >
-              100
-            </span>
-          </>
-        ) : (
-          <span
-            className="font-bold uppercase leading-none"
-            style={{ fontSize: size * 0.078, letterSpacing: "0.2em", color: accent, textIndent: "0.2em" }}
-          >
-            Top 100
-          </span>
-        )}
-        <span className="flex items-baseline" style={{ gap: 1, marginTop: size * (compact ? 0.022 : 0.03) }}>
-          <span
-            className="font-display font-semibold leading-none"
-            style={{ fontSize: size * (compact ? 0.125 : 0.125), color: accent, opacity: 0.6 }}
-          >
-            #
-          </span>
-          <span
-            className="font-display font-bold leading-none text-ink"
-            style={{ fontSize: size * (compact ? 0.30 : 0.315), letterSpacing: "-0.04em" }}
-          >
-            {rank}
-          </span>
+        {ticks.map((t, i) => (
+          <line
+            key={i}
+            x1={t.x1}
+            y1={t.y1}
+            x2={t.x2}
+            y2={t.y2}
+            stroke={tick}
+            strokeOpacity={t.on ? 1 : 0.2}
+            strokeWidth={t.on ? 2.2 : 1.4}
+            strokeLinecap="round"
+          />
+        ))}
+      </svg>
+      <div className="relative flex flex-col items-center leading-none">
+        <span
+          className="font-display font-extrabold leading-none text-ink"
+          style={{
+            fontSize: Math.round(size * (String(rank).length > 2 ? 0.26 : 0.3)),
+            letterSpacing: "-0.05em",
+          }}
+        >
+          {rank}
         </span>
-        {/* The rule and the board name are the desktop mark's bottom half. On a
-            phone the colour carries the board on its own, and dropping both
-            gives the rank the room it needs. */}
-        {!compact && (
-          <>
-            <span
-              style={{
-                width: size * 0.27,
-                height: 1,
-                background: ring,
-                margin: `${size * 0.03}px 0`,
-              }}
-            />
-            <span
-              className="font-bold uppercase leading-none"
-              style={{ fontSize: size * 0.073, letterSpacing: "0.16em", color: accent, textIndent: "0.16em" }}
-            >
-              {label}
-            </span>
-          </>
-        )}
+        <span
+          className="font-semibold uppercase leading-none"
+          style={{
+            fontSize: Math.max(5, Math.round(labelSize)),
+            letterSpacing: "0.16em",
+            textIndent: "0.16em",
+            color: ink,
+            marginTop: 2,
+          }}
+        >
+          {boardWord}
+        </span>
       </div>
     </div>
   );

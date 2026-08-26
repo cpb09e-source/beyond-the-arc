@@ -64,6 +64,24 @@
      rank. They separate by HUE rather than lightness, which is what keeps them
      reading as four kinds instead of a scale. Text clears 6.5-7.6 on its own
      fill here. */
+  /* Top-100 seal — five tiers across two boards.
+     Overall 1-10 / 11-25 / 26-100, mid-major 1-10 / 11-100. Five hues because
+     five tiers, and the mark is the only place on the site that carries them.
+     The tick ring takes the hue at full chroma; the word under the rank takes a
+     darker version of the same hue, because the chroma that makes a 2px tick
+     carry is the chroma that makes 7px type unreadable. Every ink below clears
+     4.6:1 on this ground.
+     The TICKS are graphic, not text: cyan measures 2.39 and green 2.09 against
+     warm paper, under the 3:1 guideline for graphical objects. That is a known
+     trade — the rank itself is --ink at 14.8 and the ink under it carries the
+     board, so nothing legible depends on the ring. Darken the ticks here if it
+     ever reads as too faint on paper; they are already clear on dark. */
+  --seal-ov1-tick: #ff5714; --seal-ov1-ink: #c74410;   /* orange  */
+  --seal-ov2-tick: #00b2ca; --seal-ov2-ink: #007989;   /* cyan    */
+  --seal-ov3-tick: #7b61ff; --seal-ov3-ink: #6f57e5;   /* violet  */
+  --seal-mm1-tick: #00c853; --seal-mm1-ink: #008035;   /* green   */
+  --seal-mm2-tick: #ff4d8d; --seal-mm2-ink: #c23b6b;   /* pink    */
+
   --cls-fr-bg: #D3EDF2; --cls-fr-fg: #0F5566;
   --cls-so-bg: #E8E1FA; --cls-so-fg: #4C3391;
   --cls-jr-bg: #FBEAC8; --cls-jr-fg: #7A4703;
@@ -140,6 +158,17 @@
      each one is a small headlight. Deep fills and light text instead, same four
      hues in the same order, so a junior is the same amber on either theme.
      Text clears 8.1-8.5 on its own fill. */
+  /* The seal on dark. The ticks do not move — full chroma reads on #1C1C1C as
+     well as it reads on paper — so only the ink changes, and it changes by
+     going UP to the tick's own value rather than down. Violet is the one
+     exception: #7b61ff sits at 4.05 on this ground, so its ink lifts a step to
+     #866eff (4.62). Every ink here clears 4.6:1. */
+  --seal-ov1-ink: #ff5714;
+  --seal-ov2-ink: #00b2ca;
+  --seal-ov3-ink: #866eff;
+  --seal-mm1-ink: #00c853;
+  --seal-mm2-ink: #ff4d8d;
+
   --cls-fr-bg: #123c46; --cls-fr-fg: #a4dfeb;
   --cls-so-bg: #272052; --cls-so-fg: #c6b8f2;
   --cls-jr-bg: #3f2f13; --cls-jr-fg: #f2cb80;
