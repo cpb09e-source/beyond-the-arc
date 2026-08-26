@@ -227,8 +227,8 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
     // left some profiles ending flush against the footer.
     <div className="pb-20">
       <PlayerTabs
-        overview={
-        <>
+        hero={
+      <>
       {/* Hero — "Atlas". Six small-multiple modules instead of a stat line:
           each headline number is drawn as well as printed, so the season's
           shape and the player's standing read before the figures do. The
@@ -263,6 +263,10 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         bucket={heroRanks?.bucket ?? positionByYear[String(current.year)] ?? "G"}
         banner={banner}
       />
+      </>
+        }
+        overview={
+        <>
 
       {/* No margin of its own — the gap to the hero is the hero section's own
           bottom padding and nothing else, which keeps it tighter (24px) than

@@ -36,10 +36,25 @@ const TABS: Array<{ key: PlayerTab; label: string }> = [
 ];
 
 export function PlayerTabs({
+  hero,
   overview,
   log,
   shooting,
 }: {
+  /**
+   * THE HERO IS OUTSIDE THE TABS, not inside Overview.
+   *
+   * It was in the Overview panel while the strip sat above everything. Putting
+   * the strip under the hero forces the question, because a hero inside a panel
+   * would vanish the moment you left that panel — and the tabs would then be
+   * navigating a page whose subject had disappeared. The team pages settle it
+   * the same way: masthead always, sections beneath.
+   *
+   * The consequence is that the hero now shows on Game Log and Shooting too,
+   * on a phone as well as a desktop. That is the point rather than a
+   * side-effect: whose game log this is stays on screen while you read it.
+   */
+  hero: React.ReactNode;
   overview: React.ReactNode;
   log: React.ReactNode;
   shooting: React.ReactNode;
@@ -55,6 +70,7 @@ export function PlayerTabs({
       // space BEFORE the footer and the footer is still under the bar.
       data-player-bottom-bar=""
     >
+      {hero}
       <TabStrip active={active} onSelect={setActive} />
 
       {/* EVERY PANEL STAYS MOUNTED. Switching with `hidden` rather than by
@@ -75,8 +91,12 @@ export function PlayerTabs({
 }
 
 /**
- * The desktop control. A strip above the content rather than the rail the team
- * pages carry, and that is a scope decision: a rail has to sit beside the
+ * The desktop control. Sits directly under the hero — above it, it read as
+ * page-level navigation for the whole site rather than as a switch for the
+ * cards below, and it separated the header from the name it belongs to.
+ *
+ * A strip rather than the rail the team pages carry, and that is a scope
+ * decision: a rail has to sit beside the
  * content, which means every section on the page has to agree on one container
  * width first. The team page paid that cost — ten sections normalised from
  * three different max-widths — because a rail that moves when you change tabs
@@ -93,7 +113,7 @@ function TabStrip({
   return (
     <nav
       aria-label="Player sections"
-      className="hidden lg:block mx-auto max-w-[88rem] px-10 pt-6"
+      className="hidden lg:block mx-auto max-w-[88rem] px-10 pb-1"
     >
       <ul className="flex items-stretch gap-1 border-b border-hairline">
         {TABS.map((t) => {
