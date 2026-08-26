@@ -93,7 +93,11 @@ export function CareerTable({
           title row. */}
       <div className="px-5 lg:px-7 py-5 lg:py-6 border-b border-hairline bg-paper-deep/30 flex items-end justify-between gap-3 flex-wrap">
         <div>
-          <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
+          {/* Desktop only, on the same reasoning as the Player Overview card
+              below: an eyebrow reading YEAR BY YEAR above a heading reading
+              Career is two labels for one thing, and a phone column is where
+              that costs most. */}
+          <div className="hidden sm:flex text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 items-center gap-2">
             <span className="h-px w-6 bg-coral" />
             Year by year
           </div>
