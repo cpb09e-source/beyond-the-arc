@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
 import { Select } from "@/components/select";
 import { PercentileChip } from "@/components/percentile-chip";
@@ -41,7 +41,9 @@ import { cn } from "@/lib/utils";
  * shading of the cell was tried first and does not work at this ramp: its
  * middle bands are near-paper by design, so an average night read as no
  * shading, and a tint says "good" without saying how good. The chip prints the
- * number.
+ * number, stacked under the rate it qualifies rather than beside it — six
+ * shooting columns each dragging a chip column behind them doubled the width
+ * of the widest group.
  */
 
 export type GameLogRow = {
@@ -469,19 +471,14 @@ export function PlayerGameLog({
                 </Th>
               ))}
               {cols.map((c) => (
-                <Fragment key={c.key}>
-                  <Th
-                    align="right"
-                    sort={sort.key === c.key ? sort.dir : null}
-                    onSort={() => toggleSort(c.key, true)}
-                  >
-                    {c.label}
-                  </Th>
-                  {/* The chip's column has no heading of its own — it belongs
-                      to the rate on its left and a second label would read as a
-                      second stat. Desktop only, with the cells. */}
-                  {c.shade && <th className="hidden lg:table-cell" aria-label={`${c.label} national percentile`} />}
-                </Fragment>
+                <Th
+                  key={c.key}
+                  align="right"
+                  sort={sort.key === c.key ? sort.dir : null}
+                  onSort={() => toggleSort(c.key, true)}
+                >
+                  {c.label}
+                </Th>
               ))}
             </tr>
           </thead>
@@ -533,30 +530,35 @@ export function PlayerGameLog({
                       ? nationalPct(seasonLadder[c.key], v)
                       : null;
                   return (
-                    <Fragment key={c.key}>
-                      <Td align="right" className="tabular">{c.get(r)}</Td>
-                      {/* The chip is its own cell, not a background on the
-                          number. A tinted cell says "good" without saying how
-                          good, and this ramp's middle bands are near-paper by
-                          design — a 55th-percentile night would have looked
-                          like no shading at all. The figure prints. */}
-                      {c.shade && (
-                        <Td align="right" className="hidden lg:table-cell pl-0">
-                          {pct === null ? (
-                            <span className="text-[0.6875rem] text-ink-muted">—</span>
-                          ) : (
-                            <PercentileChip pct={pct} />
-                          )}
-                        </Td>
+                    <Td key={c.key} align="right" className="tabular">
+                      {/* THE CHIP STACKS UNDER ITS RATE rather than taking a
+                          column of its own. Six shooting columns each dragging
+                          a second column behind them doubled the width of the
+                          widest group, and a chip a whole cell away from the
+                          number it qualifies has to be re-associated by eye on
+                          every row. Under it, the pair reads as one figure. */}
+                      {c.shade ? (
+                        <span className="inline-flex flex-col items-end gap-1">
+                          <span>{c.get(r)}</span>
+                          {/* Desktop only. The chip is a second line in every
+                              one of these cells, and on a phone that is thirty
+                              rows made half again as tall for a number the
+                              table is already too narrow to want. */}
+                          <span className="hidden lg:inline-flex h-4">
+                            {pct !== null && <PercentileChip pct={pct} />}
+                          </span>
+                        </span>
+                      ) : (
+                        c.get(r)
                       )}
-                    </Fragment>
+                    </Td>
                   );
                 })}
               </tr>
             ))}
             {shown.length === 0 && (
               <tr>
-                <td colSpan={4 + cols.length + cols.filter((c) => c.shade).length} className="px-3 py-6 text-center text-sm text-ink-muted">
+                <td colSpan={4 + cols.length} className="px-3 py-6 text-center text-sm text-ink-muted">
                   No games in this split.
                 </td>
               </tr>
@@ -571,14 +573,11 @@ export function PlayerGameLog({
                     and the row is already labelled Totals. */}
                 <Td />
                 <Td align="right" className="tabular">{fmtInt(t.mins)}</Td>
+                {/* No chip on the totals row. The ladder ranks a NIGHT, and a
+                    season aggregate is not a night — putting it on the same
+                    scale would say a 46% season was a median game. */}
                 {cols.map((c) => (
-                  <Fragment key={c.key}>
-                    <Td align="right" className="tabular">{totalFor(c.key, t)}</Td>
-                    {/* No chip on the totals row. The ladder ranks a NIGHT, and
-                        a season aggregate is not a night — placing it on the
-                        same scale would say a 46% season was a median game. */}
-                    {c.shade && <td className="hidden lg:table-cell" />}
-                  </Fragment>
+                  <Td key={c.key} align="right" className="tabular">{totalFor(c.key, t)}</Td>
                 ))}
               </tr>
             </tfoot>
