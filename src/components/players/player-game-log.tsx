@@ -133,6 +133,20 @@ function fmtRtg(x: number | null): string {
 function fmtPct(x: number | null): string {
   return x === null || x === undefined ? "—" : `${(x * 100).toFixed(1)}%`;
 }
+/**
+ * Shooting rates, to the whole point — LOCAL TO THIS TABLE, deliberately.
+ *
+ * A single game's rate has a denominator in single digits: 5-for-9 is 55.6%,
+ * and that decimal claims a precision nine attempts cannot support. Worse, it
+ * is a decimal that can only ever take nine values, so the column reads as
+ * noise rather than as measurement.
+ *
+ * Not changed site-wide. The season tables divide by several hundred attempts,
+ * where the tenth is real and two players a tenth apart are genuinely ordered.
+ */
+function fmtRate(x: number | null): string {
+  return x === null || x === undefined ? "—" : `${Math.round(x * 100)}%`;
+}
 /** Made over attempted, for the columns the source does not pre-compute. */
 function rate(made: number | null, att: number | null): number | null {
   if (made === null || att === null || att === 0) return null;
@@ -179,23 +193,23 @@ function colsFor(group: Group): Col[] {
       { key: "pts", label: "PTS", get: (r) => fmtInt(r.pts_scored) , sortVal: (r) => r.pts_scored },
       { key: "fgm", label: "FGM", get: (r) => fmtInt(r.fgm) , sortVal: (r) => r.fgm },
       { key: "fga", label: "FGA", get: (r) => fmtInt(r.fga) , sortVal: (r) => r.fga },
-      { key: "fgp", label: "FG%", get: (r) => fmtPct(rate(r.fgm, r.fga)), sortVal: (r) => rate(r.fgm, r.fga), shade: { att: (r) => r.fga }, wide: true },
+      { key: "fgp", label: "FG%", get: (r) => fmtRate(rate(r.fgm, r.fga)), sortVal: (r) => rate(r.fgm, r.fga), shade: { att: (r) => r.fga }, wide: true },
       // Bart stores threes and totals; twos are the subtraction.
       { key: "2pm", label: "2PM", get: (r) => fmtInt(sub(r.fgm, r.fgm3)) , sortVal: (r) => sub(r.fgm, r.fgm3) },
       { key: "2pa", label: "2PA", get: (r) => fmtInt(sub(r.fga, r.fga3)) , sortVal: (r) => sub(r.fga, r.fga3) },
-      { key: "2pp", label: "2P%", get: (r) => fmtPct(rate(sub(r.fgm, r.fgm3), sub(r.fga, r.fga3))), sortVal: (r) => rate(sub(r.fgm, r.fgm3), sub(r.fga, r.fga3)), shade: { att: (r) => sub(r.fga, r.fga3) }, wide: true },
+      { key: "2pp", label: "2P%", get: (r) => fmtRate(rate(sub(r.fgm, r.fgm3), sub(r.fga, r.fga3))), sortVal: (r) => rate(sub(r.fgm, r.fgm3), sub(r.fga, r.fga3)), shade: { att: (r) => sub(r.fga, r.fga3) }, wide: true },
       { key: "3pm", label: "3PM", get: (r) => fmtInt(r.fgm3) , sortVal: (r) => r.fgm3 },
       { key: "3pa", label: "3PA", get: (r) => fmtInt(r.fga3) , sortVal: (r) => r.fga3 },
-      { key: "3pp", label: "3P%", get: (r) => fmtPct(rate(r.fgm3, r.fga3)), sortVal: (r) => rate(r.fgm3, r.fga3), shade: { att: (r) => r.fga3 }, wide: true },
+      { key: "3pp", label: "3P%", get: (r) => fmtRate(rate(r.fgm3, r.fga3)), sortVal: (r) => rate(r.fgm3, r.fga3), shade: { att: (r) => r.fga3 }, wide: true },
       { key: "ftm", label: "FTM", get: (r) => fmtInt(r.ftm) , sortVal: (r) => r.ftm },
       { key: "fta", label: "FTA", get: (r) => fmtInt(r.fta) , sortVal: (r) => r.fta },
-      { key: "ftp", label: "FT%", get: (r) => fmtPct(rate(r.ftm, r.fta)), sortVal: (r) => rate(r.ftm, r.fta), shade: { att: (r) => r.fta }, wide: true },
+      { key: "ftp", label: "FT%", get: (r) => fmtRate(rate(r.ftm, r.fta)), sortVal: (r) => rate(r.ftm, r.fta), shade: { att: (r) => r.fta }, wide: true },
     ];
   }
   if (group === "advanced") {
     return [
-      { key: "efg", label: "eFG%", get: (r) => fmtPct(r.efg_pct), sortVal: (r) => r.efg_pct, shade: { att: (r) => r.fga }, wide: true },
-      { key: "ts", label: "TS%", get: (r) => fmtPct(r.ts_pct), sortVal: (r) => r.ts_pct, shade: { att: (r) => r.fga }, wide: true },
+      { key: "efg", label: "eFG%", get: (r) => fmtRate(r.efg_pct), sortVal: (r) => r.efg_pct, shade: { att: (r) => r.fga }, wide: true },
+      { key: "ts", label: "TS%", get: (r) => fmtRate(r.ts_pct), sortVal: (r) => r.ts_pct, shade: { att: (r) => r.fga }, wide: true },
       { key: "usg", label: "USG%", get: (r) => fmtPct(r.usage_pct), wide: true , sortVal: (r) => r.usage_pct },
       { key: "ortg", label: "ORtg", get: (r) => fmtRtg(r.ortg), wide: true , sortVal: (r) => r.ortg },
       { key: "drtg", label: "DRtg", get: (r) => fmtRtg(r.drtg), wide: true , sortVal: (r) => r.drtg },
@@ -209,8 +223,8 @@ function colsFor(group: Group): Col[] {
     // comparing them is looking at the scoring number when he wants them.
     // Recomputed from makes and attempts rather than read off fg_pct, so this
     // column and the shooting group's can never disagree.
-    { key: "fgp", label: "FG%", get: (r) => fmtPct(rate(r.fgm, r.fga)), sortVal: (r) => rate(r.fgm, r.fga), shade: { att: (r) => r.fga }, wide: true },
-    { key: "3pp", label: "3P%", get: (r) => fmtPct(rate(r.fgm3, r.fga3)), sortVal: (r) => rate(r.fgm3, r.fga3), shade: { att: (r) => r.fga3 }, wide: true },
+    { key: "fgp", label: "FG%", get: (r) => fmtRate(rate(r.fgm, r.fga)), sortVal: (r) => rate(r.fgm, r.fga), shade: { att: (r) => r.fga }, wide: true },
+    { key: "3pp", label: "3P%", get: (r) => fmtRate(rate(r.fgm3, r.fga3)), sortVal: (r) => rate(r.fgm3, r.fga3), shade: { att: (r) => r.fga3 }, wide: true },
     { key: "ast", label: "AST", get: (r) => fmtInt(r.ast) , sortVal: (r) => r.ast },
     { key: "orb", label: "ORB", get: (r) => fmtInt(r.orb) , sortVal: (r) => r.orb },
     { key: "drb", label: "DRB", get: (r) => fmtInt(r.drb) , sortVal: (r) => r.drb },
@@ -613,16 +627,16 @@ function totalFor(key: string, t: ReturnType<typeof totalsOf>): string {
     case "pf": return fmtInt(t.pf);
     case "fgm": return fmtInt(t.fgm);
     case "fga": return fmtInt(t.fga);
-    case "fgp": return fmtPct(rate(t.fgm, t.fga));
+    case "fgp": return fmtRate(rate(t.fgm, t.fga));
     case "2pm": return fmtInt(t.fgm - t.fgm3);
     case "2pa": return fmtInt(t.fga - t.fga3);
-    case "2pp": return fmtPct(rate(t.fgm - t.fgm3, t.fga - t.fga3));
+    case "2pp": return fmtRate(rate(t.fgm - t.fgm3, t.fga - t.fga3));
     case "3pm": return fmtInt(t.fgm3);
     case "3pa": return fmtInt(t.fga3);
-    case "3pp": return fmtPct(rate(t.fgm3, t.fga3));
+    case "3pp": return fmtRate(rate(t.fgm3, t.fga3));
     case "ftm": return fmtInt(t.ftm);
     case "fta": return fmtInt(t.fta);
-    case "ftp": return fmtPct(rate(t.ftm, t.fta));
+    case "ftp": return fmtRate(rate(t.ftm, t.fta));
     default: return "—";
   }
 }
