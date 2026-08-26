@@ -291,19 +291,35 @@ function sub(a: number | null, b: number | null): number | null {
 /**
  * Where a rate sits on the national ladder for its season and position, 0-100.
  *
- * The ladder is 101 ascending breakpoints, so the index IS the percentile — a
- * scan for the last breakpoint at or below the value gives the answer with no
- * arithmetic. Built by scripts/build-game-percentiles.mjs over every D-I
- * player-game; see that file for why it cannot be computed here.
+ * The ladder is 101 ascending breakpoints, so an index IS a percentile. Built
+ * by scripts/build-game-percentiles.mjs over every D-I player-game; see that
+ * file for why it cannot be computed here.
+ *
+ * TIES TAKE THE MIDPOINT OF THEIR BLOCK, and on this data that is not a detail.
+ * Nearly a quarter of qualifying guard-games are 0-for-n from three, so the
+ * ladder's first 24 breakpoints are all 0.000. Returning the last index at or
+ * below the value — the obvious scan — handed every 0% night the 23rd
+ * percentile, which reads as "better than a fifth of the country" for the worst
+ * outcome available. The midpoint of the tied block gives 12: still not zero,
+ * because you genuinely were not alone, but no longer the top of a run you sit
+ * at the bottom of just as much as the top.
+ *
+ * The same correction applies at the good end, where a block of 1.000 would
+ * otherwise hand a 2-for-2 night a 100.
  */
 function nationalPct(ladder: number[] | undefined, v: number | null): number | null {
   if (!ladder || ladder.length === 0 || v === null) return null;
-  let lo = 0;
+  let lo = -1, hi = -1;
   for (let i = 0; i < ladder.length; i++) {
-    if (ladder[i]! <= v) lo = i;
-    else break;
+    const b = ladder[i]!;
+    if (b <= v) hi = i;
+    if (b >= v && lo === -1) lo = i;
   }
-  return lo;
+  if (hi === -1) return 0;              // below the whole ladder
+  if (lo === -1) return ladder.length - 1; // above it
+  // Strictly between two breakpoints, lo sits one above hi and the midpoint
+  // rounds to whichever it is nearer; on a tied run it lands in the middle.
+  return Math.round((Math.min(lo, hi) + hi) / 2);
 }
 
 function applySplit(rows: GameLogRow[], split: SplitKey): GameLogRow[] {
