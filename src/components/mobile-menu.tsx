@@ -8,9 +8,15 @@ import { useAuth } from "@/lib/auth/auth-provider";
 import { cn } from "@/lib/utils";
 
 /**
- * The mobile menu, built on Ramp's shape: a full-screen panel with its own
- * wordmark and close button, big sentence-case rows separated by hairlines,
- * and the account actions pinned to the bottom where a thumb reaches.
+ * The mobile menu — a sheet that drops from the top and ENDS WHERE ITS CONTENT
+ * ENDS: its own wordmark and close button, big sentence-case rows separated by
+ * hairlines, then the settings and account actions directly under the last row.
+ *
+ * It used to cover the whole screen, with the link list on flex-1 and the
+ * account block pushed to the bottom edge. Seven items do not fill a phone, so
+ * flex-1 opened a band of roughly 200px of empty paper between Pricing and the
+ * theme toggle — the panel looked like it was waiting for links it did not
+ * have. Auto height instead, with the page showing beneath it.
  *
  * The structure is borrowed; the palette is not. Ramp is black type and acid
  * yellow on white, which would look like someone else's site pasted into this
@@ -77,15 +83,28 @@ export function MobileMenu({
   const signedIn = status === "signedIn";
 
   return (
-    <div
-      id="mobile-nav"
-      ref={panelRef}
-      tabIndex={-1}
-      className="lg:hidden fixed inset-0 z-[60] bg-paper flex flex-col bta-menu-in outline-none"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Menu"
-    >
+    <>
+      {/* The scrim is not decoration — it is the tap target. A sheet that shows
+          the page behind it but ignores taps on that page is worse than a panel
+          that covers everything: people reach for what they can see. */}
+      <div
+        className="lg:hidden fixed inset-0 z-[59] bg-ink/40"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div
+        id="mobile-nav"
+        ref={panelRef}
+        tabIndex={-1}
+        // max-h plus min-h-0 on the list below keeps the old guarantee: if the
+        // nav ever outgrows the screen it scrolls inside itself rather than
+        // pushing the buttons off the bottom. svh rather than vh — measured
+        // with the URL bar shown, so the sheet does not resize mid-scroll.
+        className="lg:hidden fixed inset-x-0 top-0 z-[60] max-h-[100svh] bg-paper flex flex-col rounded-b-2xl shadow-2xl bta-menu-in outline-none"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu"
+      >
       {/* Its own header rather than the site header showing through: the panel
           covers the whole screen, so it has to carry the wordmark and the way
           out. */}
@@ -106,9 +125,10 @@ export function MobileMenu({
         </button>
       </div>
 
-      {/* The links. Scrollable in its own right so a longer list never pushes
-          the buttons off the bottom of the screen. */}
-      <nav className="flex-1 overflow-y-auto overscroll-contain px-6">
+      {/* The links. NOT flex-1 any more — that is what stretched the list and
+          opened the gap. Still scrollable in its own right so a longer list
+          never pushes the buttons off the bottom of the screen. */}
+      <nav className="min-h-0 overflow-y-auto overscroll-contain px-6">
         {items.map((item) => {
           const active = isCurrent(pathname, item.href);
           return (
@@ -129,16 +149,24 @@ export function MobileMenu({
         })}
       </nav>
 
-      {/* Account actions, pinned. pb accounts for the home indicator on
-          gesture-navigation phones, which otherwise sits on top of the
-          buttons. */}
-      <div
-        className="shrink-0 px-6 pt-4 border-t border-hairline"
-        style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
-      >
+      {/* Settings and account actions.
+          TINTED, and that is load-bearing rather than decorative. Pinned to the
+          bottom edge of the screen, this block was separated from the nav by
+          the edge itself. Sitting directly under Pricing it is separated only
+          by a hairline — the same hairline that divides the six rows above it —
+          so Theme read as an eighth nav row. The tint says "not a destination"
+          without adding a label.
+          Mixing --ink rather than a surface token: on the dark theme
+          --paper-deep resolves to a colour the sheet is nearly painted in
+          already, so it would not read.
+          The safe-area padding is gone with the pinning. env() is only ever
+          non-zero on gesture phones, where it would have added a band of dead
+          space under a sheet that no longer touches the bottom of the screen. */}
+      <div className="shrink-0 px-6 pt-4 pb-5 border-t border-hairline bg-ink/[0.04] rounded-b-2xl">
         {/* Theme, above the account actions. It is a setting rather than a
             destination, so it sits with the other chrome at the foot of the
-            sheet instead of in the nav list. */}
+            sheet instead of in the nav list — which is exactly what the tint
+            on this block is there to say. */}
         <div className="flex items-center justify-between mb-4">
           <span className="text-[0.62rem] uppercase tracking-[0.18em] font-semibold text-ink-soft">
             Theme
@@ -178,6 +206,7 @@ export function MobileMenu({
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
