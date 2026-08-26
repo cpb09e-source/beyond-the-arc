@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
 import { Select } from "@/components/select";
+import { pctBg } from "@/components/percentile-chip";
 import { cn } from "@/lib/utils";
 
 /**
@@ -149,6 +150,20 @@ type Col = {
    * Sorting the rendered text would put 9 above 18 and April above January.
    */
   sortVal: (r: GameLogRow) => number | string | null;
+  /**
+   * Shooting rates only, and they carry the attempts that produced them.
+   *
+   * The shade is a percentile WITHIN THIS TABLE — this player's other games in
+   * the current split — not against a national cohort. There is no per-game
+   * cohort anywhere in the data to rank against, and inventing one would be the
+   * exact claim the note at the top of this file refuses to make. Ranking a
+   * player against himself is a statement the table can actually support: this
+   * was one of his better shooting nights.
+   *
+   * `att` gates it. A one-for-one night is 100% and would shade darker than a
+   * 9-for-14, which is noise dressed as a career game.
+   */
+  shade?: { att: (r: GameLogRow) => number | null };
   wide?: boolean;
 };
 
@@ -160,23 +175,23 @@ function colsFor(group: Group): Col[] {
       { key: "pts", label: "PTS", get: (r) => fmtInt(r.pts_scored) , sortVal: (r) => r.pts_scored },
       { key: "fgm", label: "FGM", get: (r) => fmtInt(r.fgm) , sortVal: (r) => r.fgm },
       { key: "fga", label: "FGA", get: (r) => fmtInt(r.fga) , sortVal: (r) => r.fga },
-      { key: "fgp", label: "FG%", get: (r) => fmtPct(rate(r.fgm, r.fga)), wide: true , sortVal: (r) => rate(r.fgm, r.fga) },
+      { key: "fgp", label: "FG%", get: (r) => fmtPct(rate(r.fgm, r.fga)), sortVal: (r) => rate(r.fgm, r.fga), shade: { att: (r) => r.fga }, wide: true },
       // Bart stores threes and totals; twos are the subtraction.
       { key: "2pm", label: "2PM", get: (r) => fmtInt(sub(r.fgm, r.fgm3)) , sortVal: (r) => sub(r.fgm, r.fgm3) },
       { key: "2pa", label: "2PA", get: (r) => fmtInt(sub(r.fga, r.fga3)) , sortVal: (r) => sub(r.fga, r.fga3) },
-      { key: "2pp", label: "2P%", get: (r) => fmtPct(rate(sub(r.fgm, r.fgm3), sub(r.fga, r.fga3))), wide: true , sortVal: (r) => rate(sub(r.fgm, r.fgm3), sub(r.fga, r.fga3)) },
+      { key: "2pp", label: "2P%", get: (r) => fmtPct(rate(sub(r.fgm, r.fgm3), sub(r.fga, r.fga3))), sortVal: (r) => rate(sub(r.fgm, r.fgm3), sub(r.fga, r.fga3)), shade: { att: (r) => sub(r.fga, r.fga3) }, wide: true },
       { key: "3pm", label: "3PM", get: (r) => fmtInt(r.fgm3) , sortVal: (r) => r.fgm3 },
       { key: "3pa", label: "3PA", get: (r) => fmtInt(r.fga3) , sortVal: (r) => r.fga3 },
-      { key: "3pp", label: "3P%", get: (r) => fmtPct(rate(r.fgm3, r.fga3)), wide: true , sortVal: (r) => rate(r.fgm3, r.fga3) },
+      { key: "3pp", label: "3P%", get: (r) => fmtPct(rate(r.fgm3, r.fga3)), sortVal: (r) => rate(r.fgm3, r.fga3), shade: { att: (r) => r.fga3 }, wide: true },
       { key: "ftm", label: "FTM", get: (r) => fmtInt(r.ftm) , sortVal: (r) => r.ftm },
       { key: "fta", label: "FTA", get: (r) => fmtInt(r.fta) , sortVal: (r) => r.fta },
-      { key: "ftp", label: "FT%", get: (r) => fmtPct(rate(r.ftm, r.fta)), wide: true , sortVal: (r) => rate(r.ftm, r.fta) },
+      { key: "ftp", label: "FT%", get: (r) => fmtPct(rate(r.ftm, r.fta)), sortVal: (r) => rate(r.ftm, r.fta), shade: { att: (r) => r.fta }, wide: true },
     ];
   }
   if (group === "advanced") {
     return [
-      { key: "efg", label: "eFG%", get: (r) => fmtPct(r.efg_pct), wide: true , sortVal: (r) => r.efg_pct },
-      { key: "ts", label: "TS%", get: (r) => fmtPct(r.ts_pct), wide: true , sortVal: (r) => r.ts_pct },
+      { key: "efg", label: "eFG%", get: (r) => fmtPct(r.efg_pct), sortVal: (r) => r.efg_pct, shade: { att: (r) => r.fga }, wide: true },
+      { key: "ts", label: "TS%", get: (r) => fmtPct(r.ts_pct), sortVal: (r) => r.ts_pct, shade: { att: (r) => r.fga }, wide: true },
       { key: "usg", label: "USG%", get: (r) => fmtPct(r.usage_pct), wide: true , sortVal: (r) => r.usage_pct },
       { key: "ortg", label: "ORtg", get: (r) => fmtRtg(r.ortg), wide: true , sortVal: (r) => r.ortg },
       { key: "drtg", label: "DRtg", get: (r) => fmtRtg(r.drtg), wide: true , sortVal: (r) => r.drtg },
@@ -190,8 +205,8 @@ function colsFor(group: Group): Col[] {
     // comparing them is looking at the scoring number when he wants them.
     // Recomputed from makes and attempts rather than read off fg_pct, so this
     // column and the shooting group's can never disagree.
-    { key: "fgp", label: "FG%", get: (r) => fmtPct(rate(r.fgm, r.fga)), sortVal: (r) => rate(r.fgm, r.fga), wide: true },
-    { key: "3pp", label: "3P%", get: (r) => fmtPct(rate(r.fgm3, r.fga3)), sortVal: (r) => rate(r.fgm3, r.fga3), wide: true },
+    { key: "fgp", label: "FG%", get: (r) => fmtPct(rate(r.fgm, r.fga)), sortVal: (r) => rate(r.fgm, r.fga), shade: { att: (r) => r.fga }, wide: true },
+    { key: "3pp", label: "3P%", get: (r) => fmtPct(rate(r.fgm3, r.fga3)), sortVal: (r) => rate(r.fgm3, r.fga3), shade: { att: (r) => r.fga3 }, wide: true },
     { key: "ast", label: "AST", get: (r) => fmtInt(r.ast) , sortVal: (r) => r.ast },
     { key: "orb", label: "ORB", get: (r) => fmtInt(r.orb) , sortVal: (r) => r.orb },
     { key: "drb", label: "DRB", get: (r) => fmtInt(r.drb) , sortVal: (r) => r.drb },
@@ -253,6 +268,62 @@ function sortRows(rows: GameLogRow[], sort: SortState, cols: Col[]): GameLogRow[
 
 function sub(a: number | null, b: number | null): number | null {
   return a === null || b === null ? null : a - b;
+}
+
+/** 1st, 2nd, 3rd, 4th — and 11th/12th/13th, which are the ones a naive
+ *  last-digit rule gets wrong. */
+function ordinal(n: number): string {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 13) return `${n}th`;
+  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+}
+
+/** A night has to have this many attempts before its rate is shaded. */
+const MIN_ATT = 2;
+
+/**
+ * Percentile ladders for the shaded columns, over the games actually on screen.
+ *
+ * Recomputed per split on purpose: inside "conference games", a night should
+ * rank against the other conference nights, not against a full season the
+ * reader has filtered away.
+ *
+ * Games under MIN_ATT attempts are excluded from the ladder as well as from the
+ * shading. Leaving them in would drag the distribution — a run of 0-for-1
+ * nights makes an ordinary 45% look like a career game.
+ */
+function buildLadders(rows: GameLogRow[], cols: Col[]): Map<string, number[]> {
+  const out = new Map<string, number[]>();
+  for (const c of cols) {
+    if (!c.shade) continue;
+    const vals: number[] = [];
+    for (const r of rows) {
+      const att = c.shade.att(r);
+      const v = c.sortVal(r);
+      if (att !== null && att >= MIN_ATT && typeof v === "number") vals.push(v);
+    }
+    out.set(c.key, vals.sort((a, b) => a - b));
+  }
+  return out;
+}
+
+/**
+ * Where a value sits in its ladder, 0-100.
+ *
+ * Ties take the MIDPOINT of the tied block rather than its top: three 50%
+ * nights should all read the same, and counting "values at or below" would rank
+ * the last of them above the first two for no reason. Under five eligible games
+ * nothing is shaded — a percentile over four numbers is a ranking with a
+ * percent sign on it.
+ */
+function percentileIn(ladder: number[] | undefined, v: number | null): number | null {
+  if (!ladder || ladder.length < 5 || v === null) return null;
+  let below = 0, equal = 0;
+  for (const x of ladder) {
+    if (x < v) below++;
+    else if (x === v) equal++;
+  }
+  return Math.round(((below + equal / 2) / ladder.length) * 100);
 }
 
 function applySplit(rows: GameLogRow[], split: SplitKey): GameLogRow[] {
@@ -334,6 +405,7 @@ export function PlayerGameLog({
     );
   }
   const t = useMemo(() => totalsOf(shown), [shown]);
+  const ladders = useMemo(() => buildLadders(shown, cols), [shown, cols]);
 
   if (rows.length === 0) {
     return (
@@ -474,9 +546,29 @@ export function PlayerGameLog({
                   </span>
                 </Td>
                 <Td align="right" className="tabular">{fmtInt(r.mins)}</Td>
-                {cols.map((c) => (
-                  <Td key={c.key} align="right" className="tabular">{c.get(r)}</Td>
-                ))}
+                {cols.map((c) => {
+                  const att = c.shade ? c.shade.att(r) : null;
+                  const v = c.shade ? c.sortVal(r) : null;
+                  const pct =
+                    c.shade && att !== null && att >= MIN_ATT && typeof v === "number"
+                      ? percentileIn(ladders.get(c.key), v)
+                      : null;
+                  return (
+                    <Td
+                      key={c.key}
+                      align="right"
+                      className="tabular"
+                      // lg and up only. The ramp's middle bands sit a shade off
+                      // paper, which is what makes them recede on a desktop and
+                      // what makes them muddy on a phone where the same cell is
+                      // a third the width and already carrying a scroll.
+                      shade={pct === null ? undefined : pctBg(pct)}
+                      shadeTitle={pct === null ? undefined : `${ordinal(pct)} percentile of his ${ladders.get(c.key)?.length ?? 0} qualifying games in this split`}
+                    >
+                      {c.get(r)}
+                    </Td>
+                  );
+                })}
               </tr>
             ))}
             {shown.length === 0 && (
@@ -588,7 +680,7 @@ function Th({
 }
 
 function Td({
-  children, align = "left", className = "", title,
+  children, align = "left", className = "", title, shade, shadeTitle,
 }: {
   /** Optional so a spacer cell can be written as <Td />. */
   children?: React.ReactNode;
@@ -596,12 +688,22 @@ function Td({
   className?: string;
   /** Used by the opponent cell, whose name is crest-only on a phone. */
   title?: string;
+  /** Percentile background for a shooting rate. Desktop only — see the note
+   *  at the call site. */
+  shade?: string;
+  shadeTitle?: string;
 }) {
   return (
     <td
-      title={title}
+      title={shadeTitle ?? title}
+      // The colour is applied through a custom property and a lg-gated
+      // utility rather than a plain inline background: an inline style cannot
+      // be made conditional on a breakpoint, and painting it at every width
+      // then hiding it would still leave it on a phone.
+      style={shade ? ({ "--cell-shade": shade } as React.CSSProperties) : undefined}
       className={cn(
         "px-1.5 sm:px-3 py-2.5",
+        shade && "lg:bg-[var(--cell-shade)]",
         align === "right" && "text-right",
         align === "center" && "text-center",
         className,
