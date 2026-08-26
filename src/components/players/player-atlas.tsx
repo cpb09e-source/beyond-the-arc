@@ -561,9 +561,14 @@ export function PlayerAtlas({
               <span className="h-px w-5 bg-coral" />
               <Link
                 href={`/teams/${teamSlug(teamName)}/${year}/`}
-                className="inline-flex items-center gap-1.5 hover:text-coral-soft transition-colors"
+                // The school sets larger than the rest of this line. It is the
+                // second thing a reader looks for after the name, and at the
+                // shared `label` size it was 10px — the same weight as the
+                // conference code beside it. Conference and season stay small
+                // deliberately: they are the qualifiers, not the subject.
+                className="inline-flex items-center gap-2 text-[0.8125rem] sm:text-sm hover:text-coral-soft transition-colors"
               >
-                <TeamLogo name={teamName} size={16} />
+                <TeamLogo name={teamName} size={22} />
                 <span className="truncate">{teamName}</span>
               </Link>
               {conference && <span className="text-ink-muted shrink-0">· {conference}</span>}
