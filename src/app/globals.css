@@ -933,6 +933,17 @@ body {
    Scoped to the wrapper rather than :root because the two custom properties are
    set inline on that element, and a var() in a :root rule would resolve them in
    :root's scope, where they do not exist. */
+/* Box-score modal, same problem and same shape as .team-accent below: the two
+   side colours are inline styles computed per matchup, so the dark swap needs
+   !important to outrank them. Text and fill are separate pairs because a
+   number has to be read and a bar only has to be seen. */
+[data-theme="dark"] .game-sides {
+  --side-a: var(--side-a-dark) !important;
+  --side-b: var(--side-b-dark) !important;
+  --fill-a: var(--fill-a-dark) !important;
+  --fill-b: var(--fill-b-dark) !important;
+}
+
 [data-theme="dark"] .team-accent {
   /* !important is load-bearing, not laziness. --accent and --accent-tint are
      set as INLINE styles on this element (team-page-view has to compute them

@@ -26,7 +26,7 @@ import { TeamLogo } from "@/components/team-logo";
 import { loadGamesForYear, type GameLog } from "@/lib/game-filters";
 import { attachGameBox, loadGameBox } from "@/lib/game-box";
 import { dataUrl } from "@/lib/data-url";
-import { getTeamColors } from "@/lib/team-colors";
+import { getTeamColors, readableInk } from "@/lib/team-colors";
 import { gameKey } from "@/lib/quad";
 
 export type BoxPlayer = {
@@ -219,6 +219,29 @@ export function GameBoxModal({
   const tourneyName = str(game, "tourney_name");
   const oppName = game.opp_team_market ?? "Non-D1 opponent";
   const [colorA, colorB] = sideColors(game.team_name, oppName);
+  // The raw brand colour is right on paper and wrong on the dark theme: 225 of
+  // 366 primaries fall under 3.0 contrast against the dark ground, so a team
+  // like Vanderbilt (#261e25) renders its numbers and its bar in something all
+  // but indistinguishable from the card behind them.
+  //
+  // Both variants ship as custom properties and globals.css picks per theme, so
+  // nothing here has to know which theme is live — the alternative, reading the
+  // theme in JS, would flash the wrong colour on first paint.
+  //
+  // Two ranges because the two uses differ. Text has to be READ, so it clamps
+  // to the same 0.66-0.88 the team pages use. A bar only has to be SEEN against
+  // the card, and pushing a fill that light washes the team out of it, so the
+  // fill clamps lower and keeps more of the real colour.
+  const sideVars = {
+    ["--side-a" as string]: colorA,
+    ["--side-b" as string]: colorB,
+    ["--side-a-dark" as string]: readableInk(colorA, { min: 0.66, max: 0.88 }),
+    ["--side-b-dark" as string]: readableInk(colorB, { min: 0.66, max: 0.88 }),
+    ["--fill-a" as string]: colorA,
+    ["--fill-b" as string]: colorB,
+    ["--fill-a-dark" as string]: readableInk(colorA, { min: 0.46, max: 0.72 }),
+    ["--fill-b-dark" as string]: readableInk(colorB, { min: 0.46, max: 0.72 }),
+  } as React.CSSProperties;
 
   // Linescore. Built only when both halves are known for BOTH teams — showing
   // one team's halves next to the other's blanks would read as a scoring
@@ -301,7 +324,7 @@ export function GameBoxModal({
   // cannot use, and this is a dense table — it wants every pixel. The centred,
   // rounded card comes back at sm.
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch justify-center p-0 sm:items-center sm:p-4">
+    <div className="game-sides fixed inset-0 z-50 flex items-stretch justify-center p-0 sm:items-center sm:p-4" style={sideVars}>
       <div className="bta-backdrop-in absolute inset-0 bg-ink/40" onClick={onClose} aria-hidden />
       <div
         role="dialog"
@@ -429,9 +452,9 @@ export function GameBoxModal({
                         <span className="w-16 text-base tabular text-ink text-right shrink-0">
                           {am === null ? "—" : `${am}/${aa}`}
                         </span>
-                        <PctRing made={am} att={aa} color={colorA} />
+                        <PctRing made={am} att={aa} color="var(--side-a)" />
                         <span className="flex-1 text-center text-xs text-ink-muted px-1">{row.label}</span>
-                        <PctRing made={bm} att={ba} color={colorB} />
+                        <PctRing made={bm} att={ba} color="var(--side-b)" />
                         <span className="w-16 text-base tabular text-ink shrink-0">
                           {bm === null ? "—" : `${bm}/${ba}`}
                         </span>
@@ -499,7 +522,7 @@ export function GameBoxModal({
                     const a = num(game, row.key);
                     const b = num(opp, row.key);
                     if (!showRow(row.key, a, b)) return null;
-                    return <SplitBar key={row.label} label={row.label} a={a} b={b} lower={row.lower} colorA={colorA} colorB={colorB} />;
+                    return <SplitBar key={row.label} label={row.label} a={a} b={b} lower={row.lower} colorA="var(--side-a)" colorB="var(--side-b)" />;
                   })}
 
                   <div className="pt-1 border-t border-hairline" />
@@ -511,7 +534,7 @@ export function GameBoxModal({
                     const a = num(game, row.key);
                     const b = num(opp, row.key);
                     if (!showRow(row.key, a, b, row.untracked)) return null;
-                    return <SplitBar key={row.label} label={row.label} a={a} b={b} lower={row.lower} major colorA={colorA} colorB={colorB} />;
+                    return <SplitBar key={row.label} label={row.label} a={a} b={b} lower={row.lower} major colorA="var(--side-a)" colorB="var(--side-b)" />;
                   })}
 
                   <div className="pt-1 border-t border-hairline" />
@@ -520,7 +543,7 @@ export function GameBoxModal({
                     const a = num(game, row.key);
                     const b = num(opp, row.key);
                     if (!showRow(row.key, a, b, row.untracked)) return null;
-                    return <SplitBar key={row.label} label={row.label} a={a} b={b} lower={row.lower} colorA={colorA} colorB={colorB} />;
+                    return <SplitBar key={row.label} label={row.label} a={a} b={b} lower={row.lower} colorA="var(--side-a)" colorB="var(--side-b)" />;
                   })}
                 </div>
               </div>
@@ -617,11 +640,11 @@ export function SplitBar({
       <div className="flex h-1.5 rounded-full overflow-hidden bg-hairline">
         <div
           className="transition-[width] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
-          style={{ width: `${aShare * 100}%`, background: colorA, opacity: aWins ? 1 : 0.5 }}
+          style={{ width: `${aShare * 100}%`, background: "var(--fill-a)", opacity: aWins ? 1 : 0.5 }}
         />
         <div
           className="flex-1 transition-[width] duration-500"
-          style={{ background: colorB, opacity: bWins ? 1 : 0.5 }}
+          style={{ background: "var(--fill-b)", opacity: bWins ? 1 : 0.5 }}
         />
       </div>
     </div>
