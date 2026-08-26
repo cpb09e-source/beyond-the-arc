@@ -228,10 +228,27 @@ export function TeamRail(props: NavProps) {
 /**
  * The bottom bar. Below lg only.
  *
- * Fixed, and the page pads itself by BOTTOM_BAR_CLEARANCE to match. The
- * safe-area inset is what keeps the labels off an iPhone's home indicator —
- * without it the bottom ~34px of the bar is under the system gesture area and
- * the taps land on the wrong thing.
+ * TYPE, NOT ICONS. It used to set an icon over a 9.6px label in each of six
+ * cells, which is the stock phone tab bar and reads like one. The label had to
+ * be that small because six of them plus six glyphs is what fits, so the type
+ * size was a consequence of the shape rather than a decision.
+ *
+ * Dropping the glyphs buys the labels their size back and lets the bar be what
+ * this page actually needs: an index. A team page is tables, not an app, and
+ * six section names in small caps under an accent rule is how a printed
+ * programme would list them. The icons were the weaker half anyway — a circle
+ * inside a circle for Shooting and two overlapping discs for On/Off are marks
+ * you learn from the label beneath them, not marks that save you reading it.
+ *
+ * THE ACTIVE MARKER IS ON TOP, not underneath. The bar is at the foot of the
+ * screen, so a rule under the label sits against the home indicator where an
+ * iPhone draws its own; a rule along the top edge reads as the tab's own and
+ * has the whole bar below it to belong to.
+ *
+ * Fixed, and the footer pads itself to match — see the :has() rule in
+ * globals.css. The safe-area inset keeps the labels off an iPhone's home
+ * indicator; without it the bottom ~34px of the bar is under the system
+ * gesture area and the taps land on the wrong thing.
  */
 export function TeamBottomBar(props: NavProps) {
   return (
@@ -248,7 +265,23 @@ export function TeamBottomBar(props: NavProps) {
       className={cn(
         "lg:hidden fixed inset-x-0 bottom-0 z-40",
         "border-t border-hairline bg-card/95 backdrop-blur",
-        "pb-[env(safe-area-inset-bottom)]",
+        // A CONSTANT reserve, not env(safe-area-inset-bottom).
+        //
+        // That variable is not constant on a phone. iOS reports it as 0 while
+        // Safari's bottom toolbar is on screen — the toolbar is already
+        // covering the gesture area — and as roughly 34px once the toolbar
+        // collapses on scroll. A bar padded by it therefore GROWS BY 34px
+        // partway down the page and shrinks again on the way back up, which is
+        // the one thing a fixed navigation must not do.
+        //
+        // 0.75rem always. The trade is deliberate and worth stating: on a
+        // gesture phone with the toolbar hidden, the lower few pixels of the
+        // tap target now sit inside the home-indicator strip. The LABELS are
+        // clear of it either way — they are centred in the 46px row above this
+        // padding — so what is at risk is the last sliver of a tap, not
+        // readability, and a bar that changes height while you read is the
+        // worse fault.
+        "pb-3",
       )}
     >
       <ul className="flex items-stretch">
@@ -261,19 +294,30 @@ export function TeamBottomBar(props: NavProps) {
                 prefetch={false}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 px-0.5 pt-2 pb-1.5 transition-colors",
+                  "relative flex items-center justify-center h-[2.875rem] px-0.5 transition-colors",
+                  // 0.625rem uppercase with a hair of tracking. Six labels
+                  // across 390px leaves about 62px each and "Overview" is the
+                  // longest — it sets at roughly 53px here, so nothing clips.
+                  // Uppercase is doing real work: it evens out the ascenders so
+                  // six words of different shapes read as one row of equals.
+                  "text-[0.625rem] font-bold uppercase tracking-[0.04em] whitespace-nowrap truncate",
                   isActive ? "" : "text-ink-muted",
                 )}
                 style={isActive ? { color: "var(--accent, var(--color-coral))" } : undefined}
               >
-                <Glyph className="w-[1.3rem] h-[1.3rem]">{t.icon}</Glyph>
-                {/* 0.6rem and tracking-tight: six labels across 390px leaves
-                    about 62px each, and "Overview" is the longest. Truncation
-                    here would be worse than small type — a clipped label is a
-                    label you cannot identify. */}
-                <span className="text-[0.6rem] leading-none font-semibold tracking-tight truncate max-w-full">
-                  {t.short}
-                </span>
+                {/* Inset from the cell edges rather than spanning it: a rule
+                    that runs the full width of its cell meets its neighbour's
+                    and the six read as one continuous line with a coloured
+                    segment, instead of as one tab that is marked. */}
+                <span
+                  aria-hidden
+                  className={cn(
+                    "absolute left-[14%] right-[14%] top-0 h-[2.5px] rounded-b-sm",
+                    isActive ? "opacity-100" : "opacity-0",
+                  )}
+                  style={{ backgroundColor: "var(--accent, var(--color-coral))" }}
+                />
+                {t.short}
               </Link>
             </li>
           );
