@@ -2,6 +2,7 @@ import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { TopHundredSeal } from "@/components/players/top-hundred-seal";
+import { TeammatePicker } from "@/components/players/teammate-picker";
 import type { StatLine } from "@/lib/player-stat-line";
 import { NbaTeamLogo } from "@/components/nba-team-logo";
 import type { PlayerRanksSeason } from "@/lib/static-data";
@@ -282,6 +283,7 @@ export function PlayerAtlas({
   draft,
   heroRanks,
   bucket,
+  teammates,
   banner,
 }: {
   bartId: number;
@@ -314,6 +316,8 @@ export function PlayerAtlas({
    *  that reads as news. */
   draft: DraftChip | null;
   heroRanks: PlayerRanksSeason | null;
+  /** Everyone else on this team in this season who has a profile page. */
+  teammates: Array<{ id: number; name: string; cls: string | null }>;
   /** Position cohort the season was ranked in. Only the ranked-cohort label in
    *  the seal's tooltip needs it now that the stat modules have moved out. */
   bucket: "G" | "F" | "C";
@@ -407,11 +411,14 @@ export function PlayerAtlas({
               the player stands at all — the thing the page is for. Smaller, and
               below the vitals rather than beside the name, because three of them
               at ring size do not fit next to a headshot. */}
-          {heroRanks && (
-            <div className="hidden md:block md:ml-auto shrink-0 md:pb-1">
-              <TopHundredSeal season={heroRanks} size={96} />
-            </div>
-          )}
+          {/* The right-hand column of the masthead: the Top-100 mark, and the
+              teammate picker under it. The picker keeps ml-auto even when the
+              mark is absent, so it stays on the right edge for the ~99% of
+              players who have no seal. */}
+          <div className="hidden md:flex md:ml-auto shrink-0 md:pb-1 flex-col items-end gap-3">
+            {heroRanks && <TopHundredSeal season={heroRanks} size={96} />}
+            <TeammatePicker teammates={teammates} teamName={teamName} />
+          </div>
         </div>
 
         <StatBand now={statNow} />

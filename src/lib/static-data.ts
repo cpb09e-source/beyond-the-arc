@@ -1005,6 +1005,54 @@ export async function readGamePercentiles(): Promise<GamePercentiles | null> {
   return _gamePctCache;
 }
 
+/**
+ * The other players on a team in a given season, for the hero's teammate
+ * picker.
+ *
+ * FILTERED TO PLAYERS WHO HAVE A PAGE. generateStaticParams emits profiles only
+ * for ranked players, and this is a static export — a link to an unbuilt route
+ * is not a slow page, it is a hard 404. Everyone below the line is dropped from
+ * the list rather than offered and broken.
+ *
+ * players-index is 2.8MB and the player route generates ~15,700 pages, so it is
+ * read once and folded into a (team|year) map on first use.
+ */
+export type Teammate = { id: number; name: string; cls: string | null };
+
+let _teammateCache: Map<string, Teammate[]> | null = null;
+
+export async function readTeammates(
+  teamName: string,
+  year: number,
+  excludeBartId: number,
+): Promise<Teammate[]> {
+  if (!_teammateCache) {
+    const idx = await readJson<Array<{ id: number; n: string; y: number; t: string; cl?: string | null }>>(
+      "players-index.json",
+    ).catch(() => []);
+    const ranked = await readRankedPlayerIds();
+    const map = new Map<string, Teammate[]>();
+    for (const r of idx) {
+      if (!ranked.has(r.id)) continue;
+      const key = `${r.t}|${r.y}`;
+      const list = map.get(key);
+      const entry = { id: r.id, name: r.n, cls: r.cl ?? null };
+      if (list) list.push(entry);
+      else map.set(key, [entry]);
+    }
+    // Alphabetical by surname, which is how a roster is read.
+    for (const list of map.values()) {
+      list.sort((a, b) => {
+        const sa = a.name.split(" ").slice(-1)[0] ?? a.name;
+        const sb = b.name.split(" ").slice(-1)[0] ?? b.name;
+        return sa.localeCompare(sb) || a.name.localeCompare(b.name);
+      });
+    }
+    _teammateCache = map;
+  }
+  return (_teammateCache.get(`${teamName}|${year}`) ?? []).filter((t) => t.id !== excludeBartId);
+}
+
 export async function readPortalEntryForBartId(bartId: number): Promise<PortalEntry | null> {
   const all = await readPortal();
   const matches = all.filter((e) => e.bart_player_id === bartId);

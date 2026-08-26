@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
-import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayerIds, readNbaDraftee, readRsciRank, readPlayerBoxScores, readTeamGameScores, teamGameKey, readGamePercentiles } from "@/lib/static-data";
+import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayerIds, readNbaDraftee, readRsciRank, readPlayerBoxScores, readTeamGameScores, teamGameKey, readGamePercentiles, readTeammates } from "@/lib/static-data";
 import { nbaTeamName, draftRound, nbaLogoUrl } from "@/lib/nba-draftees";
 import { CareerTable } from "@/components/players/career-table";
 import { PlayerOverview, type PlayerOverviewOption } from "@/components/players/player-overview";
@@ -189,6 +189,15 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
     })
     .sort((a, b) => (b.game_date ?? "").localeCompare(a.game_date ?? ""));
 
+  // The rest of the roster for the season the hero shows. Read against the
+  // team the player actually played for that year, not the transfer's
+  // destination — the hero's teamName is already resolved that way above.
+  const teammates = await readTeammates(
+    transfer ? transfer.from : current.team_name,
+    current.year,
+    bartId,
+  );
+
   /**
    * National percentile ladders for the game log's shooting chips, narrowed to
    * the position the player was listed at IN EACH SEASON.
@@ -281,6 +290,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         }
         heroRanks={heroRanks}
         bucket={heroRanks?.bucket ?? positionByYear[String(current.year)] ?? "G"}
+        teammates={teammates}
         banner={banner}
       />
       </>
