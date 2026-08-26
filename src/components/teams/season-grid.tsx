@@ -18,16 +18,19 @@ import {
 } from "@/lib/team-grid-columns";
 
 /**
- * "By season" — every season we hold for one team, in the same grid the
- * explorer uses on `/`.
+ * "By season" — every season we hold for one team, in a grid styled after the
+ * explorer's on `/` but with its own columns.
  *
- * WHAT IT SHARES AND WHAT IT DOES NOT. The columns from NET rightward come from
- * the shared model in team-grid-columns, so the two surfaces can never drift
- * apart on which stats exist or how a value is formatted. The table itself is
- * NOT shared: the explorer's is welded to URL-driven sorting, pagination, a
- * drag-pan handler and a filter drawer, none of which belong on a team page
- * showing twelve rows. Sorting here is local state, the way the table this
- * replaces did it.
+ * WHAT IT SHARES WITH THE EXPLORER: the visual language, and nothing else.
+ * The columns from NET rightward come from team-grid-columns, which is this
+ * grid's own model — NOT a shared one. It was briefly shared, and the result
+ * was that tuning the columns here rewrote the explorer's front page too. The
+ * explorer holds its own definitions inline; the two are meant to differ.
+ *
+ * The table is not shared either: the explorer's is welded to URL-driven
+ * sorting, pagination, a drag-pan handler and a filter drawer, none of which
+ * belong on a team page showing twelve rows. Sorting here is local state, the
+ * way the table this replaces did it.
  *
  * The identity columns are the ones the old By season table had, in its order —
  * Season, Conf, Record, Conf Rec, Coach — because those are what a reader on a

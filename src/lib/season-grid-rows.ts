@@ -16,6 +16,9 @@
  *    figures named by the column model, and only the percentiles those columns
  *    key their chips to. Adding a column to team-grid-columns widens this
  *    automatically — there is no second list to keep in step.
+ *
+ *    Note team-grid-columns serves THIS grid only. The explorer keeps its own
+ *    column definitions; changing one must not change the other.
  */
 import { DEFAULT_COLS } from "@/lib/team-grid-columns";
 import type { ConfRecord, TeamGridSeason } from "@/lib/static-data";

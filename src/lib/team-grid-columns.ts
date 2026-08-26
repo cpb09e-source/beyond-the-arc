@@ -1,15 +1,23 @@
 /**
- * The column model for the team stat grid.
+ * The column model for the team page's "By season" grid. ONE surface uses this.
  *
- * Two surfaces render this grid: the explorer on `/`, which shows every team in
- * a season, and "By season" on a team page, which shows every season for one
- * team. They differ entirely in their left-hand identity columns — the explorer
- * leads with rank and team, the team page with season, conference record,
- * tournament finish and coach — but from NET rightward they are the same table,
- * and they must stay the same table. A stat that appears in one and not the
- * other reads as a bug in whichever one the reader saw second.
+ * IT USED TO BE TWO, AND THAT WAS A MISTAKE. This module was written to be
+ * shared with the explorer on `/` on the theory that a stat appearing in one
+ * grid and not the other "reads as a bug in whichever one the reader saw
+ * second". The explorer was rewired to import from here at the same time, which
+ * silently applied every By-season column decision to the site's front page:
+ * PACE and FBP vanished, 3PA Rate and FTA Rate vanished, OREB% appeared, and a
+ * Coach column arrived. None of that was asked for on the explorer, and it was
+ * caught only by eye afterwards.
  *
- * So the bands live here and the identity columns stay with their own page.
+ * THE TWO GRIDS ARE ALLOWED TO DIFFER, AND DO. The explorer keeps its own
+ * definitions inline in explorer-client.tsx. Do not "de-duplicate" them back
+ * together: they answer different questions (every team in one season vs every
+ * season for one team) and the column sets that serve those questions are not
+ * the same set. Sharing the model makes an edit to one an unannounced edit to
+ * the other, which is exactly how this went wrong.
+ *
+ * What legitimately belongs here is only what By season itself renders.
  * This module is deliberately NOT a shared component: sharing the <table> would
  * mean dragging the explorer's URL-driven sorting, pagination and drag-pan onto
  * a page that wants none of them.
