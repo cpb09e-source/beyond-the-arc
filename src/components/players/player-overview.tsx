@@ -62,6 +62,11 @@ export function PlayerOverview({
               value={String(selected.year)}
               onChange={(v) => setSelectedYear(Number(v))}
               ariaLabel="Select season"
+              // Same 14px as the career table's view picker at every width. The
+              // two already matched on a desktop and only diverged on a phone,
+              // where the site-wide 16px floor caught this one and not that one
+              // — see the note beside field-sm-phone in globals.css.
+              className="field-sm-phone"
             >
               {options.map((o) => (
                 <option key={o.year} value={o.year}>{seasonLabel(o.year)}</option>
