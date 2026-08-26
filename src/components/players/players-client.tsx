@@ -134,12 +134,18 @@ function seasonLabel(y: number): string {
  *
  * Contrast on their own fills: 6.83, 7.57, 6.49, 7.05 — all clear AA for small
  * text, which matters at this size.
+ *
+ * THE VALUES LIVE IN globals.css. They were fixed hex here, which meant the
+ * pastel fills stayed pastel on the dark theme and each badge read as a small
+ * headlight — the same failure the percentile ramp documents. They are tokens
+ * now, with a deep-fill dark set, and the player page's hero renders the same
+ * four so a junior is the same amber wherever it appears.
  */
 const CLASS_BADGE: Record<string, { bg: string; fg: string }> = {
-  Fr: { bg: "#D3EDF2", fg: "#0F5566" },   // teal
-  So: { bg: "#E8E1FA", fg: "#4C3391" },   // violet
-  Jr: { bg: "#FBEAC8", fg: "#7A4703" },   // amber
-  Sr: { bg: "#F2DCEC", fg: "#7A2860" },   // magenta
+  Fr: { bg: "var(--cls-fr-bg)", fg: "var(--cls-fr-fg)" },   // teal
+  So: { bg: "var(--cls-so-bg)", fg: "var(--cls-so-fg)" },   // violet
+  Jr: { bg: "var(--cls-jr-bg)", fg: "var(--cls-jr-fg)" },   // amber
+  Sr: { bg: "var(--cls-sr-bg)", fg: "var(--cls-sr-fg)" },   // magenta
 };
 
 function seasonBadge(y: number): string {

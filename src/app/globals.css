@@ -56,6 +56,19 @@
    * the component so the dark theme can restate them. The light values are
    * unchanged: pastel fills carrying dark text, authored in OKLCH and baked.
    * See that file for why it is banded rather than a continuous sweep. */
+  /* Class badges — the four academic years, shared by the players explorer and
+     the player page's hero so the two can never disagree about what a junior
+     looks like.
+     Off the red-to-green axis the percentile ramp owns: a freshman in ramp-red
+     would read as "bad at being a freshman", and these are a category, not a
+     rank. They separate by HUE rather than lightness, which is what keeps them
+     reading as four kinds instead of a scale. Text clears 6.5-7.6 on its own
+     fill here. */
+  --cls-fr-bg: #D3EDF2; --cls-fr-fg: #0F5566;
+  --cls-so-bg: #E8E1FA; --cls-so-fg: #4C3391;
+  --cls-jr-bg: #FBEAC8; --cls-jr-fg: #7A4703;
+  --cls-sr-bg: #F2DCEC; --cls-sr-fg: #7A2860;
+
   --pct-bg-1: #ff9c91; --pct-fg-1: #7d231f;
   --pct-bg-2: #ffc1a2; --pct-fg-2: #8d3a0c;
   --pct-bg-3: #fce1c3; --pct-fg-3: #814600;
@@ -122,6 +135,16 @@
    * which is why "average" read as unstyled and the yellow looked washed out.
    * Every fill now clears 1.75 against the page, and every band's type still
    * clears AA on it (6.46-7.38). */
+  /* The class badges inverted, on the same principle as the ramp below: the
+     light set is pastel fills chosen to hold dark text, and dropped on #1C1C1C
+     each one is a small headlight. Deep fills and light text instead, same four
+     hues in the same order, so a junior is the same amber on either theme.
+     Text clears 8.1-8.5 on its own fill. */
+  --cls-fr-bg: #123c46; --cls-fr-fg: #a4dfeb;
+  --cls-so-bg: #272052; --cls-so-fg: #c6b8f2;
+  --cls-jr-bg: #3f2f13; --cls-jr-fg: #f2cb80;
+  --cls-sr-bg: #3b1f34; --cls-sr-fg: #eeb4dc;
+
   --pct-bg-1: #772b26; --pct-fg-1: #ffc5ba;
   --pct-bg-2: #6c351e; --pct-fg-2: #ffc9a9;
   --pct-bg-3: #5a3f24; --pct-fg-3: #ffd098;
@@ -1033,3 +1056,4 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .bta-menu-in { animation: none; }
 }
+

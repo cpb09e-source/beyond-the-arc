@@ -333,6 +333,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         hometown={stats.hometown}
         highSchool={null}
         rsci={rsci}
+        playerClass={current.class}
         draft={
           draft && draft.pick !== null
             ? {
