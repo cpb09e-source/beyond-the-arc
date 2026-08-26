@@ -471,14 +471,17 @@ function LineupNames({
   bartOf: Map<number, number | null>;
 }) {
   return (
-    <span className="text-ink">
+    // Weight on the names, not the separators: five names to a cell means the
+    // dots outnumber nothing and would thicken into a line of their own if they
+    // came along for the ride. font-normal below puts them back.
+    <span className="text-ink font-semibold">
       {ids.map((id, i) => {
         const short = shortOf.get(id) ?? `#${id}`;
         const full = nameOf.get(id) ?? short;
         const bart = bartOf.get(id);
         return (
           <span key={id}>
-            {i > 0 && <span aria-hidden className="text-ink-muted/60"> · </span>}
+            {i > 0 && <span aria-hidden className="text-ink-muted/60 font-normal"> · </span>}
             {bart != null ? (
               <Link
                 href={`/players/${bart}/`}
