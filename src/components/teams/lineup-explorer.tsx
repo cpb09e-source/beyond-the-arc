@@ -144,6 +144,37 @@ export function LineupExplorer({
     return out;
   }, [data.players]);
 
+  /**
+   * Surname alone, for phones — five "G. Yalden"s still overflow a 42vw column
+   * and wrap to four lines.
+   *
+   * WITH ONE EXCEPTION, and it is not optional: where two players on the roster
+   * share a surname the initial stays. Duke rosters Cameron and Cayden Boozer,
+   * and a lineup reading "Boozer · Boozer" names nobody — the row would be
+   * ambiguous rather than merely terse, which is worse than the width it saves.
+   *
+   * This is the roster-dependent formatting that shortOf deliberately avoids,
+   * and it is right here for the opposite reason: shortOf is the label a reader
+   * carries between seasons and pages, so its shape should not shift under
+   * them. This one exists only inside a single team's single-season table,
+   * where the collision it guards against is visible in the same column.
+   */
+  const lastOf = useMemo(() => {
+    const surnames = new Map<string, number>();
+    for (const p of data.players) {
+      const last = p.name.trim().split(/\s+/).slice(1).join(" ");
+      if (last) surnames.set(last, (surnames.get(last) ?? 0) + 1);
+    }
+    const out = new Map<number, string>();
+    for (const p of data.players) {
+      const parts = p.name.trim().split(/\s+/);
+      const last = parts.slice(1).join(" ");
+      if (!last) { out.set(p.id, p.name.trim()); continue; }
+      out.set(p.id, (surnames.get(last) ?? 0) > 1 ? `${parts[0]![0]}. ${last}` : last);
+    }
+    return out;
+  }, [data.players]);
+
   /** CBBD id -> bart id, for linking a name to its player page. */
   const bartOf = useMemo(
     () => new Map(data.players.map((p) => [p.id, p.b])),
@@ -425,7 +456,7 @@ export function LineupExplorer({
                 {sorted.map((r) => (
                   <StatRow
                     key={r.ids.join("|")}
-                    label={<LineupNames ids={r.ids} shortOf={shortOf} nameOf={nameOf} bartOf={bartOf} />}
+                    label={<LineupNames ids={r.ids} shortOf={shortOf} lastOf={lastOf} nameOf={nameOf} bartOf={bartOf} />}
                     cols={cols}
                     totals={r.totals}
                     benchmarks={benchmarks}
@@ -463,25 +494,41 @@ export function LineupExplorer({
  * the surrounding elements already imply.
  */
 function LineupNames({
-  ids, shortOf, nameOf, bartOf,
+  ids, shortOf, lastOf, nameOf, bartOf,
 }: {
   ids: number[];
   shortOf: Map<number, string>;
+  /** Surname only, shown below sm. See the note where it is built. */
+  lastOf: Map<number, string>;
   nameOf: Map<number, string>;
   bartOf: Map<number, number | null>;
 }) {
   return (
-    // Weight on the names, not the separators: five names to a cell means the
-    // dots outnumber nothing and would thicken into a line of their own if they
-    // came along for the ride. font-normal below puts them back.
+    // ONE NAME PER LINE BELOW sm, WITH NO SEPARATORS.
+    //
+    // The interpuncts are right on a line of five names and wrong the moment
+    // that line wraps: in a 42vw column the list breaks after whichever name
+    // happens to reach the edge, so the dots land at arbitrary points and some
+    // sit alone at the end of a line. Read down a column of them and the
+    // punctuation looks scattered, and worse, a wrapped lineup is hard to tell
+    // from the next lineup down.
+    //
+    // Stacking removes the question. Each row is five lines, the zebra band is
+    // the boundary, and nothing needs a separator to say where one unit ends.
+    // Above sm the names fit on one line and the dots go back to doing their
+    // job.
+    //
+    // Weight stays on the names rather than the dots: five names means four
+    // separators, and at the same weight they thicken into a rule of their own.
     <span className="text-ink font-semibold">
       {ids.map((id, i) => {
         const short = shortOf.get(id) ?? `#${id}`;
+        const last = lastOf.get(id) ?? short;
         const full = nameOf.get(id) ?? short;
         const bart = bartOf.get(id);
         return (
-          <span key={id}>
-            {i > 0 && <span aria-hidden className="text-ink-muted/60 font-normal"> · </span>}
+          <span key={id} className="block leading-snug sm:inline">
+            {i > 0 && <span aria-hidden className="hidden sm:inline text-ink-muted/60 font-normal"> · </span>}
             {bart != null ? (
               <Link
                 href={`/players/${bart}/`}
@@ -493,10 +540,14 @@ function LineupNames({
                 // turns the column into a ruled block on hover.
                 className="hover:text-coral transition-colors"
               >
-                {short}
+                <span className="sm:hidden">{last}</span>
+                <span className="hidden sm:inline">{short}</span>
               </Link>
             ) : (
-              <span title={full}>{short}</span>
+              <span title={full}>
+                <span className="sm:hidden">{last}</span>
+                <span className="hidden sm:inline">{short}</span>
+              </span>
             )}
           </span>
         );
