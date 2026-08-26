@@ -576,7 +576,7 @@ export function TeamPageView({
             overviewHref={overviewHref}
           />
         )}
-        <div className="min-w-0 flex-1 order-1">
+        <div className="min-w-0 flex-1">
 
       {/* The schedule sits BELOW the tab strip, not above it with the identity
           block.

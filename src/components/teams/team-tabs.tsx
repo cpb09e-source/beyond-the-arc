@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
  * at icon size, never scrolls, and sits under the thumb instead of at the top
  * of a page the reader has already scrolled past.
  *
- * THE RAIL IS ON THE RIGHT, AND ITS POSITION NEVER MOVES. That second part is
+ * THE RAIL IS ON THE LEFT, AND ITS POSITION NEVER MOVES. That second part is
  * why the sections all share one max-width now. They used to differ — 88rem for
  * most, 96rem for School History, 100rem for Lineups — and each centred itself,
  * so a rail pinned to the content's edge landed somewhere different on every
@@ -164,16 +164,18 @@ export function TeamRail(props: NavProps) {
   return (
     <nav
       aria-label="Team sections"
-      // order-2 puts it after the content in the flex row; the content column
-      // is order-1. Source order stays content-first so a screen reader and a
-      // keyboard reach the page before its navigation.
+      // No order utility: the rail is first in the markup and first in the
+      // row, so the visual order and the tab order agree. Placing it visually
+      // before the content while leaving it after in the DOM would send a
+      // keyboard through the entire page and back to reach the navigation.
+      //
       // mt-5 matches the top margin the first section in every tab carries, so
       // the rail's first item lines up with the content beside it rather than
       // with the column box, which sits 20px higher. It is a constant and not
       // read from the section, deliberately: the whole point of one container
       // width is that this navigation holds still between tabs, and matching
       // each tab's own first margin would start it moving again.
-      className="hidden lg:block order-2 shrink-0 w-52 mt-5 sticky top-4 self-start z-20"
+      className="hidden lg:block shrink-0 w-52 mt-5 sticky top-4 self-start z-20"
     >
       <ul className="flex flex-col gap-0.5">
         {TABS.map((t) => {
@@ -201,13 +203,13 @@ export function TeamRail(props: NavProps) {
                     : undefined
                 }
               >
-                {/* Marker on the OUTER edge — the rail sits to the right of
+                {/* Marker on the OUTER edge — the rail sits to the left of
                     the content, so the bar belongs against the page edge and
                     not between the label and the thing it labels. */}
                 <span
                   aria-hidden
                   className={cn(
-                    "absolute right-0 top-1.5 bottom-1.5 w-[3px] rounded-l",
+                    "absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r",
                     isActive ? "opacity-100" : "opacity-0",
                   )}
                   style={{ backgroundColor: "var(--accent, var(--color-coral))" }}
