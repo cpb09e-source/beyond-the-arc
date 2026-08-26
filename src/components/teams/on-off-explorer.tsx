@@ -234,7 +234,7 @@ export function OnOffExplorer({
           itself, chips underneath for what is chosen. Empty means everyone,
           which is the useful default here — the question is usually "how does
           this team look by player", and only sometimes "these two". */}
-      <div className="px-4 lg:px-0 mb-5 max-w-md">
+      <div className="mb-5 max-w-md">
         <div className="text-xs uppercase tracking-widest text-ink-muted font-medium mb-1.5">
           Players
         </div>
@@ -256,7 +256,7 @@ export function OnOffExplorer({
       </div>
 
       {/* One column control for all three tables — see the note at the top. */}
-      <div className="flex flex-wrap items-center gap-2 px-4 lg:px-0">
+      <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs uppercase tracking-widest text-ink-muted font-medium shrink-0 mr-1">
           Columns
         </span>
@@ -282,7 +282,7 @@ export function OnOffExplorer({
 
       {SECTIONS.map((sec) => (
         <section key={sec.key} className="mt-8 first:mt-6">
-          <div className="px-4 lg:px-0 mb-3">
+          <div className="mb-3">
             <h3 className="font-display text-2xl lg:text-3xl text-ink leading-none tracking-tight">
               {sec.title}
             </h3>
@@ -332,7 +332,7 @@ export function OnOffExplorer({
                     ))}
                   </tr>
                   <tr>
-                    <Th sticky padClass="px-8 sm:px-2" label="Player" align="left" active={sort.key === "name"} dir={sort.dir} onClick={() => toggleSort("name", sec.key, "asc")} />
+                    <Th sticky padClass="px-4 sm:px-2" label="Player" align="left" active={sort.key === "name"} dir={sort.dir} onClick={() => toggleSort("name", sec.key, "asc")} />
                     <Th className="hidden sm:table-cell" label="On" title="Possessions with this player on the floor" active={sort.key === "onPoss"} dir={sort.dir} onClick={() => toggleSort("onPoss", sec.key, "desc")} />
                     <Th className="hidden sm:table-cell" label="Off" title="Possessions with this player off the floor" active={sort.key === "offPoss"} dir={sort.dir} onClick={() => toggleSort("offPoss", sec.key, "desc")} />
                     <Th className="hidden sm:table-cell" label="Pct" title="Share of team possessions this player was on the floor for" active={sort.key === "share"} dir={sort.dir} onClick={() => toggleSort("share", sec.key, "desc")} />
@@ -354,14 +354,17 @@ export function OnOffExplorer({
                   {shown.map((r) => (
                     <tr key={r.id} className="group transition-colors bg-paper odd:bg-card">
                       {/* px-4 below sm so a player's name starts on the same
-                          line as the section heading above it. px-8, not
-                          px-4: the surface is pulled out by -mx-4 from a
-                          parent that is already inset, so the heading's text
-                          lands 32px from the screen edge and the column has to
-                          clear the same 32 to sit under it. Measured, not
-                          guessed — px-4 put the names at 16 and looked like a
-                          second, closer margin. */}
-                      <td className="sticky left-0 z-20 px-8 sm:px-3 py-1.5 border-r border-hairline whitespace-nowrap transition-colors bg-paper group-odd:bg-card">
+                          line as the section heading above it. px-4 matches
+                          the gutter the team page's shared container sets, and
+                          the surface is pulled back out to the screen edge by
+                          -mx-4 — so the fill bleeds and the words line up.
+
+                          This was px-8 while the section carried its own
+                          padding on top of the page's. Once the sections were
+                          normalised onto one container that doubled up, and the
+                          heading, blurb and names all sat 16px right of the
+                          section's own controls. */}
+                      <td className="sticky left-0 z-20 px-4 sm:px-3 py-1.5 border-r border-hairline whitespace-nowrap transition-colors bg-paper group-odd:bg-card">
                         {r.bart != null ? (
                           <Link href={`/players/${r.bart}/`} prefetch={false} className="text-ink font-semibold hover:text-coral transition-colors">
                             {r.name}
