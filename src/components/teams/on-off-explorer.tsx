@@ -363,11 +363,11 @@ export function OnOffExplorer({
                           second, closer margin. */}
                       <td className="sticky left-0 z-20 px-8 sm:px-3 py-1.5 border-r border-hairline whitespace-nowrap transition-colors bg-paper group-odd:bg-card">
                         {r.bart != null ? (
-                          <Link href={`/players/${r.bart}/`} prefetch={false} className="text-ink hover:text-coral transition-colors">
+                          <Link href={`/players/${r.bart}/`} prefetch={false} className="text-ink font-semibold hover:text-coral transition-colors">
                             {r.name}
                           </Link>
                         ) : (
-                          <span className="text-ink">{r.name}</span>
+                          <span className="text-ink font-semibold">{r.name}</span>
                         )}
                       </td>
                       <td className="hidden sm:table-cell px-2 sm:px-3 py-1.5 text-right tabular text-ink-soft whitespace-nowrap">
