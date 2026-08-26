@@ -85,7 +85,11 @@
   --paper-deep: #242424;     /* elevated surfaces (cards, banners) */
   --ink: #ece8e0;            /* primary text — warm cream */
   --ink-soft: #a6a29a;       /* body copy */
-  --ink-muted: #736f68;      /* secondary text */
+  --ink-muted: #8f8a81;      /* secondary text. Lifted from #736f68, which
+                                measured 3.41 on --paper and 3.11 on --card and
+                                so failed AA on both, on the token carrying 655
+                                text-ink-muted usages. Same hue, 1.24x: now
+                                4.97 and 4.52. */
   --hairline: #333331;       /* dividers */
 
   --coral: #4d9bff;          /* the accent, lifted to carry on #1C1C1C */
@@ -110,13 +114,21 @@
    * so "average" recedes instead of shouting. Authored in OKLCH at
    * L .285-.365 / C .012-.095 across hue 27-150 and baked to sRGB, exactly as
    * the light ramp is, so nothing depends on oklch() support. */
-  --pct-bg-1: #682621; --pct-fg-1: #ffc5ba;
-  --pct-bg-2: #542917; --pct-fg-2: #ffc9a9;
-  --pct-bg-3: #3f2c19; --pct-fg-3: #ffd098;
-  --pct-bg-4: #2c2a23; --pct-fg-4: #e2ded3;
-  --pct-bg-5: #303319; --pct-fg-5: #dee698;
-  --pct-bg-6: #273e16; --pct-fg-6: #c3eda9;
-  --pct-bg-7: #084c21; --pct-fg-7: #aef1bb;
+  /* FILLS LIFTED so the chip reads as a chip. The first dark ramp solved the
+   * wrong half of the problem: its type cleared 7.4-10.7 on its own fill, but
+   * the fills themselves sat 1.19-1.68 against #1C1C1C, so a mid-band chip was
+   * a number floating on the page with no visible pill around it. Bands 3, 4
+   * and 5 — the amber-to-olive middle — were the worst at 1.29, 1.19 and 1.31,
+   * which is why "average" read as unstyled and the yellow looked washed out.
+   * Every fill now clears 1.75 against the page, and every band's type still
+   * clears AA on it (6.46-7.38). */
+  --pct-bg-1: #772b26; --pct-fg-1: #ffc5ba;
+  --pct-bg-2: #6c351e; --pct-fg-2: #ffc9a9;
+  --pct-bg-3: #5a3f24; --pct-fg-3: #ffd098;
+  --pct-bg-4: #484439; --pct-fg-4: #e2ded3;
+  --pct-bg-5: #434723; --pct-fg-5: #dee698;
+  --pct-bg-6: #304c1b; --pct-fg-6: #c3eda9;
+  --pct-bg-7: #085023; --pct-fg-7: #aef1bb;
 }
 
 @theme inline {
@@ -904,6 +916,38 @@ body {
 .honour-champ-card  { background-color: color-mix(in srgb, var(--court) 55%, var(--card)); }
 .honour-f4-paper    { background-color: color-mix(in srgb, var(--court) 20%, var(--paper)); }
 .honour-f4-card     { background-color: color-mix(in srgb, var(--court) 20%, var(--card)); }
+
+/* The champion fill is the darkest thing --court-ink ever sits on. On the dark
+   theme that pairing measures 3.19, under AA, while the Final Four fill at 20%
+   is fine at 5.6-6.1. Only the champion cell needs the lighter ink, and only
+   here — --court-ink is a kicker colour in six other places where it already
+   clears AAA on the page ground, so it is not moved globally. */
+[data-theme="dark"] .honour-champ-paper,
+[data-theme="dark"] .honour-champ-card { color: #f0d5a8; }
+
+/* Per-team accent, swapped for a legible variant on the dark theme.
+   team-page-view sets --accent to the raw brand colour and --accent-dark to a
+   lightness-clamped version of it. The raw colour is right on paper but 225 of
+   366 brand primaries measure under 3.0 against #1C1C1C — Vanderbilt's
+   anthracite lands at 1.05 — so on dark the accent becomes the clamped one.
+   Scoped to the wrapper rather than :root because the two custom properties are
+   set inline on that element, and a var() in a :root rule would resolve them in
+   :root's scope, where they do not exist. */
+[data-theme="dark"] .team-accent {
+  /* !important is load-bearing, not laziness. --accent and --accent-tint are
+     set as INLINE styles on this element (team-page-view has to compute them
+     per team on the server), and an inline declaration outranks every
+     stylesheet rule regardless of specificity. Without !important this swap is
+     simply unreachable: --accent-dark resolves correctly and --accent stays the
+     raw brand colour, which is exactly how the first attempt failed.
+
+     The alternative — moving the light value to --accent-light and deriving
+     both here — needs a bare `.team-accent` rule, and that one did not survive
+     compilation while this attribute-prefixed one did. One rule that works
+     beats two that depend on the build. */
+  --accent: var(--accent-dark, var(--color-coral)) !important;
+  --accent-tint: var(--accent-tint-dark, rgba(77, 155, 255, 0.14)) !important;
+}
 
 /* Marker swipe behind a figure (components/highlight.tsx).
    Drawn left to right, the direction a hand moves, and scaled on the X axis

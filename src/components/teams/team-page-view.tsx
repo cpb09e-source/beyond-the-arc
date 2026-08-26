@@ -26,7 +26,7 @@ import { TourneyTimeline } from "@/components/teams/tourney-timeline";
 import { PlayerHeadshotStrip } from "@/components/teams/player-headshot-strip";
 import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog, RankedStat } from "@/lib/static-data";
 import { confDisplay } from "@/lib/conf-display";
-import { getTeamColors } from "@/lib/team-colors";
+import { getTeamColors, readableInk } from "@/lib/team-colors";
 
 function fmtNum(x: number | null, digits = 1): string {
   if (x === null || x === undefined) return "—";
@@ -341,9 +341,27 @@ export function TeamPageView({
   // states without prop-drilling. --accent is the full color (for text +
   // border), --accent-tint is a low-alpha background suitable for row
   // hovers. Always set; fall back to coral for unthemed teams.
+  // The dark theme cannot use the raw brand colour. Measured across all 366
+  // teams, 225 primaries fall under 3.0 contrast on the dark ground — the
+  // navies and anthracites simply vanish (Vanderbilt's #261e25 is 1.05). So a
+  // second, lightness-clamped variant ships alongside the true colour and
+  // globals.css swaps to it under [data-theme="dark"] .team-accent.
+  //
+  // 0.66-0.88 rather than readableInk's default 0.34-0.56: that default is
+  // theme-agnostic and lands mid-range, which fails BOTH grounds — only 86 of
+  // 366 teams pass either way with it. Clamped upward, all 366 clear AA on
+  // dark. The light theme keeps the true colour, where it already works.
+  const accentDark = accentColor ? readableInk(accentColor, { min: 0.66, max: 0.88 }) : null;
+  // --accent carries the LIGHT value. The dark theme overrides it from
+  // globals.css with !important, which it needs because these are inline
+  // styles and inline outranks any stylesheet rule — see the note there.
   const cssVars: React.CSSProperties = {
     ["--accent" as string]: accentColor ?? "#ed5a4f",
     ["--accent-tint" as string]: accentColor ? `${accentColor}1a` : "rgba(237, 90, 79, 0.08)",
+    ["--accent-dark" as string]: accentDark ?? "#4d9bff",
+    // The tint is a hover wash. At 10% alpha a near-black is invisible on the
+    // dark ground for the same reason the accent is, so it follows the accent.
+    ["--accent-tint-dark" as string]: accentDark ? `${accentDark}26` : "rgba(77, 155, 255, 0.14)",
   };
 
   const currentTrank = current.team_trank_stats;
@@ -399,7 +417,7 @@ export function TeamPageView({
   const showTabs = !preview;
 
   return (
-    <div style={cssVars}>
+    <div className="team-accent" style={cssVars}>
       {/* Hero */}
       <section>
         <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-10 pb-8">
