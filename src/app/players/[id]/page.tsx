@@ -154,11 +154,12 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   };
 
   /**
-   * The game log, enriched with the team-level score for each night.
+   * The game log, with each night's opponent conference joined in.
    *
-   * The player box has no score in it, so Tm/Op and the conference flag are
-   * joined from the team log on TEAM NAME AND DATE — the two files key games
-   * in different id spaces, and a team plays at most once on a date. The team
+   * The player box does not say which conference the opponent was in, so the
+   * conference split is joined from the team log on TEAM NAME AND DATE — the
+   * two files key games in different id spaces, and a team plays at most once
+   * on a date. The team
    * for a given row is the team the player was on THAT season, which is why
    * this walks the seasons rather than using the current one: a transfer's
    * 24-25 games have to join against his old school.
@@ -179,8 +180,6 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       const hit = team && r.game_date ? scores?.get(teamGameKey(team, r.game_date)) ?? null : null;
       return {
         ...r,
-        tm: hit?.tm ?? null,
-        op: hit?.op ?? null,
         // Null rather than false where the join missed: an unmatched game is
         // not a non-conference game, and the split would quietly file it as
         // one. Both conference splits test explicitly for true/false.

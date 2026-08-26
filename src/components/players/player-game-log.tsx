@@ -20,6 +20,12 @@ import { cn } from "@/lib/utils";
  * team scores would be wrong for every player who did not play the whole game,
  * which is every player.
  *
+ * The team and opponent scores are not here either, and that is a choice
+ * rather than a gap — they are the GAME's result, not the player's line, and
+ * every row already says which way it went in the W/L column. The join that
+ * fetched them stays, because the conference split still needs to know who the
+ * opponent was.
+ *
  * The percentile heat-map shading a commercial box score puts behind these
  * numbers is deliberately absent. It ranks a player against a cohort, and this
  * table is one player against himself across a season; the same 39% would be
@@ -45,10 +51,11 @@ export type GameLogRow = {
   tov: number | null; pf: number | null;
   efg_pct: number | null; ts_pct: number | null; usage_pct: number | null;
   ortg: number | null; drtg: number | null; game_score: number | null;
-  /** Joined from the team log — see readTeamGameScores. Null where unmatched. */
-  tm: number | null;
-  op: number | null;
-  /** True when the opponent is in the player's own conference that season. */
+  /**
+   * True when the opponent is in the player's own conference that season.
+   * Joined from the team log — see readTeamGameScores. Null where the join
+   * missed, which is not the same as false.
+   */
   isConf: boolean | null;
 };
 
@@ -279,8 +286,6 @@ export function PlayerGameLog({
               <Th>Date</Th>
               <Th align="center">W/L</Th>
               <Th>Opp</Th>
-              <Th align="right">Tm</Th>
-              <Th align="right">Op</Th>
               <Th align="right">MIN</Th>
               {cols.map((c) => <Th key={c.key} align="right">{c.label}</Th>)}
             </tr>
@@ -300,7 +305,7 @@ export function PlayerGameLog({
                     {r.won === true ? "W" : r.won === false ? "L" : "—"}
                   </span>
                 </Td>
-                <Td>
+                <Td title={r.opp_team_market ?? undefined}>
                   <span className="flex items-center gap-2 whitespace-nowrap">
                     {/* @ for away, blank for home, n for neutral — the shorthand
                         every box score in the sport already uses. */}
@@ -308,11 +313,20 @@ export function PlayerGameLog({
                       {r.is_neutral ? "n" : r.is_home === false ? "@" : ""}
                     </span>
                     {r.opp_team_market && <TeamLogo name={r.opp_team_market} size={18} />}
-                    <span className="text-ink-soft">{r.opp_team_market ?? "—"}</span>
+                    {/* CREST ONLY ON A PHONE. The name is the widest thing in
+                        the row and this table already scrolls sideways there,
+                        so dropping it buys several stat columns into view.
+                        sr-only rather than hidden: the crest is an image, and
+                        hiding the text outright would leave a screen reader
+                        with only its alt — which TeamLogo does set, but the
+                        visible column would then have no accessible name of
+                        its own. Absolutely positioned, so it costs the flex row
+                        nothing. */}
+                    <span className="sr-only sm:not-sr-only text-ink-soft">
+                      {r.opp_team_market ?? "—"}
+                    </span>
                   </span>
                 </Td>
-                <Td align="right" className="tabular">{fmtInt(r.tm)}</Td>
-                <Td align="right" className="tabular">{fmtInt(r.op)}</Td>
                 <Td align="right" className="tabular">{fmtInt(r.mins)}</Td>
                 {cols.map((c) => (
                   <Td key={c.key} align="right" className="tabular">{c.get(r)}</Td>
@@ -321,7 +335,7 @@ export function PlayerGameLog({
             ))}
             {shown.length === 0 && (
               <tr>
-                <td colSpan={6 + cols.length} className="px-3 py-6 text-center text-sm text-ink-muted">
+                <td colSpan={4 + cols.length} className="px-3 py-6 text-center text-sm text-ink-muted">
                   No games in this split.
                 </td>
               </tr>
@@ -333,8 +347,6 @@ export function PlayerGameLog({
                 <Td className="font-semibold text-ink">Totals</Td>
                 <Td align="center" className="text-ink-muted">—</Td>
                 <Td className="text-ink-muted">{t.n} {t.n === 1 ? "game" : "games"}</Td>
-                <Td align="right" className="text-ink-muted">—</Td>
-                <Td align="right" className="text-ink-muted">—</Td>
                 <Td align="right" className="tabular">{fmtInt(t.mins)}</Td>
                 {cols.map((c) => (
                   <Td key={c.key} align="right" className="tabular">{totalFor(c.key, t)}</Td>
@@ -403,14 +415,17 @@ function Th({
 }
 
 function Td({
-  children, align = "left", className = "",
+  children, align = "left", className = "", title,
 }: {
   children: React.ReactNode;
   align?: "left" | "right" | "center";
   className?: string;
+  /** Used by the opponent cell, whose name is crest-only on a phone. */
+  title?: string;
 }) {
   return (
     <td
+      title={title}
       className={cn(
         "px-1.5 sm:px-3 py-2.5",
         align === "right" && "text-right",
