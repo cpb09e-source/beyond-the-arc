@@ -26,7 +26,11 @@ export function FindGameTrigger({
         onClick={() => setOpen(true)}
         // Solid filled with the team's accent color, white text, shadow +
         // hover lift. Reads unambiguously as a clickable CTA in the hero.
-        className="inline-flex items-center gap-2 text-xs uppercase tracking-widest font-bold rounded-md px-4 py-2 shadow-sm hover:shadow-md hover:-translate-y-px active:translate-y-0 active:shadow-sm transition-all duration-150 text-white border border-transparent focus:outline-none focus:ring-2 focus:ring-coral/40"
+        // Tighter below sm. Beside the NET badge a phone leaves 163px and the
+        // button wanted 170 — almost all of it padding and letter-spacing
+        // rather than the four words inside. px-3 and tracking-wider buy the
+        // difference without touching the desktop button.
+        className="inline-flex items-center gap-2 text-xs uppercase tracking-wider sm:tracking-widest font-bold rounded-md px-3 sm:px-4 py-2 shadow-sm hover:shadow-md hover:-translate-y-px active:translate-y-0 active:shadow-sm transition-all duration-150 text-white border border-transparent focus:outline-none focus:ring-2 focus:ring-coral/40"
         style={{
           backgroundColor: "var(--accent, var(--color-coral))",
         }}
@@ -46,8 +50,16 @@ export function FindGameTrigger({
           <circle cx={11} cy={11} r={7} />
           <line x1={20} y1={20} x2={16.65} y2={16.65} />
         </svg>
-        <span>Find a <span className="hidden sm:inline">{teamName} </span>game</span>
-        <span aria-hidden className="text-[0.65rem] opacity-80">→</span>
+        {/* "Find game" on a phone, where this sits beside the NET badge and has
+            about 160px to live in. "Find a game" fits a two-digit rank and
+            wraps on a three-digit one, which would move the button on a team's
+            page for no reason a reader could see. The arrow goes too — it is
+            decoration, and it is the difference between fitting and not.
+            aria-label carries the full "Find a {teamName} game" at every
+            width. */}
+        <span className="sm:hidden">Find game</span>
+        <span className="hidden sm:inline">Find a {teamName} game</span>
+        <span aria-hidden className="hidden sm:inline text-[0.65rem] opacity-80">→</span>
       </button>
       {open && (
         <FindGameModal

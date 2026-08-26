@@ -385,6 +385,34 @@ export function TeamPageView({
     ? Math.round(last5Ranks.reduce((a, b) => a + b, 0) / last5Ranks.length)
     : null;
 
+  // NET rank badge, defined once and placed twice.
+  //
+  // It sits beside the team's name on desktop, where there is room on that
+  // line. On a phone the name already fills the row, so the badge wrapped
+  // underneath and read as a caption to nothing; it goes next to the record
+  // instead, which is the other number a reader is looking for. Two placements,
+  // one definition — the alternative is two copies of the styling drifting
+  // apart the first time either is touched.
+  const netBadge = preview ? (
+    <span
+      className="inline-flex items-baseline gap-1 px-3 py-1.5 rounded-md text-white font-display text-xl md:text-2xl tabular leading-none shadow-sm"
+      style={accentColor ? { background: accentColor, color: teamColors?.onPrimary ?? "#fff" } : { background: "var(--color-coral, #ed5a4f)" }}
+      title={`NET rank for ${PREVIEW_SEASON_LABEL} — set once games are played`}
+    >
+      <span className="text-[0.6em] opacity-80 uppercase tracking-widest mr-0.5">NET</span>
+      TBD
+    </span>
+  ) : currentNetRank !== null ? (
+    <span
+      className="inline-flex items-baseline gap-1 px-3 py-1.5 rounded-md text-white font-display text-xl md:text-2xl tabular leading-none shadow-sm"
+      style={accentColor ? { background: accentColor, color: teamColors?.onPrimary ?? "#fff" } : { background: "var(--color-coral, #ed5a4f)" }}
+      title={`NET rank for ${seasonLabel(current.year)} — aNET position in D-I`}
+    >
+      <span className="text-[0.6em] opacity-80 uppercase tracking-widest mr-0.5">NET</span>
+      #{currentNetRank}
+    </span>
+  ) : null;
+
   // "Where they rank best/worst", or three adjusted-efficiency tiles when the
   // season carries no national ranks. Rendered inside the hero on a normal
   // season and below the roster on a preview — one definition, two positions.
@@ -434,7 +462,10 @@ export function TeamPageView({
             24px. The tables stay at 16px on purpose. */}
         <div className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-10 pb-8">
           <div className="flex flex-wrap items-center gap-6 lg:gap-10">
-            <TeamLogo name={current.name} size={96} className="rounded-md" />
+            {/* Desktop only. Above lg the crest sits beside the whole block and
+                items-center is right, because the block is short relative to a
+                96px mark. */}
+            <TeamLogo name={current.name} size={96} className="hidden lg:block rounded-md" />
             <div className="flex-1 min-w-0">
               <div
                 className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] font-medium mb-3"
@@ -459,38 +490,42 @@ export function TeamPageView({
                   />
                 </span>
               </div>
-              <div className="flex items-baseline gap-3 md:gap-4 flex-wrap">
+              {/* Below lg the crest moves INTO the name's row.
+                  items-center on the outer row centres a 96px mark against the
+                  full column — eyebrow, name, record, coach and the button —
+                  so on a phone it floated down beside the record: measured at
+                  390px, the crest's centre sat 78px below the name's. Pairing
+                  them in one row makes the alignment structural instead of a
+                  number that has to be re-tuned whenever a line is added.
+
+                  56px rather than 96: at full size the crest is taller than the
+                  name it is meant to sit with, and takes a third of the row
+                  from a title that already wraps on the longer schools. */}
+              <div className="flex items-center gap-3.5 lg:gap-0">
+                <TeamLogo name={current.name} size={56} className="lg:hidden rounded-md shrink-0" />
+                <div className="flex items-baseline gap-3 md:gap-4 flex-wrap min-w-0">
                 <h1 className="font-display text-4xl md:text-6xl tracking-tight text-ink leading-none">
                   <TeamName name={current.name} />
                 </h1>
-                {preview ? (
-                  <span
-                    className="inline-flex items-baseline gap-1 px-3 py-1.5 rounded-md text-white font-display text-xl md:text-2xl tabular leading-none shadow-sm"
-                    style={accentColor ? { background: accentColor, color: teamColors?.onPrimary ?? "#fff" } : { background: "var(--color-coral, #ed5a4f)" }}
-                    title={`NET rank for ${PREVIEW_SEASON_LABEL} — set once games are played`}
-                  >
-                    <span className="text-[0.6em] opacity-80 uppercase tracking-widest mr-0.5">NET</span>
-                    TBD
-                  </span>
-                ) : (
-                  currentNetRank !== null && (
-                    <span
-                      className="inline-flex items-baseline gap-1 px-3 py-1.5 rounded-md text-white font-display text-xl md:text-2xl tabular leading-none shadow-sm"
-                      style={accentColor ? { background: accentColor, color: teamColors?.onPrimary ?? "#fff" } : { background: "var(--color-coral, #ed5a4f)" }}
-                      title={`NET rank for ${seasonLabel(current.year)} — aNET position in D-I`}
-                    >
-                      <span className="text-[0.6em] opacity-80 uppercase tracking-widest mr-0.5">NET</span>
-                      #{currentNetRank}
-                    </span>
-                  )
-                )}
+                <span className="hidden lg:contents">{netBadge}</span>
+                </div>
               </div>
-              <div className="mt-4 flex flex-wrap items-baseline gap-x-6 gap-y-2 text-ink-soft">
-                <span className="tabular text-2xl text-ink">
+              <div className="mt-4 flex flex-wrap items-baseline gap-x-3 sm:gap-x-6 gap-y-2 text-ink-soft">
+                {/* This row wraps on a phone, so the order utilities decide
+                    which three things get the first line: the record, the NET
+                    badge and the game finder. Avg rank and the coach are prose
+                    and wrap underneath. Above lg there is room for all of it on
+                    one line and the DOM order stands. */}
+                <span className="order-1 lg:order-none tabular text-2xl text-ink">
                   {preview ? "0-0" : (currentTrank?.record ?? "—")}
                 </span>
+                {/* Phone placement. gap-x-6 on this row is sized for text set
+                    against text; the badge is a filled block, so it takes its
+                    own tighter gap via -ml and sits with the record rather than
+                    floating a paragraph away from it. */}
+                <span className="order-2 lg:hidden">{netBadge}</span>
                 {!preview && avgRank !== null && last5Ranks.length > 1 && (
-                  <span className="text-sm text-ink-muted">
+                  <span className="order-4 lg:order-none text-sm text-ink-muted">
                     Avg NET Rank, last {last5Ranks.length} seasons: #{avgRank}
                   </span>
                 )}
@@ -502,7 +537,7 @@ export function TeamPageView({
                   const coachName = current.coach ?? confRecords.get(current.year)?.coachName ?? null;
                   if (!coachName) return null;
                   return (
-                    <span className="text-sm text-ink-muted">
+                    <span className="order-5 lg:order-none text-sm text-ink-muted">
                       Coach:{" "}
                       <Link
                         href={`/coaches/${coachSlug(coachName)}/`}
@@ -518,11 +553,13 @@ export function TeamPageView({
                   );
                 })()}
                 {!preview && (
-                  <FindGameTrigger
-                    teamId={current.id}
-                    teamName={team.name}
-                    defaultYear={current.year}
-                  />
+                  <span className="order-3 lg:order-none">
+                    <FindGameTrigger
+                      teamId={current.id}
+                      teamName={team.name}
+                      defaultYear={current.year}
+                    />
+                  </span>
                 )}
               </div>
             </div>
