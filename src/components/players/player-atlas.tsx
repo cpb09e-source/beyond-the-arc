@@ -166,6 +166,11 @@ function StatBand({ now }: { now: StatLine }) {
   // also the right one to read on: the first four are how much a player did and
   // the last three are how well he did it, and they do not compare to each
   // other. From md the grid opens to seven and they all sit on one line.
+  //
+  // Each figure gets its own tile rather than sitting bare in a ruled column.
+  // Seven numbers read as a run whatever you set them in; a bordered cell makes
+  // the 4+3 wrap look deliberate instead of like a row that ran out of width,
+  // which is the one thing the ruled version could not fix.
   const cells = [
     { unit: "Games", value: int(now.games) },
     { unit: "PPG", value: one(now.ppg) },
@@ -177,22 +182,23 @@ function StatBand({ now }: { now: StatLine }) {
   ];
 
   return (
-    <div
-      // A hairline, not the 2px rule the masthead used to carry — that one read
-      // as a stray border once nothing followed it. Here something does follow
-      // it, and the band needs separating from the vitals it sits under.
-      className="xl:hidden mt-5 pt-4 border-t border-ink/10 grid grid-cols-4 md:grid-cols-7 gap-x-3 gap-y-4 md:gap-0"
-    >
+    // No rule above the band. Bare figures needed one to separate them from the
+    // vitals; a row of bordered cells is already a block, and a hairline on top
+    // of it is a second edge doing the first one's job.
+    <div className="xl:hidden mt-5 grid grid-cols-4 md:grid-cols-7 gap-2">
       {cells.map((c) => (
         <div
           key={c.unit}
-          // Rules only from md, where all seven are on one line. Below that the
-          // band wraps, and a left border on a cell that has become first of its
-          // row draws a rule down the middle of the block.
-          className="min-w-0 md:border-l md:border-ink/10 md:first:border-l-0 md:px-3.5 md:first:pl-0"
+          // Tinted with --ink at 4%, not with a surface token. On the dark theme
+          // --paper-deep and --card both resolve to the #242424 the hero card is
+          // already painted in, so a tile drawn in either would be invisible and
+          // its border would be doing all the work. Mixing the INK gives a tint
+          // that flips with the theme: a whisper of navy on paper, a whisper of
+          // cream on black.
+          className="min-w-0 rounded-lg border border-ink/10 bg-ink/[0.04] px-2 sm:px-3 pt-2 pb-2.5"
         >
           <div className="label">{c.unit}</div>
-          <div className="tabular text-ink leading-[1.1] mt-1 text-[1.5rem] sm:text-[1.75rem] font-medium tracking-[-0.035em]">
+          <div className="font-display tabular text-ink leading-[1.1] mt-1 text-[1.5rem] sm:text-[1.65rem] tracking-[-0.035em]">
             {c.value}
           </div>
         </div>
