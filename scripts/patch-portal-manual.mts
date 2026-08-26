@@ -139,6 +139,17 @@ const BATCHES: Array<{ confirmed: string; moves: Array<[string, string]> }> = [
       ["Iaroslav Niagu", "Colorado"],
     ],
   },
+  {
+    confirmed: "2026-08-25T00:00:00",
+    moves: [
+      ["Keyshawn Hall", "St. John's"],
+      ["Nick Townsend", "Stanford"],
+      // Ole Miss is "Mississippi" in the Bart naming this corpus uses; there is
+      // no "Ole Miss" entry, and an unresolved school would land the row with a
+      // null conference.
+      ["Corey Stephenson", "Mississippi"],
+    ],
+  },
 ];
 
 const MOVES: Array<[string, string, string]> = BATCHES.flatMap(
