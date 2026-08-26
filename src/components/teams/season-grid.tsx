@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
-import { TourneyBadge } from "@/components/tourney-badge";
+import { tourneyBadge } from "@/data/tournament-results";
 import { SeedChip } from "@/components/coaches/seed-chip";
 import { PercentileChip } from "@/components/percentile-chip";
 import { StatLabel } from "@/components/explorer/sortable-th";
@@ -240,9 +240,34 @@ export function SeasonGrid({
             const rowStyle = isCurrent
               ? { backgroundColor: `color-mix(in oklab, ${accentColor ?? "var(--color-coral)"} 12%, var(--card))` }
               : undefined;
+            // The honour is the CELL, not a chip beside the season. It used to
+            // be a "CHAMP"/"F4" pill here and a gold cell on phones only; the
+            // cell is now the single treatment at every width. One idea, one
+            // visual language, and it costs no horizontal room in a group that
+            // already carries a logo, a season and a seed.
+            //
+            // Same opacity rule as the current-season tint above: this cell is
+            // sticky, so the fill mixes against the zebra base rather than
+            // laying over it. The .honour-* classes in globals.css do the mix.
+            const honour = tourneyBadge(r.teamName, r.year);
+            const honourClass =
+              honour === "champion"
+                ? cn("text-court-ink font-bold",
+                     i % 2 === 0 ? "honour-champ-paper" : "honour-champ-card")
+                : honour === "final-four"
+                ? cn("text-court-ink font-bold",
+                     i % 2 === 0 ? "honour-f4-paper" : "honour-f4-card")
+                : "";
+            // An honour outranks the current-season tint on this one cell: a
+            // season can be both, and the gold is the rarer thing to say.
+            const cellStyle = honour ? undefined : rowStyle;
+            const honourTitle =
+              honour === "champion" ? `${seasonLabel(r.year)} national champion`
+              : honour === "final-four" ? `${seasonLabel(r.year)} Final Four`
+              : undefined;
             return (
               <tr key={r.year} className={cn("group", rowBg)} style={rowStyle}>
-                <td style={rowStyle} className={cn("sticky left-0 z-20 px-2 sm:px-3 py-1 border-r border-hairline transition-colors", rowBg, ROW_HOVER)}>
+                <td title={honourTitle} style={cellStyle} className={cn("sticky left-0 z-20 px-2 sm:px-3 py-1 border-r border-hairline transition-colors", rowBg, ROW_HOVER, honourClass)}>
                   <Link
                     href={`/teams/${slug}/${r.year}/`}
                     className="group/link inline-flex items-center gap-2.5 transition-colors"
@@ -253,7 +278,6 @@ export function SeasonGrid({
                       {seasonLabel(r.year)}
                     </span>
                     {r.tourneySeed != null && <SeedChip seed={r.tourneySeed} size="sm" />}
-                    <TourneyBadge teamName={r.teamName} year={r.year} />
                   </Link>
                 </td>
                 <td className={cn("px-1.5 sm:px-3 py-1 tabular font-semibold text-ink whitespace-nowrap transition-colors", ROW_HOVER)}>

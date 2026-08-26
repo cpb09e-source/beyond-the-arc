@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
-import { TourneyBadge } from "@/components/tourney-badge";
+import { tourneyBadge } from "@/data/tournament-results";
 import { SeedChip } from "@/components/coaches/seed-chip";
 import type { StaticTeamSeasonRow, ConfRecord } from "@/lib/static-data";
 import { confDisplay } from "@/lib/conf-display";
@@ -135,7 +135,10 @@ export function SortableSeasonsTable({
                   )}
                   style={isCurrent && accentColor ? { backgroundColor: `${accentColor}1a` } : undefined}
                 >
-                  <Td>
+                  {/* The honour is the CELL, not a chip beside the season —
+                      the same treatment the explorer and the By season grid
+                      use, at every width. */}
+                  <Td className={honourClass(s.name, s.year, i)} title={honourTitle(s.name, s.year)}>
                     <Link
                       href={`/teams/${slug}/${s.year}/`}
                       className="group inline-flex items-center gap-2.5 transition-colors" prefetch={false}>
@@ -144,7 +147,6 @@ export function SortableSeasonsTable({
                       {/* NCAA tournament seed (tier-colored). Pairs naturally
                           with the F4/Champion badge that follows when present. */}
                       {cr?.tourneySeed != null && <SeedChip seed={cr.tourneySeed} size="sm" />}
-                      <TourneyBadge teamName={s.name} year={s.year} />
                     </Link>
                   </Td>
                   <Td className="text-ink-muted">{confDisplay(s.conference)}</Td>
@@ -187,8 +189,35 @@ export function SortableSeasonsTable({
   );
 }
 
-function Td({ children, align = "left", className = "" }: { children: React.ReactNode; align?: "left" | "right"; className?: string }) {
-  return <td className={`px-1 sm:px-3 py-2.5 ${align === "right" ? "text-right" : ""} ${className}`}>{children}</td>;
+function Td({ children, align = "left", className = "", title }: { children: React.ReactNode; align?: "left" | "right"; className?: string; title?: string }) {
+  return <td title={title} className={`px-1 sm:px-3 py-2.5 ${align === "right" ? "text-right" : ""} ${className}`}>{children}</td>;
+}
+
+/**
+ * Gold honour fill for a season cell, keyed to the zebra stripe it lands on.
+ *
+ * Rows here stripe `bg-paper/70` on even and transparent (the card beneath) on
+ * odd, so the mix has to follow — see the .honour-* classes in globals.css. The
+ * fill is opaque for the same reason it is in the other two grids: this column
+ * is the one the rest of the table scrolls behind.
+ */
+function honourClass(name: string, year: number, i: number): string {
+  const honour = tourneyBadge(name, year);
+  if (honour === "champion") {
+    return `text-court-ink font-bold ${i % 2 === 0 ? "honour-champ-paper" : "honour-champ-card"}`;
+  }
+  if (honour === "final-four") {
+    return `text-court-ink font-bold ${i % 2 === 0 ? "honour-f4-paper" : "honour-f4-card"}`;
+  }
+  return "";
+}
+
+function honourTitle(name: string, year: number): string | undefined {
+  const honour = tourneyBadge(name, year);
+  const season = `${year - 1}-${String(year).slice(-2)}`;
+  if (honour === "champion") return `${season} national champion`;
+  if (honour === "final-four") return `${season} Final Four`;
+  return undefined;
 }
 function ThSort({
   label, active, dir, onClick, align = "right",

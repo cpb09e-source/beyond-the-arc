@@ -25,7 +25,6 @@ import { StatChipStrip } from "@/components/filters/stat-chips";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { CompareTeamsModal } from "@/components/explorer/compare-teams-modal";
 import { TeamLogo } from "@/components/team-logo";
-import { TourneyBadge } from "@/components/tourney-badge";
 import { tourneyBadge } from "@/data/tournament-results";
 import { PercentileChip } from "@/components/percentile-chip";
 import { confDisplay } from "@/lib/conf-display";
@@ -773,10 +772,10 @@ export function ExplorerClient({
                   // base the rest of the frozen group uses.
                   const honourCell =
                     honour === "champion"
-                      ? cn("max-sm:text-court-ink max-sm:font-bold",
+                      ? cn("text-court-ink font-bold",
                            i % 2 === 0 ? "honour-champ-paper" : "honour-champ-card")
                       : honour === "final-four"
-                      ? cn("max-sm:text-court-ink max-sm:font-bold",
+                      ? cn("text-court-ink font-bold",
                            i % 2 === 0 ? "honour-f4-paper" : "honour-f4-card")
                       : "";
                   const honourTitle =
@@ -806,7 +805,6 @@ export function ExplorerClient({
                         <span className="hidden sm:inline font-medium text-ink group-hover:text-coral transition-colors">
                           {r.team_name}
                         </span>
-                        <TourneyBadge teamName={r.team_name} year={r.team_year} className="hidden sm:inline-flex" />
                       </Link>
                     </td>
                     <td className={cn("px-3 py-1 text-ink-muted hidden sm:table-cell transition-colors", ROW_HOVER)}>{confDisplay(r.team_conference)}</td>
