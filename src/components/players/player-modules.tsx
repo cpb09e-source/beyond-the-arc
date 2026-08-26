@@ -1,7 +1,7 @@
 import { PercentileChip, pctBg, pctColor } from "@/components/percentile-chip";
 import { GameBars } from "@/components/players/game-bars";
 import { opponentOf } from "@/lib/game-log";
-import { fromStart, fromEnd, type StatRow } from "@/lib/player-stat-line";
+import { fromStart, fromEnd, type StatRow } from "@/lib/bart-row";
 import { readPlayerRanks, readPlayerGames, readImpactExtrasForYear } from "@/lib/static-data";
 import { cn } from "@/lib/utils";
 

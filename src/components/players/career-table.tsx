@@ -80,6 +80,9 @@ export function CareerTable({
   playerName: string;
 }) {
   const [openFor, setOpenFor] = useState<{ year: number; teamName: string } | null>(null);
+  // Guarded: an empty season list would make Math.max return -Infinity, which
+  // matches nothing and would quietly highlight no row at all.
+  const latestYear = seasons.length ? Math.max(...seasons.map((s) => s.year)) : null;
   const [view, setView] = useState<View>("per_game");
   const isTotals = view === "totals";
 
@@ -145,6 +148,11 @@ export function CareerTable({
           </thead>
           <tbody>
             {seasons.map((s, i) => {
+              // The season the player page is about. Found by MAX YEAR rather
+              // than by array position: the file is written newest-first today,
+              // but a highlight on the wrong row would be indistinguishable
+              // from a correct one.
+              const isLatest = s.year === latestYear;
               const row = s.raw_row;
               const g = s.games;
 
@@ -225,12 +233,37 @@ export function CareerTable({
                 : fmtNum(ppg, 1);
 
               return (
-                <tr key={s.year} className={cn("transition-colors hover:bg-coral/[0.06]", i % 2 === 0 ? "bg-paper/70" : "bg-transparent")}>
-                  <Td className="font-medium">
+                <tr
+                  key={s.year}
+                  className={cn(
+                    "transition-colors hover:bg-coral/[0.06]",
+                    i % 2 === 0 ? "bg-paper/70" : "bg-transparent",
+                  )}
+                >
+                  {/* THE CURRENT SEASON IS MARKED BY A RULE, NOT A TINT. A tint
+                      has to sit under the 0.06 the hover uses or pointing at any
+                      other row would make it look current — and at 0.04 it was
+                      invisible on the dark theme, where the ground is #1C1C1C
+                      and four percent of anything is nothing. A rule reads the
+                      same on both grounds and leaves the zebra and the hover to
+                      do their own jobs.
+
+                      An inset shadow rather than a border-left: a border on one
+                      row of a collapsed table shifts that row's first cell out
+                      of the column the others sit in. */}
+                  <Td
+                    className={cn(
+                      "font-medium",
+                      isLatest && "shadow-[inset_3px_0_0_var(--coral)]",
+                    )}
+                  >
                     <button
                       type="button"
                       onClick={() => setOpenFor({ year: s.year, teamName: s.team_name })}
-                      className="text-ink hover:text-coral transition-colors underline decoration-dotted underline-offset-4"
+                      className={cn(
+                        "text-ink hover:text-coral transition-colors underline decoration-dotted underline-offset-4",
+                        isLatest && "font-semibold",
+                      )}
                       title={`Open ${seasonLabel(s.year)} game log`}
                     >
                       {seasonLabel(s.year)}
