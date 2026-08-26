@@ -3,7 +3,6 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { StickyHeaderClone } from "@/components/table/sticky-header-clone";
 import { formatHeight } from "@/lib/height";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
@@ -924,25 +923,48 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         {/* ~24 rows tall before the internal scroll takes over. Custom vertical
             rail (starts at the player rows); native thin horizontal bar. */}
         <div className="relative">
-        <StickyHeaderClone scrollerRef={gridScrollRef} />
         <div
           ref={gridScrollRef}
           
-          // NO HEIGHT BELOW md, DELIBERATELY. A cap here is what gives a
-          // sticky <th> a scrollport to stick to, and for one afternoon
-          // that is how the mobile header was pinned. It costs too much:
-          // the grid becomes a window, a finger in the data area scrolls
-          // the table instead of the page, iOS rubber-bands the pane off
-          // its own frame on both axes at once, and 100 rows get read
-          // through a 620px slot — even a full-viewport window fits only
-          // 17 of them at 45px a row. StickyHeaderClone below pins the
-          // header from OUTSIDE the table instead, which needs no cap.
+          // WINDOWED AT EVERY WIDTH, so a real sticky <th> has a scrollport
+          // to pin against on phones exactly as on desktop. This reverses the
+          // md-only cap that used to sit here, under which phones got a cloned
+          // header bar drawn outside the table by a component in
+          // components/table/sticky-header-clone.tsx, deleted with this change.
+          // Git history has it if it is ever wanted back.
           //
-          // Nor may overscroll-behavior-y be `none` here. With no cap
-          // there is nothing to scroll vertically, but the box is still a
-          // scroll container in that axis, and `none` on a container that
-          // cannot scroll still refuses to pass the gesture on — which is
-          // the 2026-08-22 bug again by a different route. x-contain only.
+          // 80svh, MEASURED FROM dunksandthrees.com/epm, which solves this the
+          // same way: one `overflow: auto` box at `h-[80vh]`, sticky `top-0`
+          // band cells over sticky column cells, `left-0` on the frozen column,
+          // and an opaque custom property behind every sticky cell. Their box
+          // is 675px of an 844px phone.
+          //
+          // THE 20% IS THE POINT, not a rounding choice. A viewport-tall window
+          // fills the screen, so every touch lands inside the table and the
+          // page has no exposed surface left to scroll from. At 80svh there is
+          // always page above or below the box, which is what keeps the table
+          // a component on a page rather than a second scrolling application.
+          //
+          // svh rather than their vh: vh resolves to the LARGEST viewport, so
+          // on iOS the box is sized as though the URL bar were hidden and
+          // overhangs the screen while it is showing. svh is the smallest, so
+          // the window always fits and never resizes mid-scroll.
+          //
+          // WHY THE HEADER STAYS PUT. A sticky cell pins to its scrollport's
+          // top edge and shows only while that edge is on screen — which sounds
+          // fragile, since the box starts below the fold. It holds because a
+          // gesture landing on a scrollable box scrolls THAT box: a finger on
+          // the table moves the table, the box's own top never moves, and the
+          // header stays pinned. The page scrolls from the margins instead.
+          //
+          // overscroll-behavior is `none` below md. Left to chain, hitting the
+          // last row hands the gesture on to the page, which slides the box's
+          // top off screen and takes the header with it. `contain` stops the
+          // chaining but keeps iOS's local rubber-band — the "I can drag the
+          // entire table" complaint from 2026-08-22. Only `none` stops both.
+          // The old warning against `none` here was written for an UNCAPPED
+          // box, which had no vertical scroll to absorb the gesture; this one
+          // does.
           //
           // DO NOT ADD `touch-action: pan-x` HERE. It looks like the tidy way
           // to say "horizontal is mine, vertical is the page's", but
@@ -951,7 +973,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           // removes pan-y for the whole gesture and the page cannot scroll
           // from any finger that lands on the table. Shipped exactly that on
           // 2026-08-22 and had to pull it.
-          className="overflow-auto overscroll-x-contain players-scroll cursor-grab md:max-h-[calc(100vh-1.5rem)]"
+          className="overflow-auto overscroll-x-contain max-md:overscroll-none players-scroll cursor-grab max-h-[80svh] md:max-h-[calc(100vh-1.5rem)]"
           {...panHandlers}
         >
           <table className="w-full text-sm border-separate border-spacing-0">

@@ -7,7 +7,6 @@ import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { Select } from "@/components/select";
 import { cn } from "@/lib/utils";
-import { StickyHeaderClone } from "@/components/table/sticky-header-clone";
 import { Collapse } from "@/components/filters/collapse";
 import {
   TransferClassesPanel,
@@ -100,8 +99,9 @@ export function PortalClient({
     by_school?: Record<string, TransferClassRow>;
   };
 }) {
-  // Handed to StickyHeaderClone, which reads this box's scrollLeft to keep
-  // the phone header bar lined up with the columns underneath it.
+  // The table's scroll container. Windowed in height at every width so its
+  // sticky header cells have a scrollport to pin against — see the note on
+  // the element itself.
   const gridScrollRef = useRef<HTMLDivElement>(null);
   const [confTo, setConfTo] = useState("All");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -293,8 +293,7 @@ export function PortalClient({
             scrollport; without it this box never scrolls vertically and
             `sticky top-0` has nothing to hold on to. svh keeps the box
             inside the visible area with the URL bar out. */}
-        <StickyHeaderClone scrollerRef={gridScrollRef} />
-        <div ref={gridScrollRef} className="overflow-auto overscroll-x-contain md:max-h-[calc(100vh-1.5rem)]">
+        <div ref={gridScrollRef} className="overflow-auto overscroll-x-contain max-md:overscroll-none max-h-[80svh] md:max-h-[calc(100vh-1.5rem)]">
           {/* border-separate so the header cells carry their own bottom
               rule — a collapsed border belongs to the table and scrolls
               away underneath a sticky cell. Nothing in the body draws a
