@@ -42,24 +42,29 @@ function tierOf(rank: number, mid: boolean): Tier {
 /**
  * How much of the ring a rank lights, as a fraction of it.
  *
- * THE DIAL FILLS DOWN FROM #1, NOT UP FROM #100. The obvious model — one tick
- * per place, so #5 lights five — runs backwards against every other coloured
- * thing on this site, where a fuller bar means a better number. A #5 with five
- * ticks lit reads as "barely made the list".
+ * ONE TICK PER PLACE, COUNTING DOWN FROM THE TOP. #1 lights all hundred, #10
+ * lights ninety-one, #100 lights one. The ring is a literal readout: the arc
+ * you can see is how many of the hundred this player is ahead of.
  *
- * Straight inversion (101 - rank) fixes the direction and buys a smaller
- * problem: it spends 9% of the ring on the entire top ten, so #1 and #5 land
- * four ticks apart and are indistinguishable at 58px. The square root spreads
- * the top of the board out instead — the top ten take about a third of the
- * ring, #1 fills it, #5 sits near four fifths, #10 near seven tenths — while
- * #100 still empties out completely.
+ * THIS IS A DELIBERATE REPLACEMENT FOR A CURVE. The fill used to be
+ * `1 - sqrt((rank-1)/99)`, which spread the top of the board out so the top ten
+ * took about a third of the ring instead of a twentieth. It made #1 and #5
+ * visibly different, which the linear model cannot — but it also meant the arc
+ * did not mean anything you could state: #10 lit 70% of the ring and read as
+ * something nearer 25th. A gauge that cannot be checked against the number
+ * printed inside it is worse than a gauge with a crowded top end.
  *
- * The cost is that the ring stops being a literal count of places. It is an
- * impression, and it is allowed to be one because the exact number is set in
- * the middle of it at four times the size.
+ * The cost is real and known: the entire top ten now sits in the last 9% of the
+ * arc, so #1 and #5 are four ticks apart at 96px and two at 58px, where each
+ * tick stands for two places. Telling those apart is the TIER COLOUR's job —
+ * 1-10 has its own hue on both boards — not the ring's.
+ *
+ * It still fills down from #1 rather than up from #100. One tick per place
+ * counted the other way would run backwards against every other coloured thing
+ * on this site, where a fuller bar means a better number.
  */
 function litFraction(rank: number) {
-  return 1 - Math.sqrt((rank - 1) / (CUTOFF - 1));
+  return (CUTOFF + 1 - rank) / CUTOFF;
 }
 
 export function TopHundredSeal({
@@ -71,11 +76,11 @@ export function TopHundredSeal({
   season: PlayerRanksSeason;
   size?: number;
   /**
-   * The small variant, for a phone. Shortens the board label to TOP / MID and
-   * sets it far larger in proportion — at this diameter the desktop ratio puts
-   * "MID-MAJOR" at about 4px, which is not type any more. Three letters buy the
-   * word its size back, and the board is the one thing colour cannot say here,
-   * because colour is spent on the tier.
+   * The small variant, for a phone. Same words as the desktop mark, set far
+   * larger in proportion — at the desktop ratio "MID-MAJOR" lands at about 4px
+   * here, which is not type any more. The board is the one thing colour cannot
+   * say on this mark, because colour is spent on the tier, so the word has to
+   * be readable rather than merely present.
    */
   compact?: boolean;
   className?: string;
@@ -155,10 +160,28 @@ function Seal({
     };
   });
 
-  const boardWord = compact ? (mid ? "Mid" : "Top") : mid ? "Mid-major" : "Top 100";
-  // Nine characters of MID-MAJOR have to fit a chord of the inner circle, so
-  // the long label steps down where the short one does not.
-  const labelSize = compact ? size * 0.13 : size * (mid ? 0.068 : 0.078);
+  const boardWord = mid ? "Mid-major" : "Top 100";
+  // SIZED BY LENGTH, NOT BY VARIANT. The label has to fit a CHORD of the inner
+  // circle rather than its diameter, and nine characters of MID-MAJOR need a
+  // smaller setting than seven of TOP 100 to clear the same arc. One ratio for
+  // both meant either a cramped mid-major mark or a small overall one.
+  //
+  // The compact mark briefly shortened these to TOP and MID so they could set
+  // larger. That reads as a different mark rather than a smaller one — the
+  // board is what the word is there to say — so they are full again, and the
+  // ratios below are what makes them fit: measured against the chord at the
+  // label's own band, every combination clears with room at 58px, the smallest
+  // this mark is ever drawn.
+  const labelSize = compact
+    ? size * (mid ? 0.095 : 0.13)
+    : size * (mid ? 0.068 : 0.078);
+  // The compact mark also gives up most of its letter-spacing. MEASURED at
+  // 58px: MID-MAJOR set 46.4px wide against a 40.5px chord, and 8.6 of those
+  // 46.4 were tracking. Wide tracking is what makes a 7px label read as a label
+  // rather than as a word, but it is the first thing that has to go when nine
+  // characters have to clear an arc — dropping the glyphs another point to keep
+  // the air would have put this at 5px, which is not type.
+  const labelTracking = compact ? "0.04em" : "0.16em";
 
   return (
     <div
@@ -201,8 +224,8 @@ function Seal({
           className="font-semibold uppercase leading-none"
           style={{
             fontSize: Math.max(5, Math.round(labelSize)),
-            letterSpacing: "0.16em",
-            textIndent: "0.16em",
+            letterSpacing: labelTracking,
+            textIndent: labelTracking,
             color: ink,
             marginTop: 2,
           }}

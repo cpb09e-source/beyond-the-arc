@@ -391,7 +391,7 @@ export function PlayerAtlas({
 
             {/* Phone only, and inside the photo/name row rather than under it —
                 the mark is identity, so it belongs on the line that carries the
-                name. Compact: the board label shortens to TOP / MID. */}
+                name. Compact only shrinks it; the wording does not change. */}
             {heroRanks && (
               <div className="md:hidden ml-auto shrink-0">
                 <TopHundredSeal season={heroRanks} size={72} compact />

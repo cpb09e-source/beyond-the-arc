@@ -514,33 +514,30 @@ body {
   }
 }
 
-/* The one sanctioned way out of the floor above, opted into per control.
+/* The one sanctioned way out of the floor above — SELECTS ONLY, opted into per
+ * control.
  *
- * It has to live here rather than as a Tailwind utility at the call site. The
- * rule above is UNLAYERED and every utility Tailwind emits sits in
+ * A select is the one control in that list that cannot trigger the zoom. Safari
+ * zooms when a control takes focus and raises a KEYBOARD; a select raises a
+ * picker sheet instead, so the 16px above is buying it nothing. Inputs and
+ * textareas are a different case and are deliberately not covered here.
+ *
+ * It has to live in this file rather than as a Tailwind utility at the call
+ * site. The rule above is UNLAYERED and every utility Tailwind emits sits in
  * `@layer utilities`, so unlayered wins no matter how specific the utility is —
  * `max-md:[&>select]:text-sm` compiles correctly, matches, and still loses. The
  * only ways to beat it are !important or a rule that is also unlayered, and the
- * second one gets to sit next to the constraint it is qualifying.
+ * second gets to sit next to the constraint it is qualifying.
  *
- * The zoom guard is NOT abandoned, only narrowed to when it matters: Safari
- * decides whether to zoom at the moment a control takes focus, so the 16px is
- * restored on :focus and the smaller size applies only at rest. A control that
- * reads at 14px sitting still and is 16px the instant it is tapped never gives
- * Safari a reason to zoom.
- *
- * Use it sparingly. Every control that opts out is one more place the phone
- * layout can regress, and the reason to opt out has to be that 16px is visibly
- * wrong for that control — not that it is merely larger than the desktop size.
+ * NO :focus BUMP. Restoring 16px on focus was tried and is worse than the
+ * problem it guards against: a select sizes to its own content, so the text and
+ * the box both jumped the moment it was tapped. If a future call site ever needs
+ * this for a real text input, that one needs the focus dance and needs to accept
+ * the jump — which is another reason inputs are not in this rule today.
  */
 @media (max-width: 47.99rem) {
-  .field-sm-phone select,
-  .field-sm-phone input {
+  .field-sm-phone select {
     font-size: 14px;
-  }
-  .field-sm-phone select:focus,
-  .field-sm-phone input:focus {
-    font-size: 16px;
   }
 }
 
