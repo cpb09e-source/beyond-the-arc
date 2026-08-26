@@ -205,6 +205,7 @@ export function SeasonGrid({
                 same bands and has no per-row rank to put here. */}
             <HeadCell
               label="NET Rk"
+              mobileLabel="Rk"
               align="right"
               title="This team's adjusted net rating rank in Division I that season, 1 = best"
               sort={{ active: sortBy === "netRank", dir: sortDir, onClick: () => toggle("netRank", "asc") }}
@@ -349,9 +350,16 @@ export function SeasonGrid({
  * same bug and the same fix as the note in sortable-th.tsx.
  */
 function HeadCell({
-  label, title, align = "left", sort, className = "",
+  label, mobileLabel, title, align = "left", sort, className = "",
 }: {
   label: string;
+  /**
+   * Shown below sm in place of `label`. For a header that is only unambiguous
+   * because of its neighbours: "NET Rk" sits against NET on a wide screen, but
+   * on a phone the identity columns it belongs to have already dropped away and
+   * the pairing that made "NET" worth repeating has gone with them.
+   */
+  mobileLabel?: string;
   title?: string;
   align?: "left" | "right";
   /** Omit to render a static, non-sortable header. */
@@ -370,7 +378,14 @@ function HeadCell({
           lowercase-initial label, opts it out of the CSS transform and
           uppercases the tail by hand. Same component the explorer's headers
           use, so the two rows capitalise identically. */}
-      <span><StatLabel label={label} /></span>
+      {mobileLabel ? (
+        <span>
+          <span className="sm:hidden"><StatLabel label={mobileLabel} /></span>
+          <span className="hidden sm:inline"><StatLabel label={label} /></span>
+        </span>
+      ) : (
+        <span><StatLabel label={label} /></span>
+      )}
       {sort && (
         sort.active ? (
           <span className="text-coral text-[0.65rem] leading-none">{sort.dir === "asc" ? "↑" : "↓"}</span>

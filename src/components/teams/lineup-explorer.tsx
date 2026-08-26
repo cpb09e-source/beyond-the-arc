@@ -577,7 +577,20 @@ function StatRow({
       <td
         style={rowStyle}
         className={cn(
-          "sticky left-0 z-20 px-2 sm:px-3 py-1.5 border-r border-hairline whitespace-nowrap transition-colors",
+          // WRAPPED AND CAPPED BELOW sm. Five names joined by separators is
+          // ~620px of unbreakable text, and this cell is sticky, so on a 390px
+          // phone the frozen column was wider than the screen: scrolling right
+          // moved the stats behind a name list that never moved, and not one
+          // stat column was ever visible. Capping the column and letting it
+          // wrap costs row height and buys back the entire rest of the table.
+          // 42vw leaves ~226px for stats, which is three columns and their
+          // percentile chips.
+          "sticky left-0 z-20 px-2 sm:px-3 py-1.5 border-r border-hairline transition-colors",
+          // Tighter type below sm too: five wrapped names at the table's
+          // normal size and leading made a 152px row, so an 80svh window held
+          // four of them. This brings it back under control without touching
+          // the desktop cell.
+          "max-w-[42vw] whitespace-normal text-[0.72rem] leading-[1.15] sm:max-w-none sm:whitespace-nowrap sm:text-inherit sm:leading-normal",
           !emphasis && "bg-paper group-odd:bg-card",
           emphasis && "border-b border-hairline",
         )}
