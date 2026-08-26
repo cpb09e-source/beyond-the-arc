@@ -871,7 +871,7 @@ body {
 }
 
 /**
- * Hardwood honour tint for the frozen rank cell on phones.
+ * Hardwood honour tint for the frozen rank / season cell.
  *
  * These exist because the tint has to be OPAQUE. The rank column is
  * `position: sticky`, and the explorer already relies on that: "opaque zebra so
@@ -887,15 +887,23 @@ body {
  * the token flips in dark mode, where --court is a darker brown and the paper
  * is near-black.
  *
- * Scoped below sm: from `sm` up the honour is a chip beside the team name and
- * the rank cell goes back to being a plain gutter.
+ * APPLIES AT EVERY WIDTH. These used to sit inside `@media (max-width: 639px)`,
+ * back when the honour was a CHAMP/F4 chip on desktop and only phones got the
+ * tinted cell. The chip is gone and the cell is now the single treatment, so a
+ * media query here meant the rule simply did not exist above 639px: the class
+ * landed on the element, `text-court-ink` coloured the number gold, and the
+ * background silently fell through to the zebra stripe. Gold digits in a plain
+ * gutter, which is not a marked row.
+ *
+ * Note these are deliberately UNLAYERED. Tailwind v4 emits its utilities into
+ * @layer utilities, and unlayered CSS outranks every layered rule, so these
+ * beat the `bg-paper` / `bg-card` zebra class sitting on the same cell without
+ * needing !important or having to strip the zebra at the call site.
  */
-@media (max-width: 639px) {
-  .honour-champ-paper { background-color: color-mix(in srgb, var(--court) 55%, var(--paper)); }
-  .honour-champ-card  { background-color: color-mix(in srgb, var(--court) 55%, var(--card)); }
-  .honour-f4-paper    { background-color: color-mix(in srgb, var(--court) 20%, var(--paper)); }
-  .honour-f4-card     { background-color: color-mix(in srgb, var(--court) 20%, var(--card)); }
-}
+.honour-champ-paper { background-color: color-mix(in srgb, var(--court) 55%, var(--paper)); }
+.honour-champ-card  { background-color: color-mix(in srgb, var(--court) 55%, var(--card)); }
+.honour-f4-paper    { background-color: color-mix(in srgb, var(--court) 20%, var(--paper)); }
+.honour-f4-card     { background-color: color-mix(in srgb, var(--court) 20%, var(--card)); }
 
 /* Marker swipe behind a figure (components/highlight.tsx).
    Drawn left to right, the direction a hand moves, and scaled on the X axis
