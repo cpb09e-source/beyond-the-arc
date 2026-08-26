@@ -71,6 +71,17 @@ const SECTIONS: Array<{ key: Mode; title: string; blurb: string }> = [
 ];
 
 /** Share of the team's possessions this player was on the floor for. */
+/**
+ * Shorter header labels for phones, by stat key.
+ *
+ * Local to this table rather than a field on LINEUP_STATS: the lineups grid
+ * shows the same stats with its own column budget and has not asked for the
+ * abbreviation, and putting it on the shared model would change both.
+ */
+const MOBILE_LABELS: Record<string, string | undefined> = {
+  net: "Net",
+};
+
 const share = (r: Row): number => (r.on.poss + r.off.poss > 0 ? r.on.poss / (r.on.poss + r.off.poss) : 0);
 
 type Row = {
@@ -329,6 +340,7 @@ export function OnOffExplorer({
                       <Th
                         key={st.key}
                         label={st.label}
+                        mobileLabel={MOBILE_LABELS[st.key]}
                         title={st.title}
                         active={sort.key === st.key && sort.mode === sec.key}
                         dir={sort.dir}
@@ -444,9 +456,16 @@ export function OnOffExplorer({
 
 function Th({
   label, align = "right", title, active, dir, onClick, sticky = false, bandStart = false,
-  className = "", padClass = "",
+  className = "", padClass = "", mobileLabel,
 }: {
   label: string;
+  /**
+   * Shown below sm in place of `label`. "Net Rtg" is two words in a header row
+   * of tracking-widest caps and the widest thing in the efficiency band; on a
+   * phone the band caption directly above it already says EFFICIENCY, so the
+   * "Rtg" is repeating its own group.
+   */
+  mobileLabel?: string;
   align?: "left" | "right";
   title?: string;
   active: boolean;
@@ -485,7 +504,12 @@ function Th({
           fills only the content box. Both documented in season-grid.tsx. */}
       <button type="button" onClick={onClick} className={cn("block w-full h-full uppercase px-1.5 sm:px-2 py-3 sm:py-2", padClass, align === "right" ? "text-right" : "text-left")}>
         <span className={cn("inline-flex items-center gap-1", align === "right" ? "justify-end" : "justify-start")}>
-          {label}
+          {mobileLabel ? (
+            <>
+              <span className="sm:hidden">{mobileLabel}</span>
+              <span className="hidden sm:inline">{label}</span>
+            </>
+          ) : label}
           {active ? (
             <span className="text-coral text-[0.65rem] leading-none">{dir === "asc" ? "↑" : "↓"}</span>
           ) : (
