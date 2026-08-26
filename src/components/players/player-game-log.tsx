@@ -65,10 +65,18 @@ type SplitKey =
   | "home" | "away" | "neutral" | "awayNeutral"
   | "wins" | "losses" | "conf" | "nonconf";
 
+/**
+ * One word each. A native select cannot ellipsize — it clips — and "Traditional
+ * boxscore" needs about 140px of text in a box that is 111px wide once two of
+ * these share a phone row. The qualifier was carrying nothing anyway: there is
+ * one boxscore group and one shooting group, so "traditional" only ever
+ * distinguished them from "advanced", which is the third option in the same
+ * list.
+ */
 const GROUPS: Array<{ key: Group; label: string }> = [
-  { key: "box", label: "Traditional boxscore" },
-  { key: "shooting", label: "Traditional shooting" },
-  { key: "advanced", label: "Advanced boxscore" },
+  { key: "box", label: "Boxscore" },
+  { key: "shooting", label: "Shooting" },
+  { key: "advanced", label: "Advanced" },
 ];
 
 /**
@@ -78,16 +86,16 @@ const GROUPS: Array<{ key: Group; label: string }> = [
  */
 const SPLITS: Array<{ key: SplitKey; label: string }> = [
   { key: "all", label: "Full season" },
-  { key: "last5", label: "Last 5 games" },
-  { key: "last10", label: "Last 10 games" },
-  { key: "conf", label: "Conference games" },
+  { key: "last5", label: "Last 5" },
+  { key: "last10", label: "Last 10" },
+  { key: "conf", label: "Conference" },
   { key: "nonconf", label: "Non-conference" },
-  { key: "home", label: "Home games" },
-  { key: "away", label: "Away games" },
-  { key: "neutral", label: "Neutral games" },
+  { key: "home", label: "Home" },
+  { key: "away", label: "Away" },
+  { key: "neutral", label: "Neutral" },
   { key: "awayNeutral", label: "Away + neutral" },
-  { key: "wins", label: "Games won" },
-  { key: "losses", label: "Games lost" },
+  { key: "wins", label: "Wins" },
+  { key: "losses", label: "Losses" },
 ];
 
 function fmtInt(x: number | null): string {
@@ -95,6 +103,18 @@ function fmtInt(x: number | null): string {
 }
 function fmt1(x: number | null): string {
   return x === null || x === undefined ? "—" : x.toFixed(1);
+}
+/**
+ * Offensive and defensive rating, to the whole point.
+ *
+ * They are points per 100 possessions over a SINGLE GAME, where the
+ * denominator is about seventy possessions — the tenth of a point the source
+ * carries is far inside the noise of that estimate, and printing it invites a
+ * reader to tell 112.3 from 112.4. Whole numbers in both column groups: the
+ * same stat formatted two ways across two tabs reads as a fault.
+ */
+function fmtRtg(x: number | null): string {
+  return x === null || x === undefined ? "—" : String(Math.round(x));
 }
 /** Rates arrive as 0..1 decimals; every percentage on this table is one. */
 function fmtPct(x: number | null): string {
@@ -111,47 +131,109 @@ function shortDate(iso: string | null): string {
   return m && d ? `${Number(m)}/${Number(d)}` : iso;
 }
 
-type Col = { key: string; label: string; get: (r: GameLogRow) => string; wide?: boolean };
+type Col = {
+  key: string;
+  label: string;
+  get: (r: GameLogRow) => string;
+  /**
+   * What the column sorts ON, which is not what it prints. FG% shows "46.3%"
+   * and sorts on 0.463; the date shows "4/4" and sorts on the ISO string.
+   * Sorting the rendered text would put 9 above 18 and April above January.
+   */
+  sortVal: (r: GameLogRow) => number | string | null;
+  wide?: boolean;
+};
 
 function colsFor(group: Group): Col[] {
   if (group === "shooting") {
     return [
-      { key: "fgm", label: "FGM", get: (r) => fmtInt(r.fgm) },
-      { key: "fga", label: "FGA", get: (r) => fmtInt(r.fga) },
-      { key: "fgp", label: "FG%", get: (r) => fmtPct(rate(r.fgm, r.fga)), wide: true },
+      // Points lead the shooting group too. Twelve columns of makes and
+      // attempts with no total is a table that never says what came of them.
+      { key: "pts", label: "PTS", get: (r) => fmtInt(r.pts_scored) , sortVal: (r) => r.pts_scored },
+      { key: "fgm", label: "FGM", get: (r) => fmtInt(r.fgm) , sortVal: (r) => r.fgm },
+      { key: "fga", label: "FGA", get: (r) => fmtInt(r.fga) , sortVal: (r) => r.fga },
+      { key: "fgp", label: "FG%", get: (r) => fmtPct(rate(r.fgm, r.fga)), wide: true , sortVal: (r) => rate(r.fgm, r.fga) },
       // Bart stores threes and totals; twos are the subtraction.
-      { key: "2pm", label: "2PM", get: (r) => fmtInt(sub(r.fgm, r.fgm3)) },
-      { key: "2pa", label: "2PA", get: (r) => fmtInt(sub(r.fga, r.fga3)) },
-      { key: "2pp", label: "2P%", get: (r) => fmtPct(rate(sub(r.fgm, r.fgm3), sub(r.fga, r.fga3))), wide: true },
-      { key: "3pm", label: "3PM", get: (r) => fmtInt(r.fgm3) },
-      { key: "3pa", label: "3PA", get: (r) => fmtInt(r.fga3) },
-      { key: "3pp", label: "3P%", get: (r) => fmtPct(rate(r.fgm3, r.fga3)), wide: true },
-      { key: "ftm", label: "FTM", get: (r) => fmtInt(r.ftm) },
-      { key: "fta", label: "FTA", get: (r) => fmtInt(r.fta) },
-      { key: "ftp", label: "FT%", get: (r) => fmtPct(rate(r.ftm, r.fta)), wide: true },
+      { key: "2pm", label: "2PM", get: (r) => fmtInt(sub(r.fgm, r.fgm3)) , sortVal: (r) => sub(r.fgm, r.fgm3) },
+      { key: "2pa", label: "2PA", get: (r) => fmtInt(sub(r.fga, r.fga3)) , sortVal: (r) => sub(r.fga, r.fga3) },
+      { key: "2pp", label: "2P%", get: (r) => fmtPct(rate(sub(r.fgm, r.fgm3), sub(r.fga, r.fga3))), wide: true , sortVal: (r) => rate(sub(r.fgm, r.fgm3), sub(r.fga, r.fga3)) },
+      { key: "3pm", label: "3PM", get: (r) => fmtInt(r.fgm3) , sortVal: (r) => r.fgm3 },
+      { key: "3pa", label: "3PA", get: (r) => fmtInt(r.fga3) , sortVal: (r) => r.fga3 },
+      { key: "3pp", label: "3P%", get: (r) => fmtPct(rate(r.fgm3, r.fga3)), wide: true , sortVal: (r) => rate(r.fgm3, r.fga3) },
+      { key: "ftm", label: "FTM", get: (r) => fmtInt(r.ftm) , sortVal: (r) => r.ftm },
+      { key: "fta", label: "FTA", get: (r) => fmtInt(r.fta) , sortVal: (r) => r.fta },
+      { key: "ftp", label: "FT%", get: (r) => fmtPct(rate(r.ftm, r.fta)), wide: true , sortVal: (r) => rate(r.ftm, r.fta) },
     ];
   }
   if (group === "advanced") {
     return [
-      { key: "efg", label: "eFG%", get: (r) => fmtPct(r.efg_pct), wide: true },
-      { key: "ts", label: "TS%", get: (r) => fmtPct(r.ts_pct), wide: true },
-      { key: "usg", label: "USG%", get: (r) => fmtPct(r.usage_pct), wide: true },
-      { key: "ortg", label: "ORtg", get: (r) => fmt1(r.ortg), wide: true },
-      { key: "drtg", label: "DRtg", get: (r) => fmt1(r.drtg), wide: true },
-      { key: "gmsc", label: "GmSc", get: (r) => fmt1(r.game_score), wide: true },
+      { key: "efg", label: "eFG%", get: (r) => fmtPct(r.efg_pct), wide: true , sortVal: (r) => r.efg_pct },
+      { key: "ts", label: "TS%", get: (r) => fmtPct(r.ts_pct), wide: true , sortVal: (r) => r.ts_pct },
+      { key: "usg", label: "USG%", get: (r) => fmtPct(r.usage_pct), wide: true , sortVal: (r) => r.usage_pct },
+      { key: "ortg", label: "ORtg", get: (r) => fmtRtg(r.ortg), wide: true , sortVal: (r) => r.ortg },
+      { key: "drtg", label: "DRtg", get: (r) => fmtRtg(r.drtg), wide: true , sortVal: (r) => r.drtg },
+      { key: "gmsc", label: "GmSc", get: (r) => fmt1(r.game_score), wide: true , sortVal: (r) => r.game_score },
     ];
   }
   return [
-    { key: "pts", label: "PTS", get: (r) => fmtInt(r.pts_scored) },
-    { key: "ast", label: "AST", get: (r) => fmtInt(r.ast) },
-    { key: "orb", label: "ORB", get: (r) => fmtInt(r.orb) },
-    { key: "drb", label: "DRB", get: (r) => fmtInt(r.drb) },
-    { key: "reb", label: "REB", get: (r) => fmtInt(r.reb) },
-    { key: "stl", label: "STL", get: (r) => fmtInt(r.stl) },
-    { key: "blk", label: "BLK", get: (r) => fmtInt(r.blk) },
-    { key: "tov", label: "TOV", get: (r) => fmtInt(r.tov) },
-    { key: "pf", label: "PF", get: (r) => fmtInt(r.pf) },
+    { key: "pts", label: "PTS", get: (r) => fmtInt(r.pts_scored) , sortVal: (r) => r.pts_scored },
+    { key: "ast", label: "AST", get: (r) => fmtInt(r.ast) , sortVal: (r) => r.ast },
+    { key: "orb", label: "ORB", get: (r) => fmtInt(r.orb) , sortVal: (r) => r.orb },
+    { key: "drb", label: "DRB", get: (r) => fmtInt(r.drb) , sortVal: (r) => r.drb },
+    { key: "reb", label: "REB", get: (r) => fmtInt(r.reb) , sortVal: (r) => r.reb },
+    { key: "stl", label: "STL", get: (r) => fmtInt(r.stl) , sortVal: (r) => r.stl },
+    { key: "blk", label: "BLK", get: (r) => fmtInt(r.blk) , sortVal: (r) => r.blk },
+    { key: "tov", label: "TOV", get: (r) => fmtInt(r.tov) , sortVal: (r) => r.tov },
+    { key: "pf", label: "PF", get: (r) => fmtInt(r.pf) , sortVal: (r) => r.pf },
+    // The two ratings ride along with the counting stats as well as with the
+    // advanced group. They are the one pair on this table that says whether a
+    // line was any good rather than how big it was, and a reader scanning the
+    // box should not have to change groups to see it.
+    { key: "ortg", label: "ORtg", get: (r) => fmtRtg(r.ortg), wide: true , sortVal: (r) => r.ortg },
+    { key: "drtg", label: "DRtg", get: (r) => fmtRtg(r.drtg), wide: true , sortVal: (r) => r.drtg },
   ];
+}
+
+/**
+ * The four columns left of the group. Declared rather than hardcoded in the
+ * markup so they can be sorted on like any other — a reader who wants the
+ * season in date order after sorting by points has to be able to click Date.
+ */
+const FIXED: Array<{ key: string; label: string; align: "left" | "center" | "right"; sortVal: (r: GameLogRow) => number | string | null }> = [
+  // The ISO date, not the "4/4" the cell prints: month-first text sorts April
+  // above January.
+  { key: "date", label: "Date", align: "left", sortVal: (r) => r.game_date },
+  // Won sorts above lost, and an unknown result sorts below both.
+  { key: "wl", label: "W/L", align: "center", sortVal: (r) => (r.won === true ? 1 : r.won === false ? 0 : null) },
+  { key: "opp", label: "Opp", align: "left", sortVal: (r) => r.opp_team_market },
+  { key: "min", label: "MIN", align: "right", sortVal: (r) => r.mins },
+];
+
+type SortState = { key: string; dir: "asc" | "desc" };
+
+/**
+ * Sort, with nulls always last.
+ *
+ * A player who did not record a rating that night has no ORtg, and floating a
+ * run of dashes to the top of a descending sort would bury exactly the games
+ * the sort was meant to surface. They sink in both directions instead, which
+ * means the order is not a strict reversal — deliberately.
+ */
+function sortRows(rows: GameLogRow[], sort: SortState, cols: Col[]): GameLogRow[] {
+  const fixed = FIXED.find((f) => f.key === sort.key);
+  const col = cols.find((c) => c.key === sort.key);
+  const val = fixed?.sortVal ?? col?.sortVal;
+  if (!val) return rows;
+  const sign = sort.dir === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const x = val(a), y = val(b);
+    if (x === null || x === undefined) return y === null || y === undefined ? 0 : 1;
+    if (y === null || y === undefined) return -1;
+    if (typeof x === "string" || typeof y === "string") {
+      return sign * String(x).localeCompare(String(y));
+    }
+    return sign * (x - y);
+  });
 }
 
 function sub(a: number | null, b: number | null): number | null {
@@ -212,10 +294,30 @@ export function PlayerGameLog({
   const [year, setYear] = useState<number>(years[0] ?? 0);
   const [split, setSplit] = useState<SplitKey>("all");
   const [group, setGroup] = useState<Group>("box");
+  // Date descending is the order the rows arrive in and the order a game log
+  // is read in, so it is the default rather than a state the reader has to ask
+  // for.
+  const [sort, setSort] = useState<SortState>({ key: "date", dir: "desc" });
 
   const seasonRows = useMemo(() => rows.filter((r) => r.year === year), [rows, year]);
-  const shown = useMemo(() => applySplit(seasonRows, split), [seasonRows, split]);
   const cols = useMemo(() => colsFor(group), [group]);
+  const shown = useMemo(
+    () => sortRows(applySplit(seasonRows, split), sort, cols),
+    [seasonRows, split, sort, cols],
+  );
+
+  /**
+   * First click on a new column sorts DESCENDING for a number and ASCENDING
+   * for text. Nobody opening a points column wants the two-point nights first,
+   * and nobody opening an opponent column wants Xavier first.
+   */
+  function toggleSort(key: string, numeric: boolean) {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: numeric ? "desc" : "asc" },
+    );
+  }
   const t = useMemo(() => totalsOf(shown), [shown]);
 
   if (rows.length === 0) {
@@ -258,36 +360,71 @@ export function PlayerGameLog({
             </Select>
           </label>
         )}
-        <label className="flex items-center gap-2">
-          <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Split</span>
-          <Select value={split} onChange={(v) => setSplit(v as SplitKey)} ariaLabel="Game split" className="field-sm-phone">
-            {SPLITS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-          </Select>
-        </label>
-        <label className="flex items-center gap-2">
-          <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Columns</span>
-          <Select value={group} onChange={(v) => setGroup(v as Group)} ariaLabel="Column group" className="field-sm-phone">
-            {GROUPS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
-          </Select>
-        </label>
-        {/* Always states what the split left, because eleven rows where there
-            were thirty-one reads as a fault otherwise. */}
-        <span className="text-xs text-ink-muted ml-auto whitespace-nowrap">
-          <span className="tabular text-ink font-semibold">{shown.length}</span>
-          {shown.length === 1 ? " game" : " games"}
-          {split !== "all" && <span className="hidden sm:inline"> · {splitLabel.toLowerCase()}</span>}
-        </span>
+        {/* Split and Columns share a row at every width. Below sm the caption
+            moves ABOVE its select and each takes half the line — side by side
+            with the captions still inline, two selects plus two captions need
+            more than a 390px phone has, and the pair would wrap to two rows
+            again. From sm there is room for the inline form. */}
+        <div className="flex items-end sm:items-center gap-3 flex-1 sm:flex-none min-w-0">
+          <label className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 flex-1 sm:flex-none min-w-0">
+            <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Split</span>
+            <Select
+              value={split}
+              onChange={(v) => setSplit(v as SplitKey)}
+              ariaLabel="Game split"
+              className="field-sm-phone w-full sm:w-auto"
+            >
+              {SPLITS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+            </Select>
+          </label>
+          <label className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 flex-1 sm:flex-none min-w-0">
+            <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Columns</span>
+            <Select
+              value={group}
+              onChange={(v) => setGroup(v as Group)}
+              ariaLabel="Column group"
+              className="field-sm-phone w-full sm:w-auto"
+            >
+              {GROUPS.map((g) => <option key={g.key} value={g.key}>{g.label}</option>)}
+            </Select>
+          </label>
+        </div>
+      </div>
+
+      {/* Its own row under the controls. Sharing their line meant it sat level
+          with a select on a phone and read as a third field rather than as a
+          result. Always states what the split left, because eleven rows where
+          there were thirty-one reads as a fault otherwise. */}
+      <div className="px-5 lg:px-6 pb-3 -mt-1 text-xs text-ink-muted">
+        <span className="tabular text-ink font-semibold">{shown.length}</span>
+        {shown.length === 1 ? " game" : " games"}
+        {split !== "all" && <> · {splitLabel.toLowerCase()}</>}
       </div>
 
       <div className="overflow-x-auto [-webkit-overflow-scrolling:touch] overscroll-x-contain">
         <table className="w-full min-w-[42rem] text-sm">
           <thead className="bg-paper-deep/70 text-left">
             <tr>
-              <Th>Date</Th>
-              <Th align="center">W/L</Th>
-              <Th>Opp</Th>
-              <Th align="right">MIN</Th>
-              {cols.map((c) => <Th key={c.key} align="right">{c.label}</Th>)}
+              {FIXED.map((f) => (
+                <Th
+                  key={f.key}
+                  align={f.align}
+                  sort={sort.key === f.key ? sort.dir : null}
+                  onSort={() => toggleSort(f.key, f.key === "min" || f.key === "wl")}
+                >
+                  {f.label}
+                </Th>
+              ))}
+              {cols.map((c) => (
+                <Th
+                  key={c.key}
+                  align="right"
+                  sort={sort.key === c.key ? sort.dir : null}
+                  onSort={() => toggleSort(c.key, true)}
+                >
+                  {c.label}
+                </Th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -307,10 +444,12 @@ export function PlayerGameLog({
                 </Td>
                 <Td title={r.opp_team_market ?? undefined}>
                   <span className="flex items-center gap-2 whitespace-nowrap">
-                    {/* @ for away, blank for home, n for neutral — the shorthand
-                        every box score in the sport already uses. */}
+                    {/* @ for away, blank for home, N for neutral — the
+                        shorthand every box score in the sport already uses.
+                        Capital N: lowercase sat below the @ beside it and read
+                        as part of the crest rather than as a marker. */}
                     <span className="text-ink-muted text-xs w-3 shrink-0">
-                      {r.is_neutral ? "n" : r.is_home === false ? "@" : ""}
+                      {r.is_neutral ? "N" : r.is_home === false ? "@" : ""}
                     </span>
                     {r.opp_team_market && <TeamLogo name={r.opp_team_market} size={18} />}
                     {/* CREST ONLY ON A PHONE. The name is the widest thing in
@@ -346,7 +485,10 @@ export function PlayerGameLog({
               <tr className="border-t-2 border-ink/15 bg-paper-deep/40 font-medium">
                 <Td className="font-semibold text-ink">Totals</Td>
                 <Td align="center" className="text-ink-muted">—</Td>
-                <Td className="text-ink-muted">{t.n} {t.n === 1 ? "game" : "games"}</Td>
+                {/* Blank. The game count is already stated in the control
+                    band above the table, and repeating it in the opponent
+                    column read as though it were an opponent. */}
+                <Td />
                 <Td align="right" className="tabular">{fmtInt(t.mins)}</Td>
                 {cols.map((c) => (
                   <Td key={c.key} align="right" className="tabular">{totalFor(c.key, t)}</Td>
@@ -370,6 +512,10 @@ export function PlayerGameLog({
  */
 function totalFor(key: string, t: ReturnType<typeof totalsOf>): string {
   switch (key) {
+    // ORtg and DRtg have no makes and attempts to re-divide, and a mean of
+    // per-game ratings would weight a four-minute night like a forty-minute
+    // one. They fall through to the dash below rather than assert a season
+    // figure this table cannot compute.
     case "pts": return fmtInt(t.pts);
     case "ast": return fmtInt(t.ast);
     case "orb": return fmtInt(t.orb);
@@ -396,20 +542,41 @@ function totalFor(key: string, t: ReturnType<typeof totalsOf>): string {
 }
 
 function Th({
-  children, align = "left",
+  children, align = "left", sort = null, onSort,
 }: {
   children: React.ReactNode;
   align?: "left" | "right" | "center";
+  /** The direction this column is sorted, or null when it is not the sort. */
+  sort?: "asc" | "desc" | null;
+  onSort?: () => void;
 }) {
   return (
     <th
+      // aria-sort is what tells a screen reader the table is ordered and by
+      // which column; the arrow below only tells someone who can see it.
+      aria-sort={sort === "asc" ? "ascending" : sort === "desc" ? "descending" : "none"}
       className={cn(
-        "px-1.5 sm:px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap",
+        "px-1.5 sm:px-3 py-2 text-xs uppercase tracking-widest font-medium whitespace-nowrap",
+        sort ? "text-ink" : "text-ink-muted",
         align === "right" && "text-right",
         align === "center" && "text-center",
       )}
     >
-      {children}
+      <button
+        type="button"
+        onClick={onSort}
+        className={cn(
+          "inline-flex items-center gap-1 uppercase tracking-widest hover:text-coral transition-colors",
+          align === "right" && "flex-row-reverse",
+        )}
+      >
+        {children}
+        {/* The caret holds its space whether or not this is the sorted column,
+            so clicking a header never shifts the row of headings sideways. */}
+        <span aria-hidden className={cn("text-[0.6em]", sort ? "opacity-100" : "opacity-0")}>
+          {sort === "asc" ? "▲" : "▼"}
+        </span>
+      </button>
     </th>
   );
 }
@@ -417,7 +584,8 @@ function Th({
 function Td({
   children, align = "left", className = "", title,
 }: {
-  children: React.ReactNode;
+  /** Optional so a spacer cell can be written as <Td />. */
+  children?: React.ReactNode;
   align?: "left" | "right" | "center";
   className?: string;
   /** Used by the opponent cell, whose name is crest-only on a phone. */
