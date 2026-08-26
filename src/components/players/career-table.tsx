@@ -99,7 +99,11 @@ export function CareerTable({
           </div>
           <div className="flex items-baseline gap-4 flex-wrap">
             <h2 className="font-display text-3xl lg:text-4xl text-ink leading-none tracking-tight">Career</h2>
-            <Select value={view} onChange={(v) => setView(v as View)} ariaLabel="Career stats view">
+            {/* Compact rather than the default size: this one sits on the same
+                line as a 2xl display heading, and at h-10/text-sm the box was
+                reading as a peer of the word "Career" instead of as its
+                control. The variant already exists — no third size. */}
+            <Select value={view} onChange={(v) => setView(v as View)} ariaLabel="Career stats view" compact>
               <option value="per_game">Per game</option>
               <option value="totals">Totals</option>
             </Select>
