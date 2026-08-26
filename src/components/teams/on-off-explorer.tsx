@@ -278,15 +278,13 @@ export function OnOffExplorer({
             <p className="mt-1.5 text-xs text-ink-muted max-w-2xl leading-relaxed">{sec.blurb}</p>
           </div>
 
-          {/* INSET, not full-bleed. This used to run edge to edge below lg
-              (-mx-4, no side borders, square corners) while the heading, the
-              blurb, the view chips and the methodology note above and below it
-              all sat in a px-4 gutter. The result read as a heading indented
-              from its own table. It now shares that gutter and keeps its border
-              and radius at every width, which is the pattern the rest of the
-              section already used. The stats lost 32px and the section gained
-              a single left edge. */}
-          <div className="border border-hairline rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 mx-4 lg:mx-0">
+          {/* FULL-BLEED below lg, deliberately: the stats need every pixel and
+              a boxed-in table on a phone wastes 32px on two margins the reader
+              did not ask for. Alignment with the heading is handled where it
+              belongs — on the first column's TEXT, which pads to px-4 to match
+              the px-4 gutter the heading, blurb and note sit in. The surface
+              runs to the edge; the words line up. */}
+          <div className="border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-4 lg:mx-0">
             {/* overscroll-x-contain ONLY — `none` also kills the vertical
                 rubber-band and this box scrolls in both axes. Documented at the
                 other grids. */}
@@ -323,7 +321,7 @@ export function OnOffExplorer({
                     ))}
                   </tr>
                   <tr>
-                    <Th sticky label="Player" align="left" active={sort.key === "name"} dir={sort.dir} onClick={() => toggleSort("name", sec.key, "asc")} />
+                    <Th sticky padClass="px-8 sm:px-2" label="Player" align="left" active={sort.key === "name"} dir={sort.dir} onClick={() => toggleSort("name", sec.key, "asc")} />
                     <Th className="hidden sm:table-cell" label="On" title="Possessions with this player on the floor" active={sort.key === "onPoss"} dir={sort.dir} onClick={() => toggleSort("onPoss", sec.key, "desc")} />
                     <Th className="hidden sm:table-cell" label="Off" title="Possessions with this player off the floor" active={sort.key === "offPoss"} dir={sort.dir} onClick={() => toggleSort("offPoss", sec.key, "desc")} />
                     <Th className="hidden sm:table-cell" label="Pct" title="Share of team possessions this player was on the floor for" active={sort.key === "share"} dir={sort.dir} onClick={() => toggleSort("share", sec.key, "desc")} />
@@ -343,7 +341,15 @@ export function OnOffExplorer({
                 <tbody>
                   {shown.map((r) => (
                     <tr key={r.id} className="group transition-colors bg-paper odd:bg-card">
-                      <td className="sticky left-0 z-20 px-2 sm:px-3 py-1.5 border-r border-hairline whitespace-nowrap transition-colors bg-paper group-odd:bg-card">
+                      {/* px-4 below sm so a player's name starts on the same
+                          line as the section heading above it. px-8, not
+                          px-4: the surface is pulled out by -mx-4 from a
+                          parent that is already inset, so the heading's text
+                          lands 32px from the screen edge and the column has to
+                          clear the same 32 to sit under it. Measured, not
+                          guessed — px-4 put the names at 16 and looked like a
+                          second, closer margin. */}
+                      <td className="sticky left-0 z-20 px-8 sm:px-3 py-1.5 border-r border-hairline whitespace-nowrap transition-colors bg-paper group-odd:bg-card">
                         {r.bart != null ? (
                           <Link href={`/players/${r.bart}/`} prefetch={false} className="text-ink hover:text-coral transition-colors">
                             {r.name}
@@ -438,7 +444,7 @@ export function OnOffExplorer({
 
 function Th({
   label, align = "right", title, active, dir, onClick, sticky = false, bandStart = false,
-  className = "",
+  className = "", padClass = "",
 }: {
   label: string;
   align?: "left" | "right";
@@ -450,6 +456,16 @@ function Th({
   bandStart?: boolean;
   /** Extra classes — used to drop a column below a breakpoint. */
   className?: string;
+  /**
+   * Padding for the inner button, replacing its default.
+   *
+   * It has to go through the button's own cn() rather than onto the <th>: the
+   * button is what fills the cell and carries the padding, so a rule on the
+   * parent leaves the touch target where it was. cn() is twMerge, so passing
+   * px-4 here REPLACES px-1.5 instead of racing it at equal specificity —
+   * which is why an arbitrary `[&>*]:px-4` variant on the th did not work.
+   */
+  padClass?: string;
 }) {
   return (
     <th
@@ -467,7 +483,7 @@ function Th({
       {/* Padding on the button and `uppercase` repeated: Preflight resets
           text-transform on button, and on the <th> the button's w-full/h-full
           fills only the content box. Both documented in season-grid.tsx. */}
-      <button type="button" onClick={onClick} className={cn("block w-full h-full uppercase px-1.5 sm:px-2 py-3 sm:py-2", align === "right" ? "text-right" : "text-left")}>
+      <button type="button" onClick={onClick} className={cn("block w-full h-full uppercase px-1.5 sm:px-2 py-3 sm:py-2", padClass, align === "right" ? "text-right" : "text-left")}>
         <span className={cn("inline-flex items-center gap-1", align === "right" ? "justify-end" : "justify-start")}>
           {label}
           {active ? (
