@@ -877,6 +877,109 @@ export async function readPlayerGames(bartId: number): Promise<PlayerGameRow[]> 
   }
 }
 
+/**
+ * The full per-game box line, as the game-log table needs it.
+ *
+ * PlayerGameRow above is a deliberate subset — the hero's three sparkline
+ * charts want four fields and nothing else, and widening it would make every
+ * one of those charts carry thirty. Same file on disk, read twice with two
+ * different shapes, which costs one extra parse on the pages that use both and
+ * keeps the narrow consumers narrow.
+ *
+ * Everything here is in the source JSON except the two-point columns, which
+ * Bart does not store: 2PM is FGM minus 3PM and 2PA is FGA minus 3PA, computed
+ * in the table rather than here so the raw row stays the raw row.
+ *
+ * PLUS-MINUS IS NOT IN THIS DATA. Neither is a NET quadrant. The table omits
+ * both rather than approximating them.
+ */
+export type PlayerBoxRow = {
+  year: number;
+  game_date: string | null;
+  opp_team_market: string | null;
+  is_home: boolean | null;
+  is_neutral: boolean | null;
+  won: boolean | null;
+  is_starter: boolean | null;
+  mins: number | null;
+  pts_scored: number | null;
+  fgm: number | null; fga: number | null;
+  fgm3: number | null; fga3: number | null;
+  ftm: number | null; fta: number | null;
+  reb: number | null; orb: number | null; drb: number | null;
+  ast: number | null; stl: number | null; blk: number | null;
+  tov: number | null; pf: number | null;
+  fg_pct: number | null; fg3_pct: number | null; ft_pct: number | null;
+  efg_pct: number | null; ts_pct: number | null; usage_pct: number | null;
+  ortg: number | null; drtg: number | null; game_score: number | null;
+};
+
+export async function readPlayerBoxScores(bartId: number): Promise<PlayerBoxRow[]> {
+  try {
+    const body = await readJson<{ games: PlayerBoxRow[] }>(`player-games/${bartId}.json`);
+    return Array.isArray(body.games) ? body.games : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Team and opponent score for one team-game, plus the two conferences.
+ *
+ * The player box has no score in it — it is a line for one player, not for the
+ * game — so the Tm/Op columns and the conference split both come from the
+ * team-level log and are joined on TEAM NAME AND DATE. Not on game_id: the
+ * player file keys games as a bare integer and the team file as a composite
+ * string, and the two are different id spaces. A team plays at most once on a
+ * date, so name-and-date is exact rather than merely convenient.
+ *
+ * ONLY FOUR FIELDS ARE KEPT. The year file is around 12,000 rows of about sixty
+ * columns each, memoized for the whole build across ~15,700 player pages;
+ * holding the rows whole would cost hundreds of megabytes on a build that has
+ * already been seen at 1.75GB.
+ */
+export type TeamGameScore = {
+  tm: number | null;
+  op: number | null;
+  teamConf: string | null;
+  oppConf: string | null;
+};
+
+const _teamGameScoreCache = new Map<number, Map<string, TeamGameScore>>();
+
+/** Key for the join. Team name and date, both as they appear in the sources. */
+export function teamGameKey(teamName: string, gameDate: string): string {
+  return `${teamName}|${gameDate}`;
+}
+
+export async function readTeamGameScores(year: number): Promise<Map<string, TeamGameScore>> {
+  const cached = _teamGameScoreCache.get(year);
+  if (cached) return cached;
+  const out = new Map<string, TeamGameScore>();
+  const rows = await readJson<Array<{
+    game_date?: string | null;
+    team_name?: string | null;
+    team_conference?: string | null;
+    opp_conference?: string | null;
+    pts_scored?: number | null;
+    pts_against?: number | null;
+  }>>(`game-logs-by-year/${year}.json`).catch(() => null);
+  if (Array.isArray(rows)) {
+    for (const r of rows) {
+      if (!r.team_name || !r.game_date) continue;
+      const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : null);
+      out.set(teamGameKey(r.team_name, r.game_date), {
+        tm: num(r.pts_scored),
+        op: num(r.pts_against),
+        teamConf: r.team_conference ?? null,
+        oppConf: r.opp_conference ?? null,
+      });
+    }
+  }
+  _teamGameScoreCache.set(year, out);
+  return out;
+}
+
 export async function readPortalEntryForBartId(bartId: number): Promise<PortalEntry | null> {
   const all = await readPortal();
   const matches = all.filter((e) => e.bart_player_id === bartId);

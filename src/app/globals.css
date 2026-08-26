@@ -1023,7 +1023,11 @@ body {
    pays for it. 5rem covers the bar's 50px plus the home-indicator inset it
    already pads itself by. */
 @media (max-width: 63.99rem) {
-  body:has(nav[data-team-bottom-bar]) footer { padding-bottom: 5rem; }
+  /* Both fixed section bars: the team page's and the player page's. The marker
+     is an attribute rather than a tag on the player side because the wrapper
+     that carries it is a div, not the nav itself. */
+  body:has(nav[data-team-bottom-bar]) footer,
+  body:has([data-player-bottom-bar]) footer { padding-bottom: 5rem; }
 }
 
 /* Box-score modal, same problem and same shape as .team-accent below: the two

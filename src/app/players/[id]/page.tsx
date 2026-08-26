@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
-import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayerIds, readNbaDraftee, readRsciRank } from "@/lib/static-data";
+import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayerIds, readNbaDraftee, readRsciRank, readPlayerBoxScores, readTeamGameScores, teamGameKey } from "@/lib/static-data";
 import { nbaTeamName, draftRound, nbaLogoUrl } from "@/lib/nba-draftees";
 import { CareerTable } from "@/components/players/career-table";
 import { PlayerOverview, type PlayerOverviewOption } from "@/components/players/player-overview";
 import { PlayerShotChart } from "@/components/players/player-shot-chart";
 import { PlayerAtlas } from "@/components/players/player-atlas";
 import { seasonLine } from "@/lib/player-stat-line";
+import { PlayerTabs } from "@/components/players/player-tabs";
+import { PlayerGameLog, type GameLogRow } from "@/components/players/player-game-log";
 
 export async function generateStaticParams() {
   // Only emit profile pages for ranked players. Unranked players (didn't
@@ -152,6 +154,43 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   };
 
   /**
+   * The game log, enriched with the team-level score for each night.
+   *
+   * The player box has no score in it, so Tm/Op and the conference flag are
+   * joined from the team log on TEAM NAME AND DATE — the two files key games
+   * in different id spaces, and a team plays at most once on a date. The team
+   * for a given row is the team the player was on THAT season, which is why
+   * this walks the seasons rather than using the current one: a transfer's
+   * 24-25 games have to join against his old school.
+   *
+   * Newest first, which is the order the table reads and what makes its
+   * "last 5" split a slice from the front.
+   */
+  const boxRows = await readPlayerBoxScores(bartId);
+  const teamByYear = new Map(player.seasons.map((sn) => [sn.year, sn.team_name]));
+  const scoreYears = new Map<number, Awaited<ReturnType<typeof readTeamGameScores>>>();
+  for (const y of new Set(boxRows.map((r) => r.year))) {
+    scoreYears.set(y, await readTeamGameScores(y));
+  }
+  const logRows: GameLogRow[] = boxRows
+    .map((r) => {
+      const team = teamByYear.get(r.year) ?? null;
+      const scores = scoreYears.get(r.year);
+      const hit = team && r.game_date ? scores?.get(teamGameKey(team, r.game_date)) ?? null : null;
+      return {
+        ...r,
+        tm: hit?.tm ?? null,
+        op: hit?.op ?? null,
+        // Null rather than false where the join missed: an unmatched game is
+        // not a non-conference game, and the split would quietly file it as
+        // one. Both conference splits test explicitly for true/false.
+        isConf:
+          hit && hit.teamConf && hit.oppConf ? hit.teamConf === hit.oppConf : null,
+      };
+    })
+    .sort((a, b) => (b.game_date ?? "").localeCompare(a.game_date ?? ""));
+
+  /**
    * NBA draft record, matched on name.
    *
    * A drafted player has left college, so this SUPERSEDES the transfer banner
@@ -188,6 +227,9 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
     // located shots), so pinning the page's bottom gutter to any one of them
     // left some profiles ending flush against the footer.
     <div className="pb-20">
+      <PlayerTabs
+        overview={
+        <>
       {/* Hero — "Atlas". Six small-multiple modules instead of a stat line:
           each headline number is drawn as well as printed, so the season's
           shape and the player's standing read before the figures do. The
@@ -256,17 +298,31 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         </section>
       )}
 
-      {/* Shooting section: the two hexbin courts (2024+ seasons). Players with
-          no located shots fall back to a zone-splits card — but only when the
-          Player Overview isn't already carrying those splits in its Shot Diet
-          panel, or they'd appear twice on the same page. */}
-      <PlayerShotChart
-        bartPlayerId={bartId}
-        years={player.seasons.map((s) => s.year)}
-        positionByYear={positionByYear}
-        suppressFallback={overviewOptions.length > 0}
+        </>
+        }
+        log={
+          <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-6">
+            <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
+              <div className="h-1 w-full bg-gradient-to-r from-coral via-coral to-coral/60" />
+              <PlayerGameLog rows={logRows} playerName={stats.name ?? `Player ${bartId}`} />
+            </div>
+          </section>
+        }
+        shooting={
+          /* The two hexbin courts (2024+ seasons). Players with no located
+             shots fall back to a zone-splits card — but only when the Player
+             Overview isn't already carrying those splits in its Shot Diet
+             panel, or they'd appear twice on the same page.
+             PLACEHOLDER CONTENT for this tab: the shot charts are what exists
+             today, and the tab is defined properly later. */
+          <PlayerShotChart
+            bartPlayerId={bartId}
+            years={player.seasons.map((s) => s.year)}
+            positionByYear={positionByYear}
+            suppressFallback={overviewOptions.length > 0}
+          />
+        }
       />
-
     </div>
   );
 }
