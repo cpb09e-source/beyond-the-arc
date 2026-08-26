@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
-import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayerIds, readImpactExtrasForYear, readNbaDraftee, readPlayerGames, readRsciRank, readAssistForPlayer } from "@/lib/static-data";
+import { readPlayer, readPortalEntryForBartId, readPlayerRanks, readRankedPlayerIds, readImpactExtrasForYear, readNbaDraftee, readPlayerGames, readRsciRank } from "@/lib/static-data";
 import { nbaTeamName, draftRound, nbaLogoUrl } from "@/lib/nba-draftees";
 import { CareerTable } from "@/components/players/career-table";
 import { PlayerOverview, type PlayerOverviewOption } from "@/components/players/player-overview";
 import { PlayerShotChart } from "@/components/players/player-shot-chart";
 import { PlayerAtlas } from "@/components/players/player-atlas";
-import { AssistConnections } from "@/components/players/assist-connections";
 
 export async function generateStaticParams() {
   // Only emit profile pages for ranked players. Unranked players (didn't
@@ -108,12 +107,6 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   if (!player || player.seasons.length === 0) notFound();
 
   const current = player.seasons[0]!;
-
-  // Assist connections for the season on top of the career table, plus the set
-  // of ids that actually have a page so the other end of a connection is only
-  // linked when there is something to link to.
-  const assist = await readAssistForPlayer(current.year, bartId);
-  const rankedForLinks = await readRankedPlayerIds();
 
   // Portal lookup: if the player has committed to a new school this cycle,
   // surface the transfer in the hero with a redacted-current + new-school
@@ -403,17 +396,6 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         suppressFallback={overviewOptions.length > 0}
       />
 
-      {/* Assist connections for the most recent season. Absent before 2014,
-          and absent for anyone whose makes never drew an assist — the panel
-          returns null rather than rendering an empty frame. */}
-      {assist && (
-        <AssistConnections
-          season={assist.season}
-          names={assist.names}
-          linkable={rankedForLinks}
-          seasonLabel={`${(current.year - 1).toString().slice(-2)}-${current.year.toString().slice(-2)}`}
-        />
-      )}
     </div>
   );
 }
