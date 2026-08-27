@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
-import { SeasonGamesModal } from "@/components/players/season-games-modal";
 import { Select } from "@/components/select";
 import { cn } from "@/lib/utils";
 
@@ -70,16 +69,7 @@ function fromStart(row: Array<string | number | null> | null, idx: number): numb
   return null;
 }
 
-export function CareerTable({
-  seasons,
-  bartPlayerId,
-  playerName,
-}: {
-  seasons: Season[];
-  bartPlayerId: number;
-  playerName: string;
-}) {
-  const [openFor, setOpenFor] = useState<{ year: number; teamName: string } | null>(null);
+export function CareerTable({ seasons }: { seasons: Season[] }) {
   // Guarded: an empty season list would make Math.max return -Infinity, which
   // matches nothing and would quietly highlight no row at all.
   const latestYear = seasons.length ? Math.max(...seasons.map((s) => s.year)) : null;
@@ -120,12 +110,6 @@ export function CareerTable({
           {seasons.length === 1 ? "season" : "seasons"}
         </span>
       </div>
-      {/* The caption is a hint about the rows, so it belongs against them
-          rather than inside the heading band it used to share. */}
-      <p className="px-5 lg:px-7 pt-2.5 pb-3 text-xs text-ink-muted">
-        Click a season to open the player&apos;s game log.
-      </p>
-
       {/* Horizontal scroll on narrow viewports — full stat line stays intact
           and swipes left/right with touch momentum instead of dropping columns. */}
       <div className="overflow-x-auto [-webkit-overflow-scrolling:touch] overscroll-x-contain">
@@ -269,17 +253,16 @@ export function CareerTable({
                       isLatest && "shadow-[inset_3px_0_0_var(--coral)]",
                     )}
                   >
-                    <button
-                      type="button"
-                      onClick={() => setOpenFor({ year: s.year, teamName: s.team_name })}
-                      className={cn(
-                        "text-ink hover:text-coral transition-colors underline decoration-dotted underline-offset-4",
-                        isLatest && "font-semibold",
-                      )}
-                      title={`Open ${seasonLabel(s.year)} game log`}
-                    >
+                    {/* Plain text now. It opened a game-log modal until the
+                        player page grew a Game Log tab that does the same job
+                        with a season picker, room for three column groups and
+                        national percentiles. Two ways into the same data, one
+                        of them worse, is a choice a reader should not have to
+                        make — and a dotted underline that no longer does
+                        anything is a broken affordance. */}
+                    <span className={cn(isLatest && "font-semibold")}>
                       {seasonLabel(s.year)}
-                    </button>
+                    </span>
                   </Td>
                   <Td>
                     {/* The SEASON's team page, not the team's default one.
@@ -324,15 +307,6 @@ export function CareerTable({
         </table>
       </div>
 
-      {openFor && (
-        <SeasonGamesModal
-          bartPlayerId={bartPlayerId}
-          playerName={playerName}
-          teamName={openFor.teamName}
-          year={openFor.year}
-          onClose={() => setOpenFor(null)}
-        />
-      )}
     </>
   );
 }

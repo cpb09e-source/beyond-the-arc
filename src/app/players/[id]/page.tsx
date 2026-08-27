@@ -312,7 +312,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
             readers come to a player page for, and it reads as the continuation
             of the vitals. Player Overview follows as the single-season detail. */}
         <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
-          <CareerTable seasons={player.seasons} bartPlayerId={bartId} playerName={stats.name ?? `Player ${bartId}`} />
+          <CareerTable seasons={player.seasons} />
         </div>
       </section>
 

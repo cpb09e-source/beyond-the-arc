@@ -226,8 +226,10 @@ function colsFor(group: Group): Col[] {
     { key: "fgp", label: "FG%", get: (r) => fmtRate(rate(r.fgm, r.fga)), sortVal: (r) => rate(r.fgm, r.fga), shade: { att: (r) => r.fga }, wide: true },
     { key: "3pp", label: "3P%", get: (r) => fmtRate(rate(r.fgm3, r.fga3)), sortVal: (r) => rate(r.fgm3, r.fga3), shade: { att: (r) => r.fga3 }, wide: true },
     { key: "ast", label: "AST", get: (r) => fmtInt(r.ast) , sortVal: (r) => r.ast },
+    // ORB and REB, not all three. DRB is REB minus ORB, so the third column
+    // carried no information the other two did not already give — it was
+    // costing width on a table that scrolls.
     { key: "orb", label: "ORB", get: (r) => fmtInt(r.orb) , sortVal: (r) => r.orb },
-    { key: "drb", label: "DRB", get: (r) => fmtInt(r.drb) , sortVal: (r) => r.drb },
     { key: "reb", label: "REB", get: (r) => fmtInt(r.reb) , sortVal: (r) => r.reb },
     { key: "stl", label: "STL", get: (r) => fmtInt(r.stl) , sortVal: (r) => r.stl },
     { key: "blk", label: "BLK", get: (r) => fmtInt(r.blk) , sortVal: (r) => r.blk },

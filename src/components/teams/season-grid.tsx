@@ -87,6 +87,24 @@ function winsOf(record: string | null): number {
 }
 
 /** One opaque hover fill so the frozen and scrolling halves read as one row. */
+/**
+ * The right edge of the frozen Season column.
+ *
+ * The column is sticky and everything else scrolls UNDER it, which worked
+ * silently until the seed chip arrived: the chip sits at the cell's right edge,
+ * and a record emerging from underneath came out flush against it with nothing
+ * between them. It reads as the seed bleeding into the record — measured, the
+ * chip ends 9px short of the boundary, so the two are never actually
+ * overlapping, but 9px of gap is not enough to say so.
+ *
+ * A hairline alone did not carry it. The shadow is what makes the edge read as
+ * something content passes BEHIND rather than as a column rule, and the extra
+ * right padding gives the chip room so the emerging text is never within a few
+ * pixels of it.
+ */
+const STICKY_EDGE =
+  "border-r border-hairline shadow-[6px_0_6px_-4px_rgba(26,34,56,0.10)] dark:shadow-[6px_0_6px_-4px_rgba(0,0,0,0.45)]";
+
 const ROW_HOVER = "group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))]";
 /** Resting tint marking the Four Factors band, mirroring the explorer and /players. */
 const FF_BAND_TINT = "bg-[color-mix(in_oklab,var(--coral)_3%,transparent)]";
@@ -168,7 +186,7 @@ export function SeasonGrid({
               right of the data it labels. colSpan is an attribute, so CSS
               cannot fix it — the structures have to match. */}
           <tr>
-            <th className="sticky left-0 z-30 bg-paper-deep h-6 p-0 border-r border-hairline" />
+            <th className={cn("sticky left-0 z-30 bg-paper-deep h-6 p-0", STICKY_EDGE)} />
             <th className="bg-paper-deep h-6 p-0" />
             <th className="bg-paper-deep h-6 p-0 hidden md:table-cell" />
             <th className="bg-paper-deep h-6 p-0 hidden md:table-cell" />
@@ -190,7 +208,7 @@ export function SeasonGrid({
                 "John Becker" — so the control would reorder nothing a reader
                 could see. Season does sort, and is also how you get back to
                 the order the table opened in after sorting by a stat. */}
-            <HeadCell label="Season" sort={{ active: sortBy==="year", dir: sortDir, onClick: () => toggle("year","desc") }} className="sticky left-0 z-30 border-r border-hairline" />
+            <HeadCell label="Season" sort={{ active: sortBy==="year", dir: sortDir, onClick: () => toggle("year","desc") }} className={cn("sticky left-0 z-30", STICKY_EDGE)} />
             <HeadCell label="Record"   sort={{ active: sortBy==="record",     dir: sortDir, onClick: () => toggle("record","desc") }} />
             <HeadCell label="Conf Rec" sort={{ active: sortBy==="confRecord", dir: sortDir, onClick: () => toggle("confRecord","desc") }} className="hidden md:table-cell" />
             {/* Conf drops at the SAME breakpoint as Conf Rec, not a smaller
@@ -267,7 +285,7 @@ export function SeasonGrid({
               : undefined;
             return (
               <tr key={r.year} className={cn("group", rowBg)} style={rowStyle}>
-                <td title={honourTitle} style={cellStyle} className={cn("sticky left-0 z-20 px-2 sm:px-3 py-1 border-r border-hairline transition-colors", rowBg, ROW_HOVER, honourClass)}>
+                <td title={honourTitle} style={cellStyle} className={cn("sticky left-0 z-20 pl-2 sm:pl-3 pr-3 sm:pr-4 py-1 transition-colors", STICKY_EDGE, rowBg, ROW_HOVER, honourClass)}>
                   <Link
                     href={`/teams/${slug}/${r.year}/`}
                     className="group/link inline-flex items-center gap-2.5 transition-colors"
