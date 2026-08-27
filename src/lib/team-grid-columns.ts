@@ -42,7 +42,7 @@ export type TeamCol = {
   sortKey: string;
   /** Sorting ascending is the "good" direction (defensive rating, turnovers). */
   lowerBetter?: boolean;
-  fmt: "num1" | "signed" | "pct1";
+  fmt: "num1" | "signed" | "pct1" | "int";
   title: string;
 };
 
@@ -90,6 +90,9 @@ export const DEFAULT_COLS = [...RATING_COLS, ...FOUR_FACTOR_COLS, ...SHOOTING_CO
 
 export function fmtColValue(v: number | null | undefined, fmt: TeamCol["fmt"]): string {
   if (v === null || v === undefined) return "—";
+  // A count, printed as one. Distinct from "signed", which is also whole but
+  // carries a leading + because it is a differential rather than a tally.
+  if (fmt === "int") return v.toLocaleString("en-US", { maximumFractionDigits: 0 });
   if (fmt === "pct1") return (v * 100).toFixed(1) + "%";
   if (fmt === "signed") return (v > 0 ? "+" : "") + v.toLocaleString("en-US", { maximumFractionDigits: 0 });
   return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });

@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { ExplorerClient } from "@/components/explorer/explorer-client";
+import { PREVIEW_SEASON } from "@/lib/seasons";
 import { readAllTeams, readConfRecordsByTeam } from "@/lib/static-data";
 import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches";
 import fs from "node:fs/promises";
@@ -37,7 +38,20 @@ export default async function HomePage() {
   // it now gets the current season plus a names-and-years index, and fetches
   // other seasons from /data/teams-by-year/<year>.json when asked for them.
   const allTeamSeasons = await readAllTeams();
-  const latestYear = allTeamSeasons.reduce((m, t) => Math.max(m, t.year), 0);
+  /**
+   * The season the server renders, which is the last one PLAYED — not the
+   * newest row in the corpus.
+   *
+   * This used to be a plain max over every year, and the moment the upcoming
+   * season got rows that silently became the default: the server seeded 2027,
+   * and every other season rendered an empty table until the client fetched it.
+   * The preview season is opt-in from the picker, never the landing state,
+   * because three populated columns is not a front page.
+   */
+  const latestYear = allTeamSeasons.reduce(
+    (m, t) => (t.year === PREVIEW_SEASON ? m : Math.max(m, t.year)),
+    0,
+  );
   const initialTeams = allTeamSeasons.filter((t) => t.year === latestYear);
   // Names and years only — what the Team filter and the Compare picker need to
   // offer seasons that are not loaded. ~0.03 MB gzipped against 1.51.

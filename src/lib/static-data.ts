@@ -82,6 +82,15 @@ export type StaticTeamSeasonRow = {
      * type by hand.
      */
     a_net?: number | null; a_ortg?: number | null; a_drtg?: number | null;
+    /**
+     * Adjusted tempo, plus the record and schedule figures that used to be read
+     * off Bart's T-Rank table. All fitted or counted in
+     * build-adjusted-ratings.mjs and merged into this bag, so the team page and
+     * the explorer read one source rather than two.
+     */
+    adjt?: number | null; wab?: number | null;
+    wins?: number | null; losses?: number | null;
+    nc_sos?: number | null; conf_sos?: number | null; sos_wp?: number | null;
     pace: number | null;
     fbpts_pct: number | null; pitp_pct: number | null; pot_pct?: number | null;
     fg3_made_diff?: number | null; orb_diff_ct?: number | null;

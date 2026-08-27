@@ -83,8 +83,11 @@ export function SortableSeasonsTable({
         case "conf_wins":  return cr?.wins ?? -1;
         case "coach":      return cr?.coachName?.toLowerCase() ?? "zzz";
         case "bta_rank":   return s.bta_rank ?? Number.POSITIVE_INFINITY;
-        case "adjoe":      return t?.adjoe ?? null;
-        case "adjde":      return t?.adjde ?? null;
+        // OUR adjusted ratings, not Bart's. Same concept, validated against his
+        // T-Rank at r = 0.986 on net rating, and computed from the game logs
+        // this site archives rather than read off a scraped CSV.
+        case "adjoe":      return s.team_season_stats?.a_ortg ?? null;
+        case "adjde":      return s.team_season_stats?.a_drtg ?? null;
         case "tourney":    return roundDepth(cr?.tourneyRound ?? null);
       }
     };
@@ -177,8 +180,8 @@ export function SortableSeasonsTable({
                     )}
                   </Td>
                   <Td align="right" className="tabular text-coral font-medium">{s.bta_rank !== null ? `#${s.bta_rank}` : "—"}</Td>
-                  <Td align="right" className="tabular">{fmtNum(t?.adjoe ?? null, 1)}</Td>
-                  <Td align="right" className="tabular">{fmtNum(t?.adjde ?? null, 1)}</Td>
+                  <Td align="right" className="tabular">{fmtNum(s.team_season_stats?.a_ortg ?? null, 1)}</Td>
+                  <Td align="right" className="tabular">{fmtNum(s.team_season_stats?.a_drtg ?? null, 1)}</Td>
                 </tr>
               );
             })}
@@ -194,7 +197,8 @@ function Td({ children, align = "left", className = "", title }: { children: Rea
 }
 
 /**
- * Gold honour fill for a season cell, keyed to the zebra stripe it lands on.
+ * Honour fill for a season cell — gold for a title, silver for a Final Four —
+ * keyed to the zebra stripe it lands on.
  *
  * Rows here stripe `bg-paper/70` on even and transparent (the card beneath) on
  * odd, so the mix has to follow — see the .honour-* classes in globals.css. The

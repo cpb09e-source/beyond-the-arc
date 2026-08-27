@@ -159,6 +159,19 @@ function blank() {
     offTurnovers: { n: 0, own: 0, opp: 0, pts: 0 },
     // second-chance points come from the PBP sidecar and may be absent
     scp: 0, o_scp: 0, scpGames: 0,
+    /**
+     * Bench scoring, from the PLAYER box rather than the team box.
+     *
+     * `starter` is a per-player-game boolean on every CBBD box line, so bench
+     * points are exact rather than inferred from a season games-started count.
+     * That distinction matters precisely for the teams worth asking about: a
+     * player who started 20 of 35 contributed to both totals, and a season-level
+     * `gs` cannot say which points landed on which side.
+     *
+     * Sanity-checked on 2026: 62,957 of 127,480 box lines carry starter=true,
+     * 49.4%, against the 50% five-of-ten expectation.
+     */
+    bench_pts: 0, benchGames: 0,
   };
 }
 
@@ -239,6 +252,27 @@ function accumulate(season, totals) {
       a.scp += mine; a.o_scp += theirs; a.scpGames++;
     }
   }
+
+  // Bench points need the PLAYER box, which is a separate archive file. Gated
+  // on the same `eligible` set as the team pass so a game that was filtered
+  // upstream cannot contribute bench points to a season it is not part of.
+  const pbFp = path.join(ROOT, "data/cbbd", String(season), "box-players-full.json.gz");
+  if (fs.existsSync(pbFp)) {
+    for (const r of JSON.parse(zlib.gunzipSync(fs.readFileSync(pbFp)).toString())) {
+      const mapped = TEAM_MAP[r.teamId];
+      if (!mapped) continue;
+      if (!eligible.has(`${r.gameId}-${r.teamId}`)) continue;
+      const a = totals.get(`${mapped.name}|${season}`);
+      if (!a) continue;
+      let any = false;
+      for (const p of r.players ?? []) {
+        if (typeof p.starter !== "boolean") continue;
+        any = true;
+        if (!p.starter) a.bench_pts += p.points ?? 0;
+      }
+      if (any) a.benchGames++;
+    }
+  }
   return used;
 }
 
@@ -263,6 +297,67 @@ const OWN_ADJ = (() => {
     console.warn("   ! team-adjusted-ratings.json missing — run build-adjusted-ratings.mjs for a_ortg/a_drtg/a_net/SOS");
     return {};
   }
+  return JSON.parse(fs.readFileSync(fp, "utf8"));
+})();
+
+/**
+ * Shot-location mix (build-shot-distribution.mjs), merged in for the same
+ * reason the adjusted ratings are: the explorer reads one file per team-season,
+ * and a second fetch to colour one column is not worth the request.
+ *
+ * These are the glossary's "Shot Frequency" — the share of a team's field-goal
+ * attempts from each zone, plus the same for what it allowed. Reconstructed
+ * from play-by-play `shotInfo.range`, so coverage is 2014-2026 minus 2021,
+ * which is the COVID season the whole site excludes.
+ *
+ * Three zones, not thirteen: this file is the PBP range flag, which only
+ * distinguishes rim / mid / three. Corner-versus-above-the-break needs shot
+ * COORDINATES, which live per-player in public/data/shots and are a separate
+ * build.
+ */
+const SHOT_MIX = (() => {
+  const fp = path.join(ROOT, "public/data/shot-distribution.json");
+  if (!fs.existsSync(fp)) {
+    console.warn("   ! shot-distribution.json missing — rim/mid/three shares will be null");
+    return {};
+  }
+  return JSON.parse(fs.readFileSync(fp, "utf8"));
+})();
+
+/**
+ * Shooting accuracy by zone (build-team-shot-zones.mts), merged for the same
+ * one-fetch reason as the two above.
+ *
+ * 2022-2026 ONLY — the shot-coordinate archive does not go back further, so
+ * these are null on 2014-2021 by construction rather than by omission.
+ */
+const SHOT_ZONES = (() => {
+  const fp = path.join(ROOT, "public/data/team-shot-zones.json");
+  if (!fs.existsSync(fp)) {
+    console.warn("   ! team-shot-zones.json missing — zone FG% columns will be null");
+    return {};
+  }
+  return JSON.parse(fs.readFileSync(fp, "utf8"));
+})();
+
+/**
+ * Roster shape (build-team-roster-splits.mjs) and lead-state records
+ * (build-team-outcomes.mjs), merged for the same one-fetch reason as the
+ * ratings and the shot files above.
+ *
+ * The outcomes file is the thinner of the two: it is play-by-play derived, so
+ * it has no 2021 at all and its per-season game coverage runs well short of the
+ * box archive on the older years. Its own `pbp_games` carries that, which is
+ * why it is passed through rather than dropped.
+ */
+const ROSTER = (() => {
+  const fp = path.join(ROOT, "public/data/team-roster-splits.json");
+  if (!fs.existsSync(fp)) { console.warn("   ! team-roster-splits.json missing"); return {}; }
+  return JSON.parse(fs.readFileSync(fp, "utf8"));
+})();
+const OUTCOMES = (() => {
+  const fp = path.join(ROOT, "public/data/team-outcomes.json");
+  if (!fs.existsSync(fp)) { console.warn("   ! team-outcomes.json missing"); return {}; }
   return JSON.parse(fs.readFileSync(fp, "utf8"));
 })();
 
@@ -362,6 +457,97 @@ for (const [key, a] of totals) {
     scp_diff_pg: splitPerGame({ n: a.scpGames, own: a.scp, opp: a.o_scp }, a.games),
     scp_games: a.scpGames,
 
+    // =====================================================================
+    // GLOSSARY SET — every stat below is one CBB Analytics publishes a written
+    // definition for, computed here from counts this accumulator already held.
+    //
+    // SCOPED TO WHAT IS DEFINED, deliberately. Their UI also offers class-year
+    // splits, roster continuity, effective height and wire-to-wire records, and
+    // none of those appear in their glossary — so the denominators are
+    // unknowable and any number we shipped under those names would disagree
+    // with theirs for reasons neither side could point at. Skipped rather than
+    // guessed.
+    //
+    // Rates are ratios of season SUMS, never means of per-game rates, for the
+    // same reason the block above is: a mean weights a 40-shot game like a
+    // 70-shot one.
+    // =====================================================================
+
+    // ---- shooting ----
+    fg_pct: r3(rate(a.fgm, a.fga)),
+    fg2_pct: r3(rate(a.fg2m, a.fg2a)),
+    fga_pg: r1(rate(a.fga, a.games)),
+    fg2a_pg: r1(rate(a.fg2a, a.games)),
+    fg3a_pg: r1(rate(a.fg3a, a.games)),
+    fta_pg: r1(rate(a.fta, a.games)),
+
+    // ---- box score, per game ----
+    pts_pg: r1(rate(a.pts, a.games)),
+    ast_pg: r1(rate(a.ast, a.games)),
+    orb_pg: r1(rate(a.orb, a.games)),
+    drb_pg: r1(rate(a.drb, a.games)),
+    reb_pg: r1(rate(a.reb, a.games)),
+    stl_pg: r1(rate(a.stl, a.games)),
+    blk_pg: r1(rate(a.blk, a.games)),
+    tov_pg: r1(rate(a.tov, a.games)),
+    pf_pg: r1(rate(a.pf, a.games)),
+    // Fouls DRAWN is the opponent's foul count. No play-by-play needed — the
+    // team box carries both sides, and a foul committed by them is one drawn
+    // by us by definition.
+    pfd_pg: r1(rate(a.o_pf, a.games)),
+
+    // ---- misc scoring: own totals, not differentials ----
+    // Over TRACKED games only, with the same 50% coverage floor the shares use.
+    // The existing fbpts_diff_pg answers "what was the edge"; these answer
+    // "how many did they score", which is the glossary's question.
+    fbpts_pg: a.fastBreak.n / (a.games || 1) >= SHARE_MIN_COVERAGE ? r1(rate(a.fastBreak.own, a.fastBreak.n)) : null,
+    pitp_pg: a.inPaint.n / (a.games || 1) >= SHARE_MIN_COVERAGE ? r1(rate(a.inPaint.own, a.inPaint.n)) : null,
+    potov_pg: a.offTurnovers.n / (a.games || 1) >= SHARE_MIN_COVERAGE ? r1(rate(a.offTurnovers.own, a.offTurnovers.n)) : null,
+    scp_pg: a.scpGames / (a.games || 1) >= SHARE_MIN_COVERAGE ? r1(rate(a.scp, a.scpGames)) : null,
+    // Share of points from second chances. Denominator is points in the games
+    // where the split existed, matching how fbpts_pct/pitp_pct are built —
+    // except scp comes from the PBP sidecar, which carries no points total of
+    // its own, so full-season points are scaled to the tracked share.
+    scp_pct: a.scpGames / (a.games || 1) >= SHARE_MIN_COVERAGE
+      ? r3(rate(a.scp, a.pts * (a.scpGames / a.games)))
+      : null,
+    bench_pts_pg: a.benchGames > 0 ? r1(rate(a.bench_pts, a.benchGames)) : null,
+    bench_pts_pct: a.benchGames > 0
+      ? r3(rate(a.bench_pts, a.pts * (a.benchGames / a.games)))
+      : null,
+
+    // ---- advanced offense ----
+    // UNASSISTED field goals. The glossary's "Assisted FGs" is just assists by
+    // definition — an assist IS an assisted made field goal — so it is already
+    // ast_pg above and is not duplicated under a second name. The unassisted
+    // half is the one that carries information the box does not otherwise
+    // state: how much of the offence created its own shot.
+    unast_pg: r1(rate(a.fgm - a.ast, a.games)),
+    unast_share: r3(rate(a.fgm - a.ast, a.fgm)),
+    ast_to: r2(rate(a.ast, a.tov)),
+    ppp: r3(rate(a.pts, a.poss)),
+
+    // ---- advanced defense ----
+    // DRB% mirrors OREB%: the share of available defensive boards taken, where
+    // "available" is our defensive rebounds plus their offensive ones.
+    drb_pct: r3(rate(a.drb, a.drb + a.o_orb)),
+    // Against OPPONENT possessions — a steal happens on their trip, not ours.
+    stl_pct: r3(rate(a.stl, a.o_poss)),
+    // Against opponent TWO-POINT attempts, per the glossary. Threes are
+    // blocked rarely enough that including them just deflates every team by a
+    // similar factor and tells you nothing extra.
+    blk_pct: r3(rate(a.blk, a.o_fg2a)),
+    // Hakeem% = STL% + BLK%. Both are already per-opponent-opportunity rates,
+    // so the sum is a combined defensive-event rate rather than a mixed unit.
+    hakeem_pct: r3(
+      rate(a.stl, a.o_poss) !== null && rate(a.blk, a.o_fg2a) !== null
+        ? rate(a.stl, a.o_poss) + rate(a.blk, a.o_fg2a)
+        : NaN,
+    ),
+    stl_pf: r2(rate(a.stl, a.pf)),
+    blk_pf: r2(rate(a.blk, a.pf)),
+    pf_eff: r2(rate(a.stl + a.blk, a.pf)),
+
     // ---- misc ----
     pace: r1(rate(a.poss, a.games)),
     // Average possession length in seconds: how long this team's trip down the
@@ -391,6 +577,44 @@ for (const [key, a] of totals) {
     ortg_adj: adj?.ortg_adj ?? null,
     drtg_adj: adj?.drtg_adj ?? null,
     net_rtg_adj: adj?.net_rtg_adj ?? null,
+
+    // ---- shot mix (shares of FGA by zone, own and allowed) ----
+    // `shot_games` is deliberately not re-exported: shot-distribution.json
+    // carries its own game count and it is not the box game count these stats
+    // are computed over. Mixing the two under one `games` key is how a column
+    // quietly starts describing a different denominator than its neighbours.
+    rim_rate: SHOT_MIX[key]?.rim_rate ?? null,
+    mid_rate: SHOT_MIX[key]?.mid_rate ?? null,
+    three_rate: SHOT_MIX[key]?.three_rate ?? null,
+    rim_rate_def: SHOT_MIX[key]?.rim_rate_def ?? null,
+    mid_rate_def: SHOT_MIX[key]?.mid_rate_def ?? null,
+    three_rate_def: SHOT_MIX[key]?.three_rate_def ?? null,
+
+    // ---- shooting accuracy by zone (2022+, coordinates) ----
+    rim_fg_pct: SHOT_ZONES[key]?.rim_fg_pct ?? null,
+    mid_fg_pct: SHOT_ZONES[key]?.mid_fg_pct ?? null,
+    corner3_fg_pct: SHOT_ZONES[key]?.corner3_fg_pct ?? null,
+    atb3_fg_pct: SHOT_ZONES[key]?.atb3_fg_pct ?? null,
+    corner3_share: SHOT_ZONES[key]?.corner3_share ?? null,
+
+    /**
+     * LAST SEASON'S adjusted net rating, carried on this season's row.
+     *
+     * Roster continuity is a statement about a team that has not played yet, so
+     * the only rating that can sit beside it is the one it earned last year.
+     * On the upcoming season that is the ONLY rating there is; on a played
+     * season it is still the right one, because "how good were they before this
+     * roster changed" is the question continuity is asking.
+     *
+     * Read from the ratings file rather than joined downstream so every surface
+     * gets the same number from the same place.
+     */
+    prev_a_net: OWN_ADJ[`${name}|${season - 1}`]?.a_net ?? null,
+
+    // ---- roster shape ----
+    ...(ROSTER[key] ?? {}),
+    // ---- lead-state records (play-by-play) ----
+    ...(OUTCOMES[key] ?? {}),
 
     // ---- opponent-adjusted, OUR model (build-adjusted-ratings.mjs) ----
     // Ridge-regularized least squares over every game in the season. Validated

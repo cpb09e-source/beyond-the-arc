@@ -3,28 +3,23 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { ALL_YEARS } from "@/lib/team-filters";
+import { PREVIEW_SEASON } from "@/lib/seasons";
+import { seasonLabel } from "@/lib/league-averages";
 
-const YEAR_LABEL: Record<number, string> = {
-  2026: "2025-26",
-  2025: "2024-25",
-  2024: "2023-24",
-  2023: "2022-23",
-  2022: "2021-22",
-  2021: "2020-21",
-  2020: "2019-20",
-  2019: "2018-19",
-  2018: "2017-18",
-  2017: "2016-17",
-  2016: "2015-16",
-  2015: "2014-15",
-  2014: "2013-14",
-  2013: "2012-13",
-  2012: "2011-12",
-  2011: "2010-11",
-  2010: "2009-10",
-  2009: "2008-09",
-  2008: "2007-08",
-};
+/**
+ * Season labels come from seasonLabel(), not a hand-kept map.
+ *
+ * There was a literal Record<number, string> here listing every year. It went
+ * stale the moment the preview season was added — 2027 had no entry, so the
+ * picker button rendered blank and the option had no text. A label that is a
+ * pure function of the year should never have been a table.
+ *
+ * The preview season is marked, because a reader who picks it is going to see a
+ * table of dashes and deserves to know that before clicking rather than after.
+ */
+function labelFor(y: number): string {
+  return y === PREVIEW_SEASON ? `${seasonLabel(y)} (preview)` : seasonLabel(y);
+}
 
 /**
  * Multi-select popover for season years. Supports both discrete picks
@@ -86,11 +81,11 @@ export function MultiYearSelect({
   // Button label: compact for many years, explicit for a few
   let buttonLabel: string;
   if (years.length === 0) buttonLabel = "—";
-  else if (years.length === 1) buttonLabel = YEAR_LABEL[years[0]!];
+  else if (years.length === 1) buttonLabel = labelFor(years[0]!);
   else if (years.length === ALL_YEARS.length) buttonLabel = "All seasons";
   else if (isContiguousRange(years)) {
     const sorted = [...years].sort((a, b) => a - b);
-    buttonLabel = `${YEAR_LABEL[sorted[0]!]} → ${YEAR_LABEL[sorted[sorted.length - 1]!]}`;
+    buttonLabel = `${labelFor(sorted[0]!)} → ${labelFor(sorted[sorted.length - 1]!)}`;
   } else buttonLabel = `${years.length} seasons`;
 
   return (
@@ -134,7 +129,7 @@ export function MultiYearSelect({
                     onChange={() => { if (!isDisabled) toggle(y); }}
                     className="accent-coral"
                   />
-                  <span>{YEAR_LABEL[y]}</span>
+                  <span>{labelFor(y)}</span>
                   {checked && <span aria-hidden className="ml-auto text-coral text-xs">✓</span>}
                 </label>
               );

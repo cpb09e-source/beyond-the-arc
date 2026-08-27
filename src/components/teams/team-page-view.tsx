@@ -426,9 +426,13 @@ export function TeamPageView({
       />
     ) : (
       <div className="grid grid-cols-2 md:grid-cols-3 gap-px bg-hairline border border-hairline rounded-lg overflow-hidden">
-        <StatTile label="Adj ORtg" value={fmtNum(currentTrank?.adjoe ?? null, 1)} sub="points per 100" />
-        <StatTile label="Adj DRtg" value={fmtNum(currentTrank?.adjde ?? null, 1)} sub="points per 100 (allowed)" />
-        <StatTile label="Adj Tempo" value={fmtNum(currentTrank?.adjt ?? null, 1)} sub="possessions / 40 min" />
+        {/* All three are OURS now (scripts/build-adjusted-ratings.mjs), not
+            Bart's. The ratings validate against his T-Rank at r = 0.986 and the
+            tempo at r = 0.979, so the numbers a reader recognises have not
+            moved — only where they come from. */}
+        <StatTile label="Adj ORtg" value={fmtNum(currentCbb?.a_ortg ?? null, 1)} sub="points per 100" />
+        <StatTile label="Adj DRtg" value={fmtNum(currentCbb?.a_drtg ?? null, 1)} sub="points per 100 (allowed)" />
+        <StatTile label="Adj Tempo" value={fmtNum(currentCbb?.adjt ?? null, 1)} sub="possessions / 40 min" />
       </div>
     );
 

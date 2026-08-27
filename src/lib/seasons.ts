@@ -20,7 +20,22 @@
  */
 
 export const SEASON_FLOOR = 2014;
+/** Last season that has actually been played. */
 export const SEASON_CEIL = 2026;
+
+/**
+ * The season that has not started yet.
+ *
+ * DELIBERATELY NOT SEASON_CEIL + 1 BY ACCIDENT — it is a separate constant
+ * because it is a separate kind of thing. SEASON_CEIL bounds everything derived
+ * from played games: /calc's game picker, the players grid, every rating. This
+ * one exists so the team explorer can show projected-roster figures for the
+ * upcoming season, and nothing else should offer it.
+ *
+ * Only three stats can exist for it (returning minutes and its two inputs), so
+ * a surface that opts in has to be able to render a mostly-empty row honestly.
+ */
+export const PREVIEW_SEASON = 2027;
 
 /** Seasons omitted from every list, picker, and route. */
 export const EXCLUDED_SEASONS: ReadonlySet<number> = new Set([2021]);
@@ -29,17 +44,31 @@ export function isExcludedSeason(y: number): boolean {
   return EXCLUDED_SEASONS.has(y);
 }
 
-/** True when a season is inside the floor/ceiling AND not excluded. */
+/**
+ * True when a season is inside the floor/ceiling AND not excluded.
+ *
+ * The preview season counts as usable: readAllTeams filters the whole corpus
+ * through this, and excluding it here would strip the rows the explorer needs
+ * before any page saw them. Surfaces that only want PLAYED seasons read
+ * ALL_SEASONS, which still stops at SEASON_CEIL.
+ */
 export function isUsableSeason(y: number): boolean {
+  if (y === PREVIEW_SEASON) return true;
   return Number.isFinite(y) && y >= SEASON_FLOOR && y <= SEASON_CEIL && !isExcludedSeason(y);
 }
 
-/** Every usable season, newest first. */
+/** Every PLAYED season, newest first. Excludes the preview season by design. */
 export const ALL_SEASONS: readonly number[] = (() => {
   const out: number[] = [];
   for (let y = SEASON_CEIL; y >= SEASON_FLOOR; y--) if (!isExcludedSeason(y)) out.push(y);
   return out;
 })();
+
+/**
+ * The season list for surfaces that can show the upcoming season — currently
+ * only the team explorer. Newest first, so the preview season leads.
+ */
+export const EXPLORER_SEASONS: readonly number[] = [PREVIEW_SEASON, ...ALL_SEASONS];
 
 /**
  * Preseason exhibitions (and closed scrimmages) leak into the game logs from
@@ -68,6 +97,7 @@ export function isExhibitionGame(gameDate: string | null | undefined, season: nu
  */
 export function clampSeason(y: number, fallback: number = SEASON_CEIL): number {
   if (!Number.isFinite(y)) return fallback;
+  if (Math.trunc(y) === PREVIEW_SEASON) return PREVIEW_SEASON;
   const v = Math.max(SEASON_FLOOR, Math.min(SEASON_CEIL, Math.trunc(y)));
   if (!isExcludedSeason(v)) return v;
   for (let d = 1; d <= SEASON_CEIL - SEASON_FLOOR; d++) {

@@ -993,13 +993,47 @@ body {
  */
 .honour-champ-paper { background-color: color-mix(in srgb, var(--court) 55%, var(--paper)); }
 .honour-champ-card  { background-color: color-mix(in srgb, var(--court) 55%, var(--card)); }
-.honour-f4-paper    { background-color: color-mix(in srgb, var(--court) 20%, var(--paper)); }
-.honour-f4-card     { background-color: color-mix(in srgb, var(--court) 20%, var(--card)); }
+
+/* THE FINAL FOUR IS SILVER, NOT WEAKER GOLD.
+ *
+ * Both fills used to be --court, at 55% and 20%. That is lightness-only
+ * separation: one honour at two strengths, which is exactly what a reader
+ * cannot rank at a glance on a table that shows maybe three marked rows in
+ * forty. Silver against gold is the oldest ranking in sport and needs no
+ * legend, so the second honour changes HUE instead of amount.
+ *
+ * --court stays where it is. Widening the gold was the other half of the
+ * mockup, but the champion fill already sits at 3.49 against --court-ink on
+ * paper (see the AA note below), and deepening it to buy separation the hue
+ * now provides would only push that further down.
+ *
+ * The silver is a literal rather than a token: it is used here and nowhere
+ * else on the site, and a --silver in :root would advertise a palette slot
+ * that does not exist. Mixed against both zebra bases like the gold, and kept
+ * light — this is the runner-up, and a slate heavy enough to compete with the
+ * champion row would invert the ranking it exists to state.
+ */
+.honour-f4-paper    { background-color: color-mix(in srgb, #8fa3b8 24%, var(--paper)); }
+.honour-f4-card     { background-color: color-mix(in srgb, #8fa3b8 24%, var(--card)); }
+
+/* All three call sites put `text-court-ink` on the honour cell, from when both
+   fills were hardwood. Gold digits on silver read as a mistake, so the ink is
+   corrected here rather than at each call site — unlayered, so it beats the
+   Tailwind utility for the same reason the fills beat the zebra classes. */
+.honour-f4-paper,
+.honour-f4-card { color: #2f4a63; }
+
+/* On the dark theme the tint is a lift off near-black rather than a wash over
+   cream, so the same 24% would read as almost nothing. The base lightens and
+   the mix widens, and the ink flips to sit on it. */
+[data-theme="dark"] .honour-f4-paper { background-color: color-mix(in srgb, #7d94ab 40%, var(--paper)); }
+[data-theme="dark"] .honour-f4-card  { background-color: color-mix(in srgb, #7d94ab 40%, var(--card)); }
+[data-theme="dark"] .honour-f4-paper,
+[data-theme="dark"] .honour-f4-card  { color: #d5e4f2; }
 
 /* The champion fill is the darkest thing --court-ink ever sits on. On the dark
-   theme that pairing measures 3.19, under AA, while the Final Four fill at 20%
-   is fine at 5.6-6.1. Only the champion cell needs the lighter ink, and only
-   here — --court-ink is a kicker colour in six other places where it already
+   theme that pairing measures 3.19, under AA. Only the champion cell needs the
+   lighter ink, and only here — --court-ink is a kicker colour in six other places where it already
    clears AAA on the page ground, so it is not moved globally. */
 [data-theme="dark"] .honour-champ-paper,
 [data-theme="dark"] .honour-champ-card { color: #f0d5a8; }

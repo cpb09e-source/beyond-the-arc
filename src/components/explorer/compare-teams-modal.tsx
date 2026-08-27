@@ -217,6 +217,9 @@ export function CompareTeamsModal({
           conf: [],
           teams: [],
           filters: [],
+          // Same reasoning as `cols` below: a view is a table-display concern
+          // and this spec exists only to shape rows, so it takes the default.
+          view: "",
           // Pinned columns are a table-display concern; this spec only exists to
           // pull a full-year cohort for the SOS rank lookup.
           cols: [],
@@ -230,11 +233,13 @@ export function CompareTeamsModal({
         const { rows } = processTeams(rowsByYear[opt.year] ?? [], spec);
         byYear.set(opt.year, rows);
         // Build the SoS leaderboard for this year so the SoS row can
-        // display "#79" instead of an opaque "79.7%". #1 = hardest schedule.
+        // display "#79" instead of an opaque number. #1 = hardest schedule.
+        // Reads our own adj_sos now rather than Bart's; higher is still the
+        // tougher schedule, so the sort direction is unchanged.
         const sosSorted = rows
-          .filter((r) => typeof r.sos === "number")
+          .filter((r) => typeof r.adj_sos === "number")
           .slice()
-          .sort((a, b) => (b.sos as number) - (a.sos as number));
+          .sort((a, b) => (b.adj_sos as number) - (a.adj_sos as number));
         const cohort = sosSorted.length;
         sosSorted.forEach((r, i) => {
           sosRanks.set(`${r.team_name}|${opt.year}`, { rank: i + 1, cohort });

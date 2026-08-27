@@ -8,11 +8,11 @@
  *                          scripts/build-team-season-stats.mjs)
  */
 
-import { ALL_SEASONS, clampSeason } from "@/lib/seasons";
+import { EXPLORER_SEASONS, clampSeason } from "@/lib/seasons";
 
 export type StatSource = "trank" | "cbbd" | "derived";
 
-export type StatGroup = "overall" | "scoring" | "defense" | "diffs" | "misc";
+export type StatGroup = "overall" | "record" | "roster" | "scoring" | "defense" | "diffs";
 
 export type TeamStatColumn = {
   key: string;             // URL-safe key, used everywhere
@@ -20,7 +20,12 @@ export type TeamStatColumn = {
   dbColumn: string;        // DB column on that table; empty for derived
   label: string;
   desc: string;
-  format?: "pct1" | "pct0" | "num1" | "num2" | "num3" | "rank";
+  /**
+   * "int" is for COUNTS — wins, games, comeback tallies. Without it they fell
+   * to num1 and the table read "32.0 wins", which is a decimal on a quantity
+   * that cannot have one.
+   */
+  format?: "pct1" | "pct0" | "num1" | "num2" | "num3" | "int" | "rank";
   group: StatGroup;
   hideInFilter?: boolean;  // true = available as a sort/data key but hidden from the filter UI
 };
@@ -37,14 +42,87 @@ export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   { key: "a_net",      source: "cbbd", dbColumn: "a_net",   label: "aNET",   desc: "Schedule-adjusted net rating — points per 100 possessions vs an average D-I opponent on a neutral floor", format: "num1", group: "overall" },
   { key: "a_ortg",     source: "cbbd", dbColumn: "a_ortg",  label: "aORTG",  desc: "Schedule-adjusted offensive rating — points scored per 100 possessions", format: "num1", group: "overall" },
   { key: "a_drtg",     source: "cbbd", dbColumn: "a_drtg",  label: "aDRTG",  desc: "Schedule-adjusted defensive rating — points allowed per 100 possessions (lower is better)", format: "num1", group: "overall" },
-  { key: "adj_sos",    source: "cbbd", dbColumn: "sos",     label: "SOS",    desc: "Strength of schedule — average opponent adjusted net rating", format: "num1", group: "overall" },
-  { key: "adjt",       source: "trank",   dbColumn: "adjt",    label: "Adj Tempo",   desc: "Adjusted possessions / 40 min",                                                                                                                                                                                                   format: "num1", group: "overall" },
-  { key: "wins",       source: "trank",   dbColumn: "wins",    label: "Wins",        desc: "Season wins",                                                                                                                                                                                                                     format: "num1", group: "overall" },
-  { key: "losses",     source: "trank",   dbColumn: "losses",  label: "Losses",      desc: "Season losses",                                                                                                                                                                                                                   format: "num1", group: "overall" },
-  { key: "wab",        source: "trank",   dbColumn: "wab",     label: "WAB",         desc: "Wins above bubble",                                                                                                                                                                                                               format: "num1", group: "overall" },
-  { key: "sos",        source: "trank",   dbColumn: "sos",     label: "SoS",         desc: "Strength of schedule",                                                                                                                                                                                                            format: "pct1", group: "overall" },
-  { key: "ncsos",      source: "trank",   dbColumn: "ncsos",   label: "NC SoS",      desc: "Non-conference SoS",                                                                                                                                                                                                              format: "pct1", group: "overall" },
-  { key: "consos",     source: "trank",   dbColumn: "consos",  label: "Conf SoS",    desc: "Conference SoS",                                                                                                                                                                                                                  format: "pct1", group: "overall" },
+  { key: "adjt",       source: "cbbd", dbColumn: "adjt",   label: "Adj Tempo", desc: "Adjusted tempo — possessions per 40 minutes against an average opponent",                                                                                                                                                                                                   format: "num1", group: "overall" },
+  // Raw pace, beside the adjusted tempo it is the unadjusted version of.
+  { key: "cbb_pace",   source: "cbbd", dbColumn: "pace",   label: "Pace",      desc: "Possessions per game", format: "num1", group: "overall" },
+
+  // ── Record & Outcomes ─────────────────────────────────────────────────────
+  // Wins, losses and the schedule a team got them against. All computed by us
+  // now — see the note in TeamRow about which of these used to be Bart's.
+  { key: "adj_sos",    source: "cbbd", dbColumn: "sos",     label: "SOS",    desc: "Strength of schedule — average opponent adjusted net rating", format: "num1", group: "record" },
+  { key: "wins",       source: "cbbd", dbColumn: "wins",   label: "Wins",      desc: "Season wins, counted from our own game logs (non-D1 games included, as the NCAA reports them)",                                                                                                                                                                                                                     format: "int", group: "record" },
+  { key: "losses",     source: "cbbd", dbColumn: "losses", label: "Losses",    desc: "Season losses, counted from our own game logs",                                                                                                                                                                                                                   format: "int", group: "record" },
+  { key: "wab",        source: "cbbd", dbColumn: "wab",    label: "WAB",       desc: "Wins above bubble — actual wins minus what the 45th-ranked team would be expected to win against this schedule",                                                                                                                                                                                                               format: "num1", group: "record" },
+  { key: "nc_sos",     source: "cbbd", dbColumn: "nc_sos",   label: "NC SOS",     desc: "Non-conference schedule strength — average opponent adjusted net rating in non-conference games", format: "num1", group: "record" },
+  { key: "conf_sos",   source: "cbbd", dbColumn: "conf_sos", label: "Conf SOS",   desc: "Conference schedule strength — average opponent adjusted net rating in conference games", format: "num1", group: "record" },
+  { key: "sos_wp",     source: "cbbd", dbColumn: "sos_wp",   label: "SOS Win%",   desc: "Expected win % of a bubble-quality (45th-ranked) team against this schedule — higher means an easier slate", format: "pct1", group: "record" },
+
+  // ── Schedule strength, our own model ──────────────────────────────────────
+  // These replace Bart's sos / ncsos / consos, which were dropped rather than
+  // kept alongside. His SoS is a win-probability figure and `adj_sos` below is
+  // a net rating, and the two shipped as "SoS" and "SOS" — labels differing
+  // only in capitalisation, in different units, in one searchable picker.
+  //
+  // `sos_wp` keeps the win-percentage FRAMING people know from T-Rank, on our
+  // own numbers and against a baseline we state: the 45th-ranked team, the same
+  // one WAB uses. It reads HIGH for a soft schedule, the opposite direction to
+  // adj_sos, which is why the label says so.
+
+
+  // Lead-state records, from build-team-outcomes.mjs. These are the only stats
+  // here whose denominator is not the full season — the play-by-play archive is
+  // incomplete, badly so before 2024, so `pbp_games` ships alongside as the
+  // count they are actually measured over.
+  { key: "win_pct", source: "cbbd", dbColumn: "win_pct", label: "Win %", desc: "Wins / games played", format: "pct1", group: "record" },
+  { key: "wins_no_trail", source: "cbbd", dbColumn: "wins_no_trail", label: "Wins w/o Trailing", desc: "Wins in games the team never trailed (ties allowed)", format: "int", group: "record" },
+  { key: "wire_wins", source: "cbbd", dbColumn: "wire_wins", label: "Wire-to-Wire Wins", desc: "Wins in which the team led the whole way — never behind and never tied again after first going ahead", format: "int", group: "record" },
+  { key: "wins_trailing_5", source: "cbbd", dbColumn: "wins_trailing_5", label: "Wins Trailing 5+", desc: "Wins in games the team trailed by 5 or more at some point", format: "int", group: "record" },
+  { key: "wins_trailing_10", source: "cbbd", dbColumn: "wins_trailing_10", label: "Wins Trailing 10+", desc: "Wins in games the team trailed by 10 or more at some point", format: "int", group: "record" },
+  { key: "wins_trailing_15", source: "cbbd", dbColumn: "wins_trailing_15", label: "Wins Trailing 15+", desc: "Wins in games the team trailed by 15 or more at some point", format: "int", group: "record" },
+  { key: "wins_trailing_20", source: "cbbd", dbColumn: "wins_trailing_20", label: "Wins Trailing 20+", desc: "Wins in games the team trailed by 20 or more at some point", format: "int", group: "record" },
+  { key: "losses_no_lead", source: "cbbd", dbColumn: "losses_no_lead", label: "Losses w/o Leading", desc: "Losses in games the team never led", format: "int", group: "record" },
+  { key: "wire_losses", source: "cbbd", dbColumn: "wire_losses", label: "Wire-to-Wire Losses", desc: "Losses in which the opponent led the whole way", format: "int", group: "record" },
+  { key: "losses_leading_5", source: "cbbd", dbColumn: "losses_leading_5", label: "Losses Leading 5+", desc: "Losses in games the team led by 5 or more at some point", format: "int", group: "record" },
+  { key: "losses_leading_10", source: "cbbd", dbColumn: "losses_leading_10", label: "Losses Leading 10+", desc: "Losses in games the team led by 10 or more at some point", format: "int", group: "record" },
+  { key: "losses_leading_15", source: "cbbd", dbColumn: "losses_leading_15", label: "Losses Leading 15+", desc: "Losses in games the team led by 15 or more at some point", format: "int", group: "record" },
+  { key: "losses_leading_20", source: "cbbd", dbColumn: "losses_leading_20", label: "Losses Leading 20+", desc: "Losses in games the team led by 20 or more at some point", format: "int", group: "record" },
+  { key: "pbp_games", source: "cbbd", dbColumn: "pbp_games", label: "PBP Games", desc: "Games with play-by-play, the denominator every lead-state count above is measured over", format: "int", group: "record" },
+
+  // ── Roster & Experience ───────────────────────────────────────────────────
+  // build-team-roster-splits.mjs. Everything is weighted by minutes played, so
+  // it describes the rotation rather than the listed roster — a redshirting
+  // seven-footer moves a straight roster average and moves nothing here.
+  { key: "eff_height", source: "cbbd", dbColumn: "eff_height", label: "Eff Height", desc: "Effective height in inches — average player height weighted by minutes played, so it describes the rotation rather than the listed roster", format: "num1", group: "roster" },
+  { key: "fr_min_pct", source: "cbbd", dbColumn: "fr_min_pct", label: "Fr Min %", desc: "Share of team minutes played by freshmen", format: "pct1", group: "roster" },
+  { key: "so_min_pct", source: "cbbd", dbColumn: "so_min_pct", label: "So Min %", desc: "Share of team minutes played by sophomores", format: "pct1", group: "roster" },
+  { key: "jr_min_pct", source: "cbbd", dbColumn: "jr_min_pct", label: "Jr Min %", desc: "Share of team minutes played by juniors", format: "pct1", group: "roster" },
+  { key: "sr_min_pct", source: "cbbd", dbColumn: "sr_min_pct", label: "Sr Min %", desc: "Share of team minutes played by seniors", format: "pct1", group: "roster" },
+  { key: "fr_pts_pct", source: "cbbd", dbColumn: "fr_pts_pct", label: "Fr Pts %", desc: "Share of team points scored by freshmen", format: "pct1", group: "roster" },
+  { key: "so_pts_pct", source: "cbbd", dbColumn: "so_pts_pct", label: "So Pts %", desc: "Share of team points scored by sophomores", format: "pct1", group: "roster" },
+  { key: "jr_pts_pct", source: "cbbd", dbColumn: "jr_pts_pct", label: "Jr Pts %", desc: "Share of team points scored by juniors", format: "pct1", group: "roster" },
+  { key: "sr_pts_pct", source: "cbbd", dbColumn: "sr_pts_pct", label: "Sr Pts %", desc: "Share of team points scored by seniors", format: "pct1", group: "roster" },
+
+
+  // Roster continuity, season over season. A returner is the same player on the
+  // same team in consecutive seasons — a transfer arriving with minutes
+  // elsewhere is not continuity for his new school. Null in 2014, the first
+  // season on file, because "no prior data" is not "lost everyone".
+  { key: "cont_pct", source: "cbbd", dbColumn: "cont_pct", label: "Continuity %", desc: "Minutes continuity — for each player the smaller of last season's and this season's minute share, summed. Near 100% when the same players hold the same rotation roles.", format: "pct1", group: "roster" },
+  { key: "ret_min_pct", source: "cbbd", dbColumn: "ret_min_pct", label: "Returning Min %", desc: "Last season's minutes belonging to players who came back, over the team's total minutes last season", format: "pct1", group: "roster" },
+  { key: "rrot_pct", source: "cbbd", dbColumn: "rrot_pct", label: "Returner Rotation %", desc: "Share of THIS season's minutes played by returners", format: "pct1", group: "roster" },
+  { key: "ret_prior_min", source: "cbbd", dbColumn: "ret_prior_min", label: "Ret Prior Min", desc: "Sum of last season's minutes for players still on this season's roster", format: "int", group: "roster" },
+  { key: "prior_team_min", source: "cbbd", dbColumn: "prior_team_min", label: "Prior Team Min", desc: "Total minutes the team played last season — the denominator for Returning Min %", format: "int", group: "roster" },
+  { key: "ret_curr_min", source: "cbbd", dbColumn: "ret_curr_min", label: "Ret Curr Min", desc: "Current-season minutes played by returners", format: "int", group: "roster" },
+  { key: "curr_team_min", source: "cbbd", dbColumn: "curr_team_min", label: "Team Min", desc: "Total minutes the team has played this season", format: "int", group: "roster" },
+
+  { key: "prev_a_net", source: "cbbd", dbColumn: "prev_a_net", label: "Prior NET", desc: "Last season’s schedule-adjusted net rating — the rating this roster is changing from", format: "num1", group: "overall" },
+
+
+  // Preseason only: what the portal brought in, and the two figures together.
+  // Null on every played season, the mirror image of the continuity columns
+  // that are null on the upcoming one.
+  { key: "in_transfer_min", source: "cbbd", dbColumn: "in_transfer_min", label: "Transfer Min In", desc: "Minutes the incoming transfers played elsewhere last season — proven production added through the portal", format: "int", group: "roster" },
+  { key: "proven_min_pct", source: "cbbd", dbColumn: "proven_min_pct", label: "Proven Min %", desc: "Returning plus incoming transfer minutes over last season's team total. Can exceed 100% when a team replaces its rotation with more proven production than it fielded.", format: "pct1", group: "roster" },
 
   // ── Scoring (offense) ────────────────────────────────────
   { key: "cbb_ts",       source: "cbbd", dbColumn: "ts_pct",     label: "TS%",        desc: "True shooting %",                  format: "pct1", group: "scoring" },
@@ -108,17 +186,79 @@ export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   { key: "pts_diff",     source: "cbbd", dbColumn: "pts_diff",       label: "Pts Diff",     desc: "Total points scored − allowed (season)",     format: "num1", group: "diffs" },
   { key: "scp_diff",     source: "cbbd", dbColumn: "scp_diff",       label: "2nd-Chance Diff", desc: "Second-chance points − allowed (season total; reconstructed from play-by-play, so blank unless every game has PBP)",          format: "num1", group: "diffs" },
 
-  // ── Misc (pace, raw net) ─────────────────────────────────
-  { key: "cbb_pace",     source: "cbbd", dbColumn: "pace",     label: "Pace",       desc: "Possessions per game",         format: "num1", group: "misc" },
-  { key: "cbb_net",      source: "cbbd", dbColumn: "net_rtg",  label: "Net (raw)",  desc: "Raw net rating (ORtg − DRtg)",   format: "num1", group: "misc" },
+  // ── Glossary set (CBB Analytics-defined), from build-team-season-stats.mjs ──
+  // Every stat here has a written definition we can point at, which is why the
+  // class-year, roster-continuity, effective-height and wire-to-wire families
+  // are absent: they appear in their product but not their glossary, so the
+  // denominators are unknowable and a number shipped under those names would
+  // disagree with theirs for reasons neither side could explain.
+  { key: "cbb_fg", source: "cbbd", dbColumn: "fg_pct", label: "FG%", desc: "Field-goal %", format: "pct1", group: "scoring" },
+  { key: "cbb_fg2", source: "cbbd", dbColumn: "fg2_pct", label: "2P%", desc: "2-point %", format: "pct1", group: "scoring" },
+  { key: "cbb_fga_pg", source: "cbbd", dbColumn: "fga_pg", label: "FGA/G", desc: "Field-goal attempts per game", format: "num1", group: "scoring" },
+  { key: "cbb_fg2a_pg", source: "cbbd", dbColumn: "fg2a_pg", label: "2PA/G", desc: "2-point attempts per game", format: "num1", group: "scoring" },
+  { key: "cbb_fg3a_pg", source: "cbbd", dbColumn: "fg3a_pg", label: "3PA/G", desc: "3-point attempts per game", format: "num1", group: "scoring" },
+  { key: "cbb_fta_pg", source: "cbbd", dbColumn: "fta_pg", label: "FTA/G", desc: "Free-throw attempts per game", format: "num1", group: "scoring" },
+  { key: "cbb_pts_pg", source: "cbbd", dbColumn: "pts_pg", label: "PTS/G", desc: "Points per game", format: "num1", group: "scoring" },
+  { key: "cbb_ast_pg", source: "cbbd", dbColumn: "ast_pg", label: "AST/G", desc: "Assists per game", format: "num1", group: "scoring" },
+  { key: "cbb_orb_pg", source: "cbbd", dbColumn: "orb_pg", label: "OREB/G", desc: "Offensive rebounds per game", format: "num1", group: "scoring" },
+  { key: "cbb_reb_pg", source: "cbbd", dbColumn: "reb_pg", label: "REB/G", desc: "Total rebounds per game", format: "num1", group: "scoring" },
+  { key: "cbb_tov_pg", source: "cbbd", dbColumn: "tov_pg", label: "TO/G", desc: "Turnovers per game", format: "num1", group: "scoring" },
+  { key: "cbb_pfd_pg", source: "cbbd", dbColumn: "pfd_pg", label: "PFD/G", desc: "Personal fouls drawn per game — the opponent's foul count", format: "num1", group: "scoring" },
+  { key: "cbb_fbpts_pg", source: "cbbd", dbColumn: "fbpts_pg", label: "FB Pts/G", desc: "Fast-break points per game", format: "num1", group: "scoring" },
+  { key: "cbb_pitp_pg", source: "cbbd", dbColumn: "pitp_pg", label: "Paint Pts/G", desc: "Points in the paint per game", format: "num1", group: "scoring" },
+  { key: "cbb_potov_pg", source: "cbbd", dbColumn: "potov_pg", label: "Pts off TO/G", desc: "Points off turnovers per game", format: "num1", group: "scoring" },
+  { key: "cbb_scp_pg", source: "cbbd", dbColumn: "scp_pg", label: "2nd Pts/G", desc: "Second-chance points per game", format: "num1", group: "scoring" },
+  { key: "cbb_scp_pct", source: "cbbd", dbColumn: "scp_pct", label: "2nd Pts %", desc: "Second-chance points / total points", format: "pct1", group: "scoring" },
+  { key: "cbb_bench_pg", source: "cbbd", dbColumn: "bench_pts_pg", label: "Bench Pts/G", desc: "Points from players who did not start, per game", format: "num1", group: "scoring" },
+  { key: "cbb_bench_pct", source: "cbbd", dbColumn: "bench_pts_pct", label: "Bench Pts %", desc: "Bench points / total points", format: "pct1", group: "scoring" },
+  { key: "cbb_ast_to", source: "cbbd", dbColumn: "ast_to", label: "AST/TO", desc: "Assists per turnover", format: "num2", group: "scoring" },
+  { key: "cbb_ppp", source: "cbbd", dbColumn: "ppp", label: "PPP", desc: "Points per offensive possession", format: "num3", group: "scoring" },
+  { key: "cbb_drb_pg", source: "cbbd", dbColumn: "drb_pg", label: "DREB/G", desc: "Defensive rebounds per game", format: "num1", group: "defense" },
+  { key: "cbb_stl_pg", source: "cbbd", dbColumn: "stl_pg", label: "STL/G", desc: "Steals per game", format: "num1", group: "defense" },
+  { key: "cbb_blk_pg", source: "cbbd", dbColumn: "blk_pg", label: "BLK/G", desc: "Blocks per game", format: "num1", group: "defense" },
+  { key: "cbb_pf_pg", source: "cbbd", dbColumn: "pf_pg", label: "PF/G", desc: "Personal fouls committed per game", format: "num1", group: "defense" },
+  { key: "cbb_drb_pct", source: "cbbd", dbColumn: "drb_pct", label: "DREB%", desc: "Defensive rebound % — share of available defensive boards secured", format: "pct1", group: "defense" },
+  { key: "cbb_stl_pct", source: "cbbd", dbColumn: "stl_pct", label: "STL%", desc: "Share of opponent possessions ending in a steal", format: "pct1", group: "defense" },
+  { key: "cbb_blk_pct", source: "cbbd", dbColumn: "blk_pct", label: "BLK%", desc: "Share of opponent 2-point attempts blocked", format: "pct1", group: "defense" },
+  { key: "cbb_hakeem", source: "cbbd", dbColumn: "hakeem_pct", label: "Hakeem%", desc: "Combined defensive-event rate — STL% + BLK%", format: "pct1", group: "defense" },
+  { key: "cbb_stl_pf", source: "cbbd", dbColumn: "stl_pf", label: "STL/PF", desc: "Steals per personal foul", format: "num2", group: "defense" },
+  { key: "cbb_blk_pf", source: "cbbd", dbColumn: "blk_pf", label: "BLK/PF", desc: "Blocks per personal foul", format: "num2", group: "defense" },
+  { key: "cbb_pf_eff", source: "cbbd", dbColumn: "pf_eff", label: "PF Eff", desc: "Defensive events per foul — (STL + BLK) / PF", format: "num2", group: "defense" },
+
+  // ── Shot frequency (build-shot-distribution.mjs, via team-season-stats) ────
+  // The glossary's "Shot Frequency": zone attempts / total attempts, own and
+  // allowed. Three zones because that is what the play-by-play range flag
+  // distinguishes; corner-vs-above-the-break needs shot coordinates.
+  //
+  // 2014-2026 EXCEPT 2021 — the COVID season the whole site excludes.
+  { key: "cbb_rim_rate", source: "cbbd", dbColumn: "rim_rate", label: "Rim Freq", desc: "Share of field-goal attempts taken at the rim", format: "pct1", group: "scoring" },
+  { key: "cbb_mid_rate", source: "cbbd", dbColumn: "mid_rate", label: "Mid Freq", desc: "Share of field-goal attempts taken from mid-range", format: "pct1", group: "scoring" },
+  { key: "cbb_three_rate", source: "cbbd", dbColumn: "three_rate", label: "3PT Freq", desc: "Share of field-goal attempts taken from three", format: "pct1", group: "scoring" },
+  { key: "cbb_rim_rate_def", source: "cbbd", dbColumn: "rim_rate_def", label: "Opp Rim Freq", desc: "Share of opponent attempts allowed at the rim", format: "pct1", group: "defense" },
+  { key: "cbb_mid_rate_def", source: "cbbd", dbColumn: "mid_rate_def", label: "Opp Mid Freq", desc: "Share of opponent attempts allowed from mid-range", format: "pct1", group: "defense" },
+  { key: "cbb_three_rate_def", source: "cbbd", dbColumn: "three_rate_def", label: "Opp 3PT Freq", desc: "Share of opponent attempts allowed from three", format: "pct1", group: "defense" },
+
+  // ── Zone accuracy (build-team-shot-zones.mts, via team-season-stats) ──────
+  // The glossary's Rim / Mid / Corner-3 / Above-the-break FG%. These need shot
+  // COORDINATES rather than the play-by-play range flag, so coverage starts at
+  // 2022 where the coordinate archive does — null before that by construction.
+  { key: "cbb_rim_fg", source: "cbbd", dbColumn: "rim_fg_pct", label: "Rim FG%", desc: "Field-goal % at the rim (2022+)", format: "pct1", group: "scoring" },
+  { key: "cbb_mid_fg", source: "cbbd", dbColumn: "mid_fg_pct", label: "Mid FG%", desc: "Field-goal % from mid-range (2022+)", format: "pct1", group: "scoring" },
+  { key: "cbb_corner3_fg", source: "cbbd", dbColumn: "corner3_fg_pct", label: "Corner 3 FG%", desc: "3-point % from the corners (2022+)", format: "pct1", group: "scoring" },
+  { key: "cbb_atb3_fg", source: "cbbd", dbColumn: "atb3_fg_pct", label: "ATB 3 FG%", desc: "3-point % above the break (2022+)", format: "pct1", group: "scoring" },
+  { key: "cbb_corner3_share", source: "cbbd", dbColumn: "corner3_share", label: "Corner 3 Freq", desc: "Share of a team's threes taken from the corner (2022+)", format: "pct1", group: "scoring" },
+  { key: "cbb_unast_pg", source: "cbbd", dbColumn: "unast_pg", label: "Unast FG/G", desc: "Unassisted field goals per game", format: "num1", group: "scoring" },
+  { key: "cbb_unast_share", source: "cbbd", dbColumn: "unast_share", label: "Unast FG%", desc: "Share of made field goals that were unassisted", format: "pct1", group: "scoring" },
+
 ];
 
 export const GROUP_LABEL: Record<StatGroup, string> = {
   overall: "Overall",
+  record: "Record & Outcomes",
+  roster: "Roster & Experience",
   scoring: "Scoring",
   defense: "Defense",
   diffs: "Differentials",
-  misc: "Misc",
 };
 
 // Filtered down to columns that appear in user-facing filter / sort dropdowns.
@@ -128,6 +268,17 @@ export type TeamStatKey = (typeof TEAM_STAT_COLUMNS)[number]["key"];
 export type Comparator = "gt" | "gte" | "lt" | "lte";
 
 export type StatFilter = { stat: TeamStatKey; op: Comparator; value: number };
+
+/**
+ * How many stat filters a URL can carry.
+ *
+ * The cap is real, not defensive: filters serialise as `f0`..`fN` and parseSpec
+ * reads a fixed range, so a ninth filter would be written to the URL and then
+ * silently dropped on the way back in. The builder UI reads this to stop
+ * offering "Add a filter" at the ceiling, which is the only way a reader ever
+ * finds out the limit exists.
+ */
+export const MAX_FILTERS = 8;
 
 export type TeamFilterSpec = {
   years: number[];              // multi-select; any combination of seasons
@@ -141,6 +292,15 @@ export type TeamFilterSpec = {
    * to see it) or bounded without being pinned.
    */
   cols: TeamStatKey[];
+  /**
+   * Named column set from src/lib/team-views.ts. Empty means the default view.
+   *
+   * Deliberately NOT validated here: parseSpec keeps whatever string the URL
+   * carried and viewByKey falls back to the default for anything it does not
+   * recognise. Validating it in the spec would mean importing the view registry
+   * into this module, which the server-side query builder also loads.
+   */
+  view: string;
   sortBy: TeamStatKey;
   sortDir: "asc" | "desc";
   limit: number;                // -1 = show all
@@ -149,7 +309,7 @@ export type TeamFilterSpec = {
 // Season window (floor, ceiling, and the excluded COVID year) is defined once
 // in src/lib/seasons.ts. Re-exported here as ALL_YEARS because a lot of call
 // sites already import that name.
-export const ALL_YEARS = ALL_SEASONS;
+export const ALL_YEARS = EXPLORER_SEASONS;
 
 export const DEFAULT_SPEC: TeamFilterSpec = {
   years: [2026],                // current season only by default
@@ -157,6 +317,7 @@ export const DEFAULT_SPEC: TeamFilterSpec = {
   teams: [],
   filters: [],
   cols: [],
+  view: "",
   // aNET is the headline: our own schedule-adjusted net rating, full coverage
   // on all 4,631 team-seasons, and auditable from the game logs.
   sortBy: "a_net",
@@ -200,8 +361,11 @@ export function specToParams(spec: TeamFilterSpec): URLSearchParams {
   }
   if (spec.conf.length) p.set("conf", spec.conf.join(","));
   if (spec.teams.length) p.set("team", spec.teams.join(","));
-  spec.filters.forEach((f, i) => p.set(`f${i}`, `${f.stat}.${f.op}.${f.value}`));
+  spec.filters
+    .slice(0, MAX_FILTERS)
+    .forEach((f, i) => p.set(`f${i}`, `${f.stat}.${f.op}.${f.value}`));
   if (spec.cols.length) p.set("cols", spec.cols.join(","));
+  if (spec.view) p.set("view", spec.view);
   if (spec.sortBy !== DEFAULT_SPEC.sortBy) p.set("sort", spec.sortBy);
   if (spec.sortDir !== DEFAULT_SPEC.sortDir) p.set("order", spec.sortDir);
   if (spec.limit !== DEFAULT_SPEC.limit) p.set("limit", String(spec.limit));
@@ -214,7 +378,7 @@ export function parseSpec(searchParams: Record<string, string | string[] | undef
     return Array.isArray(v) ? v[0] : v;
   };
   const filters: StatFilter[] = [];
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < MAX_FILTERS; i++) {
     const raw = get(`f${i}`);
     if (!raw) continue;
     const dot = raw.indexOf(".");
@@ -228,6 +392,10 @@ export function parseSpec(searchParams: Record<string, string | string[] | undef
     if (!Number.isFinite(value)) continue;
     filters.push({ stat, op, value });
   }
+  // Length-capped rather than checked against the registry — see the note on
+  // TeamFilterSpec.view. A junk value costs one failed Map lookup.
+  const rawView = get("view") ?? "";
+  const view = /^[a-z0-9-]{0,32}$/.test(rawView) ? rawView : "";
   const sortBy = get("sort");
   const sortDir = get("order");
   const limitRaw = get("limit");
@@ -277,6 +445,7 @@ export function parseSpec(searchParams: Record<string, string | string[] | undef
     teams,
     filters,
     cols,
+    view,
     sortBy: isStatKey(sortBy) ? sortBy : DEFAULT_SPEC.sortBy,
     sortDir: sortDir === "asc" || sortDir === "desc" ? sortDir : DEFAULT_SPEC.sortDir,
     limit: limit === -1 ? -1 : (Number.isFinite(limit) && limit > 0 && limit <= 5000 ? limit : DEFAULT_SPEC.limit),
@@ -296,18 +465,19 @@ export type TeamRow = {
   team_name: string;
   team_conference: string | null;
   team_year: number;
-  // bart
+  // Bart Torvik. Only `rank`, `record` and the adjoe/adjde pair are still his:
+  // wins, losses, adjt and wab are fitted or counted by us now and simply keep
+  // the same field names, and his sos / ncsos / consos are gone entirely — see
+  // the schedule-strength block in TEAM_STAT_COLUMNS for why.
   rank: number | null;
   record: string | null;
-  wins: number | null;
-  losses: number | null;
   adjoe: number | null;
   adjde: number | null;
+  // ours (build-adjusted-ratings.mjs)
+  wins: number | null;
+  losses: number | null;
   adjt: number | null;
   wab: number | null;
-  sos: number | null;
-  ncsos: number | null;
-  consos: number | null;
   // cbb (nullable until sync runs)
   cbb_efg: number | null;
   cbb_ts: number | null;
@@ -324,7 +494,6 @@ export type TeamRow = {
   cbb_fg3_def: number | null;
   cbb_ortg: number | null;
   cbb_drtg: number | null;
-  cbb_net: number | null;
   cbb_ortg_adj: number | null;
   cbb_drtg_adj: number | null;
   cbb_net_adj: number | null;
@@ -382,6 +551,87 @@ export type TeamRow = {
   orb_diff: number | null;
   fg3_diff: number | null;
   fta_diff: number | null;
+  cbb_fg: number | null;
+  cbb_fg2: number | null;
+  cbb_fga_pg: number | null;
+  cbb_fg2a_pg: number | null;
+  cbb_fg3a_pg: number | null;
+  cbb_fta_pg: number | null;
+  cbb_pts_pg: number | null;
+  cbb_ast_pg: number | null;
+  cbb_orb_pg: number | null;
+  cbb_reb_pg: number | null;
+  cbb_tov_pg: number | null;
+  cbb_pfd_pg: number | null;
+  cbb_fbpts_pg: number | null;
+  cbb_pitp_pg: number | null;
+  cbb_potov_pg: number | null;
+  cbb_scp_pg: number | null;
+  cbb_scp_pct: number | null;
+  cbb_bench_pg: number | null;
+  cbb_bench_pct: number | null;
+  cbb_ast_to: number | null;
+  cbb_ppp: number | null;
+  cbb_drb_pg: number | null;
+  cbb_stl_pg: number | null;
+  cbb_blk_pg: number | null;
+  cbb_pf_pg: number | null;
+  cbb_drb_pct: number | null;
+  cbb_stl_pct: number | null;
+  cbb_blk_pct: number | null;
+  cbb_hakeem: number | null;
+  cbb_stl_pf: number | null;
+  cbb_blk_pf: number | null;
+  cbb_pf_eff: number | null;
+  cbb_rim_rate: number | null;
+  cbb_mid_rate: number | null;
+  cbb_three_rate: number | null;
+  cbb_rim_rate_def: number | null;
+  cbb_mid_rate_def: number | null;
+  cbb_three_rate_def: number | null;
+  cbb_rim_fg: number | null;
+  cbb_mid_fg: number | null;
+  cbb_corner3_fg: number | null;
+  cbb_atb3_fg: number | null;
+  cbb_corner3_share: number | null;
+  cbb_unast_pg: number | null;
+  cbb_unast_share: number | null;
+  nc_sos: number | null;
+  conf_sos: number | null;
+  sos_wp: number | null;
+  win_pct: number | null;
+  wins_no_trail: number | null;
+  wire_wins: number | null;
+  wins_trailing_5: number | null;
+  wins_trailing_10: number | null;
+  wins_trailing_15: number | null;
+  wins_trailing_20: number | null;
+  losses_no_lead: number | null;
+  wire_losses: number | null;
+  losses_leading_5: number | null;
+  losses_leading_10: number | null;
+  losses_leading_15: number | null;
+  losses_leading_20: number | null;
+  pbp_games: number | null;
+  eff_height: number | null;
+  fr_min_pct: number | null;
+  so_min_pct: number | null;
+  jr_min_pct: number | null;
+  sr_min_pct: number | null;
+  fr_pts_pct: number | null;
+  so_pts_pct: number | null;
+  jr_pts_pct: number | null;
+  sr_pts_pct: number | null;
+  cont_pct: number | null;
+  ret_min_pct: number | null;
+  rrot_pct: number | null;
+  ret_prior_min: number | null;
+  prior_team_min: number | null;
+  ret_curr_min: number | null;
+  curr_team_min: number | null;
+  prev_a_net: number | null;
+  in_transfer_min: number | null;
+  proven_min_pct: number | null;
   // Per-season percentile rank (0–100) for each visible stat. Computed within
   // the team's own season cohort, not the full multi-year selection.
   pct: Record<string, number | null>;
@@ -459,15 +709,28 @@ function buildCohortRows(rawAll: RawTeamSeason[], years: number[]): TeamRow[] {
       team_conference: r.conference ?? null,
       team_year: r.year,
       rank: (trank?.rank as number | null) ?? null,
-      record: (trank?.record as string | null) ?? null,
-      wins: (trank?.wins as number | null) ?? null,
-      losses: (trank?.losses as number | null) ?? null,
+      /**
+       * Built from OUR wins and losses, not Bart's string.
+       *
+       * It has to be, now that the Wins and Losses columns are ours: leaving
+       * the string as Bart's would let a row read "34-1" beside a `wins >= 35`
+       * filter it satisfied. Our counts are also the more accurate of the two —
+       * Bart excludes non-D1 games from the record for 2014-2016 and includes
+       * them from 2017, so his 2014 Wichita State reads 34-1 against a real
+       * 35-1. Falls back to his string only when we have no counts at all,
+       * which is every season before the CBBD archive starts.
+       */
+      record: (() => {
+        const w = cbb?.wins, l = cbb?.losses;
+        return typeof w === "number" && typeof l === "number"
+          ? `${w}-${l}`
+          : ((trank?.record as string | null) ?? null);
+      })(),
+      wins: cbb?.wins ?? null,
+      losses: cbb?.losses ?? null,
       adjoe, adjde,
-      adjt: (trank?.adjt as number | null) ?? null,
-      wab: (trank?.wab as number | null) ?? null,
-      sos: (trank?.sos as number | null) ?? null,
-      ncsos: (trank?.ncsos as number | null) ?? null,
-      consos: (trank?.consos as number | null) ?? null,
+      adjt: cbb?.adjt ?? null,
+      wab: cbb?.wab ?? null,
       cbb_efg: cbb?.efg_pct ?? null,
       cbb_ts: cbb?.ts_pct ?? null,
       cbb_tov: cbb?.tov_pct ?? null,
@@ -477,13 +740,93 @@ function buildCohortRows(rawAll: RawTeamSeason[], years: number[]): TeamRow[] {
       cbb_ft: cbb?.ft_pct ?? null,
       cbb_fg3rate: cbb?.fg3a_rate ?? null,
       cbb_ast: cbb?.ast_pct ?? null,
+      cbb_fg: cbb?.fg_pct ?? null,
+      cbb_fg2: cbb?.fg2_pct ?? null,
+      cbb_fga_pg: cbb?.fga_pg ?? null,
+      cbb_fg2a_pg: cbb?.fg2a_pg ?? null,
+      cbb_fg3a_pg: cbb?.fg3a_pg ?? null,
+      cbb_fta_pg: cbb?.fta_pg ?? null,
+      cbb_pts_pg: cbb?.pts_pg ?? null,
+      cbb_ast_pg: cbb?.ast_pg ?? null,
+      cbb_orb_pg: cbb?.orb_pg ?? null,
+      cbb_reb_pg: cbb?.reb_pg ?? null,
+      cbb_tov_pg: cbb?.tov_pg ?? null,
+      cbb_pfd_pg: cbb?.pfd_pg ?? null,
+      cbb_fbpts_pg: cbb?.fbpts_pg ?? null,
+      cbb_pitp_pg: cbb?.pitp_pg ?? null,
+      cbb_potov_pg: cbb?.potov_pg ?? null,
+      cbb_scp_pg: cbb?.scp_pg ?? null,
+      cbb_scp_pct: cbb?.scp_pct ?? null,
+      cbb_bench_pg: cbb?.bench_pts_pg ?? null,
+      cbb_bench_pct: cbb?.bench_pts_pct ?? null,
+      cbb_ast_to: cbb?.ast_to ?? null,
+      cbb_ppp: cbb?.ppp ?? null,
+      cbb_drb_pg: cbb?.drb_pg ?? null,
+      cbb_stl_pg: cbb?.stl_pg ?? null,
+      cbb_blk_pg: cbb?.blk_pg ?? null,
+      cbb_pf_pg: cbb?.pf_pg ?? null,
+      cbb_drb_pct: cbb?.drb_pct ?? null,
+      cbb_stl_pct: cbb?.stl_pct ?? null,
+      cbb_blk_pct: cbb?.blk_pct ?? null,
+      cbb_hakeem: cbb?.hakeem_pct ?? null,
+      cbb_stl_pf: cbb?.stl_pf ?? null,
+      cbb_blk_pf: cbb?.blk_pf ?? null,
+      cbb_pf_eff: cbb?.pf_eff ?? null,
+      cbb_rim_rate: cbb?.rim_rate ?? null,
+      cbb_mid_rate: cbb?.mid_rate ?? null,
+      cbb_three_rate: cbb?.three_rate ?? null,
+      cbb_rim_rate_def: cbb?.rim_rate_def ?? null,
+      cbb_mid_rate_def: cbb?.mid_rate_def ?? null,
+      cbb_three_rate_def: cbb?.three_rate_def ?? null,
+      cbb_rim_fg: cbb?.rim_fg_pct ?? null,
+      cbb_mid_fg: cbb?.mid_fg_pct ?? null,
+      cbb_corner3_fg: cbb?.corner3_fg_pct ?? null,
+      cbb_atb3_fg: cbb?.atb3_fg_pct ?? null,
+      cbb_corner3_share: cbb?.corner3_share ?? null,
+      cbb_unast_pg: cbb?.unast_pg ?? null,
+      cbb_unast_share: cbb?.unast_share ?? null,
+      nc_sos: cbb?.nc_sos ?? null,
+      conf_sos: cbb?.conf_sos ?? null,
+      sos_wp: cbb?.sos_wp ?? null,
+      win_pct: cbb?.win_pct ?? null,
+      wins_no_trail: cbb?.wins_no_trail ?? null,
+      wire_wins: cbb?.wire_wins ?? null,
+      wins_trailing_5: cbb?.wins_trailing_5 ?? null,
+      wins_trailing_10: cbb?.wins_trailing_10 ?? null,
+      wins_trailing_15: cbb?.wins_trailing_15 ?? null,
+      wins_trailing_20: cbb?.wins_trailing_20 ?? null,
+      losses_no_lead: cbb?.losses_no_lead ?? null,
+      wire_losses: cbb?.wire_losses ?? null,
+      losses_leading_5: cbb?.losses_leading_5 ?? null,
+      losses_leading_10: cbb?.losses_leading_10 ?? null,
+      losses_leading_15: cbb?.losses_leading_15 ?? null,
+      losses_leading_20: cbb?.losses_leading_20 ?? null,
+      pbp_games: cbb?.pbp_games ?? null,
+      eff_height: cbb?.eff_height ?? null,
+      fr_min_pct: cbb?.fr_min_pct ?? null,
+      so_min_pct: cbb?.so_min_pct ?? null,
+      jr_min_pct: cbb?.jr_min_pct ?? null,
+      sr_min_pct: cbb?.sr_min_pct ?? null,
+      fr_pts_pct: cbb?.fr_pts_pct ?? null,
+      so_pts_pct: cbb?.so_pts_pct ?? null,
+      jr_pts_pct: cbb?.jr_pts_pct ?? null,
+      sr_pts_pct: cbb?.sr_pts_pct ?? null,
+      cont_pct: cbb?.cont_pct ?? null,
+      ret_min_pct: cbb?.ret_min_pct ?? null,
+      rrot_pct: cbb?.rrot_pct ?? null,
+      ret_prior_min: cbb?.ret_prior_min ?? null,
+      prior_team_min: cbb?.prior_team_min ?? null,
+      ret_curr_min: cbb?.ret_curr_min ?? null,
+      curr_team_min: cbb?.curr_team_min ?? null,
+      prev_a_net: cbb?.prev_a_net ?? null,
+      in_transfer_min: cbb?.in_transfer_min ?? null,
+      proven_min_pct: cbb?.proven_min_pct ?? null,
       cbb_efg_def: cbb?.efg_pct_def ?? null,
       cbb_tov_def: cbb?.tov_pct_def ?? null,
       cbb_orb_def: cbb?.orb_pct_def ?? null,
       cbb_fg3_def: fg3_pct_def,
       cbb_ortg: cbb?.ortg ?? null,
       cbb_drtg: cbb?.drtg ?? null,
-      cbb_net: cbb?.net_rtg ?? null,
       cbb_ortg_adj: cbbOAdj,
       cbb_drtg_adj: cbbDAdj,
       cbb_net_adj: cbb?.net_rtg_adj ?? null,
@@ -615,8 +958,15 @@ export function processTeams(rawAll: RawTeamSeason[], spec: TeamFilterSpec): { r
     displaySet = displaySet.filter((r) => teamSet.has(r.team_name));
   }
   for (const f of spec.filters) {
-    const col = COLUMN_BY_KEY.get(f.stat);
-    if (!col || col.source === "derived") continue;
+    // `source` describes where the number was FETCHED from, not whether it is
+    // filterable. This used to skip `derived` stats outright, which silently
+    // dropped every filter on eFG% Diff, TOV% Diff, OREB% Diff, 3P% Diff and
+    // FTA% Diff — all five are computed onto TeamRow by cachedCohortRows before
+    // this runs, so passes() reads them fine. The filter was accepted by the
+    // URL, counted in the chip strip, and did nothing to the table.
+    //
+    // The only check that belongs here is that the stat is one we know.
+    if (!COLUMN_BY_KEY.has(f.stat)) continue;
     displaySet = displaySet.filter((r) => passes(r, f));
   }
 
@@ -698,6 +1048,12 @@ const PERCENTILE_STATS: Array<{ key: keyof TeamRow; higherBetter: boolean }> = [
   { key: "a_ortg",  higherBetter: true },
   { key: "a_drtg",  higherBetter: false },
   { key: "adj_sos", higherBetter: true },
+  { key: "prev_a_net", higherBetter: true },
+  { key: "in_transfer_min", higherBetter: true },
+  { key: "proven_min_pct", higherBetter: true },
+  { key: "nc_sos", higherBetter: true },
+  { key: "conf_sos", higherBetter: true },
+  { key: "sos_wp", higherBetter: false },
   { key: "cbb_pace", higherBetter: true },
   // Everything else the filter drawer can PIN as a column. A pinned column
   // renders the same value + chip treatment as a default one, so any stat that
@@ -716,7 +1072,94 @@ const PERCENTILE_STATS: Array<{ key: keyof TeamRow; higherBetter: boolean }> = [
   { key: "pts_diff",    higherBetter: true },
   { key: "pitp_diff",   higherBetter: true },
   { key: "scp_diff",    higherBetter: true },
-];
+  // The glossary set. Same reasoning as the block above: anything pinnable
+  // needs a percentile or it lands in the table visibly half-dressed.
+  { key: "cbb_fg", higherBetter: true },
+  { key: "cbb_fg2", higherBetter: true },
+  { key: "cbb_fga_pg", higherBetter: true },
+  { key: "cbb_fg2a_pg", higherBetter: true },
+  { key: "cbb_fg3a_pg", higherBetter: true },
+  { key: "cbb_fta_pg", higherBetter: true },
+  { key: "cbb_pts_pg", higherBetter: true },
+  { key: "cbb_ast_pg", higherBetter: true },
+  { key: "cbb_orb_pg", higherBetter: true },
+  { key: "cbb_reb_pg", higherBetter: true },
+  { key: "cbb_tov_pg", higherBetter: false },
+  { key: "cbb_pfd_pg", higherBetter: true },
+  { key: "cbb_fbpts_pg", higherBetter: true },
+  { key: "cbb_pitp_pg", higherBetter: true },
+  { key: "cbb_potov_pg", higherBetter: true },
+  { key: "cbb_scp_pg", higherBetter: true },
+  { key: "cbb_scp_pct", higherBetter: true },
+  { key: "cbb_bench_pg", higherBetter: true },
+  { key: "cbb_bench_pct", higherBetter: true },
+  { key: "cbb_ast_to", higherBetter: true },
+  { key: "cbb_ppp", higherBetter: true },
+  { key: "cbb_drb_pg", higherBetter: true },
+  { key: "cbb_stl_pg", higherBetter: true },
+  { key: "cbb_blk_pg", higherBetter: true },
+  { key: "cbb_pf_pg", higherBetter: false },
+  { key: "cbb_drb_pct", higherBetter: true },
+  { key: "cbb_stl_pct", higherBetter: true },
+  { key: "cbb_blk_pct", higherBetter: true },
+  { key: "cbb_hakeem", higherBetter: true },
+  { key: "cbb_stl_pf", higherBetter: true },
+  { key: "cbb_blk_pf", higherBetter: true },
+  { key: "cbb_pf_eff", higherBetter: true },
+  // Shot mix direction follows the orthodoxy the league itself has been
+  // moving toward for a decade — rim and three good, mid-range bad, and the
+  // mirror image on defence. It is a judgement, not a fact, but a percentile
+  // chip has to point somewhere and "neutral" is not an option the UI has.
+  { key: "cbb_rim_rate", higherBetter: true },
+  { key: "cbb_mid_rate", higherBetter: false },
+  { key: "cbb_three_rate", higherBetter: true },
+  { key: "cbb_rim_rate_def", higherBetter: false },
+  { key: "cbb_mid_rate_def", higherBetter: true },
+  { key: "cbb_three_rate_def", higherBetter: false },
+  { key: "cbb_rim_fg", higherBetter: true },
+  { key: "cbb_mid_fg", higherBetter: true },
+  { key: "cbb_corner3_fg", higherBetter: true },
+  { key: "cbb_atb3_fg", higherBetter: true },
+  { key: "cbb_corner3_share", higherBetter: true },
+  { key: "win_pct", higherBetter: true },
+  { key: "wins_no_trail", higherBetter: true },
+  { key: "wire_wins", higherBetter: true },
+  { key: "wins_trailing_5", higherBetter: true },
+  { key: "wins_trailing_10", higherBetter: true },
+  { key: "wins_trailing_15", higherBetter: true },
+  { key: "wins_trailing_20", higherBetter: true },
+  { key: "losses_no_lead", higherBetter: false },
+  { key: "wire_losses", higherBetter: false },
+  { key: "losses_leading_5", higherBetter: false },
+  { key: "losses_leading_10", higherBetter: false },
+  { key: "losses_leading_15", higherBetter: false },
+  { key: "losses_leading_20", higherBetter: false },
+  { key: "eff_height", higherBetter: true },
+  { key: "fr_min_pct", higherBetter: true },
+  { key: "so_min_pct", higherBetter: true },
+  { key: "jr_min_pct", higherBetter: true },
+  { key: "sr_min_pct", higherBetter: true },
+  { key: "fr_pts_pct", higherBetter: true },
+  { key: "so_pts_pct", higherBetter: true },
+  { key: "jr_pts_pct", higherBetter: true },
+  { key: "sr_pts_pct", higherBetter: true },
+  // NO PERCENTILE ON THE RAW MINUTE COUNTS — ret_prior_min, prior_team_min,
+  // ret_curr_min, curr_team_min, pbp_games.
+  //
+  // A chip is a judgement: green means good. Ranking teams by how many minutes
+  // they played is ranking them by how many games they played, so Harvard drew
+  // a red 1 on Prior Team Min for the crime of being in the Ivy League. The
+  // shares built ON those denominators — Returning Min %, Returner Rotation % —
+  // keep their chips, because those genuinely say something.
+  //
+  // Dropping a key from this list is all it takes: the cell renders its value
+  // with no chip when `row.pct` has no entry for it.
+  { key: "cont_pct", higherBetter: true },
+  { key: "ret_min_pct", higherBetter: true },
+  { key: "rrot_pct", higherBetter: true },
+  { key: "cbb_unast_pg", higherBetter: true },
+  { key: "cbb_unast_share", higherBetter: true },
+]
 
 const LOWER_BETTER = new Set(
   PERCENTILE_STATS.filter((s) => !s.higherBetter).map((s) => s.key as string),
@@ -775,7 +1218,10 @@ function attachBtaRtg(rows: TeamRow[]) {
   const adjde = meanStd((r) => r.adjde);
   const cbbO = meanStd((r) => r.cbb_ortg_adj);
   const cbbD = meanStd((r) => r.cbb_drtg_adj);
-  const sos = meanStd((r) => r.sos);
+  // Was Bart's `sos`, a win-probability figure. Now our own net-rating SOS —
+  // same concept, same direction (higher = tougher), and auditable from the
+  // game logs rather than read off a scraped CSV.
+  const sos = meanStd((r) => r.adj_sos);
   // Small-weight diff tells — ORTG side
   const orbDiff   = meanStd((r) => r.orb_diff_ct);
   const fg3mDiff  = meanStd((r) => r.fg3m_diff_ct);
@@ -801,7 +1247,7 @@ function attachBtaRtg(rows: TeamRow[]) {
     if (cbbO && typeof r.cbb_ortg_adj === "number") add((r.cbb_ortg_adj - cbbO.mean) / cbbO.std, 1);
     if (adjde && typeof r.adjde === "number") add(-((r.adjde - adjde.mean) / adjde.std), 1);
     if (cbbD && typeof r.cbb_drtg_adj === "number") add(-((r.cbb_drtg_adj - cbbD.mean) / cbbD.std), 1);
-    if (sos && typeof r.sos === "number") add((r.sos - sos.mean) / sos.std, 0.5);
+    if (sos && typeof r.adj_sos === "number") add((r.adj_sos - sos.mean) / sos.std, 0.5);
     // ORTG-side small-weight tells (+z = bigger advantage = better)
     if (orbDiff   && typeof r.orb_diff_ct  === "number") add((r.orb_diff_ct  - orbDiff.mean)   / orbDiff.std,   0.25);
     if (fg3mDiff  && typeof r.fg3m_diff_ct === "number") add((r.fg3m_diff_ct - fg3mDiff.mean)  / fg3mDiff.std,  0.25);

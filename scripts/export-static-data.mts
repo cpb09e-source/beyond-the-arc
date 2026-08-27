@@ -526,9 +526,13 @@ type RankableDef = {
   higherBetter: boolean;
 };
 const RANKABLE: RankableDef[] = [
-  { key: "adjoe",         source: "trank", label: "Adj ORtg",     format: "num1",    higherBetter: true  },
-  { key: "adjde",         source: "trank", label: "Adj DRtg",     format: "num1",    higherBetter: false },
-  { key: "sos",           source: "trank", label: "SoS",          format: "num2",    higherBetter: true  },
+  // OURS, not Bart's. a_ortg / a_drtg come from build-adjusted-ratings.mjs and
+  // validate against his T-Rank at r = 0.986 on net rating; `sos` is the same
+  // file's net schedule strength, which replaced his win-probability figure so
+  // the site carries one SOS rather than two in different units.
+  { key: "a_ortg",        source: "cbb",   label: "Adj ORtg",     format: "num1",    higherBetter: true  },
+  { key: "a_drtg",        source: "cbb",   label: "Adj DRtg",     format: "num1",    higherBetter: false },
+  { key: "sos",           source: "cbb",   label: "SOS",          format: "num1",    higherBetter: true  },
   { key: "ts_pct",        source: "cbb",   label: "TS%",          format: "pct1",    higherBetter: true  },
   { key: "efg_pct",       source: "cbb",   label: "eFG%",         format: "pct1",    higherBetter: true  },
   { key: "fg3_pct",       source: "cbb",   label: "3P%",          format: "pct1",    higherBetter: true  },

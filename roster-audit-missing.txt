@@ -21,10 +21,10 @@ West Florida
 
 ## URL resolved but scraped 0 players (non-Sidearm layout or wrong swap):
 Alabama	https://rolltide.com/sports/mens-basketball/roster
-LSU	https://lsusports.net/sports/mens-basketball/roster
 Utah St.	https://utahstateaggies.com/sports/mens-basketball/roster
 George Mason	https://gomason.com/sports/mens-basketball/roster
 Memphis	https://gotigersgo.com/sports/mens-basketball/roster
+Wyoming	https://gowyo.com/sports/mens-basketball/roster
 Bradley	https://bradleybraves.com/sports/mens-basketball/roster
 Jacksonville	https://judolphins.com/sports/mens-basketball/roster
 Tennessee Tech	https://www.ttusports.com/sports/wbkb/roster
