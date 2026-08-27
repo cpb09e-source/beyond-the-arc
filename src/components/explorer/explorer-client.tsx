@@ -13,6 +13,7 @@ import {
   limitLabel,
   isLowerBetter,
   TEAM_STAT_COLUMNS,
+  teamStatColumn,
   type RawTeamSeason,
   type TeamRow,
   type StatFilter,
@@ -20,10 +21,16 @@ import {
 } from "@/lib/team-filters";
 import { Select } from "@/components/select";
 import { FilterBar, ConferenceRankingsModal } from "@/components/explorer/filter-bar";
-import { TEAM_DRAWER_SLOT_ID, TeamStatFilters, teamStatChipsFromSpec } from "@/components/explorer/team-stat-filters";
+import { TeamStatFilters, teamStatChipsFromSpec } from "@/components/explorer/team-stat-filters";
+import { PREVIEW_SEASON } from "@/lib/seasons";
+import { TABLE_VIEWS, viewByKey, viewGroups, type TableView } from "@/lib/team-views";
 import { StatChipStrip } from "@/components/filters/stat-chips";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { CompareTeamsModal } from "@/components/explorer/compare-teams-modal";
+import { DownloadMenu } from "@/components/explorer/download-menu";
+import { SavedFiltersMenu } from "@/components/explorer/saved-filters-menu";
+import { suggestName } from "@/lib/saved-filters";
+import { exportFields, type ExportCol, type ExportInput, type MultiExportInput } from "@/lib/table-export";
 import { TeamLogo } from "@/components/team-logo";
 import { tourneyBadge } from "@/data/tournament-results";
 import { PercentileChip } from "@/components/percentile-chip";
@@ -63,7 +70,8 @@ type TeamCol = {
   sortKey: string;
   /** Sorting ascending is the "good" direction (defensive rating, turnovers). */
   lowerBetter?: boolean;
-  fmt: "num1" | "signed" | "pct1";
+  /** "int" is a count — whole, and unsigned, unlike "signed" margins. */
+  fmt: "num1" | "signed" | "pct1" | "int";
   title: string;
 };
 
@@ -109,7 +117,11 @@ function pinnedColumn(key: string): TeamCol | null {
   const meta = TEAM_STAT_COLUMNS.find((c) => c.key === key);
   if (!meta) return null;
   const fmt: TeamCol["fmt"] =
-    meta.format === "pct1" ? "pct1" : meta.group === "diffs" ? "signed" : "num1";
+    meta.format === "pct1" ? "pct1"
+      : meta.format === "int" ? "int"
+      // Everything in the diffs group is a margin, so it reads with a sign.
+      : meta.group === "diffs" ? "signed"
+      : "num1";
   return {
     label: meta.label,
     total: key as keyof TeamRow,
@@ -121,6 +133,57 @@ function pinnedColumn(key: string): TeamCol | null {
   };
 }
 
+/**
+ * Compare and Conference Rankings, parked.
+ *
+ * Both are built and both still work — the modals below are wired, the
+ * rankings are still computed — they are simply not being offered while the
+ * toolbar's other controls are being settled. Flags rather than deleted code
+ * because coming back to them is the plan, and a boolean in the diff is easier
+ * to find than a commit to revert.
+ *
+ * Flipping either to true restores the trigger and nothing else has to change.
+ */
+const SHOW_COMPARE = false;
+const SHOW_CONFERENCE_RANKINGS = false;
+
+/** A renderable column, flattened for the exporter. */
+function toExportCol(c: TeamCol, band: string): ExportCol {
+  return {
+    label: c.label,
+    total: c.total as string,
+    perGame: c.perGame as string | undefined,
+    pct: c.pct,
+    fmt: c.fmt,
+    band,
+  };
+}
+
+/**
+ * The export columns for ANY view, not just the one on screen.
+ *
+ * The pinned columns lead and are de-duplicated against that view's own keys —
+ * the same rule the table applies — so a stat filtered on shows up exactly
+ * once on every tab, under "Your columns" where the view does not already
+ * carry it and in its proper band where it does.
+ */
+function exportColsForView(v: TableView, pinned: readonly string[]): ExportCol[] {
+  const viewKeys = new Set<string>(v.bands.flatMap((b) => b.keys as string[]));
+  const out: ExportCol[] = [];
+  for (const k of pinned) {
+    if (viewKeys.has(k)) continue;
+    const c = pinnedColumn(k);
+    if (c) out.push(toExportCol(c, "Your columns"));
+  }
+  for (const b of v.bands) {
+    for (const k of b.keys) {
+      const c = pinnedColumn(k);
+      if (c) out.push(toExportCol(c, b.label));
+    }
+  }
+  return out;
+}
+
 /** One opaque hover fill so the frozen and scrolling halves read as one row. */
 const ROW_HOVER = "group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))]";
 /** Resting tint marking the Four Factors band, mirroring the EPM band on /players. */
@@ -128,6 +191,7 @@ const FF_BAND_TINT = "bg-[color-mix(in_oklab,var(--coral)_3%,transparent)]";
 
 function fmtColValue(v: number | null | undefined, fmt: TeamCol["fmt"]): string {
   if (v === null || v === undefined) return "—";
+  if (fmt === "int") return v.toLocaleString("en-US", { maximumFractionDigits: 0 });
   if (fmt === "pct1") return (v * 100).toFixed(1) + "%";
   if (fmt === "signed") return (v > 0 ? "+" : "") + v.toLocaleString("en-US", { maximumFractionDigits: 0 });
   return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -156,9 +220,6 @@ export function ExplorerClient({
 }) {
   const [compareOpen, setCompareOpen] = useState(false);
   const [showRankings, setShowRankings] = useState(false);
-  // Owned here, not inside TeamStatFilters, so the toolbar's "+N more" chip can
-  // open the panel on the full list.
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const router = useRouter();
   const [, startTransition] = useTransition();
   const search = useSearchParams();
@@ -170,7 +231,29 @@ export function ExplorerClient({
   // Memoize so `spec`'s reference is stable across renders — the page-reset
   // effect keys on it, and a fresh object every render would snap the table back
   // to page 1 on any interaction (breaks pagination).
-  const spec = useMemo(() => parseSpec(params), [params]);
+  /**
+   * A VIEW BRINGS ITS OWN SORT, unless the URL names one explicitly.
+   *
+   * Selecting a view in the toolbar writes `sort` into the URL, so this branch
+   * is not for that path — it is for a link. `?view=shot-profile` typed or
+   * shared with no sort param would otherwise render shot-profile columns
+   * ordered by net rating, which is a table sorted by a column it is not
+   * showing. An explicit `sort` always wins, so a reader who clicks a header
+   * and copies the URL keeps what they chose.
+   *
+   * parseSpec cannot do this itself: it is imported by the server-side query
+   * builder, and the view registry has no business in that dependency chain.
+   */
+  const spec = useMemo(() => {
+    const base = parseSpec(params);
+    if (!base.view || params.sort) return base;
+    const v = viewByKey(base.view);
+    // A view may name a different sort for the preview season, where its usual
+    // one is a stat no game has produced yet.
+    const previewOnly = base.years.length > 0 && base.years.every((y) => y === PREVIEW_SEASON);
+    const sortBy = previewOnly && v.previewSortBy ? v.previewSortBy : v.sortBy;
+    return { ...base, sortBy, sortDir: v.sortDir };
+  }, [params]);
 
   // Union conferences across every year we have data for, so users can pick
   // a historical conference even when the visible-year selection wouldn't
@@ -242,7 +325,25 @@ export function ExplorerClient({
   // the uncommitted draft). Removing here is immediate — there is no Submit on
   // the toolbar, and a chip whose X did nothing until you opened a panel would
   // be a lie.
-  const specChips = useMemo(() => teamStatChipsFromSpec(spec.cols, spec.filters), [spec.cols, spec.filters]);
+  /**
+   * Chips for columns pinned WITHOUT a filter on them — and nothing else.
+   *
+   * The strip used to repeat every filter, which was right when the filters
+   * lived in a drawer: there was no other way to see what was applied. The
+   * builder is inline now, one editable row per filter immediately below this
+   * toolbar, so a read-only chip saying "Pace ≥ 70" next to a row that says the
+   * same thing AND can change it is pure duplication — two controls for one
+   * fact, and the weaker one first.
+   *
+   * What survives is the case the builder genuinely cannot show: a column
+   * carried in by a shared URL or a saved filter with no bound attached. There
+   * is no row for it, so without this there would be no way to see it or
+   * remove it. In normal use this is empty and the strip renders nothing.
+   */
+  const specChips = useMemo(() => {
+    const filtered = new Set<string>(spec.filters.map((f) => f.stat as string));
+    return teamStatChipsFromSpec(spec.cols.filter((k) => !filtered.has(k)), []);
+  }, [spec.cols, spec.filters]);
   const removeSpecStat = (key: string) => {
     const next: TeamFilterSpec = {
       ...spec,
@@ -252,6 +353,27 @@ export function ExplorerClient({
     const p = specToParams(next).toString();
     startTransition(() => router.replace(p ? `/?${p}` : "/", { scroll: false }));
   };
+
+  /**
+   * The canonical query for what is on screen, and what a saved filter stores.
+   *
+   * Rebuilt from the spec rather than read off `window.location`, so it is
+   * normalised: two URLs that mean the same table produce the same string, and
+   * the menu can tell whether the reader is already looking at something they
+   * saved by comparing them directly.
+   */
+  const currentQuery = useMemo(() => specToParams(spec).toString(), [spec]);
+  const savedNameSuggestion = useMemo(() => suggestName(spec), [spec]);
+  /**
+   * Applying writes the WHOLE query in one replace.
+   *
+   * Not a merge onto the current spec: a saved filter that left the previous
+   * conference selection in place would not be the table that was saved, and
+   * the reader has no way to see which parts carried over.
+   */
+  const applySaved = useCallback((query: string) => {
+    startTransition(() => router.replace(query ? `/?${query}` : "/", { scroll: false }));
+  }, [router]);
 
   // Inline quick-filter on the table — by team name only, separate from the
   // URL-persisted Team picker in the FilterBar above. We run processTeams with
@@ -298,19 +420,24 @@ export function ExplorerClient({
     return () => document.removeEventListener("pointerdown", onDown);
   }, [searchOpen]);
 
-  const { rows, count, totalPages, pageSafe } = useMemo(() => {
+  const { rows, allRows, count, totalPages, pageSafe } = useMemo(() => {
     const { rows: all } = processTeams(allTeams, { ...spec, limit: -1 });
     const q = tableSearch.trim().toLowerCase();
     const matched = q ? all.filter((r) => r.team_name.toLowerCase().includes(q)) : all;
     const total = matched.length;
     if (spec.limit === -1) {
-      return { rows: matched, count: total, totalPages: 1, pageSafe: 1 };
+      return { rows: matched, allRows: matched, count: total, totalPages: 1, pageSafe: 1 };
     }
     const totalPages = Math.max(1, Math.ceil(total / spec.limit));
     const pageSafe = Math.min(Math.max(1, page), totalPages);
     const start = (pageSafe - 1) * spec.limit;
     return {
       rows: matched.slice(start, start + spec.limit),
+      // EVERY matching row, not the visible page. The download works from
+      // this: a file that silently stopped at row 100 because the reader had
+      // "Show 100" set would be wrong in the one way a spreadsheet cannot
+      // recover from — you cannot see what is missing.
+      allRows: matched,
       count: total,
       totalPages,
       pageSafe,
@@ -320,24 +447,184 @@ export function ExplorerClient({
   useEffect(() => { setPage(1); }, [spec, tableSearch]);
   const multiYear = spec.years.length > 1;
 
-  // Pinned columns lead the table, then the default set. A pinned stat that is
-  // ALSO a default column deliberately renders twice — Colin's call: the copy on
-  // the left is the one you asked to see, and the original stays put so the
-  // Ratings / Four Factors / Shooting bands don't develop holes.
-  const pinnedCols = useMemo(
-    () => spec.cols.map(pinnedColumn).filter((c): c is TeamCol => c !== null),
-    [spec.cols],
+  const view = useMemo(() => viewByKey(spec.view), [spec.view]);
+  /** Every stat the active view already puts on the table. */
+  const viewKeys = useMemo(
+    () => new Set<string>(view.bands.flatMap((b) => b.keys as string[])),
+    [view],
   );
-  const cols = useMemo(() => [...pinnedCols, ...DEFAULT_COLS], [pinnedCols]);
+
+  /**
+   * Pinned columns lead the table, then the view's own set.
+   *
+   * A PINNED STAT THE VIEW ALREADY SHOWS IS NOT REPEATED. It used to be, on
+   * purpose: back when there was one fixed column set, a filter on eFG% put a
+   * second eFG% at the left so the thing you asked for was where you were
+   * looking, and pulling it out of the Shooting band would have left a hole.
+   *
+   * Views make that trade a bad one. There are thirteen column sets now and a
+   * reader filtering on a stat has no way to know whether the current one
+   * happens to include it — so the same number appeared twice, under two
+   * different band headers, with no indication they were the same column.
+   *
+   * The VIEW keeps the column and the pin is what drops, which is also why the
+   * old objection no longer applies: nothing leaves the band, so no hole opens.
+   * The auto-pin guarantee survives too — you still cannot filter on a stat you
+   * cannot see, because the only case dropped is the one where the view is
+   * already showing it. Switch to a view without that stat and the pin comes
+   * back on its own, since this recomputes from the view.
+   */
+  const pinnedCols = useMemo(
+    () => spec.cols
+      .filter((k) => !viewKeys.has(k))
+      .map(pinnedColumn)
+      .filter((c): c is TeamCol => c !== null),
+    [spec.cols, viewKeys],
+  );
+  /**
+   * THE VIEW SUPPLIES THE COLUMNS; the reader's pins still lead.
+   *
+   * Every column is built through pinnedColumn(), the same function the pinned
+   * ones go through, so a stat named by a view arrives with its per-game
+   * sub-figure, its percentile key and its tooltip already attached rather than
+   * as a hand-rolled copy that quietly drops them.
+   */
+  const viewCols = useMemo(
+    () => view.bands.flatMap((b) => b.keys.map(pinnedColumn).filter((c): c is TeamCol => c !== null)),
+    [view],
+  );
+  const cols = useMemo(() => [...pinnedCols, ...viewCols], [pinnedCols, viewCols]);
+
+  /**
+   * The header bands, as {label, span} — "Your columns" first when there are
+   * any, then whatever the view declares.
+   *
+   * These used to be three hardcoded <th> elements whose colSpans read
+   * RATING_COLS.length and friends directly, which meant the table could only
+   * ever show one arrangement. Derived here, a view with two bands or six
+   * renders correctly and the table knows nothing about which view it is.
+   */
+  const bands = useMemo(() => {
+    const out: Array<{ label: string; accent: boolean; span: number }> = [];
+    if (pinnedCols.length) out.push({ label: "Your columns", accent: true, span: pinnedCols.length });
+    for (const b of view.bands) {
+      const span = b.keys.filter((k) => pinnedColumn(k) !== null).length;
+      if (span > 0) out.push({ label: b.label, accent: !!b.accent, span });
+    }
+    return out;
+  }, [view, pinnedCols.length]);
   // Group boundaries shift with the pin count, so they're derived per render
   // rather than being module constants.
-  const P = pinnedCols.length;
-  const groupStarts = useMemo(
-    () => new Set([0, P, P + RATING_COLS.length, P + RATING_COLS.length + FOUR_FACTOR_COLS.length]),
-    [P],
-  );
-  const ffStart = P + RATING_COLS.length;
-  const ffEnd = ffStart + FOUR_FACTOR_COLS.length;
+  /** Column indexes where a band begins — these carry the dividing rule. */
+  const groupStarts = useMemo(() => {
+    const set = new Set<number>();
+    let at = 0;
+    for (const b of bands) { set.add(at); at += b.span; }
+    return set;
+  }, [bands]);
+  /**
+   * The tinted band. One per view, marked `accent` in the registry: it is the
+   * band the view is actually about, and tinting more than one turns a signal
+   * into wallpaper.
+   */
+  const [ffStart, ffEnd] = useMemo(() => {
+    let at = 0;
+    for (const b of bands) {
+      // "Your columns" carries the coral header but not the band tint — those
+      // columns already read as the reader's own by sitting leftmost, and
+      // tinting them as well as the view's accent band gives the table two
+      // competing highlights.
+      if (b.accent && b.label !== "Your columns") return [at, at + b.span] as const;
+      at += b.span;
+    }
+    return [-1, -1] as const;
+  }, [bands]);
+
+  /**
+   * The table flattened for export: every column, tagged with the band it
+   * sits under.
+   *
+   * The same function the all-views workbook uses for every other tab, so
+   * the single-sheet download and the tab that shares its name can never
+   * disagree about what belongs on it.
+   */
+  const exportCols = useMemo(() => exportColsForView(view, spec.cols), [view, spec.cols]);
+
+  /**
+   * Assembled on click, never on render.
+   *
+   * This walks every row in the result set — up to ~4,600 across twelve
+   * seasons — and the toolbar re-renders on each keystroke in the table
+   * search, so doing it eagerly would cost that walk for a button most
+   * readers never press.
+   */
+  const buildExport = useCallback((): ExportInput => {
+    const yearLabel = (y: number) => `${y - 1}-${y.toString().slice(-2)}`;
+    const years = [...spec.years].sort((a, b) => a - b);
+    const seasons = years.length === 0 ? "None"
+      : years.length <= 3 ? years.map(yearLabel).join(", ")
+      // Named as a span rather than a list once there are more than three:
+      // "12 seasons (2013-14 – 2026-27)" is read at a glance, and the exact
+      // set is recoverable from the Season column on every row.
+      : `${years.length} seasons (${yearLabel(years[0]!)} – ${yearLabel(years[years.length - 1]!)})`;
+    const OP: Record<string, string> = { gt: ">", gte: "≥", lt: "<", lte: "≤" };
+    const filters = spec.filters.map((f) => {
+      const meta = teamStatColumn(f.stat);
+      const pct = meta?.format === "pct1";
+      const shown = pct ? `${Math.round(f.value * 1000) / 10}%` : String(f.value);
+      return `${meta?.label ?? f.stat} ${OP[f.op] ?? f.op} ${shown}`;
+    });
+    // The label the FILE uses, not the registry name: the header says ORTG,
+    // so "sorted by aORTG" would be naming a column the reader cannot find.
+    const sortLabel = exportCols.find((c) => c.total === spec.sortBy)?.label
+      ?? teamStatColumn(spec.sortBy)?.label
+      ?? spec.sortBy;
+    return {
+      cols: exportCols,
+      rows: allRows,
+      meta: {
+        viewLabel: view.label,
+        seasons,
+        conference: spec.conf.length ? spec.conf.join(", ") : "All conferences",
+        teams: spec.teams.length ? spec.teams.join(", ") : "All teams",
+        filters,
+        sort: `${sortLabel} — ${spec.sortDir === "desc" ? "high to low" : "low to high"}`,
+        search: tableSearch.trim(),
+        url: typeof window === "undefined" ? "" : window.location.href,
+      },
+    };
+  }, [exportCols, allRows, view.label, spec, tableSearch]);
+
+  /**
+   * The same rows, dressed once per chosen view.
+   *
+   * Built on click like the single-sheet input, and for a stronger reason:
+   * this walks the result set once per tab, so doing it on render would cost
+   * up to thirteen passes over 4,600 rows on every keystroke in the table
+   * search.
+   *
+   * Tabs come out in REGISTRY order, not tick order. The picker groups views
+   * the way the View dropdown does, and a workbook whose tabs were ordered by
+   * which checkbox happened to be clicked first would not match it.
+   */
+  const buildExportAll = useCallback((viewKeys: string[]): MultiExportInput => {
+    const single = buildExport();
+    const wanted = new Set(viewKeys);
+    const chosen = TABLE_VIEWS.filter((v) => wanted.has(v.key));
+    return {
+      sheets: chosen.map((v) => ({ name: v.label, cols: exportColsForView(v, spec.cols) })),
+      rows: single.rows,
+      meta: single.meta,
+      slug: chosen.length === TABLE_VIEWS.length ? "all-views"
+        : chosen.length === 1 ? chosen[0]!.label
+        : `${chosen.length}-views`,
+    };
+  }, [buildExport, spec.cols]);
+
+  // The number of columns THE FILE will have, not the number on screen: a
+  // stat contributes its value, its percentile and sometimes a per-game
+  // figure, so sixteen table columns land as forty spreadsheet ones.
+  const exportFieldCount = useMemo(() => exportFields(exportCols).length, [exportCols]);
 
   // Live "N teams" for the filter drawer's footer: run the current scope
   // against a candidate filter set without touching the URL. limit:-1 so the
@@ -405,24 +692,15 @@ export function ExplorerClient({
             <h2>Teams</h2>, big count) that made this page read as a different
             product from the players table it sits beside in the nav. The page
             heading lives in the page shell now, not inside the data card. */}
-        {/* Hidden on phones while the drawer is open, so the panel REPLACES
-            this row rather than being pushed below it. The trigger lives in
-            here and goes with it, which is fine: the drawer carries its own
-            close X, Cancel and Submit, and every one of those clears
-            filtersOpen and brings the row straight back. Untouched from sm up,
-            where both fit on screen together. */}
         <div className={cn(
           // `relative` anchors the mobile sliding search panel, which used to
           // hang off the right-hand group. That group is no longer full width
           // on phones — the row-count select and the search button now share a
-          // line with Filters and Compare — and the panel parks at
+          // line with Compare — and the panel parks at
           // translate-x-[105%], so 105% of a ~90px group left the "closed"
           // panel sitting inside the toolbar. Anchored here it is 105% of the
           // whole row, which clears the card edge as intended.
-          "relative px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 items-center justify-between gap-3 flex-wrap",
-          // (was: hidden while the drawer was open, back when the drawer
-          // expanded inline and needed the room. It is a modal below md now.)
-          "flex",
+          "relative px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 flex items-center justify-between gap-3 flex-wrap",
         )}>
           {/* Wraps on narrow screens. Without it the row is one unbreakable
               line and "View Conference Rankings", which is whitespace-nowrap,
@@ -451,21 +729,90 @@ export function ExplorerClient({
               )}
             </div>
 
-            {/* Filters sits left of Compare, the same slot the drawer occupies
-                on /players (immediately right of the search box). */}
-            <TeamStatFilters previewCount={previewCount} open={filtersOpen} onOpenChange={setFiltersOpen} />
+            {/* SELECT VIEW.
+                Lives in the table toolbar, not on the scope bar above, and
+                applies the moment it changes rather than on Submit. Both follow
+                from the same fact: a view does not narrow the result set, it
+                re-dresses it. The scope bar's controls are submit-gated because
+                each one is an incomplete thought until the others are set;
+                a view is complete the instant it is chosen, and putting an
+                instant control inside a submit-gated row is how a reader learns
+                not to trust the Submit button.
 
-            <button
-              type="button"
-              onClick={() => setCompareOpen(true)}
-              title="Compare teams"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-coral/40 bg-coral/6 text-coral text-[0.6rem] uppercase tracking-widest font-bold hover:bg-coral/10 hover:border-coral/60 transition-colors whitespace-nowrap"
-            >
-              <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M16 3h5v5" /><path d="M8 21H3v-5" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" />
-              </svg>
-              Compare
-            </button>
+                A native select with optgroups rather than the custom popover:
+                twelve options in five sections is exactly what the element is
+                for, it matches the Seasons / Team / Conference controls a row
+                up, and it costs no JavaScript to open. */}
+            <label className="inline-flex items-center gap-1.5 min-w-0">
+              <span className="hidden sm:inline text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">
+                View
+              </span>
+              <select
+                value={spec.view || TABLE_VIEWS[0]!.key}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const next: TeamFilterSpec = {
+                    ...spec,
+                    view: v === TABLE_VIEWS[0]!.key ? "" : v,
+                    // The view carries its own sort. Without this the table
+                    // stays ordered by a column the new view may not show, and
+                    // a reader who picks "Shot Profile" gets shot-profile
+                    // columns ranked by net rating.
+                    sortBy: viewByKey(v).sortBy,
+                    sortDir: viewByKey(v).sortDir,
+                  };
+                  const p = specToParams(next).toString();
+                  startTransition(() => router.replace(p ? `/?${p}` : "/", { scroll: false }));
+                }}
+                aria-label="Table view"
+                className="field-sm-phone h-8 max-w-40 sm:max-w-none rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 transition-colors"
+              >
+                {viewGroups().map((g) => (
+                  <optgroup key={g.group} label={g.group}>
+                    {g.views.map((v) => (
+                      <option key={v.key} value={v.key} title={v.desc}>{v.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+
+            {/* Between the view select and Compare: it belongs with View —
+                both put the table into a named arrangement — and the pair
+                reads as "ours, then yours". */}
+            <SavedFiltersMenu
+              currentQuery={currentQuery}
+              suggestedName={savedNameSuggestion}
+              onApply={applySaved}
+            />
+
+            {SHOW_COMPARE && (
+              <button
+                type="button"
+                onClick={() => setCompareOpen(true)}
+                title="Compare teams"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-coral/40 bg-coral/6 text-coral text-[0.6rem] uppercase tracking-widest font-bold hover:bg-coral/10 hover:border-coral/60 transition-colors whitespace-nowrap"
+              >
+                <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M16 3h5v5" /><path d="M8 21H3v-5" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" />
+                </svg>
+                Compare
+              </button>
+            )}
+
+            {/* Beside Compare, and deliberately quieter than it: both act on
+                the table rather than narrowing it, but Compare is the thing
+                this page wants you to try and a download is the thing you
+                reach for once you already know what you want. */}
+            <DownloadMenu
+              build={buildExport}
+              buildAll={buildExportAll}
+              rowCount={allRows.length}
+              colCount={exportFieldCount}
+              // A season still in flight means the table is short. Better to
+              // refuse for a moment than to hand over a file missing a year.
+              disabled={loadingSeasons}
+            />
 
             {/* Desktop only. On phones the count renders as its own row after
                 the controls — see the mobile copy at the end of this toolbar.
@@ -492,7 +839,7 @@ export function ExplorerClient({
 
                 Below sm it keeps its old slot in the right-hand group; see the
                 note there for why. */}
-            {conferenceRankings.length > 0 && (
+            {SHOW_CONFERENCE_RANKINGS && conferenceRankings.length > 0 && (
               <button
                 type="button"
                 onClick={() => setShowRankings(true)}
@@ -502,14 +849,13 @@ export function ExplorerClient({
               </button>
             )}
 
-            {/* What's currently applied, and the fastest way to undo any of it.
-                Capped at six; the rest opens the panel, which shows them all. */}
+            {/* Only ever columns with no filter behind them — see specChips.
+                Empty in normal use, so this usually renders nothing. */}
             <StatChipStrip
               chips={specChips}
               onRemove={removeSpecStat}
               max={6}
-              onOverflow={() => setFiltersOpen(true)}
-              ariaLabel="Applied columns and filters"
+              ariaLabel="Extra columns"
             />
           </div>
 
@@ -608,11 +954,10 @@ export function ExplorerClient({
           </span>
         </div>
 
-        {/* Where the Filters drawer expands. It portals in here so it sits in
-            normal flow between the toolbar and the table — opening it grows the
-            card and pushes the table down, rather than covering it. Empty and
-            zero-height while closed. */}
-        <div id={TEAM_DRAWER_SLOT_ID} />
+        {/* The filter builder, on its own row directly under the search row.
+            It was a drawer that portalled into an empty div here; it is inline
+            now, so this is the component itself rather than a slot for it. */}
+        <TeamStatFilters previewCount={previewCount} />
         {/* Vertical bound is what makes the `sticky top-0 / top-6` header rows
             below actually stick. Without a height the wrapper never scrolls
             vertically — and since `overflow-x: auto` forces `overflow-y` to
@@ -694,20 +1039,19 @@ export function ExplorerClient({
                 <th className="sticky top-0 z-30 bg-paper-deep h-6 p-0 hidden sm:table-cell" />
                 {multiYear && <th className="sticky top-0 z-30 bg-paper-deep h-6 p-0" />}
                 <th className="sticky top-0 z-30 bg-paper-deep h-6 p-0" />
-                {P > 0 && (
-                  <th colSpan={P} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-coral text-center border-l border-hairline align-middle">
-                    Your columns
+                {bands.map((b) => (
+                  <th
+                    key={b.label}
+                    colSpan={b.span}
+                    className={cn(
+                      "sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em]",
+                      "font-semibold text-center border-l border-hairline align-middle",
+                      b.accent ? "text-coral" : "text-ink-muted",
+                    )}
+                  >
+                    {b.label}
                   </th>
-                )}
-                <th colSpan={RATING_COLS.length} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-ink-muted text-center border-l border-hairline align-middle">
-                  Ratings <span className="text-ink-muted/70">(ADJUSTED)</span>
-                </th>
-                <th colSpan={FOUR_FACTOR_COLS.length} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-coral text-center border-l border-hairline align-middle">
-                  Four Factors
-                </th>
-                <th colSpan={SHOOTING_COLS.length} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-ink-muted text-center border-l border-hairline align-middle">
-                  Shooting
-                </th>
+                ))}
               </tr>
               <tr>
                 <th ref={rankThRef} className="sticky top-6 left-0 z-40 w-12 min-w-12 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
@@ -732,7 +1076,13 @@ export function ExplorerClient({
                     title={c.title}
                     defaultDir={c.lowerBetter ? "asc" : "desc"}
                     basePath="/"
-                    defaultSort="a_net"
+                    // The EFFECTIVE sort, not the hardcoded site default.
+                    // SortableTh decides which header is "active" from the URL's
+                    // sort param falling back to this, and a view supplies its
+                    // own sort when the URL names none — so with a_net hardcoded
+                    // here, Roster Continuity sorted its rows by continuity while
+                    // marking NET as the active column.
+                    defaultSort={spec.sortBy}
                     idleArrows
                     className={cn(
                       "sticky top-6 z-30 bg-paper-deep border-b border-hairline",
@@ -881,17 +1231,22 @@ export function ExplorerClient({
       {/* Head-to-head compare modal — triggered from the "Click to compare
           teams" link in the Teams card header. Renders via a portal so it
           can sit on top of the page regardless of where the trigger lives. */}
-      <CompareTeamsModal
-        open={compareOpen}
-        onClose={() => setCompareOpen(false)}
-        teamsIndex={teamsIndex}
-        rowsByYear={rowsByYear}
-        loadYears={loadYears}
-        coachByTeamYear={coachByTeamYear}
-        tourneyFinishByTeamYear={tourneyFinishByTeamYear}
-      />
+      {/* Not rendered while the trigger is hidden — nothing can open it, and
+          mounting a modal nobody can reach costs its whole subtree on every
+          page load. */}
+      {SHOW_COMPARE && (
+        <CompareTeamsModal
+          open={compareOpen}
+          onClose={() => setCompareOpen(false)}
+          teamsIndex={teamsIndex}
+          rowsByYear={rowsByYear}
+          loadYears={loadYears}
+          coachByTeamYear={coachByTeamYear}
+          tourneyFinishByTeamYear={tourneyFinishByTeamYear}
+        />
+      )}
 
-      {showRankings && (
+      {SHOW_CONFERENCE_RANKINGS && showRankings && (
         <ConferenceRankingsModal
           rankings={conferenceRankings}
           years={[latestYear]}

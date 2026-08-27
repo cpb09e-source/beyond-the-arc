@@ -3,159 +3,156 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { SlidersHorizontal, X } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { roundNice, type RangeState } from "@/components/filters/range-row";
+import { buildStatChips, type StatChip } from "@/components/filters/stat-chips";
 import {
-  RangeRow, isBoundActive, roundNice,
-  type RangeStat, type RangeState,
-} from "@/components/filters/range-row";
-import { StatChipStrip, buildStatChips, type StatChip } from "@/components/filters/stat-chips";
-import { FilterGroup } from "@/components/filters/filter-group";
-import {
-  parseSpec, specToParams, teamStatColumn,
-  type StatFilter, type TeamFilterSpec, type TeamStatKey,
+  FILTER_COLUMNS, GROUP_LABEL, MAX_FILTERS, parseSpec, specToParams, teamStatColumn,
+  type Comparator, type StatFilter, type StatGroup, type TeamFilterSpec, type TeamStatKey,
 } from "@/lib/team-filters";
 
 /**
- * Stat-range drawer for the team explorer — the counterpart to
- * PlayerStatFilters, deliberately built to the same shape so the two pages read
- * as one product: a Filters trigger with an active count, an inline drawer of
- * grouped dual-thumb sliders, a find-a-stat box, a live match count,
- * Cancel/Submit.
+ * Stat-filter builder for the team explorer.
  *
- * It replaces a popover of "Where <stat> <operator> <value>" rows. Those could
- * express more (any comparator, the same stat twice) but asked the reader to
- * know the stat vocabulary before they could ask a question, and nothing about
- * them matched /players.
+ * ── WHY THIS IS A ROW BUILDER AND NOT A DRAWER OF SLIDERS ──────────────────
+ * It was seven groups of dual-thumb sliders, and before that a popover of
+ * "Where <stat> <operator> <value>" rows. The sliders replaced the rows because
+ * the rows "asked the reader to know the stat vocabulary before they could ask
+ * a question" — /calc's condition sheet won the same argument for the same
+ * reason: a sheet SHOWS what is available, a dropdown builder does not.
+ *
+ * That objection was correct, and it is answered here rather than ignored. The
+ * picker opens straight into a grouped, browsable list with the cursor already
+ * in the search box — you can scroll it like a menu or type like a search, so
+ * it shows what is available AND scales. What the slider drawer could not do is
+ * survive the stat count: 28 sliders fit in a panel, and the registry has 55
+ * today with roughly 45 more mapped. Nobody scrolls 100 sliders to find one.
+ *
+ * ── AND WHY THERE IS NO PANEL AT ALL NOW ───────────────────────────────────
+ * There was a "View & Filters" drawer around this: a trigger button, a header,
+ * an explanatory paragraph, an empty-state line, a scrim on phones. All of it
+ * existed to house 112 form controls. What it houses now is one button, so the
+ * chrome outweighed the content — a modal you open to press a single button is
+ * a worse version of the button. The builder lives in the toolbar, one row
+ * under the search box, and the rows appear in place as they are added.
+ *
+ * ── WHAT THE SLIDERS TAUGHT, AND HOW IT SURVIVES ───────────────────────────
+ * A slider labelled −30 to 30 tells you what a plausible aNET is; a bare value
+ * box does not, and that was the real loss. STAT_BOUNDS below is the measured
+ * table the sliders used — 1st/99th percentile of each stat across all 6,689
+ * team-seasons — and it now drives the value input's placeholder. Same lesson,
+ * no slider. A stat with no measured bounds simply gets a plain placeholder,
+ * which is the honest state until it is measured.
+ *
+ * ── FOUR COMPARATORS, NOT FIVE ─────────────────────────────────────────────
+ * >, ≥, ≤, < — exactly what the Comparator type and the URL already carry.
+ * Equality is deliberately absent: every stat here is a float, so `aNET = 25`
+ * matches nothing, and adding an operator that silently returns an empty table
+ * would be a worse answer than not offering it.
  *
  * Self-contained by design: it reads its own draft from the URL and on Submit
- * pushes `{ ...urlSpec, filters }`, preserving the scope params (seasons /
- * team / conference) that FilterBar owns and the sort/limit the table owns.
- * That's what lets the trigger live in the table toolbar while the scope
- * selects stay on the bar above.
- *
- * SLIDER BOUNDS ARE MEASURED, NOT GUESSED. Every min/max below was derived from
- * the 1st/99th percentile of that stat across all 6,689 team-seasons in
- * teams-all.json, then rounded outward to a round number. A slider whose range
- * is invented either wastes most of its travel on values no team ever posts, or
- * silently clips real ones.
+ * pushes `{ ...urlSpec, filters, cols }`, preserving the scope params (seasons
+ * / team / conference) that FilterBar owns and the sort/limit the table owns.
  */
 
-type RangeGroup = { label: string; stats: RangeStat[] };
-
-const RANGE_GROUPS_RAW: RangeGroup[] = [
-  {
-    label: "Ratings (adjusted)",
-    stats: [
-      { key: "a_net",    label: "aNET",  min: -30, max: 30,  step: 0.5 },
-      { key: "a_ortg",   label: "aORTG", min: 85,  max: 130, step: 0.5 },
-      { key: "a_drtg",   label: "aDRTG", min: 85,  max: 125, step: 0.5 },
-      { key: "adj_sos",  label: "SOS",   min: -15, max: 15,  step: 0.5 },
-      { key: "cbb_pace", label: "Pace",  min: 55,  max: 85,  step: 0.5 },
-    ],
-  },
-  {
-    label: "Four Factors",
-    stats: [
-      { key: "reb_diff_ct",  label: "REB Diff", min: -400, max: 400, step: 5 },
-      { key: "fg3m_diff_ct", label: "3PM Diff", min: -150, max: 150, step: 5 },
-      { key: "fbpts_diff",   label: "FBP Diff", min: -300, max: 300, step: 5 },
-      { key: "tov_diff_ct",  label: "TOV Diff", min: -200, max: 200, step: 5 },
-    ],
-  },
-  {
-    label: "Shooting",
-    stats: [
-      { key: "cbb_efg",     label: "eFG",      min: 35, max: 65, step: 0.5, pct: true },
-      { key: "cbb_fg3",     label: "3P",       min: 25, max: 45, step: 0.5, pct: true },
-      { key: "cbb_fg3rate", label: "3PAR", min: 15, max: 60, step: 0.5, pct: true },
-      { key: "cbb_ft",      label: "FT",       min: 55, max: 85, step: 0.5, pct: true },
-      { key: "cbb_ftarate", label: "FTAR", min: 15, max: 60, step: 0.5, pct: true },
-      { key: "cbb_ts",      label: "True shooting", min: 40, max: 65, step: 0.5, pct: true },
-    ],
-  },
-  {
-    label: "Defense",
-    stats: [
-      { key: "cbb_efg_def", label: "Opp eFG",  min: 35, max: 65, step: 0.5, pct: true },
-      { key: "cbb_fg3_def", label: "Opp 3P",   min: 25, max: 45, step: 0.5, pct: true },
-      { key: "cbb_tov_def", label: "Opp TOV",  min: 8,  max: 32, step: 0.5, pct: true },
-      { key: "cbb_orb_def", label: "Opp OREB", min: 15, max: 45, step: 0.5, pct: true },
-    ],
-  },
-  {
-    label: "Ball control",
-    stats: [
-      { key: "cbb_orb", label: "OREB", min: 12, max: 48, step: 0.5, pct: true },
-      { key: "cbb_tov", label: "TOV",  min: 8,  max: 30, step: 0.5, pct: true },
-      { key: "cbb_ast", label: "AST",  min: 30, max: 75, step: 0.5, pct: true },
-    ],
-  },
-  {
-    label: "Record",
-    stats: [
-      { key: "wins",   label: "Wins",   min: 0,   max: 40, step: 1 },
-      { key: "losses", label: "Losses", min: 0,   max: 40, step: 1 },
-      { key: "wab",    label: "Wins above bubble", min: -25, max: 15, step: 0.5 },
-    ],
-  },
-  {
-    label: "Other margins",
-    stats: [
-      { key: "pts_diff",  label: "Points Diff",      min: -600, max: 600, step: 10 },
-      { key: "pitp_diff", label: "Paint Pts Diff",   min: -500, max: 500, step: 5 },
-      { key: "scp_diff",  label: "2nd-Chance Diff",  min: -250, max: 250, step: 5 },
-    ],
-  },
-];
+// ---------------------------------------------------------------------------
+// Stat metadata
+// ---------------------------------------------------------------------------
 
 /**
- * "Wins above bubble" → "Wins Above Bubble", without wrecking the acronyms.
+ * Whether a stat is STORED as a fraction and READ as a percentage.
  *
- * A word is only capitalised when it is ENTIRELY lowercase. Anything already
- * carrying a capital is left exactly as written, which is what protects aNET,
- * aORTG, eFG, 3PA, FTA, REB and the rest. Same rule as the players drawer.
+ * Derived from the registry's own `format` rather than a second hand-kept list.
+ * That is safe because it was checked rather than assumed: every one of the 28
+ * stats the slider drawer carried an explicit `pct` flag for agrees with
+ * `format.startsWith("pct")`, and spot-reading teams-all.json confirms the rule
+ * holds for the other 27 (ts_pct 0.577, efg_pct 0.532, sos 0.599 — all
+ * fractions; ortg 117.4, wab 3.9, reb_diff 341 — all raw).
+ *
+ * Getting this wrong is not a cosmetic bug: a reader types 35 for eFG and we
+ * would store 35 instead of 0.35, and the table comes back empty.
  */
-function titleCase(label: string): string {
-  return label
-    .split(" ")
-    .map((w) => (w && w === w.toLowerCase() ? w.charAt(0).toUpperCase() + w.slice(1) : w))
-    .join(" ");
+function isPctStat(key: string): boolean {
+  return (teamStatColumn(key)?.format ?? "").startsWith("pct");
 }
 
-// Title-cased once here rather than in RangeRow, which /players also renders.
-const RANGE_GROUPS: RangeGroup[] = RANGE_GROUPS_RAW.map((g) => ({
-  ...g,
-  stats: g.stats.map((s) => ({ ...s, label: titleCase(s.label) })),
-}));
+/**
+ * Measured 1st/99th-percentile bounds, in DISPLAY units, rounded outward.
+ *
+ * Inherited wholesale from the slider drawer, where every pair was derived from
+ * the real distribution across 6,689 team-seasons. They no longer constrain
+ * anything — a reader may type any number — they only tell them what a normal
+ * one looks like.
+ *
+ * Only 28 of the 55 stats are covered, because only those had sliders. The rest
+ * are unmeasured, not zero: see the placeholder fallback in FilterRow.
+ */
+const STAT_BOUNDS: Record<string, [number, number]> = {
+  a_net: [-30, 30], a_ortg: [85, 130], a_drtg: [85, 125], adj_sos: [-15, 15],
+  cbb_pace: [55, 85],
+  reb_diff_ct: [-400, 400], fg3m_diff_ct: [-150, 150], fbpts_diff: [-300, 300],
+  tov_diff_ct: [-200, 200],
+  cbb_efg: [35, 65], cbb_fg3: [25, 45], cbb_fg3rate: [15, 60], cbb_ft: [55, 85],
+  cbb_ftarate: [15, 60], cbb_ts: [40, 65],
+  cbb_efg_def: [35, 65], cbb_fg3_def: [25, 45], cbb_tov_def: [8, 32],
+  cbb_orb_def: [15, 45],
+  cbb_orb: [12, 48], cbb_tov: [8, 30], cbb_ast: [30, 75],
+  wins: [0, 40], losses: [0, 40], wab: [-25, 15],
+  pts_diff: [-600, 600], pitp_diff: [-500, 500], scp_diff: [-250, 250],
+};
 
-const ALL_RANGE_STATS: RangeStat[] = RANGE_GROUPS.flatMap((g) => g.stats);
-const RANGE_BY_KEY = new Map(ALL_RANGE_STATS.map((s) => [s.key, s]));
+const OPS: Array<{ op: Comparator; symbol: string }> = [
+  { op: "gte", symbol: "≥" },
+  { op: "gt", symbol: ">" },
+  { op: "lte", symbol: "≤" },
+  { op: "lt", symbol: "<" },
+];
 
-// URL filters → per-stat {lo, hi} in display units.
-function filtersToRanges(filters: StatFilter[]): RangeState {
-  const out: RangeState = {};
-  for (const f of filters) {
-    const st = RANGE_BY_KEY.get(f.stat);
-    if (!st) continue;
-    const slot = (out[f.stat] ??= { lo: null, hi: null });
-    const disp = st.pct ? roundNice(f.value * 100) : f.value;
-    if (f.op === "gte" || f.op === "gt") slot.lo = disp;
-    else slot.hi = disp;
-  }
-  return out;
+/** Registry order, so the picker's sections read the way the registry is written. */
+const GROUP_ORDER: StatGroup[] = ["overall", "record", "roster", "scoring", "defense", "diffs"];
+
+// ---------------------------------------------------------------------------
+// Draft rows <-> URL filters
+// ---------------------------------------------------------------------------
+
+/**
+ * One row being edited.
+ *
+ * `value` is a STRING, not a number, and that is what makes the row typable: a
+ * number-typed draft cannot hold "-", "0." or "" without either rejecting the
+ * keystroke or collapsing to 0 mid-entry. It converts on submit, and a row that
+ * has not reached a finite number yet is simply not part of the query.
+ *
+ * `id` exists because two rows may carry the same stat — "aNET ≥ 10 and
+ * aNET ≤ 20" is the ordinary way to express a band now that ranges are gone —
+ * so the stat key cannot be the React key.
+ */
+type DraftRow = { id: number; stat: TeamStatKey; op: Comparator; value: string };
+
+let nextRowId = 1;
+
+function filtersToRows(filters: StatFilter[]): DraftRow[] {
+  return filters.map((f) => ({
+    id: nextRowId++,
+    stat: f.stat,
+    op: f.op,
+    // Back into display units. roundNice kills the float dust that would
+    // otherwise show a reader "35.00000000000001" in the box they typed 35 in.
+    value: String(isPctStat(f.stat) ? roundNice(f.value * 100) : f.value),
+  }));
 }
-// Per-stat {lo, hi} → URL filters, skipping untouched extremes.
-function rangesToFilters(state: RangeState): StatFilter[] {
+
+function rowsToFilters(rows: DraftRow[]): StatFilter[] {
   const out: StatFilter[] = [];
-  for (const st of ALL_RANGE_STATS) {
-    const b = state[st.key];
-    if (!b) continue;
-    if (b.lo !== null) out.push({ stat: st.key as TeamStatKey, op: "gte", value: st.pct ? roundNice(b.lo / 100) : b.lo });
-    if (b.hi !== null) out.push({ stat: st.key as TeamStatKey, op: "lte", value: st.pct ? roundNice(b.hi / 100) : b.hi });
+  for (const r of rows) {
+    const n = Number(r.value);
+    if (r.value.trim() === "" || !Number.isFinite(n)) continue;
+    out.push({ stat: r.stat, op: r.op, value: isPctStat(r.stat) ? roundNice(n / 100) : n });
   }
   return out;
 }
+
 function sameFilterSet(a: StatFilter[], b: StatFilter[]): boolean {
   if (a.length !== b.length) return false;
   const key = (f: StatFilter) => `${f.stat}.${f.op}.${f.value}`;
@@ -164,35 +161,37 @@ function sameFilterSet(a: StatFilter[], b: StatFilter[]): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Selection chips
+// Selection chips (toolbar only — the builder shows its own rows)
 // ---------------------------------------------------------------------------
-// The same strip /players carries, built the same way: in the toolbar off the
-// committed URL, in the panel header off the working draft.
-//
-// Labels come from TEAM_STAT_COLUMNS rather than the slider's own, so a chip
-// matches the column header it put in the table — "WAB", not "Wins above
-// bubble"; "TS%", not "True shooting".
-const CHIP_ORDER = ALL_RANGE_STATS.map((s) => s.key);
-const chipLabel = (key: string) =>
-  teamStatColumn(key)?.label ?? RANGE_BY_KEY.get(key)?.label ?? key;
-
-export function teamStatChips(cols: readonly string[], ranges: RangeState): StatChip[] {
-  return buildStatChips(cols, ranges, CHIP_ORDER, chipLabel);
-}
-
-/** Same chips, built from a committed spec rather than a live range draft. */
-export function teamStatChipsFromSpec(cols: readonly string[], filters: StatFilter[]): StatChip[] {
-  return teamStatChips(cols, filtersToRanges(filters));
-}
 
 /**
- * Where the page puts the drawer, and what the trigger points `aria-controls`
- * at. The page renders an empty div with this id directly beneath the toolbar
- * row; the panel portals into it so it expands the card in normal flow.
+ * Filters → the {lo, hi} shape the chip builder speaks.
+ *
+ * Keyed off the registry rather than the old 28-stat slider table: that table
+ * was the existence check as well as the pct lookup, so a filter on any of the
+ * other 27 stats produced no chip at all — applied, counted, invisible.
  */
-export const TEAM_DRAWER_SLOT_ID = "team-filters-slot";
-const DRAWER_PANEL_ID = "team-filters-panel";
-const SEARCH_LIST_ID = "team-filters-find";
+function filtersToRanges(filters: StatFilter[]): RangeState {
+  const out: RangeState = {};
+  for (const f of filters) {
+    if (!teamStatColumn(f.stat)) continue;
+    const slot = (out[f.stat] ??= { lo: null, hi: null });
+    const disp = isPctStat(f.stat) ? roundNice(f.value * 100) : f.value;
+    if (f.op === "gte" || f.op === "gt") slot.lo = disp;
+    else slot.hi = disp;
+  }
+  return out;
+}
+
+const CHIP_ORDER = FILTER_COLUMNS.map((c) => c.key);
+const chipLabel = (key: string) => teamStatColumn(key)?.label ?? key;
+
+/** Chips for the toolbar, built from the committed spec. */
+export function teamStatChipsFromSpec(cols: readonly string[], filters: StatFilter[]): StatChip[] {
+  return buildStatChips(cols, filtersToRanges(filters), CHIP_ORDER, chipLabel);
+}
+
+const PICKER_LIST_ID = "team-filters-picker";
 
 /** Magnifier, matching the one on the table's own search box. */
 function SearchGlass({ className }: { className?: string }) {
@@ -203,26 +202,381 @@ function SearchGlass({ className }: { className?: string }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Stat picker
+// ---------------------------------------------------------------------------
+
+type PickOption = { key: string; label: string; desc: string; group: StatGroup };
+
+const PICK_OPTIONS: PickOption[] = GROUP_ORDER.flatMap((g) =>
+  FILTER_COLUMNS.filter((c) => c.group === g).map((c) => ({
+    key: c.key, label: c.label, desc: c.desc, group: c.group,
+  })),
+);
+
+/**
+ * The "Add a Filter" popover: browse by section, or type to narrow.
+ *
+ * OPENS FOCUSED, WITH EVERYTHING SHOWING. Both halves matter and they are the
+ * whole reason this can replace a sheet of sliders. Focused, because the reader
+ * who knows they want Opp OREB should never touch the mouse again. Everything
+ * showing, because the reader who does not know what is available needs to be
+ * able to read the list — an empty box that only reveals options once you guess
+ * a prefix is the failure mode that sank the last dropdown builder.
+ *
+ * Search matches LABEL AND DESCRIPTION, so "rebound" finds OREB% and "bubble"
+ * finds WAB. Label matches sort first, so typing an exact abbreviation still
+ * puts it at the top.
+ */
+function StatPicker({
+  onPick,
+  disabled,
+  open,
+  setOpen,
+}: {
+  onPick: (key: TeamStatKey) => void;
+  disabled?: boolean;
+  /**
+   * OWNED BY THE PARENT, because a filter row can reopen this. Pressing Enter
+   * in a value box means "that one's done, give me the next" — so the row has
+   * to be able to raise the picker, and the picker cannot be the only thing
+   * that knows whether it is up.
+   */
+  open: boolean;
+  setOpen: (v: boolean) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [hi, setHi] = useState(0);
+  /** Viewport coords of the trigger, for the portalled popover. */
+  const [at, setAt] = useState<{ left: number; top: number } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * THE POPOVER IS PORTALLED TO document.body, AND IT HAS TO BE.
+   *
+   * It sits inside the table card, which establishes an overflow context for
+   * the sticky column headers below it. Any absolutely-positioned child is
+   * cropped to that box — the first build of this rendered exactly one visible
+   * option and a stray scrollbar. Fixed positioning off the trigger's own rect
+   * sidesteps the ancestor entirely, at the cost of a reposition on scroll and
+   * resize below.
+   */
+  const place = useCallback(() => {
+    const r = wrapRef.current?.getBoundingClientRect();
+    if (!r) return;
+    // Flip above the trigger when there is not room beneath it. 340 is the
+    // popover's own worst-case height (list + search row + padding).
+    const below = window.innerHeight - r.bottom;
+    setAt({
+      left: Math.min(r.left, window.innerWidth - 336),
+      top: below < 340 && r.top > 340 ? r.top - 346 : r.bottom + 6,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    inputRef.current?.focus();
+    // `true` to catch scrolls on inner containers, which do not bubble a
+    // scroll event to window.
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, place]);
+
+  // Click-away and Escape. The popover is no longer a DOM descendant of the
+  // trigger, so the away-test has to clear BOTH nodes or every click inside the
+  // list would close the thing it clicked in.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (wrapRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.stopPropagation(); setOpen(false); }
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey, true);
+    };
+  }, [open, setOpen]);
+
+  const matches = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return PICK_OPTIONS;
+    return PICK_OPTIONS.filter(
+      (o) => o.label.toLowerCase().includes(needle) || o.desc.toLowerCase().includes(needle),
+    ).sort((a, b) => {
+      const ai = a.label.toLowerCase().indexOf(needle);
+      const bi = b.label.toLowerCase().indexOf(needle);
+      // -1 (matched on description only) sorts after every label match.
+      const an = ai < 0 ? 999 : ai;
+      const bn = bi < 0 ? 999 : bi;
+      return an - bn || a.label.localeCompare(b.label);
+    });
+  }, [q]);
+
+  // Clamp during render — a shrinking list must never leave the highlight past
+  // the end, which would make Enter do nothing.
+  const hiSafe = matches.length ? Math.min(hi, matches.length - 1) : 0;
+
+  // Keep the highlighted row in view while arrowing through 55 options.
+  useEffect(() => {
+    if (!open) return;
+    listRef.current
+      ?.querySelector(`[data-idx="${hiSafe}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [hiSafe, open]);
+
+  const pick = (o: PickOption) => {
+    onPick(o.key as TeamStatKey);
+    // CLOSE ON PICK, even though "add three in a row" is the common case and
+    // staying open would save a click. It cannot stay open: picking a stat
+    // moves the caret to that row's value box, so a popover left open floats
+    // over the field the reader was just sent to and steals the next click.
+    // Two focused things at once is worse than one extra click, and the
+    // "Add a Filter" button sits right beside the rows for the next one.
+    setQ("");
+    setHi(0);
+    setOpen(false);
+  };
+
+  const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setHi((h) => Math.min(h + 1, matches.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
+    else if (e.key === "Enter" && matches[hiSafe]) { e.preventDefault(); pick(matches[hiSafe]!); }
+  };
+
+  // Section headers render only while browsing. Under a search the list is
+  // ranked by match quality, so group headings would break the order into
+  // fragments that no longer mean anything.
+  const grouped = q.trim() === "";
+
+  return (
+    <div className="relative" ref={wrapRef}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        disabled={disabled}
+        aria-expanded={open}
+        aria-controls={PICKER_LIST_ID}
+        className={cn(
+          "inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-dashed text-sm font-medium transition-colors whitespace-nowrap",
+          disabled
+            ? "border-ink/10 text-ink-muted/60 cursor-not-allowed"
+            : "border-coral/40 text-coral hover:bg-coral/6 hover:border-coral/60",
+        )}
+      >
+        <Plus size={15} />
+        Add a Filter
+      </button>
+
+      {open && at && typeof document !== "undefined" && createPortal(
+        <div
+          ref={popRef}
+          style={{ position: "fixed", left: at.left, top: at.top }}
+          className="z-60 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-hairline bg-popover shadow-xl overflow-hidden"
+        >
+          <div className="relative border-b border-hairline">
+            <SearchGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={q}
+              onChange={(e) => { setQ(e.target.value); setHi(0); }}
+              onKeyDown={onKey}
+              placeholder="Search stats…"
+              aria-label="Search stats"
+              role="combobox"
+              aria-expanded
+              aria-controls={PICKER_LIST_ID}
+              aria-autocomplete="list"
+              className="h-10 w-full pl-9 pr-3 bg-transparent text-ink text-sm placeholder:text-ink-muted focus:outline-none"
+            />
+          </div>
+
+          <div id={PICKER_LIST_ID} role="listbox" ref={listRef} className="max-h-72 overflow-y-auto py-1">
+            {matches.length === 0 && (
+              <p className="px-3 py-6 text-center text-sm text-ink-muted">No stat matches “{q.trim()}”.</p>
+            )}
+            {matches.map((o, i) => {
+              const first = grouped && (i === 0 || matches[i - 1]!.group !== o.group);
+              return (
+                <div key={o.key}>
+                  {first && (
+                    <div className="px-3 pt-2.5 pb-1 text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">
+                      {GROUP_LABEL[o.group]}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    role="option"
+                    data-idx={i}
+                    aria-selected={i === hiSafe}
+                    // onMouseDown, not onClick: the input keeps focus so the
+                    // next stat can be typed straight away.
+                    onMouseDown={(e) => { e.preventDefault(); pick(o); }}
+                    onMouseEnter={() => setHi(i)}
+                    title={o.desc}
+                    className={cn(
+                      "w-full text-left px-3 py-1.5 text-sm transition-colors",
+                      i === hiSafe ? "bg-coral/10 text-ink" : "text-ink-soft hover:bg-paper-deep",
+                    )}
+                  >
+                    <span className="truncate">{o.label}</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// One filter row
+// ---------------------------------------------------------------------------
+
+function FilterRow({
+  row,
+  autoFocus,
+  onChange,
+  onRemove,
+  onNext,
+}: {
+  row: DraftRow;
+  autoFocus: boolean;
+  onChange: (id: number, patch: Partial<DraftRow>) => void;
+  onRemove: (id: number) => void;
+  /** Enter in the value box: this row is finished, open the picker again. */
+  onNext: () => void;
+}) {
+  const col = teamStatColumn(row.stat);
+  const bounds = STAT_BOUNDS[row.stat];
+  const pct = isPctStat(row.stat);
+  const valueRef = useRef<HTMLInputElement>(null);
+
+  // The row is created by picking a stat, so the only thing left to do is type
+  // a number — land the caret there rather than making the reader aim for it.
+  useEffect(() => {
+    if (autoFocus) valueRef.current?.focus();
+  }, [autoFocus]);
+
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      <span
+        title={col?.desc}
+        className="h-8 px-2.5 inline-flex items-center rounded-md border border-hairline bg-paper-deep/60 text-sm font-medium text-ink whitespace-nowrap cursor-default"
+      >
+        {col?.label ?? row.stat}
+      </span>
+
+      <select
+        value={row.op}
+        onChange={(e) => onChange(row.id, { op: e.target.value as Comparator })}
+        aria-label={`Comparison for ${col?.label ?? row.stat}`}
+        className="h-8 w-14 shrink-0 px-1 rounded-md border border-ink/15 bg-card text-ink text-sm text-center focus:outline-none focus:ring-2 focus:ring-coral/40"
+      >
+        {OPS.map((o) => (
+          <option key={o.op} value={o.op}>{o.symbol}</option>
+        ))}
+      </select>
+
+      {/* SIZED TO THE VALUE, NOT TO THE PLACEHOLDER. Almost everything typed
+          here is two or three digits — "70", "19", "43" — and the widest
+          realistic entry is five characters ("-242", "130.5"). At w-24 the box
+          was mostly empty, and five filters of mostly-empty box is a row that
+          runs off the side of the card. */}
+      <div className="relative w-16 shrink-0">
+        <input
+          ref={valueRef}
+          // `inputMode` rather than `type="number"`: a number input swallows a
+          // lone "-" and hijacks the scroll wheel over the field, both of which
+          // bite on a table you scroll past.
+          type="text"
+          inputMode="decimal"
+          value={row.value}
+          onChange={(e) => onChange(row.id, { value: e.target.value })}
+          // Enter chains straight into the next filter rather than submitting.
+          // Picking a stat and typing a number is one motion repeated, so the
+          // keyboard path has to complete the loop — otherwise every filter
+          // after the first costs a reach for the mouse. Submit is still a
+          // deliberate click; nothing here applies anything to the table.
+          onKeyDown={(e) => {
+            if (e.key === "Enter") { e.preventDefault(); onNext(); }
+          }}
+          // An en dash rather than " to ": same information, four fewer
+          // characters, which is the difference between the hint fitting and
+          // being clipped now that the box is narrower.
+          placeholder={bounds ? `${bounds[0]}–${bounds[1]}` : "Value"}
+          aria-label={`Value for ${col?.label ?? row.stat}`}
+          className={cn(
+            "h-8 w-full px-2 rounded-md border border-ink/15 bg-card text-ink text-sm tabular",
+            "placeholder:text-ink-muted placeholder:text-[0.68rem]",
+            "focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40",
+            pct && "pr-5",
+          )}
+        />
+        {pct && (
+          <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-ink-muted pointer-events-none">%</span>
+        )}
+      </div>
+
+      {/* A bin rather than a cross. An × between two filter rows reads as a
+          separator as easily as a control — which is what it looked like next
+          to the "×" the chips use for the same job — and this one deletes a
+          row the reader built rather than dismissing something. */}
+      <button
+        type="button"
+        onClick={() => onRemove(row.id)}
+        aria-label={`Delete ${col?.label ?? row.stat} filter`}
+        title="Delete this filter"
+        // MUTED RED AT REST, full on hover. The bin is the only destructive
+        // control in the row, and leaving it the same grey as the "%" suffix
+        // made it read as decoration; --bad rather than the coral accent
+        // because coral means "this is yours / this is active" everywhere else
+        // on the page, and it cannot also mean "this deletes something".
+        //
+        // -ml-1 eats most of the row's gap-1.5. A 24px box around a 14px icon
+        // put ~11px between the value box and the bin, which was enough to
+        // read as belonging to the NEXT filter rather than to this one.
+        className={cn(
+          "shrink-0 w-5 h-8 -ml-1 inline-flex items-center justify-center rounded-md transition-colors",
+          "text-bad/75 hover:text-bad hover:bg-bad/8",
+        )}
+      >
+        <Trash2 size={14} />
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The builder row
+// ---------------------------------------------------------------------------
+
 export function TeamStatFilters({
   previewCount,
-  open: openProp,
-  onOpenChange,
 }: {
-  /** Runs the live pipeline against the working draft for the footer total. */
+  /** Runs the live pipeline against the working draft for the match total. */
   previewCount?: (filters: StatFilter[]) => number;
-  /** Optional control, so the toolbar's "+N more" chip can open the panel. */
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
 }) {
   const router = useRouter();
   const search = useSearchParams();
   const [, startTransition] = useTransition();
-  const [openLocal, setOpenLocal] = useState(false);
-  const open = openProp ?? openLocal;
-  const setOpen = useCallback(
-    (v: boolean) => { if (onOpenChange) onOpenChange(v); else setOpenLocal(v); },
-    [onOpenChange],
-  );
 
   const params = useMemo(() => {
     const obj: Record<string, string> = {};
@@ -231,400 +585,143 @@ export function TeamStatFilters({
   }, [search]);
   const urlSpec: TeamFilterSpec = useMemo(() => parseSpec(params), [params]);
 
-  const [draft, setDraft] = useState<RangeState>(() => filtersToRanges(urlSpec.filters));
-  // Pinned columns, kept as an ordered list so the table renders them in the
-  // order they were picked rather than in RANGE_GROUPS order.
+  const [rows, setRows] = useState<DraftRow[]>(() => filtersToRows(urlSpec.filters));
+  /** Pinned columns, ordered as picked so the table renders them that way. */
   const [pins, setPins] = useState<string[]>(() => urlSpec.cols);
+  /** The row that just appeared, so exactly one input claims the caret. */
+  const [freshId, setFreshId] = useState<number | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Resync the draft when the committed URL changes underneath us — a back
+  // button, or the toolbar chip strip dropping a stat. Keyed on `search` rather
+  // than urlSpec so it fires once per navigation, not once per re-parse.
   useEffect(() => {
-    setDraft(filtersToRanges(urlSpec.filters));
+    /* eslint-disable-next-line react-hooks/set-state-in-effect --
+       Deliberate: this IS the external system sync the rule is about. The URL
+       is the source of truth and the draft mirrors it; there is nothing to
+       cascade into, because both setters land in the same commit. */
+    setRows(filtersToRows(urlSpec.filters));
     setPins(urlSpec.cols);
-    /* eslint-disable-next-line */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  // Escape still closes. Body scroll is NOT locked any more — this is an inline
-  // drawer, not a modal, so the page behind it is not "behind" anything and
-  // freezing it would strand a reader who opened the drawer halfway down the
-  // table.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, setOpen]);
-
-  /**
-   * NO SCROLL ANCHORING. This used to scrollIntoView the panel on open and
-   * the trigger on close, because the drawer expanded inline and could open
-   * off-screen. Below md it is now a modal over a frozen page, so there is
-   * nothing to scroll to — and the old close-side scroll actively hurt: it
-   * moved you away from wherever you had scrolled to before opening it.
-   */
-  const triggerRef = useRef<HTMLDivElement>(null);
-
-
-  // The drawer renders into a slot the page puts directly under the toolbar, so
-  // it expands the card and pushes the table down instead of floating over it.
-  // A portal rather than rendering in place because the trigger sits inside a
-  // nested flex group in the toolbar — a full-width panel there would be
-  // trapped in that group's width.
-  //
-  // The lookup happens at RENDER time behind a mounted flag rather than being
-  // captured into state by an effect: this component re-mounts on navigation,
-  // and an effect that misses the slot — or holds a node from a previous mount
-  // — leaves nothing to portal into, with no error to show for it.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    // Flipping a mounted flag once is the standard way to defer a DOM read past
-    // hydration; there is nothing here to cascade into.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMounted(true);
+  const addRow = useCallback((stat: TeamStatKey) => {
+    const id = nextRowId++;
+    setRows((r) => (r.length >= MAX_FILTERS ? r : [...r, { id, stat, op: "gte", value: "" }]));
+    // Filtering on a stat auto-pins it as a column. Filtering on something you
+    // then cannot see in the table is the worst version of this panel — you get
+    // a list of teams and no way to check why they qualified.
+    setPins((p) => (p.includes(stat) ? p : [...p, stat]));
+    setFreshId(id);
   }, []);
-  const slot = mounted && typeof document !== "undefined"
-    ? document.getElementById(TEAM_DRAWER_SLOT_ID)
-    : null;
 
-  // Stable so memoized RangeRows don't re-render on every drag tick.
-  const setBound = useCallback(
-    (key: string, lo: number | null, hi: number | null) => {
-      setDraft((d) => ({ ...d, [key]: { lo, hi } }));
-      // Narrowing a stat auto-pins it as a column. Filtering on something you
-      // then can't see in the table is the worst version of this drawer —
-      // you'd have a list of teams and no way to check why they qualified.
-      // Untick still works; the tick just stops being a separate chore.
-      if (lo !== null || hi !== null) {
-        setPins((p) => (p.includes(key) ? p : [...p, key]));
+  /** Enter in a value box. Never opens the picker past the cap. */
+  const nextFilter = useCallback(() => {
+    setRows((r) => { if (r.length < MAX_FILTERS) setPickerOpen(true); return r; });
+  }, []);
+
+  const patchRow = useCallback((id: number, patch: Partial<DraftRow>) => {
+    setRows((r) => r.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    setFreshId(null);
+  }, []);
+
+  const removeRow = useCallback((id: number) => {
+    setRows((r) => {
+      const gone = r.find((x) => x.id === id);
+      const next = r.filter((x) => x.id !== id);
+      // Unpin only when the stat has no other row left. A band expressed as two
+      // rows must not lose its column when one half is deleted.
+      if (gone && !next.some((x) => x.stat === gone.stat)) {
+        setPins((p) => p.filter((k) => k !== gone.stat));
       }
-    },
-    [],
-  );
-  const togglePin = useCallback(
-    (key: string) => setPins((p) => (p.includes(key) ? p.filter((k) => k !== key) : [...p, key])),
-    [],
-  );
-  const clearAll = () => { setDraft({}); setPins([]); };
-  // Chip X — drop the stat wholesale: unpin the column AND release its bounds.
-  // Splitting those into two gestures would mean two clicks to undo one pick,
-  // since narrowing a slider auto-pins.
-  const removeStat = useCallback((key: string) => {
-    setPins((p) => p.filter((k) => k !== key));
-    setDraft((d) => {
-      if (!(key in d)) return d;
-      const next = { ...d };
-      delete next[key];
       return next;
     });
   }, []);
 
-  // Uncapped here — the panel is where the full picture belongs.
-  const chips = useMemo(() => teamStatChips(pins, draft), [pins, draft]);
+  const draftFilters = useMemo(() => rowsToFilters(rows), [rows]);
 
-  // ---- Jump-to-field search -------------------------------------------------
-  //
-  // Seven groups of sliders is a lot to hunt through when you already know you
-  // want Opp OREB. Type, pick, and the field is added as a column; the box
-  // empties itself so the next one is just more typing. Every team range stat
-  // maps to a real column (unlike /players, where the shot-profile stats are
-  // filter-only), so there is nothing to exclude here.
-  const [q, setQ] = useState("");
-  const [hi, setHi] = useState(0);
-  const fieldMatches = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return [] as RangeStat[];
-    return ALL_RANGE_STATS
-      .filter((s) => s.label.toLowerCase().includes(needle))
-      // Label-start matches first: typing "opp" should offer "Opp eFG" before
-      // whatever the group order happens to be.
-      .sort((a, b) => {
-        const ai = a.label.toLowerCase().indexOf(needle);
-        const bi = b.label.toLowerCase().indexOf(needle);
-        return ai - bi || a.label.localeCompare(b.label);
-      })
-      .slice(0, 8);
-  }, [q]);
-  // Clamp during render — a shrinking list must never leave the highlight
-  // pointing past the end, which would make Enter do nothing.
-  const hiSafe = fieldMatches.length ? Math.min(hi, fieldMatches.length - 1) : 0;
-
-  const pickField = (st: RangeStat) => {
-    setPins((p) => (p.includes(st.key) ? p : [...p, st.key]));
-    setQ("");
-    setHi(0);
-  };
-
-  const onSearchKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!fieldMatches.length) return;
-    if (e.key === "ArrowDown") { e.preventDefault(); setHi((h) => Math.min(h + 1, fieldMatches.length - 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
-    else if (e.key === "Enter") { e.preventDefault(); pickField(fieldMatches[hiSafe]!); }
-    else if (e.key === "Escape") {
-      // Clear the search first; only a second Escape closes the drawer, so
-      // abandoning a search doesn't throw away the whole panel.
-      e.preventDefault();
-      e.stopPropagation();
-      setQ("");
-    }
-  };
-
-  const draftFilters = useMemo(() => rangesToFilters(draft), [draft]);
   const samePins =
     pins.length === urlSpec.cols.length && pins.every((k, i) => k === urlSpec.cols[i]);
-  // Submit enables on EITHER change — pinning a column with no bounds set is a
+  // Submit enables on EITHER change — pinning a column with no bound set is a
   // legitimate submit, and gating on filters alone left the button dead.
   const dirty = !sameFilterSet(draftFilters, urlSpec.filters) || !samePins;
-  // The match total is computed inline on every change, so it tracks the
-  // thumb rather than trailing it. That is only affordable because
-  // processTeams/applySpec now reuse a cached, fully-shaped cohort instead of
-  // rebuilding every row from raw per call: measured at 5.4ms a tick over the
-  // widest selection (all 13 seasons, 6,689 team-seasons) against a 16.7ms
-  // frame. Before the cache this same work cost ~22ms and had to be debounced
-  // out of the drag path entirely.
-  const previewFilters = draftFilters;
+
+  // The match total is computed inline on every change so it tracks the typing
+  // rather than trailing it. Affordable because processTeams reuses a cached,
+  // fully-shaped cohort: measured at 5.4ms over the widest selection (all 13
+  // seasons, 6,689 team-seasons) against a 16.7ms frame.
   const matches = useMemo(
-    () => (previewCount ? previewCount(previewFilters) : null),
-    [previewCount, previewFilters],
+    () => (previewCount ? previewCount(draftFilters) : null),
+    [previewCount, draftFilters],
   );
 
-  const activeDraft = ALL_RANGE_STATS.reduce((n, s) => n + (isBoundActive(draft[s.key]) ? 1 : 0), 0);
-  const committed = useMemo(() => filtersToRanges(urlSpec.filters), [urlSpec.filters]);
-  const activeCommitted = ALL_RANGE_STATS.reduce((n, s) => n + (isBoundActive(committed[s.key]) ? 1 : 0), 0);
+  const atCap = rows.length >= MAX_FILTERS;
 
   const submit = () => {
     const p = specToParams({ ...urlSpec, filters: draftFilters, cols: pins as TeamStatKey[] }).toString();
     startTransition(() => router.replace(p ? `/?${p}` : "/", { scroll: false }));
-    setOpen(false);
   };
 
-
-  // A modal over the page must freeze the page. Below md only: at md+ this is
-  // still an inline drawer and the page behind it is the point.
-  useEffect(() => {
-    if (!open) return;
-    const phone = window.matchMedia("(max-width: 47.99rem)");
-    if (!phone.matches) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
-  }, [open]);
-
-  const panel = (
-    <>
-      {/* PHONE: a scrim, so the panel reads as over the page rather than
-          as part of it. Tapping it closes, same as the X. */}
-      {open && (
-        <div
-          className="md:hidden fixed inset-0 z-40 bg-ink/40 bta-backdrop-in"
-          onClick={() => setOpen(false)}
-          aria-hidden
-        />
-      )}
-      <div className={cn(
-        // md+: the inline drawer, unchanged. Below md: a full-screen sheet,
-        // which is what kills the anchoring problem outright — a panel that
-        // covers the viewport never needs the page scrolled to reach it.
-        "bta-sheet md:border-b md:border-hairline md:bg-paper-deep/20",
-        open && "is-open",
-        // Starts BELOW the header, not at the top of the screen: the header
-        // stays visible through the scrim, so the panel reads as something
-        // over this page rather than as a new screen. top-16 is the header's
-        // own height — the same anchor the search sheet uses.
-        "max-md:fixed max-md:inset-x-0 max-md:top-16 max-md:bottom-0 max-md:z-50 max-md:bg-card max-md:border-t max-md:border-hairline",
-        !open && "max-md:hidden",
-      )}>
-      <div className="max-md:flex max-md:flex-col max-md:h-full">
-        <div id={DRAWER_PANEL_ID} role="region" aria-label="Stat filters" className="flex flex-col max-md:flex-1 max-md:min-h-0">
-          {/* Header */}
-          <div className="flex items-start justify-between gap-3 px-4 lg:px-5 pt-4 pb-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center flex-wrap gap-2 min-h-6">
-                <h3 className="text-base font-semibold text-ink leading-none">View &amp; Filters</h3>
-                {activeDraft > 0 && (
-                  <span className="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-coral text-white text-[0.62rem] font-bold tabular">{activeDraft}</span>
-                )}
-                {chips.length > 0 && (
-                  <button type="button" onClick={clearAll} className="text-xs text-ink-muted hover:text-coral transition-colors">Clear all</button>
-                )}
-                {/* Everything picked, right where you picked it — a stat added
-                    by tick or by the find box lands here immediately. */}
-                <StatChipStrip chips={chips} onRemove={removeStat} ariaLabel="Selected columns and filters" />
-              </div>
-              <p className="mt-1.5 text-xs text-ink-muted leading-snug">
-                Tick a stat name to add it as a column, and/or drag a slider to narrow the field. Then Submit.
-              </p>
-
-              {/* Jump to a field by name. */}
-              <div className="relative mt-3 max-w-80">
-                <SearchGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" />
-                <input
-                  type="text"
-                  value={q}
-                  onChange={(e) => { setQ(e.target.value); setHi(0); }}
-                  onKeyDown={onSearchKey}
-                  placeholder="Find a stat…"
-                  aria-label="Find a stat and add it as a column"
-                  aria-expanded={fieldMatches.length > 0}
-                  aria-controls={SEARCH_LIST_ID}
-                  aria-autocomplete="list"
-                  aria-activedescendant={fieldMatches[hiSafe] ? `${SEARCH_LIST_ID}-${fieldMatches[hiSafe]!.key}` : undefined}
-                  role="combobox"
-                  className="h-8 w-full pl-8 pr-7 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
-                />
-                {q && (
-                  <button
-                    type="button"
-                    onClick={() => { setQ(""); setHi(0); }}
-                    aria-label="Clear stat search"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 inline-flex items-center justify-center rounded text-ink-muted hover:text-coral hover:bg-paper-deep"
-                  >
-                    ×
-                  </button>
-                )}
-                {fieldMatches.length > 0 && (
-                  <ul
-                    id={SEARCH_LIST_ID}
-                    role="listbox"
-                    className="absolute left-0 right-0 top-9 z-20 rounded-md border border-hairline bg-popover shadow-lg overflow-hidden py-1"
-                  >
-                    {fieldMatches.map((st, i) => {
-                      const already = pins.includes(st.key);
-                      return (
-                        <li key={st.key}>
-                          <button
-                            type="button"
-                            id={`${SEARCH_LIST_ID}-${st.key}`}
-                            role="option"
-                            aria-selected={i === hiSafe}
-                            // onMouseDown, not onClick: the input keeps focus so
-                            // the next field can be typed straight away.
-                            onMouseDown={(e) => { e.preventDefault(); pickField(st); }}
-                            onMouseEnter={() => setHi(i)}
-                            className={cn(
-                              "w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 transition-colors",
-                              i === hiSafe ? "bg-coral/10 text-ink" : "text-ink-soft hover:bg-paper-deep",
-                            )}
-                          >
-                            <span className="truncate">{st.label}</span>
-                            {already && (
-                              <span className="ml-auto text-[0.62rem] text-ink-muted shrink-0">added</span>
-                            )}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Close filters"
-              className="shrink-0 w-8 h-8 -mr-1 inline-flex items-center justify-center rounded-md text-ink-muted hover:text-ink hover:bg-paper-deep transition-colors"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          {/* Body. Capped so a drawer opened on a long table cannot push the
-              results entirely off the screen; it scrolls past that. */}
-          {/* Natural order now. The old `order-last` lifted the action bar
-              above this region because the drawer expanded inline and the bar
-              could otherwise land mid-screen; the sheet pins it to the foot of
-              a fixed-height column instead. */}
-          <div className="max-md:flex-1 max-md:min-h-0 max-md:max-h-none md:max-h-[60vh] overflow-y-auto px-4 lg:px-5 pb-5 space-y-6">
-            {RANGE_GROUPS.map((g) => {
-              const gc = g.stats.reduce((n, s) => n + (isBoundActive(draft[s.key]) ? 1 : 0), 0);
-              return (
-                // CSS containment. Without it, changing one slider re-styles and
-                // re-lays-out the whole panel — 112 form controls across seven groups —
-                // on every tick of a drag. Measured alternating, warm: p90 25ms with ~4
-                // dropped frames a drag, against 16.8ms and ~1.5 once each group is
-                // contained. Safe here because a group holds only static rows; nothing
-                // inside is sticky or absolutely positioned against an outer ancestor.
-                <FilterGroup key={g.label} label={g.label} count={gc}>
-                  {/* Two up on phones. Seven groups of one-per-row meant the
-                      panel was mostly scroll: aNET to the Wins group was five
-                      screens. The row goes dense below sm so a half-width cell
-                      can hold it — see RangeRow's `dense`. Column gap tightens
-                      to match; gap-x-6 between two 180px cells is 13% of the
-                      viewport spent on nothing. */}
-                  <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-3 sm:gap-x-6 gap-y-4">
-                    {g.stats.map((st) => (
-                      <RangeRow
-                        key={st.key}
-                        st={st}
-                        lo={draft[st.key]?.lo ?? null}
-                        hi={draft[st.key]?.hi ?? null}
-                        setBound={setBound}
-                        pinned={pins.includes(st.key)}
-                        onTogglePin={togglePin}
-                        dense
-                      />
-                    ))}
-                  </div>
-                </FilterGroup>
-              );
-            })}
-          </div>
-
-          {/* Actions. From sm up they sit at the foot of the panel and stick
-              there, so Submit stays reachable without scrolling back down
-              through seven groups.
-
-              On a phone it is pinned to the foot of the sheet, which is a
-              fixed-height flex column: the stats scroll in their own box above
-              it and the bar never moves, so Submit and the live match count
-              are always on screen without any stickiness. */}
-          <div className="px-4 lg:px-5 py-3 max-md:pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] border-b sm:border-b-0 sm:border-t max-md:border-b-0 max-md:border-t border-hairline bg-paper-deep/60 backdrop-blur-sm flex items-center gap-3 sm:sticky sm:bottom-0 max-md:shrink-0">
-            {matches !== null && (
-              <div className="text-sm text-ink-soft leading-none">
-                <span className="text-lg font-bold text-ink tabular">{matches.toLocaleString()}</span>
-                <span className="ml-1.5 text-xs text-ink-muted">{matches === 1 ? "team" : "teams"}</span>
-              </div>
-            )}
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="h-9 px-3 text-sm text-ink-muted hover:text-ink transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={submit}
-                disabled={!dirty}
-                className="h-9 text-sm font-semibold bg-coral text-white px-6 rounded-md hover:bg-coral-soft disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                Submit
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      </div>
-    </>
-  );
+  const revert = () => {
+    setRows(filtersToRows(urlSpec.filters));
+    setPins(urlSpec.cols);
+    setFreshId(null);
+  };
 
   return (
-    <div className="relative" ref={triggerRef}>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        aria-controls={DRAWER_PANEL_ID}
-        className={cn(
-          "inline-flex items-center gap-1.5 h-8 px-3 rounded-md border text-sm font-medium shadow-sm transition-colors whitespace-nowrap",
-          activeCommitted > 0 ? "border-coral/50 bg-coral/6 text-coral" : "border-ink/15 bg-card text-ink hover:border-ink/25",
-        )}
-      >
-        <SlidersHorizontal size={15} />
-        Filters
-        {activeCommitted > 0 && (
-          <span className="ml-0.5 inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-coral text-white text-[0.6rem] font-bold tabular">{activeCommitted}</span>
-        )}
-      </button>
+    // Its own row directly under the search row, inside the same card and
+    // carrying the same divider so the toolbar reads as one stacked group.
+    // WRAPS rather than scrolls: eight filters will not fit on one line at any
+    // width, and a horizontally scrolling strip of form controls hides the ones
+    // you cannot see with nothing to say they are there.
+    <div className="px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 flex items-center flex-wrap gap-x-3 gap-y-2">
+      {rows.map((r) => (
+        <FilterRow
+          key={r.id}
+          row={r}
+          autoFocus={r.id === freshId}
+          onChange={patchRow}
+          onRemove={removeRow}
+          onNext={nextFilter}
+        />
+      ))}
 
-      {slot ? createPortal(panel, slot) : null}
+      <StatPicker onPick={addRow} disabled={atCap} open={pickerOpen} setOpen={setPickerOpen} />
+
+      {atCap && (
+        <span className="text-xs text-ink-muted">
+          {MAX_FILTERS} is the maximum a shareable URL carries.
+        </span>
+      )}
+
+      {/* Actions appear only once there is something to apply. An always-on
+          Submit next to an unchanged table is a button that does nothing, and
+          the live count beside it would read as a filtered total when nothing
+          is filtered. */}
+      {dirty && (
+        <div className="ml-auto flex items-center gap-2">
+          {matches !== null && (
+            <span className="text-sm text-ink-soft leading-none whitespace-nowrap">
+              <span className="font-bold text-ink tabular">{matches.toLocaleString()}</span>
+              <span className="ml-1 text-xs text-ink-muted">{matches === 1 ? "team" : "teams"}</span>
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={revert}
+            className="h-8 px-2.5 text-sm text-ink-muted hover:text-ink transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            className="h-8 text-sm font-semibold bg-coral text-white px-5 rounded-md hover:bg-coral-soft transition-colors"
+          >
+            Submit
+          </button>
+        </div>
+      )}
     </div>
   );
 }
