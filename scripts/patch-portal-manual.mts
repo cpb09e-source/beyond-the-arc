@@ -163,6 +163,15 @@ const BATCHES: Array<{ confirmed: string; moves: Array<[string, string]> }> = [
       ["KC Ibekwe", "Portland St."],
     ],
   },
+  {
+    confirmed: "2026-08-27T00:00:00",
+    moves: [
+      ["Xaivian Lee", "Gonzaga"],
+      // He goes by Butta; the corpus has him as Efrem, and these scripts match
+      // on the corpus name. Changing it here would resolve to nobody.
+      ["Efrem Johnson", "Virginia Tech"],
+    ],
+  },
 ];
 
 const MOVES: Array<[string, string, string]> = BATCHES.flatMap(

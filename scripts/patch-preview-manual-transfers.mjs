@@ -115,6 +115,10 @@ const MOVES = [
   ["Langston Reynolds", "Northern Colorado"],
   ["Dominick Nelson", "Utah Valley"],
   ["KC Ibekwe", "Portland St."],
+  // 2026-08-27
+  ["Xaivian Lee", "Gonzaga"],
+  // "Butta" Johnson in the wild; Efrem in the corpus, which is what matches.
+  ["Efrem Johnson", "Virginia Tech"],
 ];
 
 /** Common shorthand → the name season-preview.json uses. */
