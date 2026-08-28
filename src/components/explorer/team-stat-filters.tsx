@@ -11,6 +11,7 @@ import {
   FILTER_COLUMNS, GROUP_LABEL, MAX_FILTERS, parseSpec, specToParams, teamStatColumn,
   type Comparator, type StatFilter, type StatGroup, type TeamFilterSpec, type TeamStatKey,
 } from "@/lib/team-filters";
+import { viewByKey } from "@/lib/team-views";
 
 /**
  * Stat-filter builder for the team explorer.
@@ -132,15 +133,46 @@ type DraftRow = { id: number; stat: TeamStatKey; op: Comparator; value: string }
 
 let nextRowId = 1;
 
-function filtersToRows(filters: StatFilter[]): DraftRow[] {
-  return filters.map((f) => ({
-    id: nextRowId++,
-    stat: f.stat,
-    op: f.op,
+/**
+ * Rebuild the builder's rows from the URL — ONE ROW PER PINNED COLUMN, plus
+ * any filter on a stat that is not pinned.
+ *
+ * It used to derive rows from the filters alone, and that quietly could not
+ * represent the most ordinary thing in this panel: a column you want to SEE
+ * but not bound. Such a row has no value, so it serialises to no `f` param,
+ * so the resync read it back as nothing and deleted the row — the reader
+ * ticked four stats, got four columns, and watched the four rows they were
+ * about to type into disappear.
+ *
+ * Pinned columns are the spine because that is what the table renders. A bound
+ * stat that somehow is not pinned still gets a row, so an old link cannot
+ * strand a filter with no way to edit it.
+ */
+function rowsFromSpec(cols: readonly string[], filters: StatFilter[]): DraftRow[] {
+  const byStat = new Map(filters.map((f) => [f.stat as string, f]));
+  const rows: DraftRow[] = [];
+  const seen = new Set<string>();
+
+  const toValue = (f: StatFilter) =>
     // Back into display units. roundNice kills the float dust that would
     // otherwise show a reader "35.00000000000001" in the box they typed 35 in.
-    value: String(isPctStat(f.stat) ? roundNice(f.value * 100) : f.value),
-  }));
+    String(isPctStat(f.stat) ? roundNice(f.value * 100) : f.value);
+
+  for (const key of cols) {
+    seen.add(key);
+    const f = byStat.get(key);
+    rows.push({
+      id: nextRowId++,
+      stat: key as TeamStatKey,
+      op: f ? f.op : "gte",
+      value: f ? toValue(f) : "",
+    });
+  }
+  for (const f of filters) {
+    if (seen.has(f.stat as string)) continue;
+    rows.push({ id: nextRowId++, stat: f.stat, op: f.op, value: toValue(f) });
+  }
+  return rows;
 }
 
 function rowsToFilters(rows: DraftRow[]): StatFilter[] {
@@ -229,12 +261,16 @@ const PICK_OPTIONS: PickOption[] = GROUP_ORDER.flatMap((g) =>
  * puts it at the top.
  */
 function StatPicker({
-  onPick,
+  onPickMany,
+  remaining,
   disabled,
   open,
   setOpen,
 }: {
-  onPick: (key: TeamStatKey) => void;
+  /** Commits every marked stat at once, in the order they were marked. */
+  onPickMany: (keys: TeamStatKey[]) => void;
+  /** Filter slots still free, so the picker cannot mark more than fit. */
+  remaining: number;
   disabled?: boolean;
   /**
    * OWNED BY THE PARENT, because a filter row can reopen this. Pressing Enter
@@ -247,6 +283,12 @@ function StatPicker({
 }) {
   const [q, setQ] = useState("");
   const [hi, setHi] = useState(0);
+  /**
+   * Stats ticked but not yet added, in the order they were ticked — which
+   * becomes their column order, because the order you thought of them in is
+   * the order you want to read them in.
+   */
+  const [marked, setMarked] = useState<TeamStatKey[]>([]);
   /** Viewport coords of the trigger, for the portalled popover. */
   const [at, setAt] = useState<{ left: number; top: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -290,6 +332,22 @@ function StatPicker({
     };
   }, [open, place]);
 
+  /**
+   * Hand the ticked stats to the parent, or throw them away.
+   *
+   * Declared above the click-away effect rather than beside the other
+   * handlers, because that effect is what calls them — reaching them through
+   * a ref instead is the pattern React's compiler now rejects, and a
+   * dependency is honest about what the effect actually uses.
+   */
+  const commit = useCallback(() => {
+    if (marked.length) onPickMany(marked);
+    setMarked([]);
+    setQ("");
+    setHi(0);
+  }, [marked, onPickMany]);
+  const discard = useCallback(() => { setMarked([]); setQ(""); setHi(0); }, []);
+
   // Click-away and Escape. The popover is no longer a DOM descendant of the
   // trigger, so the away-test has to clear BOTH nodes or every click inside the
   // list would close the thing it clicked in.
@@ -298,10 +356,14 @@ function StatPicker({
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;
       if (wrapRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      // Clicking away COMMITS what is ticked. Ticking four stats and losing
+      // them to a stray click would be the worst possible reading of the
+      // gesture; Escape is the one that discards, and says so below.
+      commit();
       setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.stopPropagation(); setOpen(false); }
+      if (e.key === "Escape") { e.stopPropagation(); discard(); setOpen(false); }
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey, true);
@@ -309,7 +371,7 @@ function StatPicker({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey, true);
     };
-  }, [open, setOpen]);
+  }, [open, setOpen, commit, discard]);
 
   const matches = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -338,23 +400,45 @@ function StatPicker({
       ?.scrollIntoView({ block: "nearest" });
   }, [hiSafe, open]);
 
-  const pick = (o: PickOption) => {
-    onPick(o.key as TeamStatKey);
-    // CLOSE ON PICK, even though "add three in a row" is the common case and
-    // staying open would save a click. It cannot stay open: picking a stat
-    // moves the caret to that row's value box, so a popover left open floats
-    // over the field the reader was just sent to and steals the next click.
-    // Two focused things at once is worse than one extra click, and the
-    // "Add a Filter" button sits right beside the rows for the next one.
-    setQ("");
-    setHi(0);
-    setOpen(false);
+  /**
+   * Tick or untick. Nothing reaches the table until the picker is committed.
+   *
+   * This replaced click-to-add-and-close. The old note here argued that the
+   * popover could not stay open because picking sent the caret to a value box
+   * and the popover would then float over it — true then, and no longer the
+   * case, because ticking moves no caret. The cost is that adding ONE stat is
+   * now a click plus Enter (or a click outside) rather than a single click;
+   * the gain is that adding four is four clicks instead of four round trips
+   * through the button.
+   */
+  const toggle = (o: PickOption) => {
+    const key = o.key as TeamStatKey;
+    setMarked((m) =>
+      m.includes(key) ? m.filter((k) => k !== key)
+        : m.length >= remaining ? m
+        : [...m, key],
+    );
   };
+
+
+  const atCapNow = marked.length >= remaining;
 
   const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown") { e.preventDefault(); setHi((h) => Math.min(h + 1, matches.length - 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
-    else if (e.key === "Enter" && matches[hiSafe]) { e.preventDefault(); pick(matches[hiSafe]!); }
+    else if (e.key === "Enter") {
+      e.preventDefault();
+      // Enter with nothing ticked still adds the highlighted row, so the
+      // one-stat keyboard path is type, Enter — unchanged from before.
+      if (!marked.length && matches[hiSafe]) toggle(matches[hiSafe]!);
+      // A tick set by that same keypress is not in state yet, so commit reads
+      // it from the list rather than from `marked`.
+      const keys = marked.length
+        ? marked
+        : matches[hiSafe] ? [matches[hiSafe]!.key as TeamStatKey] : [];
+      if (keys.length) onPickMany(keys);
+      setMarked([]); setQ(""); setHi(0); setOpen(false);
+    }
   };
 
   // Section headers render only while browsing. Under a search the list is
@@ -425,20 +509,53 @@ function StatPicker({
                     aria-selected={i === hiSafe}
                     // onMouseDown, not onClick: the input keeps focus so the
                     // next stat can be typed straight away.
-                    onMouseDown={(e) => { e.preventDefault(); pick(o); }}
+                    onMouseDown={(e) => { e.preventDefault(); toggle(o); }}
                     onMouseEnter={() => setHi(i)}
-                    title={o.desc}
+                    title={marked.includes(o.key as TeamStatKey) || !atCapNow ? o.desc : "Filter limit reached"}
                     className={cn(
-                      "w-full text-left px-3 py-1.5 text-sm transition-colors",
+                      "w-full text-left px-3 py-1.5 text-sm transition-colors flex items-center gap-2.5",
                       i === hiSafe ? "bg-coral/10 text-ink" : "text-ink-soft hover:bg-paper-deep",
+                      !marked.includes(o.key as TeamStatKey) && atCapNow && "opacity-40",
                     )}
                   >
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "shrink-0 w-3.5 h-3.5 rounded-[3px] border inline-flex items-center justify-center transition-colors",
+                        marked.includes(o.key as TeamStatKey)
+                          ? "bg-coral border-coral text-white"
+                          : "border-ink/25",
+                      )}
+                    >
+                      {marked.includes(o.key as TeamStatKey) && (
+                        <svg viewBox="0 0 12 12" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M2.5 6.2l2.4 2.4L9.5 3.8" />
+                        </svg>
+                      )}
+                    </span>
                     <span className="truncate">{o.label}</span>
                   </button>
                 </div>
               );
             })}
           </div>
+
+          {/* Only once something is ticked. An empty picker needs no
+              instructions; a picker holding four choices needs to say what
+              happens to them. */}
+          {marked.length > 0 && (
+            <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-hairline bg-paper-deep/50">
+              <span className="text-xs text-ink-soft">
+                <span className="font-medium text-coral">{marked.length}</span> selected
+                {atCapNow && <span className="text-ink-muted"> · limit</span>}
+              </span>
+              <span className="text-[0.68rem] text-ink-muted">
+                <span className="font-medium text-ink-soft">Enter</span> to add
+                <span className="mx-1">·</span>
+                <span className="font-medium text-ink-soft">Esc</span> to clear
+              </span>
+            </div>
+          )}
         </div>,
         document.body,
       )}
@@ -585,7 +702,7 @@ export function TeamStatFilters({
   }, [search]);
   const urlSpec: TeamFilterSpec = useMemo(() => parseSpec(params), [params]);
 
-  const [rows, setRows] = useState<DraftRow[]>(() => filtersToRows(urlSpec.filters));
+  const [rows, setRows] = useState<DraftRow[]>(() => rowsFromSpec(urlSpec.cols, urlSpec.filters));
   /** Pinned columns, ordered as picked so the table renders them that way. */
   const [pins, setPins] = useState<string[]>(() => urlSpec.cols);
   /** The row that just appeared, so exactly one input claims the caret. */
@@ -600,25 +717,89 @@ export function TeamStatFilters({
        Deliberate: this IS the external system sync the rule is about. The URL
        is the source of truth and the draft mirrors it; there is nothing to
        cascade into, because both setters land in the same commit. */
-    setRows(filtersToRows(urlSpec.filters));
+    setRows(rowsFromSpec(urlSpec.cols, urlSpec.filters));
     setPins(urlSpec.cols);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  const addRow = useCallback((stat: TeamStatKey) => {
-    const id = nextRowId++;
-    setRows((r) => (r.length >= MAX_FILTERS ? r : [...r, { id, stat, op: "gte", value: "" }]));
+  /**
+   * submit() reads the CURRENT draft and is declared below, so the callbacks
+   * above reach it through a ref rather than by being redefined on every
+   * keystroke — which would remount the row they were handed to.
+   */
+  /**
+   * A request to push the draft to the URL, honoured AFTER the state lands.
+   *
+   * THIS EXISTS BECAUSE THE OBVIOUS VERSION IS WRONG, and wrong in a way that
+   * looks like nothing happening. Calling submit() from inside the handler
+   * that just called setRows publishes the state from BEFORE that update —
+   * React has not committed it yet. The stale spec goes to the URL, the resync
+   * effect reads it back, and the rows that were just added are wiped. Ticking
+   * four stats and pressing Enter left the table exactly as it was.
+   *
+   * Bumping a counter and submitting from an effect keyed on it means the push
+   * happens on the next commit, when draftFilters and pins are the new ones.
+   */
+  const [applyRequest, setApplyRequest] = useState(0);
+  const requestApply = useCallback(() => setApplyRequest((n) => n + 1), []);
+
+  /**
+   * Add every stat the picker committed, in the order it was ticked.
+   *
+   * VALUES START BLANK, and that is the whole reason this can add four at
+   * once: rowsToFilters drops a row with no value, so a blank row pins its
+   * column and bounds nothing. Ticking four stats gives you four columns to
+   * look at; typing into them is a separate decision, made one at a time.
+   *
+   * The caret lands in the FIRST new row. Some row has to have it, and the
+   * first is the one the reader was thinking about first.
+   */
+  const addRows = useCallback((stats: TeamStatKey[]) => {
+    if (!stats.length) return;
+    let firstId: number | null = null;
+    setRows((r) => {
+      const room = MAX_FILTERS - r.length;
+      if (room <= 0) return r;
+      const added = stats.slice(0, room).map((stat) => {
+        const id = nextRowId++;
+        if (firstId === null) firstId = id;
+        return { id, stat, op: "gte" as Comparator, value: "" };
+      });
+      return [...r, ...added];
+    });
     // Filtering on a stat auto-pins it as a column. Filtering on something you
     // then cannot see in the table is the worst version of this panel — you get
     // a list of teams and no way to check why they qualified.
-    setPins((p) => (p.includes(stat) ? p : [...p, stat]));
-    setFreshId(id);
-  }, []);
+    setPins((p) => [...p, ...stats.filter((k) => !p.includes(k))]);
+    setFreshId(firstId);
+    // In the live view the table follows immediately — four ticks, four
+    // columns, no Submit.
+    requestApply();
+  }, [requestApply]);
 
-  /** Enter in a value box. Never opens the picker past the cap. */
+  /**
+   * ENTER APPLIES, in Build My Own Table only.
+   *
+   * Submit exists because a half-typed value is not a query: applying on every
+   * keystroke would filter Pace at "7" on the way to "70". Enter is different
+   * — it is a deliberate "I am done with this value", exactly as complete a
+   * thought as clicking the button, and it already means "commit this row and
+   * give me the next one". Applying the table too is the same gesture finishing
+   * its sentence.
+   *
+   * SCOPED TO THE ONE VIEW ON PURPOSE, and this is the part worth arguing
+   * about. The same key doing different things in different views is a real
+   * cost. It is paid here because the modes genuinely differ: the curated
+   * views are "set up a query, then run it", while this one is "add a column,
+   * look, add another" — and in that loop a Submit press between every step is
+   * the thing standing between the reader and the answer.
+   */
+  const applyOnEnter = viewByKey(urlSpec.view).custom === true;
+
   const nextFilter = useCallback(() => {
+    requestApply();
     setRows((r) => { if (r.length < MAX_FILTERS) setPickerOpen(true); return r; });
-  }, []);
+  }, [requestApply]);
 
   const patchRow = useCallback((id: number, patch: Partial<DraftRow>) => {
     setRows((r) => r.map((x) => (x.id === id ? { ...x, ...patch } : x)));
@@ -626,6 +807,10 @@ export function TeamStatFilters({
   }, []);
 
   const removeRow = useCallback((id: number) => {
+    // In the live view, removing applies as well. Enter changing the table
+    // while the bin quietly does not would teach the reader that the table is
+    // sometimes stale and give them no way to know when.
+    requestApply();
     setRows((r) => {
       const gone = r.find((x) => x.id === id);
       const next = r.filter((x) => x.id !== id);
@@ -636,7 +821,7 @@ export function TeamStatFilters({
       }
       return next;
     });
-  }, []);
+  }, [requestApply]);
 
   const draftFilters = useMemo(() => rowsToFilters(rows), [rows]);
 
@@ -662,8 +847,22 @@ export function TeamStatFilters({
     startTransition(() => router.replace(p ? `/?${p}` : "/", { scroll: false }));
   };
 
+  /**
+   * Honour an apply request, once the state it should publish has committed.
+   *
+   * Gated here rather than at each call site so the curated views can request
+   * freely and simply be ignored — one place decides whether this view applies
+   * without a Submit, and it is the same boolean the button's own label reads.
+   */
+  useEffect(() => {
+    if (applyRequest === 0 || !applyOnEnter) return;
+    submit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [applyRequest]);
+
+
   const revert = () => {
-    setRows(filtersToRows(urlSpec.filters));
+    setRows(rowsFromSpec(urlSpec.cols, urlSpec.filters));
     setPins(urlSpec.cols);
     setFreshId(null);
   };
@@ -686,7 +885,13 @@ export function TeamStatFilters({
         />
       ))}
 
-      <StatPicker onPick={addRow} disabled={atCap} open={pickerOpen} setOpen={setPickerOpen} />
+      <StatPicker
+        onPickMany={addRows}
+        remaining={MAX_FILTERS - rows.length}
+        disabled={atCap}
+        open={pickerOpen}
+        setOpen={setPickerOpen}
+      />
 
       {atCap && (
         <span className="text-xs text-ink-muted">

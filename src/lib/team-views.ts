@@ -297,7 +297,7 @@ export const TABLE_VIEWS: TableView[] = [
    */
   {
     key: "custom",
-    label: "Build my own table",
+    label: "Build My Own Table",
     group: "Custom",
     desc: "Start with nothing but the teams, then add exactly the columns you want",
     custom: true,
