@@ -29,6 +29,13 @@ import {
   type PlayerStatFilter,
   type PlayerSummary,
 } from "@/lib/players";
+import {
+  PLAYER_VIEWS, playerViewByKey, playerViewGroups, playerViewPackGroups,
+  type PlayerView,
+} from "@/lib/player-views";
+import {
+  PACK_STAT_BY_KEY, loadStatPack, type IndexedPack, type PackGroup,
+} from "@/lib/player-stat-pack";
 import { useDragPan } from "@/lib/use-drag-pan";
 import { useMeasuredWidth } from "@/lib/use-measured-width";
 import { PlayerName } from "@/components/player-name";
@@ -45,47 +52,88 @@ const CLASS_LABEL: Record<string, string> = {
 type GridFmt = "num1" | "num2" | "pct1" | "pct100" | "int" | "epm";
 type GridCol = {
   label: string;
-  field: keyof PlayerSummary;
+  /**
+   * Where the number comes from. Exactly one of these is set.
+   *
+   * `field` reads PlayerSummary, which is what every column did before the
+   * stat pack existed. `packKey` reads a lazily-fetched group file — see
+   * src/lib/player-stat-pack.ts — and those columns carry their percentile
+   * with them rather than having one computed here, because the pack's cohort
+   * is not the same as the table's (per-40 stats rank only over players past a
+   * minutes floor).
+   */
+  field?: keyof PlayerSummary;
+  packKey?: string;
   fmt: GridFmt;
   pct: PctKey | null;
-  sortKey?: PlayerListSpec["sortBy"];
+  sortKey?: string;
   band?: boolean;
+  /** Raw count, no chip — milestone counts and technicals. */
+  noPct?: boolean;
+  /** Tooltip on the column header. */
+  desc?: string;
 };
-const GRID_COLS: GridCol[] = [
-  // EPM LEADS. It is the headline metric — the one the table is sorted by out
-  // of the box and the reason to read the row at all — so it sits first, before
-  // the minutes and usage that describe the role it was earned in.
-  { label: "Off", field: "off_epm", fmt: "epm", pct: "off_epm", sortKey: "off_epm", band: true },
-  { label: "Def", field: "def_epm", fmt: "epm", pct: "def_epm", sortKey: "def_epm", band: true },
-  { label: "EPM", field: "epm", fmt: "epm", pct: "epm", sortKey: "epm", band: true },
-  { label: "eWins", field: "ewins", fmt: "num2", pct: "ewins", sortKey: "ewins", band: true },
-  { label: "USG", field: "usage_pct", fmt: "pct1", pct: "usage_pct", sortKey: "usage" },
-  { label: "PPG", field: "pts_pg", fmt: "num1", pct: "pts_pg", sortKey: "pts" },
-  { label: "TS%", field: "ts_pct", fmt: "pct1", pct: "ts_pct", sortKey: "ts_pct" },
-  { label: "PPP", field: "ppp", fmt: "num2", pct: "ppp", sortKey: "ppp" },
-  { label: "FG%", field: "fg_pct", fmt: "pct1", pct: "fg_pct", sortKey: "fg_pct" },
-  { label: "3P%", field: "fg3_pct", fmt: "pct1", pct: "fg3_pct", sortKey: "fg3_pct" },
-  { label: "ORB", field: "orb_pg", fmt: "num1", pct: "orb_pg", sortKey: "orb" },
-  { label: "RPG", field: "reb_pg", fmt: "num1", pct: "reb_pg", sortKey: "reb" },
-  { label: "AST", field: "ast_pg", fmt: "num1", pct: "ast_pg", sortKey: "ast" },
-  { label: "TOV%", field: "tov_pct", fmt: "pct1", pct: "tov_pct", sortKey: "tov_pct" },
-  { label: "STL", field: "stl_pg", fmt: "num1", pct: "stl_pg", sortKey: "stl" },
-  { label: "BLK", field: "blk_pg", fmt: "num1", pct: "blk_pg", sortKey: "blk" },
-  { label: "HKM", field: "hkm_pct", fmt: "pct100", pct: "hkm_pct", sortKey: "hkm" },
-];
-// Band header row: label + how many GRID_COLS it spans (ORDER MUST MATCH
-// GRID_COLS — the bands are laid out by walking spans, not by looking up
-// columns, so moving a group means moving it in both lists).
-const GRID_BANDS: Array<{ label: string; span: number; epm?: boolean }> = [
-  { label: "EPM", span: 4, epm: true },
-  { label: "Role", span: 1 },
-  { label: "Scoring", span: 1 },
-  { label: "Shooting", span: 4 },
-  { label: "Rebounding", span: 2 },
-  { label: "Handle", span: 2 },
-  { label: "Defense", span: 3 },
-];
-const GRID_FIELDS = new Set(GRID_COLS.map((c) => c.field));
+// GRID_COLS, GRID_BANDS and GRID_FIELDS used to live here: one hardcoded
+// seventeen-column table, with a parallel list of band spans that had to be
+// kept in step by hand.
+//
+// Both are now derived from a view — the default table is PLAYER_VIEWS's
+// "overview", declared column for column as it shipped — so the spans cannot
+// drift from the columns beneath them, and adding a view costs no changes in
+// this file. See viewGrid() below.
+
+/**
+ * A view's stat keys, turned into grid columns and band spans.
+ *
+ * Keys may name EITHER catalogue, and which one decides where the value comes
+ * from: PLAYER_STAT_COLUMNS resolves to a PlayerSummary field, PACK_STAT_COLUMNS
+ * to a key in a fetched group file. The reader is not shown the difference.
+ *
+ * BANDS ARE BUILT FROM THE SAME WALK as the columns, so a band's span can never
+ * drift out of step with the columns under it — the failure the hardcoded
+ * GRID_BANDS list was one edit away from at all times.
+ */
+function viewGrid(view: PlayerView): { cols: GridCol[]; bands: Array<{ label: string; span: number; epm?: boolean }> } {
+  const cols: GridCol[] = [];
+  const bands: Array<{ label: string; span: number; epm?: boolean }> = [];
+  for (const band of view.bands) {
+    let span = 0;
+    for (const key of band.keys) {
+      const summary = PLAYER_STAT_COLUMNS.find((c) => c.key === key);
+      if (summary && !summary.filterOnly) {
+        cols.push({
+          label: summary.label,
+          field: summary.field,
+          fmt: summary.field === "games" ? "int"
+            : band.accent && summary.group === "impact" ? "epm"
+            : summary.format === "pct1" ? "pct1" : summary.format === "num2" ? "num2" : "num1",
+          pct: (PCT_KEYS as readonly string[]).includes(summary.field as string)
+            ? (summary.field as PctKey) : null,
+          sortKey: SORT_KEY_BY_FIELD.get(summary.field as string) ?? summary.key,
+          band: band.accent,
+          desc: summary.desc,
+        });
+        span++;
+        continue;
+      }
+      const pack = PACK_STAT_BY_KEY.get(key);
+      if (!pack) continue;
+      cols.push({
+        label: pack.label,
+        packKey: pack.key,
+        fmt: pack.format,
+        pct: null,
+        sortKey: pack.key,
+        band: band.accent,
+        noPct: pack.noPct,
+        desc: pack.desc,
+      });
+      span++;
+    }
+    if (span > 0) bands.push({ label: band.label, span, epm: band.accent });
+  }
+  return { cols, bands };
+}
 
 // One opaque hover fill for the WHOLE row — sticky (RK/Player) and scrolling
 // cells share it so the row reads as a single band, not two colors. Opaque
@@ -292,7 +340,7 @@ function filterSpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSumma
  * the sorting, and the header, which has to decide whether a pinned column can
  * be sorted at all.
  */
-const SORT_FIELD: Record<PlayerListSpec["sortBy"], keyof PlayerSummary> = {
+const SORT_FIELD: Partial<Record<string, keyof PlayerSummary>> = {
   pir: "pir",
   bta_porpag: "bta_porpag",
   pts: "pts_pg", reb: "reb_pg", ast: "ast_pg",
@@ -319,20 +367,41 @@ const SORT_FIELD: Record<PlayerListSpec["sortBy"], keyof PlayerSummary> = {
  * vocabularies stop mattering: whatever a stat is called, it resolves to one
  * column of PlayerSummary, and that is what the sort actually reads.
  */
-const SORT_KEY_BY_FIELD = new Map<string, PlayerListSpec["sortBy"]>(
-  (Object.entries(SORT_FIELD) as Array<[PlayerListSpec["sortBy"], keyof PlayerSummary]>)
+const SORT_KEY_BY_FIELD = new Map<string, string>(
+  (Object.entries(SORT_FIELD) as Array<[string, keyof PlayerSummary]>)
     .map(([sortKey, field]) => [field as string, sortKey]),
 );
 
-function applySpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummary[] {
+function applySpec(
+  players: PlayerSummary[],
+  spec: PlayerListSpec,
+  packValue?: (p: PlayerSummary, key: string) => number | null,
+): PlayerSummary[] {
   const out = filterSpec(players, spec);
 
-  const key = SORT_FIELD[spec.sortBy];
+  /**
+   * Resolve the sort key against all three vocabularies, in the order a key is
+   * most likely to belong to one: the legacy sort names, then a stat's own key
+   * on PlayerSummary, then the stat pack.
+   *
+   * Falling through to the pack LAST matters — `gp` exists in both catalogues,
+   * and the summary's is the one the rest of the table shows.
+   */
+  const field: keyof PlayerSummary | undefined =
+    SORT_FIELD[spec.sortBy] ??
+    (PLAYER_STAT_COLUMNS.find((c) => c.key === spec.sortBy)?.field);
+  const packKey = field ? null : (PACK_STAT_BY_KEY.has(spec.sortBy) ? spec.sortBy : null);
+
   const dir = spec.sortDir === "asc" ? 1 : -1;
+  const read = (p: PlayerSummary): number | string | null => {
+    if (field) return p[field] as number | string | null;
+    if (packKey && packValue) return packValue(p, packKey);
+    return null;
+  };
   // `out` is already a fresh array from filterSpec, so sort in place.
   out.sort((a, b) => {
-    const av = a[key] as number | string | null;
-    const bv = b[key] as number | string | null;
+    const av = read(a);
+    const bv = read(b);
     if (av === null && bv === null) return 0;
     if (av === null) return 1;
     if (bv === null) return -1;
@@ -393,6 +462,74 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   // (prefiltered, transformed) and causes the heavy sort to re-run on
   // every keystroke even though nothing in the URL changed.
   const spec = useMemo(() => parsePlayerSpec(params), [params]);
+
+  // ── The active view, and the stat packs it needs ────────────────────────
+  const view = useMemo(() => playerViewByKey(spec.view), [spec.view]);
+  const { cols: viewCols, bands: viewBands } = useMemo(() => viewGrid(view), [view]);
+
+  /**
+   * Fetched group files, keyed season → group.
+   *
+   * Loaded on demand rather than up front: the ten groups come to about a
+   * megabyte gzipped a season and most readers open one view. loadStatPack
+   * caches per (season, group), so switching back to a view costs nothing and
+   * a season already fetched is never fetched twice.
+   */
+  const [packs, setPacks] = useState<Map<string, IndexedPack>>(new Map());
+  const neededGroups = useMemo(() => playerViewPackGroups(view), [view]);
+
+  useEffect(() => {
+    const want: Array<[number, PackGroup]> = [];
+    for (const y of spec.years) for (const g of neededGroups) {
+      if (!packs.has(`${y}|${g}`)) want.push([y, g]);
+    }
+    if (!want.length) return;
+    let alive = true;
+    // setState only in the callback, never in the effect body: a synchronous
+    // write here would cascade a render before the fetch had done anything.
+    Promise.all(want.map(([y, g]) => loadStatPack(y, g).then((pk) => [`${y}|${g}`, pk] as const)))
+      .then((got) => {
+        if (!alive) return;
+        setPacks((prev) => {
+          const next = new Map(prev);
+          for (const [k, pk] of got) if (pk) next.set(k, pk);
+          return next;
+        });
+      });
+    return () => { alive = false; };
+    // `packs` is read to skip what is already held, but must not re-trigger the
+    // effect — setPacks would then schedule another run of it forever.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spec.years, neededGroups]);
+
+  /**
+   * Pack values and percentiles, flattened for lookup by (season, column).
+   *
+   * Keyed by season because the same player appears once per season selected
+   * and each season has its own file — and by bart id rather than the row id,
+   * because that is what the build script keys on.
+   */
+  const packLook = useMemo(() => {
+    const val = new Map<string, Map<number, number | null>>();
+    const pct = new Map<string, Map<number, number | null>>();
+    let anyPbpThin = false;
+    for (const [key, pk] of packs) {
+      const year = key.split("|")[0]!;
+      for (const [col, m] of pk.value) val.set(`${year}|${col}`, m);
+      for (const [col, m] of pk.pct) pct.set(`${year}|${col}`, m);
+      if (pk.pbpCoverage < 0.9) anyPbpThin = true;
+    }
+    return { val, pct, anyPbpThin };
+  }, [packs]);
+
+  const packValue = useMemo(() => (p: PlayerSummary, key: string): number | null => (
+    p.bart_player_id == null ? null
+      : packLook.val.get(`${p.year}|${key}`)?.get(p.bart_player_id) ?? null
+  ), [packLook]);
+  const packPct = useMemo(() => (p: PlayerSummary, key: string): number | null => (
+    p.bart_player_id == null ? null
+      : packLook.pct.get(`${p.year}|${key}`)?.get(p.bart_player_id) ?? null
+  ), [packLook]);
   // Mirrors the fallback in parsePlayerSpec: eWins needs the play-by-play fit,
   // so a selection reaching back before it defaults to EPM instead.
   const effectiveDefaultSort = useMemo(
@@ -694,8 +831,11 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   //                  re-applies `spec.limit` for the visible window.
   //                  Recomputes only when `deferredQuery` or limit changes.
   const prefiltered = useMemo(
-    () => applySpec(transformed, { ...spec, limit: Number.MAX_SAFE_INTEGER }),
-    [transformed, spec],
+    () => applySpec(transformed, { ...spec, limit: Number.MAX_SAFE_INTEGER }, packValue),
+    // packValue is a dependency, not an afterthought: a table sorted by a pack
+    // stat is ordered by nulls until its group file lands, and without this it
+    // would stay that way.
+    [transformed, spec, packValue],
   );
 
   // Live "how many players match" for the stat-filter popout. Runs the full
@@ -746,6 +886,10 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
    * filtered on. `spec.filters` is still read as a fallback so bookmarked URLs
    * from before the change keep their columns.
    */
+  const viewFields = useMemo(
+    () => new Set(viewCols.map((c) => (c.field ?? c.packKey) as string)),
+    [viewCols],
+  );
   const dynamicCols: GridCol[] = useMemo(() => {
     const seen = new Set<string>();
     const out: GridCol[] = [];
@@ -758,7 +902,9 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       // something like PPG would appear to do nothing at all. The legacy
       // filter-inferred path keeps skipping duplicates so old bookmarks don't
       // suddenly grow a second copy of a column they already had.
-      if (!allowDuplicate && GRID_FIELDS.has(col.field)) return;
+      // Deduped against the ACTIVE view rather than a fixed default set: with
+      // views, "already a column" depends on which view is showing.
+      if (!allowDuplicate && viewFields.has(col.field as string)) return;
       seen.add(col.field as string);
       out.push({
         label: col.label,
@@ -777,7 +923,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     for (const key of spec.cols) add(key, true);
     for (const f of spec.filters) add(f.stat, false);
     return out;
-  }, [spec.cols, spec.filters]);
+  }, [spec.cols, spec.filters, viewFields]);
 
   // Toolbar read-out of the COMMITTED selection (the drawer's own strip tracks
   // the uncommitted draft). Removing here is immediate — there is no Submit on
@@ -876,6 +1022,43 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
             >
               <SearchGlass className="w-4 h-4" />
             </button>
+            {/* VIEW PICKER. A native select with optgroups rather than a
+                custom popover — twelve options in five sections is exactly
+                what the element is for, it matches the controls beside it,
+                and it costs no JavaScript to open. Same choice as the team
+                explorer, for the same reasons. */}
+            <label className="hidden sm:inline-flex items-center gap-1.5 min-w-0">
+              <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">
+                View
+              </span>
+              <select
+                value={spec.view || PLAYER_VIEWS[0]!.key}
+                onChange={(e) => {
+                  const key = e.target.value;
+                  const v = playerViewByKey(key);
+                  updateSpec({
+                    ...spec,
+                    view: key === PLAYER_VIEWS[0]!.key ? "" : key,
+                    // The view carries its own sort. Without this the table
+                    // stays ordered by a column the new view may not show, and
+                    // a reader who picks Foul Related gets foul columns ranked
+                    // by eWins.
+                    sortBy: v.sortBy,
+                    sortDir: v.sortDir,
+                  });
+                }}
+                aria-label="Table view"
+                className="h-8 max-w-44 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 transition-colors"
+              >
+                {playerViewGroups().map((g) => (
+                  <optgroup key={g.group} label={g.group}>
+                    {g.views.map((v) => (
+                      <option key={v.key} value={v.key} title={v.desc}>{v.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
             <span className="hidden sm:inline text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Show</span>
             <Select value={String(spec.limit)} onChange={(v) => updateSpec({ ...spec, limit: Number(v) })} ariaLabel="Result count" compact className="w-16 lg:w-18">
               {LIMIT_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
@@ -997,7 +1180,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                     Your columns
                   </th>
                 )}
-                {GRID_BANDS.map((b) => (
+                {viewBands.map((b) => (
                   <th
                     key={b.label}
                     colSpan={b.span}
@@ -1014,7 +1197,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               <tr>
                 <th ref={rkThRef} className="sticky top-6 left-0 z-40 w-10 min-w-10 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">RK</th>
                 <th style={playerLeft} className="sticky top-6 z-40 bg-paper-deep border-b border-hairline px-1.5 sm:px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Player</th>
-                {[...dynamicCols, ...GRID_COLS].map((c, i) =>
+                {[...dynamicCols, ...viewCols].map((c, i) =>
                   c.sortKey ? (
                     // Index-qualified: a pinned stat that is also a default
                     // column renders twice on purpose, so the label alone is
@@ -1039,13 +1222,13 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
             <tbody>
               {loading && transformed.length === 0 ? (
                 <tr>
-                  <td colSpan={dynamicCols.length + GRID_COLS.length + 2} className="px-4 py-16 text-center text-ink-muted">
+                  <td colSpan={dynamicCols.length + viewCols.length + 2} className="px-4 py-16 text-center text-ink-muted">
                     Loading {seasonsKicker(spec.years).toLowerCase()}…
                   </td>
                 </tr>
               ) : players.length === 0 ? (
                 <tr>
-                  <td colSpan={dynamicCols.length + GRID_COLS.length + 2} className="px-4 py-12 text-center">
+                  <td colSpan={dynamicCols.length + viewCols.length + 2} className="px-4 py-12 text-center">
                     <div className="text-ink-soft">No players match these filters.</div>
                     <div className="mt-1.5 text-xs text-ink-muted">
                       Try widening conference, class, or games played.
@@ -1130,11 +1313,20 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                         <TopHundredMark rank={p.rank_overall} />
                       </span>
                     </td>
-                    {[...dynamicCols, ...GRID_COLS].map((c, ci) => {
-                      const v = p[c.field] as number | null;
+                    {[...dynamicCols, ...viewCols].map((c, ci) => {
+                      // Summary column or pack column — resolved here so the
+                      // cell below does not care which catalogue it came from.
+                      const v = c.packKey
+                        ? packValue(p, c.packKey)
+                        : (p[c.field!] as number | null);
+                      const chip = c.noPct ? null
+                        : c.packKey ? packPct(p, c.packKey)
+                        : c.pct ? (pctMaps[c.pct].get(p.id) ?? null)
+                        : null;
+                      const hasChip = !c.noPct && (c.packKey ? true : c.pct !== null);
                       return (
                         <td
-                          key={`${c.field}-${ci}`}
+                          key={`${c.field ?? c.packKey}-${ci}`}
                           className={cn(
                             "px-1 sm:px-2 py-1 text-right tabular whitespace-nowrap transition-colors",
                             c.band && EPM_BAND_TINT,
@@ -1149,8 +1341,8 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                               )}
                               {fmtGrid(v, c.fmt)}
                             </span>
-                            {c.pct
-                              ? <PercentileChip pct={pctMaps[c.pct].get(p.id) ?? null} />
+                            {hasChip
+                              ? <PercentileChip pct={chip} />
                               : <span className="h-5" aria-hidden="true" /> /* chip-height spacer keeps values row-aligned */}
                           </span>
                         </td>

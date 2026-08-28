@@ -1,4 +1,5 @@
 import { clampSeason } from "@/lib/seasons";
+import { PACK_STAT_BY_KEY } from "@/lib/player-stat-pack";
 /**
  * Player query helpers. Bart's player advanced-stats CSV has no header; we
  * read by column position against a Cooper Flagg "rosetta stone" row.
@@ -336,13 +337,31 @@ export type PlayerListSpec = {
    * the stat, which is what the table used to infer from `filters` alone.
    */
   cols: string[];
-  sortBy: "pir" | "bta_porpag" | "pts" | "reb" | "ast" | "fg_pct" | "fg3_pct" | "ts_pct" | "games" | "name"
-    | "epm" | "off_epm" | "def_epm" | "ewins" | "ppp" | "min" | "usage" | "orb" | "drb" | "tov" | "tov_pct" | "stl" | "blk" | "hkm"
-    // Stats that could be ADDED as a column but never sorted on. A pinned
-    // column with no entry here rendered as dead text, so the eight below use
-    // their PLAYER_STAT_COLUMNS key verbatim rather than inventing a second
-    // name for the same stat, which is what stranded the others.
-    | "on_off" | "box_epm" | "net_rtg" | "ast_tov" | "fg2_pct" | "ft_pct" | "efg_pct" | "fta_rate";
+  /**
+   * Named column set from src/lib/player-views.ts, or "" for the default.
+   *
+   * A VIEW REPLACES THE DEFAULT COLUMNS, NOT THE PINNED ONES — same rule as
+   * the team explorer. Anything the reader added through the stat picker stays
+   * put and stays leftmost, so a view switch can never take away the column
+   * somebody is filtering on and leave them looking at a filtered table with
+   * no way to see why a row qualified.
+   */
+  view: string;
+  /**
+   * WIDENED FROM A UNION TO A STRING when the stat pack landed.
+   *
+   * The union listed every sortable stat by name, which worked while there
+   * were thirty-odd of them. The pack adds a hundred more that live in
+   * public/data/player-stats rather than on PlayerSummary, and enumerating
+   * those here would mean this file knowing about a catalogue it does not
+   * import.
+   *
+   * The allow-list did real work, though — an unrecognised ?sort= used to fall
+   * back to the default rather than order the table by nothing — so it did not
+   * go away, it moved. See isSortableKey() below, which checks VALID_SORTS and
+   * the two stat catalogues.
+   */
+  sortBy: string;
   sortDir: "asc" | "desc";
   limit: number;
 };
@@ -361,6 +380,28 @@ export type PlayerListSpec = {
  */
 export const EWINS_FIRST_YEAR = 2024;
 
+/**
+ * Is this a sort key the table can actually order by?
+ *
+ * Three vocabularies answer to `?sort=`, and all three are legitimate:
+ *
+ *   VALID_SORTS          the legacy names ("pts", "min", "usage"), which are in
+ *                        saved URLs and must keep working
+ *   PLAYER_STAT_COLUMNS  a stat's own key ("ppg", "mpg", "usg_pct")
+ *   PACK_STAT_COLUMNS    the extended catalogue, loaded per view
+ *
+ * Checked rather than trusted because this comes off the query string, and an
+ * unrecognised key would order the table by undefined — every row tying, and
+ * the reader seeing an arbitrary arrangement presented as a ranking.
+ */
+export function isSortableKey(key: string): boolean {
+  return (
+    (VALID_SORTS as readonly string[]).includes(key) ||
+    PLAYER_STAT_COLUMN_BY_KEY.has(key) ||
+    PACK_STAT_BY_KEY.has(key)
+  );
+}
+
 export const VALID_SORTS: PlayerListSpec["sortBy"][] = [
   "pir", "bta_porpag", "pts", "reb", "ast", "fg_pct", "fg3_pct",
   "ts_pct", "games", "name", "epm", "off_epm", "def_epm", "ewins", "ppp", "min", "usage",
@@ -377,6 +418,7 @@ export const DEFAULT_PLAYER_SPEC: PlayerListSpec = {
   minGames: 10,
   filters: [],
   cols: [],
+  view: "",
   // eWINS IS THE DEFAULT, not EPM. EPM is a per-100 RATE, so a 24-minute role
   // player on a good team posts the same number as the man who closes games —
   // its top 20 averaged 30.3 mpg with four players under 28. eWins multiplies
@@ -471,10 +513,6 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
   const minG = Number(get("ming"));
   const limitRaw = Number(get("limit"));
   const sortRaw = get("sort");
-  // Keep in step with PlayerListSpec["sortBy"] — this is the allow-list a URL
-  // is checked against, so a key missing here is silently ignored and the table
-  // quietly falls back to EPM.
-  const validSorts = VALID_SORTS;
   /**
    * DEFAULT SORT FALLS BACK TO EPM WHEN A SELECTED SEASON HAS NO eWINS.
    *
@@ -490,7 +528,7 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
    */
   const defaultSort: PlayerListSpec["sortBy"] =
     years.every((y) => y >= EWINS_FIRST_YEAR) ? DEFAULT_PLAYER_SPEC.sortBy : "epm";
-  const sortBy = validSorts.includes(sortRaw as PlayerListSpec["sortBy"]) ? (sortRaw as PlayerListSpec["sortBy"]) : defaultSort;
+  const sortBy = sortRaw && isSortableKey(sortRaw) ? sortRaw : defaultSort;
   const sortDirRaw = get("order");
   // Pinned columns. Unknown keys are dropped rather than trusted — this comes
   // straight off the query string — and filterOnly stats are refused because
@@ -515,6 +553,11 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
     minGames: Number.isFinite(minG) && minG >= 0 ? minG : DEFAULT_PLAYER_SPEC.minGames,
     filters,
     cols,
+    // Not validated against PLAYER_VIEWS here: this module is imported by
+    // player-views.ts, and checking would close the loop. playerViewByKey()
+    // falls back to Overview for anything it does not recognise, so an unknown
+    // ?view= is inert rather than broken.
+    view: get("view") ?? "",
     sortBy,
     sortDir: sortDirRaw === "asc" || sortDirRaw === "desc" ? sortDirRaw : DEFAULT_PLAYER_SPEC.sortDir,
     limit: Number.isFinite(limitRaw) && limitRaw > 0 && limitRaw <= 1000 ? limitRaw : DEFAULT_PLAYER_SPEC.limit,
@@ -538,6 +581,7 @@ export function playerSpecToParams(spec: PlayerListSpec): URLSearchParams {
   if (spec.minGames !== DEFAULT_PLAYER_SPEC.minGames) p.set("ming", String(spec.minGames));
   spec.filters.forEach((f, i) => p.set(`f${i}`, `${f.stat}.${f.op}.${f.value}`));
   if (spec.cols.length) p.set("cols", spec.cols.join(","));
+  if (spec.view) p.set("view", spec.view);
   if (spec.sortBy !== DEFAULT_PLAYER_SPEC.sortBy) p.set("sort", spec.sortBy);
   if (spec.sortDir !== DEFAULT_PLAYER_SPEC.sortDir) p.set("order", spec.sortDir);
   if (spec.limit !== DEFAULT_PLAYER_SPEC.limit) p.set("limit", String(spec.limit));
