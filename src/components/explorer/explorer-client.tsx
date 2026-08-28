@@ -6,7 +6,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Lock } from "lucide-react";
 import { loadSeason, type SeasonDenial } from "@/lib/season-data";
-import { clampToFreeTier, effectiveViewAccess, viewIsGated, FREE_LIMITS } from "@/lib/access";
+import { clampToFreeTier, effectiveViewAccess, viewAccess, FREE_LIMITS } from "@/lib/access";
 import { useEntitlement } from "@/lib/use-entitlement";
 import {
   parseSpec,
@@ -960,16 +960,27 @@ export function ExplorerClient({
                 aria-label="Table view"
                 className="field-sm-phone h-8 max-w-40 sm:max-w-none rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 transition-colors"
               >
-                {/* MARKED IN THE LIST, not discovered after clicking.
-                    A native <option> renders text and nothing else, so the
-                    marker is a word rather than a padlock — and " · Pass"
-                    beats an emoji in a table of ratings. Shown only to readers
-                    it applies to: a subscriber has no use for a column of
-                    labels telling them what they already bought. */}
+                {/* MARKED ONLY WHERE THE MARK IS TRUE.
+                    This said "· Pass" on every gated view, which was ten of
+                    fourteen — a list that reads as a locked product, and wrong
+                    on three of them. Record & Outcomes hands over the record;
+                    Roster Continuity hands over who came back and how many
+                    minutes; Build My Own Table hands over three columns. A
+                    reader who sees "Pass" beside those and does not click has
+                    been talked out of something they could have had.
+
+                    So the mark is limited to the views where a free reader
+                    genuinely gets a taste rather than a section — the
+                    row-capped ones. That is seven, and each one is honest.
+
+                    A native <option> renders text and nothing else, hence a
+                    word rather than a padlock. Shown only to readers it
+                    applies to: a subscriber has no use for a column of labels
+                    naming what they already bought. */}
                 {viewGroups().map((g) => (
                   <optgroup key={g.group} label={g.group}>
                     {g.views.map((v) => {
-                      const locked = !paid && viewIsGated(v.key);
+                      const locked = !paid && viewAccess(v.key).kind === "preview";
                       return (
                         <option
                           key={v.key}
@@ -1604,7 +1615,7 @@ function GateBar({
   signedIn: boolean;
 }) {
   return (
-    <div className="px-3 lg:px-4 py-3 border-t border-hairline bg-coral/[0.045] flex flex-wrap items-center gap-x-3 gap-y-2">
+    <div className="px-3 lg:px-4 py-3 border-t border-hairline bg-coral/4.5 flex flex-wrap items-center gap-x-3 gap-y-2">
       <Lock size={13} strokeWidth={2.5} className="text-coral shrink-0" aria-hidden />
       <p className="text-sm leading-snug min-w-0 flex-1">
         <span className="text-ink font-medium">{lead}</span>{" "}

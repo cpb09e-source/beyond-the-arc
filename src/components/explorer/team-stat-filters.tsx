@@ -351,6 +351,10 @@ function StatPicker({
   open: boolean;
   setOpen: (v: boolean) => void;
 }) {
+  // Read HERE rather than threaded down from the builder. The picker is the
+  // only place that knows the reader has just hit the ceiling, and the ceiling
+  // is the moment the offer is worth making.
+  const { paid, signedIn } = useEntitlement();
   const [q, setQ] = useState("");
   const [hi, setHi] = useState(0);
   /**
@@ -600,7 +604,13 @@ function StatPicker({
                     // next stat can be typed straight away.
                     onMouseDown={(e) => { e.preventDefault(); choose(o); }}
                     onMouseEnter={() => setHi(i)}
-                    title={marked.includes(o.key as TeamStatKey) || !atCapNow ? o.desc : "Filter limit reached"}
+                    title={
+                      marked.includes(o.key as TeamStatKey) || !atCapNow
+                        ? o.desc
+                        : paid
+                          ? "That is the maximum a shareable URL carries"
+                          : `${remaining} columns on the free plan — untick one, or get a Season Pass`
+                    }
                     className={cn(
                       "w-full text-left px-3 py-1.5 text-sm transition-colors flex items-center gap-2.5",
                       i === hiSafe ? "bg-coral/10 text-ink" : "text-ink-soft hover:bg-paper-deep",
@@ -630,6 +640,31 @@ function StatPicker({
               );
             })}
           </div>
+
+          {/* THE CEILING EXPLAINS ITSELF, IN THE BOX, THE MOMENT IT IS HIT.
+              Without this the picker just goes quiet: the reader ticks a third
+              column, every remaining row dims, and nothing on screen says why
+              or what to do. The line under the trigger says it, but that is
+              outside the popover and behind it — so it is read after closing,
+              which is exactly too late to act on.
+
+              Only for readers it applies to. A subscriber hitting MAX_FILTERS
+              has met a URL-length limit with nothing to sell them, and gets the
+              plain "· limit" in the footer instead. */}
+          {atCapNow && !paid && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 border-t border-coral/25 bg-coral/[0.07]">
+              <Lock size={11} strokeWidth={2.5} className="shrink-0 text-coral" aria-hidden />
+              <span className="text-xs text-ink-soft leading-snug">
+                {remaining} columns is the free limit.
+              </span>
+              <Link
+                href={signedIn ? "/pricing" : "/account/signup"}
+                className="text-xs font-medium text-coral hover:underline"
+              >
+                {signedIn ? "Upgrade for more" : "Sign up for more"}
+              </Link>
+            </div>
+          )}
 
           {/* Only once something is ticked. An empty picker needs no
               instructions; a picker holding four choices needs to say what
@@ -686,6 +721,45 @@ function FilterRow({
   const bounds = STAT_BOUNDS[row.stat];
   const pct = isPctStat(row.stat);
   const valueRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * The range hint, and the type size that makes it FIT.
+   *
+   * The box is sized to the value people type — two or three digits — and the
+   * hint is the longest thing that ever goes in it. A signed count range runs
+   * to eleven characters ("-450 to 550"), which at the old fixed 0.68rem was
+   * clipped mid-number: the reader saw "-20 to" and the upper bound — the half
+   * that says what "high" looks like — was simply gone.
+   *
+   * SHRINK THE HINT, NOT THE BOX. Widening every value box to fit the worst
+   * hint would undo the whole reason it is narrow, and the hint is read once
+   * per stat while the box is looked at constantly. Padding gives way first,
+   * then the type, and only for the strings that need it.
+   *
+   * Thresholds measured against the real bounds table, where the longest
+   * placeholder is exactly eleven characters — see build-stat-bounds.mts,
+   * which generates it. Re-run that and the worst case can move; the tiers
+   * below are wide enough to absorb a character or two either way.
+   */
+  const hint = bounds
+    // A NEGATIVE LOWER BOUND SPELLS THE WORD. "-25–30" reads as one mangled
+    // number; "-25 to 30" cannot be misread, and is worth the extra characters.
+    ? bounds[0] < 0 ? `${bounds[0]} to ${bounds[1]}` : `${bounds[0]}–${bounds[1]}`
+    : "Value";
+  /**
+   * A PERCENTAGE COSTS THREE CHARACTERS BEFORE ITS HINT IS EVEN MEASURED.
+   *
+   * The "%" suffix is painted inside the box and the input reserves ~20px of
+   * right padding for it — near a third of a 64px control. Tiering on string
+   * length alone therefore called "-7 to 8" roomy, gave it the largest type,
+   * and clipped it by 10px: seven characters, but only 36px to put them in.
+   *
+   * Charging pct stats three characters up front folds that back into one
+   * number, so the tiers below compare like with like.
+   */
+  const hintLen = (valueLocked ? 4 : hint.length) + (pct ? 3 : 0);
+  const roomy = hintLen <= 7;
+  const tight = hintLen >= 10;
 
   // The row is created by picking a stat, so the only thing left to do is type
   // a number — land the caret there rather than making the reader aim for it.
@@ -746,20 +820,31 @@ function FilterRow({
           // being clipped now that the box is narrower. A NEGATIVE lower bound
           // is the exception — "-25–30" reads as one mangled number, so those
           // spell the word out and accept the width.
-          placeholder={
+          placeholder={valueLocked ? "Pass" : hint}
+          title={
             valueLocked
-              ? "Pass"
-              : bounds
-                ? (bounds[0] < 0 ? `${bounds[0]} to ${bounds[1]}` : `${bounds[0]}–${bounds[1]}`)
-                : "Value"
+              ? "Filtering on more columns is part of the Season Pass"
+              : bounds ? `Typical range: ${hint}` : undefined
           }
-          title={valueLocked ? "Filtering on more columns is part of the Season Pass" : undefined}
           aria-label={`Value for ${col?.label ?? row.stat}`}
           className={cn(
-            "h-8 w-full px-2 rounded-md border border-ink/15 bg-card text-ink text-sm tabular",
-            "placeholder:text-ink-muted placeholder:text-[0.68rem]",
+            "h-8 w-full rounded-md border border-ink/15 bg-card text-ink text-sm tabular",
+            "placeholder:text-ink-muted",
             "focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40",
-            pct && "pr-5",
+            // Padding gives way before the type does — it costs the reader
+            // nothing and buys 8px, which is two characters at this size.
+            tight ? "px-1" : roomy ? "px-2" : "px-1.5",
+            // 0.5rem, not 0.55: MEASURED, not guessed. The input carries
+            // `tabular`, so the placeholder inherits fixed-width digits, and
+            // "-450 to 550" renders 58.1px against 55px of room at 0.55rem —
+            // clipped by three pixels, which is exactly the failure this is
+            // fixing. Re-measure with getComputedStyle(el, "::placeholder")
+            // if the bounds table or the box width ever changes.
+            tight ? "placeholder:text-[0.5rem]" : roomy ? "placeholder:text-[0.68rem]" : "placeholder:text-[0.56rem]",
+            // The % suffix sits inside the box, so it comes out of the same
+            // budget. Nothing needing the tight size is a percentage today,
+            // but the rule holds if that changes.
+            pct && (tight ? "pr-3.5" : "pr-5"),
             valueLocked && "cursor-not-allowed border-dashed bg-paper-deep/40 placeholder:text-coral/70",
           )}
         />

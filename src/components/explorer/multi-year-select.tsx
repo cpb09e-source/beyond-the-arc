@@ -31,6 +31,7 @@ export function MultiYearSelect({
   className,
   availableYears,
   disabledYears,
+  lockedNotice,
 }: {
   years: number[];
   onChange: (years: number[]) => void;
@@ -41,17 +42,48 @@ export function MultiYearSelect({
   /** Currently-disabled subset (e.g. cross-filtered by another picker).
    *  Disabled options render but can't be toggled on. */
   disabledYears?: Set<number>;
+  /**
+   * Shown inside the popover after the reader's FIRST change, once per
+   * opening. Pass null for readers it does not apply to.
+   *
+   * WHY THE PICKER OWNS THE TIMING AND THE CALLER OWNS THE WORDS. "Once per
+   * opening" is a fact about this popover — it needs the open state, which
+   * only lives here. Whether the reader is limited at all is a fact about the
+   * reader, which this component has no business knowing. Splitting it that
+   * way also keeps the message reusable: the coach picker will want the same
+   * behaviour with different words.
+   *
+   * ONCE, NOT EVERY CLICK. A reader working through a list of thirteen
+   * seasons does not need telling thirteen times, and a notice that reappears
+   * on every tick reads as an error rather than as an offer.
+   */
+  lockedNotice?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  /** Whether the notice has been shown during THIS opening. */
+  const [noticed, setNoticed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  /**
+   * Every open and every close resets it, so the next visit says it again.
+   *
+   * Done in the handlers rather than an effect on `open`: each of these is a
+   * deliberate act that already has a handler, and reacting to state this
+   * component just set is the cascading-render pattern React now flags.
+   */
+  const setOpenReset = (v: boolean | ((o: boolean) => boolean)) => {
+    setOpen(v);
+    setNoticed(false);
+  };
+  /** Called by every control that changes the selection. */
+  const flagNotice = () => { if (lockedNotice) setNoticed(true); };
 
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
-      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+      if (!containerRef.current?.contains(e.target as Node)) { setOpen(false); setNoticed(false); }
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") { setOpen(false); setNoticed(false); }
     }
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
@@ -62,6 +94,7 @@ export function MultiYearSelect({
   }, [open]);
 
   function toggle(year: number) {
+    flagNotice();
     const has = years.includes(year);
     const next = has ? years.filter((y) => y !== year) : [...years, year];
     // never allow empty — keep at least the current season selected
@@ -69,12 +102,14 @@ export function MultiYearSelect({
   }
 
   function selectAll() {
+    flagNotice();
     onChange([...ALL_YEARS]);
   }
   // Counterpart to "All" — collapses the selection back to a single season
   // (the most recent year). We never allow truly empty since downstream
   // consumers all expect at least one selection.
   function clearAll() {
+    flagNotice();
     onChange([Math.max(...ALL_YEARS)]);
   }
 
@@ -92,7 +127,7 @@ export function MultiYearSelect({
     <div ref={containerRef} className={cn("relative", className)}>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpenReset((o) => !o)}
         aria-haspopup="listbox"
         aria-expanded={open}
         // Matches the global Select + SearchableMultiSelect chrome so all
@@ -135,6 +170,14 @@ export function MultiYearSelect({
               );
             })}
           </div>
+          {/* Under the list and above the chips — the reader's eye is already
+              in the list, and this is the answer to what just happened
+              there. */}
+          {noticed && lockedNotice && (
+            <div className="border-t border-coral/25 bg-coral/[0.07] px-3 py-2 text-xs leading-snug text-ink-soft">
+              {lockedNotice}
+            </div>
+          )}
           <div className="border-t border-hairline p-2 flex flex-wrap gap-1.5 text-xs">
             <Chip onClick={selectAll}>All</Chip>
             <Chip onClick={clearAll}>Clear</Chip>

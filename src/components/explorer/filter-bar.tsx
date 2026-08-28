@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { Lock } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -156,19 +157,25 @@ export function FilterBar({
             years={draft.years}
             onChange={patchYears}
             className="w-32"
+            lockedNotice={
+              paid ? null : (
+                <>
+                  <Lock size={11} className="inline-block mr-1 -mt-0.5 text-coral" aria-hidden />
+                  One season at a time on the free plan — picking another swaps to it.{" "}
+                  <Link href="/pricing" className="font-medium text-coral hover:underline">
+                    Compare seasons
+                  </Link>
+                </>
+              )
+            }
           />
-          {/* Said under the control it governs, and only to the readers it
-              applies to. A permanent "Pass required" label beside a picker
-              that works fine for subscribers would be an advert nailed to a
-              working control. */}
-          {!paid && (
-            <span className="text-[0.65rem] text-ink-muted leading-none">
-              One at a time ·{" "}
-              <Link href="/pricing" className="text-coral hover:underline">
-                compare seasons
-              </Link>
-            </span>
-          )}
+          {/* NO STANDING LABEL UNDER THIS CONTROL. There was one, and it was
+              wrong twice over: it advertised a limit to a reader who had not
+              tried to exceed it, and it sat outside the popover, where it is
+              read after the picker closes rather than at the moment the swap
+              happens. `lockedNotice` above says the same thing inside the
+              dropdown, once per opening, immediately after the click that
+              needs explaining. */}
         </Field>
 
         <Field label="Team">
