@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Bookmark, Check, Lock, Trash2 } from "lucide-react";
@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 import { FREE_LIMITS } from "@/lib/access";
 import { useEntitlement } from "@/lib/use-entitlement";
 import {
-  describeQuery, removeSaved, upsertSaved, writeSaved,
-  savedSnapshot, savedServerSnapshot, subscribeSaved,
+  describeQuery, describePlayerQuery, removeSaved, upsertSaved, writeSaved,
+  savedSnapshot, savedServerSnapshot, subscribeSaved, type SavedScope,
   MAX_SAVED, type SavedFilter,
 } from "@/lib/saved-filters";
 
@@ -36,14 +36,29 @@ export function SavedFiltersMenu({
   currentQuery,
   suggestedName,
   onApply,
+  scope = "teams",
 }: {
   /** The explorer's current query string, canonical (specToParams order). */
   currentQuery: string;
   /** What the name box opens with. */
   suggestedName: string;
   onApply: (query: string) => void;
+  /**
+   * Which explorer's list this is.
+   *
+   * The two are stored separately — a team query applied to the players table
+   * would land on a table with no columns it recognises — and each is read back
+   * by its own describer.
+   */
+  scope?: SavedScope;
 }) {
-  const saved = useSyncExternalStore(subscribeSaved, savedSnapshot, savedServerSnapshot);
+  // Bound to the scope, and memoised so the store gets STABLE function
+  // references: a fresh subscribe on every render tears down and re-adds the
+  // listener each time, and a fresh getSnapshot re-renders without end.
+  const subscribe = useMemo(() => (cb: () => void) => subscribeSaved(cb, scope), [scope]);
+  const snapshot = useMemo(() => () => savedSnapshot(scope), [scope]);
+  const describe = scope === "players" ? describePlayerQuery : describeQuery;
+  const saved = useSyncExternalStore(subscribe, snapshot, savedServerSnapshot);
   const { paid, signedIn } = useEntitlement();
   /**
    * How many this reader may keep. MAX_SAVED for a subscriber — a browsing
@@ -133,7 +148,7 @@ export function SavedFiltersMenu({
 
   /** Write, and say so if the browser refuses. The store re-reads itself. */
   function commit(next: SavedFilter[]) {
-    if (!writeSaved(next)) {
+    if (!writeSaved(next, scope)) {
       setProblem("This browser is not allowing saved filters — check whether it is blocking site data.");
     }
   }
@@ -255,7 +270,7 @@ export function SavedFiltersMenu({
                   {active ? `Update “${active.name}”` : "Save these filters"}
                 </div>
                 <div className="text-xs text-ink-muted leading-snug mt-0.5">
-                  {describeQuery(currentQuery)}
+                  {describe(currentQuery)}
                 </div>
               </button>
             )}
@@ -285,7 +300,7 @@ export function SavedFiltersMenu({
                           {e.name}
                         </span>
                       </div>
-                      <div className="text-xs text-ink-muted truncate mt-0.5">{describeQuery(e.query)}</div>
+                      <div className="text-xs text-ink-muted truncate mt-0.5">{describe(e.query)}</div>
                     </button>
                     <button
                       type="button"

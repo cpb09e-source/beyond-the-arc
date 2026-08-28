@@ -25,6 +25,9 @@
 import { parseSpec, teamStatColumn, type TeamFilterSpec } from "@/lib/team-filters";
 import { viewByKey } from "@/lib/team-views";
 import { confDisplay } from "@/lib/conf-display";
+import { parsePlayerSpec, playerStatColumn, type PlayerListSpec } from "@/lib/players";
+import { PACK_STAT_BY_KEY } from "@/lib/player-stat-pack";
+import { playerViewByKey } from "@/lib/player-views";
 
 export type SavedFilter = {
   id: string;
@@ -35,7 +38,20 @@ export type SavedFilter = {
   savedAt: number;
 };
 
-const KEY = "bta-saved-filters-v1";
+/**
+ * SCOPED, because the two explorers save different things.
+ *
+ * A saved filter is a query string, and a team query means nothing to the
+ * players page — applying one would land on a table with no columns it
+ * recognises. Two keys keep the lists apart, and the original key is kept
+ * verbatim for teams so nobody loses what they already saved.
+ */
+export type SavedScope = "teams" | "players";
+
+const KEYS: Record<SavedScope, string> = {
+  teams: "bta-saved-filters-v1",
+  players: "bta-saved-player-filters-v1",
+};
 
 /**
  * How many can be kept.
@@ -64,10 +80,6 @@ export const MAX_SAVED = 24;
 const EMPTY: SavedFilter[] = [];
 const listeners = new Set<() => void>();
 
-/** Cached against the raw string so getSnapshot returns a STABLE reference —
- *  a fresh array each call makes React re-render without end. */
-let snapRaw: string | null = null;
-let snapVal: SavedFilter[] = EMPTY;
 
 function parseList(raw: string): SavedFilter[] {
   try {
@@ -88,19 +100,30 @@ function parseList(raw: string): SavedFilter[] {
   }
 }
 
-export function savedSnapshot(): SavedFilter[] {
+/**
+ * Cached per scope, and that is not an optimisation — getSnapshot MUST return
+ * the same reference for the same stored string or React re-renders without
+ * end. One shared cache would thrash the moment both explorers were mounted.
+ */
+const snaps: Record<SavedScope, { raw: string | null; val: SavedFilter[] }> = {
+  teams: { raw: null, val: EMPTY },
+  players: { raw: null, val: EMPTY },
+};
+
+export function savedSnapshot(scope: SavedScope = "teams"): SavedFilter[] {
   if (typeof window === "undefined") return EMPTY;
   let raw: string | null;
   try {
-    raw = window.localStorage.getItem(KEY);
+    raw = window.localStorage.getItem(KEYS[scope]);
   } catch {
     // Some privacy modes throw on access rather than returning null.
     return EMPTY;
   }
-  if (raw === snapRaw) return snapVal;
-  snapRaw = raw;
-  snapVal = raw ? parseList(raw) : EMPTY;
-  return snapVal;
+  const cache = snaps[scope];
+  if (raw === cache.raw) return cache.val;
+  cache.raw = raw;
+  cache.val = raw ? parseList(raw) : EMPTY;
+  return cache.val;
 }
 
 /** Always empty: nothing is saved at export time, and this is what hydration
@@ -109,9 +132,9 @@ export function savedServerSnapshot(): SavedFilter[] {
   return EMPTY;
 }
 
-export function subscribeSaved(onChange: () => void): () => void {
+export function subscribeSaved(onChange: () => void, scope: SavedScope = "teams"): () => void {
   listeners.add(onChange);
-  const onStorage = (e: StorageEvent) => { if (e.key === KEY) onChange(); };
+  const onStorage = (e: StorageEvent) => { if (e.key === KEYS[scope]) onChange(); };
   if (typeof window !== "undefined") window.addEventListener("storage", onStorage);
   return () => {
     listeners.delete(onChange);
@@ -120,10 +143,10 @@ export function subscribeSaved(onChange: () => void): () => void {
 }
 
 /** True when the list was written. False means storage refused it. */
-export function writeSaved(list: SavedFilter[]): boolean {
+export function writeSaved(list: SavedFilter[], scope: SavedScope = "teams"): boolean {
   if (typeof window === "undefined") return false;
   try {
-    window.localStorage.setItem(KEY, JSON.stringify(list));
+    window.localStorage.setItem(KEYS[scope], JSON.stringify(list));
   } catch {
     return false;
   }
@@ -244,4 +267,70 @@ function describeSeasons(spec: TeamFilterSpec): string {
   return spec.years.length === 1
     ? seasonLabel(spec.years[0]!)
     : `${spec.years.length} seasons`;
+}
+
+// ---------------------------------------------------------------------------
+// the same two things, for the players explorer
+// ---------------------------------------------------------------------------
+//
+// Kept here beside the team versions rather than in a file of their own: the
+// storage, the cap, the cross-tab sync and the shape of a SavedFilter are all
+// shared, and only the reading-back-of-a-query differs. Splitting them would
+// mean two modules that have to agree about a format neither owns.
+
+function playerSpecOf(query: string): PlayerListSpec {
+  const obj: Record<string, string> = {};
+  for (const [k, v] of new URLSearchParams(query).entries()) obj[k] = v;
+  return parsePlayerSpec(obj);
+}
+
+function describePlayerSeasons(spec: PlayerListSpec): string {
+  return spec.years.length === 1
+    ? seasonLabel(spec.years[0]!)
+    : `${spec.years.length} seasons`;
+}
+
+/** The one-line read-out under each saved name. Widest scope first. */
+export function describePlayerQuery(query: string): string {
+  const spec = playerSpecOf(query);
+  const parts: string[] = [describePlayerSeasons(spec)];
+
+  if (spec.teams.length === 1) parts.push(spec.teams[0]!);
+  else if (spec.teams.length > 1) parts.push(`${spec.teams.length} teams`);
+  else if (spec.conf.length === 1) parts.push(confDisplay(spec.conf[0]!));
+  else if (spec.conf.length > 1) parts.push(`${spec.conf.length} confs`);
+
+  if (spec.cls.length) parts.push(spec.cls.join("/"));
+  if (spec.pos.length) parts.push(spec.pos.join("/"));
+  if (spec.filters.length) {
+    parts.push(`${spec.filters.length} filter${spec.filters.length === 1 ? "" : "s"}`);
+  }
+  if (spec.cols.length) {
+    parts.push(`+${spec.cols.length} column${spec.cols.length === 1 ? "" : "s"}`);
+  }
+  if (spec.view) parts.push(playerViewByKey(spec.view).label);
+
+  return parts.join(" · ");
+}
+
+/** The name the save box opens with — the most specific thing the query does. */
+export function suggestPlayerName(spec: PlayerListSpec): string {
+  const OP: Record<string, string> = { gt: ">", gte: "≥", lt: "<", lte: "≤" };
+  const first = spec.filters[0];
+  if (first) {
+    // Either catalogue can be filtered on, so both are consulted — and the
+    // summary column's label wins where a key exists in both.
+    const summary = playerStatColumn(first.stat);
+    const pack = PACK_STAT_BY_KEY.get(first.stat);
+    const label = summary?.label ?? pack?.label ?? first.stat;
+    const isPct = (summary?.format ?? pack?.format) === "pct1";
+    const shown = isPct ? `${Math.round(first.value * 1000) / 10}%` : String(first.value);
+    const base = `${label} ${OP[first.op] ?? first.op} ${shown}`;
+    const more = spec.filters.length - 1;
+    return more > 0 ? `${base} +${more}` : base;
+  }
+  if (spec.teams.length === 1) return `${spec.teams[0]}, ${describePlayerSeasons(spec)}`;
+  if (spec.conf.length === 1) return `${confDisplay(spec.conf[0]!)}, ${describePlayerSeasons(spec)}`;
+  if (spec.view) return `${playerViewByKey(spec.view).label}, ${describePlayerSeasons(spec)}`;
+  return describePlayerSeasons(spec);
 }

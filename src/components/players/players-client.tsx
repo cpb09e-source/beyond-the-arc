@@ -14,6 +14,8 @@ import {
 } from "@/components/players/player-filter-bar";
 import { StatChipStrip } from "@/components/filters/stat-chips";
 import { ComparePlayersModal } from "@/components/players/compare-players-modal";
+import { SavedFiltersMenu } from "@/components/explorer/saved-filters-menu";
+import { suggestPlayerName } from "@/lib/saved-filters";
 import { SortableTh, StatLabel } from "@/components/explorer/sortable-th";
 import { Select } from "@/components/select";
 import {
@@ -41,6 +43,13 @@ import { useMeasuredWidth } from "@/lib/use-measured-width";
 import { PlayerName } from "@/components/player-name";
 
 const LIMIT_OPTIONS = [50, 100, 250, 500];
+
+/**
+ * Compare, off for now — same switch and same reason as the team explorer's
+ * SHOW_COMPARE. The modal and its data path are untouched behind it, so this
+ * is one boolean away from coming back.
+ */
+const SHOW_COMPARE = false;
 
 const CLASS_LABEL: Record<string, string> = {
   Fr: "Freshmen", So: "Sophomores", Jr: "Juniors", Sr: "Seniors", Gr: "Graduates",
@@ -567,6 +576,18 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [compareOpen, setCompareOpen] = useState(false);
+
+  // ── Saved filters ───────────────────────────────────────────────────────
+  //
+  // WHAT GETS SAVED IS THE QUERY STRING, not a record of every control, so
+  // anything playerSpecToParams learns to carry a saved filter carries for
+  // free. Canonicalised through the serialiser rather than taken from the
+  // address bar, so two ways of reaching the same table save as one entry.
+  const currentQuery = useMemo(() => playerSpecToParams(spec).toString(), [spec]);
+  const savedNameSuggestion = useMemo(() => suggestPlayerName(spec), [spec]);
+  const applySaved = (query: string) => {
+    startTransition(() => router.replace(query ? `/players/?${query}` : "/players/", { scroll: false }));
+  };
   // Owned here, not inside PlayerStatFilters, so the toolbar's "+N more" chip
   // can open the drawer on the full list.
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -973,17 +994,25 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                 on a phone. The drawer itself is a full-screen sheet on mobile,
                 so there was nothing to hide it for. */}
             <PlayerStatFilters previewCount={previewCount} open={filtersOpen} onOpenChange={setFiltersOpen} />
-            <button
-              type="button"
-              onClick={() => setCompareOpen(true)}
-              title="Compare players"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-coral/40 bg-coral/6 text-coral text-[0.6rem] uppercase tracking-widest font-bold hover:bg-coral/10 hover:border-coral/60 transition-colors whitespace-nowrap"
-            >
-              <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M16 3h5v5" /><path d="M8 21H3v-5" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" />
-              </svg>
-              Compare
-            </button>
+            {SHOW_COMPARE && (
+              <button
+                type="button"
+                onClick={() => setCompareOpen(true)}
+                title="Compare players"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-coral/40 bg-coral/6 text-coral text-[0.6rem] uppercase tracking-widest font-bold hover:bg-coral/10 hover:border-coral/60 transition-colors whitespace-nowrap"
+              >
+                <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M16 3h5v5" /><path d="M8 21H3v-5" /><path d="M21 3l-7 7" /><path d="M3 21l7-7" />
+                </svg>
+                Compare
+              </button>
+            )}
+            <SavedFiltersMenu
+              scope="players"
+              currentQuery={currentQuery}
+              suggestedName={savedNameSuggestion}
+              onApply={applySaved}
+            />
             <span className="hidden sm:inline text-xs text-ink-muted tabular whitespace-nowrap">
               {loading ? "loading…" : count > players.length
                 ? `${players.length.toLocaleString()} of ${count.toLocaleString()}`
@@ -1379,7 +1408,9 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         )}
       </div>
 
-      <ComparePlayersModal open={compareOpen} onClose={() => setCompareOpen(false)} />
+      {SHOW_COMPARE && (
+        <ComparePlayersModal open={compareOpen} onClose={() => setCompareOpen(false)} />
+      )}
     </>
   );
 }
