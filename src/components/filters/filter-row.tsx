@@ -189,7 +189,22 @@ export function FilterRow({
           )}
         />
         {pct && !valueLocked && (
-          <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-ink-muted pointer-events-none">%</span>
+          <span
+            className={cn(
+              "absolute right-1.5 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none",
+              // SIZED TO WHATEVER TYPE IS ACTUALLY IN THE BOX. Fixed at
+              // text-xs it was 0.75rem against a 0.56rem placeholder, so an
+              // empty rTS% row read as "-25 to 20%" with the % a third
+              // larger than the hint it was glued to - two different sizes
+              // of the same sentence. Once a value is typed the box is back
+              // at text-sm and the suffix goes with it.
+              row.value
+                ? "text-xs"
+                : tight ? "text-[0.5rem]" : roomy ? "text-[0.68rem]" : "text-[0.56rem]",
+            )}
+          >
+            %
+          </span>
         )}
       </div>
 

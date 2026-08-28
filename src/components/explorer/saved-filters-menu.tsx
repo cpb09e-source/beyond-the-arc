@@ -184,7 +184,7 @@ export function SavedFiltersMenu({
       <button
         type="button"
         onClick={() => (open ? closeMenu() : setOpen(true))}
-        title="Saved filters"
+        title="Save filter view"
         aria-haspopup="menu"
         aria-expanded={open}
         className={cn(
@@ -195,7 +195,11 @@ export function SavedFiltersMenu({
         )}
       >
         <Bookmark size={12} strokeWidth={2.5} fill={active ? "currentColor" : "none"} />
-        <span className="hidden sm:inline">Saved</span>
+        {/* NAMES THE ACTION, not the shelf. "Saved" only means anything to
+            somebody who already knows there is somewhere to save things;
+            the first-time reader has nothing saved and no reason to open a
+            menu labelled with the past tense. */}
+        <span className="hidden sm:inline">Save Filter View</span>
         {saved.length > 0 && <span className="tabular font-medium">{saved.length}</span>}
       </button>
 
@@ -265,27 +269,29 @@ export function SavedFiltersMenu({
                  over a summary line, so the only thing on the panel that
                  actually does something read as a label - people opened the
                  menu, saw "Save these filters" and waited for somewhere to
-                 click. The summary stays underneath, where it describes what
-                 the button would save rather than competing with it. */
-              <div>
-                <button
-                  type="button"
-                  onClick={startNaming}
-                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-coral px-3 py-1.5 text-sm font-medium text-white hover:bg-coral-soft transition-colors"
-                >
-                  <Bookmark size={13} aria-hidden />
-                  {active ? `Update “${active.name}”` : "Save these filters"}
-                </button>
-                <div className="text-xs text-ink-muted leading-snug mt-1.5">
-                  {describe(currentQuery)}
-                </div>
-              </div>
+                 click.
+
+                 NO SUMMARY UNDER IT ANY MORE. It described the live table in
+                 exactly the words the saved rows below use to describe
+                 themselves - a bare "25-26" sitting between the button and
+                 the list, which made the current selection look like a
+                 half-drawn entry in that list. The button already says what
+                 it saves, and the table itself is the summary. */
+              <button
+                type="button"
+                onClick={startNaming}
+                className="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-coral px-3 py-1.5 text-sm font-medium text-white hover:bg-coral-soft transition-colors"
+              >
+                <Bookmark size={13} aria-hidden />
+                {active ? `Update “${active.name}”` : "Save these filters"}
+              </button>
             )}
           </div>
 
           {saved.length === 0 ? (
             <div className="px-3 py-3 text-xs text-ink-muted leading-snug">
-              Nothing saved yet.
+              Nothing saved yet. Saving keeps this table exactly as it is - seasons,
+              filters and columns - so you can bring it back in one click.
             </div>
           ) : (
             <ul className="max-h-72 overflow-y-auto py-1">
