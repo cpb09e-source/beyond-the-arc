@@ -33,7 +33,6 @@ import {
   passesPlayerFilter,
   playerSpecToParams,
   type PlayerListSpec,
-  type PlayerStatFilter,
   type PlayerSummary,
 } from "@/lib/players";
 import {
@@ -44,6 +43,9 @@ import {
   PACK_STAT_BY_KEY, groupsFor, loadStatPack, type IndexedPack, type PackGroup,
 } from "@/lib/player-stat-pack";
 import { useDragPan } from "@/lib/use-drag-pan";
+import { effectivePlayerViewAccess, playerViewAccess, FREE_LIMITS } from "@/lib/access";
+import { useEntitlement } from "@/lib/use-entitlement";
+import { GateBar } from "@/components/explorer/gate-bar";
 import { useMeasuredWidth } from "@/lib/use-measured-width";
 import { PlayerName } from "@/components/player-name";
 
@@ -532,6 +534,26 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
 
   // ── The active view, and the stat packs it needs ────────────────────────
   const view = useMemo(() => playerViewByKey(spec.view), [spec.view]);
+
+  /**
+   * What this view costs this reader — see §3b of src/lib/access.ts.
+   *
+   * Resolves to `free` for every subscriber, so every branch below is dead
+   * code on a paid session. It is also optimistic while the profile is still
+   * loading, which is deliberate: a subscriber must never watch their own
+   * table lock itself and then unlock.
+   */
+  const { paid, signedIn } = useEntitlement();
+  const gate = effectivePlayerViewAccess(view.key, paid);
+  /**
+   * A gated view shows its top few rows and stops.
+   *
+   * Cut from the whole matched set rather than from the page, so the five are
+   * the top five of what the reader actually asked for: every filter, the
+   * conference and class pickers and the name search all still apply. The
+   * tool visibly works and stops short of being a ranking.
+   */
+  const previewCapped = gate.kind === "preview";
   const { cols: viewCols, bands: viewBands } = useMemo(() => viewGrid(view), [view]);
 
   /**
@@ -1006,6 +1028,15 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       ? prefiltered.filter((p) => p.name.toLowerCase().includes(q))
       : prefiltered;
     const total = matched.length;
+    // A preview is one page of five, whatever the row-count select says.
+    if (previewCapped) {
+      return {
+        players: matched.slice(0, FREE_LIMITS.previewRows),
+        count: total,
+        totalPages: 1,
+        pageSafe: 1,
+      };
+    }
     const totalPages = Math.max(1, Math.ceil(total / spec.limit));
     const pageSafe = Math.min(Math.max(1, page), totalPages);
     const start = (pageSafe - 1) * spec.limit;
@@ -1015,7 +1046,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       totalPages,
       pageSafe,
     };
-  }, [prefiltered, deferredQuery, spec.limit, page]);
+  }, [prefiltered, deferredQuery, spec.limit, page, previewCapped]);
 
   // Reset to page 1 whenever the result set changes (filters, sort, search, limit).
   useEffect(() => { setPage(1); }, [prefiltered, deferredQuery, spec.limit, spec.sortBy, spec.sortDir]);
@@ -1152,9 +1183,22 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               >
                 {playerViewGroups().map((g) => (
                   <optgroup key={g.group} label={g.group}>
-                    {g.views.map((v) => (
-                      <option key={v.key} value={v.key} title={v.desc}>{v.label}</option>
-                    ))}
+                    {/* A native <option> renders text and nothing else, hence
+                        a word rather than a padlock. Shown only to readers it
+                        applies to - a subscriber has no use for a list of
+                        labels naming what they already bought. */}
+                    {g.views.map((v) => {
+                      const locked = !paid && playerViewAccess(v.key).kind === "preview";
+                      return (
+                        <option
+                          key={v.key}
+                          value={v.key}
+                          title={locked ? `${v.desc} — part of the Season Pass` : v.desc}
+                        >
+                          {locked ? `${v.label} · Pass` : v.label}
+                        </option>
+                      );
+                    })}
                   </optgroup>
                 ))}
               </select>
@@ -1401,7 +1445,19 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                     // yielding to content minimums when the table is too
                     // narrow and still leaving the slack visible when only a
                     // couple of columns are picked.
-                    <SortableTh key={`${c.field}-${i}`} statKey={c.sortKey} label={c.label} basePath="/players" defaultSort={effectiveDefaultSort} idleArrows className="sticky top-6 z-30 w-[8%] bg-paper-deep border-b border-hairline" />
+                    <SortableTh
+                      key={`${c.field}-${i}`}
+                      statKey={c.sortKey}
+                      label={c.label}
+                      basePath="/players"
+                      defaultSort={effectiveDefaultSort}
+                      idleArrows
+                      // A preview locks the WHOLE table - re-sorting five rows
+                      // out of four thousand would hand over the ranking the
+                      // preview exists to withhold, one column at a time.
+                      locked={previewCapped}
+                      className="sticky top-6 z-30 w-[8%] bg-paper-deep border-b border-hairline"
+                    />
                   ) : (
                     <th key={`${c.field}-${i}`} className="sticky top-6 z-30 w-[8%] bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-right whitespace-nowrap align-middle">
                       <StatLabel label={c.label} />
@@ -1436,7 +1492,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                   <tr key={p.id} className={cn("group", zebra)}>
                     {/* RK — rank within the CURRENT sort */}
                     <td className={cn("sticky left-0 z-20 w-10 min-w-10 px-1 sm:px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
-                      {(pageSafe - 1) * spec.limit + i + 1}
+                      {previewCapped ? i + 1 : (pageSafe - 1) * spec.limit + i + 1}
                     </td>
                     {/* Player — photo + name + team/class/height meta */}
                     <td style={playerLeft} className={cn("sticky z-20 px-1.5 sm:px-3 py-1 transition-colors", zebra, ROW_HOVER)}>
@@ -1559,7 +1615,17 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
             <span>Estimated EPM — the box-score half alone, for seasons with no play-by-play lineups to fit. Real EPM resumes in 2024, where lineup data begins.</span>
           </div>
         )}
-        {!loading && totalPages > 1 && (
+        {/* Where the pagination would be, because that is what it
+            replaces. Under the rows, never over them: the argument for
+            subscribing IS the five real rows above it. */}
+        {previewCapped && !loading && (
+          <GateBar
+            signedIn={signedIn}
+            lead={`Showing the top ${Math.min(FREE_LIMITS.previewRows, count).toLocaleString()} of ${count.toLocaleString()}.`}
+            tail={`${view.label} is part of the Season Pass. Your filters and search still narrow these rows — the full table and column sorting are what a Pass unlocks.`}
+          />
+        )}
+        {!previewCapped && !loading && totalPages > 1 && (
           <PlayerPagination
             firstShown={(pageSafe - 1) * spec.limit + 1}
             lastShown={Math.min(pageSafe * spec.limit, count)}

@@ -238,6 +238,52 @@ export const VIEW_ACCESS: Readonly<Record<string, ViewAccess>> = {
   custom: { kind: "cols" },
 };
 
+/**
+ * The same thing for the PLAYERS explorer, and a separate map on purpose.
+ *
+ * THE TWO REGISTRIES SHARE KEYS. Four of them: `overview`, `traditional`,
+ * `scoring-context` and `custom` name a view on both explorers. Three happen
+ * to agree; `custom` does not, and cannot - "Build my own table" on the team
+ * side caps the column count and shows every row, where "Select your own
+ * columns" here is a preview. One map keyed by view name would have to pick
+ * one of those, silently, for both pages.
+ *
+ * Filled in from the decisions on docs/free-vs-paid.csv: the default table
+ * and the traditional box score are free, everything else previews.
+ */
+export const PLAYER_VIEW_ACCESS: Readonly<Record<string, ViewAccess>> = {
+  // The shop window. What a search lands on, and the box score every other
+  // site publishes anyway.
+  overview: FREE,
+  traditional: FREE,
+
+  // Everything the site computes rather than reprints.
+  "trad-shooting": PREVIEW,
+  "scoring-context": PREVIEW,
+  "adv-offense": PREVIEW,
+  "adv-defense": PREVIEW,
+  "foul-related": PREVIEW,
+  impact: PREVIEW,
+  doubles: PREVIEW,
+  leaders: PREVIEW,
+  "player-info": PREVIEW,
+
+  // NOT `cols`, which is what the team side does with its equivalent. A
+  // preview here means a free reader can still assemble any columns they
+  // like and see the top five rows of the result.
+  custom: PREVIEW,
+};
+
+/** The rule for a players view. Unknown keys are free, same as the teams. */
+export function playerViewAccess(key: string): ViewAccess {
+  return PLAYER_VIEW_ACCESS[key] ?? FREE;
+}
+
+/** The rule that actually applies to this reader. */
+export function effectivePlayerViewAccess(key: string, paid: boolean): ViewAccess {
+  return paid ? FREE : playerViewAccess(key);
+}
+
 /** The rule for a view. Unknown keys are free — a view with no entry is new,
  *  and shipping it locked by accident is the worse failure. */
 export function viewAccess(key: string): ViewAccess {
