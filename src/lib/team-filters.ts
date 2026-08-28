@@ -151,7 +151,14 @@ export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   { key: "tov_diff",   source: "derived", dbColumn: "", label: "TOV% Diff",    desc: "Opp TOV% − your TOV% (+ = forcing more)",                  format: "pct1", group: "diffs" },
   { key: "orb_diff",   source: "derived", dbColumn: "", label: "OREB% Diff",   desc: "OREB% − Opp OREB% (offensive-board battle)",               format: "pct1", group: "diffs" },
   { key: "fg3_diff",   source: "derived", dbColumn: "", label: "3P% Diff",     desc: "3P% − Opp 3P% (computed from raw 3PT counts)",             format: "pct1", group: "diffs" },
-  { key: "fta_diff",   source: "derived", dbColumn: "", label: "FTA% Diff",    desc: "FTAR − Opp FTAR (free-throw drawing edge)",        format: "pct1", group: "diffs" },
+  // HIDDEN: NULL ON EVERY TEAM-SEASON. It is derived as FTAR − Opp FTAR, and
+  // the opponent half does not exist — the season stats carry efg_pct_def,
+  // tov_pct_def, orb_pct_def and fg3_pct_def, and no free-throw-rate-allowed
+  // field at all. Measured across all 4,273 team-seasons: zero non-null
+  // values. Kept rather than deleted so the key is not reused, and hidden so
+  // nobody can filter on a column that can only ever return nothing.
+  // To restore it, add opponent free-throw rate to the season-stats build.
+  { key: "fta_diff",   source: "derived", dbColumn: "", label: "FTA% Diff",    desc: "FTAR − Opp FTAR (free-throw drawing edge)",        format: "pct1", group: "diffs", hideInFilter: true },
   // Count diffs (CBB ready-made; populated after migration 003 + sync)
   { key: "fg3m_diff_ct", source: "cbbd", dbColumn: "fg3_made_diff",  label: "3PM Diff",     desc: "3-pointers made − allowed (season total)",   format: "num1", group: "diffs" },
   { key: "fg3a_diff_ct", source: "cbbd", dbColumn: "fg3_att_diff",   label: "3PA Diff",     desc: "3-point attempts − allowed",                 format: "num1", group: "diffs" },

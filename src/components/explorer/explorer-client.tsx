@@ -22,10 +22,9 @@ import {
 } from "@/lib/team-filters";
 import { Select } from "@/components/select";
 import { FilterBar, ConferenceRankingsModal } from "@/components/explorer/filter-bar";
-import { TeamStatFilters, teamStatChipsFromSpec } from "@/components/explorer/team-stat-filters";
+import { TeamStatFilters } from "@/components/explorer/team-stat-filters";
 import { PREVIEW_SEASON } from "@/lib/seasons";
 import { TABLE_VIEWS, viewByKey, viewGroups, type TableView } from "@/lib/team-views";
-import { StatChipStrip } from "@/components/filters/stat-chips";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { CompareTeamsModal } from "@/components/explorer/compare-teams-modal";
 import { DownloadMenu } from "@/components/explorer/download-menu";
@@ -364,33 +363,6 @@ export function ExplorerClient({
   // the toolbar, and a chip whose X did nothing until you opened a panel would
   // be a lie.
   /**
-   * Chips for columns pinned WITHOUT a filter on them — and nothing else.
-   *
-   * The strip used to repeat every filter, which was right when the filters
-   * lived in a drawer: there was no other way to see what was applied. The
-   * builder is inline now, one editable row per filter immediately below this
-   * toolbar, so a read-only chip saying "Pace ≥ 70" next to a row that says the
-   * same thing AND can change it is pure duplication — two controls for one
-   * fact, and the weaker one first.
-   *
-   * What survives is the case the builder genuinely cannot show: a column
-   * carried in by a shared URL or a saved filter with no bound attached. There
-   * is no row for it, so without this there would be no way to see it or
-   * remove it. In normal use this is empty and the strip renders nothing.
-   */
-  const specChips = useMemo(() => {
-    const filtered = new Set<string>(spec.filters.map((f) => f.stat as string));
-    return teamStatChipsFromSpec(spec.cols.filter((k) => !filtered.has(k)), []);
-  }, [spec.cols, spec.filters]);
-  const removeSpecStat = (key: string) => {
-    const next: TeamFilterSpec = {
-      ...spec,
-      cols: spec.cols.filter((k) => k !== key),
-      filters: spec.filters.filter((f) => f.stat !== key),
-    };
-    const p = specToParams(next).toString();
-    startTransition(() => router.replace(p ? `/?${p}` : "/", { scroll: false }));
-  };
 
   /**
    * The canonical query for what is on screen, and what a saved filter stores.
@@ -914,15 +886,6 @@ export function ExplorerClient({
                 View Conference Rankings →
               </button>
             )}
-
-            {/* Only ever columns with no filter behind them — see specChips.
-                Empty in normal use, so this usually renders nothing. */}
-            <StatChipStrip
-              chips={specChips}
-              onRemove={removeSpecStat}
-              max={6}
-              ariaLabel="Extra columns"
-            />
           </div>
 
           {/* w-full on mobile, matching /players. The sliding mobile search

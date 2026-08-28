@@ -81,26 +81,70 @@ function isPctStat(key: string): boolean {
 /**
  * Measured 1st/99th-percentile bounds, in DISPLAY units, rounded outward.
  *
- * Inherited wholesale from the slider drawer, where every pair was derived from
- * the real distribution across 6,689 team-seasons. They no longer constrain
- * anything — a reader may type any number — they only tell them what a normal
- * one looks like.
+ * They constrain nothing — a reader may type any number — they only say what a
+ * normal one looks like, which a bare box cannot.
  *
- * Only 28 of the 55 stats are covered, because only those had sliders. The rest
- * are unmeasured, not zero: see the placeholder fallback in FilterRow.
+ * GENERATED, NOT HAND-WRITTEN: scripts/build-stat-bounds.mts measures the 1st
+ * and 99th percentile of each stat across 4,273 team-seasons and rounds
+ * outward. The first 28 were inherited from the slider drawer and covered only
+ * the stats that had once had a slider, so ~100 of the registry showed no hint
+ * at all. Re-run that script after any change to the stat registry.
+ *
+ * Every filterable stat is covered except fta_diff, which has no values at all
+ * — see its registry entry.
  */
 const STAT_BOUNDS: Record<string, [number, number]> = {
-  a_net: [-30, 30], a_ortg: [85, 130], a_drtg: [85, 125], adj_sos: [-15, 15],
-  cbb_pace: [55, 85],
-  reb_diff_ct: [-400, 400], fg3m_diff_ct: [-150, 150], fbpts_diff: [-300, 300],
-  tov_diff_ct: [-200, 200],
-  cbb_efg: [35, 65], cbb_fg3: [25, 45], cbb_fg3rate: [15, 60], cbb_ft: [55, 85],
-  cbb_ftarate: [15, 60], cbb_ts: [40, 65],
-  cbb_efg_def: [35, 65], cbb_fg3_def: [25, 45], cbb_tov_def: [8, 32],
-  cbb_orb_def: [15, 45],
-  cbb_orb: [12, 48], cbb_tov: [8, 30], cbb_ast: [30, 75],
-  wins: [0, 40], losses: [0, 40], wab: [-25, 15],
-  pts_diff: [-600, 600], pitp_diff: [-500, 500], scp_diff: [-250, 250],
+  // overall
+  a_net: [-25, 30], a_ortg: [85, 125], a_drtg: [90, 120],
+  adjt: [61, 75], cbb_pace: [61, 76], prev_a_net: [-25, 30],
+  // record
+  adj_sos: [-15, 15], wins: [0, 35], losses: [0, 30],
+  wab: [-25, 10], nc_sos: [-10, 15], conf_sos: [-20, 20],
+  sos_wp: [50, 90], win_pct: [10, 90], wins_no_trail: [0, 9],
+  wire_wins: [0, 6], wins_trailing_5: [0, 13], wins_trailing_10: [0, 6],
+  wins_trailing_15: [0, 2], wins_trailing_20: [0, 1], losses_no_lead: [0, 8],
+  wire_losses: [0, 5], losses_leading_5: [0, 12], losses_leading_10: [0, 5],
+  losses_leading_15: [0, 2], losses_leading_20: [0, 1], pbp_games: [5, 40],
+  // roster
+  eff_height: [74.5, 79], fr_min_pct: [0, 55], so_min_pct: [0, 65],
+  jr_min_pct: [0, 70], sr_min_pct: [0, 80], fr_pts_pct: [0, 55],
+  so_pts_pct: [0, 70], jr_pts_pct: [0, 75], sr_pts_pct: [0, 85],
+  cont_pct: [0, 85], ret_min_pct: [0, 95], rrot_pct: [0, 100],
+  ret_prior_min: [0, 6000], prior_team_min: [3500, 7700], ret_curr_min: [0, 6450],
+  curr_team_min: [5150, 7700], in_transfer_min: [0, 7250], proven_min_pct: [0, 120],
+  // scoring
+  cbb_ts: [47, 61], cbb_efg: [43, 58], cbb_fg3: [28, 41],
+  cbb_ft: [62, 80], cbb_fg3rate: [20, 55], cbb_ftarate: [20, 50],
+  cbb_orb: [19, 39], cbb_tov: [13, 24], cbb_ast: [40, 65],
+  cbb_fbpts: [3, 20], cbb_pitp: [30, 55], cbb_ortg: [90, 125],
+  cbb_fg: [38, 50], cbb_fg2: [42, 59], cbb_fga_pg: [49, 66],
+  cbb_fg2a_pg: [28, 45], cbb_fg3a_pg: [13, 31], cbb_fta_pg: [13, 27],
+  cbb_pts_pg: [55, 90], cbb_ast_pg: [9, 19], cbb_orb_pg: [6, 15],
+  cbb_reb_pg: [28, 42], cbb_tov_pg: [9, 17], cbb_pfd_pg: [14, 22],
+  cbb_fbpts_pg: [2, 16], cbb_pitp_pg: [20, 41], cbb_potov_pg: [9, 20],
+  cbb_scp_pg: [5, 15], cbb_scp_pct: [8, 20], cbb_bench_pg: [5, 35],
+  cbb_bench_pct: [10, 45], cbb_ast_to: [0.5, 2], cbb_ppp: [0.9, 1.3],
+  cbb_rim_rate: [20, 50], cbb_mid_rate: [10, 45], cbb_three_rate: [20, 55],
+  cbb_rim_fg: [47, 66], cbb_mid_fg: [25, 50], cbb_corner3_fg: [20, 50],
+  cbb_atb3_fg: [25, 41], cbb_corner3_share: [5, 30], cbb_unast_pg: [8, 16],
+  cbb_unast_share: [35, 60],
+  // defense
+  cbb_efg_def: [43, 57], cbb_tov_def: [13, 25], cbb_orb_def: [22, 37],
+  cbb_fg3_def: [28, 40], cbb_drtg: [90, 120], cbb_drb_pg: [20, 30],
+  cbb_stl_pg: [4, 10], cbb_blk_pg: [1.5, 6], cbb_pf_pg: [13, 23],
+  cbb_drb_pct: [63, 78], cbb_stl_pct: [5, 15], cbb_blk_pct: [4, 16],
+  cbb_hakeem: [11, 28], cbb_stl_pf: [0.2, 0.6], cbb_blk_pf: [0, 0.4],
+  cbb_pf_eff: [0.3, 0.9], cbb_rim_rate_def: [20, 50], cbb_mid_rate_def: [15, 45],
+  cbb_three_rate_def: [25, 50],
+  // diffs
+  efg_diff: [-10, 11], tov_diff: [-7, 8], orb_diff: [-15, 15],
+  fg3_diff: [-9, 9], fg3m_diff_ct: [-120, 140], fg3a_diff_ct: [-300, 350],
+  fg2m_diff_ct: [-180, 220], fgm_diff_ct: [-170, 220], ftm_diff_ct: [-180, 200],
+  orb_diff_ct: [-150, 160], drb_diff_ct: [-180, 230], reb_diff_ct: [-300, 350],
+  tov_diff_ct: [-180, 140], reb_diff_pg: [-8, 9], fg3m_diff_pg: [-4, 4],
+  fbpts_diff_pg: [-6, 7], tov_diff_pg: [-6, 5], pitp_diff_pg: [-15, 15],
+  potov_diff_pg: [-8, 8], scp_diff_pg: [-5, 6], fbpts_diff: [-170, 250],
+  pitp_diff: [-350, 450], pts_diff: [-450, 550], scp_diff: [-150, 180],
 };
 
 const OPS: Array<{ op: Comparator; symbol: string }> = [
@@ -260,15 +304,40 @@ const PICK_OPTIONS: PickOption[] = GROUP_ORDER.flatMap((g) =>
  * finds WAB. Label matches sort first, so typing an exact abbreviation still
  * puts it at the top.
  */
+/**
+ * TWO DOORS INTO ONE LIST.
+ *
+ * "filter" is the original: pick a stat, the row appears, the caret is already
+ * in its value box. One click, one bound, keep typing. That path was briefly
+ * lost to multi-select and it should not have been — bounding a stat is the
+ * single most common thing anyone does here, and it deserves to stay one
+ * click.
+ *
+ * "columns" is the batch door: tick as many as you like, commit them all with
+ * blank values. It also SHOWS what is already on the table, so unticking is
+ * how a column comes off — it manages the set rather than only adding to it.
+ *
+ * They are not two data models. Filtering a stat pins it as a column either
+ * way, so both end up in the same list of rows; what differs is how many you
+ * name at once and whether the caret follows.
+ */
 function StatPicker({
-  onPickMany,
+  mode,
+  onPick,
+  onSetColumns,
+  current,
   remaining,
   disabled,
   open,
   setOpen,
 }: {
-  /** Commits every marked stat at once, in the order they were marked. */
-  onPickMany: (keys: TeamStatKey[]) => void;
+  mode: "filter" | "columns";
+  /** filter mode: one stat, added immediately. */
+  onPick: (key: TeamStatKey) => void;
+  /** columns mode: the FULL set that should be on the table afterwards. */
+  onSetColumns: (keys: TeamStatKey[]) => void;
+  /** Stats already on the table, ticked when the columns picker opens. */
+  current: readonly string[];
   /** Filter slots still free, so the picker cannot mark more than fit. */
   remaining: number;
   disabled?: boolean;
@@ -341,11 +410,14 @@ function StatPicker({
    * dependency is honest about what the effect actually uses.
    */
   const commit = useCallback(() => {
-    if (marked.length) onPickMany(marked);
+    // Columns mode commits the whole ticked set — including ticks REMOVED,
+    // which is how a column comes off the table. Filter mode never gets here;
+    // it commits on the click itself.
+    if (mode === "columns") onSetColumns(marked);
     setMarked([]);
     setQ("");
     setHi(0);
-  }, [marked, onPickMany]);
+  }, [mode, marked, onSetColumns]);
   const discard = useCallback(() => { setMarked([]); setQ(""); setHi(0); }, []);
 
   // Click-away and Escape. The popover is no longer a DOM descendant of the
@@ -411,8 +483,15 @@ function StatPicker({
    * the gain is that adding four is four clicks instead of four round trips
    * through the button.
    */
-  const toggle = (o: PickOption) => {
+  const choose = (o: PickOption) => {
     const key = o.key as TeamStatKey;
+    if (mode === "filter") {
+      // Straight through: add it, close, and the parent puts the caret in the
+      // new row's value box.
+      onPick(key);
+      setQ(""); setHi(0); setOpen(false);
+      return;
+    }
     setMarked((m) =>
       m.includes(key) ? m.filter((k) => k !== key)
         : m.length >= remaining ? m
@@ -428,15 +507,18 @@ function StatPicker({
     else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
     else if (e.key === "Enter") {
       e.preventDefault();
-      // Enter with nothing ticked still adds the highlighted row, so the
-      // one-stat keyboard path is type, Enter — unchanged from before.
-      if (!marked.length && matches[hiSafe]) toggle(matches[hiSafe]!);
-      // A tick set by that same keypress is not in state yet, so commit reads
-      // it from the list rather than from `marked`.
+      if (mode === "filter") {
+        // Type a few letters, Enter, start typing the value. Unchanged.
+        if (matches[hiSafe]) choose(matches[hiSafe]!);
+        return;
+      }
+      // Columns: Enter with nothing ticked still takes the highlighted row,
+      // so the keyboard path never needs the mouse. That tick is not in state
+      // yet, so the set is read from the list rather than from `marked`.
       const keys = marked.length
         ? marked
-        : matches[hiSafe] ? [matches[hiSafe]!.key as TeamStatKey] : [];
-      if (keys.length) onPickMany(keys);
+        : matches[hiSafe] ? [...current, matches[hiSafe]!.key] as TeamStatKey[] : [];
+      onSetColumns(keys);
       setMarked([]); setQ(""); setHi(0); setOpen(false);
     }
   };
@@ -450,7 +532,13 @@ function StatPicker({
     <div className="relative" ref={wrapRef}>
       <button
         type="button"
-        onClick={() => setOpen(!open)}
+        // Seeding happens HERE rather than in an effect on `open`: opening is
+        // an event with a handler already attached, and the columns picker has
+        // to show what is on the table before the reader touches anything.
+        onClick={() => {
+          if (!open && mode === "columns") setMarked(current as TeamStatKey[]);
+          setOpen(!open);
+        }}
         disabled={disabled}
         aria-expanded={open}
         aria-controls={PICKER_LIST_ID}
@@ -462,7 +550,7 @@ function StatPicker({
         )}
       >
         <Plus size={15} />
-        Add a Filter
+        {mode === "filter" ? "Add a Filter" : "Add Columns"}
       </button>
 
       {open && at && typeof document !== "undefined" && createPortal(
@@ -479,7 +567,7 @@ function StatPicker({
               value={q}
               onChange={(e) => { setQ(e.target.value); setHi(0); }}
               onKeyDown={onKey}
-              placeholder="Search stats…"
+              placeholder={mode === "filter" ? "Search stats…" : "Search columns…"}
               aria-label="Search stats"
               role="combobox"
               aria-expanded
@@ -509,7 +597,7 @@ function StatPicker({
                     aria-selected={i === hiSafe}
                     // onMouseDown, not onClick: the input keeps focus so the
                     // next stat can be typed straight away.
-                    onMouseDown={(e) => { e.preventDefault(); toggle(o); }}
+                    onMouseDown={(e) => { e.preventDefault(); choose(o); }}
                     onMouseEnter={() => setHi(i)}
                     title={marked.includes(o.key as TeamStatKey) || !atCapNow ? o.desc : "Filter limit reached"}
                     className={cn(
@@ -518,21 +606,23 @@ function StatPicker({
                       !marked.includes(o.key as TeamStatKey) && atCapNow && "opacity-40",
                     )}
                   >
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "shrink-0 w-3.5 h-3.5 rounded-[3px] border inline-flex items-center justify-center transition-colors",
-                        marked.includes(o.key as TeamStatKey)
-                          ? "bg-coral border-coral text-white"
-                          : "border-ink/25",
-                      )}
-                    >
-                      {marked.includes(o.key as TeamStatKey) && (
-                        <svg viewBox="0 0 12 12" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M2.5 6.2l2.4 2.4L9.5 3.8" />
-                        </svg>
-                      )}
-                    </span>
+                    {mode === "columns" && (
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "shrink-0 w-3.5 h-3.5 rounded-[3px] border inline-flex items-center justify-center transition-colors",
+                          marked.includes(o.key as TeamStatKey)
+                            ? "bg-coral border-coral text-white"
+                            : "border-ink/25",
+                        )}
+                      >
+                        {marked.includes(o.key as TeamStatKey) && (
+                          <svg viewBox="0 0 12 12" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M2.5 6.2l2.4 2.4L9.5 3.8" />
+                          </svg>
+                        )}
+                      </span>
+                    )}
                     <span className="truncate">{o.label}</span>
                   </button>
                 </div>
@@ -543,10 +633,10 @@ function StatPicker({
           {/* Only once something is ticked. An empty picker needs no
               instructions; a picker holding four choices needs to say what
               happens to them. */}
-          {marked.length > 0 && (
+          {mode === "columns" && marked.length > 0 && (
             <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-hairline bg-paper-deep/50">
               <span className="text-xs text-ink-soft">
-                <span className="font-medium text-coral">{marked.length}</span> selected
+                <span className="font-medium text-coral">{marked.length}</span> on the table
                 {atCapNow && <span className="text-ink-muted"> · limit</span>}
               </span>
               <span className="text-[0.68rem] text-ink-muted">
@@ -637,8 +727,10 @@ function FilterRow({
           }}
           // An en dash rather than " to ": same information, four fewer
           // characters, which is the difference between the hint fitting and
-          // being clipped now that the box is narrower.
-          placeholder={bounds ? `${bounds[0]}–${bounds[1]}` : "Value"}
+          // being clipped now that the box is narrower. A NEGATIVE lower bound
+          // is the exception — "-25–30" reads as one mangled number, so those
+          // spell the word out and accept the width.
+          placeholder={bounds ? (bounds[0] < 0 ? `${bounds[0]} to ${bounds[1]}` : `${bounds[0]}–${bounds[1]}`) : "Value"}
           aria-label={`Value for ${col?.label ?? row.stat}`}
           className={cn(
             "h-8 w-full px-2 rounded-md border border-ink/15 bg-card text-ink text-sm tabular",
@@ -708,15 +800,26 @@ export function TeamStatFilters({
   /** The row that just appeared, so exactly one input claims the caret. */
   const [freshId, setFreshId] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  /** The columns picker has its own open state — only the filter one is
+   *  reopened by Enter in a value box. */
+  const [colsPickerOpen, setColsPickerOpen] = useState(false);
+  /** The last query this component pushed, so the resync can ignore it. */
+  const selfPublished = useRef<string | null>(null);
 
   // Resync the draft when the committed URL changes underneath us — a back
   // button, or the toolbar chip strip dropping a stat. Keyed on `search` rather
   // than urlSpec so it fires once per navigation, not once per re-parse.
   useEffect(() => {
-    /* eslint-disable-next-line react-hooks/set-state-in-effect --
-       Deliberate: this IS the external system sync the rule is about. The URL
-       is the source of truth and the draft mirrors it; there is nothing to
-       cascade into, because both setters land in the same commit. */
+     
+    // OUR OWN ECHO IS NOT AN OUTSIDE CHANGE. In the live view every Enter
+    // publishes, and rebuilding from that would hand every row a new id —
+    // remounting the input the reader is typing in and throwing away the
+    // caret. A URL we did not write still rebuilds, which is what makes the
+    // back button and a pasted link work.
+    if (selfPublished.current !== null && selfPublished.current === search.toString()) {
+      selfPublished.current = null;
+      return;
+    }
     setRows(rowsFromSpec(urlSpec.cols, urlSpec.filters));
     setPins(urlSpec.cols);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -754,26 +857,56 @@ export function TeamStatFilters({
    * The caret lands in the FIRST new row. Some row has to have it, and the
    * first is the one the reader was thinking about first.
    */
-  const addRows = useCallback((stats: TeamStatKey[]) => {
+  const addRows = useCallback((stats: TeamStatKey[], focusFirst: boolean) => {
     if (!stats.length) return;
-    let firstId: number | null = null;
+    // Ids are allocated HERE, not inside the updater. React runs an updater
+    // when it is ready, so a value assigned inside one is still null on the
+    // next line — which is why the caret never landed in the new row's value
+    // box. Any id the cap discards is simply never used.
+    const entries = stats.map((stat) => ({
+      id: nextRowId++, stat, op: "gte" as Comparator, value: "",
+    }));
     setRows((r) => {
       const room = MAX_FILTERS - r.length;
-      if (room <= 0) return r;
-      const added = stats.slice(0, room).map((stat) => {
-        const id = nextRowId++;
-        if (firstId === null) firstId = id;
-        return { id, stat, op: "gte" as Comparator, value: "" };
-      });
-      return [...r, ...added];
+      return room <= 0 ? r : [...r, ...entries.slice(0, room)];
     });
     // Filtering on a stat auto-pins it as a column. Filtering on something you
     // then cannot see in the table is the worst version of this panel — you get
     // a list of teams and no way to check why they qualified.
     setPins((p) => [...p, ...stats.filter((k) => !p.includes(k))]);
-    setFreshId(firstId);
+    // Only the single-pick door moves the caret. Adding six columns and being
+    // dropped into the first one's value box would be the app deciding which
+    // of the six you meant.
+    setFreshId(focusFirst ? entries[0]!.id : null);
     // In the live view the table follows immediately — four ticks, four
     // columns, no Submit.
+    requestApply();
+  }, [requestApply]);
+
+  /** The single-pick door: one stat, and the caret lands in its value box. */
+  const addFilter = useCallback((stat: TeamStatKey) => addRows([stat], true), [addRows]);
+
+  /**
+   * The batch door: `next` is the FULL set of columns that should be on the
+   * table, so this both adds and removes.
+   *
+   * Unticking a stat that carries a bound takes the bound with it. The
+   * alternative — keeping a filter on a column nobody can see — is the exact
+   * situation the auto-pin rule exists to prevent.
+   */
+  const setColumns = useCallback((next: TeamStatKey[]) => {
+    const keep = new Set<string>(next);
+    setRows((r) => {
+      const kept = r.filter((x) => keep.has(x.stat as string));
+      const have = new Set(kept.map((x) => x.stat as string));
+      const added = next
+        .filter((k) => !have.has(k))
+        .slice(0, Math.max(0, MAX_FILTERS - kept.length))
+        .map((stat) => ({ id: nextRowId++, stat, op: "gte" as Comparator, value: "" }));
+      return [...kept, ...added];
+    });
+    setPins(next.slice(0, MAX_FILTERS));
+    setFreshId(null);
     requestApply();
   }, [requestApply]);
 
@@ -844,6 +977,9 @@ export function TeamStatFilters({
 
   const submit = () => {
     const p = specToParams({ ...urlSpec, filters: draftFilters, cols: pins as TeamStatKey[] }).toString();
+    // Remember what we published so the resync below can tell our own echo
+    // from a real outside change.
+    selfPublished.current = p;
     startTransition(() => router.replace(p ? `/?${p}` : "/", { scroll: false }));
   };
 
@@ -886,11 +1022,26 @@ export function TeamStatFilters({
       ))}
 
       <StatPicker
-        onPickMany={addRows}
+        mode="filter"
+        onPick={addFilter}
+        onSetColumns={setColumns}
+        current={pins}
         remaining={MAX_FILTERS - rows.length}
         disabled={atCap}
         open={pickerOpen}
         setOpen={setPickerOpen}
+      />
+      {/* The batch door, beside the single one. Both land in the same list —
+          see the note on StatPicker — so this is two ways in, not two
+          systems. */}
+      <StatPicker
+        mode="columns"
+        onPick={addFilter}
+        onSetColumns={setColumns}
+        current={pins}
+        remaining={MAX_FILTERS}
+        open={colsPickerOpen}
+        setOpen={setColsPickerOpen}
       />
 
       {atCap && (
