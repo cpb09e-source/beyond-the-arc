@@ -1389,9 +1389,16 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                     // active arrow drawn on EPM. It is a variable now for the
                     // same reason: pre-2024 seasons have no eWins, so the
                     // default falls back to EPM and the arrow has to follow.
-                    <SortableTh key={`${c.field}-${i}`} statKey={c.sortKey} label={c.label} basePath="/players" defaultSort={effectiveDefaultSort} idleArrows className="sticky top-6 z-30 bg-paper-deep border-b border-hairline" />
+                    // w-[8%] is a width PREFERENCE - see the note on the
+                    // team explorer's header row. It lets the stat columns
+                    // share the spare width on a wide screen instead of
+                    // leaving a blank strip down the right, while still
+                    // yielding to content minimums when the table is too
+                    // narrow and still leaving the slack visible when only a
+                    // couple of columns are picked.
+                    <SortableTh key={`${c.field}-${i}`} statKey={c.sortKey} label={c.label} basePath="/players" defaultSort={effectiveDefaultSort} idleArrows className="sticky top-6 z-30 w-[8%] bg-paper-deep border-b border-hairline" />
                   ) : (
-                    <th key={`${c.field}-${i}`} className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-right whitespace-nowrap align-middle">
+                    <th key={`${c.field}-${i}`} className="sticky top-6 z-30 w-[8%] bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-right whitespace-nowrap align-middle">
                       <StatLabel label={c.label} />
                     </th>
                   ),

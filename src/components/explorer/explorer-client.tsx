@@ -1372,8 +1372,19 @@ export function ExplorerClient({
                     // out of 365 would hand over the ranking the preview
                     // exists to withhold, one column at a time.
                     locked={previewCapped || lockedCols?.[i] === true}
+                    // A WIDTH PREFERENCE, NOT A WIDTH. 8% of the table is
+                    // more than any stat column needs, so each one takes what
+                    // spare width there is instead of leaving it all to the
+                    // slack column - which is what put a 270px blank strip
+                    // down the right of a full view on a wide screen. It is a
+                    // preference in both directions: content minimums still
+                    // win when the table is too narrow to fit (nothing changes
+                    // below ~1400px, where it already scrolls), and with only
+                    // two or three columns picked, 8% each cannot swallow the
+                    // card, so the slack column still shows the empty space as
+                    // room for more columns.
                     className={cn(
-                      "sticky top-6 z-30 bg-paper-deep border-b border-hairline",
+                      "sticky top-6 z-30 w-[8%] bg-paper-deep border-b border-hairline",
                       groupStarts.has(i) && "border-l border-hairline",
                     )}
                   />
