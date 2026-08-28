@@ -89,9 +89,7 @@ function isPctStat(key: string): boolean {
  * outward. The first 28 were inherited from the slider drawer and covered only
  * the stats that had once had a slider, so ~100 of the registry showed no hint
  * at all. Re-run that script after any change to the stat registry.
- *
- * Every filterable stat is covered except fta_diff, which has no values at all
- * — see its registry entry.
+
  */
 const STAT_BOUNDS: Record<string, [number, number]> = {
   // overall

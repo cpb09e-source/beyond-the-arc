@@ -151,14 +151,13 @@ export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   { key: "tov_diff",   source: "derived", dbColumn: "", label: "TOV% Diff",    desc: "Opp TOV% − your TOV% (+ = forcing more)",                  format: "pct1", group: "diffs" },
   { key: "orb_diff",   source: "derived", dbColumn: "", label: "OREB% Diff",   desc: "OREB% − Opp OREB% (offensive-board battle)",               format: "pct1", group: "diffs" },
   { key: "fg3_diff",   source: "derived", dbColumn: "", label: "3P% Diff",     desc: "3P% − Opp 3P% (computed from raw 3PT counts)",             format: "pct1", group: "diffs" },
-  // HIDDEN: NULL ON EVERY TEAM-SEASON. It is derived as FTAR − Opp FTAR, and
-  // the opponent half does not exist — the season stats carry efg_pct_def,
-  // tov_pct_def, orb_pct_def and fg3_pct_def, and no free-throw-rate-allowed
-  // field at all. Measured across all 4,273 team-seasons: zero non-null
-  // values. Kept rather than deleted so the key is not reused, and hidden so
-  // nobody can filter on a column that can only ever return nothing.
-  // To restore it, add opponent free-throw rate to the season-stats build.
-  { key: "fta_diff",   source: "derived", dbColumn: "", label: "FTA% Diff",    desc: "FTAR − Opp FTAR (free-throw drawing edge)",        format: "pct1", group: "diffs", hideInFilter: true },
+  // NOTE: there is no free-throw ATTEMPT-RATE margin here, and that is not an
+  // oversight. It would be FTAR − Opp FTAR, and the opponent half has never
+  // existed: the season stats carry efg/tov/orb/fg3 allowed and no
+  // free-throw-rate-allowed field. The stat shipped anyway for a while and was
+  // null on all 4,273 team-seasons. FTM Diff below is a count of makes, not a
+  // rate, so it does not replace it — restoring the drawing edge means adding
+  // opponent free-throw rate to the season-stats build first.
   // Count diffs (CBB ready-made; populated after migration 003 + sync)
   { key: "fg3m_diff_ct", source: "cbbd", dbColumn: "fg3_made_diff",  label: "3PM Diff",     desc: "3-pointers made − allowed (season total)",   format: "num1", group: "diffs" },
   { key: "fg3a_diff_ct", source: "cbbd", dbColumn: "fg3_att_diff",   label: "3PA Diff",     desc: "3-point attempts − allowed",                 format: "num1", group: "diffs" },
@@ -279,13 +278,19 @@ export type StatFilter = { stat: TeamStatKey; op: Comparator; value: number };
 /**
  * How many stat filters a URL can carry.
  *
- * The cap is real, not defensive: filters serialise as `f0`..`fN` and parseSpec
- * reads a fixed range, so a ninth filter would be written to the URL and then
- * silently dropped on the way back in. The builder UI reads this to stop
- * offering "Add a filter" at the ceiling, which is the only way a reader ever
- * finds out the limit exists.
+ * THE NUMBER IS ARBITRARY; only the agreement matters. Filters serialise as
+ * `f0`..`fN` and parseSpec loops this same constant, so both sides move
+ * together and raising it costs nothing — one past the ceiling would be
+ * written to the URL and silently dropped on the way back in, which is the
+ * only reason a ceiling exists at all.
+ *
+ * It is NOT a plan lever. Gating the count would be trivially undone by
+ * editing the URL, like everything else decided in the browser.
+ *
+ * The builder UI reads this to stop offering "Add a Filter" at the ceiling,
+ * which is the only way a reader ever finds out the limit exists.
  */
-export const MAX_FILTERS = 8;
+export const MAX_FILTERS = 25;
 
 export type TeamFilterSpec = {
   years: number[];              // multi-select; any combination of seasons
@@ -557,7 +562,6 @@ export type TeamRow = {
   tov_diff: number | null;
   orb_diff: number | null;
   fg3_diff: number | null;
-  fta_diff: number | null;
   cbb_fg: number | null;
   cbb_fg2: number | null;
   cbb_fga_pg: number | null;
@@ -875,7 +879,6 @@ function buildCohortRows(rawAll: RawTeamSeason[], years: number[]): TeamRow[] {
       tov_diff: diff(cbb?.tov_pct_def ?? null, cbb?.tov_pct ?? null),
       orb_diff: diff(cbb?.orb_pct ?? null, cbb?.orb_pct_def ?? null),
       fg3_diff: diff(cbb?.fg3_pct ?? null, fg3_pct_def),
-      fta_diff: diff(cbb?.fta_rate ?? null, cbb?.fta_rate_def ?? null),
       pct: {},
     };
   });

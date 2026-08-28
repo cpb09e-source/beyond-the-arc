@@ -97,9 +97,6 @@ export const TABLE_VIEWS: TableView[] = [
     bands: [
       { label: "Offense", accent: true, keys: k("cbb_efg", "cbb_tov", "cbb_orb", "cbb_ftarate") },
       { label: "Defense", keys: k("cbb_efg_def", "cbb_tov_def", "cbb_orb_def", "cbb_fg3_def") },
-      // fta_diff is absent on purpose — it is null for every team-season we
-      // hold, because opponent free-throw rate was never built. It rendered as
-      // a column of dashes here. See its registry entry.
       { label: "Margins", keys: k("efg_diff", "tov_diff", "orb_diff") },
     ],
   },
