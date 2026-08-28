@@ -58,6 +58,17 @@ luck adjustment, and the play-by-play fit.
 We keep what we already have: **EPM, Off EPM, Def EPM, Box EPM, On/Off, eWins,
 PIR, PORPAG, BTA PORP, PPP, Net Rtg.** Nothing new in this group.
 
+### Cut after shipping — 2.
+
+**BLKD** and **BLKD/FGA**, removed 2026-08-28 by decision. The derivation
+held up — a missed FG immediately followed by a `Block Shot` names the
+shooter the block play omits — but the stat reads as a defender's number and
+is the shooter's, and no amount of labelling fixes that at a glance in a
+column header. Dropped from the builder, both catalogues, the bounds table
+and the Defensive Stats view, and stripped out of the built packs (1.0 MB).
+
+---
+
 ### Season-limited — 1.
 
 **Plus-Minus**, 2024 onward. Earlier play-by-play has no `onFloor` and no
@@ -214,7 +225,6 @@ Totals and per-40 for every counting stat. Per-game forms we already ship.
 | `tov` `tov_40` | TOV, TOV/40 | int, num1 | ↓ | box |
 | `tov_pg` ✓ | TOV/G | num1 | ↓ | |
 | `pf` `pf_40` `pf_pg` | PF, PF/40, PF/G | int, num1, num1 | ↓ | box `fouls` |
-| `blkd` | BLKD | int | ↓ | pbp — missed FG immediately followed by a `Block Shot`. The block play names only the blocker, so the shooter comes from the adjacent miss |
 | `pm` | +/− | num1 | ↑ | pbp `onFloor`. **2024+ only** |
 | `tech` `tech_40` `tech_pg` | TECH | int | — | pbp `Technical Foul`, participant named. **No chip** — see gotcha 3 |
 | `ast_tov` ✓ | AST/TOV | num2 | ↑ | |
@@ -279,7 +289,6 @@ both sides of every game. `TmMP` = team minutes = `gameMinutes × 5`.
 | `stl_pct` | STL% | pct1 | ↑ | `100 × (STL × (TmMP/5)) / (MP × OppPoss)` |
 | `drb_pct` | DRB% | pct1 | ↑ | `100 × (DRB × (TmMP/5)) / (MP × (TmDRB + OppORB))` |
 | `stl_tov` | STL/TOV | num2 | ↑ | `STL / TOV` |
-| `blkd_fga` | BLKD/FGA | pct1 | ↓ | `blkd / FGA` |
 | `hkm` ✓ | HKM% | num1 | ↑ | `BLK% + STL%` — recompute from the new components |
 
 ### Foul Related

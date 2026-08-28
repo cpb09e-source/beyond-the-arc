@@ -173,9 +173,6 @@ export const PACK_STAT_COLUMNS: PackStatColumn[] = [
   C("pf", "PF", "box", "int", "Personal fouls committed. Lower is better."),
   C("pf_40", "PF/40", "box", "num1", `Personal fouls, lower being better. ${PER40}`),
   C("pf_pg", "PF/G", "box", "num1", "Personal fouls per game. Lower is better."),
-  C("blkd", "BLKD", "box", "int",
-    "Times his own shot was blocked. The play feed names the blocker and not the man he blocked, so this is recovered from the missed attempt immediately before each block.",
-    { pbp: true }),
   C("pm", "+/−", "box", "num1",
     "Team point differential while he was on the floor. Needs to know who was playing, so 2024 onward only — earlier play-by-play carries no substitutions and no on-floor list, which is unrecoverable rather than merely missing.",
     { pbp: true }),
@@ -264,9 +261,6 @@ export const PACK_STAT_COLUMNS: PackStatColumn[] = [
     "Share of available defensive rebounds he collected while on the floor. Blank under 100 minutes."),
   C("stl_tov", "STL/TOV", "advdef", "num2",
     "Steals per turnover — takeaways weighed against giveaways."),
-  C("blkd_fga", "BLKD/FGA", "advdef", "pct1",
-    "Share of his shots that got blocked. Lower is better.",
-    { pbp: true }),
 
   // ── Fouls ─────────────────────────────────────────────────────────────────
   C("pf_eff", "PF Eff", "fouls", "num2",

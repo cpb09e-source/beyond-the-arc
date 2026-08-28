@@ -137,7 +137,7 @@ export const PLAYER_VIEWS: PlayerView[] = [
       { label: "Events", keys: ["stl", "blk", "spg", "bpg"] },
       { label: "Rates", accent: true, keys: ["stl_pct", "blk_pct", "hkm"] },
       { label: "Rebounding", keys: ["drb_pct", "reb_pct"] },
-      { label: "Cost", keys: ["stl_tov", "blkd_fga"] },
+      { label: "Cost", keys: ["stl_tov"] },
     ],
     sortBy: "hkm",
     sortDir: "desc",

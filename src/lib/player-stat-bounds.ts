@@ -31,8 +31,6 @@ export const PLAYER_STAT_BOUNDS: Record<string, [number, number]> = {
   "blk_40": [0, 4],
   "blk_pct": [0, 12],
   "blk_pf": [0, 1],
-  "blkd": [0, 25],
-  "blkd_fga": [0, 25],
   "box_epm": [-1.5, 3],
   "bpg": [0, 2],
   "bta_porpag": [-2, 5],

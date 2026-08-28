@@ -309,7 +309,7 @@ export function DownloadMenu<R>({
           ) : screen === "formats" ? (
             <div className="py-1">
               <MenuItem
-                title="Excel workbook"
+                title="Excel Workbook"
                 sub="This view, formatted, with percentile colours and a sheet describing the export"
                 ext=".xlsx"
                 busy={busy === "xlsx"}
@@ -319,7 +319,7 @@ export function DownloadMenu<R>({
                   reach for this is comparison, and which views are worth
                   comparing is the reader's question, not ours. */}
               <MenuItem
-                title="Excel — select views"
+                title="Excel - Select Views"
                 sub={`One tab per view. Same ${noun}, same order, same filters on every tab.`}
                 trailing={<ChevronRight size={14} className="text-ink-muted" />}
                 onClick={() => setScreen("views")}

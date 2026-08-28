@@ -160,7 +160,7 @@ const GROUPS = {
     ["drb", 1], ["drb_40", 1], ["ast", 1], ["ast_40", 1], ["stl", 1], ["stl_40", 1],
     ["blk", 1], ["blk_40", 1], ["tov", -1], ["tov_40", -1],
     ["pf", -1], ["pf_40", -1], ["pf_pg", -1],
-    ["blkd", -1], ["pm", 1], ["tech", 0],
+    ["pm", 1], ["tech", 0],
   ],
   shooting: [
     ["fgm", 1], ["fga", 1], ["fga_40", 1], ["fga_pg", 1],
@@ -181,7 +181,7 @@ const GROUPS = {
     ["ast_pts", 1], ["pts_created", 1], ["self_orb_pct", 1],
   ],
   advdef: [
-    ["blk_pct", 1], ["stl_pct", 1], ["drb_pct", 1], ["stl_tov", 1], ["blkd_fga", -1],
+    ["blk_pct", 1], ["stl_pct", 1], ["drb_pct", 1], ["stl_tov", 1],
   ],
   fouls: [
     ["pf_eff", 1], ["blk_pf", 1], ["stl_pf", 1], ["fouled_out", -1],
@@ -378,7 +378,7 @@ function buildSeason(season) {
         tmFta: 0, tmPoss: 0, oppFga: 0, opp3pa: 0, oppOrb: 0, oppDrb: 0,
         oppReb: 0, oppPoss: 0,
         // pbp
-        pitp: 0, scp: 0, fbRaw: 0, fbp: 0, blkd: 0, tech: 0, pm: 0, pmSeen: 0,
+        pitp: 0, scp: 0, fbRaw: 0, fbp: 0, tech: 0, pm: 0, pmSeen: 0,
         ast_pts: 0, selfOrb: 0, ownMiss: 0,
       };
       for (const [k] of GROUPS.leaders) a[k] = 0;
@@ -580,7 +580,6 @@ function buildSeason(season) {
       };
 
       let poss = null;          // { t, team, per } — who has the ball, since when
-      let prevMiss = null;      // last missed FG, for crediting a block to its shooter
       let lastMissBy = null;    // { id, team } — for self-offensive-rebound
 
       for (const p of g) {
@@ -632,10 +631,8 @@ function buildSeason(season) {
               if (!m) { m = new Map(); fbRawByPlayer.set(k, m); }
               m.set(shooter, (m.get(shooter) ?? 0) + pts);
             }
-            prevMiss = null;
             lastMissBy = null;
           } else {
-            prevMiss = { id: shooter, teamId: p.teamId };
             lastMissBy = { id: shooter, teamId: p.teamId };
           }
         }
@@ -652,13 +649,6 @@ function buildSeason(season) {
             if (!m) { m = new Map(); fbRawByPlayer.set(k, m); }
             m.set(shooter, (m.get(shooter) ?? 0) + 1);
           }
-        }
-
-        // BLOCKED. The block play names only the blocker, so the player whose
-        // shot was rejected comes from the miss immediately before it.
-        if (p.playType === "Block Shot" && prevMiss?.id != null) {
-          acc(prevMiss.id).blkd++;
-          prevMiss = null;
         }
 
         if (p.playType === "Technical Foul") {
@@ -803,7 +793,6 @@ function buildSeason(season) {
   put("pf", (a) => a.pf);
   put("pf_40", (a) => per40(a, a.pf));
   put("pf_pg", (a) => perG(a, a.pf));
-  put("blkd", (a) => a.blkd);
   // Plus/minus is null, not zero, where the season has no lineup data at all.
   put("pm", (a) => (season >= PM_FIRST_YEAR && a.pmSeen > 0 ? a.pm : null));
   put("tech", (a) => a.tech);
@@ -874,7 +863,6 @@ function buildSeason(season) {
     return den > 0 ? r1((100 * a.drb * (a.tmMp / 5)) / den) : null;
   }));
   put("stl_tov", (a) => r2(div(a.stl, a.tov)));
-  put("blkd_fga", (a) => r3(div(a.blkd, a.fga)));
 
   // fouls
   put("pf_eff", (a) => r2(div(a.stl + a.blk, a.pf)));
@@ -925,7 +913,7 @@ function buildSeason(season) {
     "pitp", "pitp_40", "pitp_pg", "pitp_share",
     "scp", "scp_40", "scp_pg", "scp_share",
     "fbp", "fbp_40", "fbp_pg", "fbp_share",
-    "blkd", "blkd_fga", "tech",
+    "tech",
     "ast_pts", "pts_created", "self_orb_pct",
   ];
   const boxGameIds = new Set([...tg.keys()].map((k) => Number(k.split("|")[0])));

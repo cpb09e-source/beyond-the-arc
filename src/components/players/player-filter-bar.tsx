@@ -280,7 +280,7 @@ function titleCase(label: string): string {
 const PCT_FRACTION_KEYS = new Set([
   "fg_pct", "fg3_pct", "fg2_pct", "ft_pct", "ts_pct", "efg_pct", "fta_rate",
   "tov_pct", "usg_pct", "win_pct", "pitp_share", "scp_share", "fbp_share",
-  "pts2_share", "pts3_share", "ptsft_share", "ftm_rate", "blkd_fga", "rts_pct",
+  "pts2_share", "pts3_share", "ptsft_share", "ftm_rate", "rts_pct",
 ]);
 
 /**
