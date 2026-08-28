@@ -29,6 +29,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { midrankPercentiles } from "./lib/percentile.mjs";
 import zlib from "node:zlib";
 
 const args = process.argv.slice(2);
@@ -361,8 +362,13 @@ function main() {
       .filter((x) => Number.isFinite(x.u))
       .sort((a, b) => a.u - b.u);
     const n = withUsg.length;
+    // Ties share a midrank, as everywhere else. Usage is a float so exact ties
+    // are vanishingly rare and this changes essentially nothing today — it is
+    // here so there is ONE convention in the codebase rather than one plus an
+    // exception nobody remembers is an exception.
+    const usgPct = midrankPercentiles(withUsg.map((x) => x.u), true);
     withUsg.forEach((x, i) => {
-      const pct = n <= 1 ? 100 : (i / (n - 1)) * 100;
+      const pct = n <= 1 ? 100 : (usgPct[i] ?? 0);
       if (pct >= LOW_USG_PCTILE) return;
       const factor = LOW_USG_FLOOR + (1 - LOW_USG_FLOOR) * (pct / LOW_USG_PCTILE);
       const p = players[x.bid];

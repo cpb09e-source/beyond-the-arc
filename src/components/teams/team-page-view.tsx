@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
+import { midrankPercentileMap } from "@/lib/percentile";
 import { TeamName } from "@/components/team-name";
 import { SeasonPreview } from "@/components/teams/season-preview";
 
@@ -171,13 +172,8 @@ function computeYearMetrics(players: StaticPlayerRow[], year: number) {
 // across the pool; ids with no value are omitted. Used for the roster chips on
 // EPM / TS% / USG% so they read on the same ramp as the players table.
 function poolPercentiles(byId: Map<number, number | null>): Map<number, number> {
-  const vals = [...byId.entries()].filter((e): e is [number, number] => typeof e[1] === "number")
-    .sort((a, b) => a[1] - b[1]);
-  const out = new Map<number, number>();
-  const n = vals.length;
-  if (n < 2) return out;
-  vals.forEach(([id], i) => out.set(id, Math.round((i / (n - 1)) * 100)));
-  return out;
+  // Ties share a percentile — see src/lib/percentile.ts.
+  return midrankPercentileMap([...byId.entries()]);
 }
 
 export function buildRoster(

@@ -99,10 +99,17 @@ for (let season = FROM; season <= TO; season++) {
     const pctileKey = stat.replace("_pct", "_ptile");
     for (const p of Object.values(out)) {
       if (typeof p[stat] !== "number" || n < 2) { p[pctileKey] = null; continue; }
-      // rank = count of values strictly below → 0..n-1 → 0..100
-      let lo = 0, hi = n;
-      while (lo < hi) { const mid = (lo + hi) >> 1; if (sorted[mid] < p[stat]) lo = mid + 1; else hi = mid; }
-      p[pctileKey] = Math.round((lo / (n - 1)) * 100);
+      // MIDRANK over the tied block, matching src/lib/percentile.ts. Counting
+      // only the values strictly below put every member of a tie at the bottom
+      // of its own run, so a shooting split shared by a hundred players read as
+      // though it beat none of them.
+      const v = p[stat];
+      let lo = 0, hiB = n;
+      while (lo < hiB) { const mid = (lo + hiB) >> 1; if (sorted[mid] < v) lo = mid + 1; else hiB = mid; }
+      let up = lo, hiU = n;
+      while (up < hiU) { const mid = (up + hiU) >> 1; if (sorted[mid] <= v) up = mid + 1; else hiU = mid; }
+      const midrank = lo + Math.max(0, up - lo - 1) / 2;
+      p[pctileKey] = Math.round((midrank / (n - 1)) * 100);
     }
   }
 

@@ -238,13 +238,27 @@ export function computeCohortStats(
         const n = sorted.length;
         if (n < 2) return () => null;
         return (v: number) => {
-          let lo = 0, hi = n;
-          while (lo < hi) {
-            const mid = (lo + hi) >> 1;
+          // MIDRANK OVER THE TIED BLOCK. This counted values strictly below and
+          // stopped, which gives every member of a tie the BOTTOM of its own
+          // block — so a value shared by half the field reads as though it beat
+          // nobody. Taking both bounds costs a second binary search and puts
+          // ties in the middle, matching src/lib/percentile.ts.
+          let lo = 0, hiB = n;
+          while (lo < hiB) {
+            const mid = (lo + hiB) >> 1;
             if (sorted[mid]! < v) lo = mid + 1;
-            else hi = mid;
+            else hiB = mid;
           }
-          return Math.max(0, Math.min(100, Math.round((lo / (n - 1)) * 100)));
+          let up = lo, hiU = n;
+          while (up < hiU) {
+            const mid = (up + hiU) >> 1;
+            if (sorted[mid]! <= v) up = mid + 1;
+            else hiU = mid;
+          }
+          // up - lo is how many share this value; an unseen value gives 0 and
+          // the midrank collapses to the insertion point, which is right.
+          const midrank = lo + Math.max(0, up - lo - 1) / 2;
+          return Math.max(0, Math.min(100, Math.round((midrank / (n - 1)) * 100)));
         };
       }
       const tsRanker = rankerFor((e) => e.ts);

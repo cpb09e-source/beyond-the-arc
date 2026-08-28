@@ -48,6 +48,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { midrankPercentiles } from "./lib/percentile.mjs";
 
 const DATA = path.resolve("public/data");
 const RANKS = path.join(DATA, "player-ranks");
@@ -302,16 +303,14 @@ function main() {
   for (const [pk, arr] of pools) {
     const stat = pk.slice(pk.lastIndexOf("|") + 1);
     const lower = LOWER_IS_BETTER.has(stat);
-    arr.sort((a, b) => (lower ? a.v - b.v : b.v - a.v));
-    const n = arr.length;
-    for (let i = 0; i < n; i++) {
-      // Ties share the best rank in their run, so identical values never get
-      // different percentiles.
-      let j = i;
-      while (j + 1 < n && arr[j + 1].v === arr[i].v) j++;
-      const pct = n === 1 ? 50 : Math.round(100 * (1 - i / (n - 1)));
-      for (let k = i; k <= j; k++) pctOf.set(`${pk}|${arr[k].key}`, pct);
-      i = j;
+    // MIDRANK, not the best rank in the run. Ties already shared a percentile
+    // here — that part was right — but they took the TOP of their block, which
+    // puts every member of a large tie at the head of the field. Where a stat
+    // does not separate players, the midpoint is the honest answer, and it is
+    // now the same rule every other surface uses.
+    const pcts = midrankPercentiles(arr.map((e) => e.v), !lower);
+    for (let i = 0; i < arr.length; i++) {
+      if (pcts[i] !== null) pctOf.set(`${pk}|${arr[i].key}`, pcts[i]);
     }
   }
   console.log(`percentile pools: ${pools.size.toLocaleString()}`);

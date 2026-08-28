@@ -3,6 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { midrankPercentileMap } from "@/lib/percentile";
 import { formatHeight } from "@/lib/height";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
@@ -361,16 +362,18 @@ const INVERTED_PCT = new Set<PctKey>(["tov_pg", "tov_pct"]);
 function attachPercentiles(players: PlayerSummary[]): PctMaps {
   const out = Object.fromEntries(PCT_KEYS.map((k) => [k, new Map<number, number>()])) as PctMaps;
   for (const key of PCT_KEYS) {
-    const ranked = players
-      .filter((p) => typeof p[key] === "number")
-      .sort((a, b) => (a[key] as number) - (b[key] as number));
-    const n = ranked.length;
-    if (n < 2) continue;
-    const inv = INVERTED_PCT.has(key);
-    ranked.forEach((p, i) => {
-      const pct = Math.round((i / (n - 1)) * 100);
-      out[key].set(p.id, inv ? 100 - pct : pct);
-    });
+    // Ties share a percentile — see src/lib/percentile.ts. Sorted position gave
+    // two players with the same number different chips, which on a leaderboard
+    // of thousands happens constantly.
+    //
+    // INVERSION IS PASSED IN rather than applied as 100 - pct afterwards. The
+    // two are not the same once ties exist: flipping a midrank after the fact
+    // is correct only when the block is symmetric about the middle, and the
+    // ranker already knows how to sort the other way.
+    out[key] = midrankPercentileMap(
+      players.map((p) => [p.id, p[key] as number | null | undefined] as const),
+      !INVERTED_PCT.has(key),
+    );
   }
   return out;
 }

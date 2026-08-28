@@ -8,6 +8,7 @@
  *                          scripts/build-team-season-stats.mjs)
  */
 
+import { midrankPercentiles } from "@/lib/percentile";
 import { EXPLORER_SEASONS, clampSeason } from "@/lib/seasons";
 
 export type StatSource = "trank" | "cbbd" | "derived";
@@ -1189,56 +1190,19 @@ function attachPercentiles(rows: TeamRow[]) {
     if (!byYear.has(r.team_year)) byYear.set(r.team_year, []);
     byYear.get(r.team_year)!.push(r);
   }
+  // WITHIN A SEASON, never across. A 2014 offence and a 2026 offence are not
+  // the same population, and pooling them would rank teams against an era
+  // rather than against the field they actually played.
   for (const cohort of byYear.values()) {
     if (cohort.length === 0) continue;
     for (const { key, higherBetter } of PERCENTILE_STATS) {
-      const indexed = cohort
-        .map((r, i) => ({ v: r[key] as number | null, i }))
-        .filter((x) => typeof x.v === "number" && Number.isFinite(x.v)) as { v: number; i: number }[];
-      if (indexed.length < 2) {
-        for (const r of cohort) r.pct[key as string] = null;
-        continue;
-      }
-      indexed.sort((a, b) => (higherBetter ? a.v - b.v : b.v - a.v));
-      const n = indexed.length;
-      const written = new Set<number>();
-      /**
-       * TIES SHARE A PERCENTILE. They did not, and that was a real bug rather
-       * than a rounding quirk.
-       *
-       * The rank used to be the position in the sorted array, so equal values
-       * were separated by wherever Array.sort happened to leave them. Losses
-       * Leading 20+ is the clearest case: 340 of 365 teams in 2025-26 have
-       * zero, the best possible value, and they were handed every percentile
-       * from 7 to 100. Two teams with identical records rendered one red and
-       * one green, which is worse than showing nothing.
-       *
-       * MIDRANK, not the first or last position in the tied block. A tie means
-       * the stat did not separate these teams, and the midpoint is the only
-       * answer that says so: taking the block's best rank would paint all 340
-       * of those teams 100th percentile, and its worst would paint them 7th —
-       * both claim a distinction the data does not contain. Midrank puts them
-       * at 53, in the neutral band of the colour ramp, which reads correctly
-       * as "no signal here".
-       *
-       * This is the standard percentile-rank definition — (below + half the
-       * ties) / total — and it is the one that keeps a cohort's mean
-       * percentile near 50, which is the property the ramp is built around.
-       */
-      for (let start = 0; start < n; ) {
-        let end = start;
-        while (end + 1 < n && indexed[end + 1]!.v === indexed[start]!.v) end++;
-        const pct = Math.round((((start + end) / 2) / (n - 1)) * 100);
-        for (let k = start; k <= end; k++) {
-          const { i } = indexed[k]!;
-          cohort[i]!.pct[key as string] = pct;
-          written.add(i);
-        }
-        start = end + 1;
-      }
-      for (let i = 0; i < cohort.length; i++) {
-        if (!written.has(i)) cohort[i]!.pct[key as string] = null;
-      }
+      // Ties share a percentile; see src/lib/percentile.ts for why that is
+      // midrank and not either end of the tied block.
+      const pcts = midrankPercentiles(
+        cohort.map((r) => r[key] as number | null),
+        higherBetter,
+      );
+      for (let i = 0; i < cohort.length; i++) cohort[i]!.pct[key as string] = pcts[i]!;
     }
   }
 }

@@ -49,6 +49,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { midrankPercentileMap } from "./lib/percentile.mjs";
 
 const DATA = path.resolve("public/data");
 const FILE = path.join(DATA, "season-preview.json");
@@ -80,7 +81,12 @@ if (extras.size === 0) {
 const prev = JSON.parse(fs.readFileSync(path.join(DATA, "players-by-year", `${PREV_YEAR}.json`), "utf8"));
 const poolIds = new Set(prev.map((p) => p.bart_player_id).filter((x) => x != null));
 
-/** round(i / (n-1) * 100) over ascending non-null values — poolPercentiles. */
+/**
+ * Percentile over the pool, ties sharing a midrank.
+ *
+ * Matches poolPercentiles in team-page-view.tsx, which is the point: the same
+ * player must not read 61 on the preview page and 58 on the team page.
+ */
 function percentilesOver(pick) {
   const vals = [];
   for (const id of poolIds) {
@@ -88,12 +94,7 @@ function percentilesOver(pick) {
     const x = v ? pick(v) : null;
     if (x != null) vals.push([id, x]);
   }
-  vals.sort((a, b) => a[1] - b[1]);
-  const out = new Map();
-  const n = vals.length;
-  if (n < 2) return out;
-  vals.forEach(([id], i) => out.set(id, Math.round((i / (n - 1)) * 100)));
-  return out;
+  return midrankPercentileMap(vals);
 }
 const ewinsPct = percentilesOver((v) => v.ewins);
 const onOffPct = percentilesOver((v) => v.on_off);

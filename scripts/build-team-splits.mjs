@@ -32,6 +32,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { midrankPercentiles } from "./lib/percentile.mjs";
 import process from "node:process";
 
 const DATA = path.resolve("public/data");
@@ -236,16 +237,19 @@ function aggregate(games) {
  * eight teams is noise wearing a number.
  */
 function percentiles(values, higherBetter) {
-  const present = values.map((v, i) => [i, v]).filter(([, v]) => typeof v === "number");
-  const out = new Array(values.length).fill(null);
-  if (present.length < 20) return out;
-  present.sort((a, b) => a[1] - b[1]);
-  const n = present.length;
-  present.forEach(([i], rank) => {
-    const p = Math.round((rank / (n - 1)) * 100);
-    out[i] = higherBetter === false ? 100 - p : p;
-  });
-  return out;
+  // A THIN POOL IS NOT A PERCENTILE. Under twenty teams, "83rd percentile"
+  // describes the shape of a small sample rather than the field, so the split
+  // reports nothing instead. Kept exactly as it was.
+  const present = values.filter((v) => typeof v === "number" && Number.isFinite(v));
+  if (present.length < 20) return new Array(values.length).fill(null);
+  // Ties share a midrank — see scripts/lib/percentile.mjs. This used to rank by
+  // position in the sorted array, so equal values got different percentiles
+  // depending on where Array.sort left them.
+  //
+  // INVERSION IS PASSED IN rather than applied as 100 - p afterwards: once ties
+  // exist the two stop agreeing, because flipping a midrank only lands right
+  // when the tied block is symmetric about the middle.
+  return midrankPercentiles(values, higherBetter !== false);
 }
 
 function buildYear(year) {

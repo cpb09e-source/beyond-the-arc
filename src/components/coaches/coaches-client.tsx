@@ -11,6 +11,7 @@ import type { SearchableOption } from "@/components/explorer/searchable-select";
 import { CompareModal } from "@/components/coaches/compare-modal";
 import { Trophy, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { midrankPercentileMap } from "@/lib/percentile";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { PercentileChip } from "@/components/percentile-chip";
@@ -309,17 +310,10 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
    * ranked last — no adjusted rating is not a bad one.
    */
   const pcts = useMemo(() => {
-    const rank = (get: (r: CoachRow) => number | null | undefined) => {
-      const vals = rows
-        .map((r) => [r.slug, get(r)] as const)
-        .filter((e): e is readonly [string, number] => typeof e[1] === "number")
-        .sort((a, b) => a[1] - b[1]);
-      const out = new Map<string, number>();
-      const n = vals.length;
-      if (n < 2) return out;
-      vals.forEach(([slug], i) => out.set(slug, Math.round((i / (n - 1)) * 100)));
-      return out;
-    };
+    // Ties share a percentile — see src/lib/percentile.ts. Ranking by sorted
+    // position gave two coaches with identical records different chips.
+    const rank = (get: (r: CoachRow) => number | null | undefined) =>
+      midrankPercentileMap(rows.map((r) => [r.slug, get(r)] as const));
     return {
       composite: rank((r) => r.composite_score),
       perSeason: rank((r) => r.composite_per_season),
