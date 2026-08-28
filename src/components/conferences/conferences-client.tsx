@@ -29,6 +29,7 @@ import { SortableTh } from "@/components/explorer/sortable-th";
 import { MultiYearSelect } from "@/components/explorer/multi-year-select";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
 import { confDisplay } from "@/lib/conf-display";
+import { ConferenceLogo } from "@/components/conferences/conference-logo";
 import {
   CONF_VIEWS, confViewByKey, confViewCols, type ConfCol,
 } from "@/lib/conference-views";
@@ -287,7 +288,6 @@ export function ConferencesClient() {
             <tr>
               <th className="sticky top-0 left-0 z-40 w-10 min-w-10 bg-paper-deep h-6 p-0" />
               <th className="sticky top-0 z-40 bg-paper-deep h-6 p-0" />
-              <th className="sticky top-0 z-30 bg-paper-deep h-6 p-0" />
               {multiYear && <th className="sticky top-0 z-30 bg-paper-deep h-6 p-0" />}
               {bands.map((b) => (
                 <th
@@ -307,7 +307,6 @@ export function ConferencesClient() {
             <tr>
               <th className="sticky top-6 left-0 z-40 w-10 min-w-10 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
               <th className="sticky top-6 z-40 bg-paper-deep border-b border-hairline px-2 sm:px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Conference</th>
-              <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-right align-middle">Teams</th>
               {multiYear && <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Season</th>}
               {cols.map((c, i) => (
                 <SortableTh
@@ -330,9 +329,9 @@ export function ConferencesClient() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={cols.length + 4} className="px-4 py-16 text-center text-ink-muted">Loading conferences…</td></tr>
+              <tr><td colSpan={cols.length + 3} className="px-4 py-16 text-center text-ink-muted">Loading conferences…</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={cols.length + 4} className="px-4 py-12 text-center text-ink-soft">No conferences match this selection.</td></tr>
+              <tr><td colSpan={cols.length + 3} className="px-4 py-12 text-center text-ink-soft">No conferences match this selection.</td></tr>
             ) : (
               rows.map((r, i) => {
                 const zebra = i % 2 === 0 ? "bg-paper" : "bg-card";
@@ -344,14 +343,20 @@ export function ConferencesClient() {
                     </td>
                     <td
                       className={cn("sticky z-20 px-2 sm:px-3 py-1.5 font-medium text-ink whitespace-nowrap transition-colors", zebra, ROW_HOVER)}
-                      // The pair that did not count, named. It is the one thing
-                      // about this table a reader cannot work out for himself.
-                      title={r.dropped.length ? `Dropped: ${r.dropped.join(", ")}` : undefined}
+                      /* WHAT FED THE ROW, AND WHAT DID NOT, on the name cell.
+                         The count used to be a column of its own; it is one
+                         number that never changes within a season and it was
+                         costing a column beside the logo. Both halves are here
+                         because a reader cannot work either out for himself. */
+                      title={`${r.kept} of ${r.teams} teams${r.dropped.length ? ` · dropped ${r.dropped.join(", ")}` : ""}`}
                     >
-                      {confDisplay(r.conf) || r.conf}
-                    </td>
-                    <td className={cn("px-2 py-1.5 text-right text-ink-muted tabular text-xs transition-colors", ROW_HOVER)}>
-                      {r.kept}<span className="opacity-50">/{r.teams}</span>
+                      <span className="inline-flex items-center gap-2 min-w-0">
+                        {/* 22, not 18. Half these marks are wordmarks rather than shields -
+                            Ivy, C-USA, WAC - and at 18 they were a smudge that
+                            carried no information. */}
+                        <ConferenceLogo conf={r.conf} size={22} />
+                        {confDisplay(r.conf) || r.conf}
+                      </span>
                     </td>
                     {multiYear && (
                       <td className={cn("px-2 py-1.5 text-ink-muted tabular text-xs transition-colors", ROW_HOVER)}>
