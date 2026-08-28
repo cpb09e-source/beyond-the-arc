@@ -155,3 +155,20 @@ export function useAuth(): AuthValue {
   if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
   return ctx;
 }
+
+/**
+ * The same value, or null where there is no provider — for consumers that have
+ * something sensible to do without one.
+ *
+ * THROWING IS RIGHT FOR useAuth and wrong here. A component that shows who is
+ * signed in cannot proceed without the session, so failing loudly is the only
+ * honest thing. But a component that merely dresses itself differently for a
+ * subscriber has a correct answer available — "not known yet" — and taking the
+ * whole page down instead is a much worse trade: React responds to a throw
+ * during server rendering by discarding the server HTML for the entire route
+ * and re-rendering it on the client, which costs every reader the prerender
+ * whether or not they were ever going to see the difference.
+ */
+export function useAuthOptional(): AuthValue | null {
+  return useContext(AuthContext);
+}

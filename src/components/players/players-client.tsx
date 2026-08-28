@@ -10,8 +10,9 @@ import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { PercentileChip } from "@/components/percentile-chip";
 import {
-  DRAWER_SLOT_ID, PlayerFilterBar, PlayerStatFilters, statChipsFromSpec,
+  DRAWER_SLOT_ID, PlayerFilterBar, statChipsFromSpec,
 } from "@/components/players/player-filter-bar";
+import { PlayerStatRows } from "@/components/players/player-stat-rows";
 import { StatChipStrip } from "@/components/filters/stat-chips";
 import { StatPicker } from "@/components/filters/stat-picker";
 import {
@@ -60,14 +61,6 @@ const LIMIT_OPTIONS = [50, 100, 250, 500];
  */
 const SHOW_COMPARE = false;
 
-/**
- * Pinned-column ceiling.
- *
- * A URL-length limit rather than a plan one — the same reason the team
- * explorer caps its own — and nothing on the players table is sold yet, so it
- * applies to everybody equally.
- */
-const MAX_PLAYER_COLS = 25;
 
 const CLASS_LABEL: Record<string, string> = {
   Fr: "Freshmen", So: "Sophomores", Jr: "Juniors", Sr: "Seniors", Gr: "Graduates",
@@ -658,8 +651,6 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [compareOpen, setCompareOpen] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [colsPickerOpen, setColsPickerOpen] = useState(false);
 
   // ── Saved filters ───────────────────────────────────────────────────────
   //
@@ -674,9 +665,6 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   };
 
 
-  // Owned here, not inside PlayerStatFilters, so the toolbar's "+N more" chip
-  // can open the drawer on the full list.
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
   // Mobile: the table search collapses to an icon that slides open on tap.
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1160,13 +1148,43 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-muted hover:text-coral text-base leading-none w-5 h-5 inline-flex items-center justify-center rounded hover:bg-paper-deep">×</button>
               )}
             </div>
-            {/* Filters button (stat builder) — between search and Compare. */}
-            {/* Unwrapped, same as the teams table renders TeamStatFilters. It
-                used to sit in a `hidden lg:block`, which meant the stat drawer —
-                the only way to filter by EPM, usage, TS% — did not exist at all
-                on a phone. The drawer itself is a full-screen sheet on mobile,
-                so there was nothing to hide it for. */}
-            <PlayerStatFilters previewCount={previewCount} open={filtersOpen} onOpenChange={setFiltersOpen} />
+            {/* VIEW PICKER. A native select with optgroups rather than a
+                custom popover — twelve options in five sections is exactly
+                what the element is for, it matches the controls beside it,
+                and it costs no JavaScript to open. Same choice as the team
+                explorer, for the same reasons. */}
+            <label className="hidden sm:inline-flex items-center gap-1.5 min-w-0">
+              <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">
+                View
+              </span>
+              <select
+                value={spec.view || PLAYER_VIEWS[0]!.key}
+                onChange={(e) => {
+                  const key = e.target.value;
+                  const v = playerViewByKey(key);
+                  updateSpec({
+                    ...spec,
+                    view: key === PLAYER_VIEWS[0]!.key ? "" : key,
+                    // The view carries its own sort. Without this the table
+                    // stays ordered by a column the new view may not show, and
+                    // a reader who picks Foul Related gets foul columns ranked
+                    // by eWins.
+                    sortBy: v.sortBy,
+                    sortDir: v.sortDir,
+                  });
+                }}
+                aria-label="Table view"
+                className="h-8 max-w-44 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 transition-colors"
+              >
+                {playerViewGroups().map((g) => (
+                  <optgroup key={g.group} label={g.group}>
+                    {g.views.map((v) => (
+                      <option key={v.key} value={v.key} title={v.desc}>{v.label}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
             {SHOW_COMPARE && (
               <button
                 type="button"
@@ -1217,46 +1235,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               chips={specChips}
               onRemove={removeSpecStat}
               max={6}
-              onOverflow={() => setFiltersOpen(true)}
               ariaLabel="Applied columns and filters"
-            />
-            {/* TWO DOORS INTO ONE LIST, the same pair the team explorer has and
-                the same component behind them.
-                Adapted in one place, because a player filter is a RANGE rather
-                than a single comparison: there is no value box for the caret to
-                land in, so the filter door pins the stat and opens the drawer
-                at its slider. The reader still gets one gesture from "I want to
-                bound this" to being able to bound it. */}
-            <StatPicker
-              mode="filter"
-              options={PLAYER_PICK_OPTIONS}
-              groupLabel={PLAYER_PICK_GROUP_LABEL}
-              listId="player-filters-picker"
-              alwaysFree
-              onPick={(key) => {
-                updateSpec({ ...spec, cols: spec.cols.includes(key) ? spec.cols : [...spec.cols, key] });
-                setFiltersOpen(true);
-              }}
-              onSetColumns={(keys) => updateSpec({ ...spec, cols: keys })}
-              current={spec.cols}
-              remaining={MAX_PLAYER_COLS - spec.cols.length}
-              open={pickerOpen}
-              setOpen={setPickerOpen}
-            />
-            <StatPicker
-              mode="columns"
-              options={PLAYER_PICK_OPTIONS}
-              groupLabel={PLAYER_PICK_GROUP_LABEL}
-              listId="player-columns-picker"
-              alwaysFree
-              onPick={(key) => {
-                updateSpec({ ...spec, cols: spec.cols.includes(key) ? spec.cols : [...spec.cols, key] });
-              }}
-              onSetColumns={(keys) => updateSpec({ ...spec, cols: keys })}
-              current={spec.cols}
-              remaining={MAX_PLAYER_COLS}
-              open={colsPickerOpen}
-              setOpen={setColsPickerOpen}
             />
           </div>
           {/* `w-auto`, not `w-full sm:w-auto`: full width forced this group onto
@@ -1279,43 +1258,6 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
             >
               <SearchGlass className="w-4 h-4" />
             </button>
-            {/* VIEW PICKER. A native select with optgroups rather than a
-                custom popover — twelve options in five sections is exactly
-                what the element is for, it matches the controls beside it,
-                and it costs no JavaScript to open. Same choice as the team
-                explorer, for the same reasons. */}
-            <label className="hidden sm:inline-flex items-center gap-1.5 min-w-0">
-              <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">
-                View
-              </span>
-              <select
-                value={spec.view || PLAYER_VIEWS[0]!.key}
-                onChange={(e) => {
-                  const key = e.target.value;
-                  const v = playerViewByKey(key);
-                  updateSpec({
-                    ...spec,
-                    view: key === PLAYER_VIEWS[0]!.key ? "" : key,
-                    // The view carries its own sort. Without this the table
-                    // stays ordered by a column the new view may not show, and
-                    // a reader who picks Foul Related gets foul columns ranked
-                    // by eWins.
-                    sortBy: v.sortBy,
-                    sortDir: v.sortDir,
-                  });
-                }}
-                aria-label="Table view"
-                className="h-8 max-w-44 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 transition-colors"
-              >
-                {playerViewGroups().map((g) => (
-                  <optgroup key={g.group} label={g.group}>
-                    {g.views.map((v) => (
-                      <option key={v.key} value={v.key} title={v.desc}>{v.label}</option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
             <span className="hidden sm:inline text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Show</span>
             <Select value={String(spec.limit)} onChange={(v) => updateSpec({ ...spec, limit: Number(v) })} ariaLabel="Result count" compact className="w-16 lg:w-18">
               {LIMIT_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
@@ -1361,10 +1303,14 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
             {!loading && spec.cls.length > 0 && <> · {spec.cls.length === 1 ? (CLASS_LABEL[spec.cls[0]!] ?? spec.cls[0]) : `${spec.cls.length} classes`}</>}
           </span>
         </div>
-        {/* Where the Filters drawer expands. It portals in here so it sits in
-            normal flow between the toolbar and the table — opening it grows the
-            card and pushes the table down, rather than covering it. Empty and
-            zero-height while closed. */}
+        {/* THE FILTER ROWS, on their own line under the toolbar — the same
+            place and the same shape as the team explorer. This is where the
+            "Filters" drawer used to be reached from; the rows are in the open
+            now, so there is nothing to open. */}
+        <div className="px-3 sm:px-4 pb-2">
+          <PlayerStatRows spec={spec} onChange={updateSpec} />
+        </div>
+        {/* Portal slot kept for the scope bar's own popovers. */}
         <div id={DRAWER_SLOT_ID} />
         {/* D&3-style internal scroll: the table scrolls inside its own viewport
             (both axes) while BOTH header rows stay frozen and the RK + Player

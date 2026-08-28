@@ -28,7 +28,7 @@
  * degrade to a generous site, not one that locks out the people paying for it.
  */
 import { useMemo } from "react";
-import { useAuth } from "@/lib/auth/auth-provider";
+import { useAuthOptional } from "@/lib/auth/auth-provider";
 import { describeMembership } from "@/lib/auth/membership";
 
 export type Entitlement = {
@@ -48,14 +48,27 @@ export type Entitlement = {
 };
 
 export function useEntitlement(): Entitlement {
-  const { status, profile, profileLoading } = useAuth();
+  /**
+   * OPTIONAL, and that is not defensive programming — it is the difference
+   * between one control rendering plainly and a whole route losing its
+   * prerender. Without a provider React discards the server HTML for the
+   * entire page and re-renders it client-side.
+   *
+   * "No provider" is not a new state to reason about: it is the unresolved
+   * case this hook already models, so it takes the same optimistic answer.
+   */
+  const auth = useAuthOptional();
+  const status = auth?.status;
+  const profile = auth?.profile ?? null;
+  const profileLoading = auth?.profileLoading ?? false;
   return useMemo(() => {
     const signedIn = status === "signedIn";
     // Unresolved covers both halves of the wait: the stored session being read
     // back, and then the profile row being fetched for it. Only the second one
     // knows whether they are a subscriber.
     const unresolved =
-      status === "loading" || (signedIn && (profileLoading || profile === null));
+      status === undefined || status === "loading"
+      || (signedIn && (profileLoading || profile === null));
     return {
       paid: unresolved ? true : describeMembership(profile).paid,
       signedIn,
