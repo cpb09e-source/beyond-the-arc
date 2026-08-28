@@ -1118,6 +1118,8 @@ export function ExplorerClient({
                     {b.label}
                   </th>
                 ))}
+                {/* TRAILING SPACER — see the header row below for why. */}
+                <th className="sticky top-0 z-30 bg-paper-deep h-6 p-0 w-full" />
               </tr>
               <tr>
                 <th ref={rankThRef} className="sticky top-6 left-0 z-40 w-12 min-w-12 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
@@ -1156,12 +1158,23 @@ export function ExplorerClient({
                     )}
                   />
                 ))}
+                {/* THE COLUMN THAT ABSORBS WHAT IS LEFT.
+                    The table is `w-full` with auto layout, so the browser
+                    shares any spare width among the real columns — which is
+                    invisible on a full view and absurd on "Build my own
+                    table", where four identity columns stretched across the
+                    whole card. This takes the slack instead, so Team, Conf and
+                    Record sit at the same width in every view and the empty
+                    space reads as room for columns still to be added.
+                    Collapses to zero when the columns already fill the table,
+                    so it costs the other views nothing. */}
+                <th aria-hidden className="sticky top-6 z-30 bg-paper-deep border-b border-hairline w-full p-0" />
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={(multiYear ? 5 : 4) + cols.length} className="px-4 py-12 text-center text-ink-muted">
+                  <td colSpan={(multiYear ? 5 : 4) + cols.length + 1} className="px-4 py-12 text-center text-ink-muted">
                     No teams match these filters.
                   </td>
                 </tr>
@@ -1272,6 +1285,7 @@ export function ExplorerClient({
                         </td>
                       );
                     })}
+                    <td aria-hidden className={cn("p-0 transition-colors", zebra, ROW_HOVER)} />
                   </tr>
                   );
                 })
