@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import Link from "next/link";
+import { Lock } from "lucide-react";
 import { TeamLogo } from "@/components/team-logo";
 import {
   GameBoxModal,
@@ -11,6 +13,7 @@ import {
   Td,
 } from "@/components/box/game-box-modal";
 import { AskStatus } from "@/components/calc/ask-status";
+import { useEntitlement } from "@/lib/use-entitlement";
 import { type SearchableOption } from "@/components/explorer/searchable-select";
 import { Select } from "@/components/select";
 import {
@@ -152,7 +155,32 @@ export function CalcClient({
    *  window. Drives the Coach dropdown options. */
   allCoaches: string[];
 }) {
-  const [years, setYears] = useState<number[]>([2026]);
+  const { paid, signedIn } = useEntitlement();
+
+  /**
+   * THE FREE CALCULATOR RUNS ON THIS SEASON. Everything else about it works.
+   *
+   * Which is the point: the tool is the filter builder, and a reader who can
+   * only run it on 2025-26 has still used the actual product on 5,000 real
+   * games. What they cannot do is the thing the archive exists for — ask the
+   * same question of eleven other seasons at once.
+   *
+   * CLAMPED AT THE SETTER, not just in the pills. Ask the Calculator writes
+   * years directly (a question naming a 2019 coach resolves to 2019), and the
+   * All button writes the lot, so gating the pills alone would leave two doors
+   * open into a selection the reader is not entitled to.
+   */
+  const [years, setYearsRaw] = useState<number[]>([2026]);
+  const setYears = useCallback<typeof setYearsRaw>((next) => {
+    setYearsRaw((prev) => {
+      const value = typeof next === "function" ? (next as (p: number[]) => number[])(prev) : next;
+      if (paid) return value;
+      // Newest first, so "the one season you get" is the most recent one asked
+      // for rather than whichever happened to be first in the array.
+      const kept = [...value].sort((a, b) => b - a).slice(0, 1);
+      return kept.length ? kept : [SEASON_CEIL];
+    });
+  }, [paid]);
   // Multi-select conference. Empty = "all conferences". Stores Bart codes
   // (ACC/B10/BE/etc.); we display via confDisplay() so labels read nicely.
   const [conferences, setConferences] = useState<string[]>([]);
@@ -627,6 +655,38 @@ export function CalcClient({
           </span>
           <span className="text-xs text-ink-muted"> — in plain English</span>
         </label>
+        {!paid ? (
+          /* The EXAMPLE QUESTION is the pitch, so it stays on screen rather
+             than being replaced by the word "locked". A reader who has never
+             seen this feature has no idea what it does; the placeholder is
+             the clearest single sentence explaining it, so it becomes the
+             body copy instead of being thrown away with the input. */
+          <div className="rounded border border-dashed border-hairline bg-card/60 p-3">
+            <p className="text-sm text-ink-soft leading-snug">
+              <span className="text-ink-muted">Ask things like </span>
+              “Roy Williams games where UNC had more fast break points and shot
+              more 3s than their opponent” — and the filters below fill
+              themselves in.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Link
+                href="/pricing"
+                className="inline-flex items-center gap-1.5 rounded-md bg-coral px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-coral-soft"
+              >
+                <Lock size={12} strokeWidth={2.5} aria-hidden />
+                See plans
+              </Link>
+              {!signedIn && (
+                <Link
+                  href="/account/login"
+                  className="text-xs text-ink-muted transition-colors hover:text-coral"
+                >
+                  Already a member? Sign in
+                </Link>
+              )}
+            </div>
+          </div>
+        ) : (
         <div className="flex flex-col sm:flex-row gap-2">
           <input
             id="calc-ask"
@@ -653,6 +713,7 @@ export function CalcClient({
             {asking ? "Reading…" : "Fill filters"}
           </button>
         </div>
+        )}
 
         {/* Sits in the slot the result line will occupy, so the panel does not
             jump when the parse lands. */}
@@ -772,35 +833,73 @@ export function CalcClient({
             <SectionLabel
               count={years.length < ALL_SEASONS.length ? years.length : 0}
               action={
-                <>
-                  <MiniButton onClick={() => setYears([...ALL_SEASONS])}>All</MiniButton>
-                  {/* Seasons can't be empty (no seasons = no games to load),
-                      so Clear returns to the default: the current season. */}
-                  <MiniButton onClick={() => setYears([SEASON_CEIL])}>Clear</MiniButton>
-                </>
+                paid ? (
+                  <>
+                    <MiniButton onClick={() => setYears([...ALL_SEASONS])}>All</MiniButton>
+                    {/* Seasons can't be empty (no seasons = no games to load),
+                        so Clear returns to the default: the current season. */}
+                    <MiniButton onClick={() => setYears([SEASON_CEIL])}>Clear</MiniButton>
+                  </>
+                ) : (
+                  <Link
+                    href="/pricing"
+                    className="inline-flex items-center gap-1 text-[0.65rem] font-bold uppercase tracking-widest text-coral hover:underline"
+                  >
+                    <Lock size={10} strokeWidth={3} aria-hidden />
+                    All seasons
+                  </Link>
+                )
               }
             >
               Seasons
             </SectionLabel>
             <div className="flex flex-wrap gap-1.5">
-              {ALL_SEASONS.map((y) => (
-                <TogglePill
-                  key={y}
-                  active={years.includes(y)}
-                  onClick={() =>
-                    setYears((prev) =>
-                      prev.includes(y)
-                        // Never allow an empty selection — deselecting the last
-                        // season means "stop filtering", i.e. all of them.
-                        ? prev.length === 1 ? [...ALL_SEASONS] : prev.filter((x) => x !== y)
-                        : [...prev, y],
-                    )
-                  }
-                >
-                  {`${String(y - 1).slice(2)}-${String(y).slice(2)}`}
-                </TogglePill>
-              ))}
+              {ALL_SEASONS.map((y) => {
+                // Older seasons stay VISIBLE and dead rather than being removed
+                // from the grid. A reader has to be able to see that eleven
+                // more seasons exist — a pill list that silently contained one
+                // entry would read as a site with one season of data.
+                const locked = !paid && y !== SEASON_CEIL;
+                if (locked) {
+                  return (
+                    <span
+                      key={y}
+                      title={`${String(y - 1).slice(2)}-${String(y).slice(2)} is part of the Season Pass`}
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded border border-dashed border-hairline text-xs text-ink-muted/60 cursor-default select-none tabular"
+                    >
+                      {`${String(y - 1).slice(2)}-${String(y).slice(2)}`}
+                      <Lock size={9} strokeWidth={3} className="text-coral/60" aria-hidden />
+                    </span>
+                  );
+                }
+                return (
+                  <TogglePill
+                    key={y}
+                    active={years.includes(y)}
+                    onClick={() =>
+                      setYears((prev) =>
+                        prev.includes(y)
+                          // Never allow an empty selection — deselecting the last
+                          // season means "stop filtering", i.e. all of them.
+                          ? prev.length === 1 ? [...ALL_SEASONS] : prev.filter((x) => x !== y)
+                          : [...prev, y],
+                      )
+                    }
+                  >
+                    {`${String(y - 1).slice(2)}-${String(y).slice(2)}`}
+                  </TogglePill>
+                );
+              })}
             </div>
+            {!paid && (
+              <p className="mt-2 text-xs text-ink-muted leading-snug">
+                The calculator runs on this season for free.{" "}
+                <Link href="/pricing" className="text-coral hover:underline font-medium">
+                  A Season Pass
+                </Link>{" "}
+                asks the same question of all thirteen at once.
+              </p>
+            )}
           </div>
 
           <div>
@@ -934,14 +1033,34 @@ export function CalcClient({
               allLabel="All Teams"
               icon={(n) => <TeamLogo name={n} size={16} />}
             />
-            <ChipSearchMulti
-              label="Coaches"
-              values={coaches}
-              options={allCoaches}
-              onChange={setCoaches}
-              placeholder="Type a coach, press Enter…"
-              allLabel="All Coaches"
-            />
+            {/* The coach filter is the one control here with no free
+                equivalent anywhere: it resolves a name to the exact seasons
+                that coach was at that school, out of coach-history.json. */}
+            {paid ? (
+              <ChipSearchMulti
+                label="Coaches"
+                values={coaches}
+                options={allCoaches}
+                onChange={setCoaches}
+                placeholder="Type a coach, press Enter…"
+                allLabel="All Coaches"
+              />
+            ) : (
+              <div>
+                <div className="text-xs uppercase tracking-widest text-ink-muted font-medium mb-1.5">
+                  Coaches
+                </div>
+                <Link
+                  href="/pricing"
+                  className="flex items-center gap-2 h-10 px-3 rounded border border-dashed border-hairline bg-paper-deep/25 text-sm text-ink-muted transition-colors hover:border-coral/40 hover:text-ink"
+                >
+                  <Lock size={13} className="shrink-0 text-coral" aria-hidden />
+                  <span className="truncate">
+                    Filter by coach — part of the Season Pass
+                  </span>
+                </Link>
+              </div>
+            )}
             <ChipSearchMulti
               label="Opponents"
               values={opponents}

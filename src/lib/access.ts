@@ -254,7 +254,58 @@ export function viewIsGated(key: string): boolean {
   return viewAccess(key).kind !== "free";
 }
 
-/* ══ §4 · PATHS ═════════════════════════════════════════════════════════ */
+/* ══ §4 · TEAM PAGES ════════════════════════════════ THE PRODUCT GATES ══ */
+
+/**
+ * Team sub-pages that need a subscription.
+ *
+ * Both are built from play-by-play stint data — every five-man unit the team
+ * played, and what happened with each player on the floor against off it —
+ * which is the most expensive thing on the site to compute and has no free
+ * equivalent anywhere. Everything else on a team page is a public fact
+ * presented well, and charging for those would be charging for the presentation
+ * of somebody else's box score.
+ *
+ * Keys are TeamTab values from components/teams/team-tabs.tsx.
+ *
+ * THIS IS A PRESENTATION GATE, and more visibly so than §3. Team pages are
+ * prerendered at build time, so the numbers are in the HTML the CDN serves
+ * whether or not the reader is entitled to them — view-source has them, no
+ * devtools needed. That is a deliberate call: gating them properly means the
+ * build stops emitting them, which takes eleven of thirteen seasons of team
+ * pages out of Google, and the free search traffic is what sells the archive.
+ * Revisit only if the archive gate turns out not to be what people pay for.
+ */
+export const PAID_TEAM_TABS: ReadonlySet<string> = new Set(["lineups", "onoff"]);
+
+export function teamTabIsPaid(tab: string): boolean {
+  return PAID_TEAM_TABS.has(tab);
+}
+
+/**
+ * Teams whose paid sections are open to everyone, as a worked example.
+ *
+ * THE ARGUMENT FOR THIS IS THE SAME ONE THE SAMPLE EXPORT MAKES. "Lineups and
+ * on/off" is a feature list; a real team's actual five-man units, sortable,
+ * with the benchmarks attached, is the product. Somebody deciding whether to
+ * pay should be able to read one all the way through.
+ *
+ * TWO, AND MID-TABLE ONES. A blue blood would be read as a highlight reel and
+ * a bottom-quartile team as a warning; a pair of ordinary high-major rosters
+ * shows what the tool does for the team the reader actually cares about. Both
+ * carry lineup data for 2023-24 onward, which is every season that has any.
+ *
+ * Slugs, not names — see lib/team-slug.ts. A misspelling here fails open (the
+ * team is simply gated like any other), so it is worth checking against
+ * public/data/lineup-stats/ rather than trusting the spelling.
+ */
+export const SAMPLE_TEAM_SLUGS: ReadonlySet<string> = new Set(["vanderbilt", "saint-louis"]);
+
+export function isSampleTeam(slug: string): boolean {
+  return SAMPLE_TEAM_SLUGS.has(slug);
+}
+
+/* ══ §5 · PATHS ═════════════════════════════════════════════════════════ */
 
 /**
  * Where a gated season file lives inside the function bundle.

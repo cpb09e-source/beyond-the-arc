@@ -64,7 +64,7 @@ export const PLANS: Plan[] = [
     inherits: "Free",
     features: [
       "All thirteen seasons, back to 2013-14",
-      "Ask the Calculator — 300 plain-English questions a month",
+      "Ask the Calculator — 50 plain-English questions a month",
       "Real EPM — the plus-minus fit from play-by-play",
       "Lineups, on/off and eWins",
       "Pick any seasons at once: 2015 + 2019 + 2026, ranked together",
@@ -122,7 +122,7 @@ export const COMPARISON: Array<{
     group: "Tools",
     rows: [
       { label: "Win Calculator", cells: ["Current season", "All years", "All years"] },
-      { label: "Ask the Calculator (plain English)", cells: [false, "300/mo", "Custom"] },
+      { label: "Ask the Calculator (plain English)", cells: [false, "50/mo", "Custom"] },
       { label: "Coach filter in the Win Calculator", cells: [false, true, true] },
       { label: "Conditions per query", cells: ["3", "Unlimited", "Unlimited"] },
       { label: "Player comparison", cells: [true, true, true] },
@@ -157,11 +157,14 @@ export const FAQ: Array<{ q: string; a: string }> = [
       + "number would be worse than no feature at all.",
   },
   {
-    q: "What counts against the 300 a month?",
+    q: "What counts against the 50 a month?",
+    // ONE NUMBER FOR BOTH BILLING PERIODS. It used to be 300 on the annual
+    // plan and 100 on monthly; at 50 that split would have made the annual
+    // plan the worse of the two, and a tier table that punishes the longer
+    // commitment is a pricing bug rather than a copy one.
     a: "One question read is one call. Pressing Calculate is free and always will be — the limit "
-      + "is on turning English into filters, not on running the numbers. Monthly billing includes "
-      + "100 a month, and the count resets on the first of the month. For most people this is "
-      + "headroom rather than a ceiling.",
+      + "is on turning English into filters, not on running the numbers. It is 50 a month on "
+      + "either billing period, and the count resets on the first of the month.",
   },
   {
     q: "Why annual rather than monthly?",

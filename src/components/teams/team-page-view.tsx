@@ -23,6 +23,8 @@ import { AssistNetworkPanel } from "@/components/teams/assist-network-panel";
 import { ClockSplitsPanel } from "@/components/teams/clock-splits-panel";
 import { LineupExplorer, type LineupFile } from "@/components/teams/lineup-explorer";
 import { OnOffExplorer } from "@/components/teams/on-off-explorer";
+import { PaidSection, SampleBanner } from "@/components/teams/paid-section";
+import { isSampleTeam } from "@/lib/access";
 import type { AssistNetwork, ClockSplits } from "@/lib/static-data";
 import { ScheduleTicker } from "@/components/teams/schedule-ticker";
 import { TeamStatsPanel, type TeamSplits } from "@/components/teams/team-stats-panel";
@@ -439,6 +441,13 @@ export function TeamPageView({
   // Which sections this render is responsible for. "all" is one long scroll
   // (older seasons, and every preview page); a named tab renders the hero plus
   // its own sections and nothing else.
+  /**
+   * Vanderbilt and Saint Louis read in full, for everyone — see
+   * SAMPLE_TEAM_SLUGS. Decided HERE, on the server, so a sample page ships no
+   * gate at all rather than one that immediately disables itself.
+   */
+  const sample = isSampleTeam(slug);
+
   const showAll = tab === "all";
   const show = {
     overview: showAll || tab === "overview",
@@ -793,12 +802,29 @@ export function TeamPageView({
           header's 108rem. */}
       {show.lineups && !preview && (
         <section id={TAB_ANCHORS.lineups} className="mt-5 mb-20 scroll-mt-20">
+          {sample && !!lineupStats && <SampleBanner teamName={team.name} />}
           {lineupStats ? (
-            <LineupExplorer
-              data={lineupStats as LineupFile}
-              benchmarks={(lineupBenchmarks ?? null) as never}
-              accentColor={accentColor}
-            />
+            // The EMPTY case is never gated. "No lineup data before 2023-24"
+            // is a fact about the season, and charging for the absence of
+            // something is the one message a paywall must never send.
+            sample ? (
+              <LineupExplorer
+                data={lineupStats as LineupFile}
+                benchmarks={(lineupBenchmarks ?? null) as never}
+                accentColor={accentColor}
+              />
+            ) : (
+              <PaidSection
+                title="Lineups"
+                blurb="Every five-man unit this team played, by net rating — filtered by who was on the floor, and re-cut as 2-, 3- and 4-man combos."
+              >
+                <LineupExplorer
+                  data={lineupStats as LineupFile}
+                  benchmarks={(lineupBenchmarks ?? null) as never}
+                  accentColor={accentColor}
+                />
+              </PaidSection>
+            )
           ) : (
             <p className="text-sm text-ink-muted leading-relaxed max-w-2xl">
               No lineup data for {seasonLabel(current.year)}. Five-man units are
@@ -815,12 +841,26 @@ export function TeamPageView({
           him. Null before 2024 for the same reason Lineups is. */}
       {show.onoff && !preview && (
         <section id={TAB_ANCHORS.onoff} className="mt-5 mb-20 scroll-mt-20">
+          {sample && !!lineupStats && <SampleBanner teamName={team.name} />}
           {lineupStats ? (
-            <OnOffExplorer
-              data={lineupStats as LineupFile}
-              benchmarks={(lineupBenchmarks ?? null) as never}
-              accentColor={accentColor}
-            />
+            sample ? (
+              <OnOffExplorer
+                data={lineupStats as LineupFile}
+                benchmarks={(lineupBenchmarks ?? null) as never}
+                accentColor={accentColor}
+              />
+            ) : (
+              <PaidSection
+                title="On/Off"
+                blurb="What the team did with each player on the floor against off it, built from the same stint data as Lineups."
+              >
+                <OnOffExplorer
+                  data={lineupStats as LineupFile}
+                  benchmarks={(lineupBenchmarks ?? null) as never}
+                  accentColor={accentColor}
+                />
+              </PaidSection>
+            )
           ) : (
             <p className="text-sm text-ink-muted leading-relaxed max-w-2xl">
               No on/off data for {seasonLabel(current.year)}. It is built from the
