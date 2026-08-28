@@ -1362,15 +1362,20 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                     {b.label}
                   </th>
                 ))}
-                {/* THE COLUMN THAT ABSORBS WHAT IS LEFT, and draws nothing.
-                    The table is w-full, so without it the browser shares spare
-                    width among the real columns — which stretched Player
-                    across the whole card on "Select Your Own Columns" and made
-                    the empty table look like it continued into columns that
-                    were not there. Opaque, because the zebra stripe lives on
-                    the <tr> and a see-through cell lets the banding run to the
-                    edge. Collapses to zero once the columns fill the table. */}
-                <th aria-hidden className="sticky top-0 z-30 w-full p-0 bg-card" />
+                {/* THE COLUMN THAT ABSORBS WHAT IS LEFT, and dressed like a
+                    column while it does it: the header band, the rule and the
+                    zebra all run through it. It was blank and opaque for a
+                    while, so the table ended where its last column ended and
+                    the rest of the card was empty paper. Restored by request -
+                    the striping reads as one table that happens to have room
+                    left, where the blank version read as the card ending early
+                    and the table floating in it.
+
+                    Now that the stat columns take an 8% share of the spare
+                    width, this is usually zero wide on a full view; it only
+                    shows up where a handful of columns genuinely cannot fill
+                    the card. */}
+                <th aria-hidden className="sticky top-0 z-30 bg-paper-deep h-6 p-0 w-full" />
               </tr>
               {/* Column row — search lives in the Player cell (D&3-style). */}
               <tr>
@@ -1403,7 +1408,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                     </th>
                   ),
                 )}
-                <th aria-hidden className="sticky top-6 z-30 w-full p-0 bg-card" />
+                <th aria-hidden className="sticky top-6 z-30 bg-paper-deep border-b border-hairline w-full p-0" />
               </tr>
             </thead>
             <tbody>
@@ -1535,8 +1540,9 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                         </td>
                       );
                     })}
-                    {/* See the header: absorbs the slack, draws nothing. */}
-                    <td aria-hidden className="p-0 bg-card" />
+                    {/* Transparent, so the row's own stripe and hover tint
+                        carry across it. See the header. */}
+                    <td aria-hidden className={cn("p-0 transition-colors", zebra, ROW_HOVER)} />
                   </tr>
                   );
                 })

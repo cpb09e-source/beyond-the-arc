@@ -1399,13 +1399,20 @@ export function ExplorerClient({
                     space reads as room for columns still to be added.
                     Collapses to zero when the columns already fill the table,
                     so it costs the other views nothing. */}
-                {/* EMPTY, NOT STRIPED. It still absorbs the width — that is
-                    the whole point of it — but it stops looking like a column
-                    with nothing in it: no header band, no rule, no zebra. The
-                    table now ends where its last column ends and the rest is
-                    blank space, which reads as room for columns still to be
-                    added rather than as data that failed to load. */}
-                <th aria-hidden className="w-full p-0 bg-card" />
+                {/* THE COLUMN THAT ABSORBS WHAT IS LEFT, and dressed like a
+                    column while it does it: the header band, the rule and the
+                    zebra all run through it. It was blank and opaque for a
+                    while, so the table ended where its last column ended and
+                    the rest of the card was empty paper. Restored by request -
+                    the striping reads as one table that happens to have room
+                    left, where the blank version read as the card ending early
+                    and the table floating in it.
+
+                    Now that the stat columns take an 8% share of the spare
+                    width, this is usually zero wide on a full view; it only
+                    shows up where a handful of columns genuinely cannot fill
+                    the card. */}
+                <th aria-hidden className="sticky top-6 z-30 bg-paper-deep border-b border-hairline w-full p-0" />
               </tr>
             </thead>
             <tbody>
@@ -1546,11 +1553,9 @@ export function ExplorerClient({
                         </td>
                       );
                     })}
-                    {/* See the header. OPAQUE, not transparent: the zebra
-                        stripe lives on the <tr>, so a see-through cell let the
-                        banding run to the edge of the card — the table looked
-                        like it continued into columns that were not there. */}
-                    <td aria-hidden className="p-0 bg-card" />
+                    {/* Transparent, so the row's own stripe and hover tint
+                        carry across it. See the header. */}
+                    <td aria-hidden className={cn("p-0 transition-colors", zebra, ROW_HOVER)} />
                   </tr>
                   );
                 })
