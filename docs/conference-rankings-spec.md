@@ -1,0 +1,132 @@
+# Conference Power Rankings — spec
+
+One row per conference per season, on `/conferences`, under the Teams menu.
+
+---
+
+## 1. What a row is
+
+**The conference minus its bottom two teams by adjusted NET.** That is the whole
+idea: a conference's strength is what it puts on the floor at the top, and every
+league carries two teams that drag an average without telling you anything about
+whether it is a good league.
+
+- Ranked by `a_net` — our schedule-adjusted net rating, the same NET the team
+  explorer sorts by. Not Bart's, not raw margin.
+- **Two dropped, always two**, so the rule never has to be explained twice. A
+  conference needs at least **5 teams** to appear at all; below that, dropping
+  two leaves something that is not a league. In practice this excludes exactly
+  one thing across thirteen seasons: the independents (`ind`, 1–2 teams in
+  2014, 2015, 2023, 2024).
+- The dropped teams are carried on the row, so the table can say who they were.
+
+## 2. Seasons
+
+2014–2026, minus 2021 (COVID, excluded site-wide) and minus 2027 (the preview
+season — a power ranking of a season with no games played is an empty table).
+Twelve seasons.
+
+## 3. How each stat aggregates
+
+Three rules, chosen so that no stat is ever an average of averages weighted by
+nothing.
+
+### A. Games-weighted mean — every rate and per-game stat
+
+    Σ(value × games) / Σ(games)
+
+For a per-game count this is exactly the pooled total: summing every team's
+points and dividing by every team's games. For a percentage it is a very close
+approximation of pooling the components — teams within a conference play 28–35
+games, so games track attempts and possessions closely enough that the
+difference lands below the displayed precision.
+
+`win_pct` falls out of this rule exactly: a games-weighted mean of W/G is ΣW/ΣG.
+
+**Split-coverage stats weight by their OWN games count**, not the season's:
+fast-break, points-in-the-paint, points-off-turnovers and second-chance figures
+carry `fbpts_games` / `pitp_games` / `potov_games` / `scp_games`, because CBBD
+tracked those splits on a subset of games before 2024. Weighting them by total
+games would let a team that was tracked eight times speak as loudly as one
+tracked thirty-three.
+
+### B. Plain mean over the kept teams — ratings and schedule
+
+`a_net`, `a_ortg`, `a_drtg`, `adjt`, `cbb_pace`, `adj_sos`, `nc_sos`,
+`conf_sos`, `sos_wp`, `wab`.
+
+These are already per-100 or per-game quantities describing a team, and the
+question the page asks is "how good are the teams in this league", so each
+kept team counts once. It is also what every conference ranking published
+anywhere does, which matters for a number people will compare against KenPom.
+
+### C. Per-team mean — counted outcomes
+
+`wins`, `losses`, and the never-in-doubt / comeback counts.
+
+**These are per-team averages, not conference totals.** A total is a function
+of how many teams the league has and how many got dropped, so a 16-team league
+would out-win a 10-team one for no reason anybody cares about. "24.3 – 8.7"
+reads oddly for a second and then reads correctly.
+
+### Season totals are never shown
+
+The team explorer's Overview and Differentials views carry season-total
+differentials (`reb_diff_ct`, `pts_diff`, …). The conference table uses the
+per-game equivalents everywhere, and computes `pts_diff_pg` (points margin per
+game) where the team side has only the total. A season total is a statement
+about how many games got played.
+
+## 4. Views
+
+Seven, each mirroring the team explorer view of the same name so a reader
+moving between the two pages sees the same columns in the same order.
+
+| View | Bands |
+|---|---|
+| Overview | Ratings (adjusted) / Four Factors / Shooting |
+| Adjusted & Schedule | Adjusted / Schedule |
+| Traditional Box | Scoring / Rebounding / Defense & fouls |
+| Scoring Context | Per game / Share of points / Creation |
+| Differentials | Margin / Situational / Rate margins |
+| Defensive Events | Event rates / Per game / Cost of fouling |
+| Record & Outcomes | Record / Never in doubt / Comebacks & collapses |
+
+Overview's Four Factors band and Differentials' Margin band swap the team
+side's count differentials for the per-game ones, per §3.
+
+## 5. Controls
+
+Seasons (multi, defaults to 25-26), Conferences (multi, from the same list the
+team explorer uses), View. **No filter builder and no column picker** — the
+column set is the view, and a table of ~31 rows does not need narrowing.
+
+## 6. Percentiles
+
+Computed in the browser across the loaded cohort — every conference-season
+currently selected — the same way the team explorer computes team percentiles
+across a season's teams. Not baked, because the cohort changes with the season
+selection: a conference's colour should say where it sits among what the reader
+is actually looking at.
+
+## 7. Data
+
+`public/data/conference-rankings.json`, one file for all twelve seasons,
+generated by `scripts/build-conference-rankings.mjs` from
+`public/data/teams-by-year/<year>.json` — the same files the team explorer
+reads, so the two pages can never disagree about a season.
+
+Rows are emitted under the team explorer's own stat keys (`a_net`, `cbb_efg`,
+…) so labels, number formats and percentile direction all come from
+`TEAM_STAT_COLUMNS` rather than a second catalogue that would drift.
+
+## 8. Open — decide before this ships
+
+- **Gating.** Nothing here is gated today. A conference file is public for every
+  season, including the ones the archive gate would withhold at team level.
+  Defensible (an aggregate of a league is not a team's row) but it is a
+  decision, and it belongs on `docs/free-vs-paid.csv`.
+- **Where the bottom two go.** They are dropped from every stat, including
+  Record. An alternative is to drop them only from the ratings and pool the
+  rest. Current answer: one rule, applied everywhere, because a row where half
+  the columns include Chicago State and half do not is a row nobody can read.

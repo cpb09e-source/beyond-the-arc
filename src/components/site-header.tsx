@@ -4,12 +4,27 @@ import Link from "next/link";
 import { SiteLogo } from "@/components/site-logo";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Search } from "lucide-react";
+import { Search, ChevronDown } from "lucide-react";
 import { SearchDialog } from "@/components/search/search-dialog";
 import { AccountNav } from "@/components/account/account-nav";
 import { MobileMenu } from "@/components/mobile-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
+
+/**
+ * The pages that hang off a nav label rather than being one.
+ *
+ * Teams is two tables now - the explorer, and the conference power
+ * rankings built from it - and the row has no width for an eighth label:
+ * seven already needed the xl gutter given back to fit at 1024. A menu adds
+ * a page without adding a word.
+ */
+const SUBNAV: Record<string, ReadonlyArray<{ href: string; label: string; desc: string }>> = {
+  "/": [
+    { href: "/", label: "Team Explorer", desc: "Every team, every season, your columns" },
+    { href: "/conferences", label: "Conference Power Rankings", desc: "Each league minus its bottom two" },
+  ],
+};
 
 const NAV = [
   { href: "/", label: "Teams" },
@@ -25,17 +40,109 @@ const NAV = [
 // The mobile menu carries one extra entry. Pricing is a real page that the
 // desktop row has no width for — seven labels already fill it — so without
 // this the only route to it is a URL someone was given.
-const MOBILE_NAV = [...NAV, { href: "/pricing", label: "Pricing" }];
+const MOBILE_NAV = [
+  ...NAV.flatMap((item) => {
+    const kids = SUBNAV[item.href];
+    // The parent label is kept and the children follow it: on a phone the
+    // list scrolls, so there is no reason to hide a page behind a hover.
+    return kids ? kids.map((k) => ({ href: k.href, label: k.label })) : [item];
+  }),
+  { href: "/pricing", label: "Pricing" },
+];
 
 // Active-route detection. The home route ("/") must match EXACTLY — otherwise
 // every page starts with "/" and the home link would always read active.
 function isCurrent(pathname: string, href: string): boolean {
-  if (href === "/") return pathname === "/";
+  // The Teams chip covers everything on its menu, so /conferences does not
+  // leave the row with nothing lit.
+  if (href === "/") {
+    return pathname === "/" || SUBNAV["/"]!.some((k) => k.href !== "/" && pathname.startsWith(k.href));
+  }
   // A single game lives at /game?id=… rather than under /scoreboard/, because
   // a static export cannot enumerate every game id at build time. It is still
   // the scoreboard's territory, so it lights that tab.
   if (href === "/scoreboard" && pathname.startsWith("/game")) return true;
   return pathname === href || pathname.startsWith(href + "/");
+}
+
+/**
+ * A nav chip that is also a menu.
+ *
+ * THE CHIP IS STILL A LINK. "Teams" goes to the team explorer on click, the
+ * way it always has, and the menu is an addition rather than a toll booth -
+ * turning a working link into a button that only opens a list is the thing
+ * that makes people hunt for a page they used to reach in one click.
+ *
+ * Opens on hover AND on focus, closes on Escape and on blur out of the group.
+ * Touch never sees it: below lg the whole row is replaced by the drawer, where
+ * the child pages are listed flat.
+ */
+function NavMenu({
+  label,
+  href,
+  items,
+  active,
+  pathname,
+}: {
+  label: string;
+  href: string;
+  items: ReadonlyArray<{ href: string; label: string; desc: string }>;
+  active: boolean;
+  pathname: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen(false); }}
+      onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
+    >
+      <Link
+        href={href}
+        aria-current={active ? "page" : undefined}
+        aria-expanded={open}
+        className={cn(
+          "relative inline-flex items-center gap-1 whitespace-nowrap rounded-md py-1.5 text-[0.7rem] uppercase font-medium transition-colors",
+          "px-2 tracking-[0.1em] xl:px-3 xl:tracking-[0.18em]",
+          active
+            ? "bg-paper text-ink shadow-sm ring-1 ring-ink/5"
+            : "text-ink-muted hover:text-ink hover:bg-paper/60",
+        )}
+      >
+        {label}
+        <ChevronDown size={11} strokeWidth={2.5} aria-hidden className={cn("transition-transform", open && "rotate-180")} />
+      </Link>
+      {open && (
+        // No gap between the chip and the panel: a few pixels of nothing is
+        // enough to drop the hover on the way down and close the menu under
+        // the pointer.
+        <div className="absolute left-0 top-full pt-1 w-64">
+          <div className="rounded-lg border border-ink/12 bg-card shadow-lg ring-1 ring-ink/5 py-1">
+            {items.map((k) => {
+              const here = k.href === "/" ? pathname === "/" : pathname.startsWith(k.href);
+              return (
+                <Link
+                  key={k.href}
+                  href={k.href}
+                  onClick={() => setOpen(false)}
+                  className={cn(
+                    "block px-3 py-2 transition-colors",
+                    here ? "bg-coral/6" : "hover:bg-paper-deep/60",
+                  )}
+                >
+                  <span className={cn("block text-sm font-medium", here ? "text-coral" : "text-ink")}>{k.label}</span>
+                  <span className="block text-xs text-ink-muted leading-snug mt-0.5">{k.desc}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function SiteHeader() {
@@ -112,6 +219,19 @@ export function SiteHeader() {
         <nav className="hidden lg:flex items-center gap-0.5 rounded-lg bg-ink/6 p-1 backdrop-blur-sm">
           {NAV.map((item) => {
             const active = isCurrent(pathname, item.href);
+            const kids = SUBNAV[item.href];
+            if (kids) {
+              return (
+                <NavMenu
+                  key={item.href}
+                  label={item.label}
+                  href={item.href}
+                  items={kids}
+                  active={active}
+                  pathname={pathname}
+                />
+              );
+            }
             return (
               <Link
                 key={item.href}
