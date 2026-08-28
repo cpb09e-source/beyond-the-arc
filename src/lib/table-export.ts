@@ -28,14 +28,45 @@
 import { buildXlsx, saveBlob, colLetter, safeSheetName, type XlsxCell, type XlsxRow, type XlsxSheet, type XlsxStyle } from "@/lib/xlsx";
 import type { TeamRow } from "@/lib/team-filters";
 
+/**
+ * WHAT AN EXPORTABLE ROW LOOKS LIKE, without saying what it is.
+ *
+ * This file started as the team explorer's download and knew TeamRow
+ * throughout. The players table needs the same three formats, the same About
+ * sheet and the same banded header, and none of that is about teams — but a
+ * player has different identity columns, no season-total-and-per-game pairing,
+ * and its percentiles arrive from a different place.
+ *
+ * So the row type is a parameter and the four things that genuinely differ are
+ * injected. A second copy of the workbook builder would have been the other
+ * option, and two spreadsheet writers that have to agree about formatting is a
+ * worse trade than one that takes a descriptor.
+ */
+export type ExportEntity<R> = {
+  /** Workbook title, e.g. "Team Ratings". */
+  title: string;
+  /** Tab name for the single-sheet export. */
+  sheetName: string;
+  /** Leftmost columns, identifying the row. */
+  identity: Array<{ header: string; width?: number; get: (r: R) => string | number | null }>;
+  /** Reads a stat by key. */
+  num: (r: R, key: string) => number | null;
+  /** Reads a percentile by key. */
+  pctOf: (r: R, key: string) => number | null;
+  /** Header of the column the widest identity field sits in, for sizing. */
+  wideHeader: string;
+  /** Filename stem — "teams" gives bta-teams-overview-2026-08-28.csv. */
+  fileStem: string;
+};
+
 /** One table column, flattened out of the explorer's view/band model. */
 export type ExportCol = {
   label: string;
-  /** Field on TeamRow holding the season total. */
+  /** Key holding the value — a season total on the team side. */
   total: string;
-  /** Field holding the per-game figure, where the column has both. */
+  /** Key holding the per-game figure, where the column has both. */
   perGame?: string;
-  /** Key into `row.pct`. */
+  /** Key for the percentile. */
   pct: string;
   fmt: "num1" | "signed" | "pct1" | "int";
   /** Band caption this column sits under, for the workbook's top row. */
@@ -54,10 +85,11 @@ export type ExportMeta = {
   url: string;
 };
 
-export type ExportInput = {
+export type ExportInput<R = TeamRow> = {
   cols: ExportCol[];
-  rows: TeamRow[];
+  rows: R[];
   meta: ExportMeta;
+  entity: ExportEntity<R>;
 };
 
 /** One tab: a name and the columns that go on it. */
@@ -72,10 +104,11 @@ export type ExportSheetSpec = { name: string; cols: ExportCol[] };
  * reading the same team across them. The reader's filters and sort are the
  * constant; the columns are what varies.
  */
-export type MultiExportInput = {
+export type MultiExportInput<R = TeamRow> = {
   sheets: ExportSheetSpec[];
-  rows: TeamRow[];
+  rows: R[];
   meta: ExportMeta;
+  entity: ExportEntity<R>;
   /** Filename stem — the caller knows whether this is all the views or three. */
   slug?: string;
 };
@@ -84,21 +117,84 @@ export type MultiExportInput = {
 // column model
 // ---------------------------------------------------------------------------
 
-type Field = {
+type Field<R> = {
   header: string;
   band: string;
   kind: "text" | "num1" | "signed" | "pct1" | "int" | "pgSigned" | "pctl";
   /** Pulls the raw value out of a row. */
-  get: (r: TeamRow) => string | number | null;
+  get: (r: R) => string | number | null;
 };
 
 const IDENTITY_BAND = "";
 
-function seasonLabel(y: number): string {
+export function exportSeasonLabel(y: number): string {
   return `${y - 1}-${y.toString().slice(-2)}`;
 }
 
-function num(r: TeamRow, key: string): number | null {
+/**
+ * The team explorer's descriptor — the identity columns and readers this file
+ * used to have hardcoded, now stated in one place.
+ *
+ * Kept here rather than in the component so the shape the workbook is built
+ * from lives beside the builder that consumes it.
+ */
+export const TEAM_ENTITY: ExportEntity<TeamRow> = {
+  title: "Team Ratings",
+  sheetName: "Teams",
+  wideHeader: "Team",
+  fileStem: "teams",
+  identity: [
+    { header: "Team", width: 22, get: (r) => r.team_name },
+    { header: "Conference", width: 15, get: (r) => r.team_conference ?? "" },
+    { header: "Season", get: (r) => exportSeasonLabel(r.team_year) },
+    { header: "Record", get: (r) => r.record ?? "" },
+  ],
+  num: (r, key) => numField(r, key),
+  pctOf: (r, key) => r.pct[key] ?? null,
+};
+
+/**
+ * The players explorer's descriptor.
+ *
+ * DIFFERENT FROM THE TEAM ONE IN TWO WAYS THAT MATTER. Identity is five
+ * columns rather than four, because a player without his team and season is
+ * not identified — there are two Chris Johnsons in most seasons. And the
+ * numbers come from two places: PlayerSummary for the stats the payload
+ * carries, a stat pack for the hundred it does not, so both readers are
+ * supplied by the caller, which is the only thing that holds the fetched
+ * packs.
+ */
+export type PlayerExportRow = {
+  name: string;
+  team_name: string;
+  team_conference: string | null;
+  year: number;
+  class: string | null;
+};
+
+export function playerEntity<R extends PlayerExportRow>(
+  num: (r: R, key: string) => number | null,
+  pctOf: (r: R, key: string) => number | null,
+): ExportEntity<R> {
+  return {
+    title: "Player Ratings",
+    sheetName: "Players",
+    wideHeader: "Player",
+    fileStem: "players",
+    identity: [
+      { header: "Player", width: 24, get: (r) => r.name },
+      { header: "Team", width: 20, get: (r) => r.team_name },
+      { header: "Conference", width: 15, get: (r) => r.team_conference ?? "" },
+      { header: "Season", get: (r) => exportSeasonLabel(r.year) },
+      { header: "Class", get: (r) => r.class ?? "" },
+    ],
+    num,
+    pctOf,
+  };
+}
+
+/** The default reader: a plain numeric property. Entities may override. */
+export function numField<R>(r: R, key: string): number | null {
   const v = (r as unknown as Record<string, unknown>)[key];
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
@@ -117,37 +213,34 @@ function num(r: TeamRow, key: string): number | null {
  * (Opp eFG% and eFG% both shorten to "eFG%" in some bands), and a spreadsheet
  * with two identically-named columns breaks every lookup written against it.
  */
-export function exportFields(cols: ExportCol[]): Field[] {
-  const out: Field[] = [
-    { header: "Team", band: IDENTITY_BAND, kind: "text", get: (r) => r.team_name },
-    { header: "Conference", band: IDENTITY_BAND, kind: "text", get: (r) => r.team_conference ?? "" },
-  ];
-  // Always present in the file, even on a single-season table: a saved CSV
-  // that does not say which season it is from is a trap the moment it is
-  // opened next to another one.
-  out.push({ header: "Season", band: IDENTITY_BAND, kind: "text", get: (r) => seasonLabel(r.team_year) });
-  out.push({ header: "Record", band: IDENTITY_BAND, kind: "text", get: (r) => r.record ?? "" });
+export function exportFields<R>(cols: ExportCol[], entity: ExportEntity<R>): Field<R>[] {
+  // Identity comes from the entity. The season belongs in there and every
+  // entity supplies it: a saved file that does not say which season it is from
+  // is a trap the moment it is opened beside another one.
+  const out: Field<R>[] = entity.identity.map((f) => ({
+    header: f.header, band: IDENTITY_BAND, kind: "text" as const, get: f.get,
+  }));
 
   for (const c of cols) {
     out.push({
       header: c.label,
       band: c.band,
       kind: c.fmt,
-      get: (r) => num(r, c.total),
+      get: (r) => entity.num(r, c.total),
     });
     if (c.perGame) {
       out.push({
         header: `${c.label} /g`,
         band: c.band,
         kind: "pgSigned",
-        get: (r) => num(r, c.perGame!),
+        get: (r) => entity.num(r, c.perGame!),
       });
     }
     out.push({
       header: `${c.label} Pctl`,
       band: c.band,
       kind: "pctl",
-      get: (r) => r.pct[c.pct] ?? null,
+      get: (r) => entity.pctOf(r, c.pct),
     });
   }
 
@@ -178,8 +271,8 @@ function csvCell(v: string | number | null): string {
  * codepage, and every accented team name arrives mojibaked. Every other
  * consumer skips it.
  */
-export function buildCsv(input: ExportInput): string {
-  const fields = exportFields(input.cols);
+export function buildCsv<R>(input: ExportInput<R>): string {
+  const fields = exportFields(input.cols, input.entity);
   const lines = [fields.map((f) => csvCell(f.header)).join(",")];
   for (const r of input.rows) {
     lines.push(fields.map((f) => csvCell(f.get(r))).join(","));
@@ -233,7 +326,9 @@ function pctStyle(pct: number): XlsxStyle {
  * +343 and -89 are told apart only by a minus is exactly the column where the
  * sign is the information.
  */
-const NUM_FMT: Record<Field["kind"], string | undefined> = {
+type FieldKind = Field<unknown>["kind"];
+
+const NUM_FMT: Record<FieldKind, string | undefined> = {
   text: undefined,
   num1: "0.0",
   signed: '"+"#,##0;"-"#,##0;0',
@@ -255,7 +350,7 @@ const NUM_FMT: Record<Field["kind"], string | undefined> = {
  */
 const ZEBRA = "F7F3EA";
 
-function bodyStyle(kind: Field["kind"], striped: boolean): XlsxStyle {
+function bodyStyle(kind: FieldKind, striped: boolean): XlsxStyle {
   const fill = striped ? ZEBRA : undefined;
   if (kind === "text") return { align: "left", size: 10, color: PALETTE.ink, fill };
   return { numFmt: NUM_FMT[kind], align: "right", size: 10, color: PALETTE.ink, fill };
@@ -277,19 +372,23 @@ function bodyStyle(kind: Field["kind"], striped: boolean): XlsxStyle {
  */
 const FILTER_BUTTON_WIDTH = 3.2;
 
-function columnWidth(f: Field): number {
+function columnWidth<R>(f: Field<R>, entity: ExportEntity<R>): number {
   const header = f.header.length + FILTER_BUTTON_WIDTH;
+  // The identity column the reader scans down gets room for a real name, and
+  // the entity says which one that is: "Team" and "Player" are different
+  // lengths and neither file should have to truncate.
+  const declared = entity.identity.find((i) => i.header === f.header)?.width;
   const values =
-    f.header === "Team" ? 22
+    declared ?? (f.header === entity.wideHeader ? 22
       : f.header === "Conference" ? 15
       : f.kind === "text" ? 10
       : f.kind === "pctl" ? 5
-      : 8;
+      : 8);
   return Math.round(Math.max(header, values) * 10) / 10;
 }
 
 /** Band captions as {label, span} in column order, identity columns included. */
-function bandRuns(fields: Field[]): Array<{ label: string; span: number }> {
+function bandRuns<R>(fields: Field<R>[]): Array<{ label: string; span: number }> {
   const runs: Array<{ label: string; span: number }> = [];
   for (const f of fields) {
     const last = runs[runs.length - 1];
@@ -303,6 +402,8 @@ function aboutSheet(
   meta: ExportMeta,
   rowCount: number,
   colCount: number,
+  /** What the workbook is called on its own cover sheet. */
+  title: string,
   /** Tab names, when the workbook carries one per view. */
   tabs?: string[],
 ): XlsxSheet {
@@ -312,7 +413,7 @@ function aboutSheet(
   const note: XlsxStyle = { size: 9, color: PALETTE.inkMuted, align: "left", wrap: true };
 
   const rows: XlsxRow[] = [
-    [{ v: "Beyond the Arc — Team Ratings", s: head }],
+    [{ v: `Beyond the Arc — ${title}`, s: head }],
     [],
     [{ v: "Exported", s: label }, { v: new Date().toLocaleString("en-US", { dateStyle: "long", timeStyle: "short" }), s: value }],
     [{ v: "View", s: label }, { v: tabs ? `${tabs.length} views, one per tab` : meta.viewLabel, s: value }],
@@ -368,8 +469,10 @@ function aboutSheet(
  * merged band captions, the frozen pane, the stripe, the percentile fills —
  * belongs to the sheet rather than to the workbook, so every tab gets it.
  */
-function teamsSheet(name: string, cols: ExportCol[], teamRows: TeamRow[]): XlsxSheet {
-  const fields = exportFields(cols);
+function entitySheet<R>(
+  name: string, cols: ExportCol[], dataRows: R[], entity: ExportEntity<R>,
+): XlsxSheet {
+  const fields = exportFields(cols, entity);
 
   const bandStyle = (label: string): XlsxStyle => ({
     bold: true, size: 9, align: "center", fill: PALETTE.paperDeep,
@@ -377,7 +480,7 @@ function teamsSheet(name: string, cols: ExportCol[], teamRows: TeamRow[]): XlsxS
   });
   // NO WRAPPING. A header that breaks mid-word ("Recor / d") is harder to
   // scan than a wider column, and columnWidth below guarantees there is room.
-  const headStyle = (f: Field): XlsxStyle => ({
+  const headStyle = (f: Field<R>): XlsxStyle => ({
     bold: true, size: 10, fill: PALETTE.paperDeep, color: PALETTE.ink,
     align: f.kind === "text" ? "left" : f.kind === "pctl" ? "center" : "right",
     underline: true,
@@ -406,7 +509,7 @@ function teamsSheet(name: string, cols: ExportCol[], teamRows: TeamRow[]): XlsxS
   rows.push(fields.map((f) => ({ v: f.header, s: headStyle(f) }) as XlsxCell));
 
   // Rows 3+ — the data, striped in pairs.
-  teamRows.forEach((r, i) => {
+  dataRows.forEach((r, i) => {
     const striped = i % 2 === 1;
     rows.push(fields.map((f) => {
       const v = f.get(r);
@@ -426,7 +529,7 @@ function teamsSheet(name: string, cols: ExportCol[], teamRows: TeamRow[]): XlsxS
   return {
     name,
     rows,
-    widths: fields.map(columnWidth),
+    widths: fields.map((f) => columnWidth(f, entity)),
     // Column A and both header rows stay put — scrolling right without the
     // team name is the single fastest way to make a wide table useless.
     freeze: { x: 1, y: 2 },
@@ -438,10 +541,10 @@ function teamsSheet(name: string, cols: ExportCol[], teamRows: TeamRow[]): XlsxS
 }
 
 /** The formatted workbook: the table as it reads, plus a sheet saying what it is. */
-export async function buildWorkbook(input: ExportInput): Promise<Blob> {
+export async function buildWorkbook<R>(input: ExportInput<R>): Promise<Blob> {
   return buildXlsx([
-    teamsSheet("Teams", input.cols, input.rows),
-    aboutSheet(input.meta, input.rows.length, exportFields(input.cols).length),
+    entitySheet(input.entity.sheetName, input.cols, input.rows, input.entity),
+    aboutSheet(input.meta, input.rows.length, exportFields(input.cols, input.entity).length, input.entity.title),
   ]);
 }
 
@@ -456,35 +559,44 @@ export async function buildWorkbook(input: ExportInput): Promise<Blob> {
  * outright — not gracefully — for a name over 31 characters, one containing
  * \ / ? * [ ] :, or two sheets sharing a name.
  */
-export async function buildAllViewsWorkbook(input: MultiExportInput): Promise<Blob> {
+export async function buildAllViewsWorkbook<R>(input: MultiExportInput<R>): Promise<Blob> {
   const taken = new Set<string>(["About"]);
   const sheets = input.sheets.map((spec) => {
     const name = safeSheetName(spec.name, taken);
-    return teamsSheet(name, spec.cols, input.rows);
+    return entitySheet(name, spec.cols, input.rows, input.entity);
   });
-  const widest = input.sheets.reduce((n, spec) => Math.max(n, exportFields(spec.cols).length), 0);
-  return buildXlsx([...sheets, aboutSheet(input.meta, input.rows.length, widest, sheets.map((s) => s.name))]);
+  const widest = input.sheets.reduce((n, spec) => Math.max(n, exportFields(spec.cols, input.entity).length), 0);
+  return buildXlsx([
+    ...sheets,
+    aboutSheet(input.meta, input.rows.length, widest, input.entity.title, sheets.map((s) => s.name)),
+  ]);
 }
 
 /** `bta-teams-overview-2026-08-27.csv` — view and date, both of which matter later. */
-export function exportFilename(meta: ExportMeta, ext: "csv" | "xlsx", slugOverride?: string): string {
+export function exportFilename(
+  meta: ExportMeta,
+  ext: "csv" | "xlsx",
+  slugOverride?: string,
+  /** What the rows are. Defaults to teams, the only caller when this was written. */
+  stem = "teams",
+): string {
   const slug = (slugOverride ?? meta.viewLabel).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   const d = new Date();
   const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  return `bta-teams-${slug}-${stamp}.${ext}`;
+  return `bta-${stem}-${slug}-${stamp}.${ext}`;
 }
 
-export function downloadCsv(input: ExportInput): void {
+export function downloadCsv<R>(input: ExportInput<R>): void {
   const blob = new Blob([buildCsv(input)], { type: "text/csv;charset=utf-8" });
-  saveBlob(blob, exportFilename(input.meta, "csv"));
+  saveBlob(blob, exportFilename(input.meta, "csv", undefined, input.entity.fileStem));
 }
 
-export async function downloadWorkbook(input: ExportInput): Promise<void> {
+export async function downloadWorkbook<R>(input: ExportInput<R>): Promise<void> {
   const blob = await buildWorkbook(input);
-  saveBlob(blob, exportFilename(input.meta, "xlsx"));
+  saveBlob(blob, exportFilename(input.meta, "xlsx", undefined, input.entity.fileStem));
 }
 
-export async function downloadAllViews(input: MultiExportInput): Promise<void> {
+export async function downloadAllViews<R>(input: MultiExportInput<R>): Promise<void> {
   const blob = await buildAllViewsWorkbook(input);
-  saveBlob(blob, exportFilename(input.meta, "xlsx", input.slug ?? "views"));
+  saveBlob(blob, exportFilename(input.meta, "xlsx", input.slug ?? "views", input.entity.fileStem));
 }

@@ -31,6 +31,7 @@ import { TABLE_VIEWS, viewByKey, viewGroups, type TableView } from "@/lib/team-v
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { CompareTeamsModal } from "@/components/explorer/compare-teams-modal";
 import { DownloadMenu } from "@/components/explorer/download-menu";
+import { TEAM_ENTITY } from "@/lib/table-export";
 import { SavedFiltersMenu } from "@/components/explorer/saved-filters-menu";
 import { suggestName } from "@/lib/saved-filters";
 import { exportFields, type ExportCol, type ExportInput, type MultiExportInput } from "@/lib/table-export";
@@ -725,6 +726,7 @@ export function ExplorerClient({
     return {
       cols: exportCols,
       rows: allRows,
+      entity: TEAM_ENTITY,
       meta: {
         viewLabel: view.label,
         seasons,
@@ -757,6 +759,7 @@ export function ExplorerClient({
     return {
       sheets: chosen.map((v) => ({ name: v.label, cols: exportColsForView(v, scopedSpec.cols) })),
       rows: single.rows,
+      entity: TEAM_ENTITY,
       meta: single.meta,
       slug: chosen.length === TABLE_VIEWS.length ? "all-views"
         : chosen.length === 1 ? chosen[0]!.label
@@ -801,6 +804,7 @@ export function ExplorerClient({
       sheets: TABLE_VIEWS.filter((v) => !v.custom)
         .map((v) => ({ name: v.label, cols: exportColsForView(v, []) })),
       rows: ranked.slice(0, SAMPLE_ROWS),
+      entity: TEAM_ENTITY,
       meta: {
         viewLabel: "Sample",
         seasons: seasonLabel(latestYear),
@@ -818,7 +822,7 @@ export function ExplorerClient({
   // The number of columns THE FILE will have, not the number on screen: a
   // stat contributes its value, its percentile and sometimes a per-game
   // figure, so sixteen table columns land as forty spreadsheet ones.
-  const exportFieldCount = useMemo(() => exportFields(exportCols).length, [exportCols]);
+  const exportFieldCount = useMemo(() => exportFields(exportCols, TEAM_ENTITY).length, [exportCols]);
 
   // Live "N teams" for the filter drawer's footer: run the current scope
   // against a candidate filter set without touching the URL. limit:-1 so the

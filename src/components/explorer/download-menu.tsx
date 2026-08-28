@@ -1,21 +1,47 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Download, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEntitlement } from "@/lib/use-entitlement";
-import { TABLE_VIEWS, viewGroups } from "@/lib/team-views";
+import { TABLE_VIEWS } from "@/lib/team-views";
+
+/**
+ * The shape this menu needs from a view registry — a key, a label, the section
+ * it lists under, and whether it is the empty build-your-own one.
+ *
+ * Structural rather than tied to TableView so the players registry, which
+ * carries different fields, satisfies it without either side importing the
+ * other.
+ */
+export type DownloadView = {
+  key: string; label: string; group: string; desc?: string; custom?: boolean;
+};
 
 import {
   downloadAllViews, downloadCsv, downloadWorkbook,
   type ExportInput, type MultiExportInput,
 } from "@/lib/table-export";
 
-/** The views the all-views workbook offers — curated sets only, never the
- *  empty one, whose tab would be team names and nothing else. */
-const EXPORTABLE_VIEWS = TABLE_VIEWS.filter((v) => !v.custom);
+/**
+ * The views the all-views workbook offers — curated sets only, never the empty
+ * one, whose tab would be names and nothing else.
+ *
+ * Grouped in registry order, so the picker matches the View dropdown the reader
+ * has already learned the shape of.
+ */
+function exportableGroups(views: DownloadView[]): Array<{ group: string; views: DownloadView[] }> {
+  const out: Array<{ group: string; views: DownloadView[] }> = [];
+  for (const v of views) {
+    if (v.custom) continue;
+    let g = out.find((x) => x.group === v.group);
+    if (!g) { g = { group: v.group, views: [] }; out.push(g); }
+    g.views.push(v);
+  }
+  return out;
+}
 
 /**
  * Download the table — a formatted workbook, a workbook of chosen views, or
@@ -46,29 +72,48 @@ const EXPORTABLE_VIEWS = TABLE_VIEWS.filter((v) => !v.custom);
  * formatted thirteen-tab workbook. The sample runs the same code as the paid
  * export over ten teams, so it cannot overstate what it is selling.
  */
-export function DownloadMenu({
+export function DownloadMenu<R>({
   build,
   buildAll,
   buildSample,
   rowCount,
   colCount,
   disabled,
+  views = TABLE_VIEWS,
+  noun = "teams",
+  alwaysFree = false,
 }: {
   /** Assembles the export input. Called only when a format is chosen. */
-  build: () => ExportInput;
+  build: () => ExportInput<R>;
   /** The same rows under each named view, one tab per key, in registry order. */
-  buildAll: (viewKeys: string[]) => MultiExportInput;
+  buildAll: (viewKeys: string[]) => MultiExportInput<R>;
   /** Every view over a fixed ten teams — what a locked reader can still have. */
-  buildSample?: () => MultiExportInput;
+  buildSample?: () => MultiExportInput<R>;
   rowCount: number;
   colCount: number;
   disabled?: boolean;
+  /**
+   * The view registry to offer. Defaults to the team explorer's, which is the
+   * only caller that existed when this was written.
+   */
+  views?: DownloadView[];
+  /** What the rows are, for the menu's own wording. */
+  noun?: string;
+  /**
+   * Skip the membership check entirely.
+   *
+   * The players explorer is ungated for now, and the honest way to say that is
+   * to not show a lock rather than to show one that opens for everybody. When
+   * a decision is made about what the players table sells, this comes off and
+   * the menu behaves exactly as it does on the team side.
+   */
+  alwaysFree?: boolean;
 }) {
   // Unknown membership resolves as entitled — see useEntitlement. Flashing an
   // upsell at a subscriber is worse than briefly offering the menu to someone
   // who will be asked to sign in the moment they click.
   const { paid, signedIn } = useEntitlement();
-  const gated = !paid;
+  const gated = !alwaysFree && !paid;
 
   const [open, setOpen] = useState(false);
   /** The menu is two screens: the format list, and the view picker. */
@@ -81,7 +126,8 @@ export function DownloadMenu({
    * alone still costs a click on All. Clearing is one click either way, so
    * "all" is the default that is never worse.
    */
-  const [picked, setPicked] = useState<string[]>(() => EXPORTABLE_VIEWS.map((v) => v.key));
+  const exportable = useMemo(() => views.filter((v) => !v.custom), [views]);
+  const [picked, setPicked] = useState<string[]>(() => views.filter((v) => !v.custom).map((v) => v.key));
   const [busy, setBusy] = useState<"csv" | "xlsx" | "xlsx-all" | "sample" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [at, setAt] = useState<{ left: number; top: number } | null>(null);
@@ -170,7 +216,7 @@ export function DownloadMenu({
   }
 
   const empty = rowCount === 0;
-  const allPicked = picked.length === EXPORTABLE_VIEWS.length;
+  const allPicked = picked.length === exportable.length;
 
   return (
     <div ref={wrapRef} className="relative">
@@ -178,7 +224,7 @@ export function DownloadMenu({
         type="button"
         onClick={() => (open ? closeMenu() : setOpen(true))}
         disabled={disabled || empty}
-        title={empty ? "Nothing to download — no teams match these filters" : "Download this table"}
+        title={empty ? `Nothing to download — no ${noun} match these filters` : "Download this table"}
         aria-haspopup="menu"
         aria-expanded={open}
         className={cn(
@@ -274,7 +320,7 @@ export function DownloadMenu({
                   comparing is the reader's question, not ours. */}
               <MenuItem
                 title="Excel — select views"
-                sub="One tab per view. Same teams, same order, same filters on every tab."
+                sub={`One tab per view. Same ${noun}, same order, same filters on every tab.`}
                 trailing={<ChevronRight size={14} className="text-ink-muted" />}
                 onClick={() => setScreen("views")}
               />
@@ -299,7 +345,7 @@ export function DownloadMenu({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPicked(allPicked ? [] : EXPORTABLE_VIEWS.map((v) => v.key))}
+                  onClick={() => setPicked(allPicked ? [] : exportable.map((v) => v.key))}
                   className="px-2 py-1 rounded text-[0.65rem] uppercase tracking-widest font-bold text-coral hover:bg-coral/8 transition-colors"
                 >
                   {allPicked ? "Clear all" : "Select all"}
@@ -309,8 +355,7 @@ export function DownloadMenu({
               {/* Grouped exactly as the View dropdown groups them — the reader
                   is picking from a list they already know the shape of. */}
               <div className="max-h-64 overflow-y-auto py-1">
-                {viewGroups()
-                  .map((g) => ({ ...g, views: g.views.filter((v) => !v.custom) }))
+                {exportableGroups(views)
                   .filter((g) => g.views.length > 0)
                   .map((g) => (
                   <div key={g.group}>

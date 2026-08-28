@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { midrankPercentileMap } from "@/lib/percentile";
@@ -15,6 +15,10 @@ import {
 import { StatChipStrip } from "@/components/filters/stat-chips";
 import { ComparePlayersModal } from "@/components/players/compare-players-modal";
 import { SavedFiltersMenu } from "@/components/explorer/saved-filters-menu";
+import { DownloadMenu } from "@/components/explorer/download-menu";
+import {
+  playerEntity, type ExportCol, type ExportInput, type MultiExportInput,
+} from "@/lib/table-export";
 import { suggestPlayerName } from "@/lib/saved-filters";
 import { SortableTh, StatLabel } from "@/components/explorer/sortable-th";
 import { Select } from "@/components/select";
@@ -24,6 +28,7 @@ import {
   // only by scripts/build-players-explorer.mjs, at build time.
   PLAYER_STAT_COLUMNS,
   parsePlayerSpec,
+  playerStatColumn,
   EWINS_FIRST_YEAR,
   passesPlayerFilter,
   playerSpecToParams,
@@ -90,6 +95,35 @@ type GridCol = {
 // "overview", declared column for column as it shipped — so the spans cannot
 // drift from the columns beneath them, and adding a view costs no changes in
 // this file. See viewGrid() below.
+
+/**
+ * A view's stat keys, flattened into export columns.
+ *
+ * Mirrors viewGrid below — same walk, same two catalogues, same precedence —
+ * but produces the spreadsheet's column model rather than the table's. Kept as
+ * a separate function rather than a second use of viewGrid because the file
+ * wants a percentile column beside every value, which the table does not.
+ */
+function exportColsFor(v: PlayerView): ExportCol[] {
+  return v.bands.flatMap((band) => band.keys.flatMap((key): ExportCol[] => {
+    const summary = PLAYER_STAT_COLUMNS.find((c) => c.key === key);
+    if (summary && !summary.filterOnly) {
+      return [{
+        label: summary.label, total: summary.field as string, pct: summary.field as string,
+        fmt: summary.format === "pct1" ? "pct1" : "num1", band: band.label,
+      }];
+    }
+    const pack = PACK_STAT_BY_KEY.get(key);
+    if (!pack) return [];
+    return [{
+      // A milestone count has no percentile, so it gets no Pctl column — an
+      // empty one would read as data we failed to compute.
+      label: pack.label, total: pack.key, pct: pack.noPct ? "" : pack.key,
+      fmt: pack.format === "pct1" ? "pct1" : pack.format === "int" ? "int" : "num1",
+      band: band.label,
+    }];
+  }));
+}
 
 /**
  * A view's stat keys, turned into grid columns and band spans.
@@ -588,6 +622,8 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   const applySaved = (query: string) => {
     startTransition(() => router.replace(query ? `/players/?${query}` : "/players/", { scroll: false }));
   };
+
+
   // Owned here, not inside PlayerStatFilters, so the toolbar's "+N more" chip
   // can open the drawer on the full list.
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -859,6 +895,74 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     [transformed, spec, packValue],
   );
 
+  // ── Download ────────────────────────────────────────────────────────────
+  //
+  // BUILT ON CLICK, NOT ON RENDER. Assembling an export walks every row in the
+  // result set, and this toolbar re-renders on each keystroke in the search
+  // box, so nothing is built until a format is actually chosen.
+  /**
+   * The two readers the entity needs, closing over the fetched packs.
+   *
+   * A stat is on PlayerSummary or in a pack, and the file must not care which —
+   * so the lookup order here is the same one the table uses, summary first.
+   */
+  const exportEntity = useMemo(() => playerEntity<PlayerSummary>(
+    (r, key) => {
+      const v = (r as unknown as Record<string, unknown>)[key];
+      if (typeof v === "number" && Number.isFinite(v)) return v;
+      return key ? packValue(r, key) : null;
+    },
+    (r, key) => {
+      if (!key) return null;
+      if ((PCT_KEYS as readonly string[]).includes(key)) return pctMaps[key as PctKey]?.get(r.id) ?? null;
+      return packPct(r, key);
+    },
+  ), [packValue, packPct, pctMaps]);
+
+  const buildExport = useCallback((): ExportInput<PlayerSummary> => ({
+    cols: exportColsFor(view),
+    rows: prefiltered,
+    entity: exportEntity,
+    meta: {
+      viewLabel: view.label,
+      seasons: spec.years.length === 1 ? seasonLabel(spec.years[0]!) : `${spec.years.length} seasons`,
+      conference: spec.conf.length ? spec.conf.join(", ") : "All conferences",
+      teams: spec.teams.length ? spec.teams.join(", ") : "All teams",
+      filters: spec.filters.map((f) => {
+        const OP: Record<string, string> = { gt: ">", gte: "≥", lt: "<", lte: "≤" };
+        const meta = playerStatColumn(f.stat) ?? PACK_STAT_BY_KEY.get(f.stat);
+        const shown = meta?.format === "pct1" ? `${Math.round(f.value * 1000) / 10}%` : String(f.value);
+        return `${meta?.label ?? f.stat} ${OP[f.op] ?? f.op} ${shown}`;
+      }),
+      sort: `${spec.sortBy} — ${spec.sortDir === "desc" ? "high to low" : "low to high"}`,
+      search: deferredQuery.trim(),
+      url: typeof window === "undefined" ? "" : window.location.href,
+    },
+  }), [view, prefiltered, exportEntity, spec, deferredQuery]);
+
+  /**
+   * The same rows, dressed once per chosen view. Tabs come out in REGISTRY
+   * order rather than tick order, so the workbook matches the View dropdown.
+   */
+  const buildExportAll = useCallback((viewKeys: string[]): MultiExportInput<PlayerSummary> => {
+    const single = buildExport();
+    const wanted = new Set(viewKeys);
+    return {
+      sheets: PLAYER_VIEWS.filter((v) => wanted.has(v.key) && !v.custom)
+        .map((v) => ({ name: v.label, cols: exportColsFor(v) })),
+      rows: single.rows,
+      entity: exportEntity,
+      meta: single.meta,
+      slug: wanted.size === PLAYER_VIEWS.filter((v) => !v.custom).length ? "all-views" : "views",
+    };
+  }, [buildExport, exportEntity]);
+
+  const exportFieldCount = useMemo(
+    // Value plus percentile per stat, plus the five identity columns.
+    () => exportColsFor(view).length * 2 + 5,
+    [view],
+  );
+
   // Live "how many players match" for the stat-filter popout. Runs the full
   // pipeline with a candidate filter set (keeping the active scope) so the
   // panel can show a running count as the user builds filters — before Apply.
@@ -1012,6 +1116,23 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               currentQuery={currentQuery}
               suggestedName={savedNameSuggestion}
               onApply={applySaved}
+            />
+            {/* Beside Saved, and deliberately quieter: both act on the table
+                rather than narrowing it. Same menu the team explorer uses —
+                it takes the view registry as a prop, so there is one download
+                implementation and not two that have to agree about
+                formatting. */}
+            <DownloadMenu
+              views={PLAYER_VIEWS}
+              noun="players"
+              // Ungated for now, by decision — nothing on the players table is
+              // sold yet, so a lock here would be selling something twice.
+              alwaysFree
+              build={buildExport}
+              buildAll={buildExportAll}
+              rowCount={prefiltered.length}
+              colCount={exportFieldCount}
+              disabled={loading || prefiltered.length === 0}
             />
             <span className="hidden sm:inline text-xs text-ink-muted tabular whitespace-nowrap">
               {loading ? "loading…" : count > players.length
