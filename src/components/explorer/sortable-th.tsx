@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -57,6 +58,7 @@ export function SortableTh({
   align = "right",
   nowrap = true,
   idleArrows = false,
+  locked = false,
 }: {
   statKey: string;
   label: string;
@@ -70,6 +72,16 @@ export function SortableTh({
   nowrap?: boolean;
   /** Show a faint ⇅ on inactive columns (D&3-style affordance). */
   idleArrows?: boolean;
+  /**
+   * Render the header as a plain caption with a padlock — no link, no arrows,
+   * no hover.
+   *
+   * For columns a free reader can see but not re-order. The header has to stay
+   * legible (the point is to show what is being withheld) while giving no
+   * affordance, because a sort link here would either do nothing or reorder a
+   * table by a column whose values are blurred out — both worse than a lock.
+   */
+  locked?: boolean;
 }) {
   const params = useSearchParams();
   const sortInUrl = params.get("sort");
@@ -103,6 +115,30 @@ export function SortableTh({
       ? "text-left hover:bg-paper-deep/60"
       : "text-right hover:bg-paper-deep/60";
   const activeClass = isActive ? "text-ink" : "text-ink-muted";
+
+  if (locked) {
+    return (
+      <th
+        title={`${label} — part of the Season Pass`}
+        className={cn(
+          baseClasses.replace("cursor-pointer", "cursor-default"),
+          variant === "cbb"
+            ? "text-right border-l border-coral/30"
+            : align === "left" ? "text-left" : "text-right",
+          "text-ink-muted/70",
+          nowrap ? "whitespace-nowrap" : "whitespace-normal",
+          className,
+        )}
+      >
+        <span className="block w-full h-full px-1.5 sm:px-3 py-3 sm:py-2">
+          <span className={cn("inline-flex items-center gap-1", align === "left" ? "justify-start" : "justify-end")}>
+            <span><StatLabel label={label} /></span>
+            <Lock size={9} strokeWidth={2.5} className="text-coral/70 shrink-0" aria-hidden />
+          </span>
+        </span>
+      </th>
+    );
+  }
 
   return (
     <th

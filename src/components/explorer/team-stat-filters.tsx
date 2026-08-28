@@ -3,7 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Lock, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { roundNice, type RangeState } from "@/components/filters/range-row";
 import { buildStatChips, type StatChip } from "@/components/filters/stat-chips";
@@ -12,6 +13,8 @@ import {
   type Comparator, type StatFilter, type StatGroup, type TeamFilterSpec, type TeamStatKey,
 } from "@/lib/team-filters";
 import { viewByKey } from "@/lib/team-views";
+import { clampToFreeTier, FREE_LIMITS } from "@/lib/access";
+import { useEntitlement } from "@/lib/use-entitlement";
 
 /**
  * Stat-filter builder for the team explorer.
@@ -661,6 +664,7 @@ function FilterRow({
   onChange,
   onRemove,
   onNext,
+  valueLocked = false,
 }: {
   row: DraftRow;
   autoFocus: boolean;
@@ -668,6 +672,15 @@ function FilterRow({
   onRemove: (id: number) => void;
   /** Enter in the value box: this row is finished, open the picker again. */
   onNext: () => void;
+  /**
+   * The column stays, the bound does not — a free reader past
+   * FREE_LIMITS.boundedStatCols.
+   *
+   * Locking the BOX rather than refusing the keystroke, because the two feel
+   * completely different: a disabled field says "not for you yet", while a
+   * field that accepts a digit and then discards it says the site is broken.
+   */
+  valueLocked?: boolean;
 }) {
   const col = teamStatColumn(row.stat);
   const bounds = STAT_BOUNDS[row.stat];
@@ -692,8 +705,12 @@ function FilterRow({
       <select
         value={row.op}
         onChange={(e) => onChange(row.id, { op: e.target.value as Comparator })}
+        disabled={valueLocked}
         aria-label={`Comparison for ${col?.label ?? row.stat}`}
-        className="h-8 w-14 shrink-0 px-1 rounded-md border border-ink/15 bg-card text-ink text-sm text-center focus:outline-none focus:ring-2 focus:ring-coral/40"
+        className={cn(
+          "h-8 w-14 shrink-0 px-1 rounded-md border border-ink/15 bg-card text-ink text-sm text-center focus:outline-none focus:ring-2 focus:ring-coral/40",
+          valueLocked && "opacity-50",
+        )}
       >
         {OPS.map((o) => (
           <option key={o.op} value={o.op}>{o.symbol}</option>
@@ -715,6 +732,7 @@ function FilterRow({
           inputMode="decimal"
           value={row.value}
           onChange={(e) => onChange(row.id, { value: e.target.value })}
+          disabled={valueLocked}
           // Enter chains straight into the next filter rather than submitting.
           // Picking a stat and typing a number is one motion repeated, so the
           // keyboard path has to complete the loop — otherwise every filter
@@ -728,16 +746,24 @@ function FilterRow({
           // being clipped now that the box is narrower. A NEGATIVE lower bound
           // is the exception — "-25–30" reads as one mangled number, so those
           // spell the word out and accept the width.
-          placeholder={bounds ? (bounds[0] < 0 ? `${bounds[0]} to ${bounds[1]}` : `${bounds[0]}–${bounds[1]}`) : "Value"}
+          placeholder={
+            valueLocked
+              ? "Pass"
+              : bounds
+                ? (bounds[0] < 0 ? `${bounds[0]} to ${bounds[1]}` : `${bounds[0]}–${bounds[1]}`)
+                : "Value"
+          }
+          title={valueLocked ? "Filtering on more columns is part of the Season Pass" : undefined}
           aria-label={`Value for ${col?.label ?? row.stat}`}
           className={cn(
             "h-8 w-full px-2 rounded-md border border-ink/15 bg-card text-ink text-sm tabular",
             "placeholder:text-ink-muted placeholder:text-[0.68rem]",
             "focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40",
             pct && "pr-5",
+            valueLocked && "cursor-not-allowed border-dashed bg-paper-deep/40 placeholder:text-coral/70",
           )}
         />
-        {pct && (
+        {pct && !valueLocked && (
           <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-ink-muted pointer-events-none">%</span>
         )}
       </div>
@@ -784,6 +810,22 @@ export function TeamStatFilters({
   const router = useRouter();
   const search = useSearchParams();
   const [, startTransition] = useTransition();
+  const { paid, signedIn } = useEntitlement();
+
+  /**
+   * TWO CEILINGS, NOT ONE, and the gap between them is deliberate — see
+   * FREE_LIMITS in src/lib/access.ts.
+   *
+   * `colCap` is how many stats can be on the table. `boundCap` is how many of
+   * those may carry a value. A free reader gets three columns to LOOK at and
+   * two to FILTER on, because looking is the demo and filtering is the tool.
+   *
+   * MAX_FILTERS is the ceiling for everybody: it is a URL-length limit, not a
+   * plan lever, and a subscriber runs into it for the same reason a free
+   * reader would if they got that far.
+   */
+  const colCap = paid ? MAX_FILTERS : Math.min(FREE_LIMITS.statCols, MAX_FILTERS);
+  const boundCap = paid ? MAX_FILTERS : Math.min(FREE_LIMITS.boundedStatCols, MAX_FILTERS);
 
   const params = useMemo(() => {
     const obj: Record<string, string> = {};
@@ -791,10 +833,22 @@ export function TeamStatFilters({
     return obj;
   }, [search]);
   const urlSpec: TeamFilterSpec = useMemo(() => parseSpec(params), [params]);
+  /**
+   * The query as this reader is allowed to run it.
+   *
+   * The BUILDER has to read the clamped version, not the raw URL, or a link
+   * carrying five columns would draw five rows of controls above a table
+   * showing three — and the reader would have no way to tell which two were
+   * doing nothing. Same function the table uses, so the two cannot disagree.
+   *
+   * `urlSpec` is still what submit() writes from, so nothing the reader has
+   * not touched gets quietly rewritten out of their URL.
+   */
+  const readSpec = useMemo(() => clampToFreeTier(urlSpec, paid), [urlSpec, paid]);
 
-  const [rows, setRows] = useState<DraftRow[]>(() => rowsFromSpec(urlSpec.cols, urlSpec.filters));
+  const [rows, setRows] = useState<DraftRow[]>(() => rowsFromSpec(readSpec.cols, readSpec.filters));
   /** Pinned columns, ordered as picked so the table renders them that way. */
-  const [pins, setPins] = useState<string[]>(() => urlSpec.cols);
+  const [pins, setPins] = useState<string[]>(() => readSpec.cols);
   /** The row that just appeared, so exactly one input claims the caret. */
   const [freshId, setFreshId] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -803,6 +857,8 @@ export function TeamStatFilters({
   const [colsPickerOpen, setColsPickerOpen] = useState(false);
   /** The last query this component pushed, so the resync can ignore it. */
   const selfPublished = useRef<string | null>(null);
+  /** What membership the current draft was built for — see the resync below. */
+  const lastPaid = useRef(paid);
 
   // Resync the draft when the committed URL changes underneath us — a back
   // button, or the toolbar chip strip dropping a stat. Keyed on `search` rather
@@ -814,14 +870,23 @@ export function TeamStatFilters({
     // remounting the input the reader is typing in and throwing away the
     // caret. A URL we did not write still rebuilds, which is what makes the
     // back button and a pasted link work.
-    if (selfPublished.current !== null && selfPublished.current === search.toString()) {
+    //
+    // MEMBERSHIP RESOLVING COUNTS AS AN OUTSIDE CHANGE. useEntitlement is
+    // optimistic while the profile is in flight, so the rows seeded on first
+    // render came from the UNCLAMPED query — five controls over a
+    // three-column table until something else happened to re-seed them. When
+    // the answer lands, re-read; and skip the echo guard on that pass, or a
+    // reader who submitted inside that first second keeps the wide draft.
+    const paidChanged = lastPaid.current !== paid;
+    lastPaid.current = paid;
+    if (!paidChanged && selfPublished.current !== null && selfPublished.current === search.toString()) {
       selfPublished.current = null;
       return;
     }
-    setRows(rowsFromSpec(urlSpec.cols, urlSpec.filters));
-    setPins(urlSpec.cols);
+    setRows(rowsFromSpec(readSpec.cols, readSpec.filters));
+    setPins(readSpec.cols);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }, [search, paid]);
 
   /**
    * submit() reads the CURRENT draft and is declared below, so the callbacks
@@ -865,7 +930,7 @@ export function TeamStatFilters({
       id: nextRowId++, stat, op: "gte" as Comparator, value: "",
     }));
     setRows((r) => {
-      const room = MAX_FILTERS - r.length;
+      const room = colCap - r.length;
       return room <= 0 ? r : [...r, ...entries.slice(0, room)];
     });
     // Filtering on a stat auto-pins it as a column. Filtering on something you
@@ -879,7 +944,7 @@ export function TeamStatFilters({
     // In the live view the table follows immediately — four ticks, four
     // columns, no Submit.
     requestApply();
-  }, [requestApply]);
+  }, [requestApply, colCap]);
 
   /** The single-pick door: one stat, and the caret lands in its value box. */
   const addFilter = useCallback((stat: TeamStatKey) => addRows([stat], true), [addRows]);
@@ -899,14 +964,14 @@ export function TeamStatFilters({
       const have = new Set(kept.map((x) => x.stat as string));
       const added = next
         .filter((k) => !have.has(k))
-        .slice(0, Math.max(0, MAX_FILTERS - kept.length))
+        .slice(0, Math.max(0, colCap - kept.length))
         .map((stat) => ({ id: nextRowId++, stat, op: "gte" as Comparator, value: "" }));
       return [...kept, ...added];
     });
-    setPins(next.slice(0, MAX_FILTERS));
+    setPins(next.slice(0, colCap));
     setFreshId(null);
     requestApply();
-  }, [requestApply]);
+  }, [requestApply, colCap]);
 
   /**
    * ENTER APPLIES, in Build My Own Table only.
@@ -929,8 +994,8 @@ export function TeamStatFilters({
 
   const nextFilter = useCallback(() => {
     requestApply();
-    setRows((r) => { if (r.length < MAX_FILTERS) setPickerOpen(true); return r; });
-  }, [requestApply]);
+    setRows((r) => { if (r.length < colCap) setPickerOpen(true); return r; });
+  }, [requestApply, colCap]);
 
   const patchRow = useCallback((id: number, patch: Partial<DraftRow>) => {
     setRows((r) => r.map((x) => (x.id === id ? { ...x, ...patch } : x)));
@@ -957,10 +1022,10 @@ export function TeamStatFilters({
   const draftFilters = useMemo(() => rowsToFilters(rows), [rows]);
 
   const samePins =
-    pins.length === urlSpec.cols.length && pins.every((k, i) => k === urlSpec.cols[i]);
+    pins.length === readSpec.cols.length && pins.every((k, i) => k === readSpec.cols[i]);
   // Submit enables on EITHER change — pinning a column with no bound set is a
   // legitimate submit, and gating on filters alone left the button dead.
-  const dirty = !sameFilterSet(draftFilters, urlSpec.filters) || !samePins;
+  const dirty = !sameFilterSet(draftFilters, readSpec.filters) || !samePins;
 
   // The match total is computed inline on every change so it tracks the typing
   // rather than trailing it. Affordable because processTeams reuses a cached,
@@ -971,7 +1036,17 @@ export function TeamStatFilters({
     [previewCount, draftFilters],
   );
 
-  const atCap = rows.length >= MAX_FILTERS;
+  const atCap = rows.length >= colCap;
+  /**
+   * How many rows carry a bound right now, and therefore whether the next one
+   * may.
+   *
+   * Counted off the DRAFT rather than the URL so the box locks the moment the
+   * second value is typed, not after a Submit. Clearing a value unlocks the
+   * others again, which is what makes this a limit rather than a trap.
+   */
+  const boundedCount = rows.filter((r) => r.value.trim() !== "").length;
+  const boundsLocked = boundedCount >= boundCap;
 
   const submit = () => {
     const p = specToParams({ ...urlSpec, filters: draftFilters, cols: pins as TeamStatKey[] }).toString();
@@ -996,8 +1071,8 @@ export function TeamStatFilters({
 
 
   const revert = () => {
-    setRows(rowsFromSpec(urlSpec.cols, urlSpec.filters));
-    setPins(urlSpec.cols);
+    setRows(rowsFromSpec(readSpec.cols, readSpec.filters));
+    setPins(readSpec.cols);
     setFreshId(null);
   };
 
@@ -1016,6 +1091,10 @@ export function TeamStatFilters({
           onChange={patchRow}
           onRemove={removeRow}
           onNext={nextFilter}
+          // Only the rows that are still BLANK lock. A value already typed
+          // keeps working — retracting a filter somebody set, because they
+          // later added a column, would be the paywall reaching backwards.
+          valueLocked={boundsLocked && r.value.trim() === ""}
         />
       ))}
 
@@ -1024,7 +1103,7 @@ export function TeamStatFilters({
         onPick={addFilter}
         onSetColumns={setColumns}
         current={pins}
-        remaining={MAX_FILTERS - rows.length}
+        remaining={colCap - rows.length}
         disabled={atCap}
         open={pickerOpen}
         setOpen={setPickerOpen}
@@ -1037,14 +1116,33 @@ export function TeamStatFilters({
         onPick={addFilter}
         onSetColumns={setColumns}
         current={pins}
-        remaining={MAX_FILTERS}
+        remaining={colCap}
         open={colsPickerOpen}
         setOpen={setColsPickerOpen}
       />
 
-      {atCap && (
+      {/* TWO DIFFERENT SENTENCES FOR TWO DIFFERENT LIMITS, and neither one is
+          allowed to borrow the other’s wording. MAX_FILTERS is a fact about
+          URLs and has nothing to sell; the free caps are a plan boundary and
+          have to say so, with a way out. Writing one message for both would
+          either dress a technical limit up as an upsell or make a paywall look
+          like a bug. */}
+      {atCap && paid && (
         <span className="text-xs text-ink-muted">
           {MAX_FILTERS} is the maximum a shareable URL carries.
+        </span>
+      )}
+      {!paid && (atCap || boundsLocked) && (
+        <span className="inline-flex items-center gap-1.5 text-xs whitespace-nowrap">
+          <Lock size={11} className="text-coral shrink-0" aria-hidden />
+          <span className="text-ink-soft">
+            {atCap
+              ? `${colCap} columns on the free plan.`
+              : `${boundCap} of them can carry a value.`}
+          </span>
+          <Link href={signedIn ? "/pricing" : "/account/signup"} className="text-coral hover:underline font-medium">
+            {signedIn ? "See plans" : "Get more"}
+          </Link>
         </span>
       )}
 

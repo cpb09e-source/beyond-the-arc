@@ -6,6 +6,8 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Lock } from "lucide-react";
 import { loadSeason, type SeasonDenial } from "@/lib/season-data";
+import { clampToFreeTier, effectiveViewAccess, viewIsGated, FREE_LIMITS } from "@/lib/access";
+import { useEntitlement } from "@/lib/use-entitlement";
 import {
   parseSpec,
   processTeams,
@@ -19,6 +21,7 @@ import {
   type TeamRow,
   type StatFilter,
   type TeamFilterSpec,
+  type TeamStatKey,
 } from "@/lib/team-filters";
 import { Select } from "@/components/select";
 import { FilterBar, ConferenceRankingsModal } from "@/components/explorer/filter-bar";
@@ -144,6 +147,15 @@ function pinnedColumn(key: string): TeamCol | null {
  *
  * Flipping either to true restores the trigger and nothing else has to change.
  */
+/**
+ * How many teams the free sample export carries.
+ *
+ * Ten because it is a page of a spreadsheet — enough to see the formatting,
+ * the bands and the percentile fills do their job across a real spread of
+ * teams, and few enough that it is plainly a sample rather than the product.
+ */
+const SAMPLE_ROWS = 10;
+
 const SHOW_COMPARE = false;
 const SHOW_CONFERENCE_RANKINGS = false;
 
@@ -220,6 +232,11 @@ export function ExplorerClient({
 }) {
   const [compareOpen, setCompareOpen] = useState(false);
   const [showRankings, setShowRankings] = useState(false);
+  // Read once, at the top, and threaded down rather than re-derived per
+  // control: three different gates on this page have to agree about who this
+  // reader is, and two of them deciding differently mid-render is the one bug
+  // that would look like the paywall is broken rather than strict.
+  const { paid, signedIn } = useEntitlement();
   const router = useRouter();
   const [, startTransition] = useTransition();
   const search = useSearchParams();
@@ -254,6 +271,35 @@ export function ExplorerClient({
     const sortBy = previewOnly && v.previewSortBy ? v.previewSortBy : v.sortBy;
     return { ...base, sortBy, sortDir: v.sortDir };
   }, [params]);
+
+  /**
+   * ONE SEASON AT A TIME WITHOUT A PASS — see FREE_LIMITS.seasonsAtOnce.
+   *
+   * Enforced by narrowing what the table WORKS OVER, not by rewriting the URL.
+   * The reader's selection stays exactly as they left it (and as a shared link
+   * carried it), so subscribing restores the table they were looking at rather
+   * than leaving them to rebuild it. The scope bar keeps showing what they
+   * picked; the notice beside the count says what is actually loaded.
+   *
+   * Newest first because parseSpec already sorts that way, so "the one season
+   * you get" is always the most recent one selected — the one most likely to
+   * be the point of the comparison.
+   */
+  /**
+   * The spec everything DOWNSTREAM OF THE DATA uses.
+   *
+   * Deliberately not a replacement for `spec`: the URL, the saved-filter query
+   * and the export metadata all keep the reader’s real selection. Only what
+   * the table computes narrows.
+   *
+   * THIS IS THE ONLY PLACE THE FREE LIMITS ARE ENFORCED. The capped controls
+   * elsewhere are there to explain the ceiling, not to hold it — a URL can
+   * carry a query no control on this page would have let anyone build.
+   */
+  const scopedSpec = useMemo(() => clampToFreeTier(spec, paid), [spec, paid]);
+  /** Something was actually cut — measured, not predicted. */
+  const seasonsLocked = scopedSpec.years.length < spec.years.length;
+  const colsLocked = scopedSpec.cols.length < spec.cols.length;
 
   // Union conferences across every year we have data for, so users can pick
   // a historical conference even when the visible-year selection wouldn't
@@ -326,12 +372,12 @@ export function ExplorerClient({
     });
   }, []);
 
-  useEffect(() => { loadYears(spec.years); }, [spec.years, loadYears]);
+  useEffect(() => { loadYears(scopedSpec.years); }, [scopedSpec.years, loadYears]);
 
   /** The rows the table actually works over: the selected seasons, once loaded. */
   const allTeams = useMemo(
-    () => spec.years.flatMap((y) => rowsByYear[y] ?? []),
-    [spec.years, rowsByYear],
+    () => scopedSpec.years.flatMap((y) => rowsByYear[y] ?? []),
+    [scopedSpec.years, rowsByYear],
   );
   const loadingSeasons = loadingYears.length > 0;
 
@@ -343,7 +389,7 @@ export function ExplorerClient({
    * cheaper action and may resolve the other by itself.
    */
   const seasonNotice = useMemo(() => {
-    const years = Object.keys(deniedYears).map(Number).filter((y) => spec.years.includes(y));
+    const years = Object.keys(deniedYears).map(Number).filter((y) => scopedSpec.years.includes(y));
     if (years.length === 0) return null;
     const reasons = new Set(years.map((y) => deniedYears[y]!));
     const label = years.length === 1
@@ -356,7 +402,7 @@ export function ExplorerClient({
       return { text: `${label} part of the Season Pass.`, cta: "See plans", href: "/pricing" };
     }
     return { text: `${label} unavailable right now.`, cta: "Retry", href: "/" };
-  }, [deniedYears, spec.years]);
+  }, [deniedYears, scopedSpec.years]);
 
   // Toolbar read-out of the COMMITTED selection (the panel's own strip tracks
   // the uncommitted draft). Removing here is immediate — there is no Submit on
@@ -431,18 +477,18 @@ export function ExplorerClient({
   }, [searchOpen]);
 
   const { rows, allRows, count, totalPages, pageSafe } = useMemo(() => {
-    const { rows: all } = processTeams(allTeams, { ...spec, limit: -1 });
+    const { rows: all } = processTeams(allTeams, { ...scopedSpec, limit: -1 });
     const q = tableSearch.trim().toLowerCase();
     const matched = q ? all.filter((r) => r.team_name.toLowerCase().includes(q)) : all;
     const total = matched.length;
-    if (spec.limit === -1) {
+    if (scopedSpec.limit === -1) {
       return { rows: matched, allRows: matched, count: total, totalPages: 1, pageSafe: 1 };
     }
-    const totalPages = Math.max(1, Math.ceil(total / spec.limit));
+    const totalPages = Math.max(1, Math.ceil(total / scopedSpec.limit));
     const pageSafe = Math.min(Math.max(1, page), totalPages);
-    const start = (pageSafe - 1) * spec.limit;
+    const start = (pageSafe - 1) * scopedSpec.limit;
     return {
-      rows: matched.slice(start, start + spec.limit),
+      rows: matched.slice(start, start + scopedSpec.limit),
       // EVERY matching row, not the visible page. The download works from
       // this: a file that silently stopped at row 100 because the reader had
       // "Show 100" set would be wrong in the one way a spreadsheet cannot
@@ -452,12 +498,19 @@ export function ExplorerClient({
       totalPages,
       pageSafe,
     };
-  }, [allTeams, spec, tableSearch, page]);
+  }, [allTeams, scopedSpec, tableSearch, page]);
   // Reset to page 1 when the result set changes (filters, sort, search, limit).
   useEffect(() => { setPage(1); }, [spec, tableSearch]);
-  const multiYear = spec.years.length > 1;
+  const multiYear = scopedSpec.years.length > 1;
 
   const view = useMemo(() => viewByKey(spec.view), [spec.view]);
+  /**
+   * What this view does for this reader — see §3 of src/lib/access.ts.
+   *
+   * Resolves to `free` for every subscriber, so every branch below is dead
+   * code on a paid session and the fast path stays the simple one.
+   */
+  const gate = useMemo(() => effectiveViewAccess(view.key, paid), [view.key, paid]);
   /** Every stat the active view already puts on the table. */
   const viewKeys = useMemo(
     () => new Set<string>(view.bands.flatMap((b) => b.keys as string[])),
@@ -485,11 +538,11 @@ export function ExplorerClient({
    * back on its own, since this recomputes from the view.
    */
   const pinnedCols = useMemo(
-    () => spec.cols
+    () => scopedSpec.cols
       .filter((k) => !viewKeys.has(k))
       .map(pinnedColumn)
       .filter((c): c is TeamCol => c !== null),
-    [spec.cols, viewKeys],
+    [scopedSpec.cols, viewKeys],
   );
   /**
    * THE VIEW SUPPLIES THE COLUMNS; the reader's pins still lead.
@@ -515,14 +568,94 @@ export function ExplorerClient({
    * renders correctly and the table knows nothing about which view it is.
    */
   const bands = useMemo(() => {
-    const out: Array<{ label: string; accent: boolean; span: number }> = [];
-    if (pinnedCols.length) out.push({ label: "Your columns", accent: true, span: pinnedCols.length });
+    // A `bands` gate names the FREE ones, so anything unnamed is locked. Null
+    // for every other kind of gate, which is what keeps `locked` false for
+    // subscribers and for views that are free outright.
+    const freeBands = gate.kind === "bands" ? new Set(gate.free) : null;
+    const out: Array<{ label: string; accent: boolean; span: number; locked: boolean }> = [];
+    // "Your columns" is never locked: they are the reader's own picks, already
+    // capped at FREE_LIMITS.statCols, and blurring a column somebody
+    // deliberately added reads as the table breaking rather than as a paywall.
+    if (pinnedCols.length) {
+      out.push({ label: "Your columns", accent: true, span: pinnedCols.length, locked: false });
+    }
     for (const b of view.bands) {
       const span = b.keys.filter((k) => pinnedColumn(k) !== null).length;
-      if (span > 0) out.push({ label: b.label, accent: !!b.accent, span });
+      if (span > 0) {
+        out.push({
+          label: b.label,
+          accent: !!b.accent,
+          span,
+          locked: !!freeBands && !freeBands.has(b.label),
+        });
+      }
     }
     return out;
-  }, [view, pinnedCols.length]);
+  }, [view, pinnedCols.length, gate]);
+
+  /**
+   * Which columns are behind the wall, indexed the same way `cols` is.
+   *
+   * DERIVED FROM `bands` RATHER THAN FROM THE VIEW REGISTRY, which matters:
+   * `bands` has already dropped any band whose keys all failed to resolve, and
+   * has already put "Your columns" at the front. Walking the registry instead
+   * would produce indexes that drift from the rendered table by however many
+   * columns those two facts account for — and a blur that lands one column to
+   * the left is worse than no blur, because it hides something we are giving
+   * away and reveals something we are not.
+   *
+   * "Your columns" is never locked. Those are the reader's own picks, already
+   * capped at FREE_LIMITS.statCols, and locking a column somebody deliberately
+   * added would read as the table breaking rather than as a paywall.
+   *
+   * null when nothing is locked, so the render path can skip the check
+   * entirely rather than testing an array of falses on every cell.
+   */
+  const lockedCols = useMemo(() => {
+    const out: boolean[] = [];
+    for (const b of bands) for (let i = 0; i < b.span; i++) out.push(b.locked);
+    return out.some(Boolean) ? out : null;
+  }, [bands]);
+
+  /**
+   * The locked bands, named, for the bar under the table.
+   *
+   * Named rather than counted — "Never in doubt and Comebacks & collapses are
+   * blurred" tells a reader what they would be buying; "2 groups are blurred"
+   * tells them only that they are being charged.
+   */
+  const lockedBandNames = useMemo(
+    () => bands.filter((b) => b.locked).map((b) => b.label),
+    [bands],
+  );
+  const lockedBandCount = lockedBandNames.length;
+  const lockedBandLabels =
+    lockedBandCount === 0 ? null
+    : lockedBandCount === 1 ? lockedBandNames[0]!
+    : `${lockedBandNames.slice(0, -1).join(", ")} and ${lockedBandNames[lockedBandCount - 1]}`;
+
+  /**
+   * A locked view shows its top few rows and stops.
+   *
+   * CUT FROM `allRows`, NOT FROM THE PAGE. The five are the top five of the
+   * reader's whole result set — every filter, the conference picker and the
+   * table search all still apply — so the tool visibly works and simply stops
+   * short of being a ranking. Slicing the paginated `rows` instead would have
+   * meant page 2 showing five more, which is not a paywall, it is a nuisance.
+   *
+   * Filters deliberately still narrow it. A free reader can therefore reach
+   * any one team's shot profile by filtering down to them, and that is the
+   * intended trade: the alternative — freezing the same five teams for
+   * everybody — demonstrates nothing except that the feature exists.
+   */
+  const previewCapped = gate.kind === "preview";
+  const visibleRows = useMemo(
+    () => (previewCapped ? allRows.slice(0, FREE_LIMITS.previewRows) : rows),
+    [previewCapped, allRows, rows],
+  );
+  /** Rank numbers continue across pages, and start again at 1 in a preview. */
+  const rowOffset = previewCapped || spec.limit === -1 ? 0 : (pageSafe - 1) * spec.limit;
+
   // Group boundaries shift with the pin count, so they're derived per render
   // rather than being module constants.
   /** Column indexes where a band begins — these carry the dividing rule. */
@@ -558,7 +691,7 @@ export function ExplorerClient({
    * the single-sheet download and the tab that shares its name can never
    * disagree about what belongs on it.
    */
-  const exportCols = useMemo(() => exportColsForView(view, spec.cols), [view, spec.cols]);
+  const exportCols = useMemo(() => exportColsForView(view, scopedSpec.cols), [view, scopedSpec.cols]);
 
   /**
    * Assembled on click, never on render.
@@ -570,7 +703,7 @@ export function ExplorerClient({
    */
   const buildExport = useCallback((): ExportInput => {
     const yearLabel = (y: number) => `${y - 1}-${y.toString().slice(-2)}`;
-    const years = [...spec.years].sort((a, b) => a - b);
+    const years = [...scopedSpec.years].sort((a, b) => a - b);
     const seasons = years.length === 0 ? "None"
       : years.length <= 3 ? years.map(yearLabel).join(", ")
       // Named as a span rather than a list once there are more than three:
@@ -603,7 +736,7 @@ export function ExplorerClient({
         url: typeof window === "undefined" ? "" : window.location.href,
       },
     };
-  }, [exportCols, allRows, view.label, spec, tableSearch]);
+  }, [exportCols, allRows, view.label, spec, scopedSpec.years, tableSearch]);
 
   /**
    * The same rows, dressed once per chosen view.
@@ -622,14 +755,65 @@ export function ExplorerClient({
     const wanted = new Set(viewKeys);
     const chosen = TABLE_VIEWS.filter((v) => wanted.has(v.key));
     return {
-      sheets: chosen.map((v) => ({ name: v.label, cols: exportColsForView(v, spec.cols) })),
+      sheets: chosen.map((v) => ({ name: v.label, cols: exportColsForView(v, scopedSpec.cols) })),
       rows: single.rows,
       meta: single.meta,
       slug: chosen.length === TABLE_VIEWS.length ? "all-views"
         : chosen.length === 1 ? chosen[0]!.label
         : `${chosen.length}-views`,
     };
-  }, [buildExport, spec.cols]);
+  }, [buildExport, scopedSpec.cols]);
+
+  // Hoisted above buildSample, which needs it. Memoized rather than a bare
+  // `?? []`: a fresh array literal every render would make every consumer
+  // recompute on each keystroke in the table search.
+  const latestRows = useMemo(() => rowsByYear[latestYear] ?? [], [rowsByYear, latestYear]);
+
+  /**
+   * The free sample: every view, the current season, the ten best teams.
+   *
+   * A REAL FILE, NOT A SCREENSHOT OF ONE. Somebody deciding whether an export
+   * is worth paying for is deciding about column headers, number formats,
+   * percentile fills and whether it opens cleanly in their spreadsheet — none
+   * of which a marketing page can answer and all of which ten real rows do.
+   * It is the same code path the paid export uses, so it cannot flatter it.
+   *
+   * FIXED SCOPE ON PURPOSE, ignoring whatever the reader has on screen. Ten
+   * teams by NET from the current season is a constant: it gives away nothing
+   * that is not already the first page of the free table, and it cannot be
+   * turned into a data tap by filtering to the rows somebody actually wanted
+   * and pressing the button repeatedly.
+   *
+   * Built from `latestRows`, which is the server-rendered season and therefore
+   * always in hand — the sample must never depend on a fetch that a signed-out
+   * reader may not be allowed to make.
+   */
+  const buildSample = useCallback((): MultiExportInput => {
+    const sampleSpec = {
+      ...parseSpec({}),
+      years: [latestYear],
+      sortBy: "a_net" as TeamStatKey,
+      sortDir: "desc" as const,
+      limit: -1,
+    };
+    const { rows: ranked } = processTeams(latestRows, sampleSpec);
+    return {
+      sheets: TABLE_VIEWS.filter((v) => !v.custom)
+        .map((v) => ({ name: v.label, cols: exportColsForView(v, []) })),
+      rows: ranked.slice(0, SAMPLE_ROWS),
+      meta: {
+        viewLabel: "Sample",
+        seasons: seasonLabel(latestYear),
+        conference: "All conferences",
+        teams: `Top ${SAMPLE_ROWS} by NET`,
+        filters: [`Sample export — the full table is part of the Season Pass`],
+        sort: "NET — high to low",
+        search: "",
+        url: typeof window === "undefined" ? "" : window.location.origin + "/pricing",
+      },
+      slug: "sample",
+    };
+  }, [latestRows, latestYear]);
 
   // The number of columns THE FILE will have, not the number on screen: a
   // stat contributes its value, its percentile and sometimes a per-game
@@ -641,8 +825,8 @@ export function ExplorerClient({
   // count is the real total rather than the visible page.
   const previewCount = useCallback(
     (filters: StatFilter[]) =>
-      processTeams(allTeams, { ...spec, filters, limit: -1 }).rows.length,
-    [allTeams, spec],
+      processTeams(allTeams, { ...scopedSpec, filters, limit: -1 }).rows.length,
+    [allTeams, scopedSpec],
   );
 
   // Conference rankings — locked to the most-recent season available, regardless
@@ -656,7 +840,6 @@ export function ExplorerClient({
   // Memoized, not a bare `?? []`. A fresh array literal every render would make
   // the conferenceRankings useMemo below recompute on every keystroke in the
   // table search — the exact cost this whole change exists to remove.
-  const latestRows = useMemo(() => rowsByYear[latestYear] ?? [], [rowsByYear, latestYear]);
   const conferenceRankings = useMemo(() => {
     // limit: -1 disables the explorer's default top-50 cap. Without this, we'd
     // only see teams that crack the national top-50 aNET, hiding most of
@@ -777,11 +960,26 @@ export function ExplorerClient({
                 aria-label="Table view"
                 className="field-sm-phone h-8 max-w-40 sm:max-w-none rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 transition-colors"
               >
+                {/* MARKED IN THE LIST, not discovered after clicking.
+                    A native <option> renders text and nothing else, so the
+                    marker is a word rather than a padlock — and " · Pass"
+                    beats an emoji in a table of ratings. Shown only to readers
+                    it applies to: a subscriber has no use for a column of
+                    labels telling them what they already bought. */}
                 {viewGroups().map((g) => (
                   <optgroup key={g.group} label={g.group}>
-                    {g.views.map((v) => (
-                      <option key={v.key} value={v.key} title={v.desc}>{v.label}</option>
-                    ))}
+                    {g.views.map((v) => {
+                      const locked = !paid && viewIsGated(v.key);
+                      return (
+                        <option
+                          key={v.key}
+                          value={v.key}
+                          title={locked ? `${v.desc} — part of the Season Pass` : v.desc}
+                        >
+                          {locked ? `${v.label} · Pass` : v.label}
+                        </option>
+                      );
+                    })}
                   </optgroup>
                 ))}
               </select>
@@ -817,6 +1015,7 @@ export function ExplorerClient({
             <DownloadMenu
               build={buildExport}
               buildAll={buildExportAll}
+              buildSample={buildSample}
               rowCount={allRows.length}
               colCount={exportFieldCount}
               // A season still in flight means the table is short. Better to
@@ -832,8 +1031,8 @@ export function ExplorerClient({
                 made this group full-width, which pushed the select and the
                 search button onto a third row. */}
             <span className="hidden sm:inline text-xs text-ink-muted whitespace-nowrap tabular">
-              <span className="text-ink font-medium">{rows.length.toLocaleString()}</span>
-              {count > rows.length && <> of {count.toLocaleString()}</>} teams
+              <span className="text-ink font-medium">{visibleRows.length.toLocaleString()}</span>
+              {count > visibleRows.length && <> of {count.toLocaleString()}</>} teams
               {/* A season the reader just added is a fetch away, not on the
                   page. Say so rather than briefly showing a short table as if
                   that were the answer. */}
@@ -849,6 +1048,10 @@ export function ExplorerClient({
                 {" "}
                 <span className="text-coral font-medium">Add a Filter</span>
                 {" "}below
+                {/* The ceiling, said before it is reached. Finding out you
+                    have hit a limit is a worse moment than being told the
+                    limit while you still have room inside it. */}
+                {!paid && <> — {FREE_LIMITS.statCols} on the free plan</>}
               </span>
             )}
 
@@ -864,6 +1067,33 @@ export function ExplorerClient({
                   className="text-coral hover:underline font-medium"
                 >
                   {seasonNotice.cta}
+                </Link>
+              </span>
+            )}
+
+            {colsLocked && (
+              <span className="inline-flex items-center gap-1.5 text-xs whitespace-nowrap">
+                <Lock size={11} className="text-coral shrink-0" />
+                <span className="text-ink-soft">
+                  Showing {FREE_LIMITS.statCols} of your {spec.cols.length} columns.
+                </span>
+                <Link href="/pricing" className="text-coral hover:underline font-medium">
+                  See plans
+                </Link>
+              </span>
+            )}
+
+            {/* Several seasons asked for, one delivered. Beside the count
+                rather than under the table, because it explains the number
+                immediately to its left. */}
+            {seasonsLocked && (
+              <span className="inline-flex items-center gap-1.5 text-xs whitespace-nowrap">
+                <Lock size={11} className="text-coral shrink-0" />
+                <span className="text-ink-soft">
+                  {seasonLabel(scopedSpec.years[0]!)} only — comparing seasons is part of the Pass.
+                </span>
+                <Link href="/pricing" className="text-coral hover:underline font-medium">
+                  See plans
                 </Link>
               </span>
             )}
@@ -977,8 +1207,8 @@ export function ExplorerClient({
           </div>
           {/* PHONE ONLY: the count, on its own line under the controls. */}
           <span className="sm:hidden basis-full text-xs text-ink-muted whitespace-nowrap tabular">
-            <span className="text-ink font-medium">{rows.length.toLocaleString()}</span>
-            {count > rows.length && <> of {count.toLocaleString()}</>} teams
+            <span className="text-ink font-medium">{visibleRows.length.toLocaleString()}</span>
+            {count > visibleRows.length && <> of {count.toLocaleString()}</>} teams
             {loadingSeasons && <span className="ml-1.5 text-coral">· loading season…</span>}
           </span>
         </div>
@@ -1072,13 +1302,21 @@ export function ExplorerClient({
                   <th
                     key={b.label}
                     colSpan={b.span}
+                    title={b.locked ? `${b.label} is part of the Season Pass` : undefined}
                     className={cn(
                       "sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em]",
                       "font-semibold text-center border-l border-hairline align-middle",
-                      b.accent ? "text-coral" : "text-ink-muted",
+                      b.locked ? "text-coral/80" : b.accent ? "text-coral" : "text-ink-muted",
                     )}
                   >
-                    {b.label}
+                    {/* The caption stays perfectly legible while the numbers
+                        under it do not. That is the whole pitch: a reader has
+                        to be able to see WHAT they are not being shown, or the
+                        band is just a smudge with no reason to pay for it. */}
+                    <span className="inline-flex items-center gap-1">
+                      {b.label}
+                      {b.locked && <Lock size={8} strokeWidth={3} aria-hidden />}
+                    </span>
                   </th>
                 ))}
                 {/* TRAILING SPACER — see the header row below for why. */}
@@ -1115,6 +1353,10 @@ export function ExplorerClient({
                     // marking NET as the active column.
                     defaultSort={spec.sortBy}
                     idleArrows
+                    // A preview locks the WHOLE table — re-sorting five rows
+                    // out of 365 would hand over the ranking the preview
+                    // exists to withhold, one column at a time.
+                    locked={previewCapped || lockedCols?.[i] === true}
                     className={cn(
                       "sticky top-6 z-30 bg-paper-deep border-b border-hairline",
                       groupStarts.has(i) && "border-l border-hairline",
@@ -1135,14 +1377,14 @@ export function ExplorerClient({
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {visibleRows.length === 0 ? (
                 <tr>
                   <td colSpan={(multiYear ? 5 : 4) + cols.length + 1} className="px-4 py-12 text-center text-ink-muted">
                     No teams match these filters.
                   </td>
                 </tr>
               ) : (
-                rows.map((r, i) => {
+                visibleRows.map((r, i) => {
                   // Opaque zebra so the frozen columns can share it and still
                   // hide the scrolled content behind them.
                   const zebra = i % 2 === 0 ? "bg-paper" : "bg-card";
@@ -1180,7 +1422,7 @@ export function ExplorerClient({
                       title={honourTitle}
                       className={cn("sticky left-0 z-20 w-12 min-w-12 px-1 sm:px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER, honourCell)}
                     >
-                      {(spec.limit === -1 ? 0 : (pageSafe - 1) * spec.limit) + i + 1}
+                      {rowOffset + i + 1}
                     </td>
                     {/* Trailing edge of the frozen group. #/Team pin and everything
                         right of them scrolls underneath, so without a seam the
@@ -1210,17 +1452,41 @@ export function ExplorerClient({
                       const total = cell[c.total as string] ?? null;
                       const perGame = c.perGame ? cell[c.perGame as string] ?? null : null;
                       const isFF = ci >= ffStart && ci < ffEnd;
+                      const locked = lockedCols?.[ci] === true;
                       return (
                         <td
                           key={`${c.sortKey}-${ci}`}
+                          title={locked ? "Part of the Season Pass" : undefined}
                           className={cn(
                             "px-1 sm:px-2 py-1 text-right tabular whitespace-nowrap transition-colors",
                             isFF && FF_BAND_TINT,
                             groupStarts.has(ci) && "border-l border-hairline",
+                            locked && "select-none",
                             ROW_HOVER,
                           )}
                         >
-                          <span className="inline-flex flex-col items-end gap-0.5 leading-tight">
+                          {locked && <span className="sr-only">Locked — part of the Season Pass</span>}
+                          <span
+                            // Blurred rather than replaced with a dash or a
+                            // padlock: the shape of the column survives, so a
+                            // reader can see there are real numbers here and
+                            // roughly how they vary, which is a far better
+                            // argument than an empty cell. aria-hidden because
+                            // the sr-only line above already says what this is
+                            // — a screen reader should not read out values a
+                            // sighted reader cannot see.
+                            aria-hidden={locked || undefined}
+                            className={cn(
+                              "inline-flex flex-col items-end gap-0.5 leading-tight",
+                              // GRAYSCALE AS WELL AS BLUR. The percentile chip
+                              // is a solid colour block, and colour survives a
+                              // blur perfectly — a green smudge still says
+                              // "90th percentile", which is most of what the
+                              // column was worth. Draining it leaves the shape
+                              // of the data and none of the signal.
+                              locked && "blur-[3.5px] opacity-60 grayscale",
+                            )}
+                          >
                             {/* Season total is the value. When it's unavailable —
                                 fast break before 2023, where too few games tracked
                                 the split to total honestly — fall back to the
@@ -1256,7 +1522,20 @@ export function ExplorerClient({
             </tbody>
           </table>
         </div>
-        {spec.limit !== -1 && totalPages > 1 && (
+        {previewCapped ? (
+          <GateBar
+            signedIn={signedIn}
+            lead={`Showing the top ${Math.min(FREE_LIMITS.previewRows, count).toLocaleString()} of ${count.toLocaleString()}.`}
+            tail={`${view.label} is part of the Season Pass. Your filters and search still narrow these rows — the full table and column sorting are what a Pass unlocks.`}
+          />
+        ) : lockedBandLabels ? (
+          <GateBar
+            signedIn={signedIn}
+            lead={`${lockedBandLabels} ${lockedBandCount === 1 ? "is" : "are"} blurred.`}
+            tail={`Everything to the left is free. A Season Pass reveals the rest of ${view.label}, and every other view.`}
+          />
+        ) : null}
+        {!previewCapped && spec.limit !== -1 && totalPages > 1 && (
           <TeamPagination
             firstShown={(pageSafe - 1) * spec.limit + 1}
             lastShown={Math.min(pageSafe * spec.limit, count)}
@@ -1297,6 +1576,57 @@ export function ExplorerClient({
         />
       )}
     </>
+  );
+}
+
+/**
+ * The one place the table asks for money.
+ *
+ * UNDER THE TABLE, NOT OVER IT. A modal or an overlay would cover the rows the
+ * preview exists to show — the argument for subscribing IS the five real rows
+ * above this bar, and burying them to advertise the other 360 gets the order
+ * exactly backwards. It sits where the pagination would be, because that is
+ * literally what it replaces.
+ *
+ * The wording is split in two because the two halves do different jobs: the
+ * lead says what is happening right now (a fact the reader can verify by
+ * counting the rows), and the tail says what a subscription changes. Rolling
+ * them into one sentence made it read as marketing rather than as a status.
+ */
+function GateBar({
+  lead,
+  tail,
+  signedIn,
+}: {
+  lead: string;
+  tail: string;
+  /** Signed-in readers are asked to upgrade; signed-out ones get a way back in. */
+  signedIn: boolean;
+}) {
+  return (
+    <div className="px-3 lg:px-4 py-3 border-t border-hairline bg-coral/[0.045] flex flex-wrap items-center gap-x-3 gap-y-2">
+      <Lock size={13} strokeWidth={2.5} className="text-coral shrink-0" aria-hidden />
+      <p className="text-sm leading-snug min-w-0 flex-1">
+        <span className="text-ink font-medium">{lead}</span>{" "}
+        <span className="text-ink-muted">{tail}</span>
+      </p>
+      <div className="flex items-center gap-2 shrink-0">
+        {!signedIn && (
+          <Link
+            href="/account/login"
+            className="px-2.5 py-1.5 rounded-md text-xs text-ink-muted hover:text-coral transition-colors whitespace-nowrap"
+          >
+            Sign in
+          </Link>
+        )}
+        <Link
+          href="/pricing"
+          className="inline-flex items-center rounded-md bg-coral px-3 py-1.5 text-xs font-medium text-white hover:bg-coral-soft transition-colors whitespace-nowrap"
+        >
+          See plans
+        </Link>
+      </div>
+    </div>
   );
 }
 

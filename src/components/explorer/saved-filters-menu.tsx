@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
-import { Bookmark, Check, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Bookmark, Check, Lock, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FREE_LIMITS } from "@/lib/access";
+import { useEntitlement } from "@/lib/use-entitlement";
 import {
   describeQuery, removeSaved, upsertSaved, writeSaved,
   savedSnapshot, savedServerSnapshot, subscribeSaved,
@@ -41,6 +44,24 @@ export function SavedFiltersMenu({
   onApply: (query: string) => void;
 }) {
   const saved = useSyncExternalStore(subscribeSaved, savedSnapshot, savedServerSnapshot);
+  const { paid, signedIn } = useEntitlement();
+  /**
+   * How many this reader may keep. MAX_SAVED for a subscriber — a browsing
+   * limit, not a plan one — and FREE_LIMITS.savedFilters otherwise.
+   */
+  const cap = paid ? MAX_SAVED : Math.min(FREE_LIMITS.savedFilters, MAX_SAVED);
+  /**
+   * SAVING NEEDS AN ACCOUNT; READING BACK DOES NOT.
+   *
+   * These live in localStorage, so a signed-out reader technically could keep
+   * them and nothing would break. Asking for an account anyway is a product
+   * decision rather than a technical one: a saved filter is the first thing on
+   * this page worth coming back for, and it is the cheapest possible reason to
+   * make somebody an account. Anything already saved keeps working and stays
+   * clickable — taking away what is already on the machine to force a signup
+   * would be a different and much worse trade.
+   */
+  const canSave = signedIn;
   const [open, setOpen] = useState(false);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
@@ -121,8 +142,15 @@ export function SavedFiltersMenu({
     const trimmed = name.trim();
     if (!trimmed) { nameRef.current?.focus(); return; }
     const replacing = saved.some((e) => e.name.toLowerCase() === trimmed.toLowerCase());
-    if (!replacing && saved.length >= MAX_SAVED) {
-      setProblem(`That is ${MAX_SAVED} saved filters — remove one before adding another.`);
+    // Renaming over an existing entry is always allowed, at any tier: it
+    // replaces rather than adds, so the count does not move and refusing it
+    // would be a limit that fires when nothing is being consumed.
+    if (!replacing && saved.length >= cap) {
+      setProblem(
+        paid
+          ? `That is ${cap} saved filters — remove one before adding another.`
+          : `Free accounts keep ${cap}. Remove one, or upgrade for ${MAX_SAVED}.`,
+      );
       return;
     }
     setProblem(null);
@@ -167,7 +195,34 @@ export function SavedFiltersMenu({
               so putting the action on top keeps it in the same place whether
               there are none saved or twenty. */}
           <div className="px-3 py-2.5 border-b border-hairline bg-paper-deep/40">
-            {naming ? (
+            {!canSave ? (
+              /* The sign-up ask, in the place the save button would be. Kept
+                 in the same slot rather than shown as a separate banner so
+                 the menu has one shape: this is what the top of it does. */
+              <div>
+                <div className="flex items-start gap-2">
+                  <Lock size={13} className="mt-0.5 shrink-0 text-coral" aria-hidden />
+                  <div className="text-sm text-ink-soft leading-snug">
+                    Saving a table needs an account. Free ones keep{" "}
+                    {FREE_LIMITS.savedFilters}.
+                  </div>
+                </div>
+                <Link
+                  href="/account/signup"
+                  onClick={closeMenu}
+                  className="mt-2.5 inline-flex w-full items-center justify-center rounded-md bg-coral px-3 py-1.5 text-sm font-medium text-white hover:bg-coral-soft transition-colors"
+                >
+                  Create a free account
+                </Link>
+                <Link
+                  href="/account/login"
+                  onClick={closeMenu}
+                  className="mt-1.5 block text-center text-xs text-ink-muted hover:text-coral transition-colors"
+                >
+                  Already have one? Sign in
+                </Link>
+              </div>
+            ) : naming ? (
               <div className="flex items-center gap-2">
                 <input
                   ref={nameRef}
@@ -251,7 +306,10 @@ export function SavedFiltersMenu({
 
           {/* Said here rather than discovered on another device. */}
           <div className="px-3 py-2 border-t border-hairline text-[0.68rem] text-ink-muted leading-snug">
-            {problem ?? "Saved in this browser only. Clearing site data removes them."}
+            {problem ??
+              (canSave && !paid
+                ? `${saved.length} of ${cap}. Saved in this browser only — clearing site data removes them.`
+                : "Saved in this browser only. Clearing site data removes them.")}
           </div>
         </div>,
         document.body,

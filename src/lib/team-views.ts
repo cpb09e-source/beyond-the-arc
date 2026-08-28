@@ -32,6 +32,7 @@
  * than fail.
  */
 import { TEAM_STAT_COLUMNS, type TeamStatKey } from "@/lib/team-filters";
+import { VIEW_ACCESS } from "@/lib/access";
 
 export type ViewBand = {
   label: string;
@@ -345,6 +346,46 @@ if (process.env.NODE_ENV !== "production") {
   }
   if (bad.length) {
     throw new Error(`team-views.ts names stat keys that do not exist: ${bad.join(", ")}`);
+  }
+}
+
+/**
+ * The same guarantee for the paywall, which is the one place a typo would be
+ * WORSE than a column of dashes.
+ *
+ * src/lib/access.ts decides what a free reader sees, and for two views it does
+ * so by naming bands — "Record" is free, the rest of Record & Outcomes is not.
+ * Those names are strings matched against band labels, so renaming a band here
+ * would not break anything visible: it would quietly stop matching, the band
+ * would fall out of the free list, and the view would either give away more
+ * than intended or lock something that should be public. Nobody would notice
+ * either way until a customer did.
+ *
+ * Checked in BOTH directions, because each catches a different mistake: a
+ * policy naming a band that no longer exists (a rename), and a view with no
+ * policy entry at all (a new view shipped ungated by omission).
+ */
+if (process.env.NODE_ENV !== "production") {
+  const bad: string[] = [];
+  for (const v of TABLE_VIEWS) {
+    const rule = VIEW_ACCESS[v.key];
+    if (!rule) {
+      bad.push(`view "${v.key}" has no entry in VIEW_ACCESS`);
+      continue;
+    }
+    if (rule.kind !== "bands") continue;
+    const labels = new Set(v.bands.map((b) => b.label));
+    for (const label of rule.free) {
+      if (!labels.has(label)) {
+        bad.push(`"${v.key}" has no band called "${label}" — it has [${[...labels].join(" | ")}]`);
+      }
+    }
+  }
+  for (const key of Object.keys(VIEW_ACCESS)) {
+    if (!BY_KEY.has(key)) bad.push(`VIEW_ACCESS names "${key}", which is not a view`);
+  }
+  if (bad.length) {
+    throw new Error(`access.ts and team-views.ts disagree: ${bad.join("; ")}`);
   }
 }
 

@@ -5,8 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Download, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAuth } from "@/lib/auth/auth-provider";
-import { describeMembership } from "@/lib/auth/membership";
+import { useEntitlement } from "@/lib/use-entitlement";
 import { TABLE_VIEWS, viewGroups } from "@/lib/team-views";
 
 import {
@@ -40,10 +39,17 @@ const EXPORTABLE_VIEWS = TABLE_VIEWS.filter((v) => !v.custom);
  * that the feature is *presented* as part of the Season Pass, which is what
  * makes it worth paying for; enforcing it would need the export to come from a
  * server, and this site does not have one.
+ *
+ * WHICH IS EXACTLY WHY THE LOCKED PANEL HANDS OVER A REAL FILE. If the gate
+ * cannot be about withholding the numbers, it has to be about being worth
+ * buying — and nothing argues for a formatted thirteen-tab workbook like a
+ * formatted thirteen-tab workbook. The sample runs the same code as the paid
+ * export over ten teams, so it cannot overstate what it is selling.
  */
 export function DownloadMenu({
   build,
   buildAll,
+  buildSample,
   rowCount,
   colCount,
   disabled,
@@ -52,17 +58,17 @@ export function DownloadMenu({
   build: () => ExportInput;
   /** The same rows under each named view, one tab per key, in registry order. */
   buildAll: (viewKeys: string[]) => MultiExportInput;
+  /** Every view over a fixed ten teams — what a locked reader can still have. */
+  buildSample?: () => MultiExportInput;
   rowCount: number;
   colCount: number;
   disabled?: boolean;
 }) {
-  const { status, profile } = useAuth();
-  const paid = describeMembership(profile).paid;
-  // "loading" is deliberately treated as paid-unknown rather than free: the
-  // profile lands a moment after first paint, and flashing an upsell at a
-  // subscriber before it arrives is worse than briefly offering the menu to
-  // someone who will be asked to sign in when they click.
-  const gated = status !== "loading" && !paid;
+  // Unknown membership resolves as entitled — see useEntitlement. Flashing an
+  // upsell at a subscriber is worse than briefly offering the menu to someone
+  // who will be asked to sign in the moment they click.
+  const { paid, signedIn } = useEntitlement();
+  const gated = !paid;
 
   const [open, setOpen] = useState(false);
   /** The menu is two screens: the format list, and the view picker. */
@@ -76,7 +82,7 @@ export function DownloadMenu({
    * "all" is the default that is never worse.
    */
   const [picked, setPicked] = useState<string[]>(() => EXPORTABLE_VIEWS.map((v) => v.key));
-  const [busy, setBusy] = useState<"csv" | "xlsx" | "xlsx-all" | null>(null);
+  const [busy, setBusy] = useState<"csv" | "xlsx" | "xlsx-all" | "sample" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [at, setAt] = useState<{ left: number; top: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -137,7 +143,7 @@ export function DownloadMenu({
     };
   }, [open, screen, closeMenu]);
 
-  async function run(kind: "csv" | "xlsx" | "xlsx-all") {
+  async function run(kind: "csv" | "xlsx" | "xlsx-all" | "sample") {
     if (busy) return;
     setBusy(kind);
     setError(null);
@@ -146,7 +152,8 @@ export function DownloadMenu({
     // result set once per tab and is the case that needs it.
     await new Promise((r) => requestAnimationFrame(() => r(null)));
     try {
-      if (kind === "xlsx-all") await downloadAllViews(buildAll(picked));
+      if (kind === "sample") await downloadAllViews(buildSample!());
+      else if (kind === "xlsx-all") await downloadAllViews(buildAll(picked));
       else if (kind === "csv") downloadCsv(build());
       else await downloadWorkbook(build());
       closeMenu();
@@ -221,12 +228,36 @@ export function DownloadMenu({
               >
                 See plans
               </Link>
+              {/* THE SAMPLE SITS BELOW THE ASK, NOT ABOVE IT. Offering the
+                  free file first would answer the question before anyone had
+                  asked it, and the panel would read as a giveaway with a price
+                  attached rather than as a product with a preview. */}
+              {buildSample && (
+                <button
+                  type="button"
+                  onClick={() => run("sample")}
+                  disabled={busy === "sample"}
+                  className="mt-2 w-full rounded-md border border-ink/20 bg-card px-3 py-2 text-left transition-colors hover:border-ink/35 disabled:opacity-60"
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-sm font-medium text-ink">Download a sample</span>
+                    <span className="text-[0.65rem] tabular text-ink-muted shrink-0">
+                      {busy === "sample" ? "building…" : ".xlsx"}
+                    </span>
+                  </div>
+                  <div className="text-xs text-ink-muted leading-snug mt-0.5">
+                    The real thing, smaller — every view, one tab each, over the
+                    ten best teams of this season.
+                  </div>
+                </button>
+              )}
+
               <Link
-                href="/account/login"
+                href={signedIn ? "/account" : "/account/login"}
                 className="mt-2 block text-center text-xs text-ink-muted hover:text-coral"
                 onClick={closeMenu}
               >
-                Already a member? Sign in
+                {signedIn ? "Manage your membership" : "Already a member? Sign in"}
               </Link>
             </div>
           ) : screen === "formats" ? (

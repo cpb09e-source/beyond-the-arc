@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -15,6 +16,8 @@ import { MultiYearSelect } from "./multi-year-select";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { ScopeCollapse, scopeSummary } from "@/components/filters/scope-collapse";
+import { FREE_LIMITS } from "@/lib/access";
+import { useEntitlement } from "@/lib/use-entitlement";
 
 const CONF_GROUP_LABELS = { power: "Power Conferences", midmajor: "Mid-Majors" } as const;
 
@@ -38,6 +41,7 @@ export function FilterBar({
   const router = useRouter();
   const search = useSearchParams();
   const [pending, startTransition] = useTransition();
+  const { paid } = useEntitlement();
 
   const params = useMemo(() => {
     const obj: Record<string, string> = {};
@@ -65,6 +69,28 @@ export function FilterBar({
 
   function patch(next: Partial<typeof draft>) {
     setDraft((d) => ({ ...d, ...next }));
+  }
+
+  /**
+   * The season picker becomes a RADIO on the free plan, not a broken checkbox.
+   *
+   * The naive cap — take the first N of whatever comes back — is the version
+   * that feels broken: the picker sorts newest-first, so a reader on 2025-26
+   * who clicks 2018-19 would get their click silently thrown away and no idea
+   * why. Swapping to the season they just asked for is the behaviour a control
+   * with a limit of one should have, and it means every season stays reachable
+   * with one click.
+   *
+   * Newest-first among the additions so "Select all" and a dragged range land
+   * on the most recent season rather than on 2013-14, which is what sorting
+   * the raw array would have given.
+   */
+  function patchYears(next: number[]) {
+    const cap = FREE_LIMITS.seasonsAtOnce;
+    if (paid || next.length <= cap) { patch({ years: next }); return; }
+    const added = next.filter((y) => !draft.years.includes(y)).sort((a, b) => b - a);
+    const kept = next.filter((y) => !added.includes(y)).sort((a, b) => b - a);
+    patch({ years: [...added, ...kept].slice(0, cap) });
   }
   // NOTE: this bar no longer edits stat filters — TeamStatFilters owns them
   // now — but it still carries `draft.filters` through untouched so pressing
@@ -128,9 +154,21 @@ export function FilterBar({
         <Field label="Seasons">
           <MultiYearSelect
             years={draft.years}
-            onChange={(years) => patch({ years })}
+            onChange={patchYears}
             className="w-32"
           />
+          {/* Said under the control it governs, and only to the readers it
+              applies to. A permanent "Pass required" label beside a picker
+              that works fine for subscribers would be an advert nailed to a
+              working control. */}
+          {!paid && (
+            <span className="text-[0.65rem] text-ink-muted leading-none">
+              One at a time ·{" "}
+              <Link href="/pricing" className="text-coral hover:underline">
+                compare seasons
+              </Link>
+            </span>
+          )}
         </Field>
 
         <Field label="Team">
