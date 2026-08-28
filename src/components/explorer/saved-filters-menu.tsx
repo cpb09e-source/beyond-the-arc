@@ -291,7 +291,7 @@ export function SavedFiltersMenu({
           {saved.length === 0 ? (
             <div className="px-3 py-3 text-xs text-ink-muted leading-snug">
               Nothing saved yet. Saving keeps this table exactly as it is - seasons,
-              filters and columns - so you can bring it back in one click.
+              filters and columns.
             </div>
           ) : (
             <ul className="max-h-72 overflow-y-auto py-1">
