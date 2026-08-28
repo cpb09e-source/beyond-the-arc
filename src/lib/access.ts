@@ -268,10 +268,11 @@ export const PLAYER_VIEW_ACCESS: Readonly<Record<string, ViewAccess>> = {
   leaders: PREVIEW,
   "player-info": PREVIEW,
 
-  // NOT `cols`, which is what the team side does with its equivalent. A
-  // preview here means a free reader can still assemble any columns they
-  // like and see the top five rows of the result.
-  custom: PREVIEW,
+  // `cols`, exactly as the team side treats "Build my own table": nothing is
+  // locked by the view itself, and FREE_LIMITS.statCols does the work. Its
+  // own kind rather than "free" so the empty table can say what the limit is
+  // before the reader reaches it.
+  custom: { kind: "cols" },
 };
 
 /** The rule for a players view. Unknown keys are free, same as the teams. */

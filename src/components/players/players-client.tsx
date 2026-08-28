@@ -43,9 +43,10 @@ import {
   PACK_STAT_BY_KEY, groupsFor, loadStatPack, type IndexedPack, type PackGroup,
 } from "@/lib/player-stat-pack";
 import { useDragPan } from "@/lib/use-drag-pan";
-import { effectivePlayerViewAccess, playerViewAccess, FREE_LIMITS } from "@/lib/access";
+import { clampToFreeTier, effectivePlayerViewAccess, playerViewAccess, FREE_LIMITS } from "@/lib/access";
 import { useEntitlement } from "@/lib/use-entitlement";
 import { GateBar } from "@/components/explorer/gate-bar";
+import { Lock } from "lucide-react";
 import { useMeasuredWidth } from "@/lib/use-measured-width";
 import { PlayerName } from "@/components/player-name";
 
@@ -554,6 +555,24 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
    * tool visibly works and stops short of being a ranking.
    */
   const previewCapped = gate.kind === "preview";
+
+  /**
+   * The query this reader is actually entitled to RUN, as opposed to the one
+   * they asked for. Same helper the team explorer uses, so the two tables
+   * cannot drift on what a free plan includes.
+   *
+   * IT NARROWS THE COMPUTATION, NEVER THE URL. `spec` still carries every
+   * column, filter and season the reader picked, so the controls keep showing
+   * their real selection and subscribing restores the table instead of making
+   * them rebuild it.
+   *
+   * This is also what gives "Select Your Own Columns" its teeth: the view
+   * itself locks nothing (access.ts calls it `cols`), and the cap here is the
+   * whole gate. Capping the picker alone would do nothing about a URL that
+   * already carries five columns - a shared link, or an old saved view.
+   */
+  const scopedSpec = useMemo(() => clampToFreeTier(spec, paid), [spec, paid]);
+  const colsLocked = scopedSpec.cols.length < spec.cols.length;
   const { cols: viewCols, bands: viewBands } = useMemo(() => viewGrid(view), [view]);
 
   /**
@@ -905,8 +924,8 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   }, [rawByYear, spec.years, epmByYear, shootingByYear]);
 
   const transformed = useMemo(
-    () => spec.years.flatMap((y) => processedByYear[y]?.players ?? []),
-    [processedByYear, spec.years],
+    () => scopedSpec.years.flatMap((y) => processedByYear[y]?.players ?? []),
+    [processedByYear, scopedSpec.years],
   );
 
   // Per-stat percentile lookup that picks the right year's cohort for the
@@ -943,11 +962,11 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   //                  re-applies `spec.limit` for the visible window.
   //                  Recomputes only when `deferredQuery` or limit changes.
   const prefiltered = useMemo(
-    () => applySpec(transformed, { ...spec, limit: Number.MAX_SAFE_INTEGER }, packValue),
+    () => applySpec(transformed, { ...scopedSpec, limit: Number.MAX_SAFE_INTEGER }, packValue),
     // packValue is a dependency, not an afterthought: a table sorted by a pack
     // stat is ordered by nulls until its group file lands, and without this it
     // would stay that way.
-    [transformed, spec, packValue],
+    [transformed, scopedSpec, packValue],
   );
 
   // ── Download ────────────────────────────────────────────────────────────
@@ -1120,10 +1139,10 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         sortKey: SORT_KEY_BY_FIELD.get(col.field as string),
       });
     };
-    for (const key of spec.cols) add(key, true);
-    for (const f of spec.filters) add(f.stat, false);
+    for (const key of scopedSpec.cols) add(key, true);
+    for (const f of scopedSpec.filters) add(f.stat, false);
     return out;
-  }, [spec.cols, spec.filters, viewFields]);
+  }, [scopedSpec.cols, scopedSpec.filters, viewFields]);
 
   return (
     <>
@@ -1230,9 +1249,10 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
             <DownloadMenu
               views={PLAYER_VIEWS}
               noun="players"
-              // Ungated for now, by decision — nothing on the players table is
-              // sold yet, so a lock here would be selling something twice.
-              alwaysFree
+              // GATED, same as the team side. Leaving the exports open while
+              // ten of the twelve views preview would have made those gates
+              // decorative: a free reader could read five rows of Scoring
+              // Context on screen and download all 2,614 of them.
               build={buildExport}
               buildAll={buildExportAll}
               rowCount={prefiltered.length}
@@ -1246,6 +1266,28 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               {!loading && spec.conf.length > 0 && <> · {spec.conf.length === 1 ? spec.conf[0] : `${spec.conf.length} confs`}</>}
               {!loading && spec.cls.length > 0 && <> · {spec.cls.length === 1 ? (CLASS_LABEL[spec.cls[0]!] ?? spec.cls[0]) : `${spec.cls.length} classes`}</>}
             </span>
+
+            {/* THE CEILING, SAID BEFORE IT IS REACHED on an empty custom
+                table, and said plainly the moment it bites. Finding out you
+                have hit a limit is a worse moment than being told the limit
+                while you still have room inside it — and a table quietly
+                showing three of your five columns reads as broken. */}
+            {view.custom && spec.cols.length === 0 && !paid && (
+              <span className="hidden sm:inline text-xs text-ink-muted whitespace-nowrap">
+                {FREE_LIMITS.statCols} columns on the free plan
+              </span>
+            )}
+            {colsLocked && (
+              <span className="inline-flex items-center gap-1.5 text-xs whitespace-nowrap">
+                <Lock size={11} className="text-coral shrink-0" />
+                <span className="text-ink-soft">
+                  Showing {FREE_LIMITS.statCols} of your {spec.cols.length} columns.
+                </span>
+                <Link href="/pricing" className="text-coral hover:underline font-medium">
+                  See plans
+                </Link>
+              </span>
+            )}
             {/* NO CHIP STRIP. It existed to answer "what is applied?" back when
                 the answer was hidden inside a drawer. The filter rows below now
                 say it in full — stat, comparator, value, and an X on each — so a
