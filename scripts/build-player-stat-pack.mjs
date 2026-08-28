@@ -53,6 +53,13 @@ const CBBD = path.join(ROOT, "data/cbbd");
 // is excluded site-wide anyway (src/lib/seasons.ts).
 const ALL_SEASONS = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2022, 2023, 2024, 2025, 2026];
 
+/**
+ * Seasons with a ROSTER, which is one more than the seasons with stats: 2021
+ * has no player box and no play-by-play, so nothing is built for it, but its
+ * roster is what identifies a player who only ever played that year.
+ */
+const ROSTER_SEASONS = [...ALL_SEASONS, 2021].sort((a, b) => a - b);
+
 const args = process.argv.slice(2);
 const opt = (n) => { const i = args.indexOf(`--${n}`); return i > -1 ? args[i + 1] : null; };
 const ONLY = opt("only") ? [Number(opt("only"))] : null;
@@ -245,7 +252,14 @@ function draftByBartId() {
   // Every school each bart id ever appears under, across every season we hold.
   const schools = new Map();   // bartId -> Set<normalised school>
   const byName = new Map();    // normalised name -> Set<bartId>
-  for (const year of ALL_SEASONS) {
+  /**
+   * EVERY ROSTER FILE, not just the seasons this pack builds. 2021 has no
+   * player box and no play-by-play, so it is excluded everywhere else — but it
+   * has a roster, and leaving it out hid the one season that identifies a
+   * player. Jalen Johnson's only Duke year is 2021; without it the 2021 draft's
+   * 20th pick matched nobody and went blank.
+   */
+  for (const year of ROSTER_SEASONS) {
     for (const p of bartRows(year)) {
       if (p.bart_player_id == null || !p.name) continue;
       const id = p.bart_player_id;
@@ -274,12 +288,26 @@ function draftByBartId() {
       continue;
     }
     const college = normSchool(rec.college ?? "");
-    const fits = [...ids].filter((id) => {
+    if (!college) { ambiguous++; continue; }
+    const played = (id, test) => {
       const set = schools.get(id);
-      if (!set || !college) return false;
-      for (const s of set) if (s === college || s.includes(college) || college.includes(s)) return true;
+      if (!set) return false;
+      for (const s of set) if (test(s)) return true;
       return false;
-    });
+    };
+    /**
+     * EXACT FIRST, and containment only if exactly one candidate survives it.
+     *
+     * Plain substring matching put Brandon Miller of Alabama and Brandon Miller
+     * of Alabama A&M in the same bucket — "alabama" is inside "alabamaaandm" —
+     * so the real second pick of 2023 was thrown out as ambiguous. Exact
+     * equality separates them; containment stays as a fallback for the schools
+     * whose names genuinely differ in length between the two sources.
+     */
+    let fits = [...ids].filter((id) => played(id, (s) => s === college));
+    if (fits.length !== 1) {
+      fits = [...ids].filter((id) => played(id, (s) => s.includes(college) || college.includes(s)));
+    }
     if (fits.length === 1) { out.set(fits[0], rec); matched++; }
     else ambiguous++;
   }
@@ -287,12 +315,33 @@ function draftByBartId() {
   return out;
 }
 
+/**
+ * The draft source writes schools the way a broadcast does — UNC, UConn — and
+ * our roster writes them out. Neither spelling is wrong and no amount of
+ * normalising turns one into the other, so the handful that differ are listed.
+ */
+const SCHOOL_ALIASES = {
+  unc: "northcarolina",
+  uconn: "connecticut",
+  usc: "southerncalifornia",
+  ucf: "centralflorida",
+  pitt: "pittsburgh",
+  olemiss: "mississippi",
+  umass: "massachusetts",
+  smu: "southernmethodist",
+  lsu: "louisianastate",
+  vcu: "virginiacommonwealth",
+  byu: "brighamyoung",
+  tcu: "texaschristian",
+};
+
 /** School names for comparison — "St." vs "State", punctuation, case. */
 function normSchool(s) {
-  return String(s ?? "").toLowerCase()
-    .replace(/st\.?/g, "state")
-    .replace(/university|the/g, "")
+  const n = String(s ?? "").toLowerCase()
+    .replace(/\bst\.?\b/g, "state")
+    .replace(/\buniversity\b|\bthe\b/g, "")
     .replace(/[^a-z0-9]+/g, "");
+  return SCHOOL_ALIASES[n] ?? n;
 }
 const normDraftName = (s) => String(s ?? "").toLowerCase().normalize("NFKD")
   .replace(/[̀-ͯ]/g, "").replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim()
