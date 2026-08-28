@@ -10,10 +10,9 @@ import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { PercentileChip } from "@/components/percentile-chip";
 import {
-  DRAWER_SLOT_ID, PlayerFilterBar, statChipsFromSpec,
+  DRAWER_SLOT_ID, PlayerFilterBar,
 } from "@/components/players/player-filter-bar";
 import { PlayerStatRows } from "@/components/players/player-stat-rows";
-import { StatChipStrip } from "@/components/filters/stat-chips";
 import { StatPicker } from "@/components/filters/stat-picker";
 import {
   PLAYER_PICK_OPTIONS, PLAYER_PICK_GROUP_LABEL,
@@ -1107,19 +1106,6 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     return out;
   }, [spec.cols, spec.filters, viewFields]);
 
-  // Toolbar read-out of the COMMITTED selection (the drawer's own strip tracks
-  // the uncommitted draft). Removing here is immediate — there is no Submit on
-  // the toolbar, and a chip whose X did nothing until you opened a drawer would
-  // be a lie.
-  const specChips = useMemo(() => statChipsFromSpec(spec.cols, spec.filters), [spec.cols, spec.filters]);
-  const removeSpecStat = (key: string) => {
-    updateSpec({
-      ...spec,
-      cols: spec.cols.filter((k) => k !== key),
-      filters: spec.filters.filter((f) => f.stat !== key),
-    });
-  };
-
   return (
     <>
       <PlayerFilterBar conferences={conferences} teams={teamOptions} />
@@ -1228,15 +1214,12 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               {!loading && spec.conf.length > 0 && <> · {spec.conf.length === 1 ? spec.conf[0] : `${spec.conf.length} confs`}</>}
               {!loading && spec.cls.length > 0 && <> · {spec.cls.length === 1 ? (CLASS_LABEL[spec.cls[0]!] ?? spec.cls[0]) : `${spec.cls.length} classes`}</>}
             </span>
-            {/* What's currently applied, and the fastest way to undo any of it.
-                Capped at six so a wide selection can't push the toolbar into a
-                third line; the rest opens the drawer, which shows them all. */}
-            <StatChipStrip
-              chips={specChips}
-              onRemove={removeSpecStat}
-              max={6}
-              ariaLabel="Applied columns and filters"
-            />
+            {/* NO CHIP STRIP. It existed to answer "what is applied?" back when
+                the answer was hidden inside a drawer. The filter rows below now
+                say it in full — stat, comparator, value, and an X on each — so a
+                second removable read-out of the same selection was two controls
+                for one job, and the shorter one had to be capped and truncated.
+                The team explorer dropped its own strip for the same reason. */}
           </div>
           {/* `w-auto`, not `w-full sm:w-auto`: full width forced this group onto
               its own line under Filters and Compare. It now shares that line,

@@ -467,11 +467,6 @@ export function statChips(cols: string[], ranges: RangeState): StatChip[] {
   return buildStatChips(cols, ranges, CHIP_ORDER, chipLabel);
 }
 
-/** Same chips, built from a committed spec rather than a live range draft. */
-export function statChipsFromSpec(cols: string[], filters: PlayerStatFilter[]): StatChip[] {
-  return statChips(cols, filtersToRanges(filters));
-}
-
 /**
  * Where the page puts the drawer, and what the trigger points `aria-controls`
  * at. The page renders an empty div with this id directly beneath the toolbar

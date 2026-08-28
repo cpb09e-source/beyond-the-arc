@@ -6,8 +6,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { Lock, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { roundNice, type RangeState } from "@/components/filters/range-row";
-import { buildStatChips, type StatChip } from "@/components/filters/stat-chips";
+import { roundNice } from "@/components/filters/range-row";
 import {
   FILTER_COLUMNS, GROUP_LABEL, MAX_FILTERS, parseSpec, specToParams, teamStatColumn,
   type Comparator, type StatFilter, type StatGroup, type TeamFilterSpec, type TeamStatKey,
@@ -230,37 +229,6 @@ function sameFilterSet(a: StatFilter[], b: StatFilter[]): boolean {
   const key = (f: StatFilter) => `${f.stat}.${f.op}.${f.value}`;
   const sa = new Set(a.map(key));
   return b.every((f) => sa.has(key(f)));
-}
-
-// ---------------------------------------------------------------------------
-// Selection chips (toolbar only — the builder shows its own rows)
-// ---------------------------------------------------------------------------
-
-/**
- * Filters → the {lo, hi} shape the chip builder speaks.
- *
- * Keyed off the registry rather than the old 28-stat slider table: that table
- * was the existence check as well as the pct lookup, so a filter on any of the
- * other 27 stats produced no chip at all — applied, counted, invisible.
- */
-function filtersToRanges(filters: StatFilter[]): RangeState {
-  const out: RangeState = {};
-  for (const f of filters) {
-    if (!teamStatColumn(f.stat)) continue;
-    const slot = (out[f.stat] ??= { lo: null, hi: null });
-    const disp = isPctStat(f.stat) ? roundNice(f.value * 100) : f.value;
-    if (f.op === "gte" || f.op === "gt") slot.lo = disp;
-    else slot.hi = disp;
-  }
-  return out;
-}
-
-const CHIP_ORDER = FILTER_COLUMNS.map((c) => c.key);
-const chipLabel = (key: string) => teamStatColumn(key)?.label ?? key;
-
-/** Chips for the toolbar, built from the committed spec. */
-export function teamStatChipsFromSpec(cols: readonly string[], filters: StatFilter[]): StatChip[] {
-  return buildStatChips(cols, filtersToRanges(filters), CHIP_ORDER, chipLabel);
 }
 
 const PICKER_LIST_ID = "team-filters-picker";
