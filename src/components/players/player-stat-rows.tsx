@@ -136,9 +136,20 @@ export function PlayerStatRows({
   const setColumns = useCallback((next: string[]) => {
     const keep = new Set(next);
     const kept = rows.filter((x) => keep.has(x.stat));
-    setRows(kept);
+    // EVERY TICKED STAT GETS A ROW, blank. Keeping only the rows that already
+    // existed made the columns door look like it did nothing: it added columns
+    // to the table and left no way to bound them, so the gesture that was meant
+    // to say "I want to work with these five stats" produced five columns and
+    // no controls. A blank row IS the column plus somewhere to type.
+    const have = new Set(kept.map((x) => x.stat));
+    const added: DraftRow[] = next
+      .filter((k) => !have.has(k))
+      .slice(0, Math.max(0, MAX_PLAYER_COLS - kept.length))
+      .map((stat) => ({ id: nextRowId++, stat, op: "gte" as RowComparator, value: "" }));
+    const nextRows = [...kept, ...added];
+    setRows(nextRows);
     setFreshId(null);
-    commit(kept, next.slice(0, MAX_PLAYER_COLS));
+    commit(nextRows, next.slice(0, MAX_PLAYER_COLS));
   }, [rows, commit]);
 
   const patchRow = useCallback((id: number, patch: Partial<DraftRow>) => {
@@ -166,7 +177,12 @@ export function PlayerStatRows({
   }, [rows.length]);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    // Same row treatment as the team explorer's filter builder: its own band
+    // under the search row, inside the same card, carrying the same divider so
+    // the toolbar reads as one stacked group. WRAPS rather than scrolls —
+    // eight filters will not fit on one line at any width, and a horizontally
+    // scrolling strip of form controls hides the ones you cannot see.
+    <div className="px-3 lg:px-4 py-2.5 border-b border-hairline bg-paper-deep/30 flex items-center flex-wrap gap-x-3 gap-y-2">
       {rows.map((r) => (
         <FilterRow
           key={r.id}

@@ -167,6 +167,16 @@ export function StatPicker({
   }, [mode, marked, onSetColumns]);
   const discard = useCallback(() => { setMarked([]); setQ(""); setHi(0); }, []);
 
+  /**
+   * The Enter action, held in a ref.
+   *
+   * The document listener is installed above where commitOnEnter is defined,
+   * and putting it in the effect's deps would tear the listener down and
+   * rebuild it on every keystroke. A ref keeps one listener and always calls
+   * the current closure.
+   */
+  const enterRef = useRef<() => void>(() => {});
+
   // Click-away and Escape. The popover is no longer a DOM descendant of the
   // trigger, so the away-test has to clear BOTH nodes or every click inside the
   // list would close the thing it clicked in.
@@ -182,7 +192,15 @@ export function StatPicker({
       setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.stopPropagation(); discard(); setOpen(false); }
+      if (e.key === "Escape") { e.stopPropagation(); discard(); setOpen(false); return; }
+      // Enter anywhere in the popover commits — including with focus parked on
+      // an option the mouse just ticked, which is the common case.
+      if (e.key !== "Enter") return;
+      const t = e.target as Node;
+      if (!wrapRef.current?.contains(t) && !popRef.current?.contains(t)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      enterRef.current();
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey, true);
@@ -251,25 +269,44 @@ export function StatPicker({
 
   const atCapNow = marked.length >= remaining;
 
+  /**
+   * What Enter does. Pulled out of the input's handler because it must not
+   * depend on where the caret is.
+   *
+   * THE BUG THIS FIXES: the footer promises "Enter to add", and Enter was
+   * handled only on the search box. Tick three stats with the mouse and focus
+   * is on the last option you clicked, not the input — so Enter either did
+   * nothing or re-toggled that option, and the picker sat there looking
+   * broken with "3 on the table" written across the bottom. Keyboard users
+   * never saw it, because arrowing never moves focus out of the input.
+   */
+  const commitOnEnter = useCallback(() => {
+    if (mode === "filter") {
+      // Type a few letters, Enter, start typing the value. Unchanged.
+      if (matches[hiSafe]) {
+        onPick(matches[hiSafe]!.key);
+        setQ(""); setHi(0); setOpen(false);
+      }
+      return;
+    }
+    // Columns: Enter with nothing ticked still takes the highlighted row, so
+    // the keyboard path never needs the mouse. That tick is not in state yet,
+    // so the set is read from the list rather than from `marked`.
+    const keys = marked.length
+      ? marked
+      : matches[hiSafe] ? [...current, matches[hiSafe]!.key] : [];
+    onSetColumns(keys);
+    setMarked([]); setQ(""); setHi(0); setOpen(false);
+  }, [mode, matches, hiSafe, marked, current, onPick, onSetColumns, setOpen]);
+
+  // Keep the ref pointing at the current closure. In an effect rather than
+  // during render, which is where a ref may be written.
+  useEffect(() => { enterRef.current = commitOnEnter; }, [commitOnEnter]);
+
   const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown") { e.preventDefault(); setHi((h) => Math.min(h + 1, matches.length - 1)); }
     else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
-    else if (e.key === "Enter") {
-      e.preventDefault();
-      if (mode === "filter") {
-        // Type a few letters, Enter, start typing the value. Unchanged.
-        if (matches[hiSafe]) choose(matches[hiSafe]!);
-        return;
-      }
-      // Columns: Enter with nothing ticked still takes the highlighted row,
-      // so the keyboard path never needs the mouse. That tick is not in state
-      // yet, so the set is read from the list rather than from `marked`.
-      const keys = marked.length
-        ? marked
-        : matches[hiSafe] ? [...current, matches[hiSafe]!.key] : [];
-      onSetColumns(keys);
-      setMarked([]); setQ(""); setHi(0); setOpen(false);
-    }
+    // Enter is handled once, at the document level — see the effect above.
   };
 
   // Section headers render only while browsing. Under a search the list is

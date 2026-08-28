@@ -1307,9 +1307,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
             place and the same shape as the team explorer. This is where the
             "Filters" drawer used to be reached from; the rows are in the open
             now, so there is nothing to open. */}
-        <div className="px-3 sm:px-4 pb-2">
-          <PlayerStatRows spec={spec} onChange={updateSpec} />
-        </div>
+        <PlayerStatRows spec={spec} onChange={updateSpec} />
         {/* Portal slot kept for the scope bar's own popovers. */}
         <div id={DRAWER_SLOT_ID} />
         {/* D&3-style internal scroll: the table scrolls inside its own viewport
