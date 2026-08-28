@@ -52,6 +52,13 @@ export type TableView = {
   sortBy: TeamStatKey;
   sortDir: "asc" | "desc";
   /**
+   * An EMPTY view the reader fills in themselves. Excluded from the all-views
+   * workbook, where a tab of nothing but team names would be a blank sheet
+   * among twelve real ones — and where the reader's own columns already lead
+   * every other tab.
+   */
+  custom?: boolean;
+  /**
    * Sort to use when the PREVIEW season is selected, if `sortBy` is a stat that
    * cannot exist before games are played.
    *
@@ -264,6 +271,39 @@ export const TABLE_VIEWS: TableView[] = [
       { label: "Minutes by class", keys: k("fr_min_pct", "so_min_pct", "jr_min_pct", "sr_min_pct") },
       { label: "Points by class", keys: k("fr_pts_pct", "so_pts_pct", "jr_pts_pct", "sr_pts_pct") },
     ],
+  },
+
+  // ── Custom ────────────────────────────────────────────────────────────────
+  /**
+   * THE EMPTY ONE. Team, conference, season and record, and not one stat.
+   *
+   * Every other view answers "show me the shooting numbers" — a question we
+   * guessed at in advance. This answers "show me exactly these six things and
+   * nothing else", which no curated set ever will, because the reader's six
+   * are not the same as anyone else's.
+   *
+   * The columns come from Add a Filter, which already pins whatever it filters
+   * on and renders it under "Your columns". So this view needs no machinery of
+   * its own — it is the absence of a column set, and the pinning behaviour that
+   * already exists does the rest.
+   *
+   * DECLARED LAST on purpose. TABLE_VIEWS[0] is the default view the toolbar
+   * falls back to, and a reader who arrives at an empty table has been given a
+   * blank page instead of a product.
+   *
+   * It still sorts by NET underneath. The column is not shown, but the rows
+   * have to arrive in SOME order, and "best teams first" is the only order that
+   * is not arbitrary.
+   */
+  {
+    key: "custom",
+    label: "Build my own table",
+    group: "Custom",
+    desc: "Start with nothing but the teams, then add exactly the columns you want",
+    custom: true,
+    sortBy: "a_net" as TeamStatKey,
+    sortDir: "desc",
+    bands: [],
   },
 ];
 

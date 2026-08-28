@@ -8,10 +8,15 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { describeMembership } from "@/lib/auth/membership";
 import { TABLE_VIEWS, viewGroups } from "@/lib/team-views";
+
 import {
   downloadAllViews, downloadCsv, downloadWorkbook,
   type ExportInput, type MultiExportInput,
 } from "@/lib/table-export";
+
+/** The views the all-views workbook offers — curated sets only, never the
+ *  empty one, whose tab would be team names and nothing else. */
+const EXPORTABLE_VIEWS = TABLE_VIEWS.filter((v) => !v.custom);
 
 /**
  * Download the table — a formatted workbook, a workbook of chosen views, or
@@ -70,7 +75,7 @@ export function DownloadMenu({
    * alone still costs a click on All. Clearing is one click either way, so
    * "all" is the default that is never worse.
    */
-  const [picked, setPicked] = useState<string[]>(() => TABLE_VIEWS.map((v) => v.key));
+  const [picked, setPicked] = useState<string[]>(() => EXPORTABLE_VIEWS.map((v) => v.key));
   const [busy, setBusy] = useState<"csv" | "xlsx" | "xlsx-all" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [at, setAt] = useState<{ left: number; top: number } | null>(null);
@@ -158,7 +163,7 @@ export function DownloadMenu({
   }
 
   const empty = rowCount === 0;
-  const allPicked = picked.length === TABLE_VIEWS.length;
+  const allPicked = picked.length === EXPORTABLE_VIEWS.length;
 
   return (
     <div ref={wrapRef} className="relative">
@@ -263,7 +268,7 @@ export function DownloadMenu({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPicked(allPicked ? [] : TABLE_VIEWS.map((v) => v.key))}
+                  onClick={() => setPicked(allPicked ? [] : EXPORTABLE_VIEWS.map((v) => v.key))}
                   className="px-2 py-1 rounded text-[0.65rem] uppercase tracking-widest font-bold text-coral hover:bg-coral/8 transition-colors"
                 >
                   {allPicked ? "Clear all" : "Select all"}
@@ -273,7 +278,10 @@ export function DownloadMenu({
               {/* Grouped exactly as the View dropdown groups them — the reader
                   is picking from a list they already know the shape of. */}
               <div className="max-h-64 overflow-y-auto py-1">
-                {viewGroups().map((g) => (
+                {viewGroups()
+                  .map((g) => ({ ...g, views: g.views.filter((v) => !v.custom) }))
+                  .filter((g) => g.views.length > 0)
+                  .map((g) => (
                   <div key={g.group}>
                     <div className="px-3 pt-2 pb-1 text-[0.58rem] uppercase tracking-[0.15em] text-ink-muted font-semibold">
                       {g.group}

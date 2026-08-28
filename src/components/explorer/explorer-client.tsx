@@ -868,6 +868,18 @@ export function ExplorerClient({
               {loadingSeasons && <span className="ml-1.5 text-coral">· loading season…</span>}
             </span>
 
+            {/* The empty view, before any column is picked. Without this the
+                table reads as broken rather than as a blank canvas — the rows
+                are there, the stats simply have not been chosen yet. */}
+            {view.custom && cols.length === 0 && (
+              <span className="text-xs text-ink-muted whitespace-nowrap">
+                Pick your columns with
+                {" "}
+                <span className="text-coral font-medium">Add a Filter</span>
+                {" "}below
+              </span>
+            )}
+
             {/* A gated season, said out loud. Without this the table is simply
                 short, and a subscriber whose token expired sees the same thing
                 as a reader who filtered too hard. */}
