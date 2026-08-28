@@ -10,13 +10,9 @@ import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { PercentileChip } from "@/components/percentile-chip";
 import {
-  DRAWER_SLOT_ID, PlayerFilterBar,
+  PlayerFilterBar,
 } from "@/components/players/player-filter-bar";
 import { PlayerStatRows } from "@/components/players/player-stat-rows";
-import { StatPicker } from "@/components/filters/stat-picker";
-import {
-  PLAYER_PICK_OPTIONS, PLAYER_PICK_GROUP_LABEL,
-} from "@/components/players/player-filter-bar";
 import { ComparePlayersModal } from "@/components/players/compare-players-modal";
 import { SavedFiltersMenu } from "@/components/explorer/saved-filters-menu";
 import { DownloadMenu } from "@/components/explorer/download-menu";
@@ -1000,14 +996,6 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     [view],
   );
 
-  // Live "how many players match" for the stat-filter popout. Runs the full
-  // pipeline with a candidate filter set (keeping the active scope) so the
-  // panel can show a running count as the user builds filters — before Apply.
-  const previewCount = useMemo(
-    () => (filters: PlayerStatFilter[]) =>
-      filterSpec(transformed, { ...spec, filters }, packValue).length,
-    [transformed, spec, packValue],
-  );
   const { players, count, totalPages, pageSafe } = useMemo(() => {
     // 3-char minimum on search — single-letter "L" matches thousands and
     // burns time both filtering and re-rendering rows. The placeholder
@@ -1291,8 +1279,6 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
             "Filters" drawer used to be reached from; the rows are in the open
             now, so there is nothing to open. */}
         <PlayerStatRows spec={spec} onChange={updateSpec} />
-        {/* Portal slot kept for the scope bar's own popovers. */}
-        <div id={DRAWER_SLOT_ID} />
         {/* D&3-style internal scroll: the table scrolls inside its own viewport
             (both axes) while BOTH header rows stay frozen and the RK + Player
             columns pin left. Sticky cells carry opaque backgrounds. */}
