@@ -132,7 +132,18 @@ const readGz = (fp) => JSON.parse(zlib.gunzipSync(fs.readFileSync(fp)).toString(
 
 const GROUPS = {
   info: [
-    ["age", 1], ["ht_in", 1], ["draft_pick", -1], ["draft_rd", -1], ["draft_rd_pick", -1],
+    // AGE RANKS DOWNWARD. A nineteen-year-old and a twenty-three-year-old
+    // putting up the same line are not the same player, and the younger one is
+    // the better of the two — he did it against older opposition and has more
+    // in front of him. Ranking age upward said the opposite in colour.
+    ["age", -1],
+    ["ht_in", 1], ["draft_pick", -1],
+    // ROUND AND SLOT GET NO PERCENTILE. There are two rounds, so a "round"
+    // percentile is a two-valued colour ramp saying nothing the number does
+    // not; and a 30th pick in the first round outranks a 1st pick in the
+    // second, which a within-round rank inverts. The overall pick already
+    // carries the ordering that means something.
+    ["draft_rd", 0], ["draft_rd_pick", 0],
   ],
   playtime: [
     ["gp", 1], ["gs", 1], ["min", 1], ["min_pg", 1], ["win_pct", 1],
@@ -213,10 +224,75 @@ function ageAt(rawRow, season) {
   return age >= 15 && age <= 30 ? r1(age) : null;
 }
 
-function draftIndex() {
+/**
+ * bart id → draft record, resolved BY COLLEGE as well as by name.
+ *
+ * nba-draftees.json is keyed by normalised name alone, and names collide. The
+ * case that caught it: Jalen Smith of Maryland went 10th in 2020, and Jalen
+ * Smith of SMU and Rice — a different person, never drafted — was being handed
+ * his pick. A name-keyed lookup has no way to tell them apart.
+ *
+ * The record carries the college, and we know every school a bart id ever
+ * played for, so the two are matched on both. Where that still leaves more
+ * than one candidate, or none, the player gets NO draft data rather than a
+ * guess: a blank cell is a missing fact, a wrong pick is a false one.
+ */
+function draftByBartId() {
   const fp = path.join(ROOT, "public/data/nba-draftees.json");
-  if (!fs.existsSync(fp)) return null;
-  return JSON.parse(fs.readFileSync(fp, "utf8"));
+  if (!fs.existsSync(fp)) return new Map();
+  const draft = JSON.parse(fs.readFileSync(fp, "utf8"));
+
+  // Every school each bart id ever appears under, across every season we hold.
+  const schools = new Map();   // bartId -> Set<normalised school>
+  const byName = new Map();    // normalised name -> Set<bartId>
+  for (const year of ALL_SEASONS) {
+    for (const p of bartRows(year)) {
+      if (p.bart_player_id == null || !p.name) continue;
+      const id = p.bart_player_id;
+      const team = Array.isArray(p.teams) ? p.teams[0] : p.teams;
+      if (team?.name) {
+        let set = schools.get(id);
+        if (!set) { set = new Set(); schools.set(id, set); }
+        set.add(normSchool(team.name));
+      }
+      const nn = normDraftName(p.name);
+      let ids = byName.get(nn);
+      if (!ids) { ids = new Set(); byName.set(nn, ids); }
+      ids.add(id);
+    }
+  }
+
+  const out = new Map();
+  let matched = 0, ambiguous = 0, unmatched = 0;
+  for (const [name, rec] of Object.entries(draft)) {
+    const ids = byName.get(normDraftName(name));
+    if (!ids || ids.size === 0) { unmatched++; continue; }
+    if (ids.size === 1) {
+      // One player by that name — no collision to resolve.
+      out.set([...ids][0], rec);
+      matched++;
+      continue;
+    }
+    const college = normSchool(rec.college ?? "");
+    const fits = [...ids].filter((id) => {
+      const set = schools.get(id);
+      if (!set || !college) return false;
+      for (const s of set) if (s === college || s.includes(college) || college.includes(s)) return true;
+      return false;
+    });
+    if (fits.length === 1) { out.set(fits[0], rec); matched++; }
+    else ambiguous++;
+  }
+  out.stats = { matched, ambiguous, unmatched };
+  return out;
+}
+
+/** School names for comparison — "St." vs "State", punctuation, case. */
+function normSchool(s) {
+  return String(s ?? "").toLowerCase()
+    .replace(/st\.?/g, "state")
+    .replace(/university|the/g, "")
+    .replace(/[^a-z0-9]+/g, "");
 }
 const normDraftName = (s) => String(s ?? "").toLowerCase().normalize("NFKD")
   .replace(/[̀-ͯ]/g, "").replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim()
@@ -627,7 +703,7 @@ function buildSeason(season) {
   pbpStats.pitpFallback = pitpStats.viaFallback;
 
   // ── Derive, and emit. ───────────────────────────────────────────────────
-  const draft = draftIndex();
+  const draft = DRAFT;
   const meta = new Map();
   for (const p of rows) {
     if (p.bart_player_id == null) continue;
@@ -646,19 +722,19 @@ function buildSeason(season) {
   // info
   put("age", (a, m) => (m ? ageAt(m.player_bart_stats?.raw_row, season) : null));
   put("ht_in", (a, m) => (m ? heightInches(m.height) : null));
+  const draftOf = (id) => draft.get(id) ?? null;
   put("draft_pick", (a, m) => {
-    if (!draft || !m?.name) return null;
-    const d = draft[normDraftName(m.name)];
+    const d = m ? draftOf(m.bart_player_id) : null;
     return d && typeof d.pick === "number" ? d.pick : null;
   });
   // Round is DERIVED — nba-draftees.json stores no round. Right in a normal
   // 60-pick year, off by one slot in a year with forfeited picks (2024 had 58).
   put("draft_rd", (a, m) => {
-    const d = draft && m?.name ? draft[normDraftName(m.name)] : null;
+    const d = m ? draftOf(m.bart_player_id) : null;
     return d && typeof d.pick === "number" ? (d.pick <= 30 ? 1 : 2) : null;
   });
   put("draft_rd_pick", (a, m) => {
-    const d = draft && m?.name ? draft[normDraftName(m.name)] : null;
+    const d = m ? draftOf(m.bart_player_id) : null;
     return d && typeof d.pick === "number" ? (d.pick <= 30 ? d.pick : d.pick - 30) : null;
   });
 
@@ -846,6 +922,13 @@ function buildSeason(season) {
   );
   return { season, players: ids.length, bytes, fb: pbpStats };
 }
+
+/** Built once — it walks every season to resolve name collisions. */
+const DRAFT = draftByBartId();
+console.log(
+  `draft: ${DRAFT.stats.matched} matched, ${DRAFT.stats.ambiguous} left blank as ambiguous, ` +
+  `${DRAFT.stats.unmatched} not in our player files`,
+);
 
 const done = [];
 for (const y of SEASONS) {

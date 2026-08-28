@@ -261,26 +261,31 @@ export function SavedFiltersMenu({
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={startNaming}
-                className="w-full text-left group"
-              >
-                <div className="text-sm font-medium text-ink group-hover:text-coral transition-colors">
+              /* A BUTTON THAT LOOKS LIKE ONE. This was a bare text heading
+                 over a summary line, so the only thing on the panel that
+                 actually does something read as a label - people opened the
+                 menu, saw "Save these filters" and waited for somewhere to
+                 click. The summary stays underneath, where it describes what
+                 the button would save rather than competing with it. */
+              <div>
+                <button
+                  type="button"
+                  onClick={startNaming}
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-coral px-3 py-1.5 text-sm font-medium text-white hover:bg-coral-soft transition-colors"
+                >
+                  <Bookmark size={13} aria-hidden />
                   {active ? `Update “${active.name}”` : "Save these filters"}
-                </div>
-                <div className="text-xs text-ink-muted leading-snug mt-0.5">
+                </button>
+                <div className="text-xs text-ink-muted leading-snug mt-1.5">
                   {describe(currentQuery)}
                 </div>
-              </button>
+              </div>
             )}
           </div>
 
           {saved.length === 0 ? (
             <div className="px-3 py-3 text-xs text-ink-muted leading-snug">
-              Nothing saved yet. A saved filter keeps the whole table — seasons,
-              conference, every stat filter, your columns and the view — and puts
-              it back in one click.
+              Nothing saved yet.
             </div>
           ) : (
             <ul className="max-h-72 overflow-y-auto py-1">
@@ -319,13 +324,16 @@ export function SavedFiltersMenu({
             </ul>
           )}
 
-          {/* Said here rather than discovered on another device. */}
-          <div className="px-3 py-2 border-t border-hairline text-[0.68rem] text-ink-muted leading-snug">
-            {problem ??
-              (canSave && !paid
-                ? `${saved.length} of ${cap}. Saved in this browser only — clearing site data removes them.`
-                : "Saved in this browser only. Clearing site data removes them.")}
-          </div>
+          {/* Only when there is something to say. The where-they-live note
+              used to sit here permanently, which made a one-line menu carry two
+              lines of caveat. A real problem still gets said, and so does the
+              free-tier count, because that one changes what the next click
+              does. */}
+          {(problem || (canSave && !paid)) && (
+            <div className="px-3 py-2 border-t border-hairline text-[0.68rem] text-ink-muted leading-snug">
+              {problem ?? `${saved.length} of ${cap} saved`}
+            </div>
+          )}
         </div>,
         document.body,
       )}
