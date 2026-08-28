@@ -1393,6 +1393,15 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                     {b.label}
                   </th>
                 ))}
+                {/* THE COLUMN THAT ABSORBS WHAT IS LEFT, and draws nothing.
+                    The table is w-full, so without it the browser shares spare
+                    width among the real columns — which stretched Player
+                    across the whole card on "Select Your Own Columns" and made
+                    the empty table look like it continued into columns that
+                    were not there. Opaque, because the zebra stripe lives on
+                    the <tr> and a see-through cell lets the banding run to the
+                    edge. Collapses to zero once the columns fill the table. */}
+                <th aria-hidden className="sticky top-0 z-30 w-full p-0 bg-card" />
               </tr>
               {/* Column row — search lives in the Player cell (D&3-style). */}
               <tr>
@@ -1418,18 +1427,19 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                     </th>
                   ),
                 )}
+                <th aria-hidden className="sticky top-6 z-30 w-full p-0 bg-card" />
               </tr>
             </thead>
             <tbody>
               {loading && transformed.length === 0 ? (
                 <tr>
-                  <td colSpan={dynamicCols.length + viewCols.length + 2} className="px-4 py-16 text-center text-ink-muted">
+                  <td colSpan={dynamicCols.length + viewCols.length + 3} className="px-4 py-16 text-center text-ink-muted">
                     Loading {seasonsKicker(spec.years).toLowerCase()}…
                   </td>
                 </tr>
               ) : players.length === 0 ? (
                 <tr>
-                  <td colSpan={dynamicCols.length + viewCols.length + 2} className="px-4 py-12 text-center">
+                  <td colSpan={dynamicCols.length + viewCols.length + 3} className="px-4 py-12 text-center">
                     <div className="text-ink-soft">No players match these filters.</div>
                     <div className="mt-1.5 text-xs text-ink-muted">
                       Try widening conference, class, or games played.
@@ -1549,6 +1559,8 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                         </td>
                       );
                     })}
+                    {/* See the header: absorbs the slack, draws nothing. */}
+                    <td aria-hidden className="p-0 bg-card" />
                   </tr>
                   );
                 })

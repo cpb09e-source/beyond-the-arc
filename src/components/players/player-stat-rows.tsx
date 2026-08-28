@@ -44,15 +44,41 @@ function labelOf(key: string): string {
   return playerStatColumn(key)?.label ?? PACK_STAT_BY_KEY.get(key)?.label ?? key;
 }
 
-/** URL filters → editable rows, in the order the URL holds them. */
-function rowsFromFilters(filters: readonly PlayerStatFilter[]): DraftRow[] {
-  return filters.map((f) => ({
+/**
+ * The URL → editable rows.
+ *
+ * READS BOTH cols AND filters, and that is the whole fix for a bug worth
+ * describing: rows were rebuilt from `filters` alone, but a row with no value
+ * typed into it is not a filter — it is a pinned column. So every time the URL
+ * came back round, blank rows evaporated while `cols` kept their columns. The
+ * reader saw a column and a chip for a stat with no row to remove it from,
+ * which is exactly what "I cleared them and one stayed" looks like.
+ *
+ * The invariant is now: every pinned column has at least one row, and every row
+ * names a pinned column. Column order leads, because that is the order the
+ * table shows.
+ */
+function rowsFromSpec(cols: readonly string[], filters: readonly PlayerStatFilter[]): DraftRow[] {
+  const out: DraftRow[] = [];
+  const rowFor = (f: PlayerStatFilter): DraftRow => ({
     id: nextRowId++,
     stat: f.stat,
     op: f.op,
     // Percentages are stored as fractions and typed as whole percent.
     value: isPctStat(f.stat) ? String(Math.round(f.value * 1000) / 10) : String(f.value),
-  }));
+  });
+  for (const key of cols) {
+    const own = filters.filter((f) => f.stat === key);
+    if (own.length) out.push(...own.map(rowFor));
+    // A pinned column nobody has bounded: a blank row, which is the column
+    // plus somewhere to type.
+    else out.push({ id: nextRowId++, stat: key, op: "gte", value: "" });
+  }
+  // A bound on something not pinned should not happen — narrowing pins — but an
+  // old URL could carry one, and dropping it silently would filter the table by
+  // something with no row and no column to explain it.
+  for (const f of filters) if (!cols.includes(f.stat)) out.push(rowFor(f));
+  return out;
 }
 
 /** Rows → URL filters. A row with no value is a pinned column, not a filter. */
@@ -75,7 +101,7 @@ export function PlayerStatRows({
   spec: PlayerListSpec;
   onChange: (next: PlayerListSpec) => void;
 }) {
-  const [rows, setRows] = useState<DraftRow[]>(() => rowsFromFilters(spec.filters));
+  const [rows, setRows] = useState<DraftRow[]>(() => rowsFromSpec(spec.cols, spec.filters));
   const [pickerOpen, setPickerOpen] = useState(false);
   const [colsPickerOpen, setColsPickerOpen] = useState(false);
   /** The row that just appeared, so its value box takes the caret. */
@@ -90,15 +116,27 @@ export function PlayerStatRows({
    */
   const lastCommitted = useRef<string>("");
   useEffect(() => {
-    const incoming = JSON.stringify(spec.filters);
+    // Watches BOTH halves, since a pinned column with no bound lives in `cols`
+    // alone and would otherwise never trigger a resync.
+    const incoming = JSON.stringify([spec.cols, spec.filters]);
     if (incoming === lastCommitted.current) return;
     lastCommitted.current = incoming;
-    setRows(rowsFromFilters(spec.filters));
-  }, [spec.filters]);
+    setRows(rowsFromSpec(spec.cols, spec.filters));
+  }, [spec.cols, spec.filters]);
 
-  const commit = useCallback((next: DraftRow[], cols: string[]) => {
+  /**
+   * COLUMNS ARE DERIVED FROM THE ROWS, not passed in beside them.
+   *
+   * Every caller used to hand over its own idea of the next `cols`, computed
+   * from `spec.cols` captured at render — so two removals in quick succession
+   * had the second one re-committing a column the first had just taken away.
+   * The rows already say which columns exist; reading the answer off them
+   * makes the two impossible to disagree.
+   */
+  const commit = useCallback((next: DraftRow[]) => {
+    const cols = [...new Set(next.map((r) => r.stat))].slice(0, MAX_PLAYER_COLS);
     const filters = filtersFromRows(next);
-    lastCommitted.current = JSON.stringify(filters);
+    lastCommitted.current = JSON.stringify([cols, filters]);
     onChange({ ...spec, filters, cols });
   }, [onChange, spec]);
 
@@ -123,10 +161,10 @@ export function PlayerStatRows({
     const next = [...rows, row];
     setRows(next);
     setFreshId(row.id);
-    // Pin it now — the column should appear the moment the row does, not only
-    // once a value has been typed into it.
-    commit(next, spec.cols.includes(stat) ? spec.cols : [...spec.cols, stat]);
-  }, [rows, commit, spec.cols]);
+    // The column appears the moment the row does, not only once a value has
+    // been typed — commit() reads the column set off the rows.
+    commit(next);
+  }, [rows, commit]);
 
   /**
    * The batch door hands back the FULL set of columns, so this adds and
@@ -149,27 +187,25 @@ export function PlayerStatRows({
     const nextRows = [...kept, ...added];
     setRows(nextRows);
     setFreshId(null);
-    commit(nextRows, next.slice(0, MAX_PLAYER_COLS));
+    commit(nextRows);
   }, [rows, commit]);
 
   const patchRow = useCallback((id: number, patch: Partial<DraftRow>) => {
     const next = rows.map((x) => (x.id === id ? { ...x, ...patch } : x));
     setRows(next);
     setFreshId(null);
-    commit(next, spec.cols);
-  }, [rows, commit, spec.cols]);
+    commit(next);
+  }, [rows, commit]);
 
   const removeRow = useCallback((id: number) => {
-    const gone = rows.find((x) => x.id === id);
     const next = rows.filter((x) => x.id !== id);
     setRows(next);
-    // Unpin only when no other row still names the stat — a band written as
-    // two rows must not lose its column when one half goes.
-    const cols = gone && !next.some((x) => x.stat === gone.stat)
-      ? spec.cols.filter((k) => k !== gone.stat)
-      : spec.cols;
-    commit(next, cols);
-  }, [rows, commit, spec.cols]);
+    // The column goes with the last row that named it, and survives while any
+    // other row still does — a band written as two rows must not lose its
+    // column when one half is deleted. Both fall out of deriving cols from
+    // rows, rather than needing a rule of their own.
+    commit(next);
+  }, [rows, commit]);
 
   /** Enter in a value box: that row is done, offer the next one. */
   const nextFilter = useCallback(() => {

@@ -1388,7 +1388,13 @@ export function ExplorerClient({
                     space reads as room for columns still to be added.
                     Collapses to zero when the columns already fill the table,
                     so it costs the other views nothing. */}
-                <th aria-hidden className="sticky top-6 z-30 bg-paper-deep border-b border-hairline w-full p-0" />
+                {/* EMPTY, NOT STRIPED. It still absorbs the width — that is
+                    the whole point of it — but it stops looking like a column
+                    with nothing in it: no header band, no rule, no zebra. The
+                    table now ends where its last column ends and the rest is
+                    blank space, which reads as room for columns still to be
+                    added rather than as data that failed to load. */}
+                <th aria-hidden className="w-full p-0 bg-card" />
               </tr>
             </thead>
             <tbody>
@@ -1529,7 +1535,11 @@ export function ExplorerClient({
                         </td>
                       );
                     })}
-                    <td aria-hidden className={cn("p-0 transition-colors", zebra, ROW_HOVER)} />
+                    {/* See the header. OPAQUE, not transparent: the zebra
+                        stripe lives on the <tr>, so a see-through cell let the
+                        banding run to the edge of the card — the table looked
+                        like it continued into columns that were not there. */}
+                    <td aria-hidden className="p-0 bg-card" />
                   </tr>
                   );
                 })
