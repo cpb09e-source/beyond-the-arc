@@ -504,7 +504,7 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
     const stat = raw.slice(0, dot1);
     const op = raw.slice(dot1 + 1, dot2);
     const valueStr = raw.slice(dot2 + 1);
-    if (!isPlayerStatKey(stat) || !isPlayerComparator(op)) continue;
+    if ((!isPlayerStatKey(stat) && !PACK_STAT_BY_KEY.has(stat)) || !isPlayerComparator(op)) continue;
     const value = Number(valueStr);
     if (!Number.isFinite(value)) continue;
     filters.push({ stat, op, value });
@@ -540,7 +540,11 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
         .map((s) => s.trim())
         .filter((k) => {
           const c = PLAYER_STAT_COLUMN_BY_KEY.get(k);
-          return !!c && !c.filterOnly;
+          if (c) return !c.filterOnly;
+          // A stat from the pack is just as pinnable. Checking only the
+          // summary catalogue silently dropped ?cols=pitp_share on parse, so
+          // the picker could write a column the page then refused to read.
+          return PACK_STAT_BY_KEY.has(k);
         })
         .filter((k, i, a) => a.indexOf(k) === i)
     : [];

@@ -15,6 +15,8 @@ import {
 import { viewByKey } from "@/lib/team-views";
 import { clampToFreeTier, FREE_LIMITS } from "@/lib/access";
 import { useEntitlement } from "@/lib/use-entitlement";
+import { StatPicker, type PickOption } from "@/components/filters/stat-picker";
+import { FilterRow } from "@/components/filters/filter-row";
 
 /**
  * Stat-filter builder for the team explorer.
@@ -148,13 +150,6 @@ const STAT_BOUNDS: Record<string, [number, number]> = {
   pitp_diff: [-350, 450], pts_diff: [-450, 550], scp_diff: [-150, 180],
 };
 
-const OPS: Array<{ op: Comparator; symbol: string }> = [
-  { op: "gte", symbol: "≥" },
-  { op: "gt", symbol: ">" },
-  { op: "lte", symbol: "≤" },
-  { op: "lt", symbol: "<" },
-];
-
 /** Registry order, so the picker's sections read the way the registry is written. */
 const GROUP_ORDER: StatGroup[] = ["overall", "record", "roster", "scoring", "defense", "diffs"];
 
@@ -270,20 +265,9 @@ export function teamStatChipsFromSpec(cols: readonly string[], filters: StatFilt
 
 const PICKER_LIST_ID = "team-filters-picker";
 
-/** Magnifier, matching the one on the table's own search box. */
-function SearchGlass({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
-      <circle cx={11} cy={11} r={7} /><line x1={20} y1={20} x2={16.65} y2={16.65} />
-    </svg>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Stat picker
 // ---------------------------------------------------------------------------
-
-type PickOption = { key: string; label: string; desc: string; group: StatGroup };
 
 const PICK_OPTIONS: PickOption[] = GROUP_ORDER.flatMap((g) =>
   FILTER_COLUMNS.filter((c) => c.group === g).map((c) => ({
@@ -305,582 +289,17 @@ const PICK_OPTIONS: PickOption[] = GROUP_ORDER.flatMap((g) =>
  * finds WAB. Label matches sort first, so typing an exact abbreviation still
  * puts it at the top.
  */
-/**
- * TWO DOORS INTO ONE LIST.
- *
- * "filter" is the original: pick a stat, the row appears, the caret is already
- * in its value box. One click, one bound, keep typing. That path was briefly
- * lost to multi-select and it should not have been — bounding a stat is the
- * single most common thing anyone does here, and it deserves to stay one
- * click.
- *
- * "columns" is the batch door: tick as many as you like, commit them all with
- * blank values. It also SHOWS what is already on the table, so unticking is
- * how a column comes off — it manages the set rather than only adding to it.
- *
- * They are not two data models. Filtering a stat pins it as a column either
- * way, so both end up in the same list of rows; what differs is how many you
- * name at once and whether the caret follows.
- */
-function StatPicker({
-  mode,
-  onPick,
-  onSetColumns,
-  current,
-  remaining,
-  disabled,
-  open,
-  setOpen,
-}: {
-  mode: "filter" | "columns";
-  /** filter mode: one stat, added immediately. */
-  onPick: (key: TeamStatKey) => void;
-  /** columns mode: the FULL set that should be on the table afterwards. */
-  onSetColumns: (keys: TeamStatKey[]) => void;
-  /** Stats already on the table, ticked when the columns picker opens. */
-  current: readonly string[];
-  /** Filter slots still free, so the picker cannot mark more than fit. */
-  remaining: number;
-  disabled?: boolean;
-  /**
-   * OWNED BY THE PARENT, because a filter row can reopen this. Pressing Enter
-   * in a value box means "that one's done, give me the next" — so the row has
-   * to be able to raise the picker, and the picker cannot be the only thing
-   * that knows whether it is up.
-   */
-  open: boolean;
-  setOpen: (v: boolean) => void;
-}) {
-  // Read HERE rather than threaded down from the builder. The picker is the
-  // only place that knows the reader has just hit the ceiling, and the ceiling
-  // is the moment the offer is worth making.
-  const { paid, signedIn } = useEntitlement();
-  const [q, setQ] = useState("");
-  const [hi, setHi] = useState(0);
-  /**
-   * Stats ticked but not yet added, in the order they were ticked — which
-   * becomes their column order, because the order you thought of them in is
-   * the order you want to read them in.
-   */
-  const [marked, setMarked] = useState<TeamStatKey[]>([]);
-  /** Viewport coords of the trigger, for the portalled popover. */
-  const [at, setAt] = useState<{ left: number; top: number } | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const popRef = useRef<HTMLDivElement>(null);
-
-  /**
-   * THE POPOVER IS PORTALLED TO document.body, AND IT HAS TO BE.
-   *
-   * It sits inside the table card, which establishes an overflow context for
-   * the sticky column headers below it. Any absolutely-positioned child is
-   * cropped to that box — the first build of this rendered exactly one visible
-   * option and a stray scrollbar. Fixed positioning off the trigger's own rect
-   * sidesteps the ancestor entirely, at the cost of a reposition on scroll and
-   * resize below.
-   */
-  const place = useCallback(() => {
-    const r = wrapRef.current?.getBoundingClientRect();
-    if (!r) return;
-    // Flip above the trigger when there is not room beneath it. 340 is the
-    // popover's own worst-case height (list + search row + padding).
-    const below = window.innerHeight - r.bottom;
-    setAt({
-      left: Math.min(r.left, window.innerWidth - 336),
-      top: below < 340 && r.top > 340 ? r.top - 346 : r.bottom + 6,
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    place();
-    inputRef.current?.focus();
-    // `true` to catch scrolls on inner containers, which do not bubble a
-    // scroll event to window.
-    window.addEventListener("scroll", place, true);
-    window.addEventListener("resize", place);
-    return () => {
-      window.removeEventListener("scroll", place, true);
-      window.removeEventListener("resize", place);
-    };
-  }, [open, place]);
-
-  /**
-   * Hand the ticked stats to the parent, or throw them away.
-   *
-   * Declared above the click-away effect rather than beside the other
-   * handlers, because that effect is what calls them — reaching them through
-   * a ref instead is the pattern React's compiler now rejects, and a
-   * dependency is honest about what the effect actually uses.
-   */
-  const commit = useCallback(() => {
-    // Columns mode commits the whole ticked set — including ticks REMOVED,
-    // which is how a column comes off the table. Filter mode never gets here;
-    // it commits on the click itself.
-    if (mode === "columns") onSetColumns(marked);
-    setMarked([]);
-    setQ("");
-    setHi(0);
-  }, [mode, marked, onSetColumns]);
-  const discard = useCallback(() => { setMarked([]); setQ(""); setHi(0); }, []);
-
-  // Click-away and Escape. The popover is no longer a DOM descendant of the
-  // trigger, so the away-test has to clear BOTH nodes or every click inside the
-  // list would close the thing it clicked in.
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (wrapRef.current?.contains(t) || popRef.current?.contains(t)) return;
-      // Clicking away COMMITS what is ticked. Ticking four stats and losing
-      // them to a stray click would be the worst possible reading of the
-      // gesture; Escape is the one that discards, and says so below.
-      commit();
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.stopPropagation(); discard(); setOpen(false); }
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey, true);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey, true);
-    };
-  }, [open, setOpen, commit, discard]);
-
-  const matches = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return PICK_OPTIONS;
-    return PICK_OPTIONS.filter(
-      (o) => o.label.toLowerCase().includes(needle) || o.desc.toLowerCase().includes(needle),
-    ).sort((a, b) => {
-      const ai = a.label.toLowerCase().indexOf(needle);
-      const bi = b.label.toLowerCase().indexOf(needle);
-      // -1 (matched on description only) sorts after every label match.
-      const an = ai < 0 ? 999 : ai;
-      const bn = bi < 0 ? 999 : bi;
-      return an - bn || a.label.localeCompare(b.label);
-    });
-  }, [q]);
-
-  // Clamp during render — a shrinking list must never leave the highlight past
-  // the end, which would make Enter do nothing.
-  const hiSafe = matches.length ? Math.min(hi, matches.length - 1) : 0;
-
-  // Keep the highlighted row in view while arrowing through 55 options.
-  useEffect(() => {
-    if (!open) return;
-    listRef.current
-      ?.querySelector(`[data-idx="${hiSafe}"]`)
-      ?.scrollIntoView({ block: "nearest" });
-  }, [hiSafe, open]);
-
-  /**
-   * Tick or untick. Nothing reaches the table until the picker is committed.
-   *
-   * This replaced click-to-add-and-close. The old note here argued that the
-   * popover could not stay open because picking sent the caret to a value box
-   * and the popover would then float over it — true then, and no longer the
-   * case, because ticking moves no caret. The cost is that adding ONE stat is
-   * now a click plus Enter (or a click outside) rather than a single click;
-   * the gain is that adding four is four clicks instead of four round trips
-   * through the button.
-   */
-  const choose = (o: PickOption) => {
-    const key = o.key as TeamStatKey;
-    if (mode === "filter") {
-      // Straight through: add it, close, and the parent puts the caret in the
-      // new row's value box.
-      onPick(key);
-      setQ(""); setHi(0); setOpen(false);
-      return;
-    }
-    setMarked((m) =>
-      m.includes(key) ? m.filter((k) => k !== key)
-        : m.length >= remaining ? m
-        : [...m, key],
-    );
-  };
-
-
-  const atCapNow = marked.length >= remaining;
-
-  const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowDown") { e.preventDefault(); setHi((h) => Math.min(h + 1, matches.length - 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
-    else if (e.key === "Enter") {
-      e.preventDefault();
-      if (mode === "filter") {
-        // Type a few letters, Enter, start typing the value. Unchanged.
-        if (matches[hiSafe]) choose(matches[hiSafe]!);
-        return;
-      }
-      // Columns: Enter with nothing ticked still takes the highlighted row,
-      // so the keyboard path never needs the mouse. That tick is not in state
-      // yet, so the set is read from the list rather than from `marked`.
-      const keys = marked.length
-        ? marked
-        : matches[hiSafe] ? [...current, matches[hiSafe]!.key] as TeamStatKey[] : [];
-      onSetColumns(keys);
-      setMarked([]); setQ(""); setHi(0); setOpen(false);
-    }
-  };
-
-  // Section headers render only while browsing. Under a search the list is
-  // ranked by match quality, so group headings would break the order into
-  // fragments that no longer mean anything.
-  const grouped = q.trim() === "";
-
-  return (
-    <div className="relative" ref={wrapRef}>
-      <button
-        type="button"
-        // Seeding happens HERE rather than in an effect on `open`: opening is
-        // an event with a handler already attached, and the columns picker has
-        // to show what is on the table before the reader touches anything.
-        onClick={() => {
-          if (!open && mode === "columns") setMarked(current as TeamStatKey[]);
-          setOpen(!open);
-        }}
-        disabled={disabled}
-        aria-expanded={open}
-        aria-controls={PICKER_LIST_ID}
-        className={cn(
-          "inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-dashed text-sm font-medium transition-colors whitespace-nowrap",
-          disabled
-            ? "border-ink/10 text-ink-muted/60 cursor-not-allowed"
-            : "border-coral/40 text-coral hover:bg-coral/6 hover:border-coral/60",
-        )}
-      >
-        <Plus size={15} />
-        {mode === "filter" ? "Add a Filter" : "Add Columns"}
-      </button>
-
-      {open && at && typeof document !== "undefined" && createPortal(
-        <div
-          ref={popRef}
-          style={{ position: "fixed", left: at.left, top: at.top }}
-          className="z-60 w-80 max-w-[calc(100vw-2rem)] rounded-lg border border-hairline bg-popover shadow-xl overflow-hidden"
-        >
-          <div className="relative border-b border-hairline">
-            <SearchGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" />
-            <input
-              ref={inputRef}
-              type="text"
-              value={q}
-              onChange={(e) => { setQ(e.target.value); setHi(0); }}
-              onKeyDown={onKey}
-              placeholder={mode === "filter" ? "Search stats…" : "Search columns…"}
-              aria-label="Search stats"
-              role="combobox"
-              aria-expanded
-              aria-controls={PICKER_LIST_ID}
-              aria-autocomplete="list"
-              className="h-10 w-full pl-9 pr-3 bg-transparent text-ink text-sm placeholder:text-ink-muted focus:outline-none"
-            />
-          </div>
-
-          <div id={PICKER_LIST_ID} role="listbox" ref={listRef} className="max-h-72 overflow-y-auto py-1">
-            {matches.length === 0 && (
-              <p className="px-3 py-6 text-center text-sm text-ink-muted">No stat matches “{q.trim()}”.</p>
-            )}
-            {matches.map((o, i) => {
-              const first = grouped && (i === 0 || matches[i - 1]!.group !== o.group);
-              return (
-                <div key={o.key}>
-                  {first && (
-                    <div className="px-3 pt-2.5 pb-1 text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">
-                      {GROUP_LABEL[o.group]}
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    role="option"
-                    data-idx={i}
-                    aria-selected={i === hiSafe}
-                    // onMouseDown, not onClick: the input keeps focus so the
-                    // next stat can be typed straight away.
-                    onMouseDown={(e) => { e.preventDefault(); choose(o); }}
-                    onMouseEnter={() => setHi(i)}
-                    title={
-                      marked.includes(o.key as TeamStatKey) || !atCapNow
-                        ? o.desc
-                        : paid
-                          ? "That is the maximum a shareable URL carries"
-                          : `${remaining} columns on the free plan — untick one, or get a Season Pass`
-                    }
-                    className={cn(
-                      "w-full text-left px-3 py-1.5 text-sm transition-colors flex items-center gap-2.5",
-                      i === hiSafe ? "bg-coral/10 text-ink" : "text-ink-soft hover:bg-paper-deep",
-                      !marked.includes(o.key as TeamStatKey) && atCapNow && "opacity-40",
-                    )}
-                  >
-                    {mode === "columns" && (
-                      <span
-                        aria-hidden
-                        className={cn(
-                          "shrink-0 w-3.5 h-3.5 rounded-[3px] border inline-flex items-center justify-center transition-colors",
-                          marked.includes(o.key as TeamStatKey)
-                            ? "bg-coral border-coral text-white"
-                            : "border-ink/25",
-                        )}
-                      >
-                        {marked.includes(o.key as TeamStatKey) && (
-                          <svg viewBox="0 0 12 12" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M2.5 6.2l2.4 2.4L9.5 3.8" />
-                          </svg>
-                        )}
-                      </span>
-                    )}
-                    <span className="truncate">{o.label}</span>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* THE CEILING EXPLAINS ITSELF, IN THE BOX, THE MOMENT IT IS HIT.
-              Without this the picker just goes quiet: the reader ticks a third
-              column, every remaining row dims, and nothing on screen says why
-              or what to do. The line under the trigger says it, but that is
-              outside the popover and behind it — so it is read after closing,
-              which is exactly too late to act on.
-
-              Only for readers it applies to. A subscriber hitting MAX_FILTERS
-              has met a URL-length limit with nothing to sell them, and gets the
-              plain "· limit" in the footer instead. */}
-          {atCapNow && !paid && (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 border-t border-coral/25 bg-coral/[0.07]">
-              <Lock size={11} strokeWidth={2.5} className="shrink-0 text-coral" aria-hidden />
-              <span className="text-xs text-ink-soft leading-snug">
-                {remaining} columns is the free limit.
-              </span>
-              <Link
-                href={signedIn ? "/pricing" : "/account/signup"}
-                className="text-xs font-medium text-coral hover:underline"
-              >
-                {signedIn ? "Upgrade for more" : "Sign up for more"}
-              </Link>
-            </div>
-          )}
-
-          {/* Only once something is ticked. An empty picker needs no
-              instructions; a picker holding four choices needs to say what
-              happens to them. */}
-          {mode === "columns" && marked.length > 0 && (
-            <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-hairline bg-paper-deep/50">
-              <span className="text-xs text-ink-soft">
-                <span className="font-medium text-coral">{marked.length}</span> on the table
-                {atCapNow && <span className="text-ink-muted"> · limit</span>}
-              </span>
-              <span className="text-[0.68rem] text-ink-muted">
-                <span className="font-medium text-ink-soft">Enter</span> to add
-                <span className="mx-1">·</span>
-                <span className="font-medium text-ink-soft">Esc</span> to clear
-              </span>
-            </div>
-          )}
-        </div>,
-        document.body,
-      )}
-    </div>
-  );
-}
+// StatPicker moved to src/components/filters/stat-picker.tsx when the players
+// table needed the same two doors. It is the same component, unchanged in
+// behaviour; only the option list and its section headings are now passed in.
 
 // ---------------------------------------------------------------------------
 // One filter row
 // ---------------------------------------------------------------------------
 
-function FilterRow({
-  row,
-  autoFocus,
-  onChange,
-  onRemove,
-  onNext,
-  valueLocked = false,
-}: {
-  row: DraftRow;
-  autoFocus: boolean;
-  onChange: (id: number, patch: Partial<DraftRow>) => void;
-  onRemove: (id: number) => void;
-  /** Enter in the value box: this row is finished, open the picker again. */
-  onNext: () => void;
-  /**
-   * The column stays, the bound does not — a free reader past
-   * FREE_LIMITS.boundedStatCols.
-   *
-   * Locking the BOX rather than refusing the keystroke, because the two feel
-   * completely different: a disabled field says "not for you yet", while a
-   * field that accepts a digit and then discards it says the site is broken.
-   */
-  valueLocked?: boolean;
-}) {
-  const col = teamStatColumn(row.stat);
-  const bounds = STAT_BOUNDS[row.stat];
-  const pct = isPctStat(row.stat);
-  const valueRef = useRef<HTMLInputElement>(null);
-
-  /**
-   * The range hint, and the type size that makes it FIT.
-   *
-   * The box is sized to the value people type — two or three digits — and the
-   * hint is the longest thing that ever goes in it. A signed count range runs
-   * to eleven characters ("-450 to 550"), which at the old fixed 0.68rem was
-   * clipped mid-number: the reader saw "-20 to" and the upper bound — the half
-   * that says what "high" looks like — was simply gone.
-   *
-   * SHRINK THE HINT, NOT THE BOX. Widening every value box to fit the worst
-   * hint would undo the whole reason it is narrow, and the hint is read once
-   * per stat while the box is looked at constantly. Padding gives way first,
-   * then the type, and only for the strings that need it.
-   *
-   * Thresholds measured against the real bounds table, where the longest
-   * placeholder is exactly eleven characters — see build-stat-bounds.mts,
-   * which generates it. Re-run that and the worst case can move; the tiers
-   * below are wide enough to absorb a character or two either way.
-   */
-  const hint = bounds
-    // A NEGATIVE LOWER BOUND SPELLS THE WORD. "-25–30" reads as one mangled
-    // number; "-25 to 30" cannot be misread, and is worth the extra characters.
-    ? bounds[0] < 0 ? `${bounds[0]} to ${bounds[1]}` : `${bounds[0]}–${bounds[1]}`
-    : "Value";
-  /**
-   * A PERCENTAGE COSTS THREE CHARACTERS BEFORE ITS HINT IS EVEN MEASURED.
-   *
-   * The "%" suffix is painted inside the box and the input reserves ~20px of
-   * right padding for it — near a third of a 64px control. Tiering on string
-   * length alone therefore called "-7 to 8" roomy, gave it the largest type,
-   * and clipped it by 10px: seven characters, but only 36px to put them in.
-   *
-   * Charging pct stats three characters up front folds that back into one
-   * number, so the tiers below compare like with like.
-   */
-  const hintLen = (valueLocked ? 4 : hint.length) + (pct ? 3 : 0);
-  const roomy = hintLen <= 7;
-  const tight = hintLen >= 10;
-
-  // The row is created by picking a stat, so the only thing left to do is type
-  // a number — land the caret there rather than making the reader aim for it.
-  useEffect(() => {
-    if (autoFocus) valueRef.current?.focus();
-  }, [autoFocus]);
-
-  return (
-    <div className="inline-flex items-center gap-1.5">
-      <span
-        title={col?.desc}
-        className="h-8 px-2.5 inline-flex items-center rounded-md border border-hairline bg-paper-deep/60 text-sm font-medium text-ink whitespace-nowrap cursor-default"
-      >
-        {col?.label ?? row.stat}
-      </span>
-
-      <select
-        value={row.op}
-        onChange={(e) => onChange(row.id, { op: e.target.value as Comparator })}
-        disabled={valueLocked}
-        aria-label={`Comparison for ${col?.label ?? row.stat}`}
-        className={cn(
-          "h-8 w-14 shrink-0 px-1 rounded-md border border-ink/15 bg-card text-ink text-sm text-center focus:outline-none focus:ring-2 focus:ring-coral/40",
-          valueLocked && "opacity-50",
-        )}
-      >
-        {OPS.map((o) => (
-          <option key={o.op} value={o.op}>{o.symbol}</option>
-        ))}
-      </select>
-
-      {/* SIZED TO THE VALUE, NOT TO THE PLACEHOLDER. Almost everything typed
-          here is two or three digits — "70", "19", "43" — and the widest
-          realistic entry is five characters ("-242", "130.5"). At w-24 the box
-          was mostly empty, and five filters of mostly-empty box is a row that
-          runs off the side of the card. */}
-      <div className="relative w-16 shrink-0">
-        <input
-          ref={valueRef}
-          // `inputMode` rather than `type="number"`: a number input swallows a
-          // lone "-" and hijacks the scroll wheel over the field, both of which
-          // bite on a table you scroll past.
-          type="text"
-          inputMode="decimal"
-          value={row.value}
-          onChange={(e) => onChange(row.id, { value: e.target.value })}
-          disabled={valueLocked}
-          // Enter chains straight into the next filter rather than submitting.
-          // Picking a stat and typing a number is one motion repeated, so the
-          // keyboard path has to complete the loop — otherwise every filter
-          // after the first costs a reach for the mouse. Submit is still a
-          // deliberate click; nothing here applies anything to the table.
-          onKeyDown={(e) => {
-            if (e.key === "Enter") { e.preventDefault(); onNext(); }
-          }}
-          // An en dash rather than " to ": same information, four fewer
-          // characters, which is the difference between the hint fitting and
-          // being clipped now that the box is narrower. A NEGATIVE lower bound
-          // is the exception — "-25–30" reads as one mangled number, so those
-          // spell the word out and accept the width.
-          placeholder={valueLocked ? "Pass" : hint}
-          title={
-            valueLocked
-              ? "Filtering on more columns is part of the Season Pass"
-              : bounds ? `Typical range: ${hint}` : undefined
-          }
-          aria-label={`Value for ${col?.label ?? row.stat}`}
-          className={cn(
-            "h-8 w-full rounded-md border border-ink/15 bg-card text-ink text-sm tabular",
-            "placeholder:text-ink-muted",
-            "focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40",
-            // Padding gives way before the type does — it costs the reader
-            // nothing and buys 8px, which is two characters at this size.
-            tight ? "px-1" : roomy ? "px-2" : "px-1.5",
-            // 0.5rem, not 0.55: MEASURED, not guessed. The input carries
-            // `tabular`, so the placeholder inherits fixed-width digits, and
-            // "-450 to 550" renders 58.1px against 55px of room at 0.55rem —
-            // clipped by three pixels, which is exactly the failure this is
-            // fixing. Re-measure with getComputedStyle(el, "::placeholder")
-            // if the bounds table or the box width ever changes.
-            tight ? "placeholder:text-[0.5rem]" : roomy ? "placeholder:text-[0.68rem]" : "placeholder:text-[0.56rem]",
-            // The % suffix sits inside the box, so it comes out of the same
-            // budget. Nothing needing the tight size is a percentage today,
-            // but the rule holds if that changes.
-            pct && (tight ? "pr-3.5" : "pr-5"),
-            valueLocked && "cursor-not-allowed border-dashed bg-paper-deep/40 placeholder:text-coral/70",
-          )}
-        />
-        {pct && !valueLocked && (
-          <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-ink-muted pointer-events-none">%</span>
-        )}
-      </div>
-
-      {/* A bin rather than a cross. An × between two filter rows reads as a
-          separator as easily as a control — which is what it looked like next
-          to the "×" the chips use for the same job — and this one deletes a
-          row the reader built rather than dismissing something. */}
-      <button
-        type="button"
-        onClick={() => onRemove(row.id)}
-        aria-label={`Delete ${col?.label ?? row.stat} filter`}
-        title="Delete this filter"
-        // MUTED RED AT REST, full on hover. The bin is the only destructive
-        // control in the row, and leaving it the same grey as the "%" suffix
-        // made it read as decoration; --bad rather than the coral accent
-        // because coral means "this is yours / this is active" everywhere else
-        // on the page, and it cannot also mean "this deletes something".
-        //
-        // -ml-1 eats most of the row's gap-1.5. A 24px box around a 14px icon
-        // put ~11px between the value box and the bin, which was enough to
-        // read as belonging to the NEXT filter rather than to this one.
-        className={cn(
-          "shrink-0 w-5 h-8 -ml-1 inline-flex items-center justify-center rounded-md transition-colors",
-          "text-bad/75 hover:text-bad hover:bg-bad/8",
-        )}
-      >
-        <Trash2 size={14} />
-      </button>
-    </div>
-  );
-}
+// FilterRow moved to src/components/filters/filter-row.tsx alongside the
+// picker. Same row; the label, the measured bounds and the is-a-percentage
+// flag are passed in rather than looked up from the team catalogue.
 
 // ---------------------------------------------------------------------------
 // The builder row
@@ -1172,6 +591,9 @@ export function TeamStatFilters({
         <FilterRow
           key={r.id}
           row={r}
+          label={teamStatColumn(r.stat)?.label ?? r.stat}
+          bounds={STAT_BOUNDS[r.stat]}
+          pct={isPctStat(r.stat)}
           autoFocus={r.id === freshId}
           onChange={patchRow}
           onRemove={removeRow}
@@ -1185,8 +607,11 @@ export function TeamStatFilters({
 
       <StatPicker
         mode="filter"
-        onPick={addFilter}
-        onSetColumns={setColumns}
+        options={PICK_OPTIONS}
+        groupLabel={GROUP_LABEL}
+        listId={PICKER_LIST_ID}
+        onPick={(k) => addFilter(k as TeamStatKey)}
+        onSetColumns={(keys) => setColumns(keys as TeamStatKey[])}
         current={pins}
         remaining={colCap - rows.length}
         disabled={atCap}
@@ -1198,8 +623,11 @@ export function TeamStatFilters({
           systems. */}
       <StatPicker
         mode="columns"
-        onPick={addFilter}
-        onSetColumns={setColumns}
+        options={PICK_OPTIONS}
+        groupLabel={GROUP_LABEL}
+        listId={`${PICKER_LIST_ID}-cols`}
+        onPick={(k) => addFilter(k as TeamStatKey)}
+        onSetColumns={(keys) => setColumns(keys as TeamStatKey[])}
         current={pins}
         remaining={colCap}
         open={colsPickerOpen}

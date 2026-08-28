@@ -9,7 +9,8 @@ import {
   RangeRow, isBoundActive, roundNice,
   type RangeStat, type RangeState,
 } from "@/components/filters/range-row";
-import { PACK_STAT_COLUMNS } from "@/lib/player-stat-pack";
+import { PACK_STAT_COLUMNS, PACK_STAT_BY_KEY } from "@/lib/player-stat-pack";
+import { type PickOption } from "@/components/filters/stat-picker";
 import { playerStatBounds } from "@/lib/player-stat-bounds";
 import { StatChipStrip, buildStatChips, type StatChip } from "@/components/filters/stat-chips";
 import { FilterGroup } from "@/components/filters/filter-group";
@@ -382,6 +383,27 @@ function buildRangeGroups(): RangeGroup[] {
 }
 
 const RANGE_GROUPS: RangeGroup[] = buildRangeGroups();
+
+/**
+ * The same stats again, shaped for the shared stat picker.
+ *
+ * Built from RANGE_GROUPS rather than from the catalogues a second time, so the
+ * picker and the drawer can never disagree about which stats exist or which
+ * section a stat lives in — the failure that would show up as a stat you can
+ * add from one door and cannot find in the other.
+ */
+export const PLAYER_PICK_OPTIONS: PickOption[] = RANGE_GROUPS.flatMap((g) =>
+  g.stats.map((st) => ({
+    key: st.key,
+    label: st.label,
+    desc: playerStatColumn(st.key)?.desc ?? PACK_STAT_BY_KEY.get(st.key)?.desc ?? "",
+    group: g.label,
+  })),
+);
+
+/** Section headings are already their own labels here, so this is the identity. */
+export const PLAYER_PICK_GROUP_LABEL: Record<string, string> =
+  Object.fromEntries(RANGE_GROUPS.map((g) => [g.label, g.label]));
 
 const ALL_RANGE_STATS: RangeStat[] = RANGE_GROUPS.flatMap((g) => g.stats);
 const RANGE_BY_KEY = new Map(ALL_RANGE_STATS.map((s) => [s.key, s]));

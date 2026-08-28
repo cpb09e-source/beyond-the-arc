@@ -13,6 +13,10 @@ import {
   DRAWER_SLOT_ID, PlayerFilterBar, PlayerStatFilters, statChipsFromSpec,
 } from "@/components/players/player-filter-bar";
 import { StatChipStrip } from "@/components/filters/stat-chips";
+import { StatPicker } from "@/components/filters/stat-picker";
+import {
+  PLAYER_PICK_OPTIONS, PLAYER_PICK_GROUP_LABEL,
+} from "@/components/players/player-filter-bar";
 import { ComparePlayersModal } from "@/components/players/compare-players-modal";
 import { SavedFiltersMenu } from "@/components/explorer/saved-filters-menu";
 import { DownloadMenu } from "@/components/explorer/download-menu";
@@ -41,7 +45,7 @@ import {
   type PlayerView,
 } from "@/lib/player-views";
 import {
-  PACK_STAT_BY_KEY, loadStatPack, type IndexedPack, type PackGroup,
+  PACK_STAT_BY_KEY, groupsFor, loadStatPack, type IndexedPack, type PackGroup,
 } from "@/lib/player-stat-pack";
 import { useDragPan } from "@/lib/use-drag-pan";
 import { useMeasuredWidth } from "@/lib/use-measured-width";
@@ -55,6 +59,15 @@ const LIMIT_OPTIONS = [50, 100, 250, 500];
  * is one boolean away from coming back.
  */
 const SHOW_COMPARE = false;
+
+/**
+ * Pinned-column ceiling.
+ *
+ * A URL-length limit rather than a plan one — the same reason the team
+ * explorer caps its own — and nothing on the players table is sold yet, so it
+ * applies to everybody equally.
+ */
+const MAX_PLAYER_COLS = 25;
 
 const CLASS_LABEL: Record<string, string> = {
   Fr: "Freshmen", So: "Sophomores", Jr: "Juniors", Sr: "Seniors", Gr: "Graduates",
@@ -344,7 +357,11 @@ function isBelowBaseline(p: PlayerSummary): boolean {
 // Filter-only pass (no sort/slice). Single loop, zero intermediate arrays — so
 // the live filter-count in the drawer (which only needs `.length`) doesn't pay
 // for a full O(n log n) sort of the pool on every slider tick.
-function filterSpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSummary[] {
+function filterSpec(
+  players: PlayerSummary[],
+  spec: PlayerListSpec,
+  packValue?: (p: PlayerSummary, key: string) => number | null,
+): PlayerSummary[] {
   const confSet = spec.conf.length ? new Set(spec.conf) : null;
   const teamSet = spec.teams.length ? new Set(spec.teams) : null;
   const clsSet = spec.cls.length ? new Set(spec.cls) : null;
@@ -365,9 +382,28 @@ function filterSpec(players: PlayerSummary[], spec: PlayerListSpec): PlayerSumma
       if (bucket === null || !posSet.has(bucket)) continue;
     }
     if ((p.games ?? 0) < spec.minGames) continue;
-    // Stat filters (AND-combined). gt/gte/lt/lte against a PlayerSummary field.
+    // Stat filters, AND-combined.
+    //
+    // A stat lives on PlayerSummary or in a pack, and a filter must work on
+    // either. passesPlayerFilter returns TRUE for a key it does not recognise —
+    // a deliberate "unknown filter does not narrow" — which for a pack stat
+    // meant the filter silently did nothing at all. So pack keys are resolved
+    // here, against the same values the table shows.
     let ok = true;
     for (const f of spec.filters) {
+      const pack = PACK_STAT_BY_KEY.has(f.stat) && !playerStatColumn(f.stat);
+      if (pack) {
+        const v = packValue ? packValue(p, f.stat) : null;
+        // Null fails, matching passesPlayerFilter: a filter is a claim about a
+        // number, and a row with no number cannot support it.
+        if (v === null) { ok = false; break; }
+        const pass = f.op === "gt" ? v > f.value
+          : f.op === "gte" ? v >= f.value
+          : f.op === "lt" ? v < f.value
+          : v <= f.value;
+        if (!pass) { ok = false; break; }
+        continue;
+      }
       if (!passesPlayerFilter(p, f)) { ok = false; break; }
     }
     if (!ok) continue;
@@ -420,7 +456,7 @@ function applySpec(
   spec: PlayerListSpec,
   packValue?: (p: PlayerSummary, key: string) => number | null,
 ): PlayerSummary[] {
-  const out = filterSpec(players, spec);
+  const out = filterSpec(players, spec, packValue);
 
   /**
    * Resolve the sort key against all three vocabularies, in the order a key is
@@ -519,7 +555,19 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
    * a season already fetched is never fetched twice.
    */
   const [packs, setPacks] = useState<Map<string, IndexedPack>>(new Map());
-  const neededGroups = useMemo(() => playerViewPackGroups(view), [view]);
+  /**
+   * The pack files this render needs: the view's, plus any the reader has
+   * PINNED or filtered on.
+   *
+   * Reading the view alone was not enough — a pinned stat from another group
+   * rendered as a dash, and a filter on one silently matched nothing, because
+   * the file holding its values had never been asked for.
+   */
+  const neededGroups = useMemo(() => {
+    const out = new Set<PackGroup>(playerViewPackGroups(view));
+    for (const g of groupsFor([...spec.cols, ...spec.filters.map((f) => f.stat)])) out.add(g);
+    return [...out];
+  }, [view, spec.cols, spec.filters]);
 
   useEffect(() => {
     const want: Array<[number, PackGroup]> = [];
@@ -610,6 +658,8 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [compareOpen, setCompareOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [colsPickerOpen, setColsPickerOpen] = useState(false);
 
   // ── Saved filters ───────────────────────────────────────────────────────
   //
@@ -968,8 +1018,8 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   // panel can show a running count as the user builds filters — before Apply.
   const previewCount = useMemo(
     () => (filters: PlayerStatFilter[]) =>
-      filterSpec(transformed, { ...spec, filters }).length,
-    [transformed, spec],
+      filterSpec(transformed, { ...spec, filters }, packValue).length,
+    [transformed, spec, packValue],
   );
   const { players, count, totalPages, pageSafe } = useMemo(() => {
     // 3-char minimum on search — single-letter "L" matches thousands and
@@ -1020,8 +1070,27 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     const out: GridCol[] = [];
     const add = (key: string, allowDuplicate: boolean) => {
       const col = PLAYER_STAT_COLUMNS.find((c) => c.key === key);
+      if (!col) {
+        // A PINNED STAT FROM THE PACK. Without this branch the picker could
+        // commit ?cols=pitp_share and the table would show nothing for it —
+        // the URL said one thing and the page another.
+        const pack = PACK_STAT_BY_KEY.get(key);
+        if (!pack || seen.has(pack.key)) return;
+        if (!allowDuplicate && viewFields.has(pack.key)) return;
+        seen.add(pack.key);
+        out.push({
+          label: pack.label,
+          packKey: pack.key,
+          fmt: pack.format,
+          pct: null,
+          noPct: pack.noPct,
+          sortKey: pack.key,
+          desc: pack.desc,
+        });
+        return;
+      }
       // filterOnly stats (shooting profile) never become grid columns.
-      if (!col || col.filterOnly || seen.has(col.field as string)) return;
+      if (col.filterOnly || seen.has(col.field as string)) return;
       // An EXPLICIT tick renders even when the stat is already a default
       // column — same rule as the team explorer, and without it ticking
       // something like PPG would appear to do nothing at all. The legacy
@@ -1150,6 +1219,44 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               max={6}
               onOverflow={() => setFiltersOpen(true)}
               ariaLabel="Applied columns and filters"
+            />
+            {/* TWO DOORS INTO ONE LIST, the same pair the team explorer has and
+                the same component behind them.
+                Adapted in one place, because a player filter is a RANGE rather
+                than a single comparison: there is no value box for the caret to
+                land in, so the filter door pins the stat and opens the drawer
+                at its slider. The reader still gets one gesture from "I want to
+                bound this" to being able to bound it. */}
+            <StatPicker
+              mode="filter"
+              options={PLAYER_PICK_OPTIONS}
+              groupLabel={PLAYER_PICK_GROUP_LABEL}
+              listId="player-filters-picker"
+              alwaysFree
+              onPick={(key) => {
+                updateSpec({ ...spec, cols: spec.cols.includes(key) ? spec.cols : [...spec.cols, key] });
+                setFiltersOpen(true);
+              }}
+              onSetColumns={(keys) => updateSpec({ ...spec, cols: keys })}
+              current={spec.cols}
+              remaining={MAX_PLAYER_COLS - spec.cols.length}
+              open={pickerOpen}
+              setOpen={setPickerOpen}
+            />
+            <StatPicker
+              mode="columns"
+              options={PLAYER_PICK_OPTIONS}
+              groupLabel={PLAYER_PICK_GROUP_LABEL}
+              listId="player-columns-picker"
+              alwaysFree
+              onPick={(key) => {
+                updateSpec({ ...spec, cols: spec.cols.includes(key) ? spec.cols : [...spec.cols, key] });
+              }}
+              onSetColumns={(keys) => updateSpec({ ...spec, cols: keys })}
+              current={spec.cols}
+              remaining={MAX_PLAYER_COLS}
+              open={colsPickerOpen}
+              setOpen={setColsPickerOpen}
             />
           </div>
           {/* `w-auto`, not `w-full sm:w-auto`: full width forced this group onto
