@@ -172,6 +172,19 @@ const BATCHES: Array<{ confirmed: string; moves: Array<[string, string]> }> = [
       ["Efrem Johnson", "Virginia Tech"],
     ],
   },
+  {
+    confirmed: "2026-08-28T00:00:00",
+    moves: [
+      // Ole Miss is "Mississippi" in the Bart naming, as above.
+      ["Micah Handlogten", "Mississippi"],
+      // The corpus has him as "Tre Holloman" from 2024 on; a "Trejuan
+      // Holloman" also exists on 2023 and is the same player under his full
+      // name, so the short form is what resolves to one id here.
+      ["Tre Holloman", "Grand Canyon"],
+      // Same shape: "Daniel Skillings" on 2023, "Dan Skillings Jr." from 2024.
+      ["Dan Skillings Jr.", "Grand Canyon"],
+    ],
+  },
 ];
 
 const MOVES: Array<[string, string, string]> = BATCHES.flatMap(

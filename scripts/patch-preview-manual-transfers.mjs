@@ -119,6 +119,10 @@ const MOVES = [
   ["Xaivian Lee", "Gonzaga"],
   // "Butta" Johnson in the wild; Efrem in the corpus, which is what matches.
   ["Efrem Johnson", "Virginia Tech"],
+  // 2026-08-28
+  ["Micah Handlogten", "Mississippi"],
+  ["Tre Holloman", "Grand Canyon"],
+  ["Dan Skillings Jr.", "Grand Canyon"],
 ];
 
 /** Common shorthand → the name season-preview.json uses. */
