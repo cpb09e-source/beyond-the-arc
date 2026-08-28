@@ -49,6 +49,24 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+  # The paid seasons travel INSIDE the function bundle, not in `out/`.
+  # Netlify publishes `out/` as the website and would serve anything in it to
+  # anyone; included_files puts these on the function's own filesystem, where
+  # no URL reaches them. scripts/stage-gated-data.mjs writes this directory
+  # during the build and deletes the same files from out/ — see that script
+  # for why both halves are required.
+  #
+  # Harmless when the paywall is off: the directory is empty and the glob
+  # simply matches nothing.
+  included_files = ["gated-data/**"]
+
+# A readable path for the gated-season endpoint. status 200 is a rewrite
+# rather than a redirect, so the browser's Authorization header survives —
+# a 30x would drop it and every subscriber would look signed out.
+[[redirects]]
+  from   = "/api/season/*"
+  to     = "/.netlify/functions/season/:splat"
+  status = 200
 
 # THIS BLOCK NO LONGER DRIVES `npm run dev`. It is kept only for
 # `npm run dev:netlify`, an escape hatch for reproducing Netlify's own routing.

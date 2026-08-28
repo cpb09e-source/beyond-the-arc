@@ -4,7 +4,8 @@ import { useMemo, useState, useEffect, useRef, useCallback, useTransition } from
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { dataUrl } from "@/lib/data-url";
+import { Lock } from "lucide-react";
+import { loadSeason, type SeasonDenial } from "@/lib/season-data";
 import {
   parseSpec,
   processTeams,
@@ -281,6 +282,14 @@ export function ExplorerClient({
     () => ({ [latestYear]: initialTeams }),
   );
   const [loadingYears, setLoadingYears] = useState<number[]>([]);
+  /**
+   * Seasons that came back refused rather than empty.
+   *
+   * Kept separately from the rows because "no teams matched" and "these rows
+   * are part of the Season Pass" look identical in a table and mean opposite
+   * things — one is a filter to loosen, the other is a sign-in.
+   */
+  const [deniedYears, setDeniedYears] = useState<Record<number, SeasonDenial>>({});
   // Years already requested, so a re-render mid-flight cannot fire a second
   // fetch for the same file. A ref rather than state: it must be updated
   // synchronously, before the effect can run again.
@@ -293,19 +302,25 @@ export function ExplorerClient({
     if (missing.length === 0) return;
     for (const y of missing) requested.current.add(y);
     setLoadingYears((prev) => [...prev, ...missing]);
+    // loadSeason resolves either way — a refusal is a result, not a rejection,
+    // so one gated year narrows the table and explains itself rather than
+    // blanking the page.
     Promise.all(
       missing.map((y) =>
-        fetch(dataUrl(`/data/teams-by-year/${y}.json`))
-          .then((r) => (r.ok ? r.json() : []))
-          // A failed season resolves to no rows rather than rejecting: one bad
-          // year should narrow the table, not blank the page.
-          .catch(() => [])
-          .then((rows: RawTeamSeason[]) => [y, rows] as const),
+        loadSeason<RawTeamSeason>(y).then((res) => [y, res] as const),
       ),
     ).then((pairs) => {
       setRowsByYear((prev) => {
         const next = { ...prev };
-        for (const [y, rows] of pairs) next[y] = rows;
+        for (const [y, res] of pairs) next[y] = res.ok ? res.rows : [];
+        return next;
+      });
+      setDeniedYears((prev) => {
+        const next = { ...prev };
+        for (const [y, res] of pairs) {
+          if (res.ok) delete next[y];
+          else next[y] = res.denial;
+        }
         return next;
       });
       setLoadingYears((prev) => prev.filter((y) => !missing.includes(y)));
@@ -320,6 +335,29 @@ export function ExplorerClient({
     [spec.years, rowsByYear],
   );
   const loadingSeasons = loadingYears.length > 0;
+
+  /**
+   * One line covering however many seasons were refused, and the single most
+   * useful thing to do about it.
+   *
+   * Signed-out wins over not-subscribed when both appear: signing in is the
+   * cheaper action and may resolve the other by itself.
+   */
+  const seasonNotice = useMemo(() => {
+    const years = Object.keys(deniedYears).map(Number).filter((y) => spec.years.includes(y));
+    if (years.length === 0) return null;
+    const reasons = new Set(years.map((y) => deniedYears[y]!));
+    const label = years.length === 1
+      ? `${seasonLabel(years[0]!)} is`
+      : `${years.length} seasons are`;
+    if (reasons.has("signed-out")) {
+      return { text: `${label} part of the Season Pass.`, cta: "Sign in", href: "/account/login" };
+    }
+    if (reasons.has("not-subscribed")) {
+      return { text: `${label} part of the Season Pass.`, cta: "See plans", href: "/pricing" };
+    }
+    return { text: `${label} unavailable right now.`, cta: "Retry", href: "/" };
+  }, [deniedYears, spec.years]);
 
   // Toolbar read-out of the COMMITTED selection (the panel's own strip tracks
   // the uncommitted draft). Removing here is immediate — there is no Submit on
@@ -829,6 +867,22 @@ export function ExplorerClient({
                   that were the answer. */}
               {loadingSeasons && <span className="ml-1.5 text-coral">· loading season…</span>}
             </span>
+
+            {/* A gated season, said out loud. Without this the table is simply
+                short, and a subscriber whose token expired sees the same thing
+                as a reader who filtered too hard. */}
+            {seasonNotice && (
+              <span className="inline-flex items-center gap-1.5 text-xs whitespace-nowrap">
+                <Lock size={11} className="text-coral shrink-0" />
+                <span className="text-ink-soft">{seasonNotice.text}</span>
+                <Link
+                  href={seasonNotice.href}
+                  className="text-coral hover:underline font-medium"
+                >
+                  {seasonNotice.cta}
+                </Link>
+              </span>
+            )}
 
             {/* Desktop home for the rankings link: immediately after the count.
                 Both are statements about the same set of teams — "100 of 365,

@@ -20,7 +20,7 @@
  * subdirs.
  */
 import { rm } from "node:fs/promises";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 
 const ROOT = process.cwd();
@@ -200,6 +200,14 @@ async function main() {
       console.warn(`   could not strip ${d}: ${e.message}`);
     }
   }
+
+  // The paywall, last: it deletes the paid seasons from out/ and stages them
+  // for the function bundle. It runs AFTER the strips so nothing can put a
+  // gated file back, and it exits non-zero if a paid season is still
+  // published — a paywall that silently does not hold is worse than none.
+  console.log("");
+  const gate = spawnSync(process.execPath, [path.join(ROOT, "scripts/stage-gated-data.mjs")], { stdio: "inherit" });
+  if (gate.status !== 0) throw new Error("stage-gated-data.mjs failed — refusing to finish the build");
 
   console.log(`\n✓ Stripped ${stripped}/${STRIP_DIRS.length} R2 dirs. Build complete.`);
 }
