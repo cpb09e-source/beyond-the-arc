@@ -9,6 +9,8 @@ import {
   RangeRow, isBoundActive, roundNice,
   type RangeStat, type RangeState,
 } from "@/components/filters/range-row";
+import { PACK_STAT_COLUMNS } from "@/lib/player-stat-pack";
+import { playerStatBounds } from "@/lib/player-stat-bounds";
 import { StatChipStrip, buildStatChips, type StatChip } from "@/components/filters/stat-chips";
 import { FilterGroup } from "@/components/filters/filter-group";
 import { confDisplay } from "@/lib/conf-display";
@@ -19,6 +21,7 @@ import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-se
 import { type SearchableOption } from "@/components/explorer/searchable-select";
 import {
   DEFAULT_PLAYER_SPEC,
+  PLAYER_STAT_COLUMNS,
   parsePlayerSpec,
   playerSpecToParams,
   playerStatColumn,
@@ -253,79 +256,6 @@ function QuickField({ label, children }: { label: string; children: React.ReactN
 // stored as fractions in the URL but shown/edited as whole percent here.
 type RangeGroup = { label: string; stats: RangeStat[] };
 
-const RANGE_GROUPS_RAW: RangeGroup[] = [
-  {
-    label: "Estimated +/-",
-    stats: [
-      { key: "epm",     label: "Estimated Plus-Minus",  min: -12, max: 12, step: 0.1 },
-      { key: "off_epm", label: "Offensive EPM",         min: -12, max: 12, step: 0.1 },
-      { key: "def_epm", label: "Defensive EPM",         min: -8,  max: 8,  step: 0.1 },
-      { key: "ewins",   label: "eWins",                 min: -1,  max: 12, step: 0.1 },
-      { key: "on_off",  label: "On / Off (net)",        min: -40, max: 40, step: 0.5 },
-    ],
-  },
-  {
-    label: "Role",
-    stats: [
-      { key: "mpg",     label: "Minutes per game",      min: 0, max: 40, step: 1 },
-      { key: "usg_pct", label: "Usage",                 min: 0, max: 60, step: 1, pct: true },
-      { key: "gp",      label: "Games played",          min: 0, max: 40, step: 1 },
-    ],
-  },
-  {
-    label: "Scoring",
-    stats: [
-      { key: "ppg",    label: "Points per game",        min: 0, max: 40, step: 0.5 },
-      { key: "apg",    label: "Assists per game",       min: 0, max: 14, step: 0.5 },
-      { key: "tov_pg", label: "Turnovers per game",     min: 0, max: 7,  step: 0.1 },
-      { key: "tov_pct", label: "Turnover rate",          min: 0, max: 40, step: 0.5, pct: true },
-      { key: "pir",    label: "PIR",                    min: 0, max: 40, step: 0.5 },
-    ],
-  },
-  {
-    label: "Shooting",
-    stats: [
-      { key: "ts_pct",  label: "True shooting",         min: 0, max: 100, step: 1, pct: true },
-      { key: "fg_pct",  label: "Field goal",            min: 0, max: 100, step: 1, pct: true },
-      { key: "fg3_pct", label: "3-point",               min: 0, max: 100, step: 1, pct: true },
-      { key: "ft_pct",  label: "Free throw",            min: 0, max: 100, step: 1, pct: true },
-    ],
-  },
-  {
-    // Shooting profile (CBBD) — values already 0–100, so NOT pct (no /100).
-    label: "Shot profile",
-    stats: [
-      { key: "rim_pct",  label: "Rim FG %",              min: 0, max: 100, step: 1 },
-      { key: "mid_pct",  label: "Mid FG %",              min: 0, max: 100, step: 1 },
-      { key: "asst_pct", label: "Assisted %",            min: 0, max: 100, step: 1 },
-      { key: "rim_rate", label: "Rim shot rate %",       min: 0, max: 100, step: 1 },
-      { key: "tp_rate",  label: "3PT shot rate %",       min: 0, max: 100, step: 1 },
-    ],
-  },
-  {
-    label: "Rebounding",
-    stats: [
-      { key: "rpg",  label: "Rebounds per game",        min: 0, max: 20, step: 0.5 },
-      { key: "orpg", label: "Off reb per game",         min: 0, max: 7,  step: 0.1 },
-      { key: "drpg", label: "Def reb per game",         min: 0, max: 13, step: 0.1 },
-    ],
-  },
-  {
-    label: "Defense",
-    stats: [
-      { key: "spg", label: "Steals per game",           min: 0, max: 4,  step: 0.1 },
-      { key: "bpg", label: "Blocks per game",           min: 0, max: 5,  step: 0.1 },
-      { key: "hkm", label: "Hakeem % (BLK + STL)",      min: 0, max: 15, step: 0.5 },
-    ],
-  },
-  {
-    label: "Playmaking",
-    stats: [
-      { key: "net_rtg", label: "Net rating",            min: -60, max: 60, step: 1 },
-      { key: "ast_tov", label: "Assist : turnover",     min: 0,   max: 8,  step: 0.1 },
-    ],
-  },
-];
 
 /**
  * "Minutes per game" → "Minutes Per Game", without wrecking the acronyms.
@@ -341,13 +271,117 @@ function titleCase(label: string): string {
     .join(" ");
 }
 
-// Title-cased once here rather than in RangeRow, which the teams explorer also
-// renders — this is the players drawer's house style, not a change to the
-// shared row.
-const RANGE_GROUPS: RangeGroup[] = RANGE_GROUPS_RAW.map((g) => ({
-  ...g,
-  stats: g.stats.map((s) => ({ ...s, label: titleCase(s.label) })),
-}));
+/**
+ * EVERY filterable stat, grouped, with MEASURED bounds.
+ *
+ * This drawer used to offer thirty stats with hand-written min/max — "rebounds
+ * per game, 0 to 20" — chosen by eye. Two things made that untenable: the
+ * catalogue is now 137 stats across two sources, and a guessed bound is not
+ * neutral. It is the range the slider spans and the hint the reader is told a
+ * normal value looks like, so a wrong one quietly misinforms.
+ *
+ * Bounds come from src/lib/player-stat-bounds.ts — the 1st and 99th percentile
+ * of the real distribution across every player-season the site holds, generated
+ * by scripts/build-player-stat-bounds.mts. Same method as the team explorer.
+ */
+const PCT_FRACTION_KEYS = new Set([
+  "fg_pct", "fg3_pct", "fg2_pct", "ft_pct", "ts_pct", "efg_pct", "fta_rate",
+  "tov_pct", "usg_pct", "win_pct", "pitp_share", "scp_share", "fbp_share",
+  "pts2_share", "pts3_share", "ptsft_share", "ftm_rate", "blkd_fga", "rts_pct",
+]);
+
+/**
+ * Step size from the SPAN, not the magnitude.
+ *
+ * A stat running 0 to 4 needs twentieths; one running 0 to 900 needs fives.
+ * Deriving it from the measured range means a stat added later gets a usable
+ * slider without anyone picking a number for it.
+ */
+function stepFor(min: number, max: number): number {
+  const span = Math.abs(max - min);
+  if (span <= 3) return 0.05;
+  if (span <= 10) return 0.1;
+  if (span <= 40) return 0.5;
+  if (span <= 200) return 1;
+  if (span <= 1000) return 5;
+  return 10;
+}
+
+/**
+ * Section headings, in the order the drawer shows them.
+ *
+ * The two catalogues group their stats on different principles — PlayerSummary
+ * by concept, the pack by which file it ships in — so both are mapped onto one
+ * set of headings a reader can scan. Anything unmapped lands in Other rather
+ * than being dropped, so a stat can never go missing by being forgotten here.
+ */
+const SECTION_ORDER: string[] = [
+  "Impact", "Playing Time", "Scoring", "Shooting", "Shot Profile",
+  "Rebounding", "Playmaking", "Defense", "Fouls", "Scoring Context",
+  "Milestones", "Game Leaders", "Player Info", "Other",
+];
+
+const SUMMARY_SECTION: Record<string, string> = {
+  impact: "Impact", advanced: "Impact", offense: "Scoring",
+  shooting: "Shooting", defense: "Defense", volume: "Playing Time",
+};
+const PACK_SECTION: Record<string, string> = {
+  info: "Player Info", playtime: "Playing Time", box: "Scoring",
+  shooting: "Shooting", context: "Scoring Context", advoff: "Playmaking",
+  advdef: "Defense", fouls: "Fouls", doubles: "Milestones", leaders: "Game Leaders",
+};
+
+/** Stats that belong under a heading their catalogue group would not give them. */
+const SECTION_OVERRIDE: Record<string, string> = {
+  rim_pct: "Shot Profile", mid_pct: "Shot Profile", asst_pct: "Shot Profile",
+  rim_rate: "Shot Profile", tp_rate: "Shot Profile",
+  orpg: "Rebounding", drpg: "Rebounding", rpg: "Rebounding",
+  orb: "Rebounding", drb: "Rebounding", reb: "Rebounding",
+  orb_40: "Rebounding", drb_40: "Rebounding", reb_40: "Rebounding",
+  orb_pct: "Rebounding", drb_pct: "Rebounding", reb_pct: "Rebounding",
+  self_orb_pct: "Rebounding",
+  apg: "Playmaking", ast: "Playmaking", ast_40: "Playmaking",
+  tov_pg: "Playmaking", tov: "Playmaking", tov_40: "Playmaking",
+  tov_pct: "Playmaking", ast_tov: "Playmaking",
+  spg: "Defense", bpg: "Defense", stl: "Defense", blk: "Defense",
+  stl_40: "Defense", blk_40: "Defense", hkm: "Defense",
+  pf: "Fouls", pf_40: "Fouls", pf_pg: "Fouls", tech: "Fouls",
+  fouled_out: "Fouls", pf_eff: "Fouls", blk_pf: "Fouls", stl_pf: "Fouls",
+  gp: "Playing Time", mpg: "Playing Time", gs: "Playing Time", min: "Playing Time",
+};
+
+function buildRangeGroups(): RangeGroup[] {
+  const bySection = new Map<string, RangeStat[]>();
+  const seen = new Set<string>();
+  const add = (key: string, label: string, group: string, fromPack: boolean) => {
+    // The summary catalogue wins on a shared key (`gp` is in both), so a filter
+    // always matches the column the table is already showing.
+    if (seen.has(key)) return;
+    seen.add(key);
+    const measured = playerStatBounds(key);
+    // A stat with no measured bound still gets offered — it just gets a wide
+    // default rather than a fabricated tight one.
+    const [min, max] = measured ?? [0, 100];
+    const section = SECTION_OVERRIDE[key]
+      ?? (fromPack ? PACK_SECTION[group] : SUMMARY_SECTION[group])
+      ?? "Other";
+    const stat: RangeStat = {
+      key, label: titleCase(label), min, max,
+      step: stepFor(min, max), pct: PCT_FRACTION_KEYS.has(key),
+    };
+    const list = bySection.get(section);
+    if (list) list.push(stat); else bySection.set(section, [stat]);
+  };
+
+  for (const c of PLAYER_STAT_COLUMNS) add(c.key, c.label, c.group, false);
+  for (const c of PACK_STAT_COLUMNS) add(c.key, c.label, c.group, true);
+
+  return SECTION_ORDER
+    .filter((g) => bySection.has(g))
+    .map((g) => ({ label: g, stats: bySection.get(g)! }));
+}
+
+const RANGE_GROUPS: RangeGroup[] = buildRangeGroups();
 
 const ALL_RANGE_STATS: RangeStat[] = RANGE_GROUPS.flatMap((g) => g.stats);
 const RANGE_BY_KEY = new Map(ALL_RANGE_STATS.map((s) => [s.key, s]));
