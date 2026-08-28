@@ -351,10 +351,13 @@ export function ConferencesClient() {
                       title={`${r.kept} of ${r.teams} teams${r.dropped.length ? ` · dropped ${r.dropped.join(", ")}` : ""}`}
                     >
                       <span className="inline-flex items-center gap-2 min-w-0">
-                        {/* 22, not 18. Half these marks are wordmarks rather than shields -
-                            Ivy, C-USA, WAC - and at 18 they were a smudge that
-                            carried no information. */}
-                        <ConferenceLogo conf={r.conf} size={22} />
+                        {/* 28. Half these marks are wordmarks rather than shields -
+                            Ivy, C-USA, WAC - so they need real width before
+                            they read as anything; at 18 they were a smudge.
+                            The rows are already two lines tall (value over
+                            percentile chip), so this costs no height, and the
+                            files are 128px so it costs no sharpness either. */}
+                        <ConferenceLogo conf={r.conf} size={28} />
                         {confDisplay(r.conf) || r.conf}
                       </span>
                     </td>
