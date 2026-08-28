@@ -29,6 +29,7 @@ import { SortableTh } from "@/components/explorer/sortable-th";
 import { MultiYearSelect } from "@/components/explorer/multi-year-select";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
 import { confDisplay } from "@/lib/conf-display";
+import { POWER_CONFS } from "@/lib/conf-tiers";
 import { ConferenceLogo } from "@/components/conferences/conference-logo";
 import {
   CONF_VIEWS, confViewByKey, confViewCols, type ConfCol,
@@ -201,14 +202,26 @@ export function ConferencesClient() {
     return picked;
   }, [cohort, spec.confs, spec.sortBy, spec.sortDir]);
 
-  /** Conference options come from the seasons on screen, so a defunct league
-   *  only offers itself where it existed. */
+  /**
+   * Conference options, POWER FIRST, from the seasons on screen — so a
+   * defunct league only offers itself where it existed, and the Pac-12 shows
+   * up under Power for the seasons it was one.
+   *
+   * The tier split is POWER_CONFS, the same set /portal and the /coaches Tier
+   * filter use, so "power" means one thing on this site. It is a fixed set
+   * rather than a per-season judgement: the Big East is in it on the strength
+   * of the whole 2014-26 window, and re-deciding that year by year would make
+   * the header move under the reader for no gain.
+   *
+   * Sections render in the order the groups first appear, so the sort has to
+   * put every power conference ahead of every other one.
+   */
   const confOptions = useMemo(() => {
     const seen = new Map<string, string>();
     for (const r of cohort) if (!seen.has(r.conf)) seen.set(r.conf, confDisplay(r.conf) || r.conf);
     return [...seen.entries()]
-      .map(([value, label]) => ({ value, label }))
-      .sort((a, b) => a.label.localeCompare(b.label));
+      .map(([value, label]) => ({ value, label, group: POWER_CONFS.has(value) ? "power" : "mid" }))
+      .sort((a, b) => (a.group === b.group ? a.label.localeCompare(b.label) : a.group === "power" ? -1 : 1));
   }, [cohort]);
 
   const multiYear = spec.years.length > 1;
@@ -252,6 +265,7 @@ export function ConferencesClient() {
             onChange={(confs) => update({ confs })}
             emptyLabel="All"
             ariaLabel="Conferences"
+            groupLabels={{ power: "Power", mid: "Mid Major" }}
             className="w-36"
           />
         </label>
