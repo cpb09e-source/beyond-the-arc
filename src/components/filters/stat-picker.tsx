@@ -137,12 +137,27 @@ export function StatPicker({
   useEffect(() => {
     if (!open) return;
     place();
-    inputRef.current?.focus();
+    /**
+     * THE CARET GOES TO THE SEARCH BOX, on a frame boundary.
+     *
+     * Focusing straight from the effect lost the race: the trigger is a
+     * button, so the browser focuses it as part of finishing the click that
+     * opened the popover, and it did so after this ran. The picker opened with
+     * the focus still on "Add Columns", where typing did nothing and Tab left
+     * the list entirely.
+     */
+    // A TIMEOUT, NOT A FRAME. The browser focuses the trigger as part of
+    // finishing the click that opened this, and on a real pointer click that
+    // lands AFTER the next animation frame — so a rAF handed the focus over
+    // and the browser took it straight back. A macrotask runs after the whole
+    // click sequence has settled.
+    const t = setTimeout(() => inputRef.current?.focus(), 0);
     // `true` to catch scrolls on inner containers, which do not bubble a
     // scroll event to window.
     window.addEventListener("scroll", place, true);
     window.addEventListener("resize", place);
     return () => {
+      clearTimeout(t);
       window.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
@@ -176,6 +191,7 @@ export function StatPicker({
    * the current closure.
    */
   const enterRef = useRef<() => void>(() => {});
+  const arrowRef = useRef<(delta: number) => void>(() => {});
 
   // Click-away and Escape. The popover is no longer a DOM descendant of the
   // trigger, so the away-test has to clear BOTH nodes or every click inside the
@@ -193,14 +209,24 @@ export function StatPicker({
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") { e.stopPropagation(); discard(); setOpen(false); return; }
-      // Enter anywhere in the popover commits — including with focus parked on
-      // an option the mouse just ticked, which is the common case.
-      if (e.key !== "Enter") return;
+      if (e.key !== "Enter" && e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
       const t = e.target as Node;
       if (!wrapRef.current?.contains(t) && !popRef.current?.contains(t)) return;
       e.preventDefault();
       e.stopPropagation();
-      enterRef.current();
+      // Enter anywhere in the popover acts — including with focus parked on an
+      // option the mouse just ticked, which is the common case.
+      if (e.key === "Enter") { enterRef.current(); return; }
+      /**
+       * ARROWS TOO, and for the same reason.
+       *
+       * They used to be bound to the search box alone, so tabbing into the
+       * list left the reader with a focused option and no way to move off it.
+       * Now the highlight moves wherever the focus is — and when the focus IS
+       * on an option, it follows the highlight, so the ring the reader is
+       * watching is the row that Enter will act on.
+       */
+      arrowRef.current(e.key === "ArrowDown" ? 1 : -1);
     };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey, true);
@@ -270,6 +296,21 @@ export function StatPicker({
   const atCapNow = marked.length >= remaining;
 
   /**
+   * Commit the ticked set, unconditionally.
+   *
+   * Separate from the Enter handler because the button in the footer must
+   * always mean "done" — Enter has a second job (ticking the highlighted row),
+   * and a button that sometimes ticked instead of closing would be unusable.
+   */
+  const commitColumns = useCallback(() => {
+    // Nothing ticked closes without changing anything, rather than committing
+    // an empty set over the reader's existing columns.
+    if (!marked.length) { setOpen(false); return; }
+    onSetColumns(marked);
+    setMarked([]); setQ(""); setHi(0); setOpen(false);
+  }, [marked, onSetColumns, setOpen]);
+
+  /**
    * What Enter does. Pulled out of the input's handler because it must not
    * depend on where the caret is.
    *
@@ -289,25 +330,50 @@ export function StatPicker({
       }
       return;
     }
-    // Columns: Enter with nothing ticked still takes the highlighted row, so
-    // the keyboard path never needs the mouse. That tick is not in state yet,
-    // so the set is read from the list rather than from `marked`.
-    const keys = marked.length
-      ? marked
-      : matches[hiSafe] ? [...current, matches[hiSafe]!.key] : [];
-    onSetColumns(keys);
-    setMarked([]); setQ(""); setHi(0); setOpen(false);
-  }, [mode, matches, hiSafe, marked, current, onPick, onSetColumns, setOpen]);
+    /**
+     * COLUMNS: THE FIRST ENTER TICKS, THE SECOND COMMITS.
+     *
+     * This door selects a SET, so a single Enter cannot mean both "I want this
+     * one" and "I am done" — under the old rule the first Enter closed the
+     * picker, which made picking five stats by keyboard impossible.
+     *
+     * So Enter on a row that is not ticked ticks it and stays open; Enter on a
+     * row that is already ticked commits everything. Arrow to the next stat,
+     * Enter, arrow, Enter, then Enter again where you are: five stats without
+     * touching the mouse, and the second press is only ever needed once.
+     */
+    const hit = matches[hiSafe];
+    if (hit && !marked.includes(hit.key)) {
+      // Respect the cap the same way clicking does.
+      if (marked.length < remaining) setMarked((m) => [...m, hit.key]);
+      return;
+    }
+    commitColumns();
+  }, [mode, matches, hiSafe, marked, remaining, onPick, setOpen, commitColumns]);
 
-  // Keep the ref pointing at the current closure. In an effect rather than
+  /**
+   * Move the highlight, and take the focus with it when the focus is already
+   * on an option. Typing-then-arrowing keeps the caret in the search box,
+   * which is what a reader mid-search expects.
+   */
+  const moveHighlight = useCallback((delta: number) => {
+    if (!matches.length) return;
+    const next = Math.min(Math.max(hiSafe + delta, 0), matches.length - 1);
+    setHi(next);
+    const active = document.activeElement;
+    const onOption = active instanceof HTMLElement && active.getAttribute("role") === "option";
+    if (onOption) {
+      listRef.current?.querySelector<HTMLElement>(`[data-idx="${next}"]`)?.focus();
+    }
+  }, [matches.length, hiSafe]);
+
+  // Keep the refs pointing at the current closures. In an effect rather than
   // during render, which is where a ref may be written.
   useEffect(() => { enterRef.current = commitOnEnter; }, [commitOnEnter]);
+  useEffect(() => { arrowRef.current = moveHighlight; }, [moveHighlight]);
 
-  const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowDown") { e.preventDefault(); setHi((h) => Math.min(h + 1, matches.length - 1)); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setHi((h) => Math.max(h - 1, 0)); }
-    // Enter is handled once, at the document level — see the effect above.
-  };
+  // Arrows and Enter are both handled once, at the document level, so the
+  // search box needs no key handler of its own.
 
   // Section headers render only while browsing. Under a search the list is
   // ranked by match quality, so group headings would break the order into
@@ -352,7 +418,6 @@ export function StatPicker({
               type="text"
               value={q}
               onChange={(e) => { setQ(e.target.value); setHi(0); }}
-              onKeyDown={onKey}
               placeholder={mode === "filter" ? "Search stats…" : "Search columns…"}
               aria-label="Search stats"
               role="combobox"
@@ -381,6 +446,13 @@ export function StatPicker({
                     role="option"
                     data-idx={i}
                     aria-selected={i === hiSafe}
+                    /* ROVING TABINDEX. Every option is a button, so without
+                       this Tab walks through all 142 of them one press at a
+                       time. Exactly one is tabbable — the highlighted one — so
+                       Tab out of the search box lands on the row the reader is
+                       already looking at, and Shift+Tab leaves the list in one
+                       press. */
+                    tabIndex={i === hiSafe ? 0 : -1}
                     // onMouseDown, not onClick: the input keeps focus so the
                     // next stat can be typed straight away.
                     onMouseDown={(e) => { e.preventDefault(); choose(o); }}
@@ -456,10 +528,25 @@ export function StatPicker({
                 <span className="font-medium text-coral">{marked.length}</span> on the table
                 {atCapNow && <span className="text-ink-muted"> · limit</span>}
               </span>
-              <span className="text-[0.68rem] text-ink-muted">
-                <span className="font-medium text-ink-soft">Enter</span> to add
-                <span className="mx-1">·</span>
-                <span className="font-medium text-ink-soft">Esc</span> to clear
+              {/* A REAL BUTTON, not only the keyboard hint.
+                  "Enter to add" is discoverable if you already know the
+                  pattern and invisible if you do not, and this door is the one
+                  where a reader ticks four things and then looks for the way
+                  out. The hint stays, smaller, for the people already using
+                  it. */}
+              <span className="flex items-center gap-2">
+                <span className="hidden sm:inline text-[0.62rem] text-ink-muted">
+                  <span className="font-medium text-ink-soft">Esc</span> to clear
+                </span>
+                <button
+                  type="button"
+                  // mousedown, so the click-away handler never sees this as an
+                  // outside click and commits twice.
+                  onMouseDown={(e) => { e.preventDefault(); commitColumns(); }}
+                  className="h-7 px-2.5 rounded-md bg-coral text-white text-[0.68rem] uppercase tracking-widest font-bold hover:bg-coral/90 transition-colors whitespace-nowrap"
+                >
+                  Add {marked.length} column{marked.length === 1 ? "" : "s"}
+                </button>
               </span>
             </div>
           )}
