@@ -188,7 +188,7 @@ const EXTRA: Record<string, Omit<ConfCol, "key">> = {
   ncaa_bids: { label: "Bids", title: "Teams in the round of 64 (First Four losers not counted)", fmt: "int", lowerBetter: false },
   ncaa_w: { label: "NCAA W", title: "NCAA tournament wins by the whole conference", fmt: "int", lowerBetter: false },
   ncaa_l: { label: "NCAA L", title: "NCAA tournament losses by the whole conference — not ranked, since a league loses more by sending more", fmt: "int", lowerBetter: true, noPct: true },
-  ncaa_s16: { label: "S16", title: "Teams reaching the Sweet 16", fmt: "int", lowerBetter: false },
+  ncaa_s16: { label: "S16", title: "Teams reaching the Sweet 16", fmt: "int", lowerBetter: false, noPct: true },
   // Not ranked: on any given season all but a handful of leagues sit at
   // zero, and a percentile chip on a column of zeroes ranks nothing while
   // looking like it ranks something.

@@ -135,7 +135,7 @@ set of Elite Eight winners, and the champion is whoever won the game the
 file calls "Champion". Checks out against every season: exactly four Final
 Four teams and one champion in each of the eleven that had a tournament.
 
-**F4 and NC are not ranked either.** On any given season all but a handful
+**S16, F4 and NC are not ranked either.** On any given season all but a handful
 of leagues sit at zero, and a percentile chip on a column of zeroes ranks
 nothing while looking like it ranks something.
 
