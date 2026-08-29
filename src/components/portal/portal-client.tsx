@@ -4,6 +4,7 @@ import { useMemo, useState, useRef } from "react";
 import Link from "next/link";
 import { Star, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { TeamLogo } from "@/components/team-logo";
+import { TopHundredPill } from "@/components/portal/top-hundred-pill";
 import { PlayerPhoto } from "@/components/player-photo";
 import { Select } from "@/components/select";
 import { cn } from "@/lib/utils";
@@ -372,11 +373,18 @@ export function PortalClient({
                       <PlayerPhoto bartPlayerId={e.bart_player_id} name={e.name} size={38} />
                     </Td>
                     <Td className="pr-1">
-                      {e.bart_player_id ? (
-                        <Link href={`/players/${e.bart_player_id}`} className="font-medium text-ink hover:text-coral transition-colors" prefetch={false}>{e.name}</Link>
-                      ) : (
-                        <span className="font-medium text-ink">{e.name}</span>
-                      )}
+                      {/* The board mark rides with the name, not in a column
+                          of its own: it applies to 21 of 613 rows, and a
+                          column that is empty 97% of the time costs every
+                          row width to say nothing. */}
+                      <span className="inline-flex items-center gap-1.5 min-w-0">
+                        {e.bart_player_id ? (
+                          <Link href={`/players/${e.bart_player_id}`} className="font-medium text-ink hover:text-coral transition-colors" prefetch={false}>{e.name}</Link>
+                        ) : (
+                          <span className="font-medium text-ink">{e.name}</span>
+                        )}
+                        {e.t100 && <TopHundredPill rank={e.t100} />}
+                      </span>
                     </Td>
                     <Td className="pl-1"><StarRow stars={e.stars} /></Td>
                     <Td>
