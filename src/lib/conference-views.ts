@@ -130,7 +130,7 @@ export const CONF_VIEWS: ConfView[] = [
       // The one band on the page that counts the WHOLE league rather than
       // the kept teams. A conference's March record is a fact about the
       // conference, and dropping two teams from it would make it wrong.
-      { label: "March Madness", keys: ["ncaa_bids", "ncaa_w", "ncaa_l", "ncaa_s16"] },
+      { label: "March Madness", keys: ["ncaa_bids", "ncaa_w", "ncaa_l", "ncaa_s16", "ncaa_f4", "ncaa_nc"] },
       { label: "Never in doubt", keys: ["wins_no_trail", "wire_wins", "losses_no_lead", "wire_losses"] },
       { label: "Comebacks & collapses", keys: ["wins_trailing_10", "wins_trailing_20", "losses_leading_10", "losses_leading_20"] },
     ],
@@ -189,6 +189,11 @@ const EXTRA: Record<string, Omit<ConfCol, "key">> = {
   ncaa_w: { label: "NCAA W", title: "NCAA tournament wins by the whole conference", fmt: "int", lowerBetter: false },
   ncaa_l: { label: "NCAA L", title: "NCAA tournament losses by the whole conference — not ranked, since a league loses more by sending more", fmt: "int", lowerBetter: true, noPct: true },
   ncaa_s16: { label: "S16", title: "Teams reaching the Sweet 16", fmt: "int", lowerBetter: false },
+  // Not ranked: on any given season all but a handful of leagues sit at
+  // zero, and a percentile chip on a column of zeroes ranks nothing while
+  // looking like it ranks something.
+  ncaa_f4: { label: "F4", title: "Teams reaching the Final Four", fmt: "int", lowerBetter: false, noPct: true },
+  ncaa_nc: { label: "NC", title: "National champions", fmt: "int", lowerBetter: false, noPct: true },
 
   /** Raw, not adjusted — the only kind a game split can have. */
   net_rtg: {

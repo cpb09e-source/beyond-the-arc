@@ -126,7 +126,18 @@ serve a control most readers will never touch.
 ## 4c. March
 
 The Record & Outcomes view carries a **March Madness** band — bids, wins,
-losses, and Sweet 16 teams — from `src/data/tournament-games.json`.
+losses, Sweet 16 teams, Final Four teams and national champions — from
+`src/data/tournament-games.json`.
+
+A round is reached by winning the one before it, which is how the file is
+shaped: the Sweet 16 field is the set of R32 winners, the Final Four is the
+set of Elite Eight winners, and the champion is whoever won the game the
+file calls "Champion". Checks out against every season: exactly four Final
+Four teams and one champion in each of the eleven that had a tournament.
+
+**F4 and NC are not ranked either.** On any given season all but a handful
+of leagues sit at zero, and a percentile chip on a column of zeroes ranks
+nothing while looking like it ranks something.
 
 **It counts the whole league, including the two teams the row drops.** This is
 the one band where the drop rule does not apply, and deliberately: "the ACC went

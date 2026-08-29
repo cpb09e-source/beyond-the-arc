@@ -418,7 +418,7 @@ for (const year of SEASONS) {
     const seen = new Set();
     const unmatched = new Set();
     const bump = (conf, field, by = 1) => {
-      const rec = marchByConf.get(conf) ?? { bids: 0, w: 0, l: 0, s16: 0 };
+      const rec = marchByConf.get(conf) ?? { bids: 0, w: 0, l: 0, s16: 0, f4: 0, nc: 0 };
       rec[field] += by;
       marchByConf.set(conf, rec);
     };
@@ -431,10 +431,17 @@ for (const year of SEASONS) {
         // A bid is counted once per team, on whatever game it first appears
         // in — which is its opener, since the file is in bracket order.
         if (!seen.has(key)) { seen.add(key); bump(conf, "bids"); }
-        // Reaching the Sweet 16 means winning in R32, so the winner of an
-        // R32 game is what this counts. Counting appearances IN the Sweet 16
-        // round would miss nothing, but this way a team is tallied once.
-        if (field === "w" && g.round === "R32") bump(conf, "s16");
+        // A ROUND IS REACHED BY WINNING THE ONE BEFORE IT. The file names a
+        // game by the round it IS, so the Sweet 16 field is the set of R32
+        // winners, the Final Four is the set of Elite Eight winners, and the
+        // champion is the winner of the game called "Champion". Counting
+        // appearances in the round itself would work too but would tally a
+        // team twice where a round has two games.
+        if (field === "w") {
+          if (g.round === "R32") bump(conf, "s16");
+          else if (g.round === "Elite Eight") bump(conf, "f4");
+          else if (g.round === "Champion") bump(conf, "nc");
+        }
       }
     }
     if (unmatched.size) marchUnmatched.push(`${year}: ${[...unmatched].join(", ")}`);
@@ -487,6 +494,8 @@ for (const year of SEASONS) {
       row.ncaa_w = m ? m.w : null;
       row.ncaa_l = m ? m.l : null;
       row.ncaa_s16 = m ? m.s16 : null;
+      row.ncaa_f4 = m ? m.f4 : null;
+      row.ncaa_nc = m ? m.nc : null;
     }
 
     // Rate margins from the conference's own aggregated halves.
