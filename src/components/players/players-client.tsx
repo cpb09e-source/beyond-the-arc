@@ -1555,11 +1555,18 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                             ) : (
                               <span className="font-medium text-ink whitespace-nowrap block leading-tight" title={p.name}><PlayerName name={p.name} /></span>
                             )}
-                            {/* Hover affordance, and a phone has no hover. It sat between the
-                                name and the row's right edge on every one of 50 rows,
-                                costing width in the widest frozen column on the
-                                narrowest screen. */}
-                            <span className="hidden sm:inline-flex"><CopyName name={p.name} /></span>
+                            {/* THE RANK SITS WITH THE NAME — above `sm`. It is a
+                                fact about the player, so it belongs against his
+                                name rather than out at the column edge where it
+                                read as a column of its own.
+
+                                On a phone this column is 194px wide and the name
+                                is already abbreviated to "C. Boozer" to fit, so
+                                the badge moves down to the meta line instead —
+                                see below. */}
+                            <span className="hidden sm:inline-flex">
+                              <TopHundredMark rank={p.rank_overall} />
+                            </span>
                           </span>
                           <span className="flex items-center gap-1.5 text-[0.66rem] text-ink-muted whitespace-nowrap leading-tight">
                             {/* Logo only — the school name was the widest thing
@@ -1595,13 +1602,18 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                                 {seasonBadge(p.year)}
                               </span>
                             )}
+                            {/* The phone's home for the rank: this line already
+                                holds pills, it is shorter than the name line, and
+                                the badge is the same height as the class chip. */}
+                            <span className="sm:hidden inline-flex">
+                              <TopHundredMark rank={p.rank_overall} />
+                            </span>
                           </span>
                         </span>
-                        {/* Sits beside the whole two-line block rather than at
-                            the end of the name line. Stacked, the chip is taller
-                            than one line of type, so inside the name line it
-                            grew that line and crowded the class pill under it. */}
-                        <TopHundredMark rank={p.rank_overall} />
+                        {/* The copy affordance takes the outside position: it is
+                            an action rather than information, and it is hover-only
+                            anyway, so it costs the name line nothing out here. */}
+                        <span className="hidden sm:inline-flex"><CopyName name={p.name} /></span>
                       </span>
                     </td>
                     {[...dynamicCols, ...viewCols].map((c, ci) => {

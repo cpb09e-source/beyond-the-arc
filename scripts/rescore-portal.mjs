@@ -6,7 +6,11 @@
  * already on disk — no On3 call, no Supabase — so it's safe to re-run and it
  * respects the data freeze.
  *
- *   node scripts/rescore-portal.mjs
+ * RUN IT UNDER TSX, not node: the returner rule reads a season other than
+ * the last one, and productionFor() in scripts/lib/bta-prtg.mts is the one
+ * place the raw_row offsets for games, minutes and PIR are decoded.
+ *
+ *   npx tsx scripts/rescore-portal.mjs
  *
  * ---------------------------------------------------------------------------
  * THE SCORE
@@ -103,6 +107,10 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+// Run under tsx (see the header): productionFor() is the one place the
+// raw_row offsets for games, minutes and PIR are read, and the returner rule
+// needs them for a season other than the last one.
+import { computeCohortStats, productionFor } from "./lib/bta-prtg.mts";
 
 const DATA = path.resolve("public/data");
 const PORTAL = path.join(DATA, "portal.json");
@@ -555,12 +563,77 @@ function sophLeapFor(playedClass, eligibility, epm) {
 /** The class a player actually played last season — more reliable than the
  *  feed's eligibility string, which disagrees with it on 82 of 638 entries. */
 const classPlayed = new Map();
-for (const y of [2026, 2025, 2024]) {
+// Every season on disk, not just the last three: the returner rule below
+// scores players on whichever season they last spent at the school they are
+// going back to, and the sophomore bump has to be right for that year too.
+const CORPUS_YEARS = fs.existsSync(path.join(DATA, "players-by-year"))
+  ? fs.readdirSync(path.join(DATA, "players-by-year"))
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => Number(f.replace(".json", "")))
+      .filter((y) => Number.isFinite(y))
+      .sort((a, b) => b - a)
+  : [];
+for (const y of CORPUS_YEARS) {
   const fp = path.join(DATA, "players-by-year", `${y}.json`);
   if (!fs.existsSync(fp)) continue;
   for (const p of JSON.parse(fs.readFileSync(fp, "utf8"))) {
     if (p?.bart_player_id != null && p.class) classPlayed.set(`${p.bart_player_id}|${y}`, p.class);
   }
+}
+
+/**
+ * The Rating for ONE SEASON of one player, from scratch.
+ *
+ * The main loop below computes the same chain inline for a player's last
+ * season. This exists for the returner rule, which has to ask the same
+ * question about an EARLIER season — and rather than trust two copies of a
+ * six-step formula to stay in step, every entry is run through this function
+ * as well and any disagreement stops the build. See the check after the loop.
+ */
+function rateSeason({ bartId, year, gp, mpg, ppg, pir, conf, eligibility }) {
+  const hit = year != null && bartId != null ? epmForYear(year).get(bartId) ?? null : null;
+  const epm = hit?.epm ?? null;
+  const minutes = (gp ?? 0) * (mpg ?? 0);
+  let ewins = hit?.ewins ?? null;
+  if (epm !== null && minutes >= 200 && hit?.poss != null && hit.poss < minutes * POSS_PER_MIN * POSS_SANITY) {
+    ewins = (epm / 100) * (minutes * POSS_PER_MIN) / PTS_PER_WIN;
+  }
+  ewins = ewins === null ? null : Math.round(ewins * 1000) / 1000;
+
+  const played = year != null ? classPlayed.get(`${bartId}|${year}`) ?? null : null;
+  const bump = sophLeapFor(played, eligibility, epm) || 0;
+  const possUsed = hit?.poss != null && !(minutes >= 200 && hit.poss < minutes * POSS_PER_MIN * POSS_SANITY)
+    ? hit.poss
+    : (minutes >= 200 ? minutes * POSS_PER_MIN : null);
+  const ewinsProj = ewins === null ? null
+    : Math.round((ewins + (bump / 100) * (possUsed ?? 0) / PTS_PER_WIN) * 1000) / 1000;
+
+  let pirAdj = null, pirWins = 0;
+  if (typeof pir === "number" && Number.isFinite(pir) && (mpg ?? 0) >= 5) {
+    const adj = (pir * 40) / mpg * (1 + confTierAdj(conf));
+    pirAdj = Math.round(adj * 100) / 100;
+    pirWins = Math.round(PIR_WEIGHT * (adj - PIR_BASELINE) * 1000) / 1000;
+  }
+
+  const onOff = hit?.on_off ?? null;
+  const onoffPen = onOff === null || onOff >= 0
+    ? 0
+    : Math.round(ONOFF_PENALTY * Math.max(ONOFF_FLOOR, onOff) * 1000) / 1000;
+
+  const preMM = ewinsProj === null ? null : ewinsProj + pirWins + onoffPen;
+  const mmPen = preMM === null || POWER_CONFS.has(conf ?? "")
+    ? 0
+    : Math.round(-MID_MAJOR_PENALTY * Math.abs(preMM) * 1000) / 1000;
+  const value = preMM === null ? null : Math.round((preMM + mmPen) * 1000) / 1000;
+
+  const eligible = epm !== null && (gp ?? 0) >= MIN_GP && (mpg ?? 0) >= MIN_MPG && (ppg ?? 0) >= MIN_PPG;
+  const rating = eligible && typeof value === "number" ? Math.round(value * RATING_SCALE) : null;
+  // PVS rides along because the class gate reads it: a player with no PVS is
+  // treated as not having cleared the production baseline at all.
+  const pvs = eligible && typeof value === "number" && epm !== null
+    ? Math.round(epm * Math.pow(Math.min(1, (mpg ?? 0) / FULL_MPG), ROLE_EXP) * 1000) / 1000
+    : null;
+  return { epm, ewins, dev_bump: bump, ewins_proj: ewinsProj, pir_adj: pirAdj, pir_wins: pirWins, on_off: onOff, onoff_pen: onoffPen, mm_penalty: mmPen, value, rating, pvs };
 }
 
 const portal = JSON.parse(fs.readFileSync(PORTAL, "utf8"));
@@ -663,6 +736,129 @@ for (const e of entries) {
     e.rating = null;
     e.stars = 0;
   }
+}
+
+/**
+ * PROOF THE TWO COPIES AGREE.
+ *
+ * rateSeason() restates the chain the loop above just ran inline. Run it
+ * over every entry's own last season and the answers must be identical —
+ * if they ever are not, the returner rule below is quietly scoring players
+ * on a formula the table does not use, which is the kind of divergence
+ * nobody notices until a number looks wrong months later.
+ */
+{
+  const drift = [];
+  for (const e of entries) {
+    const check = rateSeason({
+      bartId: e.bart_player_id, year: e.last_year,
+      gp: e.gp, mpg: e.mpg, ppg: e.ppg, pir: e.pir,
+      conf: e.conf_from ?? e.last_conf ?? null, eligibility: e.eligibility,
+    });
+    if ((check.rating ?? null) !== (e.rating ?? null) || (check.value ?? null) !== (e.value ?? null)
+      || (check.pvs ?? null) !== (e.pvs ?? null)) {
+      drift.push(`${e.name}: loop ${e.rating}/${e.value}/${e.pvs} vs rateSeason ${check.rating}/${check.value}/${check.pvs}`);
+    }
+  }
+  if (drift.length) {
+    console.error(`✗ rateSeason disagrees with the main loop on ${drift.length} entr(ies):`);
+    for (const d of drift.slice(0, 5)) console.error('   ' + d);
+    process.exit(1);
+  }
+}
+
+/**
+ * GOING BACK TO A SCHOOL HE ALREADY PLAYED FOR.
+ *
+ * A player returning to a former school is rated on his best case: the
+ * Rating from his last season THERE, if that beats the one he just earned
+ * somewhere else. Never the reverse — a bad year at the old school does not
+ * pull down what he did last season.
+ *
+ * The argument is that the transfer is a return to a known fit rather than
+ * an arrival: the staff, the system and the role are the ones he produced in
+ * before, and the year in between is the outlier the move is correcting.
+ * Denzel Aberdeen is the case that prompted it — Florida to Kentucky and
+ * back — though for him the old season is the weaker one (19 against 57), so
+ * the rule leaves him alone. It only ever moves a Rating up.
+ *
+ * The old season goes through rateSeason(), the same chain as everything
+ * else, with that year's EPM, that year's conference and that year's class.
+ */
+let returners = 0;
+const returnerNotes = [];
+{
+  // One corpus, all years — computeCohortStats needs the full field to
+  // z-score against, and productionFor reads a season out of it.
+  const bySeason = new Map();
+  for (const y of CORPUS_YEARS) {
+    const fp = path.join(DATA, "players-by-year", `${y}.json`);
+    for (const p of JSON.parse(fs.readFileSync(fp, "utf8"))) {
+      const pid = p?.bart_player_id;
+      if (typeof pid !== "number") continue;
+      const team = Array.isArray(p.teams) ? p.teams[0] : p.teams;
+      const st = Array.isArray(p.player_bart_stats) ? p.player_bart_stats[0] : p.player_bart_stats;
+      if (!bySeason.has(pid)) bySeason.set(pid, []);
+      bySeason.get(pid).push({
+        year: p.year, team_name: team?.name ?? "—", team_conference: team?.conference ?? null,
+        class: p.class, raw_row: st?.raw_row ?? null, games: st?.games ?? null,
+        notes: st?.notes ?? null, projection: st?.projection ?? null,
+      });
+    }
+  }
+  for (const seasons of bySeason.values()) seasons.sort((a, b) => b.year - a.year);
+  const cohortStats = computeCohortStats(bySeason);
+
+  for (const e of entries) {
+    if (!e.team_to || e.bart_player_id == null || e.last_year == null) continue;
+    const seasons = bySeason.get(e.bart_player_id) ?? [];
+    // The most recent season at the destination that is not the one he is
+    // leaving. Name comparison goes through the same canonicaliser the
+    // entries themselves were cleaned with.
+    const target = resolveSchool(e.team_to) ?? e.team_to;
+    const prior = seasons.find(
+      (sn) => sn.year < e.last_year && (resolveSchool(sn.team_name) ?? sn.team_name) === target,
+    );
+    if (!prior) continue;
+
+    // productionFor reads the newest season of whatever corpus it is given,
+    // so hand it a corpus of exactly the season in question.
+    const prod = productionFor(e.bart_player_id, new Map([[e.bart_player_id, [prior]]]), cohortStats);
+    if (!prod) continue;
+    const then = rateSeason({
+      bartId: e.bart_player_id, year: prior.year,
+      gp: prod.gp, mpg: prod.mpg, ppg: prod.ppg, pir: prod.pir,
+      conf: prior.team_conference ?? null, eligibility: e.eligibility,
+    });
+    // AN UNRATED LAST SEASON IS NOT A HIGHER ONE. A player who barely played
+    // where he was — Dominick Nelson at 8 minutes and 3.7 points for Iowa
+    // St. — has no Rating at all, and the whole point of the rule is that
+    // the season at the school he is returning to is the better evidence.
+    // Treating null as "nothing to beat" is what lets him carry his Utah
+    // Valley year back with him.
+    if (then.rating === null) continue;
+    if (e.rating !== null && then.rating <= e.rating) continue;
+
+    returnerNotes.push(`${e.name} → ${target}: ${e.rating} (${e.last_year}) → ${then.rating} (${prior.year})`);
+    returners++;
+    // What the row now says, and where it came from. The last-season figures
+    // stay on the entry under their own keys so nothing is lost.
+    e.rating_last_season = e.rating;   // null where he did not clear the baseline
+    e.rating_year = prior.year;
+    e.rating_basis = "return";
+    e.rating = then.rating;
+    e.value = then.value;
+    // PVS moves with the rest of it, or the class ledger would keep reading
+    // the season we just decided not to judge him on — and a returner whose
+    // last year was thin would score a Rating on the page while counting for
+    // nothing towards the class he is joining.
+    e.pvs = then.pvs;
+    e.stars = starsForRating(then.rating);
+  }
+}
+if (returners > 0) {
+  console.log(`  ${returners} returner(s) rated on their last season at the school they are going back to:`);
+  for (const n of returnerNotes.slice(0, 8)) console.log("    " + n);
 }
 
 /**

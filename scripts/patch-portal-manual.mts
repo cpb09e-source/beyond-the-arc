@@ -417,7 +417,7 @@ async function main() {
   doc.manual_entries_at = new Date().toISOString();
   await fs.writeFile(PORTAL, JSON.stringify(doc));
   console.log(`✓ rewrote ${PORTAL}`);
-  console.log("→ now run: node scripts/rescore-portal.mjs");
+  console.log("→ now run: npx tsx scripts/rescore-portal.mjs");
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
