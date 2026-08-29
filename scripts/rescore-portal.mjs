@@ -732,6 +732,8 @@ for (const e of entries) {
     rating: e.rating,
     value: e.value,
     stars: e.stars,
+    // Board position, so a class can be credited or charged for it below.
+    t100: e.t100 ?? null,
   };
   bucket(e.team_from, e.conf_from).out_players.push({ ...base, counter_team: e.team_to, counter_conf: e.conf_to });
   bucket(e.team_to, e.conf_to).in_players.push({ ...base, counter_team: e.team_from, counter_conf: e.conf_from });
@@ -758,6 +760,22 @@ for (const e of entries) {
  */
 const OUT_WEIGHT = 1.0;
 
+/**
+ * What a top-100 player is worth to a class, over and above his Rating.
+ *
+ * A ten-point swing each way — ten on for signing one, ten off for losing
+ * one. The Rating already values production, and a top-100 player already
+ * rates well, so this is not the same number twice: it is the premium for
+ * landing somebody who is genuinely one of the hundred best players in the
+ * country rather than a very good starter. Ten is roughly a third of the gap
+ * between a four-star Rating and a five-star one, which is the size that
+ * moves a class a place or two without deciding the table on its own.
+ *
+ * Symmetric on purpose. A school that replaces a top-100 departure with a
+ * top-100 arrival nets zero from this term, which is the right answer.
+ */
+const TOP_100_SWING = 10;
+
 
 const POWER = new Set(["ACC", "B10", "B12", "SEC", "BE"]);
 const allRows = [];
@@ -765,11 +783,19 @@ for (const b of perSchool.values()) {
   const sum = (a) => a.reduce((s, p) => s + (p.rating ?? 0), 0);
   b.in_players.sort((x, y) => (y.rating ?? 0) - (x.rating ?? 0));
   b.out_players.sort((x, y) => (y.rating ?? 0) - (x.rating ?? 0));
-  const net = sum(b.in_players) - OUT_WEIGHT * sum(b.out_players);
+  const t100In = b.in_players.filter((p) => p.t100).length;
+  const t100Out = b.out_players.filter((p) => p.t100).length;
+  const net =
+    sum(b.in_players)
+    - OUT_WEIGHT * sum(b.out_players)
+    + TOP_100_SWING * (t100In - t100Out);
   allRows.push({
     school: b.school,
     conference: b.conference,
     net: Math.round(net * 100) / 100,
+    /** Top-100 players in and out, so the modal can show the swing. */
+    t100_in: t100In,
+    t100_out: t100Out,
     /** Wins behind the rating sum, kept for the modal's secondary line. */
     net_wins: Math.round(
       (b.in_players.reduce((s, p) => s + (p.value ?? 0), 0)
