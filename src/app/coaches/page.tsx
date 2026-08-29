@@ -29,7 +29,6 @@ export default async function CoachesPage() {
       <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-4 lg:pt-5 pb-4">
         <PageHeading
           label="Head coaches"
-          sub="Every active Division I head coach, with the career arc behind the record and the play style their teams actually ran."
         />
         {rows.length === 0 ? (
           <div className="bg-card border border-hairline rounded-lg p-10 text-center text-ink-muted">

@@ -38,7 +38,6 @@ export default async function PortalPage() {
       <section className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-4 lg:pt-5 pb-4">
         <PageHeading
           label="Transfer portal"
-          sub="Every logged move, rated on what the player actually produced — and the class ledger each one adds to."
         />
         {data === null ? (
           <div className="bg-card border border-hairline rounded-lg p-10 text-center text-ink-muted">
