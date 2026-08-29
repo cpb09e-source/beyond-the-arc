@@ -186,6 +186,8 @@ const BATCHES: Array<{ confirmed: string; moves: Array<[string, string]> }> = [
       // Utah Tech guard, 31 games in 2025-26. One "Noah Bolanga" in the
       // corpus, so the join is unambiguous.
       ["Noah Bolanga", "Abilene Christian"],
+      // Queens sophomore, 34 games in 2025-26.
+      ["Maban Jabriel", "Maryland"],
     ],
   },
 ];
