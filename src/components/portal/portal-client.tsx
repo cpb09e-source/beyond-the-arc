@@ -456,8 +456,8 @@ function SchoolLogoCell({
   const row = bySchool?.[school];
   if (!row) {
     return (
-      <span className="inline-flex items-center" title={school}>
-        <TeamLogo name={school} size={28} />
+      <span className="inline-flex items-center justify-center w-9" title={school}>
+        <TeamLogo name={school} size={26} width={36} />
       </span>
     );
   }
@@ -466,9 +466,9 @@ function SchoolLogoCell({
       type="button"
       onClick={() => onOpen(row)}
       title={`${school} — transfer class`}
-      className="inline-flex items-center rounded hover:bg-paper-deep/60 transition-colors p-0.5 -m-0.5 cursor-pointer"
+      className="inline-flex items-center justify-center w-9 rounded hover:bg-paper-deep/60 transition-colors p-0.5 -m-0.5 cursor-pointer"
     >
-      <TeamLogo name={school} size={28} />
+      <TeamLogo name={school} size={26} width={36} />
     </button>
   );
 }

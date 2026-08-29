@@ -181,12 +181,26 @@ function contrastFor(hex: string): string {
 export function TeamLogo({
   name,
   size = 24,
+  width,
   className,
   local = false,
   eager = false,
 }: {
   name: string;
   size?: number;
+  /**
+   * Box WIDTH, where it should differ from the height.
+   *
+   * Every logo is a 200x200 PNG, but the art inside varies: a crest fills
+   * its canvas and a wordmark sits in a thin band across the middle of one.
+   * In a square box with object-contain that makes the wordmark draw about a
+   * third smaller than the crest beside it, which is the "these logos are
+   * different sizes" complaint — the boxes were identical all along.
+   *
+   * A box wider than it is tall gives the wordmark the width it wants while
+   * the crest stays bounded by height, so the two read at the same weight.
+   */
+  width?: number;
   className?: string;
   // Serve from the bundled same-origin copy (public/ttz-logos) instead of GCS.
   // Needed wherever the node gets rasterized by html-to-image (the 32-0 share
@@ -219,7 +233,7 @@ export function TeamLogo({
         loading={eager ? "eager" : "lazy"}
         onError={() => setErrored(true)}
         className={cn("inline-block object-contain shrink-0", className)}
-        style={{ width: size, height: size }}
+        style={{ width: width ?? size, height: size }}
       />
     );
   }
@@ -234,7 +248,7 @@ export function TeamLogo({
         className
       )}
       style={{
-        width: size,
+        width: width ?? size,
         height: size,
         background: bg,
         color: fg,
