@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { CalcClient } from "@/components/calc/calc-client";
+import { PageHeading } from "@/components/page-heading";
 
 // Mirror src/lib/coaches.ts TEAM_NAME_OVERRIDES so the (team, year) coach
 // lookup keys match the team_name strings that appear in game logs.
@@ -45,13 +46,12 @@ export default async function CalcPage() {
   const { coachByTeamYear, allCoaches } = await loadCoachLookup();
   return (
     <>
-      <section>
-        <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-10 pb-2">
-          <div className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] text-coral font-medium mb-4">
-            <span className="h-px w-8 bg-coral" />
-            <span>The win calculator</span>
-          </div>
-        </div>
+      {/* THE SAME HEADING AS EVERY OTHER PAGE. This was a coral rule and a
+          coral label, which was the site's older masthead treatment and the
+          only one of its kind left — the four table pages all moved to the
+          gold kicker, so this read as a page from a different site. */}
+      <section className="mx-auto max-w-7xl px-6 lg:px-10 pt-4 lg:pt-5">
+        <PageHeading label="Win calculator" />
       </section>
 
       <section className="mx-auto max-w-7xl px-0 sm:px-6 lg:px-10 pt-3 pb-8 lg:pt-4 lg:pb-10">
