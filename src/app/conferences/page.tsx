@@ -19,10 +19,9 @@ export const metadata = {
 export default function ConferencesPage() {
   return (
     <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-4 lg:pt-5 pb-4">
-      <PageHeading
-        label="Conference power rankings"
-        sub="Every conference, one row a season, ranked on the teams that carry it — the bottom two by adjusted NET are dropped from every number on the page."
-      />
+      {/* NO SUBTITLE. It said what the table's own note row says, one
+          scroll higher and in more words. */}
+      <PageHeading label="Conference power rankings" />
       {/* ConferencesClient reads useSearchParams for its season, conference and
           view selection. Static export requires that hook to sit inside a
           Suspense boundary or the build fails on a CSR bailout. */}
