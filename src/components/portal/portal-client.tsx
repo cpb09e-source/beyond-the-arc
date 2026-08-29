@@ -131,8 +131,11 @@ export function PortalClient({
    * would bury the news. This does both — the names worth knowing first,
    * then the news.
    *
-   * Clicking any header leaves it: the pin is the default view, not a
-   * permanent section, so a reader who sorts by PPG gets PPG.
+   * THE PIN SURVIVES SORTING. Whatever column you order by, the hundred
+   * come first and everybody else follows — the chosen sort runs inside each
+   * of the two blocks rather than across them. Without that, sorting by
+   * Rating put a 4-star 89 above every five-star on the board, which is the
+   * table contradicting its own tier column.
    */
   const [sortBy, setSortBy] = useState<SortKey>("board");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -193,10 +196,15 @@ export function PortalClient({
       }
     };
     return [...filtered].sort((a, b) => {
+      // THE BOARD IS THE FIRST KEY OF EVERY SORT. One block of top-100
+      // players, one block of everyone else; the column you picked orders
+      // each block internally.
+      const aBoard = a.t100 ? 0 : 1, bBoard = b.t100 ? 0 : 1;
+      if (aBoard !== bBoard) return aBoard - bBoard;
       if (sortBy === "board") {
-        // Board first, in board order; then commit date, newest first, with
-        // the uncommitted parked at the bottom exactly as they are under the
-        // plain commit-date sort.
+        // Inside the hundred, board order; outside it, commit date newest
+        // first with the uncommitted parked at the bottom exactly as they
+        // are under the plain commit-date sort.
         const ar = a.t100 ?? Infinity, br = b.t100 ?? Infinity;
         if (ar !== br) return ar - br;
         const ad = a.team_to ? (a.date_updated ?? null) : null;
