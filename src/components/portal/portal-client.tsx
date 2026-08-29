@@ -30,6 +30,15 @@ export type PortalEntry = {
   team_to: string | null;
   conf_to: string | null;
   last_year: number | null;
+  /**
+   * Position on the overall EPM board for his last season, when inside the
+   * top hundred. Absent for everybody else.
+   *
+   * The same number the top-100 seal draws on the player's own page, baked
+   * in by rescore-portal.mjs. It pins the default order and it is why the
+   * five-star tier means exactly "top-100 player".
+   */
+  t100?: number;
   last_team: string | null;
   last_conf: string | null;
   gp: number | null;
@@ -85,7 +94,7 @@ export type PortalEntry = {
 };
 
 type SortKey =
-  | "name" | "stars" | "date" | "committed" | "from" | "to"
+  | "board" | "name" | "stars" | "date" | "committed" | "from" | "to"
   | "mpg" | "ppg" | "rpg" | "apg" | "rating";
 
 export function PortalClient({
@@ -112,7 +121,20 @@ export function PortalClient({
   // Commit date by default, newest first: the portal is a feed before it is a
   // leaderboard, and the first question on opening it is who just landed
   // somewhere. eWins is one click away in the header.
-  const [sortBy, setSortBy] = useState<SortKey>("committed");
+  /**
+   * THE DEFAULT IS THE BOARD, not the commit date.
+   *
+   * The twenty-one top-100 players sit at the top in board order, and
+   * everyone else follows on commit date as before. A portal table whose
+   * first screen is whoever happened to commit this morning buries the only
+   * rows most readers came for; sorting the whole thing by Rating instead
+   * would bury the news. This does both — the names worth knowing first,
+   * then the news.
+   *
+   * Clicking any header leaves it: the pin is the default view, not a
+   * permanent section, so a reader who sorts by PPG gets PPG.
+   */
+  const [sortBy, setSortBy] = useState<SortKey>("board");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [openClass, setOpenClass] = useState<TransferClassRow | null>(null);
 
@@ -152,6 +174,8 @@ export function PortalClient({
     const dir = sortDir === "asc" ? 1 : -1;
     const get = (e: PortalEntry): number | string | null => {
       switch (sortBy) {
+        // Handled before this runs — see the comparator below.
+        case "board":        return null;
         case "name":         return e.name;
         case "stars":        return e.stars;
         case "date":         return e.date_entered ?? "";
@@ -169,6 +193,19 @@ export function PortalClient({
       }
     };
     return [...filtered].sort((a, b) => {
+      if (sortBy === "board") {
+        // Board first, in board order; then commit date, newest first, with
+        // the uncommitted parked at the bottom exactly as they are under the
+        // plain commit-date sort.
+        const ar = a.t100 ?? Infinity, br = b.t100 ?? Infinity;
+        if (ar !== br) return ar - br;
+        const ad = a.team_to ? (a.date_updated ?? null) : null;
+        const bd = b.team_to ? (b.date_updated ?? null) : null;
+        if (ad === null && bd === null) return 0;
+        if (ad === null) return 1;
+        if (bd === null) return -1;
+        return ad < bd ? 1 : ad > bd ? -1 : 0;
+      }
       const av = get(a), bv = get(b);
       if (av === null || av === undefined) return 1;
       if (bv === null || bv === undefined) return -1;

@@ -106,6 +106,34 @@ import path from "node:path";
 
 const DATA = path.resolve("public/data");
 const PORTAL = path.join(DATA, "portal.json");
+const RANKS_DIR = path.join(DATA, "player-ranks");
+
+/**
+ * A player's overall EPM board position for a season, or null.
+ *
+ * THE SAME NUMBER THE TOP-100 SEAL DRAWS on a player page — read from the
+ * same per-player file rather than recomputed here, so the portal cannot
+ * disagree with the mark on the player's own page about whether he is in the
+ * hundred. A player with no file (a JUCO arrival, a D-II transfer, a
+ * freshman) simply has no board position, which is not the same as being
+ * outside the hundred but ranks the same way here.
+ */
+function boardRank(bartId, year) {
+  if (!bartId || !year) return null;
+  const fp = path.join(RANKS_DIR, `${bartId}.json`);
+  if (!fs.existsSync(fp)) return null;
+  try {
+    const j = JSON.parse(fs.readFileSync(fp, "utf8"));
+    const season = (j.seasonRanks ?? []).find((r) => r.year === year);
+    const rank = season?.rankOverall;
+    return typeof rank === "number" && rank > 0 ? rank : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The board is a hundred deep, same cutoff as the seal. */
+const TOP_100 = 100;
 
 // Minutes that count as a full-time role. A 28+ MPG player carries full weight.
 const FULL_MPG = 28;
@@ -636,6 +664,34 @@ for (const e of entries) {
     e.stars = 0;
   }
 }
+
+/**
+ * THE BOARD OVERRULES THE RATING, in both directions.
+ *
+ * Five stars means top-100 player, full stop: every one of the hundred wears
+ * five, and nobody outside it does. The Rating still decides one through
+ * four, and still orders the top hundred among themselves on the page — but
+ * a tier that says "elite" about somebody the site's own board does not rank
+ * is a tier disagreeing with the rest of the site, which is the failure this
+ * whole file exists to avoid.
+ *
+ * It moves in both directions on purpose. Four of the twenty-one top-100
+ * transfers were wearing four stars on a Rating cut that could not see the
+ * board; five players outside the hundred were wearing five.
+ */
+let promoted = 0, capped = 0, boarded = 0;
+for (const e of entries) {
+  const rank = boardRank(e.bart_player_id, e.last_year);
+  if (rank !== null && rank <= TOP_100) {
+    e.t100 = rank;
+    boarded++;
+    if (e.stars !== 5) { e.stars = 5; promoted++; }
+  } else {
+    delete e.t100;
+    if (e.stars === 5) { e.stars = 4; capped++; }
+  }
+}
+console.log(`  ${boarded} top-100 player(s) — ${promoted} promoted to five stars, ${capped} outside the hundred capped at four`);
 
 // ---- transfer classes ----
 const perSchool = new Map();
