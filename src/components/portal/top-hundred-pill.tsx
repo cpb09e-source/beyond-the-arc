@@ -33,7 +33,10 @@ export function TopHundredPill({
     <span
       title={`Top 100 — #${rank} in the country last season`}
       className={cn(
-        "inline-flex items-center gap-0.5 rounded-full px-1.5 h-4 shrink-0",
+        // SQUARED OFF, not a pill. A capsule reads as a status chip -
+        // "transferred", "committed" - and this is a number. The small
+        // radius keeps it a plate with a rank stamped on it.
+        "inline-flex items-center gap-0.5 rounded-[3px] px-1 h-4 shrink-0",
         "text-[0.6rem] font-bold tabular leading-none align-middle",
         className,
       )}
