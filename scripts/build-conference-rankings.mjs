@@ -414,7 +414,13 @@ for (const year of SEASONS) {
   {
     const games = tourneyByYear[String(year)] ?? [];
     const confOf = new Map();
-    for (const t of raw) if (t.conference && t.name) confOf.set(joinKey(t.name), t.conference);
+    /** joinKey -> Bart's own spelling, which is what the logo lookup wants. */
+    const bartName = new Map();
+    for (const t of raw) {
+      if (!t.conference || !t.name) continue;
+      confOf.set(joinKey(t.name), t.conference);
+      bartName.set(joinKey(t.name), t.name);
+    }
     const seen = new Set();
     const unmatched = new Set();
     const bump = (conf, field, by = 1) => {
@@ -440,7 +446,14 @@ for (const year of SEASONS) {
         if (field === "w") {
           if (g.round === "R32") bump(conf, "s16");
           else if (g.round === "Elite Eight") bump(conf, "f4");
-          else if (g.round === "Champion") bump(conf, "nc");
+          else if (g.round === "Champion") {
+            bump(conf, "nc");
+            // The champion by name as well as by count: the table draws the
+            // school's crest in that cell rather than the number 1, which is
+            // the only value the column ever takes.
+            const rec = marchByConf.get(conf);
+            if (rec) rec.champ = bartName.get(key) ?? side.school;
+          }
         }
       }
     }
@@ -496,6 +509,7 @@ for (const year of SEASONS) {
       row.ncaa_s16 = m ? m.s16 : null;
       row.ncaa_f4 = m ? m.f4 : null;
       row.ncaa_nc = m ? m.nc : null;
+      if (m?.champ) row.ncaa_champ = m.champ;
     }
 
     // Rate margins from the conference's own aggregated halves.

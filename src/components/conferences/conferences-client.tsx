@@ -36,6 +36,7 @@ import {
 } from "@/lib/table-export";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { ConferenceLogo } from "@/components/conferences/conference-logo";
+import { TeamLogo } from "@/components/team-logo";
 import Link from "next/link";
 import {
   CONF_VIEWS, confCol, confViewByKey, confViewCols, confViewBands, confViewsFor, type ConfCol,
@@ -160,6 +161,9 @@ export function ConferencesClient() {
    * view's own default if the split kept it, then to its first column.
    */
   const sortBy = useMemo(() => {
+    // Season is sortable in every view and under every split, so it never
+    // falls through to the "this split cannot fill it" rescue below.
+    if (spec.sortBy === "year") return spec.sortBy;
     if (cols.some((c) => c.key === spec.sortBy)) return spec.sortBy;
     if (cols.some((c) => c.key === view.sortBy)) return view.sortBy;
     return cols[0]?.key ?? spec.sortBy;
@@ -187,6 +191,8 @@ export function ConferencesClient() {
 
   /** One row's numbers under the active split — the row itself on Full. */
   const readValue = useCallback((r: ConfRow, key: string): number | null => {
+    // The season is a property of the row, not of a split of its games.
+    if (key === "year") return r.year;
     if (spec.split === "full") return confValue(r, key);
     const block = splitPack?.rows[`${r.year}|${r.conf}`]?.[spec.split];
     return splitValue(block, key);
@@ -519,7 +525,19 @@ export function ConferencesClient() {
             <tr>
               <th className="sticky top-6 left-0 z-40 w-10 min-w-10 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
               <th className="sticky top-6 z-40 bg-paper-deep border-b border-hairline px-2 sm:px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Conference</th>
-              {multiYear && <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Season</th>}
+              {multiYear && (
+                <SortableTh
+                  statKey="year"
+                  label="Season"
+                  title="Sort by season"
+                  defaultDir="desc"
+                  align="left"
+                  basePath="/conferences"
+                  defaultSort={sortBy}
+                  idleArrows
+                  className="sticky top-6 z-30 bg-paper-deep border-b border-hairline"
+                />
+              )}
               {cols.map((c, i) => (
                 <SortableTh
                   key={c.key}
@@ -588,6 +606,15 @@ export function ConferencesClient() {
                     {cols.map((c, ci) => {
                       const v = readValue(r, c.key);
                       const pct = pcts.get(c.key)?.get(id) ?? null;
+                      /**
+                       * THE CHAMPION AS A CREST, not as the number 1.
+                       *
+                       * NC is the one column whose only non-zero value is 1,
+                       * so the number carries no information the crest does
+                       * not carry better — and the crest answers the question
+                       * a 1 immediately raises, which is "who?".
+                       */
+                      const champ = c.key === "ncaa_nc" ? (r.ncaa_champ as string | undefined) : undefined;
                       return (
                         <td
                           key={c.key}
@@ -598,7 +625,18 @@ export function ConferencesClient() {
                           )}
                         >
                           <span className="inline-flex flex-col items-end gap-0.5">
-                            <span className={v === null ? "text-ink-muted" : "text-ink"}>{fmtValue(v, c.fmt)}</span>
+                            {c.key === "ncaa_nc" ? (
+                              champ
+                                ? <span className="inline-flex items-center" title={`${champ} — national champion`}>
+                                    <TeamLogo name={champ} size={22} />
+                                  </span>
+                                // An em dash, not a 0. Every other row in this
+                                // column did not win it, and thirty zeroes down
+                                // a column is noise around the one that did.
+                                : <span className="text-ink-muted">—</span>
+                            ) : (
+                              <span className={v === null ? "text-ink-muted" : "text-ink"}>{fmtValue(v, c.fmt)}</span>
+                            )}
                             {pct !== null
                               ? <PercentileChip pct={pct} />
                               : <span className="h-5" aria-hidden="true" />}
