@@ -263,7 +263,21 @@ async function main() {
   // never guess across unrelated players who happen to share a last name.
   function resolve(cands: Map<number, IdxRec> | undefined, ft: string, requireSchool: boolean): number | null {
     if (!cands || cands.size === 0) return null;
-    if (ft) for (const [id, rec] of cands) if (rec.teams.has(ft)) return id;
+    // MOST RECENT AMONG THE SCHOOL MATCHES, not the first one found.
+    //
+    // This used to return whichever candidate the index happened to hold
+    // first, which is corpus file order — oldest season first. Two players
+    // can share a school and an initial-and-surname key, and when they do,
+    // the older one won: On3's "DJ Wagner" (Arkansas, 2026) resolved to
+    // Dequavious Wagner, an Arkansas guard whose last season was 2014, and
+    // the entry carried his 8-game line into the portal table. A player
+    // entering the portal today is the recent one; the tie-break should say
+    // so rather than leaving it to readdir.
+    if (ft) {
+      let best: number | null = null, by = -1;
+      for (const [id, rec] of cands) if (rec.teams.has(ft) && rec.year > by) { by = rec.year; best = id; }
+      if (best !== null) return best;
+    }
     if (requireSchool) return null;
     if (cands.size === 1) return [...cands.keys()][0]!;
     let best: number | null = null, by = -1;

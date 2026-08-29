@@ -190,6 +190,30 @@ const BATCHES: Array<{ confirmed: string; moves: Array<[string, string]> }> = [
   },
 ];
 
+/**
+ * Entries On3 joined to the WRONG player, by cbba_player_id.
+ *
+ * The feed sends a name and the name is matched against our corpus. Where two
+ * players share a school and an initial-and-surname key, that match can land
+ * on the wrong one: "DJ Wagner" (Arkansas, 2026) resolved to Dequavious
+ * Wagner, an Arkansas guard whose last season was 2014, and the row carried
+ * his eight-game line into the portal table.
+ *
+ * The tie-break is fixed in refresh-portal.mts (most recent season wins), but
+ * that script cannot run under the data freeze, so the correction lives here
+ * as well: the id is set and everything derived from it — production, last
+ * season, the school he is leaving — is recomputed from the corpus. Harmless
+ * once a fresh pull agrees, since it will find nothing to change.
+ */
+const IDENTITY_FIXES: Array<{ cbba_player_id: number; bart_player_id: number; name: string; why: string }> = [
+  {
+    cbba_player_id: 269352,
+    bart_player_id: 79249,
+    name: "D.J. Wagner",
+    why: "was bart 27594, Dequavious Wagner (Arkansas, last played 2014)",
+  },
+];
+
 const MOVES: Array<[string, string, string]> = BATCHES.flatMap(
   (b) => b.moves.map(([name, dest]) => [name, dest, b.confirmed] as [string, string, string]),
 );
@@ -410,8 +434,37 @@ async function main() {
     lines.push(`+ ${name.padEnd(21)} ${String(team_from ?? "UNKNOWN").padEnd(16)} → ${team_to.padEnd(15)} ${bart ? `bart ${String(bart).padEnd(7)}` : "no bart  "}${prod ? `${prod.gp}gp ${(prod.mpg ?? 0).toFixed(1)}mpg ${(prod.ppg ?? 0).toFixed(1)}ppg pir ${(prod.pir ?? 0).toFixed(1)}` : "NO PRODUCTION — will score unrated"}`);
   }
 
+  // ── Identity corrections ────────────────────────────────────────────
+  let identified = 0;
+  for (const fix of IDENTITY_FIXES) {
+    const entry = entries.find((e: { cbba_player_id?: number }) => e.cbba_player_id === fix.cbba_player_id);
+    if (!entry) { lines.push(`? ${fix.name.padEnd(21)} no entry ${fix.cbba_player_id} to correct`); continue; }
+    if (entry.bart_player_id === fix.bart_player_id) {
+      lines.push(`· ${fix.name.padEnd(21)} identity already correct (bart ${fix.bart_player_id})`);
+      continue;
+    }
+    const prod: ProductionResult | null = productionFor(fix.bart_player_id, playersByBartId, yearCohortStats);
+    entry.bart_player_id = fix.bart_player_id;
+    entry.name = fix.name;
+    // Everything below is a function of who he is, so all of it is redone.
+    entry.last_year = prod?.last_year ?? null;
+    entry.last_team = prod?.last_team ?? null;
+    entry.last_conf = prod?.last_conf ?? null;
+    entry.gp = prod?.gp ?? null;
+    entry.mpg = prod?.mpg ?? null;
+    entry.ppg = prod?.ppg ?? null;
+    entry.rpg = prod?.rpg ?? null;
+    entry.apg = prod?.apg ?? null;
+    entry.spg = prod?.spg ?? null;
+    entry.bpg = prod?.bpg ?? null;
+    entry.pir = prod?.pir ?? null;
+    entry.bta_portg = prod?.bta_portg ?? null;
+    identified++;
+    lines.push(`= ${fix.name.padEnd(21)} bart ${fix.bart_player_id} — ${fix.why}; now ${prod?.last_team ?? "?"} ${prod?.last_year ?? "?"}, ${prod?.gp ?? "?"}gp ${(prod?.mpg ?? 0).toFixed(1)}mpg ${(prod?.ppg ?? 0).toFixed(1)}ppg`);
+  }
+
   console.log(lines.join("\n"));
-  console.log(`\nadded ${added} · fixed ${fixed} · already correct ${already} · entries now ${entries.length}`);
+  console.log(`\nadded ${added} · fixed ${fixed} · identities corrected ${identified} · already correct ${already} · entries now ${entries.length}`);
 
   if (DRY) { console.log("\n--dry: nothing written."); return; }
   doc.manual_entries_at = new Date().toISOString();
