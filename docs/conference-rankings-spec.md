@@ -95,6 +95,55 @@ moving between the two pages sees the same columns in the same order.
 Overview's Four Factors band and Differentials' Margin band swap the team
 side's count differentials for the per-game ones, per §3.
 
+## 4b. Game splits
+
+Three: **Full Season**, **All Conference Games**, **All Non-Conference Games**,
+aggregated from `public/data/team-splits/<year>.json` by the same rules, over
+**the same kept teams** — the cut is decided once on full-season aNET and then
+applied to every split, so the three rows describe the same set of teams and can
+be read against each other.
+
+**The conference split is mostly self-play.** In league games the conference is
+playing itself, so its margin collapses towards zero: one team's points scored
+are another's allowed. It does not land on zero, and the gap is the interesting
+part — the rows are the league minus its worst two, and those two are exactly
+who the rest beat in league play. A healthy 2026 conference sits at +1.4 to
++4.8. Read this split for pace, shooting and the rate stats; read
+non-conference for how the league fares against everyone else.
+
+**The view list narrows with the split.** Adjusted & Schedule, Differentials and
+Record & Outcomes have no split at all — the adjusted ratings are a season-long
+fit, the count differentials come from season totals, and the outcome counts are
+not split upstream — so those views are not offered when a split is active, and
+a view that keeps fewer than four columns is dropped the same way. Overview
+swaps its bands under a split: raw ratings in place of adjusted ones, and the
+four factors themselves in place of the count differentials.
+
+The splits ride in their own file (`conference-splits.json`), fetched the first
+time one is picked: 103 KB gzipped, as big again as the rankings themselves, to
+serve a control most readers will never touch.
+
+## 4c. March
+
+The Record & Outcomes view carries a **March Madness** band — bids, wins,
+losses, and Sweet 16 teams — from `src/data/tournament-games.json`.
+
+**It counts the whole league, including the two teams the row drops.** This is
+the one band where the drop rule does not apply, and deliberately: "the ACC went
+5-4 in March" is a fact about the ACC, and a bid is a bid however the team
+rated.
+
+Two things to know about the numbers: **bids means the round of 64**, since the
+source carries the 63-game bracket and a First Four loser never appears; and
+**NCAA losses is not ranked** — a league loses more tournament games by sending
+more teams, so colouring it would say the opposite of what happened. 2020 is
+blank across the band; there was no tournament.
+
+The join is Sports Reference's school names against Bart's conferences, so it
+is normalised on both sides with an alias list, and the builder prints anything
+it could not match rather than dropping it silently. It currently matches
+everything.
+
 ## 5. Controls
 
 Seasons (multi, defaults to 25-26), Conferences (multi, from the same list the

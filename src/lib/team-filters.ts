@@ -75,13 +75,13 @@ export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   // incomplete, badly so before 2024, so `pbp_games` ships alongside as the
   // count they are actually measured over.
   { key: "win_pct", source: "cbbd", dbColumn: "win_pct", label: "Win %", desc: "Wins / games played", format: "pct1", group: "record" },
-  { key: "wins_no_trail", source: "cbbd", dbColumn: "wins_no_trail", label: "Wins w/o Trailing", desc: "Wins in games the team never trailed (ties allowed)", format: "int", group: "record" },
+  { key: "wins_no_trail", source: "cbbd", dbColumn: "wins_no_trail", label: "Wins w/o Trail", desc: "Wins in games the team never trailed (ties allowed)", format: "int", group: "record" },
   { key: "wire_wins", source: "cbbd", dbColumn: "wire_wins", label: "Wire-to-Wire Wins", desc: "Wins in which the team led the whole way — never behind and never tied again after first going ahead", format: "int", group: "record" },
   { key: "wins_trailing_5", source: "cbbd", dbColumn: "wins_trailing_5", label: "Wins Trailing 5+", desc: "Wins in games the team trailed by 5 or more at some point", format: "int", group: "record" },
   { key: "wins_trailing_10", source: "cbbd", dbColumn: "wins_trailing_10", label: "Wins Trailing 10+", desc: "Wins in games the team trailed by 10 or more at some point", format: "int", group: "record" },
   { key: "wins_trailing_15", source: "cbbd", dbColumn: "wins_trailing_15", label: "Wins Trailing 15+", desc: "Wins in games the team trailed by 15 or more at some point", format: "int", group: "record" },
   { key: "wins_trailing_20", source: "cbbd", dbColumn: "wins_trailing_20", label: "Wins Trailing 20+", desc: "Wins in games the team trailed by 20 or more at some point", format: "int", group: "record" },
-  { key: "losses_no_lead", source: "cbbd", dbColumn: "losses_no_lead", label: "Losses w/o Leading", desc: "Losses in games the team never led", format: "int", group: "record" },
+  { key: "losses_no_lead", source: "cbbd", dbColumn: "losses_no_lead", label: "Losses w/o Lead", desc: "Losses in games the team never led", format: "int", group: "record" },
   { key: "wire_losses", source: "cbbd", dbColumn: "wire_losses", label: "Wire-to-Wire Losses", desc: "Losses in which the opponent led the whole way", format: "int", group: "record" },
   { key: "losses_leading_5", source: "cbbd", dbColumn: "losses_leading_5", label: "Losses Leading 5+", desc: "Losses in games the team led by 5 or more at some point", format: "int", group: "record" },
   { key: "losses_leading_10", source: "cbbd", dbColumn: "losses_leading_10", label: "Losses Leading 10+", desc: "Losses in games the team led by 10 or more at some point", format: "int", group: "record" },

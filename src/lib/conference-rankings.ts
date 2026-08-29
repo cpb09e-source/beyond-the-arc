@@ -57,3 +57,40 @@ export function loadConferenceRankings(): Promise<ConfPack | null> {
   }
   return cache;
 }
+
+/** Split key -> its stats, for one conference-season. */
+export type ConfSplitBlock = Record<string, number | null>;
+export type ConfSplitPack = {
+  built: string;
+  splits: Array<{ key: string; label: string }>;
+  /** "2026|B10" -> { conf: {...}, nonconf: {...} } */
+  rows: Record<string, Record<string, ConfSplitBlock>>;
+};
+
+let splitCache: Promise<ConfSplitPack | null> | null = null;
+
+/**
+ * Fetch the game splits, the first time somebody asks for one.
+ *
+ * SEPARATE FILE, LAZILY. The splits are as big again as the rankings
+ * themselves (103 KB gzipped), and most readers will never touch the control,
+ * so folding them into the main payload would double every visit to serve a
+ * minority of them.
+ */
+export function loadConferenceSplits(): Promise<ConfSplitPack | null> {
+  if (!splitCache) {
+    splitCache = fetch(dataUrl("/data/conference-splits.json"))
+      .then((r) => (r.ok ? (r.json() as Promise<ConfSplitPack>) : null))
+      .catch(() => null);
+  }
+  return splitCache;
+}
+
+/** The value for a row and stat, under whichever split is showing. */
+export function splitValue(
+  block: ConfSplitBlock | undefined,
+  key: string,
+): number | null {
+  const v = block?.[key];
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}

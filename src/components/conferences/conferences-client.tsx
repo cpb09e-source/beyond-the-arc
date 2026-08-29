@@ -20,7 +20,7 @@
  * scripts/build-conference-rankings.mjs and docs/conference-rankings-spec.md.
  * This file only picks, sorts and paints.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { midrankPercentileMap } from "@/lib/percentile";
@@ -29,19 +29,42 @@ import { SortableTh } from "@/components/explorer/sortable-th";
 import { MultiYearSelect } from "@/components/explorer/multi-year-select";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
 import { confDisplay } from "@/lib/conf-display";
+import { useDragPan } from "@/lib/use-drag-pan";
+import { DownloadMenu } from "@/components/explorer/download-menu";
+import {
+  numField, type ExportCol, type ExportEntity, type ExportInput, type MultiExportInput,
+} from "@/lib/table-export";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { ConferenceLogo } from "@/components/conferences/conference-logo";
+import Link from "next/link";
 import {
-  CONF_VIEWS, confViewByKey, confViewCols, type ConfCol,
+  CONF_VIEWS, confCol, confViewByKey, confViewCols, confViewBands, confViewsFor, type ConfCol,
 } from "@/lib/conference-views";
 import {
-  confValue, loadConferenceRankings, type ConfPack, type ConfRow,
+  confValue, loadConferenceRankings, loadConferenceSplits, splitValue,
+  type ConfPack, type ConfRow, type ConfSplitPack,
 } from "@/lib/conference-rankings";
 
 const ROW_HOVER = "group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))]";
 
 /** The season the page opens on. */
 const DEFAULT_YEAR = 2026;
+
+/**
+ * The game splits, in the order the control offers them.
+ *
+ * READ THE CONFERENCE SPLIT WITH ITS THUMB ON THE SCALE. In league games the
+ * conference is mostly playing itself, so its margin collapses towards zero —
+ * one team's points scored are another's allowed. It does not land ON zero,
+ * and the gap is informative: the rows are the league minus its worst two,
+ * and those two are exactly who the rest beat in league play. Pace, shooting
+ * and the rate stats are unaffected and say real things.
+ */
+const SPLITS = [
+  { key: "full", label: "Full Season" },
+  { key: "conf", label: "All Conference Games" },
+  { key: "nonconf", label: "All Non-Conference Games" },
+] as const;
 
 function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
@@ -74,6 +97,7 @@ type ConfSpec = {
   years: number[];
   confs: string[];
   view: string;
+  split: string;
   sortBy: string;
   sortDir: "asc" | "desc";
 };
@@ -84,13 +108,21 @@ function parseConfSpec(params: URLSearchParams, pack: ConfPack | null): ConfSpec
     .split(",")
     .map((s) => Number(s.trim()))
     .filter((n) => Number.isFinite(n) && (known.size === 0 || known.has(n)));
-  const view = confViewByKey(params.get("view")).key;
+  const splitInUrl = params.get("split") ?? "full";
+  const split = SPLITS.some((s) => s.key === splitInUrl) ? splitInUrl : "full";
+  // A view the split cannot fill falls back to the first one it can, so a
+  // bookmarked Record & Outcomes URL plus a split is a table rather than a
+  // row of dashes.
+  const asked = confViewByKey(params.get("view"));
+  const offered = confViewsFor(split);
+  const view = (offered.some((v) => v.key === asked.key) ? asked : offered[0]!).key;
   const sortInUrl = params.get("sort");
   const orderInUrl = params.get("order");
   return {
     years: years.length ? years : [DEFAULT_YEAR],
     confs: (params.get("conf") ?? "").split(",").map((s) => s.trim()).filter(Boolean),
     view,
+    split,
     sortBy: sortInUrl ?? confViewByKey(view).sortBy,
     sortDir: orderInUrl === "asc" ? "asc" : orderInUrl === "desc" ? "desc" : confViewByKey(view).sortDir,
   };
@@ -115,7 +147,50 @@ export function ConferencesClient() {
   const params = useMemo(() => new URLSearchParams(search.toString()), [search]);
   const spec = useMemo(() => parseConfSpec(params, pack), [params, pack]);
   const view = useMemo(() => confViewByKey(spec.view), [spec.view]);
-  const cols = useMemo(() => confViewCols(view), [view]);
+  const cols = useMemo(() => confViewCols(view, spec.split), [view, spec.split]);
+  const viewOptions = useMemo(() => confViewsFor(spec.split), [spec.split]);
+
+  /**
+   * The sort the table can actually run.
+   *
+   * A split drops the columns it has no numbers for, and the sort key is
+   * usually one of them — Overview sorts on aNET, which no split has. Left
+   * alone the comparator read null for every row and the table came out
+   * alphabetical, which looks like a bug and is one. Falls back to the
+   * view's own default if the split kept it, then to its first column.
+   */
+  const sortBy = useMemo(() => {
+    if (cols.some((c) => c.key === spec.sortBy)) return spec.sortBy;
+    if (cols.some((c) => c.key === view.sortBy)) return view.sortBy;
+    return cols[0]?.key ?? spec.sortBy;
+  }, [cols, spec.sortBy, view.sortBy]);
+
+  /**
+   * The splits, fetched the first time one is picked and then kept.
+   *
+   * The table shows full-season numbers while this is in flight rather than
+   * emptying itself: a half-second of the right shape beats a blank.
+   */
+  const [splitPack, setSplitPack] = useState<ConfSplitPack | null>(null);
+  useEffect(() => {
+    if (spec.split === "full" || splitPack) return;
+    let live = true;
+    loadConferenceSplits().then((p) => { if (live) setSplitPack(p); });
+    return () => { live = false; };
+  }, [spec.split, splitPack]);
+
+  /** The view registry, in the shape the download menu wants. */
+  const downloadViews = useMemo(
+    () => viewOptions.map((v) => ({ key: v.key, label: v.label, group: "Views", desc: v.desc })),
+    [viewOptions],
+  );
+
+  /** One row's numbers under the active split — the row itself on Full. */
+  const readValue = useCallback((r: ConfRow, key: string): number | null => {
+    if (spec.split === "full") return confValue(r, key);
+    const block = splitPack?.rows[`${r.year}|${r.conf}`]?.[spec.split];
+    return splitValue(block, key);
+  }, [spec.split, splitPack]);
 
   /** Write the URL. Sorting goes through SortableTh's own links, not this. */
   const update = useCallback((next: Partial<ConfSpec>) => {
@@ -127,6 +202,20 @@ export function ConferencesClient() {
     if (next.confs) {
       if (next.confs.length) p.set("conf", next.confs.join(","));
       else p.delete("conf");
+    }
+    if (next.split) {
+      if (next.split === "full") p.delete("split");
+      else p.set("split", next.split);
+      // A split the current view cannot fill moves the reader to one it can,
+      // rather than handing them an empty table and no explanation.
+      const offered = confViewsFor(next.split);
+      if (!offered.some((v) => v.key === spec.view)) {
+        const fallback = offered[0]!;
+        if (fallback.key === CONF_VIEWS[0]!.key) p.delete("view");
+        else p.set("view", fallback.key);
+        p.delete("sort");
+        p.delete("order");
+      }
     }
     if (next.view) {
       const v = confViewByKey(next.view);
@@ -140,7 +229,7 @@ export function ConferencesClient() {
     }
     const qs = p.toString();
     router.replace(qs ? `/conferences?${qs}` : "/conferences", { scroll: false });
-  }, [params, router]);
+  }, [params, router, spec.view]);
 
   /**
    * THE COHORT IS EVERY CONFERENCE IN THE SELECTED SEASONS, not the conferences
@@ -171,10 +260,11 @@ export function ConferencesClient() {
       byYear.set(r.year, arr);
     }
     for (const c of cols) {
+      if (c.noPct) continue;
       const merged = new Map<string, number>();
       for (const rows of byYear.values()) {
         const m = midrankPercentileMap(
-          rows.map((r) => [`${r.year}|${r.conf}`, confValue(r, c.key)] as const),
+          rows.map((r) => [`${r.year}|${r.conf}`, readValue(r, c.key)] as const),
           !c.lowerBetter,
         );
         for (const [k, v] of m) merged.set(k, v);
@@ -182,15 +272,15 @@ export function ConferencesClient() {
       out.set(c.key, merged);
     }
     return out;
-  }, [cohort, cols]);
+  }, [cohort, cols, readValue]);
 
   const rows = useMemo(() => {
     const keep = new Set(spec.confs);
     const picked = keep.size ? cohort.filter((r) => keep.has(r.conf)) : [...cohort];
     const dir = spec.sortDir === "asc" ? 1 : -1;
     picked.sort((a, b) => {
-      const va = confValue(a, spec.sortBy);
-      const vb = confValue(b, spec.sortBy);
+      const va = readValue(a, sortBy);
+      const vb = readValue(b, sortBy);
       // Nulls last in both directions: a conference with no number for a stat
       // has not earned the top of the table by lacking one.
       if (va === null && vb === null) return a.year !== b.year ? b.year - a.year : a.conf.localeCompare(b.conf);
@@ -200,7 +290,7 @@ export function ConferencesClient() {
       return b.year - a.year || a.conf.localeCompare(b.conf);
     });
     return picked;
-  }, [cohort, spec.confs, spec.sortBy, spec.sortDir]);
+  }, [cohort, spec.confs, sortBy, spec.sortDir, readValue]);
 
   /**
    * Conference options, POWER FIRST, from the seasons on screen — so a
@@ -224,6 +314,74 @@ export function ConferencesClient() {
       .sort((a, b) => (a.group === b.group ? a.label.localeCompare(b.label) : a.group === "power" ? -1 : 1));
   }, [cohort]);
 
+  const gridScrollRef = useRef<HTMLDivElement>(null);
+  const panHandlers = useDragPan(gridScrollRef);
+  /**
+   * The export reads THE TABLE, not the file: same split, same percentiles,
+   * same rows in the same order. A workbook that quietly reverted to
+   * full-season numbers because that is what the row object holds would be
+   * the worst kind of wrong — right-looking and different.
+   */
+  const exportEntity = useMemo((): ExportEntity<ConfRow> => ({
+    title: "Conference Power Rankings",
+    sheetName: "Conferences",
+    wideHeader: "Conference",
+    fileStem: "conferences",
+    identity: [
+      { header: "Conference", width: 22, get: (r) => confDisplay(r.conf) || r.conf },
+      { header: "Season", get: (r) => seasonLabel(r.year) },
+      { header: "Teams", get: (r) => r.kept },
+      { header: "Of", get: (r) => r.teams },
+      { header: "Dropped", width: 28, get: (r) => r.dropped.join(", ") },
+    ],
+    num: (r, key) => (key ? readValue(r, key) : numField(r, key)),
+    pctOf: (r, key) => pcts.get(key)?.get(`${r.year}|${r.conf}`) ?? null,
+  }), [readValue, pcts]);
+
+  const exportCols = useCallback((v: typeof view): ExportCol[] =>
+    confViewBands(v, spec.split).flatMap((b) =>
+      b.keys
+        .map((k) => confViewCols(v, spec.split).find((c) => c.key === k))
+        .filter((c): c is ConfCol => !!c)
+        .map((c) => ({
+          label: c.label,
+          total: c.key,
+          pct: c.key,
+          // The workbook has no num2; a second decimal is display polish.
+          fmt: c.fmt === "num2" ? "num1" : c.fmt,
+          band: b.label,
+        })),
+    ), [spec.split]);
+
+  const exportMeta = useCallback((label: string) => ({
+    viewLabel: label,
+    seasons: spec.years.length === 1 ? seasonLabel(spec.years[0]!) : `${spec.years.length} seasons`,
+    conference: spec.confs.length ? spec.confs.join(", ") : "All conferences",
+    teams: `Each conference minus its bottom 2 by NET`,
+    filters: [SPLITS.find((sp) => sp.key === spec.split)?.label ?? "Full Season"],
+    sort: `${confCol(sortBy)?.label ?? sortBy} — ${spec.sortDir === "desc" ? "high to low" : "low to high"}`,
+    search: "",
+    url: typeof window === "undefined" ? "" : window.location.href,
+  }), [spec.years, spec.confs, spec.split, spec.sortDir, sortBy]);
+
+  const buildExport = useCallback((): ExportInput<ConfRow> => ({
+    cols: exportCols(view),
+    rows,
+    entity: exportEntity,
+    meta: exportMeta(view.label),
+  }), [exportCols, view, rows, exportEntity, exportMeta]);
+
+  const buildExportAll = useCallback((viewKeys: string[]): MultiExportInput<ConfRow> => {
+    const wanted = new Set(viewKeys);
+    return {
+      sheets: viewOptions.filter((v) => wanted.has(v.key)).map((v) => ({ name: v.label, cols: exportCols(v) })),
+      rows,
+      entity: exportEntity,
+      meta: exportMeta("Multiple views"),
+      slug: wanted.size === viewOptions.length ? "all-views" : "views",
+    };
+  }, [viewOptions, exportCols, rows, exportEntity, exportMeta]);
+
   const multiYear = spec.years.length > 1;
   /**
    * Band captions with the column index each one starts at, so the dividing
@@ -234,13 +392,13 @@ export function ConferencesClient() {
   const bands = useMemo(() => {
     const out: Array<{ label: string; accent?: boolean; span: number; start: number }> = [];
     let at = 0;
-    for (const b of view.bands) {
+    for (const b of confViewBands(view, spec.split)) {
       const span = b.keys.filter((k) => cols.some((c) => c.key === k)).length;
       if (span > 0) out.push({ label: b.label, accent: b.accent, span, start: at });
       at += span;
     }
     return out;
-  }, [view, cols]);
+  }, [view, cols, spec.split]);
   const groupStarts = useMemo(() => new Set(bands.map((b) => b.start)), [bands]);
 
   return (
@@ -278,24 +436,64 @@ export function ConferencesClient() {
             aria-label="Table view"
             className="h-8 max-w-44 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 transition-colors"
           >
-            {CONF_VIEWS.map((v) => (
+            {viewOptions.map((v) => (
               <option key={v.key} value={v.key} title={v.desc}>{v.label}</option>
             ))}
           </select>
         </label>
 
+        <label className="inline-flex items-center gap-1.5 min-w-0">
+          <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">Split</span>
+          <select
+            value={spec.split}
+            onChange={(e) => update({ split: e.target.value })}
+            aria-label="Stat split"
+            className="h-8 max-w-52 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 transition-colors"
+          >
+            {SPLITS.map((sp) => (
+              <option key={sp.key} value={sp.key}>{sp.label}</option>
+            ))}
+          </select>
+        </label>
+
+        <DownloadMenu
+          views={downloadViews}
+          noun="conferences"
+          // Ungated, like the rest of this page. When the gating worksheet
+          // comes back with a decision for /conferences this comes off.
+          alwaysFree
+          build={buildExport}
+          buildAll={buildExportAll}
+          rowCount={rows.length}
+          colCount={cols.length * 2 + 5}
+          disabled={loading || rows.length === 0}
+        />
+
         <span className="hidden sm:inline text-xs text-ink-muted tabular whitespace-nowrap">
           {loading ? "loading…" : `${rows.length.toLocaleString()} ${rows.length === 1 ? "row" : "rows"}`}
         </span>
-
-        {/* The rule, said once, where the numbers are. Without it a reader has
-            no way to know the table is not a plain conference average. */}
-        <span className="hidden lg:inline text-xs text-ink-muted whitespace-nowrap">
-          · bottom 2 teams by NET dropped from every conference
-        </span>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* THE RULE, ON ITS OWN LINE. Sharing the toolbar row it was the first
+          thing dropped at narrow widths, and it is the one sentence without
+          which the table reads as a plain conference average. Under the
+          conference split it also has to explain why the margins are small. */}
+      <div className="px-3 lg:px-4 py-2 border-b border-hairline bg-paper-deep/30 text-xs text-ink-muted leading-snug">
+        {spec.split === "conf"
+          ? "League games only, so a conference is mostly playing itself — the margin that remains is what the rest of the league does to the two teams each row drops."
+          : spec.split === "nonconf"
+            ? "Non-conference games only. Bottom 2 teams by NET still dropped from every conference."
+            : "Bottom 2 teams by NET dropped from every conference."}
+      </div>
+
+      {/* Click-and-drag panning over the stat columns, same gesture as the
+          team explorer and /players. Touch is left alone — it already
+          scrolls natively, and better. */}
+      <div
+        ref={gridScrollRef}
+        className="overflow-x-auto overscroll-x-contain cursor-grab"
+        {...panHandlers}
+      >
         <table className="w-full text-sm border-separate border-spacing-0">
           <thead>
             {/* Band row, same two-tier header as the other tables. */}
@@ -330,7 +528,7 @@ export function ConferencesClient() {
                   title={c.title}
                   defaultDir={c.lowerBetter ? "asc" : "desc"}
                   basePath="/conferences"
-                  defaultSort={view.sortBy}
+                  defaultSort={sortBy}
                   idleArrows
                   className={cn(
                     "sticky top-6 z-30 w-[8%] bg-paper-deep border-b border-hairline",
@@ -362,9 +560,16 @@ export function ConferencesClient() {
                          number that never changes within a season and it was
                          costing a column beside the logo. Both halves are here
                          because a reader cannot work either out for himself. */
-                      title={`${r.kept} of ${r.teams} teams${r.dropped.length ? ` · dropped ${r.dropped.join(", ")}` : ""}`}
+                      title={`${r.kept} of ${r.teams} teams${r.dropped.length ? ` · dropped ${r.dropped.join(", ")}` : ""} · open in the Team Explorer`}
                     >
-                      <span className="inline-flex items-center gap-2 min-w-0">
+                      {/* STRAIGHT INTO THE TEAM EXPLORER, on this league and
+                          this season. The row says how a conference did; the
+                          obvious next question is which of its teams did it,
+                          and that table already exists. */}
+                      <Link
+                        href={`/?ys=${r.year}&conf=${encodeURIComponent(r.conf)}`}
+                        className="inline-flex items-center gap-2 min-w-0 hover:text-coral transition-colors"
+                      >
                         {/* 28. Half these marks are wordmarks rather than shields -
                             Ivy, C-USA, WAC - so they need real width before
                             they read as anything; at 18 they were a smudge.
@@ -373,7 +578,7 @@ export function ConferencesClient() {
                             files are 128px so it costs no sharpness either. */}
                         <ConferenceLogo conf={r.conf} size={28} />
                         {confDisplay(r.conf) || r.conf}
-                      </span>
+                      </Link>
                     </td>
                     {multiYear && (
                       <td className={cn("px-2 py-1.5 text-ink-muted tabular text-xs transition-colors", ROW_HOVER)}>
@@ -381,7 +586,7 @@ export function ConferencesClient() {
                       </td>
                     )}
                     {cols.map((c, ci) => {
-                      const v = confValue(r, c.key);
+                      const v = readValue(r, c.key);
                       const pct = pcts.get(c.key)?.get(id) ?? null;
                       return (
                         <td

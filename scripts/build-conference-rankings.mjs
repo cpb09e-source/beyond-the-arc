@@ -24,7 +24,18 @@ import fs from "node:fs";
 import path from "node:path";
 
 const IN_DIR = "public/data/teams-by-year";
+const SPLIT_DIR = "public/data/team-splits";
+const TOURNEY_FILE = "src/data/tournament-games.json";
 const OUT = "public/data/conference-rankings.json";
+/**
+ * The splits ride in their own file.
+ *
+ * Folded into the main one they took it from 105 KB gzipped to 215, on every
+ * visit, to serve a control most readers will never touch. Separate, the page
+ * loads what it shows and fetches the rest the first time somebody picks a
+ * split.
+ */
+const OUT_SPLITS = "public/data/conference-splits.json";
 
 /** 2014-2026 without 2021. 2027 is the preview season: no games, no ranking. */
 const SEASONS = [];
@@ -147,15 +158,162 @@ const RATE_MARGINS = [
 /** The offensive/defensive halves the margins need, aggregated the same way. */
 const MARGIN_PARTS = ["efg_pct", "efg_pct_def", "fg3_pct", "fg3_pct_def", "orb_pct", "orb_pct_def", "tov_pct", "tov_pct_def"];
 
+// ---------------------------------------------------------------------------
+// The conference-games / non-conference-games splits
+// ---------------------------------------------------------------------------
+//
+// public/data/team-splits/<year>.json holds each team's numbers cut eight
+// ways; two of them are worth aggregating to a conference.
+//
+// A CONFERENCE ROW ON THE CONFERENCE SPLIT IS MOSTLY SELF-PLAY, and its
+// margin collapses towards zero because of it: in league games the league is
+// playing itself, so one team's points scored are another's allowed.
+//
+// It does NOT land on zero, and the gap is the whole point of this page. The
+// kept teams are the league minus its worst two, and those two are exactly
+// who the kept teams beat in league play — so a healthy conference sits at
+// +1.4 to +4.8 (2026), not at 0. A league whose top teams cannot separate
+// from its bottom two shows up here immediately.
+//
+// Read the conference split for pace, shooting and the rate stats, and read
+// non-conference for how the league does against everybody else.
+//
+// [ourKey, splitKey, rule] — same two rules as the full-season table.
+const SPLIT_STATS = [
+  ["cbb_ortg", "ortg", "m"],
+  ["cbb_drtg", "drtg", "m"],
+  ["net_rtg", "net_rtg", "m"],
+  ["cbb_pace", "pace", "m"],
+
+  ["cbb_efg", "efg", "w"],
+  ["cbb_ts", "ts_pct", "w"],
+  ["cbb_orb", "orb_pct", "w"],
+  ["cbb_tov", "tov_pct", "w"],
+  ["cbb_ftarate", "ftr", "w"],
+  ["cbb_fg3", "fg3_pct", "w"],
+  ["cbb_ft", "ft_pct", "w"],
+  ["cbb_fg3rate", "fg3_rate", "w"],
+
+  ["cbb_pts_pg", "pts_pg", "w"],
+  ["cbb_fga_pg", "fga_pg", "w"],
+  ["cbb_ast_pg", "ast_pg", "w"],
+  ["cbb_orb_pg", "orb_pg", "w"],
+  ["cbb_drb_pg", "drb_pg", "w"],
+  ["cbb_stl_pg", "stl_pg", "w"],
+  ["cbb_blk_pg", "blk_pg", "w"],
+  ["cbb_tov_pg", "tov_pg", "w"],
+  ["cbb_pf_pg", "pf_pg", "w"],
+  ["cbb_pfd_pg", "pfd_pg", "w"],
+
+  ["cbb_fbpts_pg", "fbpts_pg", "w"],
+  ["cbb_pitp_pg", "pitp_pg", "w"],
+  ["cbb_potov_pg", "pot_pg", "w"],
+  ["cbb_fbpts", "fbpts_sh", "w"],
+  ["cbb_pitp", "pitp_sh", "w"],
+  ["cbb_ast", "ast_pct", "w"],
+  ["cbb_ast_to", "ast_tov", "w"],
+
+  ["cbb_stl_pct", "stl_pct", "w"],
+  ["cbb_blk_pct", "blk_pct", "w"],
+  ["cbb_hakeem", "hkm_pct", "w"],
+  ["cbb_drb_pct", "drb_pct", "w"],
+  ["cbb_stl_pf", "stl_pf", "w"],
+  ["cbb_blk_pf", "blk_pf", "w"],
+  ["cbb_pf_eff", "pf_eff", "w"],
+];
+/** Which splits the page offers. `full` is the top-level row itself. */
+const SPLIT_KEYS = ["conf", "nonconf"];
+
+// ---------------------------------------------------------------------------
+// March
+// ---------------------------------------------------------------------------
+//
+// EVERY TEAM IN THE LEAGUE, INCLUDING THE TWO THE ROW DROPS. This is the one
+// place the drop rule does not apply, on purpose: "the ACC went 5-4 in March"
+// is a fact about the ACC, and a bid is a bid however the team rated. A
+// one-bid league whose auto-bid came from its 9th-best team still played that
+// game, and hiding it would make the column wrong rather than consistent.
+//
+// Names come from Sports Reference and the conferences from Bart, so the join
+// is normalised on both sides and anything left over is reported rather than
+// silently dropped.
+const tourneyByYear = fs.existsSync(TOURNEY_FILE)
+  ? JSON.parse(fs.readFileSync(TOURNEY_FILE, "utf8"))
+  : {};
+
+function normSchool(s) {
+  return String(s ?? "")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\bstate\b/g, "st")
+    .replace(/\buniversity\b|\bthe\b/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+/** SR spellings that normalise to something Bart does not use. */
+const TOURNEY_ALIASES = {
+  connecticut: "connecticut",
+  uconn: "connecticut",
+  unc: "northcarolina",
+  pittsburgh: "pittsburgh",
+  pitt: "pittsburgh",
+  "olemiss": "mississippi",
+  umass: "massachusetts",
+  "texasam": "texasam",
+  "miamifl": "miamifl",
+  miami: "miamifl",
+  "miamiflorida": "miamifl",
+  "loyolachicago": "loyolachicago",
+  "loyoilchicago": "loyolachicago",
+  "saintmarys": "saintmarys",
+  "stmarys": "saintmarys",
+  "saintmaryscalifornia": "saintmarys",
+  "unclv": "unlv",
+  "southerncalifornia": "usc",
+  "brighamyoung": "byu",
+  "centralflorida": "ucf",
+  "virginiacommonwealth": "vcu",
+  "texaschristian": "tcu",
+  "southernmethodist": "smu",
+  "louisianastate": "lsu",
+  "nevadalasvegas": "unlv",
+  "mountstmarys": "mountstmarys",
+  // SR writes the parenthetical, Bart does not; SR abbreviates where Bart
+  // spells out, and each of these was a real tournament team dropped from
+  // its conference row until it was listed here.
+  "albanyny": "albany",
+  "stjohnsny": "stjohns",
+  "etsu": "easttennesseest",
+  "collegeofcharleston": "charleston",
+  "loyolail": "loyolachicago",
+  "fdu": "fairleighdickinson",
+  "texasamcorpuschristi": "texasamcorpuschris",
+  "grambling": "gramblingst",
+  "mcneese": "mcneesest",
+  "omaha": "nebraskaomaha",
+  "californiabaptist": "calbaptist",
+  "queensnc": "queens",
+};
+const joinKey = (name) => {
+  const n = normSchool(name);
+  return TOURNEY_ALIASES[n] ?? n;
+};
+
+/** Rounds a team reaching them has played, for the Sweet 16 tally. */
+const DEEP_ROUNDS = new Set(["Sweet 16", "Elite Eight", "Final Four", "Champion"]);
+
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const round = (v, dp) => (v === null ? null : Math.round(v * 10 ** dp) / 10 ** dp);
 
 /** Games-weighted mean, skipping teams with no value or no weight. */
-function weighted(teams, key, weightKey) {
+function weighted(teams, key, weightKey, pick = (t) => t.s) {
   let num_ = 0, den = 0;
   for (const t of teams) {
-    const v = num(t.s[key]);
-    const w = num(weightKey ? t.s[weightKey] : t.s.games);
+    const bag = pick(t);
+    if (!bag) continue;
+    const v = num(bag[key]);
+    const w = num(weightKey ? bag[weightKey] : bag.games);
     if (v === null || w === null || w <= 0) continue;
     num_ += v * w;
     den += w;
@@ -164,10 +322,12 @@ function weighted(teams, key, weightKey) {
 }
 
 /** Plain mean over the kept teams, skipping nulls. */
-function mean(teams, key) {
+function mean(teams, key, pick = (t) => t.s) {
   let sum = 0, n = 0;
   for (const t of teams) {
-    const v = num(t.s[key]);
+    const bag = pick(t);
+    if (!bag) continue;
+    const v = num(bag[key]);
     if (v === null) continue;
     sum += v;
     n++;
@@ -181,12 +341,17 @@ function mean(teams, key) {
  * display so a sort never ties on a rounding artifact.
  */
 function dpFor(key) {
+  if (key === "net_rtg") return 2;
   if (/_pct$|^cbb_(efg|ts|fg3|ft|fg3rate|ftarate|ast|unast_share|fbpts|pitp|hakeem|stl_pct|blk_pct|drb_pct)$|^win_pct$|_diff$/.test(key)) return 4;
   return 2;
 }
 
 let totalRows = 0;
 const rows = [];
+/** Tournament schools no conference could be found for, reported at the end. */
+const marchUnmatched = [];
+/** year|conf -> { conf, nonconf }, written to its own file. */
+const splitRows = {};
 const report = [];
 
 for (const year of SEASONS) {
@@ -197,6 +362,36 @@ for (const year of SEASONS) {
   }
   const raw = JSON.parse(fs.readFileSync(file, "utf8"));
 
+  /**
+   * The same season cut by conference / non-conference games, keyed by team
+   * NAME — which is the only join these two files share. A missing file is
+   * not fatal: the season simply has no splits and the page falls back to
+   * full-season for it.
+   */
+  const splitFile = path.join(SPLIT_DIR, `${year}.json`);
+  const splitDoc = fs.existsSync(splitFile) ? JSON.parse(fs.readFileSync(splitFile, "utf8")) : null;
+  const splitStatIndex = new Map((splitDoc?.stats ?? []).map((st, i) => [st.key, i]));
+  /**
+   * One team's split as a flat {statKey: value, games} bag.
+   *
+   * SCALE CONVERSION HAPPENS HERE. The splits file stores a percentage as a
+   * whole number (53.2 for an eFG%) where every other file on the site — and
+   * every formatter reading these rows — stores it as a fraction. Read off
+   * the file's own `fmt` rather than a hand-kept list, so a stat that changes
+   * shape upstream cannot land here silently multiplied by a hundred.
+   */
+  const splitIsPct = new Set((splitDoc?.stats ?? []).filter((st) => st.fmt === "pct1").map((st) => st.key));
+  const splitBag = (teamName, splitKey) => {
+    const rec = splitDoc?.teams?.[teamName]?.[splitKey];
+    if (!rec || !Array.isArray(rec.v)) return null;
+    const out = { games: rec.games };
+    for (const [k, i] of splitStatIndex) {
+      const v = rec.v[i];
+      out[k] = typeof v === "number" && splitIsPct.has(k) ? v / 100 : (v ?? null);
+    }
+    return out;
+  };
+
   /** conference → teams, carrying just the two objects we read from. */
   const byConf = new Map();
   for (const t of raw) {
@@ -206,6 +401,43 @@ for (const year of SEASONS) {
     const arr = byConf.get(conf) ?? [];
     arr.push({ id: t.id, name: t.name, s });
     byConf.set(conf, arr);
+  }
+
+  /**
+   * conference -> { bids, w, l, s16 } for this season's NCAA tournament.
+   *
+   * Built over EVERY team in the league, not the kept ones — see the note on
+   * tourneyByYear. Seasons with no tournament (2020, cancelled) simply have
+   * no entry and the columns come out blank.
+   */
+  const marchByConf = new Map();
+  {
+    const games = tourneyByYear[String(year)] ?? [];
+    const confOf = new Map();
+    for (const t of raw) if (t.conference && t.name) confOf.set(joinKey(t.name), t.conference);
+    const seen = new Set();
+    const unmatched = new Set();
+    const bump = (conf, field, by = 1) => {
+      const rec = marchByConf.get(conf) ?? { bids: 0, w: 0, l: 0, s16: 0 };
+      rec[field] += by;
+      marchByConf.set(conf, rec);
+    };
+    for (const g of games) {
+      for (const [side, field] of [[g.winner, "w"], [g.loser, "l"]]) {
+        const key = joinKey(side.school);
+        const conf = confOf.get(key);
+        if (!conf) { unmatched.add(side.school); continue; }
+        bump(conf, field);
+        // A bid is counted once per team, on whatever game it first appears
+        // in — which is its opener, since the file is in bracket order.
+        if (!seen.has(key)) { seen.add(key); bump(conf, "bids"); }
+        // Reaching the Sweet 16 means winning in R32, so the winner of an
+        // R32 game is what this counts. Counting appearances IN the Sweet 16
+        // round would miss nothing, but this way a team is tallied once.
+        if (field === "w" && g.round === "R32") bump(conf, "s16");
+      }
+    }
+    if (unmatched.size) marchUnmatched.push(`${year}: ${[...unmatched].join(", ")}`);
   }
 
   let skipped = [];
@@ -248,12 +480,54 @@ for (const year of SEASONS) {
       row.pts_diff_pg = g > 0 ? round(pts / g, 2) : null;
     }
 
+    // March, from the whole league rather than the kept set.
+    {
+      const m = marchByConf.get(conf);
+      row.ncaa_bids = m ? m.bids : null;
+      row.ncaa_w = m ? m.w : null;
+      row.ncaa_l = m ? m.l : null;
+      row.ncaa_s16 = m ? m.s16 : null;
+    }
+
     // Rate margins from the conference's own aggregated halves.
     const parts = {};
     for (const k of MARGIN_PARTS) parts[k] = weighted(kept, k);
     for (const [outKey, a, b] of RATE_MARGINS) {
       const va = parts[a], vb = parts[b];
       row[outKey] = va === null || vb === null ? null : round(va - vb, 4);
+    }
+
+    /**
+     * THE SAME KEPT TEAMS, cut two more ways.
+     *
+     * The cut is decided once, on full-season aNET, and then applied to every
+     * split. Re-ranking within each split would mean the conference-games row
+     * and the full-season row described different sets of teams, and no
+     * reader would be able to compare them.
+     */
+    if (splitDoc) {
+      const split = {};
+      for (const sk of SPLIT_KEYS) {
+        const bag = (t) => splitBag(t.name, sk);
+        const withData = kept.filter((t) => bag(t));
+        if (withData.length < 3) continue;
+        const block = {};
+        for (const [outKey, srcKey, rule] of SPLIT_STATS) {
+          const v = rule === "m" ? mean(withData, srcKey, bag) : weighted(withData, srcKey, undefined, bag);
+          block[outKey] = round(v, dpFor(outKey));
+        }
+        // The splits carry offensive and defensive rebounds but not the sum.
+        block.cbb_reb_pg = block.cbb_orb_pg !== null && block.cbb_drb_pg !== null
+          ? round(block.cbb_orb_pg + block.cbb_drb_pg, 2) : null;
+        // Points margin per game, from the same rating pair the row already
+        // has: (net per 100) x (possessions per game) / 100.
+        block.pts_diff_pg = block.net_rtg !== null && block.cbb_pace !== null
+          ? round((block.net_rtg * block.cbb_pace) / 100, 2) : null;
+        block.games = round(mean(withData, "games", bag), 1);
+        block.teams = withData.length;
+        split[sk] = block;
+      }
+      if (Object.keys(split).length) splitRows[`${year}|${conf}`] = split;
     }
 
     rows.push(row);
@@ -272,6 +546,20 @@ const out = {
   rows,
 };
 fs.writeFileSync(OUT, JSON.stringify(out));
+fs.writeFileSync(OUT_SPLITS, JSON.stringify({
+  built: out.built,
+  splits: [
+    { key: "conf", label: "Conference Games" },
+    { key: "nonconf", label: "Non-Conference Games" },
+  ],
+  rows: splitRows,
+}));
 
 for (const line of report) console.log(line);
+if (marchUnmatched.length) {
+  console.log("");
+  console.log("Tournament schools with no conference match:");
+  for (const line of marchUnmatched) console.log("  " + line);
+}
 console.log(`\n${OUT}: ${totalRows} rows, ${(fs.statSync(OUT).size / 1024).toFixed(0)} KB`);
+console.log(`${OUT_SPLITS}: ${Object.keys(splitRows).length} rows, ${(fs.statSync(OUT_SPLITS).size / 1024).toFixed(0)} KB`);
