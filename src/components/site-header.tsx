@@ -19,10 +19,10 @@ import { cn } from "@/lib/utils";
  * seven already needed the xl gutter given back to fit at 1024. A menu adds
  * a page without adding a word.
  */
-const SUBNAV: Record<string, ReadonlyArray<{ href: string; label: string; desc: string }>> = {
+const SUBNAV: Record<string, ReadonlyArray<{ href: string; label: string }>> = {
   "/": [
-    { href: "/", label: "Team Explorer", desc: "Every team, every season, your columns" },
-    { href: "/conferences", label: "Conference Power Rankings", desc: "Each league minus its bottom two" },
+    { href: "/", label: "Team Explorer" },
+    { href: "/conferences", label: "Conference Power Rankings" },
   ],
 };
 
@@ -86,7 +86,7 @@ function NavMenu({
 }: {
   label: string;
   href: string;
-  items: ReadonlyArray<{ href: string; label: string; desc: string }>;
+  items: ReadonlyArray<{ href: string; label: string }>;
   active: boolean;
   pathname: string;
 }) {
@@ -119,7 +119,7 @@ function NavMenu({
         // No gap between the chip and the panel: a few pixels of nothing is
         // enough to drop the hover on the way down and close the menu under
         // the pointer.
-        <div className="absolute left-0 top-full pt-1 w-64">
+        <div className="absolute left-0 top-full pt-1 w-56">
           <div className="rounded-lg border border-ink/12 bg-card shadow-lg ring-1 ring-ink/5 py-1">
             {items.map((k) => {
               const here = k.href === "/" ? pathname === "/" : pathname.startsWith(k.href);
@@ -129,12 +129,14 @@ function NavMenu({
                   href={k.href}
                   onClick={() => setOpen(false)}
                   className={cn(
-                    "block px-3 py-2 transition-colors",
-                    here ? "bg-coral/6" : "hover:bg-paper-deep/60",
+                    // TITLES ONLY. The blurbs under them explained pages whose
+                    // names already say what they are, and turned a two-item
+                    // menu into a paragraph you had to read to click.
+                    "block px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
+                    here ? "bg-coral/6 text-coral" : "text-ink hover:bg-paper-deep/60",
                   )}
                 >
-                  <span className={cn("block text-sm font-medium", here ? "text-coral" : "text-ink")}>{k.label}</span>
-                  <span className="block text-xs text-ink-muted leading-snug mt-0.5">{k.desc}</span>
+                  {k.label}
                 </Link>
               );
             })}
