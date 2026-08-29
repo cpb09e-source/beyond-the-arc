@@ -39,7 +39,15 @@ export function MobileMenu({
 }: {
   open: boolean;
   onClose: () => void;
-  items: ReadonlyArray<{ href: string; label: string }>;
+  /**
+   * A row is either a destination or a SECTION: a heading with its own
+   * destinations under it. Teams is two tables rather than one page, and a
+   * flat list either hides that or spends two top-level rows saying it.
+   */
+  items: ReadonlyArray<
+    | { href: string; label: string; children?: undefined }
+    | { href?: undefined; label: string; children: ReadonlyArray<{ href: string; label: string }> }
+  >;
   isCurrent: (pathname: string, href: string) => boolean;
   pathname: string;
 }) {
@@ -130,6 +138,43 @@ export function MobileMenu({
           never pushes the buttons off the bottom of the screen. */}
       <nav className="min-h-0 overflow-y-auto overscroll-contain px-6">
         {items.map((item) => {
+          if (item.children) {
+            return (
+              // A HEADING, NOT A LINK. The section name is a label for the two
+              // rows under it; making it tappable as well would give the drawer
+              // two ways to reach the same page a thumb-width apart.
+              <div key={item.label} className="border-b border-hairline">
+                <div className="pt-5 pb-2 text-[0.7rem] uppercase tracking-[0.18em] text-ink-muted font-semibold">
+                  {item.label}
+                </div>
+                {item.children.map((k, i) => {
+                  // NOT isCurrent: that one lights the Teams chip for every
+                  // page on its menu, which is right for the desktop chip and
+                  // wrong here - it lit Team Explorer and Conference Power
+                  // Rankings at the same time. A child is current only if it
+                  // is the page you are on.
+                  const on = k.href === "/" ? pathname === "/" : pathname.startsWith(k.href);
+                  return (
+                    <Link
+                      key={k.href}
+                      href={k.href}
+                      onClick={onClose}
+                      aria-current={on ? "page" : undefined}
+                      className={cn(
+                        // Indented and hairline-separated from each other, but
+                        // not from the heading: the group reads as one block.
+                        "flex items-center justify-between py-4 pl-3 text-base tracking-tight transition-colors",
+                        i > 0 && "border-t border-hairline/60",
+                        on ? "text-coral font-semibold" : "text-ink font-medium hover:text-coral",
+                      )}
+                    >
+                      {k.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            );
+          }
           const active = isCurrent(pathname, item.href);
           return (
             <Link

@@ -41,11 +41,12 @@ const NAV = [
 // desktop row has no width for — seven labels already fill it — so without
 // this the only route to it is a URL someone was given.
 const MOBILE_NAV = [
-  ...NAV.flatMap((item) => {
+  // A label with a menu becomes a SECTION in the drawer - the name as a
+  // heading, its pages nested under it - rather than being flattened into
+  // two top-level rows that no longer say they belong together.
+  ...NAV.map((item) => {
     const kids = SUBNAV[item.href];
-    // The parent label is kept and the children follow it: on a phone the
-    // list scrolls, so there is no reason to hide a page behind a hover.
-    return kids ? kids.map((k) => ({ href: k.href, label: k.label })) : [item];
+    return kids ? { label: item.label, children: kids } : item;
   }),
   { href: "/pricing", label: "Pricing" },
 ];
