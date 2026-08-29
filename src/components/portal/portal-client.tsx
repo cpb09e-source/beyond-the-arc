@@ -347,7 +347,6 @@ export function PortalClient({
           <table className="w-full text-sm border-separate border-spacing-0">
             <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-30 [&_th]:bg-paper-deep [&_th]:border-b [&_th]:border-hairline [&_th:has(button)]:hover:bg-paper-deep/60">
               <tr className="text-left">
-                <Th className="w-10 text-center">#</Th>
                 <Th className="w-12">{""}</Th>
                 <ThSort label="Player" active={sortBy==="name"} dir={sortDir} onClick={() => toggleSort("name","asc")} align="left" className="pr-1" />
                 <ThSort label="Tier"  active={sortBy==="stars"} dir={sortDir} onClick={() => toggleSort("stars","desc")} align="left" className="pl-1" />
@@ -368,7 +367,6 @@ export function PortalClient({
               ) : (
                 pageRows.map((e, i) => (
                   <tr key={e.cbba_player_id + "-" + (e.date_entered ?? "")} className={cn("transition-colors hover:bg-[var(--accent-tint,rgba(237,90,79,0.08))]", i % 2 === 0 ? "bg-paper/70" : "bg-transparent")}>
-                    <Td className="text-center text-ink-muted tabular">{(safePage - 1) * pageSize + i + 1}</Td>
                     <Td className="text-center">
                       <PlayerPhoto bartPlayerId={e.bart_player_id} name={e.name} size={38} />
                     </Td>

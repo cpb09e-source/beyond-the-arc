@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Star, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TeamLogo } from "@/components/team-logo";
+import { TopHundredPill } from "@/components/portal/top-hundred-pill";
 import { PlayerPhoto } from "@/components/player-photo";
 import { confDisplay } from "@/lib/conf-display";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
@@ -38,6 +39,8 @@ export type TCPlayer = {
   /** The player's Rating. Class scores are these, summed. */
   rating?: number | null;
   stars: 0 | 1 | 2 | 3 | 4 | 5;
+  /** Overall board position when inside the top 100, else null. */
+  t100?: number | null;
   counter_team: string | null;   // OUT: where they went. IN: where they came from.
   counter_conf: string | null;
 };
@@ -359,13 +362,19 @@ function PlayerList({
             <li key={p.cbba_player_id} className="flex items-center gap-3 py-2.5">
               <PlayerPhoto bartPlayerId={p.bart_player_id} name={p.name} size={28} />
               <div className="flex-1 min-w-0">
-                {p.bart_player_id ? (
-                  <Link href={`/players/${p.bart_player_id}/`} className="font-medium text-ink hover:text-coral transition-colors block truncate" prefetch={false}>
-                    {p.name}
-                  </Link>
-                ) : (
-                  <span className="font-medium text-ink block truncate">{p.name}</span>
-                )}
+                {/* The board mark, same as the portal table — this list is
+                    where a class is judged, and "they signed a top-20 player"
+                    is the first thing worth seeing about one. */}
+                <span className="flex items-center gap-1.5 min-w-0">
+                  {p.bart_player_id ? (
+                    <Link href={`/players/${p.bart_player_id}/`} className="font-medium text-ink hover:text-coral transition-colors truncate" prefetch={false}>
+                      {p.name}
+                    </Link>
+                  ) : (
+                    <span className="font-medium text-ink truncate">{p.name}</span>
+                  )}
+                  {p.t100 ? <TopHundredPill rank={p.t100} /> : null}
+                </span>
                 <div className="flex items-center gap-2 mt-0.5">
                   <MiniStars stars={p.stars} />
                   {p.counter_team ? (

@@ -9,6 +9,7 @@ import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { PercentileChip } from "@/components/percentile-chip";
+import { TopHundredPill } from "@/components/portal/top-hundred-pill";
 import {
   PlayerFilterBar,
 } from "@/components/players/player-filter-bar";
@@ -1913,28 +1914,17 @@ function HScrollRail({ target }: { target: React.RefObject<HTMLDivElement | null
  * still shows on the player page, but two marks in a table cell is more chrome
  * than a name column can carry.
  */
+/**
+ * The board mark on a grid row.
+ *
+ * WAS A GOLD "TOP 100" PLATE, which said the same thing about #1 and #100
+ * and spent two lines of a tight row saying it. The rank itself is both
+ * shorter and more informative, and it is the same mark the transfer portal
+ * wears — one badge for one fact, everywhere it appears.
+ */
 function TopHundredMark({ rank }: { rank: number | null }) {
   if (rank === null || rank > 100) return null;
-  return (
-    <span
-      className="inline-flex flex-col items-center shrink-0 rounded-[3px] uppercase font-bold select-none whitespace-nowrap"
-      style={{
-        padding: "2px 4px",
-        fontSize: 7,
-        lineHeight: 1.12,
-        letterSpacing: "0.11em",
-        textIndent: "0.11em",
-        color: "var(--court-ink)",
-        background: "color-mix(in oklab, var(--court) 16%, transparent)",
-        boxShadow: "inset 0 0 0 1px color-mix(in oklab, var(--court) 72%, transparent)",
-      }}
-      title={`Top 100 overall — ranked ${rank}`}
-      aria-label={`Top 100 overall, ranked ${rank}`}
-    >
-      <span>Top</span>
-      <span>100</span>
-    </span>
-  );
+  return <TopHundredPill rank={rank} />;
 }
 
 function CopyName({ name }: { name: string }) {
