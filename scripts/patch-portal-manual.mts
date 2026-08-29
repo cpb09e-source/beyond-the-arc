@@ -183,6 +183,9 @@ const BATCHES: Array<{ confirmed: string; moves: Array<[string, string]> }> = [
       ["Tre Holloman", "Grand Canyon"],
       // Same shape: "Daniel Skillings" on 2023, "Dan Skillings Jr." from 2024.
       ["Dan Skillings Jr.", "Grand Canyon"],
+      // Utah Tech guard, 31 games in 2025-26. One "Noah Bolanga" in the
+      // corpus, so the join is unambiguous.
+      ["Noah Bolanga", "Abilene Christian"],
     ],
   },
 ];

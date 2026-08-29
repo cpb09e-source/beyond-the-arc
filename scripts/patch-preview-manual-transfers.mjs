@@ -123,6 +123,8 @@ const MOVES = [
   ["Micah Handlogten", "Mississippi"],
   ["Tre Holloman", "Grand Canyon"],
   ["Dan Skillings Jr.", "Grand Canyon"],
+  // Utah Tech guard, 31 games in 2025-26. One "Noah Bolanga" in the corpus.
+  ["Noah Bolanga", "Abilene Christian"],
 ];
 
 /** Common shorthand → the name season-preview.json uses. */
