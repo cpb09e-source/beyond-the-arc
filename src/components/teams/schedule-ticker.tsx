@@ -288,8 +288,20 @@ function GameCell({
           // fill with a dark same-hue label was tried and reverted: it made
           // the W and the L read as boxes rather than as a green W and a red
           // L, which is the thing anybody scanning this strip is looking for.
-          game.won === true && "bg-good/22 text-good",
-          game.won === false && "bg-bad/22 text-bad",
+          //
+          // BUT THE GROUND DEPENDS ON WHAT IS BEHIND THE TILE. On an ordinary
+          // tile that is paper, so a 22% tint of the result colour reads as a
+          // chip. On a TOURNAMENT tile the tile itself is already washed that
+          // same colour, and tinting the chip the same hue again stacks green
+          // on green: measured against its own background the W falls from
+          // 2.42 to 2.03, and the chip stops reading as a chip — it becomes a
+          // slightly paler rectangle floating on the wash. Giving it the card
+          // colour there instead lifts the letter to 3.19, the best contrast
+          // this chip gets in either state, and keeps the pill shape that
+          // makes the March stretch scannable. The letter's colour never
+          // changes; only the thing behind it does.
+          game.won === true && (isTourney ? "bg-card text-good" : "bg-good/22 text-good"),
+          game.won === false && (isTourney ? "bg-card text-bad" : "bg-bad/22 text-bad"),
           game.won === null && "bg-paper-deep text-ink-muted",
         )}
       >
