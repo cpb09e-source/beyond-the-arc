@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import type { SearchableOption } from "./searchable-select";
 
@@ -22,6 +22,7 @@ export function SearchableMultiSelect({
   groupLabels,
   align = "left",
   inlineSearch = false,
+  renderIcon,
 }: {
   /** Selected values. Empty array = "All". */
   value: string[];
@@ -57,6 +58,15 @@ export function SearchableMultiSelect({
    * the way a 240px panel hanging off a narrow control can.
    */
   inlineSearch?: boolean;
+  /**
+   * An icon for each row, and for the trigger when one option is chosen.
+   *
+   * A prop rather than a field on the option, because the option lists are
+   * built in useMemo over hundreds of teams and constructing three hundred
+   * crests to render six of them is work thrown away on every keystroke. This
+   * runs per RENDERED row.
+   */
+  renderIcon?: (opt: SearchableOption) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -66,6 +76,7 @@ export function SearchableMultiSelect({
   const [shiftX, setShiftX] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   // Ties the inline combobox to the list it controls. useId so two pickers on
   // one page never collide.
   const listboxId = useId();
@@ -150,6 +161,22 @@ export function SearchableMultiSelect({
    */
   const activeSafe = Math.max(0, Math.min(activeIdx, filtered.length - 1));
 
+  /**
+   * Keep the highlighted row on screen.
+   *
+   * The list scrolls at 18rem and the arrow keys move a highlight, not the
+   * scroll position — so past the sixth row the keyboard was moving something
+   * the reader could no longer see. `block: "nearest"` scrolls only when the
+   * row is actually out of view, which is what stops every keypress from
+   * re-centring a list that was already fine.
+   */
+  useEffect(() => {
+    if (!open) return;
+    listRef.current
+      ?.querySelector(`[data-opt-idx="${activeSafe}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [open, activeSafe]);
+
   function toggle(v: string) {
     if (disabledValues?.has(v)) return;
     if (value.includes(v)) onChange(value.filter((x) => x !== v));
@@ -192,6 +219,9 @@ export function SearchableMultiSelect({
     triggerLabel = `${value.length} selected`;
   }
 
+  /** The one selected option, when there is exactly one. */
+  const soleOption = value.length === 1 ? options.find((o) => o.value === value[0]) : undefined;
+
   const FIELD =
     "h-10 w-full px-3 pr-8 rounded-md border text-ink text-sm text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors relative";
 
@@ -216,6 +246,7 @@ export function SearchableMultiSelect({
           role="combobox"
           aria-expanded={true}
           aria-controls={listboxId}
+          aria-activedescendant={filtered.length ? `${listboxId}-opt-${activeSafe}` : undefined}
           aria-autocomplete="list"
           className={cn(FIELD, "bg-card border-coral/40")}
         />
@@ -228,7 +259,16 @@ export function SearchableMultiSelect({
           aria-expanded={open}
           className={cn(FIELD, "bg-card border-ink/15 hover:border-ink/25")}
         >
-          <span className="truncate block">{triggerLabel}</span>
+          {/* The crest rides along on a single pick — the one case where the
+              trigger is naming a specific team rather than a count. */}
+          {renderIcon && value.length === 1 && soleOption ? (
+            <span className="flex items-center gap-1.5 min-w-0">
+              <span className="shrink-0 flex items-center">{renderIcon(soleOption)}</span>
+              <span className="truncate">{triggerLabel}</span>
+            </span>
+          ) : (
+            <span className="truncate block">{triggerLabel}</span>
+          )}
           <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted text-[0.7rem]">▾</span>
         </button>
       )}
@@ -252,11 +292,16 @@ export function SearchableMultiSelect({
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={onKeyDown}
                 placeholder={placeholder}
+                role="combobox"
+                aria-expanded={true}
+                aria-controls={listboxId}
+                aria-activedescendant={filtered.length ? `${listboxId}-opt-${activeSafe}` : undefined}
+                aria-autocomplete="list"
                 className="w-full h-8 px-2 text-sm rounded border border-hairline bg-paper text-ink focus:outline-none focus:ring-2 focus:ring-coral/40"
               />
             </div>
           )}
-          <div className="max-h-72 overflow-y-auto py-1">
+          <div ref={listRef} className="max-h-72 overflow-y-auto py-1">
             {filtered.length === 0 ? (
               <div className="px-3 py-4 text-sm text-ink-muted text-center">No matches</div>
             ) : (
@@ -285,11 +330,20 @@ export function SearchableMultiSelect({
                       return (
                         <label
                           key={o.value}
+                          id={`${listboxId}-opt-${idx}`}
+                          data-opt-idx={idx}
                           onMouseEnter={() => { if (!isDisabled) setActiveIdx(idx); }}
                           className={cn(
-                            "flex items-center gap-3 px-3 py-1.5 text-sm",
+                            "flex items-center gap-2.5 px-3 py-1.5 text-sm",
                             isDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer",
-                            isActive && !isDisabled && "bg-paper-deep",
+                            // THE HIGHLIGHT HAS TO SURVIVE DARK MODE. It was
+                            // bg-paper-deep, which is a hair off the card on a
+                            // dark ground — so the arrow keys moved something
+                            // invisible and the list looked like it had no
+                            // keyboard support at all. A coral wash plus an
+                            // inset rail reads on both grounds.
+                            isActive && !isDisabled &&
+                              "bg-[color-mix(in_oklab,var(--coral)_14%,var(--card))] shadow-[inset_2px_0_0_var(--coral)]",
                           )}
                         >
                           <input
@@ -297,9 +351,10 @@ export function SearchableMultiSelect({
                             checked={isSelected}
                             disabled={isDisabled}
                             onChange={() => toggle(o.value)}
-                            className="accent-coral"
+                            className="accent-coral shrink-0"
                           />
-                          <span className={cn(isSelected && "font-medium text-coral")}>{o.label}</span>
+                          {renderIcon && <span className="shrink-0 flex items-center">{renderIcon(o)}</span>}
+                          <span className={cn("truncate", isSelected && "font-medium text-coral")}>{o.label}</span>
                         </label>
                       );
                     })}

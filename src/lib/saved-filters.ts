@@ -28,6 +28,8 @@ import { confDisplay } from "@/lib/conf-display";
 import { parsePlayerSpec, playerStatColumn, type PlayerListSpec } from "@/lib/players";
 import { PACK_STAT_BY_KEY } from "@/lib/player-stat-pack";
 import { playerViewByKey } from "@/lib/player-views";
+import { teamGameViewByKey } from "@/lib/team-game-index";
+import { gameViewByKey } from "@/lib/game-index";
 
 export type SavedFilter = {
   id: string;
@@ -46,11 +48,13 @@ export type SavedFilter = {
  * recognises. Two keys keep the lists apart, and the original key is kept
  * verbatim for teams so nobody loses what they already saved.
  */
-export type SavedScope = "teams" | "players";
+export type SavedScope = "teams" | "players" | "team-games" | "player-games";
 
 const KEYS: Record<SavedScope, string> = {
   teams: "bta-saved-filters-v1",
   players: "bta-saved-player-filters-v1",
+  "team-games": "bta-saved-team-game-filters-v1",
+  "player-games": "bta-saved-player-game-filters-v1",
 };
 
 /**
@@ -108,6 +112,8 @@ function parseList(raw: string): SavedFilter[] {
 const snaps: Record<SavedScope, { raw: string | null; val: SavedFilter[] }> = {
   teams: { raw: null, val: EMPTY },
   players: { raw: null, val: EMPTY },
+  "team-games": { raw: null, val: EMPTY },
+  "player-games": { raw: null, val: EMPTY },
 };
 
 export function savedSnapshot(scope: SavedScope = "teams"): SavedFilter[] {
@@ -334,3 +340,61 @@ export function suggestPlayerName(spec: PlayerListSpec): string {
   if (spec.view) return `${playerViewByKey(spec.view).label}, ${describePlayerSeasons(spec)}`;
   return describePlayerSeasons(spec);
 }
+
+// ---------------------------------------------------------------------------
+// the game logs
+// ---------------------------------------------------------------------------
+
+/**
+ * A saved game-log query, read back in one line.
+ *
+ * These pages do not go through a spec parser the way the two explorers do —
+ * their state is a handful of flat params — so this reads the URL directly.
+ * The params it names are the ones the clients write: `ys`, `conf`, `team`,
+ * `opp`, `cls`, `f`, `c`, `view`.
+ *
+ * Same ordering rule as the others: widest scope first, and anything left at
+ * its default is left out, so a summary only ever names something the reader
+ * actually chose.
+ */
+function describeGameQuery(query: string, kind: "team" | "player"): string {
+  const p = new URLSearchParams(query);
+  const list = (key: string) => (p.get(key) ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  const parts: string[] = [];
+
+  const years = list("ys").map(Number).filter((n) => Number.isFinite(n));
+  if (years.length === 1) parts.push(seasonLabel(years[0]!));
+  else if (years.length > 1) parts.push(`${years.length} seasons`);
+  else parts.push("current season");
+
+  const teams = list("team");
+  const confs = list("conf");
+  if (teams.length === 1) parts.push(teams[0]!);
+  else if (teams.length > 1) parts.push(`${teams.length} teams`);
+  else if (confs.length === 1) parts.push(confDisplay(confs[0]!));
+  else if (confs.length > 1) parts.push(`${confs.length} confs`);
+
+  const opps = list("opp");
+  if (opps.length === 1) parts.push(`vs ${opps[0]!}`);
+  else if (opps.length > 1) parts.push(`vs ${opps.length} teams`);
+
+  const cls = list("cls");
+  if (cls.length) parts.push(cls.join("/"));
+
+  const filters = list("f");
+  if (filters.length) parts.push(`${filters.length} filter${filters.length === 1 ? "" : "s"}`);
+
+  const cols = list("c");
+  if (cols.length) parts.push(`+${cols.length} column${cols.length === 1 ? "" : "s"}`);
+
+  const view = p.get("view");
+  if (view) {
+    const v = kind === "team" ? teamGameViewByKey(view) : gameViewByKey(view);
+    parts.push(v.label);
+  }
+
+  return parts.join(" · ");
+}
+
+export const describeTeamGameQuery = (query: string) => describeGameQuery(query, "team");
+export const describePlayerGameQuery = (query: string) => describeGameQuery(query, "player");

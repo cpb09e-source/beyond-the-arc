@@ -181,6 +181,42 @@ export const GAME_STATS: GameStat[] = [
 ];
 
 /**
+ * Section headings for the "Add Columns" picker — see the team index's twin
+ * block for why this exists alongside the views.
+ */
+export const GAME_GROUPS: Array<{ key: string; label: string; keys: string[] }> = [
+  { key: "overall", label: "Overall",
+    keys: ["gmsc", "min", "pts", "pra", "stocks"] },
+  { key: "shooting", label: "Scoring & Shooting",
+    keys: ["fgm", "fga", "fg_pct", "fg2m", "fg2a", "fg3m", "fg3a", "fg3_pct",
+           "ftm", "fta", "ft_pct", "efg", "ts"] },
+  { key: "box", label: "Rebounding & Defense",
+    keys: ["orb", "drb", "reb", "ast", "stl", "blk", "tov", "pf"] },
+  { key: "advanced", label: "Advanced",
+    keys: ["usg", "ortg", "drtg"] },
+];
+
+export const GAME_GROUP_LABEL: Record<string, string> =
+  Object.fromEntries(GAME_GROUPS.map((g) => [g.key, g.label]));
+
+const GAME_GROUP_OF = new Map<string, string>(
+  GAME_GROUPS.flatMap((g) => g.keys.map((k) => [k, g.key] as [string, string])),
+);
+
+export const GAME_PICK_OPTIONS: Array<{ key: string; label: string; desc: string; group: string }> =
+  GAME_GROUPS.flatMap((g) =>
+    g.keys
+      .map((k) => GAME_STATS.find((s) => s.key === k))
+      .filter((s): s is GameStat => !!s)
+      .map((s) => ({ key: s.key, label: s.label, desc: s.title, group: g.key })),
+  );
+
+if (process.env.NODE_ENV !== "production") {
+  const missing = GAME_STATS.filter((s) => !GAME_GROUP_OF.has(s.key)).map((s) => s.key);
+  if (missing.length) console.warn("[game-index] stats with no picker group:", missing);
+}
+
+/**
  * The date, as a sortable column rather than a suffix on the opponent.
  *
  * Not in any view — an identity column the table always renders. In the
@@ -244,10 +280,27 @@ export const gameViewByKey = (key: string | null | undefined): GameView =>
 
 // ── Filters ────────────────────────────────────────────────────────────────
 
-export type GameOp = "ge" | "le" | "eq";
+/**
+ * The comparators, which are the team explorer's comparators.
+ *
+ * `gte` / `gt` / `lte` / `lt` — the same four the shared FilterRow offers, so a
+ * reader who has used the team or players table already knows this one. There
+ * is no equality: `TS% = 70` matches nothing on a float, and an operator that
+ * silently returns an empty table is worse than one that is not offered.
+ *
+ * LEGACY ALIASES on the way in. This page shipped with `ge` / `le` / `eq`, so
+ * a link somebody kept still has to work. `ge` and `le` are the same question
+ * under a new name; `eq` has no equivalent and is DROPPED rather than mapped
+ * to something adjacent — a filter that quietly means something else is worse
+ * than one that is gone.
+ */
+export type GameOp = "gt" | "gte" | "lt" | "lte";
 export type GameFilter = { stat: string; op: GameOp; value: number };
 
-export const OP_LABEL: Record<GameOp, string> = { ge: "≥", le: "≤", eq: "=" };
+export const OP_LABEL: Record<GameOp, string> = { gte: "≥", gt: ">", lte: "≤", lt: "<" };
+
+/** Pre-rename ops, still honoured on the way in. */
+const OP_ALIAS: Record<string, GameOp> = { ge: "gte", le: "lte", gte: "gte", gt: "gt", lte: "lte", lt: "lt" };
 
 export function passesFilters(r: number[], filters: GameFilter[]): boolean {
   for (const f of filters) {
@@ -257,11 +310,10 @@ export function passesFilters(r: number[], filters: GameFilter[]): boolean {
     // A blank stat fails every comparison rather than passing one. "3P% ≥ 50"
     // must not return the games where nobody shot a three.
     if (v === null) return false;
-    if (f.op === "ge" && !(v >= f.value)) return false;
-    if (f.op === "le" && !(v <= f.value)) return false;
-    // Percentages are stored as fractions, so an equality on one is a
-    // rounding question rather than a comparison.
-    if (f.op === "eq" && Math.abs(v - f.value) > 1e-9) return false;
+    if (f.op === "gte" && !(v >= f.value)) return false;
+    if (f.op === "gt" && !(v > f.value)) return false;
+    if (f.op === "lte" && !(v <= f.value)) return false;
+    if (f.op === "lt" && !(v < f.value)) return false;
   }
   return true;
 }
@@ -273,10 +325,11 @@ export function parseFilters(raw: string | null): GameFilter[] {
   for (const part of raw.split(",")) {
     const [stat, op, value] = part.split(":");
     if (!stat || !GAME_STAT_BY_KEY.has(stat)) continue;
-    if (op !== "ge" && op !== "le" && op !== "eq") continue;
+    const mapped = op ? OP_ALIAS[op] : undefined;
+    if (!mapped) continue;
     const n = Number(value);
     if (!Number.isFinite(n)) continue;
-    out.push({ stat, op, value: n });
+    out.push({ stat, op: mapped, value: n });
   }
   return out;
 }
@@ -294,32 +347,32 @@ export const serializeFilters = (fs: GameFilter[]): string =>
  */
 export const GAME_PRESETS: Array<{ key: string; label: string; desc: string; filters: GameFilter[] }> = [
   { key: "p40", label: "40-point games", desc: "Every 40-point performance.",
-    filters: [{ stat: "pts", op: "ge", value: 40 }] },
+    filters: [{ stat: "pts", op: "gte", value: 40 }] },
   { key: "td", label: "Triple-doubles", desc: "Points, rebounds and assists all in double figures.",
     filters: [
-      { stat: "pts", op: "ge", value: 10 },
-      { stat: "reb", op: "ge", value: 10 },
-      { stat: "ast", op: "ge", value: 10 },
+      { stat: "pts", op: "gte", value: 10 },
+      { stat: "reb", op: "gte", value: 10 },
+      { stat: "ast", op: "gte", value: 10 },
     ] },
   { key: "2010", label: "20 & 10", desc: "Twenty points and ten rebounds.",
-    filters: [{ stat: "pts", op: "ge", value: 20 }, { stat: "reb", op: "ge", value: 10 }] },
+    filters: [{ stat: "pts", op: "gte", value: 20 }, { stat: "reb", op: "gte", value: 10 }] },
   { key: "5x5", label: "5×5", desc: "Five or more in all five counting stats — the rarest line in the box score.",
     filters: [
-      { stat: "pts", op: "ge", value: 5 }, { stat: "reb", op: "ge", value: 5 },
-      { stat: "ast", op: "ge", value: 5 }, { stat: "stl", op: "ge", value: 5 },
-      { stat: "blk", op: "ge", value: 5 },
+      { stat: "pts", op: "gte", value: 5 }, { stat: "reb", op: "gte", value: 5 },
+      { stat: "ast", op: "gte", value: 5 }, { stat: "stl", op: "gte", value: 5 },
+      { stat: "blk", op: "gte", value: 5 },
     ] },
   { key: "bombs", label: "8+ threes", desc: "Eight or more three-pointers made.",
-    filters: [{ stat: "fg3m", op: "ge", value: 8 }] },
+    filters: [{ stat: "fg3m", op: "gte", value: 8 }] },
   { key: "swat", label: "7+ blocks", desc: "Seven or more blocks.",
-    filters: [{ stat: "blk", op: "ge", value: 7 }] },
+    filters: [{ stat: "blk", op: "gte", value: 7 }] },
   { key: "dime", label: "12+ assists", desc: "Twelve or more assists.",
-    filters: [{ stat: "ast", op: "ge", value: 12 }] },
+    filters: [{ stat: "ast", op: "gte", value: 12 }] },
   { key: "eff", label: "Perfect 15+", desc: "Fifteen points or more without missing a shot.",
     filters: [
-      { stat: "pts", op: "ge", value: 15 },
-      { stat: "fg_pct", op: "ge", value: 1 },
-      { stat: "fga", op: "ge", value: 5 },
+      { stat: "pts", op: "gte", value: 15 },
+      { stat: "fg_pct", op: "gte", value: 1 },
+      { stat: "fga", op: "gte", value: 5 },
     ] },
 ];
 

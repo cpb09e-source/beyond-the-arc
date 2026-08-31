@@ -24,6 +24,8 @@ import { MultiYearSelect } from "@/components/explorer/multi-year-select";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
 import { DownloadMenu } from "@/components/explorer/download-menu";
 import { GateBar } from "@/components/explorer/gate-bar";
+import { SavedFiltersMenu } from "@/components/explorer/saved-filters-menu";
+import { GameStatRows, MAX_GAME_COLS } from "@/components/games/game-stat-rows";
 import { useDragPan } from "@/lib/use-drag-pan";
 import { midrankPercentileMap } from "@/lib/percentile";
 import { PercentileChip } from "@/components/percentile-chip";
@@ -34,17 +36,22 @@ import { POWER_CONFS } from "@/lib/conf-tiers";
 import { teamSlug } from "@/lib/team-slug";
 import type { ExportCol, ExportEntity, ExportInput, MultiExportInput } from "@/lib/table-export";
 import {
-  HOME, NEUTRAL, T, TEAM_GAME_PRESETS, TEAM_GAME_SEASONS, TEAM_GAME_STATS,
+  HOME, NEUTRAL, T, TEAM_GAME_GROUP_LABEL, TEAM_GAME_PICK_OPTIONS,
+  TEAM_GAME_PRESETS, TEAM_GAME_SEASONS, TEAM_GAME_STATS, TEAM_GAME_STAT_BY_KEY,
   TEAM_GAME_VIEWS, TEAM_OP_LABEL, WON,
   fmtTeamGameDate, fmtTeamGameValue, loadTeamGameIndex, parseTeamFilters,
   passesTeamFilters, serializeTeamFilters, teamGameStat, teamGameViewByKey,
-  type TeamGameFilter, type TeamGameOp, type TeamGamePack, type TeamGameView,
+  type TeamGameFilter, type TeamGamePack, type TeamGameView,
 } from "@/lib/team-game-index";
 
 const ROW_HOVER = "group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))]";
 const DEFAULT_YEAR = 2026;
 const LIMIT_OPTIONS = [50, 100, 250, 500];
 const BASE = "/teams/games";
+
+/** Two filters are the same question. Used to toggle shortcuts on and off. */
+const sameFilter = (a: TeamGameFilter, b: TeamGameFilter) =>
+  a.stat === b.stat && a.op === b.op && a.value === b.value;
 
 const seasonLabel = (y: number) => `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
 
@@ -61,6 +68,8 @@ type Spec = {
   teams: string[];
   opps: string[];
   view: string;
+  /** Stats pinned by the reader, which lead the view's own columns. */
+  cols: string[];
   filters: TeamGameFilter[];
   q: string;
   limit: number;
@@ -80,6 +89,11 @@ function parseSpec(params: URLSearchParams): Spec {
     teams: (params.get("team") ?? "").split(",").map((s) => s.trim()).filter(Boolean),
     opps: (params.get("opp") ?? "").split(",").map((s) => s.trim()).filter(Boolean),
     view: teamGameViewByKey(params.get("view")).key,
+    // The date column is an identity column the table always draws, so it is
+    // not pinnable — allowing it would render it twice.
+    cols: (params.get("c") ?? "").split(",").map((k) => k.trim())
+      .filter((k) => k && k !== "date" && TEAM_GAME_STAT_BY_KEY.has(k))
+      .slice(0, MAX_GAME_COLS),
     filters: parseTeamFilters(params.get("f")),
     q: params.get("q") ?? "",
     limit: LIMIT_OPTIONS.includes(limit) ? limit : 100,
@@ -210,10 +224,27 @@ export function TeamGamesClient() {
   }, [spec, previewCapped]);
 
   const view = useMemo(() => teamGameViewByKey(spec.view), [spec.view]);
-  const cols = useMemo(
+
+  /**
+   * Pinned columns lead the table, de-duplicated against the view's own set.
+   *
+   * THE VIEW KEEPS THE COLUMN AND THE PIN IS WHAT DROPS — same rule as the
+   * team explorer. Pinning eFG% while the Four Factors view is up should not
+   * print eFG% twice under two different headings; it should do nothing
+   * visible, which is exactly what a reader who already has the column wants.
+   */
+  const pinnedCols = useMemo(
+    () => scoped.cols
+      .filter((k) => !view.keys.includes(k))
+      .map((k) => teamGameStat(k))
+      .filter((s): s is NonNullable<typeof s> => !!s),
+    [scoped.cols, view.keys],
+  );
+  const viewCols = useMemo(
     () => view.keys.map((k) => teamGameStat(k)).filter((s): s is NonNullable<typeof s> => !!s),
     [view],
   );
+  const cols = useMemo(() => [...pinnedCols, ...viewCols], [pinnedCols, viewCols]);
 
   const [packs, setPacks] = useState<Map<number, TeamGamePack>>(new Map());
   const pending = useMemo(() => scoped.years.filter((y) => !packs.has(y)), [scoped.years, packs]);
@@ -255,6 +286,7 @@ export function TeamGamesClient() {
     setList("conf", next.confs);
     setList("team", next.teams);
     setList("opp", next.opps);
+    setList("c", next.cols);
     if (next.view !== undefined) {
       if (next.view === TEAM_GAME_VIEWS[0]!.key) p.delete("view");
       else p.set("view", next.view);
@@ -301,28 +333,63 @@ export function TeamGamesClient() {
     return [...seen].sort().map((value) => ({ value, label: value }));
   }, [active]);
 
-  // ── Filter builder ───────────────────────────────────────────────────────
-  const [draft, setDraft] = useState<{ stat: string; op: TeamGameOp; value: string }>({
-    stat: "pts", op: "ge", value: "",
-  });
-
-  const addFilter = useCallback(() => {
-    const n = Number(draft.value);
-    if (!draft.stat || !Number.isFinite(n)) return;
-    const s = teamGameStat(draft.stat);
-    const value = s?.fmt === "pct1" ? n / 100 : n;
-    update({ filters: [...spec.filters, { stat: draft.stat, op: draft.op, value }] });
-    setDraft((d) => ({ ...d, value: "" }));
-  }, [draft, spec.filters, update]);
-
-  const removeFilter = useCallback((i: number) => {
-    update({ filters: spec.filters.filter((_, j) => j !== i) });
-  }, [spec.filters, update]);
-
-  const activePreset = useMemo(() => {
-    const now = serializeTeamFilters(spec.filters);
-    return TEAM_GAME_PRESETS.find((p) => serializeTeamFilters(p.filters) === now)?.key ?? null;
+  /**
+   * Which shortcuts are ON — plural, because they compose.
+   *
+   * A shortcut used to REPLACE the filter list, so clicking "Overtime" after
+   * "30-point wins" threw the first question away. It is a filter or two with
+   * a name on it, so it now behaves like one: clicking adds its filters to
+   * whatever is already there, clicking again takes exactly those back out,
+   * and what it leaves behind is ORDINARY EDITABLE ROWS in the builder below —
+   * a shortcut is a starting point you adjust, not a mode you are in.
+   *
+   * Its stats are pinned as columns too, the same rule that governs a filter
+   * typed by hand: a table filtered on something the reader cannot see is a
+   * table that cannot be checked.
+   */
+  const activePresets = useMemo(() => {
+    const on = new Set<string>();
+    for (const p of TEAM_GAME_PRESETS) {
+      if (p.filters.every((f) => spec.filters.some((g) => sameFilter(f, g)))) on.add(p.key);
+    }
+    return on;
   }, [spec.filters]);
+
+  const togglePreset = useCallback((p: (typeof TEAM_GAME_PRESETS)[number], on: boolean) => {
+    const filters = on
+      ? spec.filters.filter((g) => !p.filters.some((f) => sameFilter(f, g)))
+      : [...spec.filters, ...p.filters.filter((f) => !spec.filters.some((g) => sameFilter(f, g)))];
+    // Turning a shortcut OFF takes its columns with it, unless a filter the
+    // reader wrote themselves still needs one.
+    const cols = on
+      ? spec.cols.filter((k) => !p.filters.some((f) => f.stat === k) || filters.some((f) => f.stat === k))
+      : [...new Set([...spec.cols, ...p.filters.map((f) => f.stat)])].slice(0, MAX_GAME_COLS);
+    update({ filters, cols });
+  }, [spec.filters, spec.cols, update]);
+
+  /**
+   * What the save box opens with.
+   *
+   * The most specific true thing about the table, in that order: the shortcut
+   * if one is on, else the first filter written out, else the view and the
+   * season. A default of "Saved filter 3" would make the list unreadable a
+   * week later, which is the only time anybody reads it.
+   */
+  const suggestedName = useMemo(() => {
+    const preset = TEAM_GAME_PRESETS.find((p) => activePresets.has(p.key));
+    if (preset) return preset.label;
+    const f = spec.filters[0];
+    if (f) {
+      const st = teamGameStat(f.stat);
+      const v = st?.fmt === "pct1" ? `${Math.round(f.value * 100)}%` : f.value;
+      return `${st?.label ?? f.stat} ${TEAM_OP_LABEL[f.op]} ${v}`;
+    }
+    return `${view.label} · ${seasonLabel(spec.years[0] ?? DEFAULT_YEAR)}`;
+  }, [activePresets, spec.filters, spec.years, view.label]);
+
+  const applySaved = useCallback((query: string) => {
+    router.replace(query ? `${BASE}?${query}` : BASE, { scroll: false });
+  }, [router]);
 
   // ── Export ───────────────────────────────────────────────────────────────
   const exportEntity = useMemo((): ExportEntity<Hit> => ({
@@ -344,14 +411,29 @@ export function TeamGamesClient() {
     pctOf: () => null,
   }), []);
 
-  const exportColsFor = useCallback((v: TeamGameView): ExportCol[] =>
-    v.keys.map((k) => teamGameStat(k))
-      .filter((s): s is NonNullable<typeof s> => !!s)
-      .map((s) => ({
-        label: s.label, total: s.key, pct: "",
-        fmt: s.fmt === "pct1" ? "pct1" : s.fmt === "int" ? "int" : "num1",
-        band: v.label,
-      })), []);
+  /**
+   * Export columns for ANY view, with the reader's pins leading.
+   *
+   * Pins are de-duplicated against that view's own keys the same way the table
+   * does it, so a download of every view shows a pinned stat once per sheet
+   * rather than twice on the sheets that already carry it.
+   */
+  const exportColsFor = useCallback((v: TeamGameView): ExportCol[] => {
+    const toCol = (s: NonNullable<ReturnType<typeof teamGameStat>>, band: string): ExportCol => ({
+      label: s.label, total: s.key, pct: "",
+      fmt: s.fmt === "pct1" ? "pct1" : s.fmt === "int" ? "int" : "num1",
+      band,
+    });
+    const pinned = scoped.cols
+      .filter((k) => !v.keys.includes(k))
+      .map((k) => teamGameStat(k))
+      .filter((x): x is NonNullable<typeof x> => !!x)
+      .map((x) => toCol(x, "Your columns"));
+    const own = v.keys.map((k) => teamGameStat(k))
+      .filter((x): x is NonNullable<typeof x> => !!x)
+      .map((x) => toCol(x, v.label));
+    return [...pinned, ...own];
+  }, [scoped.cols]);
 
   const exportMeta = useCallback((label: string) => ({
     viewLabel: label,
@@ -434,6 +516,7 @@ export function TeamGamesClient() {
           <SearchableMultiSelect
             value={spec.teams} options={teamOptions} onChange={(teams) => update({ teams })}
             emptyLabel="All" ariaLabel="Teams" className="w-auto min-w-36 max-w-60"
+            renderIcon={(o) => <TeamLogo name={o.value} size={18} />}
           />
         </label>
 
@@ -442,6 +525,7 @@ export function TeamGamesClient() {
           <SearchableMultiSelect
             value={spec.opps} options={oppOptions} onChange={(opps) => update({ opps })}
             emptyLabel="All" ariaLabel="Opponents" className="w-auto min-w-36 max-w-60"
+            renderIcon={(o) => <TeamLogo name={o.value} size={18} />}
           />
         </label>
 
@@ -458,6 +542,13 @@ export function TeamGamesClient() {
             ))}
           </select>
         </label>
+
+        <SavedFiltersMenu
+          currentQuery={params.toString()}
+          suggestedName={suggestedName}
+          onApply={applySaved}
+          scope="team-games"
+        />
 
         <DownloadMenu
           views={downloadViews}
@@ -484,116 +575,63 @@ export function TeamGamesClient() {
       {/* Shortcuts. */}
       <div className="px-3 lg:px-4 py-2 border-b border-hairline bg-paper-deep/30 flex items-center flex-wrap gap-1.5">
         <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium mr-0.5">Shortcuts</span>
-        {TEAM_GAME_PRESETS.map((p) => (
-          <button
-            key={p.key}
-            type="button"
-            title={p.desc}
-            onClick={() => update({ filters: activePreset === p.key ? [] : p.filters })}
-            className={cn(
-              "h-6 px-2 rounded-md text-[0.7rem] font-medium border transition-colors",
-              activePreset === p.key
-                ? "bg-coral text-white border-coral"
-                : "bg-card text-ink-soft border-ink/12 hover:border-ink/25 hover:text-ink",
-            )}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Filter builder. */}
-      <div className="px-3 lg:px-4 py-2 border-b border-hairline flex items-center flex-wrap gap-x-2 gap-y-2">
-        <select
-          value={draft.stat}
-          onChange={(e) => setDraft((d) => ({ ...d, stat: e.target.value }))}
-          aria-label="Filter stat"
-          className="h-8 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40"
-        >
-          {TEAM_GAME_STATS.filter((s) => s.filterable).map((s) => (
-            <option key={s.key} value={s.key} title={s.title}>{s.label}</option>
-          ))}
-        </select>
-        <select
-          value={draft.op}
-          onChange={(e) => setDraft((d) => ({ ...d, op: e.target.value as TeamGameOp }))}
-          aria-label="Comparison"
-          className="h-8 w-14 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40"
-        >
-          {(["ge", "le", "eq"] as TeamGameOp[]).map((op) => (
-            <option key={op} value={op}>{TEAM_OP_LABEL[op]}</option>
-          ))}
-        </select>
-        <input
-          type="number"
-          inputMode="decimal"
-          value={draft.value}
-          placeholder="Value"
-          onChange={(e) => setDraft((d) => ({ ...d, value: e.target.value }))}
-          onKeyDown={(e) => { if (e.key === "Enter") addFilter(); }}
-          aria-label="Filter value"
-          className="h-8 w-24 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40"
-        />
-        <button
-          type="button"
-          onClick={addFilter}
-          disabled={draft.value === ""}
-          className="h-8 px-3 rounded-md text-sm font-semibold bg-coral text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-coral-soft transition-colors"
-        >
-          Add filter
-        </button>
-
-        {spec.filters.map((f, i) => {
-          const s = teamGameStat(f.stat);
-          const shown = s?.fmt === "pct1" ? `${(f.value * 100).toFixed(0)}%` : f.value;
+        {TEAM_GAME_PRESETS.map((p) => {
+          const on = activePresets.has(p.key);
           return (
-            <span
-              key={`${f.stat}-${f.op}-${f.value}-${i}`}
-              className="inline-flex items-center gap-1 h-7 pl-2 pr-1 rounded-md bg-ink/[0.06] text-xs font-medium text-ink"
+            <button
+              key={p.key}
+              type="button"
+              title={p.desc}
+              aria-pressed={on}
+              onClick={() => togglePreset(p, on)}
+              className={cn(
+                "h-6 px-2 rounded-md text-[0.7rem] font-medium border transition-colors",
+                on
+                  ? "bg-coral text-white border-coral"
+                  : "bg-card text-ink-soft border-ink/12 hover:border-ink/25 hover:text-ink",
+              )}
             >
-              {s?.label ?? f.stat} {TEAM_OP_LABEL[f.op]} {shown}
-              <button
-                type="button"
-                onClick={() => removeFilter(i)}
-                aria-label={`Remove ${s?.label ?? f.stat} filter`}
-                className="inline-flex items-center justify-center w-4 h-4 rounded text-ink-muted hover:text-coral hover:bg-ink/10 transition-colors"
-              >
-                ×
-              </button>
-            </span>
+              {p.label}
+            </button>
           );
         })}
-        {spec.filters.length > 1 && (
-          <button
-            type="button"
-            onClick={() => update({ filters: [] })}
-            className="text-xs text-ink-muted hover:text-coral underline underline-offset-2 transition-colors"
-          >
-            clear all
-          </button>
-        )}
-
-        <div className="ml-auto flex items-center gap-2">
-          <input
-            type="search"
-            value={spec.q}
-            onChange={(e) => update({ q: e.target.value })}
-            placeholder="Team name…"
-            aria-label="Search team"
-            className="h-8 w-40 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40"
-          />
-          {!previewCapped && (
-            <select
-              value={spec.limit}
-              onChange={(e) => update({ limit: Number(e.target.value) })}
-              aria-label="Rows shown"
-              className="h-8 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40"
-            >
-              {LIMIT_OPTIONS.map((n) => <option key={n} value={n}>Top {n}</option>)}
-            </select>
-          )}
-        </div>
       </div>
+
+      {/* The filter builder — the team explorer's rows, over game stats.
+          Bounding a stat pins it as a column, so the two doors above and the
+          view dropdown all end up describing the same set. */}
+      <GameStatRows
+        cols={spec.cols}
+        filters={spec.filters}
+        options={TEAM_GAME_PICK_OPTIONS}
+        groupLabel={TEAM_GAME_GROUP_LABEL}
+        idPrefix="team-games"
+        labelOf={(k) => teamGameStat(k)?.label ?? k}
+        isPct={(k) => teamGameStat(k)?.fmt === "pct1"}
+        onChange={({ cols, filters }) => update({ cols, filters })}
+        trailing={
+          <>
+            <input
+              type="search"
+              value={spec.q}
+              onChange={(e) => update({ q: e.target.value })}
+              placeholder="Team name…"
+              aria-label="Search team"
+              className="h-8 w-40 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40"
+            />
+            {!previewCapped && (
+              <select
+                value={spec.limit}
+                onChange={(e) => update({ limit: Number(e.target.value) })}
+                aria-label="Rows shown"
+                className="h-8 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40"
+              >
+                {LIMIT_OPTIONS.map((n) => <option key={n} value={n}>Top {n}</option>)}
+              </select>
+            )}
+          </>
+        }
+      />
 
       <div
         ref={gridScrollRef}
@@ -605,7 +643,21 @@ export function TeamGamesClient() {
             <tr>
               <th className="sticky top-0 left-0 z-40 w-10 min-w-10 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
               <th className="sticky top-0 z-40 bg-paper-deep border-b border-hairline px-2 sm:px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Team</th>
+              <SortableTh
+                statKey="won"
+                label="W/L"
+                title="Sort wins to the top"
+                defaultDir="desc"
+                align="left"
+                basePath={BASE}
+                defaultSort={scoped.sortBy}
+                idleArrows
+                locked={previewCapped}
+                className="sticky top-0 z-30 bg-paper-deep border-b border-hairline"
+              />
               <th className="sticky top-0 z-30 bg-paper-deep border-b border-hairline px-2 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle whitespace-nowrap">Game</th>
+              <th className="sticky top-0 z-30 bg-paper-deep border-b border-hairline px-2 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle whitespace-nowrap" title="Home, away or a neutral floor">Site</th>
+              <th className="sticky top-0 z-30 bg-paper-deep border-b border-hairline px-2 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle whitespace-nowrap">Opponent</th>
               <SortableTh
                 statKey="date"
                 label="Date"
@@ -640,9 +692,9 @@ export function TeamGamesClient() {
           </thead>
           <tbody>
             {busy ? (
-              <tr><td colSpan={cols.length + 5} className="px-4 py-16 text-center text-ink-muted">Loading team games…</td></tr>
+              <tr><td colSpan={cols.length + 8} className="px-4 py-16 text-center text-ink-muted">Loading team games…</td></tr>
             ) : hits.length === 0 ? (
-              <tr><td colSpan={cols.length + 5} className="px-4 py-12 text-center text-ink-soft">No game matches these filters.</td></tr>
+              <tr><td colSpan={cols.length + 8} className="px-4 py-12 text-center text-ink-soft">No game matches these filters.</td></tr>
             ) : (
               hits.map((h, i) => {
                 const zebra = i % 2 === 0 ? "bg-paper" : "bg-card";
@@ -672,15 +724,31 @@ export function TeamGamesClient() {
                         </Link>
                       </span>
                     </td>
-                    <td className={cn("px-2 py-1.5 whitespace-nowrap text-xs transition-colors", ROW_HOVER)}>
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className={cn("font-semibold tabular", won ? "text-good" : "text-ink-muted")}>
-                          {won ? "W" : "L"}
-                        </span>
-                        <span className="tabular text-ink-soft">{h.row[T.pts]}-{h.row[T.pa]}</span>
-                        <span className="text-ink-muted">{site}</span>
-                        <TeamLogo name={opp} size={16} />
-                        <span className="hidden sm:inline text-ink-soft max-w-[9rem] truncate">{opp}</span>
+                    <td className={cn("px-2 py-1.5 text-center text-xs transition-colors", ROW_HOVER)}>
+                      <span className={cn("font-semibold", won ? "text-good" : "text-ink-muted")}>
+                        {won ? "W" : "L"}
+                      </span>
+                    </td>
+                    <td className={cn("px-2 py-1.5 whitespace-nowrap text-xs tabular text-ink transition-colors", ROW_HOVER)}>
+                      {h.row[T.pts]}-{h.row[T.pa]}
+                    </td>
+                    <td className={cn("px-2 py-1.5 text-center text-xs text-ink-muted transition-colors", ROW_HOVER)}>
+                      {site}
+                    </td>
+                    <td className={cn("px-2 py-1.5 whitespace-nowrap transition-colors", ROW_HOVER)}>
+                      {/* Same weight and colour as the Team column: the two
+                          names in a row are the same kind of thing, and every
+                          opponent in this corpus is a D1 team with a page. */}
+                      <span className="inline-flex items-center gap-2 min-w-0">
+                        <TeamLogo name={opp} size={20} />
+                        <Link
+                          href={`/teams/${teamSlug(opp)}/${pack.season}/`}
+                          title={opp}
+                          prefetch={false}
+                          className="font-medium text-ink hover:text-coral transition-colors"
+                        >
+                          {opp}
+                        </Link>
                       </span>
                     </td>
                     <td className={cn("px-2 py-1.5 whitespace-nowrap text-xs text-ink-muted tabular transition-colors", ROW_HOVER)}>

@@ -194,6 +194,64 @@ export const TEAM_GAME_STATS: TeamGameStat[] = [
 ];
 
 /**
+ * Section headings for the "Add Columns" picker.
+ *
+ * The views decide what a reader sees BY DEFAULT; this decides how they browse
+ * the whole catalogue when the default is not what they wanted. It is a second
+ * arrangement of the same stats, not a second set — every key here is a key in
+ * TEAM_GAME_STATS, and the assertion below is what keeps that true.
+ *
+ * Grouped by what the number is ABOUT rather than by view, because a reader
+ * hunting for "3P%" looks under shooting whether or not the Scoring view is on
+ * screen.
+ */
+export const TEAM_GAME_GROUPS: Array<{ key: string; label: string; keys: string[] }> = [
+  { key: "result", label: "Result & Efficiency",
+    keys: ["net", "margin", "pts", "pa", "poss", "pace", "ortg", "drtg"] },
+  { key: "shooting", label: "Scoring & Shooting",
+    keys: ["fgm", "fga", "fg_pct", "fg3m", "fg3a", "fg3_pct", "ftm", "fta", "ft_pct", "ts"] },
+  { key: "box", label: "Rebounding & Defense",
+    keys: ["oreb", "dreb", "reb", "ast", "stl", "blk", "tov", "pf"] },
+  { key: "factors", label: "Four Factors",
+    keys: ["efg", "ftr", "tovr", "orbr", "efgd", "ftrd", "tovd", "orbd"] },
+  { key: "diffs", label: "Differentials",
+    keys: ["reb_dif", "ast_dif", "stl_dif", "blk_dif", "tov_dif", "fg3m_dif"] },
+  { key: "situational", label: "Situational",
+    keys: ["lead", "h1", "h2", "ot"] },
+  { key: "context", label: "Context",
+    keys: ["won", "home", "neutral", "conf", "tourney", "post", "ap", "opp_ap", "seed", "opp_seed"] },
+];
+
+export const TEAM_GAME_GROUP_LABEL: Record<string, string> =
+  Object.fromEntries(TEAM_GAME_GROUPS.map((g) => [g.key, g.label]));
+
+/** Which section a stat browses under. Every stat has one — see the check below. */
+const TEAM_GROUP_OF = new Map<string, string>(
+  TEAM_GAME_GROUPS.flatMap((g) => g.keys.map((k) => [k, g.key] as [string, string])),
+);
+
+/**
+ * The picker's option list, derived rather than hand-kept.
+ *
+ * Built FROM TEAM_GAME_STATS in group order, so a stat added to the catalogue
+ * shows up here the moment it is given a group — and one that is not given a
+ * group is dropped loudly in dev rather than silently going missing from the
+ * picker.
+ */
+export const TEAM_GAME_PICK_OPTIONS: Array<{ key: string; label: string; desc: string; group: string }> =
+  TEAM_GAME_GROUPS.flatMap((g) =>
+    g.keys
+      .map((k) => TEAM_GAME_STATS.find((s) => s.key === k))
+      .filter((s): s is TeamGameStat => !!s)
+      .map((s) => ({ key: s.key, label: s.label, desc: s.title, group: g.key })),
+  );
+
+if (process.env.NODE_ENV !== "production") {
+  const missing = TEAM_GAME_STATS.filter((s) => !TEAM_GROUP_OF.has(s.key)).map((s) => s.key);
+  if (missing.length) console.warn("[team-game-index] stats with no picker group:", missing);
+}
+
+/**
  * The date, as a sortable column rather than a suffix on the opponent.
  *
  * NOT IN ANY VIEW — it is an identity column the table always renders, like
@@ -273,10 +331,27 @@ export const teamGameViewByKey = (key: string | null | undefined): TeamGameView 
 
 // ── Filters ────────────────────────────────────────────────────────────────
 
-export type TeamGameOp = "ge" | "le" | "eq";
+/**
+ * The comparators, which are the team explorer's comparators.
+ *
+ * `gte` / `gt` / `lte` / `lt` — the same four the shared FilterRow offers, so a
+ * reader who has used the team or players table already knows this one. There
+ * is no equality: `TS% = 70` matches nothing on a float, and an operator that
+ * silently returns an empty table is worse than one that is not offered.
+ *
+ * LEGACY ALIASES on the way in. This page shipped with `ge` / `le` / `eq`, so
+ * a link somebody kept still has to work. `ge` and `le` are the same question
+ * under a new name; `eq` has no equivalent and is DROPPED rather than mapped
+ * to something adjacent — a filter that quietly means something else is worse
+ * than one that is gone.
+ */
+export type TeamGameOp = "gt" | "gte" | "lt" | "lte";
 export type TeamGameFilter = { stat: string; op: TeamGameOp; value: number };
 
-export const TEAM_OP_LABEL: Record<TeamGameOp, string> = { ge: "≥", le: "≤", eq: "=" };
+export const TEAM_OP_LABEL: Record<TeamGameOp, string> = { gte: "≥", gt: ">", lte: "≤", lt: "<" };
+
+/** Pre-rename ops, still honoured on the way in. */
+const TEAM_OP_ALIAS: Record<string, TeamGameOp> = { ge: "gte", le: "lte", gte: "gte", gt: "gt", lte: "lte", lt: "lt" };
 
 export function passesTeamFilters(r: number[], filters: TeamGameFilter[]): boolean {
   for (const f of filters) {
@@ -284,9 +359,10 @@ export function passesTeamFilters(r: number[], filters: TeamGameFilter[]): boole
     if (!s) continue;
     const v = s.get(r);
     if (v === null) return false;
-    if (f.op === "ge" && !(v >= f.value)) return false;
-    if (f.op === "le" && !(v <= f.value)) return false;
-    if (f.op === "eq" && Math.abs(v - f.value) > 1e-9) return false;
+    if (f.op === "gte" && !(v >= f.value)) return false;
+    if (f.op === "gt" && !(v > f.value)) return false;
+    if (f.op === "lte" && !(v <= f.value)) return false;
+    if (f.op === "lt" && !(v < f.value)) return false;
   }
   return true;
 }
@@ -297,10 +373,11 @@ export function parseTeamFilters(raw: string | null): TeamGameFilter[] {
   for (const part of raw.split(",")) {
     const [stat, op, value] = part.split(":");
     if (!stat || !TEAM_GAME_STAT_BY_KEY.has(stat)) continue;
-    if (op !== "ge" && op !== "le" && op !== "eq") continue;
+    const mapped = op ? TEAM_OP_ALIAS[op] : undefined;
+    if (!mapped) continue;
     const n = Number(value);
     if (!Number.isFinite(n)) continue;
-    out.push({ stat, op, value: n });
+    out.push({ stat, op: mapped, value: n });
   }
   return out;
 }
@@ -317,25 +394,25 @@ export const serializeTeamFilters = (fs: TeamGameFilter[]): string =>
  */
 export const TEAM_GAME_PRESETS: Array<{ key: string; label: string; desc: string; filters: TeamGameFilter[] }> = [
   { key: "p100", label: "100-point games", desc: "A team scored triple figures.",
-    filters: [{ stat: "pts", op: "ge", value: 100 }] },
+    filters: [{ stat: "pts", op: "gte", value: 100 }] },
   { key: "blowout", label: "30-point wins", desc: "Won by thirty or more.",
-    filters: [{ stat: "margin", op: "ge", value: 30 }] },
+    filters: [{ stat: "margin", op: "gte", value: 30 }] },
   { key: "lockdown", label: "Held under 50", desc: "Allowed fewer than fifty points.",
-    filters: [{ stat: "pa", op: "le", value: 49 }] },
+    filters: [{ stat: "pa", op: "lte", value: 49 }] },
   { key: "bombs", label: "18+ threes", desc: "Eighteen or more three-pointers made.",
-    filters: [{ stat: "fg3m", op: "ge", value: 18 }] },
+    filters: [{ stat: "fg3m", op: "gte", value: 18 }] },
   { key: "ot", label: "Overtime", desc: "Games that needed extra time.",
-    filters: [{ stat: "ot", op: "ge", value: 1 }] },
+    filters: [{ stat: "ot", op: "gte", value: 1 }] },
   { key: "upset", label: "Beat a ranked team", desc: "A win over an AP top-25 opponent.",
     filters: [
-      { stat: "won", op: "ge", value: 1 },
-      { stat: "opp_ap", op: "ge", value: 1 },
-      { stat: "opp_ap", op: "le", value: 25 },
+      { stat: "won", op: "gte", value: 1 },
+      { stat: "opp_ap", op: "gte", value: 1 },
+      { stat: "opp_ap", op: "lte", value: 25 },
     ] },
   { key: "ncaa", label: "NCAA tournament", desc: "March Madness games only.",
-    filters: [{ stat: "tourney", op: "ge", value: 1 }] },
+    filters: [{ stat: "tourney", op: "gte", value: 1 }] },
   { key: "clinic", label: "25+ assists", desc: "Twenty-five or more assists.",
-    filters: [{ stat: "ast", op: "ge", value: 25 }] },
+    filters: [{ stat: "ast", op: "gte", value: 25 }] },
 ];
 
 // ── Formatting ─────────────────────────────────────────────────────────────

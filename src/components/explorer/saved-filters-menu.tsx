@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils";
 import { FREE_LIMITS } from "@/lib/access";
 import { useEntitlement } from "@/lib/use-entitlement";
 import {
-  describeQuery, describePlayerQuery, removeSaved, upsertSaved, writeSaved,
+  describeQuery, describePlayerQuery, describeTeamGameQuery, describePlayerGameQuery,
+  removeSaved, upsertSaved, writeSaved,
   savedSnapshot, savedServerSnapshot, subscribeSaved, type SavedScope,
   MAX_SAVED, type SavedFilter,
 } from "@/lib/saved-filters";
@@ -32,6 +33,14 @@ import {
  * swaps in the real list straight after, which is both mismatch-free and how
  * a second tab's saves arrive here without a reload.
  */
+/** One read-out per scope — a query means nothing to the wrong describer. */
+const DESCRIBERS: Record<SavedScope, (q: string) => string> = {
+  teams: describeQuery,
+  players: describePlayerQuery,
+  "team-games": describeTeamGameQuery,
+  "player-games": describePlayerGameQuery,
+};
+
 export function SavedFiltersMenu({
   currentQuery,
   suggestedName,
@@ -57,7 +66,7 @@ export function SavedFiltersMenu({
   // listener each time, and a fresh getSnapshot re-renders without end.
   const subscribe = useMemo(() => (cb: () => void) => subscribeSaved(cb, scope), [scope]);
   const snapshot = useMemo(() => () => savedSnapshot(scope), [scope]);
-  const describe = scope === "players" ? describePlayerQuery : describeQuery;
+  const describe = DESCRIBERS[scope];
   const saved = useSyncExternalStore(subscribe, snapshot, savedServerSnapshot);
   const { paid, signedIn } = useEntitlement();
   /**
