@@ -285,6 +285,28 @@ export function effectivePlayerViewAccess(key: string, paid: boolean): ViewAcces
   return paid ? FREE : playerViewAccess(key);
 }
 
+/**
+ * THE GAME LOG EXPLORER IS ONE PREVIEW, whole.
+ *
+ * Not a map of views like the two tables above, because the gate here is not
+ * about which columns you get — every view of a single game is the same box
+ * score seen from a different angle, and there is no version of it that is
+ * "the free one". What a Pass buys on this page is the RANKING: the whole
+ * list rather than its top five, the ordering of your choice, more than one
+ * season at a time, and the download.
+ *
+ * The five rows are the pitch and they are real rows, not a mock: a free
+ * reader picks 40-point games, or triple-doubles, or types their own bound,
+ * and gets the top five games in the country that actually cleared it. The
+ * tool demonstrably works before it stops.
+ */
+export const GAME_LOG_ACCESS: ViewAccess = PREVIEW;
+
+/** The rule that actually applies to this reader. */
+export function effectiveGameLogAccess(paid: boolean): ViewAccess {
+  return paid ? FREE : GAME_LOG_ACCESS;
+}
+
 /** The rule for a view. Unknown keys are free — a view with no entry is new,
  *  and shipping it locked by accident is the worse failure. */
 export function viewAccess(key: string): ViewAccess {

@@ -24,6 +24,12 @@ const SUBNAV: Record<string, ReadonlyArray<{ href: string; label: string }>> = {
     { href: "/", label: "Team Explorer" },
     { href: "/conferences", label: "Conference Power Rankings" },
   ],
+  // Players is two tables for the same reason Teams is: the explorer rates a
+  // season, the game log rates a night, and neither is a view of the other.
+  "/players": [
+    { href: "/players", label: "Player Explorer" },
+    { href: "/players/games", label: "Game Log Explorer" },
+  ],
 };
 
 const NAV = [
