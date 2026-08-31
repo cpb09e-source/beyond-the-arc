@@ -164,7 +164,14 @@ export function ScheduleTicker({
         const scroller = (
         <div
           ref={scrollerRef}
-          className="overflow-x-auto overscroll-x-contain select-none cursor-grab [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          // py-1 -my-1 IS NOT SPACING, it is headroom for the tournament tiles.
+          // overflow-x-auto forces the other axis to compute as auto too (CSS
+          // overflow: one axis non-visible makes the other non-visible), so this
+          // box clips vertically — and the tourney cells' ring sat exactly on the
+          // edge, shaving the top and bottom of every green and red box. The
+          // padding gives them room inside the scroller; the negative margin gives
+          // it back to the layout, so nothing else moves.
+          className="overflow-x-auto overscroll-x-contain select-none cursor-grab py-1 -my-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
           style={{ scrollSnapType: "x proximity" }}
         >
           <div className={cn("flex items-start min-w-min", showSeasonLabels ? "gap-2" : "gap-1.5")}>
