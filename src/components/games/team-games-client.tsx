@@ -433,7 +433,7 @@ export function TeamGamesClient() {
           <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">Team</span>
           <SearchableMultiSelect
             value={spec.teams} options={teamOptions} onChange={(teams) => update({ teams })}
-            emptyLabel="All" ariaLabel="Teams" className="w-36"
+            emptyLabel="All" ariaLabel="Teams" className="w-auto min-w-36 max-w-60"
           />
         </label>
 
@@ -441,7 +441,7 @@ export function TeamGamesClient() {
           <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">Opp</span>
           <SearchableMultiSelect
             value={spec.opps} options={oppOptions} onChange={(opps) => update({ opps })}
-            emptyLabel="All" ariaLabel="Opponents" className="w-36"
+            emptyLabel="All" ariaLabel="Opponents" className="w-auto min-w-36 max-w-60"
           />
         </label>
 

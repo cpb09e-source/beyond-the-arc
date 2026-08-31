@@ -487,7 +487,7 @@ export function GamesClient() {
             onChange={(teams) => update({ teams })}
             emptyLabel="All"
             ariaLabel="Teams"
-            className="w-36"
+            className="w-auto min-w-36 max-w-60"
           />
         </label>
 
