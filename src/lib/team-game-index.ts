@@ -72,22 +72,21 @@ export type TeamGameStat = {
   lowerBetter?: boolean;
   filterable?: boolean;
   /**
-   * Show a percentile chip beside this column.
+   * Show a percentile chip beside this column. DEFAULTS TO TRUE.
    *
-   * RATES ONLY, AND THAT IS THE WHOLE RULE. A percentile answers "is this
-   * number good?", which is a real question about 134.3 ORtg or a 53.4% eFG
-   * and a meaningless one about the rest:
+   * Matches the team explorer, which chips every stat column it renders — the
+   * point being that a reader moving between the two tables reads the same
+   * signal the same way, and does not have to learn which page shows context
+   * and which does not.
    *
-   *   Raw counts — PTS, REB, FGM — are what the table is usually sorted by,
-   *   so the top row is the 100th percentile BY DEFINITION and the chip only
-   *   restates the sort.
+   * The exceptions are the columns the explorer would not call stats at all:
+   * the result flags (W, HOME, CONF, NCAA) and the rank-like context (AP rank,
+   * seed), which are identity, not distribution. A percentile of a 3-seed is
+   * not a fact about anything.
    *
-   *   Context — AP rank, seed, W, halves — has no distribution worth ranking.
-   *   The percentile of a 3-seed is not a fact about anything.
-   *
-   *   Pace is a rate but not a virtue. Fast is not better than slow, so a
-   *   chip that colours 95 possessions green would be asserting something
-   *   the site does not believe.
+   * PACE IS THE ONE TO READ CAREFULLY. Its chip means "how fast, ranked", not
+   * "how good" — fast is not better than slow. A green 97 says this was a
+   * track meet, not that a track meet is the right way to play.
    */
   pct?: boolean;
 };
@@ -95,7 +94,7 @@ export type TeamGameStat = {
 const S = (
   key: string, label: string, fmt: TeamGameStat["fmt"], title: string,
   get: TeamGameStat["get"], extra: Partial<TeamGameStat> = {},
-): TeamGameStat => ({ key, label, title, fmt, get, filterable: true, ...extra });
+): TeamGameStat => ({ key, label, title, fmt, get, filterable: true, pct: true, ...extra });
 
 export const TEAM_GAME_STATS: TeamGameStat[] = [
   /**
@@ -108,29 +107,31 @@ export const TEAM_GAME_STATS: TeamGameStat[] = [
     (r) => {
       const o = ten(r[T.ortg]!), d = ten(r[T.drtg]!);
       return o === null || d === null ? null : o - d;
-    }, { pct: true }),
+    }),
   S("margin", "MARGIN", "int", "Final margin. Negative in a loss.",
     (r) => r[T.pts]! - r[T.pa]!),
   S("pts", "PTS", "int", "Points scored.", (r) => r[T.pts]!),
   S("pa", "OPP", "int", "Points allowed.", (r) => r[T.pa]!, { lowerBetter: true }),
   S("poss", "POSS", "int", "Possessions.", (r) => r[T.poss]!),
-  S("pace", "PACE", "num1", "Possessions per 40 minutes.", (r) => ten(r[T.pace]!)),
+  S("pace", "PACE", "num1",
+    "Possessions per 40 minutes. The percentile ranks how FAST the game was, not how well it was played.",
+    (r) => ten(r[T.pace]!)),
   S("ortg", "ORtg", "num1", "Offensive rating — points per 100 possessions.",
-    (r) => ten(r[T.ortg]!), { pct: true }),
+    (r) => ten(r[T.ortg]!)),
   S("drtg", "DRtg", "num1", "Defensive rating — points allowed per 100 possessions.",
-    (r) => ten(r[T.drtg]!), { lowerBetter: true, pct: true }),
+    (r) => ten(r[T.drtg]!), { lowerBetter: true }),
 
   S("fgm", "FGM", "int", "Field goals made.", (r) => r[T.fgm]!),
   S("fga", "FGA", "int", "Field goals attempted.", (r) => r[T.fga]!),
-  S("fg_pct", "FG%", "pct1", "Field goal percentage.", (r) => div(r[T.fgm]!, r[T.fga]!), { pct: true }),
+  S("fg_pct", "FG%", "pct1", "Field goal percentage.", (r) => div(r[T.fgm]!, r[T.fga]!)),
   S("fg3m", "3PM", "int", "Three-pointers made.", (r) => r[T.fg3m]!),
   S("fg3a", "3PA", "int", "Three-pointers attempted.", (r) => r[T.fg3a]!),
-  S("fg3_pct", "3P%", "pct1", "Three-point percentage.", (r) => div(r[T.fg3m]!, r[T.fg3a]!), { pct: true }),
+  S("fg3_pct", "3P%", "pct1", "Three-point percentage.", (r) => div(r[T.fg3m]!, r[T.fg3a]!)),
   S("ftm", "FTM", "int", "Free throws made.", (r) => r[T.ftm]!),
   S("fta", "FTA", "int", "Free throws attempted.", (r) => r[T.fta]!),
-  S("ft_pct", "FT%", "pct1", "Free throw percentage.", (r) => div(r[T.ftm]!, r[T.fta]!), { pct: true }),
+  S("ft_pct", "FT%", "pct1", "Free throw percentage.", (r) => div(r[T.ftm]!, r[T.fta]!)),
   S("ts", "TS%", "pct1", "True shooting — points per shooting possession, free throws included.",
-    (r) => div(r[T.pts]!, 2 * (r[T.fga]! + 0.44 * r[T.fta]!)), { pct: true }),
+    (r) => div(r[T.pts]!, 2 * (r[T.fga]! + 0.44 * r[T.fta]!))),
 
   S("oreb", "OREB", "int", "Offensive rebounds.", (r) => r[T.oreb]!),
   S("dreb", "DREB", "int", "Defensive rebounds.", (r) => r[T.reb]! - r[T.oreb]!),
@@ -143,26 +144,30 @@ export const TEAM_GAME_STATS: TeamGameStat[] = [
 
   // ── The four factors, and what the defence allowed ──────────────────────
   S("efg", "eFG%", "pct1", "Effective field goal percentage — a three counted for what it is worth.",
-    (r) => per(r[T.efg]!), { pct: true }),
+    (r) => per(r[T.efg]!)),
   S("ftr", "FTR", "pct1", "Free throw rate — free throws attempted per field goal attempt.",
-    (r) => per(r[T.ftr]!), { pct: true }),
+    (r) => per(r[T.ftr]!)),
   S("tovr", "TOV%", "pct1", "Turnover rate — turnovers per possession.",
-    (r) => per(r[T.tovr]!), { lowerBetter: true, pct: true }),
+    (r) => per(r[T.tovr]!), { lowerBetter: true }),
   S("orbr", "ORB%", "pct1", "Offensive rebound rate — share of own misses rebounded.",
-    (r) => per(r[T.orbr]!), { pct: true }),
+    (r) => per(r[T.orbr]!)),
   S("efgd", "eFG% D", "pct1", "Effective field goal percentage allowed.",
-    (r) => per(r[T.efgd]!), { lowerBetter: true, pct: true }),
+    (r) => per(r[T.efgd]!), { lowerBetter: true }),
   S("ftrd", "FTR D", "pct1", "Free throw rate allowed.",
-    (r) => per(r[T.ftrd]!), { lowerBetter: true, pct: true }),
-  S("tovd", "TOV% D", "pct1", "Turnover rate forced.", (r) => per(r[T.tovd]!), { pct: true }),
+    (r) => per(r[T.ftrd]!), { lowerBetter: true }),
+  S("tovd", "TOV% D", "pct1", "Turnover rate forced.", (r) => per(r[T.tovd]!)),
   S("orbd", "ORB% D", "pct1", "Offensive rebound rate allowed.",
-    (r) => per(r[T.orbd]!), { lowerBetter: true, pct: true }),
+    (r) => per(r[T.orbd]!), { lowerBetter: true }),
 
   // ── Situational ────────────────────────────────────────────────────────
   S("lead", "LEAD", "int", "Largest lead held.", (r) => r[T.lead]!),
   S("h1", "1H", "int", "First-half points.", (r) => r[T.h1]!),
   S("h2", "2H", "int", "Second-half points.", (r) => r[T.h2]!),
-  S("ot", "OT", "int", "Overtime points. Zero in a game that ended in regulation.", (r) => r[T.ot]!),
+  // NO CHIP: 96% of games end in regulation, so a midrank puts every zero at
+  // the 47th percentile and paints a column of identical amber on the most
+  // common value in the table. Same reasoning as noPct in player-stat-pack.
+  S("ot", "OT", "int", "Overtime points. Zero in a game that ended in regulation.",
+    (r) => r[T.ot]!, { pct: false }),
 
   // ── Differentials, straight from the game log ──────────────────────────
   S("reb_dif", "REB±", "int", "Rebound margin.", (r) => r[T.rebDif]!),
@@ -176,16 +181,16 @@ export const TEAM_GAME_STATS: TeamGameStat[] = [
   // ── Context, filterable so a question can be asked of it ───────────────
   // Flags read as 0/1 so the filter builder can reach them: "WON ≥ 1" is how
   // you ask for wins, and it composes with everything else.
-  S("won", "W", "int", "1 for a win, 0 for a loss.", (r) => ((r[T.f]! & WON) ? 1 : 0)),
-  S("home", "HOME", "int", "1 at home, 0 away or neutral.", (r) => ((r[T.f]! & HOME) ? 1 : 0)),
-  S("neutral", "NEUT", "int", "1 on a neutral floor.", (r) => ((r[T.f]! & NEUTRAL) ? 1 : 0)),
-  S("conf", "CONF", "int", "1 for a conference game.", (r) => ((r[T.f]! & CONF) ? 1 : 0)),
-  S("tourney", "NCAA", "int", "1 for an NCAA tournament game.", (r) => ((r[T.f]! & TOURNEY) ? 1 : 0)),
-  S("post", "POST", "int", "1 for any postseason game.", (r) => ((r[T.f]! & POST) ? 1 : 0)),
-  S("ap", "AP", "int", "AP rank that week. 0 if unranked.", (r) => r[T.ap]!),
-  S("opp_ap", "OPP AP", "int", "Opponent's AP rank that week. 0 if unranked.", (r) => r[T.oppAp]!),
-  S("seed", "SEED", "int", "NCAA tournament seed. 0 outside the tournament.", (r) => r[T.seed]!),
-  S("opp_seed", "OPP SEED", "int", "Opponent's NCAA seed.", (r) => r[T.oppSeed]!),
+  S("won", "W", "int", "1 for a win, 0 for a loss.", (r) => ((r[T.f]! & WON) ? 1 : 0), { pct: false }),
+  S("home", "HOME", "int", "1 at home, 0 away or neutral.", (r) => ((r[T.f]! & HOME) ? 1 : 0), { pct: false }),
+  S("neutral", "NEUT", "int", "1 on a neutral floor.", (r) => ((r[T.f]! & NEUTRAL) ? 1 : 0), { pct: false }),
+  S("conf", "CONF", "int", "1 for a conference game.", (r) => ((r[T.f]! & CONF) ? 1 : 0), { pct: false }),
+  S("tourney", "NCAA", "int", "1 for an NCAA tournament game.", (r) => ((r[T.f]! & TOURNEY) ? 1 : 0), { pct: false }),
+  S("post", "POST", "int", "1 for any postseason game.", (r) => ((r[T.f]! & POST) ? 1 : 0), { pct: false }),
+  S("ap", "AP", "int", "AP rank that week. 0 if unranked.", (r) => r[T.ap]!, { pct: false }),
+  S("opp_ap", "OPP AP", "int", "Opponent's AP rank that week. 0 if unranked.", (r) => r[T.oppAp]!, { pct: false }),
+  S("seed", "SEED", "int", "NCAA tournament seed. 0 outside the tournament.", (r) => r[T.seed]!, { pct: false }),
+  S("opp_seed", "OPP SEED", "int", "Opponent's NCAA seed.", (r) => r[T.oppSeed]!, { pct: false }),
 ];
 
 export const TEAM_GAME_STAT_BY_KEY = new Map(TEAM_GAME_STATS.map((s) => [s.key, s]));
