@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { isFlaggedSeason } from "@/lib/seasons";
 import { TeamLogo } from "@/components/team-logo";
 import { Select } from "@/components/select";
 import { PercentileChip } from "@/components/percentile-chip";
@@ -368,6 +369,7 @@ export function PlayerGameLog({
   playerName,
   ladders,
   minAtt,
+  emptySeason,
 }: {
   /** Every logged game the player has, newest first. */
   rows: GameLogRow[];
@@ -380,6 +382,15 @@ export function PlayerGameLog({
   ladders: Record<string, Record<string, number[]>>;
   /** Attempts a night needs before it gets a chip. Matches the ladder's own. */
   minAtt: number;
+  /**
+   * The season to name when there are NO rows at all.
+   *
+   * `year` is picked from the rows, so with none it is 0 and the empty state
+   * cannot say which season is missing. The page knows — it is rendering the
+   * career table right above this — so it passes the player's own season down
+   * for that one sentence.
+   */
+  emptySeason?: number;
 }) {
   const years = useMemo(
     () => [...new Set(rows.map((r) => r.year))].sort((a, b) => b - a),
@@ -418,8 +429,25 @@ export function PlayerGameLog({
   if (rows.length === 0) {
     return (
       <div className="px-5 lg:px-7 py-8 text-sm text-ink-muted">
-        No game log for {playerName}. The box archive starts in 2013-14 and does not
-        cover every season.
+        {/* NAME THE ACTUAL REASON. "The archive starts in 2013-14" is true of
+            the floor and says nothing about 2020-21, which is inside the window
+            and shown everywhere else on the site — a reader who has just looked
+            at this player's season averages deserves better than a sentence
+            that reads as if the season were too old. */}
+        {isFlaggedSeason(emptySeason ?? year) ? (
+          <>
+            No game log for {playerName} in{" "}
+            {`${((emptySeason ?? year) - 1) % 100}`}-{`${(emptySeason ?? year) % 100}`}. The
+            COVID season&rsquo;s archive carries team box scores but no per-player
+            ones, so the season totals above have no game-by-game detail behind
+            them.
+          </>
+        ) : (
+          <>
+            No game log for {playerName}. The box archive starts in 2013-14 and does not
+            cover every season.
+          </>
+        )}
       </div>
     );
   }

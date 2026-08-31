@@ -339,6 +339,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                 playerName={stats.name ?? `Player ${bartId}`}
                 ladders={logLadders}
                 minAtt={gamePct?.min_att ?? 2}
+                emptySeason={current.year}
               />
             </div>
           </section>
