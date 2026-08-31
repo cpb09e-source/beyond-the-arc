@@ -24,6 +24,11 @@
   --court-ink: #8a6224;      /* hardwood dark enough to set text on a court tint */
   --good: #4a7c59;           /* chart positive — forest green */
   --bad: #b94c4c;            /* chart negative — muted red */
+  /* Trophy gold, for the one thing on the site that is genuinely a trophy:
+     a national title, a runner-up, a top-100 recruit rank. Kept separate from
+     --court, which is hardwood and deliberately too muted to carry a badge. */
+  --gold: #c8901a;
+  --gold-ink: #4a3505;       /* text on a gold fill */
 
   /* shadcn aliases — map to brand */
   --background: var(--paper);
@@ -129,6 +134,11 @@
   --court-ink: #d9ae6e;      /* lighter than --court here — it sets text on a dark tint */
   --good: #5fb87a;
   --bad: #e2706e;
+  /* Lifted to carry on #1C1C1C, same as the accent above it. --gold-ink stays
+     dark because it only ever sits ON a gold fill, which is light in both
+     themes. */
+  --gold: #e0ae3e;
+  --gold-ink: #33240a;
 
   --card: #242424;
   --card-foreground: var(--ink);
@@ -216,6 +226,8 @@
   --color-court-ink: var(--court-ink);
   --color-good: var(--good);
   --color-bad: var(--bad);
+  --color-gold: var(--gold);
+  --color-gold-ink: var(--gold-ink);
   --color-hairline: var(--hairline);
 
   --font-display: var(--font-display);

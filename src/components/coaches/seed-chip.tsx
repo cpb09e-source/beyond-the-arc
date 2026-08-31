@@ -12,10 +12,10 @@
  */
 export function SeedChip({ seed, size = "md" }: { seed: number; size?: "sm" | "md" }) {
   let classes: string;
-  if (seed <= 4) classes = "bg-blue-100 text-blue-800";
-  else if (seed <= 8) classes = "bg-emerald-100 text-emerald-800";
-  else if (seed <= 12) classes = "bg-amber-100 text-amber-800";
-  else classes = "bg-red-100 text-red-800";
+  if (seed <= 4) classes = "bg-coral/15 text-coral";
+  else if (seed <= 8) classes = "bg-good/15 text-good";
+  else if (seed <= 12) classes = "bg-court/25 text-court-ink";
+  else classes = "bg-bad/15 text-bad";
   const sizeClasses =
     size === "sm" ? "text-[0.6rem] w-5 h-5" : "text-xs w-7 h-7";
   return (

@@ -563,7 +563,7 @@ export function CompareTeamsModal({
                 right there in the numbers anyway. */}
             <p className="hidden md:block text-sm text-ink-muted mt-2 max-w-2xl">
               Pick up to four team-seasons. Best mark per row in{" "}
-              <span className="text-emerald-700 font-medium">green</span>, worst in{" "}
+              <span className="text-good font-medium">green</span>, worst in{" "}
               <span className="text-coral font-medium">coral</span>. Ties get neither.
             </p>
           </div>

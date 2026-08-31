@@ -136,7 +136,7 @@ export function SeasonHeatStrip({ seasons }: { seasons: CoachSeason[] }) {
                 </span>
                 {round ? (
                   <span
-                    className={`text-[0.55rem] uppercase tracking-widest font-bold tabular leading-none ${isTitle ? "text-amber-700" : "text-ink-soft"}`}
+                    className={`text-[0.55rem] uppercase tracking-widest font-bold tabular leading-none ${isTitle ? "text-gold" : "text-ink-soft"}`}
                   >
                     {round}
                   </span>
@@ -144,7 +144,7 @@ export function SeasonHeatStrip({ seasons }: { seasons: CoachSeason[] }) {
                   <span className="text-[0.55rem] leading-none opacity-0">·</span>
                 )}
                 {isTitle && (
-                  <span className="absolute inset-x-1 bottom-0 h-0.5 bg-amber-500/80 rounded-t" />
+                  <span className="absolute inset-x-1 bottom-0 h-0.5 bg-gold/80 rounded-t" />
                 )}
               </div>
             );

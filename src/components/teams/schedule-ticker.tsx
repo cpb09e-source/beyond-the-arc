@@ -246,8 +246,8 @@ function GameCell({
         // Tournament cells get a subtle inset wash + hairline ring colored
         // by result — green for a win, red for a loss — so the March
         // Madness stretch reads as a color-coded mini-bracket.
-        isTourney && game.won === true && "bg-emerald-100/60 ring-1 ring-emerald-300/60",
-        isTourney && game.won === false && "bg-rose-100/60 ring-1 ring-rose-300/60",
+        isTourney && game.won === true && "bg-good/12 ring-1 ring-good/35",
+        isTourney && game.won === false && "bg-bad/12 ring-1 ring-bad/35",
         isTourney && game.won === null && "bg-paper-deep ring-1 ring-hairline",
       )}
     >
@@ -257,8 +257,8 @@ function GameCell({
         <span
           className={cn(
             "text-[0.5rem] tabular font-bold uppercase tracking-wider leading-none pointer-events-none",
-            game.won === true && "text-emerald-700",
-            game.won === false && "text-rose-700",
+            game.won === true && "text-good",
+            game.won === false && "text-bad",
             game.won === null && "text-ink-muted",
           )}
         >
@@ -268,8 +268,8 @@ function GameCell({
       <span
         className={cn(
           "inline-flex items-center justify-center text-[0.55rem] font-semibold tabular w-6 h-4 rounded-sm leading-none pointer-events-none",
-          game.won === true && "bg-emerald-100 text-emerald-800",
-          game.won === false && "bg-rose-100 text-rose-800",
+          game.won === true && "bg-good/15 text-good",
+          game.won === false && "bg-bad/15 text-bad",
           game.won === null && "bg-paper-deep text-ink-muted",
         )}
       >

@@ -103,7 +103,7 @@ function RankBadge({
   return (
     <span className="inline-flex flex-col leading-tight">
       <span className="inline-flex items-center gap-1">
-        {isElite && <span aria-hidden className="text-amber-500 text-[0.85em] leading-none">★</span>}
+        {isElite && <span aria-hidden className="text-gold text-[0.85em] leading-none">★</span>}
         <span className={cn(
           "font-display tabular tabular-nums tracking-[-0.02em]",
           isElite ? "text-coral" : isGood ? "text-coral" : "text-ink",
@@ -575,7 +575,7 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
                 right there in the numbers anyway. */}
             <p className="hidden md:block text-sm text-ink-muted mt-2 max-w-2xl">
               Pick up to four player-seasons. Best mark per row in{" "}
-              <span className="text-emerald-700 font-medium">green</span>, worst in{" "}
+              <span className="text-good font-medium">green</span>, worst in{" "}
               <span className="text-coral font-medium">coral</span>. Ties get neither.
             </p>
           </div>

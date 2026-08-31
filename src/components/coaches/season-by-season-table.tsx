@@ -226,8 +226,8 @@ function RatingCell({ value, pct, coral, rankFormat }: { value: number | null | 
   if (value == null) return <td className="px-1.5 sm:px-3 py-2.5 text-center text-ink-muted/50 tabular">—</td>;
   let pillClass = "bg-paper-deep text-ink-muted";
   if (pct != null) {
-    if (pct >= 90) pillClass = "bg-emerald-100 text-emerald-700";
-    else if (pct >= 75) pillClass = "bg-emerald-50 text-emerald-700";
+    if (pct >= 90) pillClass = "bg-good/18 text-good";
+    else if (pct >= 75) pillClass = "bg-good/10 text-good";
     else if (pct >= 50) pillClass = "bg-paper-deep text-ink-muted";
     else pillClass = "bg-paper-deep text-ink-muted/70";
   }
@@ -290,7 +290,7 @@ function SeasonPostseasonBadge({ season }: { season: CoachSeason }) {
   if (round === "Champion") {
     return (
       <span
-        className="inline-flex items-center justify-center rounded-full bg-amber-500 text-white shadow-sm align-middle ml-0.5 sm:ml-1 w-3.5 h-3.5 sm:w-[18px] sm:h-[18px]"
+        className="inline-flex items-center justify-center rounded-full bg-gold text-gold-ink shadow-sm align-middle ml-0.5 sm:ml-1 w-3.5 h-3.5 sm:w-[18px] sm:h-[18px]"
         title={`${season.year - 1}-${String(season.year).slice(-2)} National Champion · #${season.seed} seed`}
         aria-label="National champion"
       >

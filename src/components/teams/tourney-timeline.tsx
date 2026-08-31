@@ -18,8 +18,8 @@ type RowEntry = {
 };
 
 const ROUND_TIERS: Record<string, { label: string; bg: string; fg: string }> = {
-  "Champion":   { label: "TITLE",  bg: "bg-amber-500",     fg: "text-white" },
-  "Runner-Up":  { label: "FINAL",  bg: "bg-amber-300",     fg: "text-amber-950" },
+  "Champion":   { label: "TITLE",  bg: "bg-gold",          fg: "text-gold-ink" },
+  "Runner-Up":  { label: "FINAL",  bg: "bg-gold/45",       fg: "text-gold-ink" },
   "F4":         { label: "F4",     bg: "bg-coral",         fg: "text-white" },
   "E8":         { label: "E8",     bg: "bg-coral/80",      fg: "text-white" },
   "S16":        { label: "S16",    bg: "bg-coral/30",      fg: "text-coral" },

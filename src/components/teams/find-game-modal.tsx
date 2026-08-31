@@ -389,8 +389,8 @@ function ResultsView({
             <span
               className={
                 g.won
-                  ? "inline-flex items-center justify-center text-[0.55rem] font-bold tabular w-6 h-5 rounded bg-emerald-100 text-emerald-800"
-                  : "inline-flex items-center justify-center text-[0.55rem] font-bold tabular w-6 h-5 rounded bg-rose-100 text-rose-800"
+                  ? "inline-flex items-center justify-center text-[0.55rem] font-bold tabular w-6 h-5 rounded bg-good/15 text-good"
+                  : "inline-flex items-center justify-center text-[0.55rem] font-bold tabular w-6 h-5 rounded bg-bad/15 text-bad"
               }
             >
               {g.won ? "W" : "L"}

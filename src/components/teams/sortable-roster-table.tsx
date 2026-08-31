@@ -204,10 +204,10 @@ export function SortableRosterTable({
 
 function StatusBadge({ status, from }: { status: "returning" | "transfer" | "newcomer"; from?: string | null }) {
   if (status === "returning") {
-    return <span className="ml-2 inline-block align-middle text-[0.6rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-green-500/15 text-green-600">Ret</span>;
+    return <span className="ml-2 inline-block align-middle text-[0.6rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-good/15 text-good">Ret</span>;
   }
   if (status === "newcomer") {
-    return <span className="ml-2 inline-block align-middle text-[0.6rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-500">New</span>;
+    return <span className="ml-2 inline-block align-middle text-[0.6rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-coral/15 text-coral">New</span>;
   }
   return (
     <>
@@ -235,7 +235,7 @@ function RsciBadge({ rank }: { rank?: number | null }) {
   return (
     <span
       title={`RSCI national recruit rank #${rank}`}
-      className="ml-1.5 inline-block align-middle text-[0.6rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600"
+      className="ml-1.5 inline-block align-middle text-[0.6rem] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-gold/18 text-gold"
     >
       #{rank}
     </span>

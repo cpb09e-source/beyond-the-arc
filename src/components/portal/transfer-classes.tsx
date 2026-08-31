@@ -139,7 +139,7 @@ export function TransferClassesPanel({
         {leader && (
           <span className="text-[0.68rem] text-ink-muted truncate min-w-0">
             {leader.school}{" "}
-            <span className={cn("tabular", leader.score >= 0 ? "text-emerald-700" : "text-rose-700")}>
+            <span className={cn("tabular", leader.score >= 0 ? "text-good" : "text-bad")}>
               {leader.score > 0 ? "+" : ""}{leader.score}
             </span>
           </span>
@@ -192,7 +192,7 @@ function ClassList({ rows, onPick }: { rows: TransferClassRow[]; onPick: (r: Tra
                 {confDisplay(r.conference)} · {r.in_count}↓ {r.out_count}↑
               </span>
             </span>
-            <span className={`font-display text-base tabular tabular-nums ${r.score >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+            <span className={`font-display text-base tabular tabular-nums ${r.score >= 0 ? "text-good" : "text-bad"}`}>
               {r.score > 0 ? "+" : ""}{r.score}
             </span>
           </button>
@@ -306,7 +306,7 @@ export function TransferClassModal({ row, onClose }: { row: TransferClassRow; on
           <div className="flex items-baseline gap-3">
             <div className="text-right">
               <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Class score</div>
-              <div className={`font-display text-3xl tabular ${row.score >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
+              <div className={`font-display text-3xl tabular ${row.score >= 0 ? "text-good" : "text-bad"}`}>
                 {row.score > 0 ? "+" : ""}{row.score}
               </div>
               {/* The score is a reading scale; the wins are the quantity. Both,
@@ -327,9 +327,9 @@ export function TransferClassModal({ row, onClose }: { row: TransferClassRow; on
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] gap-0 overflow-y-auto flex-1">
-          <PlayerList kicker="Incoming" accent="text-emerald-700" players={inPlayers} />
+          <PlayerList kicker="Incoming" accent="text-good" players={inPlayers} />
           <div className="hidden md:block bg-hairline" />
-          <PlayerList kicker="Outgoing" accent="text-rose-700" players={outPlayers} />
+          <PlayerList kicker="Outgoing" accent="text-bad" players={outPlayers} />
         </div>
       </div>
     </div>
@@ -388,7 +388,7 @@ function PlayerList({
               </div>
               <span className="flex flex-col items-end">
                 <span
-                  className={`font-medium tabular text-sm ${(p.rating ?? 0) >= 0 ? "text-ink" : "text-rose-700"}`}
+                  className={`font-medium tabular text-sm ${(p.rating ?? 0) >= 0 ? "text-ink" : "text-bad"}`}
                   title={p.value === null ? undefined
                     : `${p.ewins_proj?.toFixed(2) ?? "—"} eWins${(p.dev_bump ?? 0) > 0 ? " (incl. soph leap)" : ""}` +
                       `  ·  ${(p.pir_wins ?? 0) >= 0 ? "+" : ""}${(p.pir_wins ?? 0).toFixed(2)} from tiered PIR` +

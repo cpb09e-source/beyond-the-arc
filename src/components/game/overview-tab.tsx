@@ -389,7 +389,7 @@ type StatRow = {
 function Won({ on, children }: { on: boolean; children: React.ReactNode }) {
   if (!on) return <span className="inline-block px-1.5 py-0.5">{children}</span>;
   return (
-    <span className="inline-block px-1.5 py-0.5 rounded-md bg-emerald-100/60 ring-1 ring-emerald-300/60">
+    <span className="inline-block px-1.5 py-0.5 rounded-md bg-good/12 ring-1 ring-good/35">
       {children}
     </span>
   );
@@ -717,8 +717,8 @@ function ResumeCell({
       className={cn(
         "flex-1 min-w-0 flex flex-col items-center gap-1 rounded-lg px-1.5 pt-1.5 pb-1 ring-1",
         plain && "bg-paper-deep/50 ring-hairline",
-        !plain && won === true && "bg-emerald-100/60 ring-emerald-300/60",
-        !plain && won === false && "bg-rose-100/50 ring-rose-300/50",
+        !plain && won === true && "bg-good/12 ring-good/35",
+        !plain && won === false && "bg-bad/12 ring-bad/35",
         !plain && won === null && "bg-paper-deep ring-hairline",
       )}
     >
@@ -727,7 +727,7 @@ function ResumeCell({
       ) : (
         <span className={cn(
           "text-[0.55rem] uppercase tracking-[0.1em] font-bold leading-none",
-          won === true ? "text-emerald-700" : won === false ? "text-rose-700" : "text-ink-muted",
+          won === true ? "text-good" : won === false ? "text-bad" : "text-ink-muted",
         )}>
           {won === null ? "–" : won ? "W" : "L"}
         </span>

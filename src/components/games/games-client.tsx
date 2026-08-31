@@ -743,7 +743,7 @@ export function GamesClient() {
                     </td>
                     <td className={cn("px-2 py-1.5 whitespace-nowrap text-xs transition-colors", ROW_HOVER)}>
                       <span className="inline-flex items-center gap-1.5">
-                        <span className={cn("font-semibold tabular", won ? "text-emerald-600 dark:text-emerald-400" : "text-ink-muted")}>
+                        <span className={cn("font-semibold tabular", won ? "text-good" : "text-ink-muted")}>
                           {won ? "W" : "L"}
                         </span>
                         <span className="text-ink-muted">{site}</span>

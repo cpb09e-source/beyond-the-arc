@@ -111,8 +111,8 @@ function RankPanel({
   year: number;
 }) {
   const pillClass = tone === "best"
-    ? "text-emerald-700 bg-emerald-50"
-    : "text-rose-700 bg-rose-50";
+    ? "text-good bg-good/10"
+    : "text-bad bg-bad/10";
   return (
     <div className="bg-card p-5 lg:p-6">
       <div className="flex items-baseline justify-between mb-4">
