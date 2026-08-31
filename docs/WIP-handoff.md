@@ -44,6 +44,45 @@ resize rather than guessing at what an image shows.
 
 ## Open work
 
+### THE PAYWALL IS ON. Switched 2026-08-30, not yet deployed.
+
+`FREE_SEASONS = [2026, 2025]` in src/lib/access.ts. Everything from 2013-14 to
+2023-24 is now paid. One line to reverse.
+
+What that turns on, and what it does not:
+
+**Real data gates — bytes withheld.** teams-by-year and players-explorer for
+the ten paid seasons are staged into the function bundle and deleted from
+out/; the build fails if either leaks. Verified end to end: signed out 401,
+unknown corpus 400, subscriber 200.
+
+**Team-season pages for paid seasons are now a gate page** — ArchiveSeasonGate,
+in front of all six routes (main + roster/shooting/lineups/on-off/history).
+loadTeamPageData is never called for a gated season, so the numbers are not in
+the HTML at all. Confirmed: /teams/duke/2019 has zero stat markers, /2026 is
+untouched.
+
+**THIS ONE COSTS SUBSCRIBERS, and it is the trade to revisit first.** A static
+export ships one HTML for everyone, so a Pass holder sees the same gate page.
+Half of what a team page renders (lineup-stats, team-seasons) is build-only
+input that is stripped from the deploy, so there is no endpoint their browser
+could fetch it back from. They are sent to the Team Explorer instead, which is
+properly gated and holds the same season. Fixing it properly means a
+team-season endpoint — days of work, not a tweak.
+
+**Still leaking, deliberately: player pages and coach pages.** /players/76149
+embeds 24-25, 23-24 and 22-23 rows in its HTML, and always will — a career
+table is the entire point of the page, and gating it would gut the site's
+most-linked and most-indexed URLs to protect one player's numbers at a time.
+The archive's value is cross-sectional (rank, filter, compare across everyone),
+and that is gated. Revisit only if the individual pages start being used as a
+way around the wall.
+
+**Before the deploy, in this order:** rebuild -> `npm run sync:r2` -> deploy.
+The build now also stages gated-data/, which netlify.toml ships with the
+function via included_files.
+
+
 ### CBBD_API_KEY is DEAD — Colin is fixing it (told 2026-08-30)
 
 `CBBD_API_KEY` in `.env.local` returns **401 Unauthorized on every endpoint**,

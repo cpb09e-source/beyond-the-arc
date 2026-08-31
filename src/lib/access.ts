@@ -54,7 +54,7 @@ import { EXPLORER_SEASONS, PREVIEW_SEASON } from "@/lib/seasons";
  * Google indexes and what a first-time visitor lands on, and the free tier is
  * the top of the funnel that sells the archive.
  */
-export const FREE_SEASONS: readonly number[] = [...EXPLORER_SEASONS];
+export const FREE_SEASONS: readonly number[] = [2026, 2025];
 
 /** True when `year` needs no account. */
 export function isSeasonFree(year: number): boolean {
