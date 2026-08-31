@@ -39,6 +39,9 @@ const STRIP_DIRS = [
   // the lists are supposed to mirror R2_DIRS in src/lib/data-url.ts exactly.
   "data/game-players",
   "data/shots",
+  // Added 2026-08-30 with the Game Log Explorer. 80 MB in twelve files: not a
+  // file-count problem like the rest of this list, a git-history one.
+  "data/game-index",
 ];
 
 /**

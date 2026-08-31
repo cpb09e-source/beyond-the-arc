@@ -33,6 +33,13 @@ const R2_DIRS = [
   // Per-player shot locations for the player-page shot chart — ~4.7k files
   // per season of coverage, fetched one at a time.
   "/data/shots/",
+  // The Game Log Explorer's corpus — one file per season, ~7 MB each, fetched
+  // on demand. THE ODD ONE OUT IN THIS LIST: every other entry is here because
+  // of file COUNT, which is what times out a Netlify upload. This is twelve
+  // files. It is on R2 because it is 80 MB that a rebuild rewrites in full,
+  // and public/data is tracked in git — so shipping it through the deploy
+  // would write 80 MB into history every time the corpus is regenerated.
+  "/data/game-index/",
 ] as const;
 
 export function dataUrl(path: string): string {

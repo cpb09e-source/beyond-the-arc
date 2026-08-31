@@ -44,6 +44,72 @@ resize rather than guessing at what an image shows.
 
 ## Open work
 
+### CBBD_API_KEY is DEAD — Colin is fixing it (told 2026-08-30)
+
+`CBBD_API_KEY` in `.env.local` returns **401 Unauthorized on every endpoint**,
+including `/conferences`. Colin's read: the subscription payment failed on his
+end; he plans to sort it out within a few days of 2026-08-30. Do not debug it
+as a code problem, and do not "fix" it by repointing scripts at the other key
+unless he asks.
+
+`CBB_DATA_API_KEY` (the other key in `.env.local`) is live and returns 200.
+
+**Nine scripts read the dead one** — `cbbd-ingest.mjs`, `cbbd-repair-plays.mjs`,
+`pull-adjusted-ratings.mjs`, `pull-missing-plays.mjs`, `pull-player-box-v2.mjs`,
+`pull-rankings.mjs`, `pull-shooting-splits.mjs`, `pull-team-box-v2.mjs`,
+`pull-team-box.mjs`. The first pull attempted after the key is restored will
+work; one attempted before it will fail on auth, not on the freeze.
+
+Nothing is blocked meanwhile: the data freeze runs to 2026-10-01 and every
+`build-*` script reads the local `data/cbbd` archive, which needs no key.
+
+Also settled the same day: **CBBD has no women's basketball.** `?gender=women`,
+`?league=womens` and `?division=women` are all silently ignored (identical 364
+men's teams returned), and rosters for UConn/USC/Notre Dame come back men's.
+Women's coverage would need a different source entirely.
+
+
+### 0. Game Log Explorer — BUILT 2026-08-30, UNCOMMITTED, NOT DEPLOYED
+
+**Both open questions below were decided the same day and are done.** Gated as
+a five-row preview (`GAME_LOG_ACCESS`); corpus gitignored and mirrored to the
+public R2 bucket, already uploaded and serving. The `data/cbbd` backup script
+landed alongside it — `npm run backup:archive`, blocked only on the Cloudflare
+bucket and token, which is dashboard work. See `docs/data-storage-and-backup.md`.
+
+**Before the next deploy: `npm run sync:r2`.** The build now strips
+`data/game-index` from `out/`, so a deploy without a prior sync would 404 the
+whole page. (Already synced once, 2026-08-30 — but rebuild the corpus and it
+needs it again.)
+
+New page at /players/games, nested under a Players nav menu beside the existing
+explorer. One row per player per game, default-sorted by Game Score, with a
+shortcuts row (40-point games, triple-doubles, 5x5, ...), a filter builder,
+player search, and CSV/Excel download. Full write-up in
+docs/game-log-explorer.md.
+
+Two things to decide before it ships:
+
+- **80 MB of new data** under public/data/game-index/ (12 files, one per
+  season, ~7 MB each, ~2.3 MB gzipped over the wire). Everything in
+  public/data is tracked, so committing it is consistent with the repo — but
+  it is 80 MB of git history. The alternative is R2: add the dir to R2_DIRS in
+  src/lib/data-url.ts, to the strip list, and to the sync script. The page
+  fetches through plain /data paths today.
+- **Gating.** Shipped ungated, with alwaysFree on the download menu, exactly
+  like /conferences. The free-vs-paid worksheet still has no row for either
+  page.
+
+Rebuild the corpus with: node scripts/build-game-index.mjs — whenever
+player-games or players-explorer is rebuilt. It is deliberately NOT wired into
+next build; it is a data build like the other pull/build scripts.
+
+Verified against source: the 2026 top-scoring row (Dennis Parker Jr., 53 vs
+Coppin St., 12/14/25) matches player-games exactly, and the 5x5 filter across
+2023-2026 returns exactly one game — Maliq Brown, Syracuse vs Louisville,
+2/7/24.
+
+
 The team page redesign landed. Six tabs — Overview, Roster, School History,
 Shooting, Lineups, On/Off — with real routes on the recent seasons plus every
 Vermont season, and an anchor fallback everywhere else.
