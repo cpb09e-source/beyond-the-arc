@@ -237,7 +237,9 @@ export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   // allowed. Three zones because that is what the play-by-play range flag
   // distinguishes; corner-vs-above-the-break needs shot coordinates.
   //
-  // 2014-2026 EXCEPT 2021 — the COVID season the whole site excludes.
+  // 2014-2026 EXCEPT 2021: these come from the play-by-play range flag, and
+  // the COVID season's archive carries no play-by-play. The season itself is
+  // shown site-wide (see FLAGGED_SEASONS) — it is these columns that are blank.
   { key: "cbb_rim_rate", source: "cbbd", dbColumn: "rim_rate", label: "Rim Freq", desc: "Share of field-goal attempts taken at the rim", format: "pct1", group: "scoring" },
   { key: "cbb_mid_rate", source: "cbbd", dbColumn: "mid_rate", label: "Mid Freq", desc: "Share of field-goal attempts taken from mid-range", format: "pct1", group: "scoring" },
   { key: "cbb_three_rate", source: "cbbd", dbColumn: "three_rate", label: "3PT Freq", desc: "Share of field-goal attempts taken from three", format: "pct1", group: "scoring" },

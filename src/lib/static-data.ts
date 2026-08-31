@@ -138,8 +138,8 @@ export async function readIndex(): Promise<StaticIndex> {
 }
 
 // The team-season exports still carry full history, so gate here to match the
-// site-wide window defined in src/lib/seasons.ts — floor 2013-14 plus the
-// excluded 2020-21 COVID season.
+// site-wide window defined in src/lib/seasons.ts — currently floor 2013-14
+// with nothing excluded. 2020-21 is flagged rather than dropped, so it passes.
 
 /**
  * CACHED, because this is the single most expensive read in the build.

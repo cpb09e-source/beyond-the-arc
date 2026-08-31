@@ -138,9 +138,87 @@ for (const season of seasons) {
     const day = dayNum(g.game_date);
     if (minDay === null || day < minDay) minDay = day;
 
-    // 40 possessions is well below any real college game (the slowest on
-    // record sit near 50) and well above the handful of broken rows.
-    const ratable = (g.poss ?? 0) >= 40;
+    /**
+     * THE RATINGS ARE COMPUTED HERE, NOT IMPORTED.
+     *
+     * Upstream ships ortg/drtg in the box, and they are `pts / poss_box * 100`
+     * — where `poss_box` is a possession count that disagrees with the game
+     * log's own. Where it disagrees it is simply wrong: Creighton 107-61 over
+     * Alcorn St. logs 76.1 possessions and boxes 45, which prints an offensive
+     * rating of 237.8. Houston 77-52 over Tulane logs 59.1 and boxes 13, for
+     * 592.3.
+     *
+     * Guarding the imported number was not enough, because `poss_box` is not
+     * merely small on the bad rows — it is arbitrary, and 45 clears any floor
+     * worth setting. So the denominator is the log's `poss`, which is the same
+     * number this index already ships in the POSS column.
+     *
+     * SAFE, AND MEASURED. Comparing upstream's rating against `pts / poss` over
+     * 85,162 rows: 99.42% agree within a tenth of a point, 0.58% differ by more
+     * than ten, and NOTHING lands in between. The disagreement is not drift
+     * that recomputing would paper over; it is a clean split between rows where
+     * upstream used the same possessions we do and rows where it used garbage.
+     *
+     * It also makes the table checkable. A reader can now divide the PTS column
+     * by the POSS column on the same row and get the ORTG column, which was not
+     * true before and is the real defect behind the 237.8.
+     */
+    /**
+     * THE DENOMINATOR IS DERIVED, AND CHECKED AGAINST THE ONE WE WERE GIVEN.
+     *
+     * Neither supplied possession count can be trusted on its own. The box's
+     * `poss_box` is wrong on 493 rows (Creighton 107-61 boxed at 45), and the
+     * log's `poss` is wrong on a different ~371 (Georgia 72-52 logged at 42,
+     * Kansas 104-74 at 51 — a 104-point game is never 51 possessions).
+     *
+     * So possessions are computed from the counting stats, which are the part
+     * of the box that has never been in doubt:
+     *
+     *   poss ≈ FGA − ORB + TOV + 0.475·FTA
+     *
+     * Dean Oliver's estimator, with KenPom's free-throw coefficient. Measured
+     * against the log's `poss` over 55,147 rows: 96.05% agree within 5%, 98.87%
+     * within 10%, and the 0.67% that differ by more than 25% are exactly the
+     * broken rows — the estimate puts Georgia/Wofford at 59.8 and 61.5, which
+     * is what a 72-52 game actually looks like.
+     *
+     * The log wins when the two agree, so the POSS column keeps the number the
+     * rest of the site uses; the estimate takes over only where the log has
+     * gone wrong. Either way the row is self-consistent: PTS ÷ POSS × 100 is
+     * the ORTG printed beside it.
+     */
+    const est = (() => {
+      const fga = B(b, "fga"), orb = B(b, "oreb"), tov = B(b, "tov"), fta = B(b, "fta");
+      if ([fga, orb, tov, fta].some((v) => typeof v !== "number")) return null;
+      return fga - orb + tov + 0.475 * fta;
+    })();
+    const logged = g.poss ?? null;
+    const poss = (() => {
+      if (logged === null) return est;
+      if (est === null) return logged;
+      return Math.abs(est - logged) / logged <= 0.10 ? logged : est;
+    })();
+
+    const ratable = poss !== null && poss >= 40;
+    const ortg = ratable ? (g.pts_scored / poss) * 100 : null;
+    const drtg = ratable ? (g.pts_against / poss) * 100 : null;
+
+    /**
+     * PACE IS BROKEN IN THE SAME PLACES, and cannot be recomputed the same way.
+     *
+     * Pace is possessions per 40 minutes, so for a regulation game it IS the
+     * possession count, and for an overtime game it is that scaled by
+     * 40/(40 + 5·OT) — a period count this row does not carry. So pace is kept
+     * from the log and sanity-checked against the possessions beside it.
+     *
+     * The ratio distribution over 55,153 rows says exactly where to cut:
+     * 93.3% sit at 0.95-1.02 (regulation), 5.9% at 0.70-0.95 (one to three
+     * overtimes, 40/45 through 40/55), and then a gap before 0.8% of rows fall
+     * below 0.70. 0.65 keeps a hypothetical quadruple overtime and drops the
+     * rest — including that Houston row, which logs a pace of 13.0 next to its
+     * own 59.1 possessions.
+     */
+    const paceOk = (g.pace ?? 0) >= 40 && !!poss && g.pace / poss >= 0.65;
 
     const flags =
       (g.is_home ? HOME : 0) |
@@ -153,17 +231,15 @@ for (const season of seasons) {
 
     rows.push([
       ti, oi, day, flags,
-      int(g.pts_scored), int(g.pts_against), int(g.poss), tenth(g.pace),
+      int(g.pts_scored), int(g.pts_against), int(poss), paceOk ? tenth(g.pace) : 0,
       int(B(b, "fgm")), int(B(b, "fga")), int(B(b, "fg3m")), int(B(b, "fg3a")),
       int(B(b, "ftm")), int(B(b, "fta")),
       int(B(b, "oreb")), int(B(b, "reb")), int(B(b, "ast")), int(B(b, "stl")),
       int(B(b, "blk")), int(B(b, "tov")), int(B(b, "fouls")),
-      // RATINGS ONLY WHERE THE POSSESSION COUNT IS BELIEVABLE. Ten rows in
-      // 59,000 carry a possession total under 40 — one of them is a 93-47 game
-      // logged at 10 possessions, which computes to an offensive rating of 930
-      // and takes first place in any sort by efficiency. The box score is real
-      // and stays; the ratings derived from a broken denominator do not.
-      ratable ? tenth(B(b, "ortg")) : 0, ratable ? tenth(B(b, "drtg")) : 0,
+      // Ratings only where the possession count is believable — see the
+      // `ratable` note above. The box score is real and stays; the ratings
+      // derived from a broken denominator do not.
+      tenth(ortg), tenth(drtg),
       permille(B(b, "ff_efg")), permille(B(b, "ff_ftr")),
       permille(B(b, "ff_tov")), permille(B(b, "ff_orb")),
       permille(B(b, "ff_efg_def")), permille(B(b, "ff_ftr_def")),

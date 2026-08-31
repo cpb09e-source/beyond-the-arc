@@ -321,8 +321,12 @@ const MANUAL: GlossaryEntry[] = [
     category: "Coverage",
     aka: ["covid", "missing season"],
     body:
-      "Excluded site-wide. COVID-shortened schedules, cancelled games and irregular opponents make "
-      + "it incomparable with the seasons around it.",
+      "Shown, but flagged. COVID-shortened schedules, cancelled games and irregular opponents make "
+      + "it incomparable with the seasons around it, so it carries a marker wherever seasons can be "
+      + "pooled — it is fine on its own terms and misleading in an average. Coverage is partial: "
+      + "team pages, the team explorer and the Team Game Log Explorer hold it in full, while the "
+      + "per-player game log and anything built from play-by-play (shot charts, lineups, on/off) "
+      + "do not, because that season's archive has no per-player box or play-by-play.",
   },
   {
     term: "Minutes floor",

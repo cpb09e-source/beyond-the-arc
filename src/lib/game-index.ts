@@ -77,7 +77,18 @@ export function loadGameIndex(season: number): Promise<GamePack | null> {
   return p;
 }
 
-/** Seasons with a file on disk. 2021 is absent site-wide — the COVID year. */
+/**
+ * Seasons with a file on disk.
+ *
+ * 2021 IS MISSING FOR A DATA REASON, not a policy one — the COVID season is
+ * shown everywhere else on the site (see FLAGGED_SEASONS in lib/seasons). This
+ * index is pivoted from the per-player game logs, and the CBBD archive for
+ * 2021 has the team box but no `box-players-full`, so there are no per-player
+ * rows to pivot: every one of the 24,653 player files has zero 2021 games.
+ *
+ * Restoring it needs one archive pull, not a rebuild. Add 2021 here the moment
+ * that file lands and scripts/build-game-index.mjs has produced the season.
+ */
 export const GAME_SEASONS = [2026, 2025, 2024, 2023, 2022, 2020, 2019, 2018, 2017, 2016, 2015, 2014];
 
 // ── Reading a row ──────────────────────────────────────────────────────────

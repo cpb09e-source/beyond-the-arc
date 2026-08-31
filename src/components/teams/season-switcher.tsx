@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { SeasonFlag } from "@/components/season-flag";
 import { useRouter } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -60,7 +61,7 @@ export function SeasonSwitcher({
   }, [open]);
 
   if (sorted.length <= 1) {
-    return <span>{seasonLabel(currentYear)}</span>;
+    return <span>{seasonLabel(currentYear)}<SeasonFlag year={currentYear} /></span>;
   }
 
   return (
@@ -86,7 +87,7 @@ export function SeasonSwitcher({
         {/* normal-case and tabular: the eyebrow is uppercase and tracked, and a
             value dressed as a caption is what made this invisible before. */}
         <span className="text-sm font-semibold tabular normal-case tracking-normal leading-none">
-          {seasonLabel(currentYear)}
+          {seasonLabel(currentYear)}<SeasonFlag year={currentYear} />
         </span>
         <ChevronDown
           size={14}
@@ -122,7 +123,7 @@ export function SeasonSwitcher({
                   isCurrent ? "text-[color:var(--accent)]" : "text-ink",
                 )}
               >
-                <span>{seasonLabel(y)}</span>
+                <span>{seasonLabel(y)}<SeasonFlag year={y} /></span>
                 {isCurrent && (
                   <span className="text-[0.55rem] uppercase tracking-[0.14em] opacity-70">
                     Showing

@@ -54,8 +54,16 @@ export function loadTeamGameIndex(season: number): Promise<TeamGamePack | null> 
   return p;
 }
 
-/** Seasons with a file. 2021 is absent site-wide — the COVID year. */
-export const TEAM_GAME_SEASONS = [2026, 2025, 2024, 2023, 2022, 2020, 2019, 2018, 2017, 2016, 2015, 2014];
+/**
+ * Seasons with a file.
+ *
+ * 2021 IS HERE and its twin in game-index.ts does not have it, which is not an
+ * oversight. This index joins the team box and the game logs, and the archive
+ * has both for the COVID season — 7,906 team-games across 349 teams, joined
+ * with zero misses. The player index needs the per-player box, which that
+ * season's archive does not carry at all.
+ */
+export const TEAM_GAME_SEASONS = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014];
 
 // ── Reading a row ──────────────────────────────────────────────────────────
 

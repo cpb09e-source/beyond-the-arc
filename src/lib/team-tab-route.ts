@@ -30,8 +30,9 @@
 
 /**
  * How many of the most recent seasons get real tab routes, for every team.
- * See the table above. Excluded seasons (COVID 2021) do not count against it —
- * this is a count of seasons we actually hold, newest first.
+ * See the table above. This is a count of seasons we actually hold, newest
+ * first, so 2020-21 counts like any other — it is far enough back that it has
+ * never reached the tabbed window anyway.
  */
 export const TABBED_SEASONS = 5;
 
