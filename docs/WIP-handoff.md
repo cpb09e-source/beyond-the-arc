@@ -1,8 +1,9 @@
 # Where we are — handoff
 
-Written 2026-08-25. Read this first after a `/clear`. Everything below is
-state that lives nowhere else: decisions made in conversation, findings from
-investigation, and constraints that are not derivable from the code.
+Written 2026-08-25, last updated 2026-08-31. Read this first after a `/clear`.
+Everything below is state that lives nowhere else: decisions made in
+conversation, findings from investigation, and constraints that are not
+derivable from the code.
 
 Delete sections as they land. Keep the constraints.
 
@@ -102,6 +103,11 @@ including `/conferences`. Colin's read: the subscription payment failed on his
 end; he plans to sort it out within a few days of 2026-08-30. Do not debug it
 as a code problem, and do not "fix" it by repointing scripts at the other key
 unless he asks.
+
+**Re-tested 2026-08-31** against `/games/players?season=2021` — still
+`401 {"message":"Unauthorized"}`. The key parses cleanly (152 chars, no
+whitespace, byte-identical to what the pull scripts' own `.env.local` parser
+extracts), so there is nothing to fix on this side. It now blocks item 8.
 
 `CBB_DATA_API_KEY` (the other key in `.env.local`) is live and returns 200.
 
@@ -393,6 +399,76 @@ The build is not the risk; the upload is. Sequence, when authorized:
 Budget 45 minutes or more. File count went ~215k -> 319,479. Netlify dedupes by
 content hash, so a normal incremental deploy runs under 2 min, but nearly every
 team page changed in this redesign — this one behaves like a first deploy.
+
+### 8. The COVID season's per-player game logs — BLOCKED ON THE KEY ONLY
+
+2020-21 came back on 2026-08-31 (commits `d4c5228`, `efe4841`, `78a337e`): it
+is no longer excluded, it is FLAGGED — real, visible, marked where seasons can
+be pooled. See `FLAGGED_SEASONS` in `src/lib/seasons.ts` for the full argument.
+
+**What landed**, all rebuilt offline from the archive already on disk:
+
+| artifact | result |
+| --- | --- |
+| `game-box-by-year/2021` | 8,243 rows, 100% join, **0 misses** |
+| `team-game-index/2021` | 7,906 team-games, 349 teams |
+| `team-splits/2021`, `player-photo-index/2021` | built |
+| `gated-data/` | 10 -> 11 seasons staged |
+
+Team pages, the team explorer and the Team Game Log Explorer carry 2021 in
+full. Gonzaga's 31-1 has a page; so does Jalen Suggs, whose only college season
+that is.
+
+**What is still missing, and why.** `data/cbbd/2021/` holds 3 files where every
+neighbouring season holds 163. Absent: `box-players-full.json.gz` and ~157
+`plays-*.json.gz`. So there are no per-player game logs for that season — all
+24,653 files under `public/data/player-games/` contain zero 2021 rows — and
+therefore no `game-index/2021`, which is why `GAME_SEASONS` in
+`src/lib/game-index.ts` still stops at 2020 while `TEAM_GAME_SEASONS` does not.
+
+**No local workaround exists.** Checked on 2026-08-31 and do not re-check:
+`shooting-players.json.gz` for 2021 is season-level per player, not per game;
+`box-epm-2021.json` is model output, not box scores;
+`build-player-games-cbbd.mjs` reads `box-players-full.json.gz` and nothing else.
+
+**The chain, verified step by step — only step 1 is blocked:**
+
+```bash
+node scripts/pull-player-box-v2.mjs      --season 2021   # needs a live key
+node scripts/build-player-games-cbbd.mjs --season 2021
+node scripts/build-game-index.mjs        --season 2021
+node scripts/sync-data-to-r2.mjs --only game-index
+```
+
+Then one line: add `2021` to `GAME_SEASONS` in `src/lib/game-index.ts`, where
+the doc comment already says it is waiting for exactly this.
+
+Two things confirmed by reading the scripts rather than assuming:
+
+- `build-player-games-cbbd.mjs --season 2021` **merges**. It reads each existing
+  player file, drops that season's rows and appends the new ones, so it will not
+  clobber the other twelve seasons across 24,653 files.
+- Both builders accept `--season`, so neither `SEASONS` constant needs editing.
+
+The pull is small: 2021 ran 2020-11-25 to 2021-04-05, **124 distinct game
+days**, 8,243 team-game rows. At 7-day windows and a 1.1s pause that is a couple
+of minutes and well under a hundred requests.
+
+The same file also unblocks `porpag-2021` (`build-bta-porpag.mjs` reads
+`box-players-full.json.gz` too, and is the only top-level per-season family
+still missing 2021).
+
+**Still out of reach even after that pull:** shot charts, lineups, on/off,
+assist networks, clock splits. Those need the ~157 `plays-*.json.gz` day files
+via `pull-missing-plays.mjs` — a separate and much larger pull. The pages
+already degrade honestly ("No lineup data for 20-21"), so this is a gap, not a
+bug.
+
+If the key turns out to be a dead end, the fallback is an ESPN backfill for
+2021 player box scores — ESPN has the data at parity (see
+`docs/womens-basketball-feasibility.md` for what was established about its
+feed), but it means a new scraper plus a name-matching join onto Bart IDs. Do
+not start that without Colin saying so.
 
 ## Things learned the hard way — do not re-derive these
 
