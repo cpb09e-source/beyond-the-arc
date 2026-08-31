@@ -17,14 +17,14 @@
  * table, the other is a sales conversation.
  */
 import { dataUrl } from "@/lib/data-url";
-import { isSeasonFree, publicSeasonFile, seasonEndpoint } from "@/lib/access";
+import { isSeasonFree, publicSeasonFile, seasonEndpoint, type GatedCorpus } from "@/lib/access";
 import { getSupabaseBrowser } from "@/lib/auth/supabase-browser";
 
 /** Why a season came back without rows. */
 export type SeasonDenial = "signed-out" | "not-subscribed" | "unavailable";
 
 export type SeasonResult<T> =
-  | { ok: true; rows: T[] }
+  | { ok: true; data: T }
   | { ok: false; denial: SeasonDenial };
 
 /**
@@ -45,13 +45,19 @@ async function accessToken(): Promise<string | null> {
   }
 }
 
-export async function loadSeason<T>(year: number): Promise<SeasonResult<T>> {
+export async function loadSeason<T>(
+  kind: GatedCorpus,
+  year: number,
+): Promise<SeasonResult<T>> {
+  // T is the whole payload: an array of team rows for `teams`, a {fields,rows}
+  // object for `players`. The gate does not care what shape it is handing
+  // over, and pretending otherwise cost a cast at every call site.
   // The common path, unchanged: a plain CDN file, no token, no function.
   if (isSeasonFree(year)) {
     try {
-      const res = await fetch(dataUrl(publicSeasonFile(year)));
+      const res = await fetch(dataUrl(publicSeasonFile(kind, year)));
       if (!res.ok) return { ok: false, denial: "unavailable" };
-      return { ok: true, rows: (await res.json()) as T[] };
+      return { ok: true, data: (await res.json()) as T };
     } catch {
       return { ok: false, denial: "unavailable" };
     }
@@ -63,10 +69,10 @@ export async function loadSeason<T>(year: number): Promise<SeasonResult<T>> {
   if (!token) return { ok: false, denial: "signed-out" };
 
   try {
-    const res = await fetch(seasonEndpoint(year), {
+    const res = await fetch(seasonEndpoint(kind, year), {
       headers: { authorization: `Bearer ${token}` },
     });
-    if (res.ok) return { ok: true, rows: (await res.json()) as T[] };
+    if (res.ok) return { ok: true, data: (await res.json()) as T };
     if (res.status === 401) return { ok: false, denial: "signed-out" };
     if (res.status === 403) return { ok: false, denial: "not-subscribed" };
     return { ok: false, denial: "unavailable" };

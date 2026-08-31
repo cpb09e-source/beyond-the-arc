@@ -354,12 +354,12 @@ export function ExplorerClient({
     // blanking the page.
     Promise.all(
       missing.map((y) =>
-        loadSeason<RawTeamSeason>(y).then((res) => [y, res] as const),
+        loadSeason<RawTeamSeason[]>("teams", y).then((res) => [y, res] as const),
       ),
     ).then((pairs) => {
       setRowsByYear((prev) => {
         const next = { ...prev };
-        for (const [y, res] of pairs) next[y] = res.ok ? res.rows : [];
+        for (const [y, res] of pairs) next[y] = res.ok ? res.data : [];
         return next;
       });
       setDeniedYears((prev) => {

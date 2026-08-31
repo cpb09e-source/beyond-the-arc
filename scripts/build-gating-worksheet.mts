@@ -15,15 +15,25 @@
  *
  *   npx tsx scripts/build-gating-worksheet.mts
  *
- * THE PLAYER ROWS ALL SAY "free" TODAY, and that is not an opinion this script
- * has — VIEW_ACCESS has no entries for player views, and viewAccess() treats an
- * unknown key as free on purpose, so that shipping a view locked by accident
- * cannot happen. Every player view is therefore genuinely open right now.
+ * TWO REGISTRIES, NOT ONE. Team views resolve through viewAccess() and player
+ * views through playerViewAccess(). They share four key names and disagree on
+ * one of them, so a single lookup would silently report the wrong gate for
+ * half the sheet — which it did until 2026-08-30, when every player row still
+ * read "free" because VIEW_ACCESS had no entries for them.
+ *
+ * THE CALL COLUMN IS FILLED IN. It was Colin's blank to fill; he asked for the
+ * decisions to be made on 2026-08-30, so it now records what was decided and
+ * the code was changed to match. A row where the call differs from the gate is
+ * a bug in one or the other.
  */
 import { writeFileSync } from "node:fs";
 import { TABLE_VIEWS } from "../src/lib/team-views";
 import { PLAYER_VIEWS } from "../src/lib/player-views";
-import { FREE_LIMITS, FREE_SEASONS, PAID_TEAM_TABS, SAMPLE_TEAM_SLUGS, viewAccess } from "../src/lib/access";
+import {
+  FREE_LIMITS, FREE_SEASONS, GAME_LOG_ACCESS, GATED_CORPORA, PAID_TEAM_TABS,
+  SAMPLE_TEAM_SLUGS, playerViewAccess, viewAccess,
+} from "../src/lib/access";
+import { GAME_VIEWS } from "../src/lib/game-index";
 import { MAX_SAVED } from "../src/lib/saved-filters";
 
 /** One line of the worksheet. `call` is deliberately empty — that is his half. */
@@ -39,8 +49,7 @@ type Row = {
 const rows: Row[] = [];
 
 /** Describes a ViewAccess in the words the worksheet uses, not the type's. */
-function gateToday(key: string): string {
-  const a = viewAccess(key);
+function describe(a: ReturnType<typeof viewAccess>): string {
   switch (a.kind) {
     case "free": return "free";
     case "preview": return `preview (top ${FREE_LIMITS.previewRows}, no re-sort)`;
@@ -55,8 +64,16 @@ rows.push({
   what: "Which seasons need an account",
   detail: `13 seasons, 2014-2026`,
   today: FREE_SEASONS.length >= 13 ? "every season free (gate built, switched off)" : FREE_SEASONS.join(", "),
-  call: "",
-  notes: "THE ONLY DATA GATE on the site — a paid season is never published to the CDN. Everything else on this sheet hides presentation of data the browser already holds. Agreed setting was 'current season and the one before'.",
+  call: "current season and the one before — NOT YET SWITCHED ON",
+  notes: "THE ONLY DATA GATE on the site — a paid season is never published to the CDN. Everything else on this sheet hides presentation of data the browser already holds. The switch is one line in access.ts; flipping it is Colin's call, and it takes effect on the next deploy.",
+});
+rows.push({
+  area: "Season archive",
+  what: "What the data gate actually covers",
+  detail: Object.values(GATED_CORPORA).join(", "),
+  today: `${Object.keys(GATED_CORPORA).length} corpora`,
+  call: "as listed",
+  notes: "Verified end to end 2026-08-30: staged 20 files, subscriber got 200, signed-out got 401, unknown corpus got 400. game-index is NOT here — 7 MB a season would put ~77 MB in a function bundle capped at 50 MB zipped, so the Game Log Explorer is product-gated instead. conference-rankings.json is one file for every season, so there is nothing per-season to withhold.",
 });
 
 // ── §2 The free-tier allowances ────────────────────────────────────────────
@@ -84,8 +101,8 @@ for (const v of TABLE_VIEWS) {
     area: "Team Explorer view",
     what: v.label,
     detail: v.custom ? "reader's own columns" : v.bands.map((b) => b.label).join(" / "),
-    today: gateToday(v.key),
-    call: "",
+    today: describe(viewAccess(v.key)),
+    call: describe(viewAccess(v.key)),
     notes: v.desc,
   });
 }
@@ -94,11 +111,31 @@ for (const v of PLAYER_VIEWS) {
     area: "Players Explorer view",
     what: v.label,
     detail: v.custom ? "reader's own columns" : v.bands.map((b) => b.label).join(" / "),
-    today: gateToday(v.key),
-    call: "",
+    today: describe(playerViewAccess(v.key)),
+    call: describe(playerViewAccess(v.key)),
     notes: v.desc,
   });
 }
+// The Game Log Explorer is one gate for the whole page rather than a map:
+// every view of it is the same box score from a different angle.
+for (const v of GAME_VIEWS) {
+  rows.push({
+    area: "Game Log Explorer view",
+    what: v.label,
+    detail: `${v.keys.length} columns`,
+    today: describe(GAME_LOG_ACCESS),
+    call: describe(GAME_LOG_ACCESS),
+    notes: v.desc,
+  });
+}
+rows.push({
+  area: "Conference Power Rankings",
+  what: "The whole table",
+  detail: "31 rows a season, seven views",
+  today: "free",
+  call: "free",
+  notes: "Decided 2026-08-30: the page is a shop window — one row a conference, nothing a reader could rebuild a season from. The DOWNLOAD is gated, like every other download.",
+});
 
 // ── §4 Team pages ──────────────────────────────────────────────────────────
 const TEAM_TABS: Array<[string, string]> = [
@@ -123,30 +160,30 @@ for (const [tab, desc] of TEAM_TABS) {
 }
 
 // ── §5 Everything else that could carry a price ────────────────────────────
-const FEATURES: Array<[string, string, string, string]> = [
-  ["Download", "CSV of the current view", "free on players, gated on teams", "Raw values, nothing rounded."],
-  ["Download", "Excel Workbook of the current view", "free on players, gated on teams", "Formatted, percentile colours, a sheet describing the export."],
-  ["Download", "Excel - Select Views (multi-tab)", "free on players, gated on teams", "One tab per view. The most obviously paid-shaped thing in the menu."],
-  ["Download", "Sample workbook", "free", "Runs the same code as the paid export on a fixed slice. The pitch, not a limit."],
-  ["Explorer", "Compare (teams)", "free", "Hidden on players for now by decision."],
-  ["Explorer", "Saved filter views", `capped at ${FREE_LIMITS.savedFilters}`, "Stored in the browser, not on the account."],
-  ["Player page", "Shot chart", "free", "Zones and rates, 2014 onward."],
-  ["Player page", "Game log / box scores", "free", ""],
-  ["Site", "Coaches (812 pages)", "free", ""],
-  ["Site", "Transfer portal / recruits / draftees", "free", ""],
-  ["Site", "/calc archive calculator", "gated", "Already behind the archive gate."],
-  ["Site", "/32-0 game", "free", ""],
+const FEATURES: Array<[string, string, string, string, string]> = [
+  ["Download", "CSV of the current view", "paid", "paid", "Raw values, nothing rounded."],
+  ["Download", "Excel Workbook of the current view", "paid", "paid", "Formatted, percentile colours, a sheet describing the export."],
+  ["Download", "Excel - Select Views (multi-tab)", "paid", "paid", "One tab per view. The most obviously paid-shaped thing in the menu."],
+  ["Download", "Sample workbook", "free", "free", "Runs the same code as the paid export on a fixed slice. The pitch, not a limit."],
+  ["Explorer", "Compare (teams)", "free", "free", "Hidden on players for now by decision."],
+  ["Explorer", "Saved filter views", `capped at ${FREE_LIMITS.savedFilters}`, `capped at ${FREE_LIMITS.savedFilters}`, "Stored in the browser, not on the account."],
+  ["Player page", "Shot chart", "free", "free", "Zones and rates, 2014 onward."],
+  ["Player page", "Game log / box scores", "free", "free", "Prerendered into the page, so a gate here would be a sign rather than a door."],
+  ["Site", "Coaches (812 pages)", "free", "free", ""],
+  ["Site", "Transfer portal / recruits / draftees", "free", "free", ""],
+  ["Site", "/calc archive calculator", "gated", "gated", "Already behind the archive gate."],
+  ["Site", "/32-0 game", "free", "free", ""],
 ];
-for (const [area, what, today, notes] of FEATURES) {
-  rows.push({ area, what, detail: "", today, call: "", notes });
+for (const [area, what, today, call, notes] of FEATURES) {
+  rows.push({ area, what, detail: "", today, call, notes });
 }
 
 // ── Write it ───────────────────────────────────────────────────────────────
 /** Excel-safe: quote everything, double interior quotes, CRLF between rows. */
 const cell = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
-const header = ["Area", "What", "Columns / detail", "Gate today", "YOUR CALL", "Notes"];
+const header = ["Area", "What", "Columns / detail", "Gate today", "DECIDED", "Notes"];
 const legend = [
-  ["LEGEND", "Fill in the YOUR CALL column only", "", "", "", ""],
+  ["LEGEND", "DECIDED 2026-08-30. 'Gate today' is read from the code; a row where the two disagree is a bug.", "", "", "", ""],
   ["", "free", "no gate at all", "", "", ""],
   ["", "preview", `columns render, top ${FREE_LIMITS.previewRows} rows only, no re-sort`, "", "", ""],
   ["", "bands: A / B", "name the bands that stay free; the rest render blurred under a lock", "", "", ""],

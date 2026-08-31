@@ -386,14 +386,46 @@ export function isSampleTeam(slug: string): boolean {
  */
 export const GATED_DIR = "gated-data";
 
+/**
+ * THE CORPORA THE DATA GATE ACTUALLY COVERS.
+ *
+ * One entry per per-season bulk file a table loads. This list is the whole
+ * scope of the archive paywall: a corpus not named here is published to the
+ * CDN for every season, whatever FREE_SEASONS says, and no amount of gating
+ * elsewhere changes that.
+ *
+ * It began as teams-by-year alone, which meant narrowing FREE_SEASONS would
+ * have locked the team explorer while the players explorer went on handing
+ * out every season it was asked for — a paywall with a door on one of two
+ * entrances.
+ *
+ * WHAT IS DELIBERATELY NOT HERE:
+ *
+ *   game-index — 7 MB a season against ~1.5 MB for the others. Ten gated
+ *   seasons would put ~77 MB into the function bundle on top of everything
+ *   else, and Netlify's limit is 50 MB zipped. The Game Log Explorer is
+ *   PRODUCT-gated instead (GAME_LOG_ACCESS, five rows), which is a sign rather
+ *   than a door — say so out loud rather than believing the archive is sealed.
+ *
+ *   conference-rankings.json — one file covering every season at once, so
+ *   there is nothing per-season to withhold. Splitting it to gate it would be
+ *   work in service of a page that is deliberately free.
+ */
+export const GATED_CORPORA = {
+  teams: "teams-by-year",
+  players: "players-explorer",
+} as const;
+
+export type GatedCorpus = keyof typeof GATED_CORPORA;
+
 /** The gated path for a season, relative to the repo root. */
-export function gatedSeasonFile(year: number): string {
-  return `${GATED_DIR}/teams-by-year/${year}.json`;
+export function gatedSeasonFile(kind: GatedCorpus, year: number): string {
+  return `${GATED_DIR}/${GATED_CORPORA[kind]}/${year}.json`;
 }
 
 /** The public path for a season, as written in /public. */
-export function publicSeasonFile(year: number): string {
-  return `/data/teams-by-year/${year}.json`;
+export function publicSeasonFile(kind: GatedCorpus, year: number): string {
+  return `/data/${GATED_CORPORA[kind]}/${year}.json`;
 }
 
 /**
@@ -402,7 +434,11 @@ export function publicSeasonFile(year: number): string {
  * A free season is an ordinary static file on the CDN — no function call, no
  * token, cacheable at the edge. Only a paid season pays the cost of going
  * through the function, which is what keeps the common path fast.
+ *
+ * The teams URL keeps its original shape so a bookmarked or cached
+ * /api/season/2019 still resolves; everything else carries its kind.
  */
-export function seasonEndpoint(year: number): string {
-  return isSeasonFree(year) ? publicSeasonFile(year) : `/api/season/${year}`;
+export function seasonEndpoint(kind: GatedCorpus, year: number): string {
+  if (isSeasonFree(year)) return publicSeasonFile(kind, year);
+  return kind === "teams" ? `/api/season/${year}` : `/api/season/${kind}/${year}`;
 }

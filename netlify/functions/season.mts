@@ -50,16 +50,48 @@ function parseYear(raw: string | undefined): number | null {
   return y >= 2000 && y <= 2100 ? y : null;
 }
 
+/**
+ * Which staged corpus a request is for, from the path.
+ *
+ *   /api/season/2019          -> teams   (the original shape, still honoured)
+ *   /api/season/players/2019  -> players
+ *
+ * AN ALLOW-LIST, NOT A PATH JOIN. Both segments end up in a filesystem path,
+ * so `kind` is matched against a fixed map rather than interpolated — the
+ * year is already constrained to four digits, and this closes the other half.
+ * Mirrors GATED_CORPORA in src/lib/access.ts; duplicated for the same reason
+ * ACTIVE_STATUSES is, so a client-side edit cannot widen what the server hands
+ * out.
+ */
+const CORPUS_DIR: Record<string, string> = {
+  teams: "teams-by-year",
+  players: "players-explorer",
+};
+
+function parseTarget(pathname: string): { dir: string; year: number } | null {
+  const parts = pathname.split("/").filter(Boolean);
+  const year = parseYear(parts.pop());
+  if (year === null) return null;
+  const last = parts.pop() ?? "";
+  // The bare /api/season/<year> form has "season" where a kind would be.
+  const kind = last === "season" ? "teams" : last;
+  const dir = CORPUS_DIR[kind];
+  return dir ? { dir, year } : null;
+}
+
 export default async (req: Request, _context: Context) => {
   if (req.method !== "GET") {
     return Response.json({ error: "GET only" }, { status: 405 });
   }
 
-  const tail = new URL(req.url).pathname.split("/").filter(Boolean).pop();
-  const year = parseYear(tail);
-  if (year === null) {
-    return Response.json({ error: "Expected /api/season/<year>." }, { status: 400 });
+  const target = parseTarget(new URL(req.url).pathname);
+  if (!target) {
+    return Response.json(
+      { error: "Expected /api/season/<year> or /api/season/<kind>/<year>." },
+      { status: 400 },
+    );
   }
+  const { dir, year } = target;
 
   const user = await requireUser(req);
   if (!user) {
@@ -104,7 +136,7 @@ export default async (req: Request, _context: Context) => {
   // `included_files` lands the gated tree next to the bundled function, so the
   // path is resolved from the process working directory rather than guessed
   // relative to this module — esbuild rewrites the module's own location.
-  const file = path.join(process.cwd(), "gated-data", "teams-by-year", `${year}.json`);
+  const file = path.join(process.cwd(), "gated-data", dir, `${year}.json`);
   let body: string;
   try {
     body = await readFile(file, "utf8");

@@ -46,6 +46,7 @@ import {
 import { useDragPan } from "@/lib/use-drag-pan";
 import { clampToFreeTier, effectivePlayerViewAccess, playerViewAccess, FREE_LIMITS } from "@/lib/access";
 import { useEntitlement } from "@/lib/use-entitlement";
+import { loadSeason, type SeasonDenial } from "@/lib/season-data";
 import { GateBar } from "@/components/explorer/gate-bar";
 import { Lock } from "lucide-react";
 import { useMeasuredWidth } from "@/lib/use-measured-width";
@@ -546,6 +547,14 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
    * table lock itself and then unlock.
    */
   const { paid, signedIn } = useEntitlement();
+  /**
+   * Seasons the archive gate refused, by year.
+   *
+   * A different KIND of gate from the view gate below: that one hides the
+   * presentation of rows the browser already holds, this one records bytes the
+   * server would not send. Both can be in play at once.
+   */
+  const [deniedYears, setDeniedYears] = useState<Record<number, SeasonDenial>>({});
   const gate = effectivePlayerViewAccess(view.key, paid);
   /**
    * A gated view shows its top few rows and stops.
@@ -556,6 +565,30 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
    * tool visibly works and stops short of being a ranking.
    */
   const previewCapped = gate.kind === "preview";
+
+  /**
+   * What to say about a season the archive gate refused.
+   *
+   * Same wording and same precedence as the team explorer's seasonNotice —
+   * signed-out beats not-subscribed, because signing in is the cheaper action
+   * and may resolve the other by itself. Two bars that drifted apart in
+   * wording, on the one control that handles money, is the drift that matters.
+   */
+  const seasonNotice = useMemo(() => {
+    const years = Object.keys(deniedYears).map(Number).filter((y) => spec.years.includes(y));
+    if (years.length === 0) return null;
+    const reasons = new Set(years.map((y) => deniedYears[y]!));
+    const label = years.length === 1
+      ? `${seasonLabel(years[0]!)} is`
+      : `${years.length} seasons are`;
+    if (reasons.has("signed-out")) {
+      return { text: `${label} part of the Season Pass.`, cta: "Sign in", href: "/account/login" };
+    }
+    if (reasons.has("not-subscribed")) {
+      return { text: `${label} part of the Season Pass.`, cta: "See plans", href: "/pricing" };
+    }
+    return { text: `${label} unavailable right now.`, cta: "Retry", href: "/players" };
+  }, [deniedYears, spec.years]);
 
   /**
    * The query this reader is actually entitled to RUN, as opposed to the one
@@ -747,18 +780,34 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     }
     let cancelled = false;
     setLoading(true);
+    // THROUGH THE GATE, not a bare fetch. A gated season is not a static file
+    // — it comes from a function that wants to know who is asking — and this
+    // was the hole that would have made narrowing FREE_SEASONS a paywall on
+    // the team explorer only, with every season still pouring out of here.
     Promise.all(
       toFetch.map((y) =>
-        fetch(`/data/players-explorer/${y}.json`)
-          .then((r) => r.json())
-          .then((payload: ExplorerPayload) => [y, payload] as const),
+        loadSeason<ExplorerPayload>("players", y).then((res) => [y, res] as const),
       ),
     )
       .then((entries) => {
         if (cancelled) return;
         setRawByYear((s) => {
           const next = { ...s };
-          for (const [y, arr] of entries) next[y] = arr;
+          for (const [y, res] of entries) {
+            // A refusal leaves the season out of the table rather than
+            // blanking it: the other selected seasons still render, and the
+            // bar below says why this one is missing.
+            if (res.ok) next[y] = res.data;
+            else next[y] = { fields: [], rows: [] } as ExplorerPayload;
+          }
+          return next;
+        });
+        setDeniedYears((prev) => {
+          const next = { ...prev };
+          for (const [y, res] of entries) {
+            if (res.ok) delete next[y];
+            else next[y] = res.denial;
+          }
           return next;
         });
         setLoading(false);
@@ -1276,6 +1325,21 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
             {view.custom && spec.cols.length === 0 && !paid && (
               <span className="hidden sm:inline text-xs text-ink-muted whitespace-nowrap">
                 {FREE_LIMITS.statCols} columns on the free plan
+              </span>
+            )}
+            {/* The ARCHIVE gate, beside the view gates rather than instead of
+                them: this one is about seasons the server refused, and it can
+                be showing at the same time as the column and preview notices. */}
+            {seasonNotice && (
+              <span className="inline-flex items-center gap-1.5 text-xs whitespace-nowrap">
+                <Lock size={11} className="text-coral shrink-0" />
+                <span className="text-ink-soft">{seasonNotice.text}</span>
+                <Link
+                  href={seasonNotice.href}
+                  className="text-coral hover:underline font-medium"
+                >
+                  {seasonNotice.cta}
+                </Link>
               </span>
             )}
             {colsLocked && (

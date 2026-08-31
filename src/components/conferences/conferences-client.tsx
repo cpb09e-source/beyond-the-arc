@@ -465,9 +465,10 @@ export function ConferencesClient() {
         <DownloadMenu
           views={downloadViews}
           noun="conferences"
-          // Ungated, like the rest of this page. When the gating worksheet
-          // comes back with a decision for /conferences this comes off.
-          alwaysFree
+          // The PAGE is free and the DOWNLOAD is not — decided 2026-08-30.
+          // Thirty-one rows on screen is a shop window; the same rows as a
+          // formatted workbook is the product, and it is the one thing in this
+          // toolbar shaped like something to sell.
           build={buildExport}
           buildAll={buildExportAll}
           rowCount={rows.length}

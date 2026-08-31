@@ -69,7 +69,18 @@ function readPolicy() {
 }
 
 const { all, paid } = readPolicy();
-const gatedDir = path.join(ROOT, "gated-data", "teams-by-year");
+
+/**
+ * The corpora to stage. MIRRORS GATED_CORPORA in src/lib/access.ts — a dir
+ * added there and forgotten here is a season the browser asks the function
+ * for and the function does not have, which reads to a paying subscriber as a
+ * broken table.
+ *
+ * game-index is deliberately absent: 7 MB a season would put ~77 MB of the
+ * Game Log Explorer's corpus into a function bundle capped at 50 MB zipped.
+ * That page is product-gated instead.
+ */
+const CORPORA = ["teams-by-year", "players-explorer"];
 
 // Always start clean: a season that just became free must not be left behind
 // in the bundle, where it would keep being served through the function to
@@ -81,23 +92,25 @@ if (paid.length === 0) {
   process.exit(0);
 }
 
-fs.mkdirSync(gatedDir, { recursive: true });
-
 let staged = 0;
 let removed = 0;
-for (const year of paid) {
-  const src = path.join(ROOT, "public/data/teams-by-year", `${year}.json`);
-  if (!fs.existsSync(src)) {
-    console.warn(`   ! ${year}.json missing from public/data — skipped`);
-    continue;
-  }
-  fs.copyFileSync(src, path.join(gatedDir, `${year}.json`));
-  staged++;
+for (const corpus of CORPORA) {
+  const gatedDir = path.join(ROOT, "gated-data", corpus);
+  fs.mkdirSync(gatedDir, { recursive: true });
+  for (const year of paid) {
+    const src = path.join(ROOT, "public/data", corpus, `${year}.json`);
+    if (!fs.existsSync(src)) {
+      console.warn(`   ! ${corpus}/${year}.json missing from public/data — skipped`);
+      continue;
+    }
+    fs.copyFileSync(src, path.join(gatedDir, `${year}.json`));
+    staged++;
 
-  const published = path.join(OUT, "data/teams-by-year", `${year}.json`);
-  if (fs.existsSync(published)) {
-    fs.rmSync(published);
-    removed++;
+    const published = path.join(OUT, "data", corpus, `${year}.json`);
+    if (fs.existsSync(published)) {
+      fs.rmSync(published);
+      removed++;
+    }
   }
 }
 
@@ -107,15 +120,21 @@ console.log(`   removed from out/        ${removed}`);
 
 // The check that matters. If a paid season is still published, the function is
 // decorative — fail the build rather than deploy a paywall that does nothing.
-const leaked = paid.filter((y) =>
-  fs.existsSync(path.join(OUT, "data/teams-by-year", `${y}.json`)),
-);
+// EVERY corpus is checked: a gate that holds on teams and leaks on players is
+// not a gate, and the leak would be invisible from the team explorer.
+const leaked = [];
+for (const corpus of CORPORA) {
+  for (const y of paid) {
+    if (fs.existsSync(path.join(OUT, "data", corpus, `${y}.json`))) leaked.push(`${corpus}/${y}`);
+  }
+}
 if (leaked.length) {
   console.error(`✗ STILL PUBLIC in out/: ${leaked.join(", ")} — the gate would not hold.`);
   process.exit(1);
 }
-if (staged !== paid.length) {
-  console.error(`✗ Staged ${staged} of ${paid.length} paid seasons — the gate would 404 for subscribers.`);
+const expected = paid.length * CORPORA.length;
+if (staged !== expected) {
+  console.error(`✗ Staged ${staged} of ${expected} paid season files — the gate would 404 for subscribers.`);
   process.exit(1);
 }
 console.log("✓ Paid seasons are out of the published site and inside the function bundle.");
