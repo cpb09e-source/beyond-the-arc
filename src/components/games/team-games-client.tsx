@@ -14,7 +14,7 @@
  * rating is the same result per hundred possessions, which is the team answer
  * to the player page's Game Score.
  */
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -71,7 +71,6 @@ type Spec = {
   /** Stats pinned by the reader, which lead the view's own columns. */
   cols: string[];
   filters: TeamGameFilter[];
-  q: string;
   limit: number;
   sortBy: string;
   sortDir: "asc" | "desc";
@@ -95,7 +94,6 @@ function parseSpec(params: URLSearchParams): Spec {
       .filter((k) => k && k !== "date" && TEAM_GAME_STAT_BY_KEY.has(k))
       .slice(0, MAX_GAME_COLS),
     filters: parseTeamFilters(params.get("f")),
-    q: params.get("q") ?? "",
     limit: LIMIT_OPTIONS.includes(limit) ? limit : 100,
     sortBy: sortBy && teamGameStat(sortBy) ? sortBy : "net",
     sortDir: order === "asc" ? "asc" : "desc",
@@ -107,10 +105,9 @@ function parseSpec(params: URLSearchParams): Spec {
 type Hit = { pack: TeamGamePack; row: number[]; idx: number; v: number | null };
 
 /** Filter, sort and cut to `limit` in one linear scan — see games-client. */
-function selectRows(packs: TeamGamePack[], spec: Spec, filters: TeamGameFilter[], q: string) {
+function selectRows(packs: TeamGamePack[], spec: Spec, filters: TeamGameFilter[]) {
   const stat = teamGameStat(spec.sortBy) ?? TEAM_GAME_STATS[0]!;
   const dirMul = spec.sortDir === "desc" ? -1 : 1;
-  const needle = q.trim().toLowerCase();
   const confSet = new Set(spec.confs);
   const teamSet = new Set(spec.teams);
   const oppSet = new Set(spec.opps);
@@ -135,7 +132,6 @@ function selectRows(packs: TeamGamePack[], spec: Spec, filters: TeamGameFilter[]
     for (let i = 0; i < n; i++) {
       if (confSet.size && !confSet.has(pack.teams.confs[i]!)) continue;
       if (teamSet.size && !teamSet.has(pack.teams.names[i]!)) continue;
-      if (needle && !pack.teams.names[i]!.toLowerCase().includes(needle)) continue;
       okTeam[i] = 1;
     }
     const okOpp = new Uint8Array(pack.opps.length);
@@ -269,10 +265,9 @@ export function TeamGamesClient() {
     [scoped.years, packs],
   );
 
-  const deferredQ = useDeferredValue(scoped.q);
   const { hits, matched } = useMemo(
-    () => selectRows(active, scoped, scoped.filters, deferredQ),
-    [active, scoped, deferredQ],
+    () => selectRows(active, scoped, scoped.filters),
+    [active, scoped],
   );
 
   const update = useCallback((next: Partial<Spec>) => {
@@ -294,9 +289,6 @@ export function TeamGamesClient() {
     if (next.filters !== undefined) {
       const s = serializeTeamFilters(next.filters);
       if (s) p.set("f", s); else p.delete("f");
-    }
-    if (next.q !== undefined) {
-      if (next.q) p.set("q", next.q); else p.delete("q");
     }
     if (next.limit !== undefined) {
       if (next.limit === 100) p.delete("n"); else p.set("n", String(next.limit));
@@ -444,7 +436,10 @@ export function TeamGamesClient() {
       ? spec.filters.map((f) => `${teamGameStat(f.stat)?.label ?? f.stat} ${TEAM_OP_LABEL[f.op]} ${f.value}`)
       : ["No filters"],
     sort: `${teamGameStat(spec.sortBy)?.label ?? spec.sortBy} — ${spec.sortDir === "desc" ? "high to low" : "low to high"}`,
-    search: spec.q,
+    // ExportMeta is shared with tables that still have a search box. This one
+    // has no free-text search any more, so the field is present and empty
+    // rather than absent.
+    search: "",
     url: typeof window === "undefined" ? "" : window.location.href,
   }), [spec]);
 
@@ -609,16 +604,15 @@ export function TeamGamesClient() {
         labelOf={(k) => teamGameStat(k)?.label ?? k}
         isPct={(k) => teamGameStat(k)?.fmt === "pct1"}
         onChange={({ cols, filters }) => update({ cols, filters })}
+        /* NO FREE-TEXT SEARCH HERE. The Team picker
+           in the bar above is already a searchable list of every team in the
+           selected seasons — type "tenne", arrow, enter — so a free-text box
+           beside it was a second, weaker way to ask the same question: it
+           matched substrings instead of selecting, took no more than one team,
+           and left the picker showing "All" while the table was filtered.
+           The player log lost its own box in the same pass. */
         trailing={
           <>
-            <input
-              type="search"
-              value={spec.q}
-              onChange={(e) => update({ q: e.target.value })}
-              placeholder="Team name…"
-              aria-label="Search team"
-              className="h-8 w-40 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40"
-            />
             {!previewCapped && (
               <select
                 value={spec.limit}

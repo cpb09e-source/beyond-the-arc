@@ -21,7 +21,7 @@
  * 1.37 million rows — sorts in one linear scan without building 1.37 million
  * objects to throw away.
  */
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -83,7 +83,6 @@ type GameSpec = {
   /** Stats pinned by the reader, which lead the view's own columns. */
   cols: string[];
   filters: GameFilter[];
-  q: string;
   limit: number;
   sortBy: string;
   sortDir: "asc" | "desc";
@@ -109,7 +108,6 @@ function parseSpec(params: URLSearchParams): GameSpec {
       .filter((k) => k && k !== "date" && GAME_STAT_BY_KEY.has(k))
       .slice(0, MAX_GAME_COLS),
     filters: parseFilters(params.get("f")),
-    q: params.get("q") ?? "",
     limit: LIMIT_OPTIONS.includes(limit) ? limit : 100,
     // Game Score, high to low: the page's thesis in a default.
     sortBy: sortBy && gameStat(sortBy) ? sortBy : "gmsc",
@@ -134,11 +132,9 @@ function selectRows(
   packs: GamePack[],
   spec: GameSpec,
   filters: GameFilter[],
-  q: string,
 ): { hits: Hit[]; matched: number } {
   const stat = gameStat(spec.sortBy) ?? GAME_STATS[0]!;
   const dirMul = spec.sortDir === "desc" ? -1 : 1;
-  const needle = q.trim().toLowerCase();
   const confSet = new Set(spec.confs);
   const teamSet = new Set(spec.teams);
   const clsSet = new Set(spec.classes);
@@ -169,7 +165,6 @@ function selectRows(
       if (confSet.size && !confSet.has(pack.players.confs[i]!)) continue;
       if (teamSet.size && !teamSet.has(pack.players.teams[i]!)) continue;
       if (clsSet.size && !clsSet.has(pack.classes[pack.players.cls[i]!] ?? "")) continue;
-      if (needle && !pack.players.names[i]!.toLowerCase().includes(needle)) continue;
       ok[i] = 1;
     }
 
@@ -300,10 +295,9 @@ export function GamesClient() {
 
   // Typing in the search box re-scans a million rows; deferring it keeps the
   // keystrokes themselves at full speed.
-  const deferredQ = useDeferredValue(scoped.q);
   const { hits, matched } = useMemo(
-    () => selectRows(active, scoped, scoped.filters, deferredQ),
-    [active, scoped, deferredQ],
+    () => selectRows(active, scoped, scoped.filters),
+    [active, scoped],
   );
 
   // ── URL writes ───────────────────────────────────────────────────────────
@@ -327,10 +321,6 @@ export function GamesClient() {
       const s = serializeFilters(next.filters);
       if (s) p.set("f", s);
       else p.delete("f");
-    }
-    if (next.q !== undefined) {
-      if (next.q) p.set("q", next.q);
-      else p.delete("q");
     }
     if (next.limit !== undefined) {
       if (next.limit === 100) p.delete("n");
@@ -481,7 +471,9 @@ export function GamesClient() {
       ? spec.filters.map((f) => `${gameStat(f.stat)?.label ?? f.stat} ${OP_LABEL[f.op]} ${f.value}`)
       : ["No filters"],
     sort: `${gameStat(spec.sortBy)?.label ?? spec.sortBy} — ${spec.sortDir === "desc" ? "high to low" : "low to high"}`,
-    search: spec.q,
+    // ExportMeta is shared with tables that still have a search box; this one
+    // does not, so the field is present and empty rather than absent.
+    search: "",
     url: typeof window === "undefined" ? "" : window.location.href,
   }), [spec]);
 
@@ -646,16 +638,15 @@ export function GamesClient() {
         labelOf={(k) => gameStat(k)?.label ?? k}
         isPct={(k) => gameStat(k)?.fmt === "pct1"}
         onChange={({ cols, filters }) => update({ cols, filters })}
+        /* NO FREE-TEXT SEARCH HERE EITHER — the team log lost its box in the
+           same pass, for a related reason. This page answers "what are the best
+           single games", and a name box quietly turns it into "the best games
+           by this one player", which is what a player's own page is for. What
+           it did well is already covered: the Team and Conf pickers narrow the
+           field, and a player you can name has a profile with their whole log
+           on it. */
         trailing={
           <>
-            <input
-              type="search"
-              value={spec.q}
-              onChange={(e) => update({ q: e.target.value })}
-              placeholder="Player name…"
-              aria-label="Search player"
-              className="h-8 w-40 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40"
-            />
             {/* A row-count picker under a five-row cap would be a control that
                 does nothing. The bar under the table says why it is missing. */}
             {!previewCapped && (
