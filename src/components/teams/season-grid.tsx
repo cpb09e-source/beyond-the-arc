@@ -8,6 +8,7 @@ import { SeedChip } from "@/components/coaches/seed-chip";
 import { PercentileChip } from "@/components/percentile-chip";
 import { StatLabel } from "@/components/explorer/sortable-th";
 import { confDisplay } from "@/lib/conf-display";
+import { coachSlug } from "@/lib/coach-slug";
 import { cn } from "@/lib/utils";
 import {
   RATING_COLS,
@@ -328,7 +329,24 @@ export function SeasonGrid({
                   {r.conference ?? "—"}
                 </td>
                 <td className={cn("px-3 py-1 text-ink-muted whitespace-nowrap transition-colors hidden lg:table-cell", ROW_HOVER)}>
-                  {r.coach ?? "—"}
+                  {/* The same link the hero's "Coach:" line already carries,
+                      and unconditional for the same reason: coachSlug is
+                      deterministic, every name in this column came out of the
+                      coaches corpus, and the hero has been linking them this
+                      way without a guard. Sitting in a column of plain text it
+                      stays muted until hover, so the row does not turn into a
+                      strip of blue. */}
+                  {r.coach
+                    ? (
+                        <Link
+                          href={`/coaches/${coachSlug(r.coach)}/`}
+                          prefetch={false}
+                          className="hover:text-coral transition-colors"
+                        >
+                          {r.coach}
+                        </Link>
+                      )
+                    : "—"}
                 </td>
                 <td className={cn("px-2 sm:px-3 py-1 text-right tabular whitespace-nowrap transition-colors", ROW_HOVER)}>
                   {r.netRank !== null

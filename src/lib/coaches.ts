@@ -13,6 +13,7 @@
  */
 
 import fs from "node:fs/promises";
+import { coachSlug } from "@/lib/coach-slug";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { readAllTeams } from "@/lib/static-data";
@@ -214,14 +215,13 @@ export type CoachProfile = CoachIndexRow & {
 /**
  * Stable URL slug for a coach. Lowercase + non-alphanum → hyphen.
  */
-export function coachSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+/**
+ * Re-exported from lib/coach-slug so client components can import the slug
+ * without pulling this module's file-reading loaders into the browser bundle.
+ * One implementation: the routes are generated from it and links are built
+ * from it, so they cannot drift.
+ */
+export { coachSlug } from "@/lib/coach-slug";
 
 function winPct(w: number, l: number): number | null {
   const total = w + l;
