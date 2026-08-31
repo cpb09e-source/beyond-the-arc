@@ -166,7 +166,10 @@ function selectRows(
       if (filters.length && !passesFilters(r, filters)) continue;
       matched++;
 
-      const v = stat.get(r);
+      // The date stat returns an offset within its own season; the season is
+      // added here because the stat function cannot see which pack it came
+      // from.
+      const v = stat.key === "date" ? pack.season * 1000 + r[F.d]! : stat.get(r);
       const hit: Hit = { pack, row: r, idx: i, v };
       if (hits.length >= limit) {
         // Worse than everything already kept — the common case, and the reason
@@ -668,6 +671,18 @@ export function GamesClient() {
               <th className="sticky top-0 left-0 z-40 w-10 min-w-10 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
               <th className="sticky top-0 z-40 bg-paper-deep border-b border-hairline px-2 sm:px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Player</th>
               <th className="sticky top-0 z-30 bg-paper-deep border-b border-hairline px-2 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle whitespace-nowrap">Game</th>
+              <SortableTh
+                statKey="date"
+                label="Date"
+                title="Sort by date"
+                defaultDir="desc"
+                align="left"
+                basePath={BASE}
+                defaultSort={scoped.sortBy}
+                idleArrows
+                locked={previewCapped}
+                className="sticky top-0 z-30 bg-paper-deep border-b border-hairline"
+              />
               {multiYear && (
                 <th className="sticky top-0 z-30 bg-paper-deep border-b border-hairline px-2 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Season</th>
               )}
@@ -690,10 +705,10 @@ export function GamesClient() {
           </thead>
           <tbody>
             {busy ? (
-              <tr><td colSpan={cols.length + 4} className="px-4 py-16 text-center text-ink-muted">Loading games…</td></tr>
+              <tr><td colSpan={cols.length + 5} className="px-4 py-16 text-center text-ink-muted">Loading games…</td></tr>
             ) : hits.length === 0 ? (
               <tr>
-                <td colSpan={cols.length + 4} className="px-4 py-12 text-center text-ink-soft">
+                <td colSpan={cols.length + 5} className="px-4 py-12 text-center text-ink-soft">
                   No game matches these filters.
                 </td>
               </tr>
@@ -753,8 +768,10 @@ export function GamesClient() {
                             pushed PTS off the edge - and the crest is the half
                             a reader recognises fastest anyway. */}
                         <span className="hidden sm:inline text-ink-soft max-w-[9rem] truncate">{opp}</span>
-                        <span className="text-ink-muted tabular">{fmtGameDate(pack, h.row)}</span>
                       </span>
+                    </td>
+                    <td className={cn("px-2 py-1.5 whitespace-nowrap text-xs text-ink-muted tabular transition-colors", ROW_HOVER)}>
+                      {fmtGameDate(pack, h.row)}
                     </td>
                     {multiYear && (
                       <td className={cn("px-2 py-1.5 text-ink-muted tabular text-xs transition-colors", ROW_HOVER)}>

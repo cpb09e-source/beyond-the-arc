@@ -180,7 +180,27 @@ export const GAME_STATS: GameStat[] = [
     (r) => r[F.stl]! + r[F.blk]!),
 ];
 
-export const GAME_STAT_BY_KEY = new Map(GAME_STATS.map((s) => [s.key, s]));
+/**
+ * The date, as a sortable column rather than a suffix on the opponent.
+ *
+ * Not in any view — an identity column the table always renders. In the
+ * catalogue so SortableTh can name it; unfilterable because a day offset is
+ * not something anyone types into a filter box. `get` returns the offset
+ * within a season, and selectRows adds the season, which a stat function
+ * cannot see.
+ */
+export const GAME_DATE_STAT: GameStat = {
+  key: "date",
+  label: "Date",
+  title: "Date of the game.",
+  fmt: "int",
+  get: (r) => r[F.d]!,
+  filterable: false,
+};
+
+export const GAME_STAT_BY_KEY = new Map(
+  [...GAME_STATS, GAME_DATE_STAT].map((s) => [s.key, s]),
+);
 export const gameStat = (key: string): GameStat | undefined => GAME_STAT_BY_KEY.get(key);
 
 // ── Views ──────────────────────────────────────────────────────────────────

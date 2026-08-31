@@ -193,7 +193,31 @@ export const TEAM_GAME_STATS: TeamGameStat[] = [
   S("opp_seed", "OPP SEED", "int", "Opponent's NCAA seed.", (r) => r[T.oppSeed]!, { pct: false }),
 ];
 
-export const TEAM_GAME_STAT_BY_KEY = new Map(TEAM_GAME_STATS.map((s) => [s.key, s]));
+/**
+ * The date, as a sortable column rather than a suffix on the opponent.
+ *
+ * NOT IN ANY VIEW — it is an identity column the table always renders, like
+ * the team and the opponent. It lives in the catalogue so SortableTh can name
+ * it and the sort machinery can find it, and it is unfilterable because a
+ * day-offset is not a number anyone would type into a filter box.
+ *
+ * `get` returns the offset WITHIN a season, which is only half an ordering;
+ * selectRows adds the season, because a stat function cannot see which pack
+ * its row came from.
+ */
+export const TEAM_GAME_DATE_STAT: TeamGameStat = {
+  key: "date",
+  label: "Date",
+  title: "Date of the game.",
+  fmt: "int",
+  get: (r) => r[T.d]!,
+  filterable: false,
+  pct: false,
+};
+
+export const TEAM_GAME_STAT_BY_KEY = new Map(
+  [...TEAM_GAME_STATS, TEAM_GAME_DATE_STAT].map((s) => [s.key, s]),
+);
 export const teamGameStat = (key: string) => TEAM_GAME_STAT_BY_KEY.get(key);
 
 // ── Views ──────────────────────────────────────────────────────────────────
