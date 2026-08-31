@@ -48,8 +48,22 @@ function readPolicy() {
   const floor = Number(seasons.match(/export const SEASON_FLOOR = (\d+)/)?.[1]);
   const ceil = Number(seasons.match(/export const SEASON_CEIL = (\d+)/)?.[1]);
   const preview = Number(seasons.match(/export const PREVIEW_SEASON = (\d+)/)?.[1]);
-  const excluded = [...(seasons.match(/EXCLUDED_SEASONS[^=]*= new Set\(\[([^\]]*)\]/)?.[1] ?? "")
-    .matchAll(/\d+/g)].map((m) => Number(m[0]));
+  /**
+   * ANCHORED TO THE DECLARATION LINE, and it has to be.
+   *
+   * This read `EXCLUDED_SEASONS[^=]*= new Set\(\[...\]` — unanchored, so the
+   * `EXCLUDED_SEASONS` it found could be the one inside isExcludedSeason's
+   * body, and `[^=]*` would then run forward through a doc comment into the
+   * NEXT `= new Set([...])` in the file. The moment FLAGGED_SEASONS was added
+   * below it, this script read 2021 as excluded when the source said the
+   * opposite, and quietly refused to stage a season the site was showing.
+   *
+   * `^export const` plus a line-bounded tail can only ever match the real
+   * declaration, and `new Set<number>()` yields no digits, which is the
+   * correct answer for an empty set.
+   */
+  const excludedDecl = seasons.match(/^export const EXCLUDED_SEASONS[^=]*=([^;]*);/m)?.[1] ?? "";
+  const excluded = [...excludedDecl.matchAll(/\d+/g)].map((m) => Number(m[0]));
   if (!floor || !ceil || !preview) throw new Error("seasons.ts: could not read the season window");
 
   const all = [];

@@ -70,8 +70,10 @@ if (paywallOff) {
   const floor = need("SEASON_FLOOR", num("SEASON_FLOOR"));
   const ceil = need("SEASON_CEIL", num("SEASON_CEIL"));
   const preview = need("PREVIEW_SEASON", num("PREVIEW_SEASON"));
-  const excluded = [...(seasonsSrc.match(/EXCLUDED_SEASONS[^=]*= new Set\(\[([^\]]*)\]/)?.[1] ?? "")
-    .matchAll(/\d+/g)].map((m) => Number(m[0]));
+  // Anchored to the declaration line — see the long note in
+  // scripts/stage-gated-data.mjs for what the unanchored version read instead.
+  const excludedDecl = seasonsSrc.match(/^export const EXCLUDED_SEASONS[^=]*=([^;]*);/m)?.[1] ?? "";
+  const excluded = [...excludedDecl.matchAll(/\d+/g)].map((m) => Number(m[0]));
 
   const seasons = [];
   for (let y = floor; y <= ceil; y++) if (!excluded.includes(y)) seasons.push(y);
