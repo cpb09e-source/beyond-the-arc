@@ -101,6 +101,14 @@ function winsOf(record: string | null): number {
  * something content passes BEHIND rather than as a column rule, and the extra
  * right padding gives the chip room so the emerging text is never within a few
  * pixels of it.
+ *
+ * WIDENED AGAIN 2026-08-31, on a phone screenshot where the chip looked sliced
+ * by the edge. Measured in Chrome at 390px the chip clears it by 12.7px and
+ * renders clean at every scroll position, so the slicing is most likely an iOS
+ * sticky-repaint artifact during momentum scroll — the sticky cell lags a frame
+ * and the shadow paints across it. That is not something CSS can assert away,
+ * but 12px was thin for a round chip against a shadowed edge, so the mobile
+ * padding goes to 16px and the desktop to 20px.
  */
 const STICKY_EDGE =
   "border-r border-hairline shadow-[6px_0_6px_-4px_rgba(26,34,56,0.10)] dark:shadow-[6px_0_6px_-4px_rgba(0,0,0,0.45)]";
@@ -285,7 +293,7 @@ export function SeasonGrid({
               : undefined;
             return (
               <tr key={r.year} className={cn("group", rowBg)} style={rowStyle}>
-                <td title={honourTitle} style={cellStyle} className={cn("sticky left-0 z-20 pl-2 sm:pl-3 pr-3 sm:pr-4 py-1 transition-colors", STICKY_EDGE, rowBg, ROW_HOVER, honourClass)}>
+                <td title={honourTitle} style={cellStyle} className={cn("sticky left-0 z-20 pl-2 sm:pl-3 pr-4 sm:pr-5 py-1 transition-colors", STICKY_EDGE, rowBg, ROW_HOVER, honourClass)}>
                   <Link
                     href={`/teams/${slug}/${r.year}/`}
                     className="group/link inline-flex items-center gap-2.5 transition-colors"
