@@ -95,11 +95,9 @@ type Row = {
 export function OnOffExplorer({
   data,
   benchmarks,
-  accentColor,
 }: {
   data: LineupFile;
   benchmarks: LineupBenchmarks | null;
-  accentColor?: string | null;
 }) {
   const [view, setView] = useState<LineupView>(LINEUP_VIEWS[0]!);
   const [picked, setPicked] = useState<string[]>([]);
@@ -116,7 +114,6 @@ export function OnOffExplorer({
     key: "onPoss", mode: "diff", dir: "desc",
   });
 
-  const accent = accentColor ?? undefined;
 
   /**
    * Volume columns are dropped from every view here. POSS and MINS are pinned
@@ -251,7 +248,6 @@ export function OnOffExplorer({
           ids={picked}
           nameOf={nameOf}
           onRemove={(v) => setPicked(picked.filter((x) => x !== v))}
-          accent={accent}
         />
       </div>
 
@@ -272,7 +268,7 @@ export function OnOffExplorer({
                 "shrink-0 px-3 py-1.5 rounded-md text-sm font-medium border transition-colors",
                 active ? "text-white border-transparent" : "text-ink-muted border-ink/15 bg-card hover:text-ink hover:border-ink/30",
               )}
-              style={active ? { backgroundColor: accent ?? "var(--color-coral)" } : undefined}
+              style={active ? { backgroundColor: "var(--accent-fill)", color: "var(--accent-on-fill)" } : undefined}
             >
               {v.label}
             </button>
@@ -323,9 +319,9 @@ export function OnOffExplorer({
                         colSpan={b.span}
                         className={cn(
                           "bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-center border-l border-hairline align-middle",
-                          b.accent ? "text-coral" : "text-ink-muted",
+                          b.accent ? "text-[color:var(--accent)]" : "text-ink-muted",
                         )}
-                        style={b.accent && accent ? { color: accent } : undefined}
+
                       >
                         {b.label}
                       </th>

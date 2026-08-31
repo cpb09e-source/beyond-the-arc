@@ -132,13 +132,11 @@ export function SeasonGrid({
   rows,
   currentYear,
   slug,
-  accentColor,
 }: {
   rows: SeasonGridRow[];
   currentYear: number;
   slug: string;
   /** Optional team color for the current-season row tint. */
-  accentColor?: string | null;
 }) {
   const [sortBy, setSortBy] = useState<SortKey>("year");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -269,7 +267,10 @@ export function SeasonGrid({
             // as the table was scrolled right. Same trap the explorer's honour cells hit
             // — see the note in explorer-client.tsx.
             const rowStyle = isCurrent
-              ? { backgroundColor: `color-mix(in oklab, ${accentColor ?? "var(--color-coral)"} 12%, var(--card))` }
+              // var(--accent), not the raw prop: mixed at 12% against the
+              // card, a dark brand primary is indistinguishable from the card
+              // on the dark theme.
+              ? { backgroundColor: "color-mix(in oklab, var(--accent) 12%, var(--card))" }
               : undefined;
             // The honour is the CELL, not a chip beside the season. It used to
             // be a "CHAMP"/"F4" pill here and a gold cell on phones only; the

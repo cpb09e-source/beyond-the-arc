@@ -57,7 +57,6 @@ export function SortableSeasonsTable({
   currentYear,
   slug,
   confRecords,
-  accentColor,
 }: {
   seasons: StaticTeamSeasonRow[];
   currentYear: number;
@@ -65,7 +64,6 @@ export function SortableSeasonsTable({
   // year → conf record; missing entries render as "—".
   confRecords: Map<number, ConfRecord>;
   // Optional team color for the current-season row tint.
-  accentColor?: string | null;
 }) {
   // Default: newest year first.
   const [sortBy, setSortBy] = useState<SortKey>("year");
@@ -134,9 +132,12 @@ export function SortableSeasonsTable({
                   className={cn(
                     "transition-colors hover:bg-[var(--accent-tint)]",
                     !isCurrent && (i % 2 === 0 ? "bg-paper/70" : "bg-transparent"),
-                    isCurrent && !accentColor && "bg-coral/10",
+                    // No accentColor branch: --accent-tint is defined for
+                    // every team and follows the theme, which a 10% wash of a
+                    // navy on #1C1C1C does not — it was invisible.
+                    isCurrent && "bg-[var(--accent-tint)]",
                   )}
-                  style={isCurrent && accentColor ? { backgroundColor: `${accentColor}1a` } : undefined}
+
                 >
                   {/* The honour is the CELL, not a chip beside the season —
                       the same treatment the explorer and the By season grid

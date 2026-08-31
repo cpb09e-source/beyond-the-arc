@@ -16,12 +16,10 @@ export function PlayerChips({
   ids,
   nameOf,
   onRemove,
-  accent,
 }: {
   ids: string[];
   nameOf: Map<number, string>;
   onRemove: (v: string) => void;
-  accent?: string;
 }) {
   if (ids.length === 0) return null;
   return (
@@ -36,7 +34,7 @@ export function PlayerChips({
           <span
             aria-hidden
             className="h-1.5 w-1.5 rounded-full"
-            style={{ backgroundColor: accent ?? "var(--color-coral)" }}
+            style={{ backgroundColor: "var(--accent)" }}
           />
           {nameOf.get(Number(v)) ?? v}
           <span aria-hidden className="text-ink-muted group-hover:text-ink transition-colors">×</span>

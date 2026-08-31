@@ -116,7 +116,16 @@ function pickPrimary(c1: string, c2: string): string {
   return brandScore(c1) >= brandScore(c2) ? c1 : c2;
 }
 
-function contrastOn(hex: string): string {
+/**
+ * Black or white, whichever can be read on this colour.
+ *
+ * Exported because the team pages need it for a colour this module never sees:
+ * the dark theme's accent FILL is derived at render time, and it lands
+ * anywhere in a lightness band wide enough that neither ink works across all
+ * of it. Fixing the foreground instead of picking it put near-black on San
+ * Diego's #205cca at 2.82 — under the bar for large text, let alone small.
+ */
+export function contrastOn(hex: string): string {
   return luminance(hex) > 0.55 ? "#1a2238" : "#ffffff";
 }
 

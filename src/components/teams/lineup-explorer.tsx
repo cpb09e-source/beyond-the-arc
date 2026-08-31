@@ -86,11 +86,9 @@ function combinations(ids: number[], k: number): number[][] {
 export function LineupExplorer({
   data,
   benchmarks,
-  accentColor,
 }: {
   data: LineupFile;
   benchmarks: LineupBenchmarks | null;
-  accentColor?: string | null;
 }) {
   const [onCourt, setOnCourt] = useState<string[]>([]);
   const [offCourt, setOffCourt] = useState<string[]>([]);
@@ -283,7 +281,6 @@ export function LineupExplorer({
     else { setSortKey(k); setSortDir(defaultDir); }
   }
 
-  const accent = accentColor ?? undefined;
 
   return (
     <div>
@@ -306,7 +303,7 @@ export function LineupExplorer({
               inlineSearch
               disabledValues={offIds.size ? new Set(offCourt) : undefined}
             />
-            <PlayerChips ids={onCourt} nameOf={nameOf} onRemove={(v) => setOnCourt(onCourt.filter((x) => x !== v))} accent={accent} />
+            <PlayerChips ids={onCourt} nameOf={nameOf} onRemove={(v) => setOnCourt(onCourt.filter((x) => x !== v))} />
           </Field>
 
           <Field label="Off the court">
@@ -320,7 +317,7 @@ export function LineupExplorer({
               inlineSearch
               disabledValues={onIds.size ? new Set(onCourt) : undefined}
             />
-            <PlayerChips ids={offCourt} nameOf={nameOf} onRemove={(v) => setOffCourt(offCourt.filter((x) => x !== v))} accent={accent} />
+            <PlayerChips ids={offCourt} nameOf={nameOf} onRemove={(v) => setOffCourt(offCourt.filter((x) => x !== v))} />
           </Field>
 
           {/* Segmented, not a select. Four fixed options that the reader
@@ -338,9 +335,13 @@ export function LineupExplorer({
                     aria-pressed={active}
                     className={cn(
                       "w-11 text-sm tabular font-medium border-r border-ink/10 last:border-r-0 transition-colors",
-                      active ? "text-white" : "text-ink-muted hover:text-ink hover:bg-paper-deep/60",
+                      active ? "" : "text-ink-muted hover:text-ink hover:bg-paper-deep/60",
                     )}
-                    style={active ? { backgroundColor: accent ?? "var(--color-coral)" } : undefined}
+                    // A pressed pill is a surface, so it takes the fill pair
+                    // and its own foreground. text-white was safe only while
+                    // the fill was the raw brand colour; the dark theme's fill
+                    // is light enough that white on it is unreadable.
+                    style={active ? { backgroundColor: "var(--accent-fill)", color: "var(--accent-on-fill)" } : undefined}
                   >
                     {n}
                   </button>
@@ -375,10 +376,10 @@ export function LineupExplorer({
               className={cn(
                 "shrink-0 px-3 py-1.5 rounded-md text-sm font-medium border transition-colors",
                 active
-                  ? "text-white border-transparent"
+                  ? "border-transparent"
                   : "text-ink-muted border-ink/15 bg-card hover:text-ink hover:border-ink/30",
               )}
-              style={active ? { backgroundColor: accent ?? "var(--color-coral)" } : undefined}
+              style={active ? { backgroundColor: "var(--accent-fill)", color: "var(--accent-on-fill)" } : undefined}
             >
               {v.label}
             </button>
@@ -415,9 +416,8 @@ export function LineupExplorer({
                         colSpan={b.span}
                         className={cn(
                           "bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-center border-l border-hairline align-middle",
-                          b.accent ? "text-coral" : "text-ink-muted",
+                          b.accent ? "text-[color:var(--accent)]" : "text-ink-muted",
                         )}
-                        style={b.accent && accent ? { color: accent } : undefined}
                       >
                         {b.label}
                       </th>
@@ -450,7 +450,6 @@ export function LineupExplorer({
                   cols={cols}
                   totals={totals}
                   benchmarks={benchmarks}
-                  accent={accent}
                   emphasis
                 />
                 {sorted.map((r) => (
@@ -460,8 +459,7 @@ export function LineupExplorer({
                     cols={cols}
                     totals={r.totals}
                     benchmarks={benchmarks}
-                    accent={accent}
-                  />
+                    />
                 ))}
               </tbody>
             </table>
@@ -603,14 +601,13 @@ function StatTh({
 }
 
 function StatRow({
-  label, cols, totals, benchmarks, accent, emphasis = false,
+  label, cols, totals, benchmarks, emphasis = false,
 }: {
   label: React.ReactNode;
   /** The active view's columns, so every row matches the header exactly. */
   cols: LineupStat[];
   totals: LineupTotals;
   benchmarks: LineupBenchmarks | null;
-  accent?: string;
   emphasis?: boolean;
 }) {
   const qualified = totals.poss >= MIN_POSS;
@@ -621,7 +618,7 @@ function StatRow({
   // as the table was scrolled right. Same trap the explorer's honour cells hit
   // — see the note in explorer-client.tsx.
   const rowStyle = emphasis
-    ? { backgroundColor: `color-mix(in oklab, ${accent ?? "var(--color-coral)"} 10%, var(--card))` }
+    ? { backgroundColor: "color-mix(in oklab, var(--accent) 10%, var(--card))" }
     : undefined;
   return (
     <tr

@@ -1112,6 +1112,14 @@ body {
      beats two that depend on the build. */
   --accent: var(--accent-dark, var(--color-coral)) !important;
   --accent-tint: var(--accent-tint-dark, rgba(77, 155, 255, 0.14)) !important;
+
+  /* The fill pair, for the same reason the box-score modal keeps one: a badge
+     or a pressed pill is a SURFACE, and the text variant above is clamped too
+     light to still look like the team's colour when it is the whole chip.
+     --accent-fill keeps more of the real hue, and the foreground flips to the
+     page colour because nothing in that lightness band can carry white. */
+  --accent-fill: var(--accent-fill-dark, rgba(77, 155, 255, 1)) !important;
+  --accent-on-fill: var(--accent-on-fill-dark, #1a2238) !important;
 }
 
 /* Marker swipe behind a figure (components/highlight.tsx).

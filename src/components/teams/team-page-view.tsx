@@ -38,7 +38,7 @@ import { TourneyTimeline } from "@/components/teams/tourney-timeline";
 import { PlayerHeadshotStrip } from "@/components/teams/player-headshot-strip";
 import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog, RankedStat } from "@/lib/static-data";
 import { confDisplay } from "@/lib/conf-display";
-import { getTeamColors, readableInk } from "@/lib/team-colors";
+import { contrastOn, getTeamColors, readableInk } from "@/lib/team-colors";
 
 function fmtNum(x: number | null, digits = 1): string {
   if (x === null || x === undefined) return "—";
@@ -359,6 +359,20 @@ export function TeamPageView({
   // 366 teams pass either way with it. Clamped upward, all 366 clear AA on
   // dark. The light theme keeps the true colour, where it already works.
   const accentDark = accentColor ? readableInk(accentColor, { min: 0.66, max: 0.88 }) : null;
+  /**
+   * A SECOND, DARKER VARIANT FOR SURFACES — text and fill are different jobs.
+   *
+   * 0.66-0.88 is tuned for something that has to be READ against the page. A
+   * badge or a pressed pill only has to be SEEN as a surface, and pushing a
+   * fill that light washes the team out of its own colour: San Diego's navy
+   * would arrive as a pale sky blue. So fills clamp lower and keep more of the
+   * real hue, exactly as the box-score modal already does for its two sides.
+   *
+   * Anything in that 0.46-0.72 band is too light to carry white text, so the
+   * fill ships with its own foreground and the dark theme swaps that to the
+   * page colour — see globals.css.
+   */
+  const accentFillDark = accentColor ? readableInk(accentColor, { min: 0.46, max: 0.72 }) : null;
   // --accent carries the LIGHT value. The dark theme overrides it from
   // globals.css with !important, which it needs because these are inline
   // styles and inline outranks any stylesheet rule — see the note there.
@@ -369,6 +383,17 @@ export function TeamPageView({
     // The tint is a hover wash. At 10% alpha a near-black is invisible on the
     // dark ground for the same reason the accent is, so it follows the accent.
     ["--accent-tint-dark" as string]: accentDark ? `${accentDark}26` : "rgba(77, 155, 255, 0.14)",
+    // The fill pair. On paper the brand colour is its own best surface and the
+    // team's own on-primary rides with it; the dark theme swaps both.
+    ["--accent-fill" as string]: accentColor ?? "#ed5a4f",
+    ["--accent-fill-dark" as string]: accentFillDark ?? "#4d9bff",
+    ["--accent-on-fill" as string]: teamColors?.onPrimary ?? "#fff",
+    // PICKED, not fixed. The dark fill sits anywhere in a 0.46-0.72 lightness
+    // band, and no single ink spans it: the page colour on San Diego's derived
+    // #205cca measures 2.82, which is under the bar even for the badge's large
+    // type. contrastOn chooses per colour, the same way the team's own
+    // onPrimary was chosen for the light theme.
+    ["--accent-on-fill-dark" as string]: accentFillDark ? contrastOn(accentFillDark) : "#1a2238",
   };
 
   const currentTrank = current.team_trank_stats;
@@ -398,7 +423,7 @@ export function TeamPageView({
   const netBadge = preview ? (
     <span
       className="inline-flex items-baseline gap-1 px-3 py-1.5 rounded-md text-white font-display text-xl md:text-2xl tabular leading-none shadow-sm"
-      style={accentColor ? { background: accentColor, color: teamColors?.onPrimary ?? "#fff" } : { background: "var(--color-coral, #ed5a4f)" }}
+      style={{ background: "var(--accent-fill)", color: "var(--accent-on-fill)" }}
       title={`NET rank for ${PREVIEW_SEASON_LABEL} — set once games are played`}
     >
       <span className="text-[0.6em] opacity-80 uppercase tracking-widest mr-0.5">NET</span>
@@ -407,7 +432,7 @@ export function TeamPageView({
   ) : currentNetRank !== null ? (
     <span
       className="inline-flex items-baseline gap-1 px-3 py-1.5 rounded-md text-white font-display text-xl md:text-2xl tabular leading-none shadow-sm"
-      style={accentColor ? { background: accentColor, color: teamColors?.onPrimary ?? "#fff" } : { background: "var(--color-coral, #ed5a4f)" }}
+      style={{ background: "var(--accent-fill)", color: "var(--accent-on-fill)" }}
       title={`NET rank for ${seasonLabel(current.year)} — aNET position in D-I`}
     >
       <span className="text-[0.6em] opacity-80 uppercase tracking-widest mr-0.5">NET</span>
@@ -497,15 +522,27 @@ export function TeamPageView({
                 96px mark. */}
             <TeamLogo name={current.name} size={96} className="hidden lg:block rounded-md" />
             <div className="flex-1 min-w-0">
+              {/* var(--accent), NOT the raw brand colour.
+ 
+                  THIS LINE SETS currentColor FOR THE SEASON SWITCHER, which
+                  draws its border, its surface and its label from it. With the
+                  brand colour inline here, San Diego's navy reached the dark
+                  theme untouched and the whole control measured 1.18 against
+                  #1C1C1C — present, and unreadable. The variable is the same
+                  colour on paper and the lightness-clamped one on dark, which
+                  is why the coach's name two lines down was legible while this
+                  was not: it was already reading the variable.
+ 
+                  No conditional: --accent is defined for every team, falling
+                  back to coral on the wrapper for the ones with no brand
+                  colour, so the old accentColor ternaries had nothing left to
+                  choose between. */}
               <div
                 className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] font-medium mb-3"
-                style={accentColor ? { color: accentColor } : undefined}
+                style={{ color: "var(--accent)" }}
               >
-                <span
-                  className={accentColor ? "h-px w-8" : "h-px w-8 bg-coral"}
-                  style={accentColor ? { background: accentColor } : undefined}
-                />
-                <span className={accentColor ? "inline-flex items-center gap-2" : "inline-flex items-center gap-2 text-coral"}>
+                <span className="h-px w-8" style={{ background: "var(--accent)" }} />
+                <span className="inline-flex items-center gap-2">
                   {confDisplay(current.conference)}
                   <SeasonSwitcher
                     slug={slug}
@@ -791,7 +828,6 @@ export function TeamPageView({
             rows={seasonGrid}
             currentYear={current.year}
             slug={slug}
-            accentColor={accentColor}
           />
         ) : (
           <SortableSeasonsTable
@@ -799,7 +835,6 @@ export function TeamPageView({
             currentYear={current.year}
             slug={slug}
             confRecords={confRecords}
-            accentColor={accentColor}
           />
         )}
       </section>
@@ -867,7 +902,6 @@ export function TeamPageView({
               <LineupExplorer
                 data={lineupStats as LineupFile}
                 benchmarks={(lineupBenchmarks ?? null) as never}
-                accentColor={accentColor}
               />
             ) : (
               <PaidSection
@@ -877,7 +911,6 @@ export function TeamPageView({
                 <LineupExplorer
                   data={lineupStats as LineupFile}
                   benchmarks={(lineupBenchmarks ?? null) as never}
-                  accentColor={accentColor}
                 />
               </PaidSection>
             )
@@ -903,7 +936,6 @@ export function TeamPageView({
               <OnOffExplorer
                 data={lineupStats as LineupFile}
                 benchmarks={(lineupBenchmarks ?? null) as never}
-                accentColor={accentColor}
               />
             ) : (
               <PaidSection
@@ -913,7 +945,6 @@ export function TeamPageView({
                 <OnOffExplorer
                   data={lineupStats as LineupFile}
                   benchmarks={(lineupBenchmarks ?? null) as never}
-                  accentColor={accentColor}
                 />
               </PaidSection>
             )
