@@ -3,9 +3,6 @@ import { readTeam, readAllTeams } from "@/lib/static-data";
 import { TeamPageView, PREVIEW_SEASON_YEAR, PREVIEW_SEASON_LABEL } from "@/components/teams/team-page-view";
 import { loadTeamPageData } from "@/lib/team-page-data";
 import { isTabbedSeason } from "@/lib/team-tab-route";
-import { isSeasonFree } from "@/lib/access";
-import { ArchiveSeasonGate } from "@/components/teams/archive-season-gate";
-import { archiveGateProps } from "@/lib/archive-gate";
 
 
 function slugFor(name: string): string {
@@ -96,14 +93,6 @@ export default async function TeamSeasonPage({
   const { slug, year: yearStr } = await params;
   const year = Number(yearStr);
   if (!Number.isFinite(year)) notFound();
-
-  // THE ARCHIVE GATE, before any data is read. A gated season never reaches
-  // loadTeamPageData, so its numbers are not in this file's HTML at all —
-  // which is the only kind of gate a static export can actually enforce.
-  if (!isSeasonFree(year)) {
-    const gate = await archiveGateProps(slug, year);
-    if (gate) return <ArchiveSeasonGate {...gate} />;
-  }
 
   const data = await loadTeamPageData(slug, year);
   if (!data) notFound();

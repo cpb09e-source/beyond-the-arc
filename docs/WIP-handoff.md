@@ -44,7 +44,19 @@ resize rather than guessing at what an image shows.
 
 ## Open work
 
-### THE PAYWALL IS ON. Switched 2026-08-30, not yet deployed.
+### THE PAYWALL IS ON — and it covers the EXPLORERS ONLY.
+
+Deployed 2026-08-31 (deploy 6a94e21c499f03829072b574, 66 min). Verified in
+production: /data/teams-by-year/2019.json is 404, /api/season/2019 is 401
+signed out and 200 with 1.28 MB for a subscriber.
+
+**Entity pages are free at every season, by decision.** /teams/duke/2014,
+player pages and coach pages all render in full for everyone. A gate on team
+pages shipped in that same deploy and was reverted within the hour — see the
+note at the top of §1 in src/lib/access.ts for why, and for what it cost while
+it was on (a static export gates subscribers too).
+
+Original notes below, still true of the data gate itself.
 
 `FREE_SEASONS = [2026, 2025]` in src/lib/access.ts. Everything from 2013-14 to
 2023-24 is now paid. One line to reverse.

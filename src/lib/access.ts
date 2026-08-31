@@ -38,6 +38,33 @@ import { EXPLORER_SEASONS, PREVIEW_SEASON } from "@/lib/seasons";
 /* ══ §1 · SEASONS ═══════════════════════════════════════ THE DATA GATE ══ */
 
 /**
+ * WHAT THE ARCHIVE PAYWALL COVERS, AND WHAT IT DELIBERATELY DOES NOT.
+ * Decided 2026-08-31, after a day of having it the other way round.
+ *
+ * IT COVERS THE EXPLORERS — the bulk season files behind /, /players and the
+ * Game Log. Rank, filter and compare across every team or player in a season
+ * is the product; that is what a Pass buys.
+ *
+ * IT DOES NOT COVER ENTITY PAGES. /teams/duke/2014, /players/<id> and
+ * /coaches/<slug> are free at every season, on purpose. Colin's call, and the
+ * right one: a school's history is the thing a fan arrives for, the thing
+ * Google indexes, and the top of the funnel that sells the archive. Charging
+ * for one team's 2014 season protects almost nothing — a reader who wants the
+ * whole picture still needs the explorer — while costing every inbound link
+ * the site has.
+ *
+ * These pages are prerendered, so they embed their seasons' numbers in the
+ * HTML. That is now a decision rather than a leak. It DOES mean the archive is
+ * reachable one team-season at a time by anyone patient enough to visit 22,000
+ * URLs; the paywall is on the analysis, not on the facts.
+ *
+ * A gate on team pages shipped on 2026-08-30 and was reverted the same night.
+ * If it ever comes back, note what it cost: a static export serves one HTML to
+ * everyone, so it gated SUBSCRIBERS too, and the fix for that is a
+ * team-season endpoint that does not exist.
+ */
+
+/**
  * Seasons anyone can read without an account.
  *
  * CURRENTLY EVERY SEASON — the machinery is built and deliberately inert, so
