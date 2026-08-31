@@ -109,9 +109,21 @@ function winsOf(record: string | null): number {
  * and the shadow paints across it. That is not something CSS can assert away,
  * but 12px was thin for a round chip against a shadowed edge, so the mobile
  * padding goes to 16px and the desktop to 20px.
+ *
+ * AND TURNED DOWN, same day. 6px of blur at 0.10 (0.45 in dark) was a smudge
+ * rather than an edge on a phone, where the column is a third of the screen
+ * and the shadow is the widest soft thing on the page. It also had nothing to
+ * agree with: this is the ONLY sticky column on the site that casts a shadow —
+ * the explorer, /players and both game logs give theirs an opaque background
+ * and nothing else — so it read as belonging to a different site.
+ *
+ * 2px of offset and 3px of blur keeps what the shadow was for (content passes
+ * BEHIND this edge, it is not a column rule) and drops what it was not. The
+ * hairline still does most of the work; the shadow is now the hint that there
+ * is depth behind it, which is all it was ever supposed to be.
  */
 const STICKY_EDGE =
-  "border-r border-hairline shadow-[6px_0_6px_-4px_rgba(26,34,56,0.10)] dark:shadow-[6px_0_6px_-4px_rgba(0,0,0,0.45)]";
+  "border-r border-hairline shadow-[2px_0_3px_-2px_rgba(26,34,56,0.07)] dark:shadow-[2px_0_3px_-2px_rgba(0,0,0,0.28)]";
 
 const ROW_HOVER = "group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))]";
 /** Resting tint marking the Four Factors band, mirroring the explorer and /players. */
