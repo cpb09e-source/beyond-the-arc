@@ -3,29 +3,34 @@
 import Link from "next/link";
 import { SiteLogo } from "@/components/site-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { cn } from "@/lib/utils";
 
 /**
- * The mobile menu — a sheet that drops from the top and ENDS WHERE ITS CONTENT
- * ENDS: its own wordmark and close button, big sentence-case rows separated by
- * hairlines, then the settings and account actions directly under the last row.
+ * The mobile menu — a FULL-SCREEN sheet, like Ramp's: its own wordmark and
+ * close button, sentence-case rows separated by hairlines, and the settings
+ * and account actions on the bottom edge of the screen.
  *
- * It used to cover the whole screen, with the link list on flex-1 and the
- * account block pushed to the bottom edge. Seven items do not fill a phone, so
- * flex-1 opened a band of roughly 200px of empty paper between Pricing and the
- * theme toggle — the panel looked like it was waiting for links it did not
- * have. Auto height instead, with the page showing beneath it.
+ * It spent a while at auto height, ending where its content ended, because
+ * seven always-open rows left a band of empty paper above the account block.
+ * Collapsing the Teams section took three rows down to one and made that gap
+ * worse, not better — a short panel with a strip of live page under it reads
+ * as a dropdown that failed to finish. Full height instead: the nav owns the
+ * screen while it is open, and the empty space belongs to the sheet rather
+ * than looking like a mistake.
  *
  * The structure is borrowed; the palette is not. Ramp is black type and acid
  * yellow on white, which would look like someone else's site pasted into this
  * one — so the rows are ink on paper and the primary action is the site's own
  * azure.
  *
- * NO CHEVRONS. Ramp puts a chevron on rows that expand into a submenu and
- * leaves its direct links (Customers, Pricing) bare. Every row here is a
- * direct link, so a chevron would advertise a submenu that does not exist.
+ * CHEVRONS ONLY ON SECTIONS. Ramp puts a chevron on rows that expand into a
+ * submenu and leaves its direct links (Customers, Pricing) bare. Teams is the
+ * one row here with pages under it, so it is the one row with a chevron - and
+ * it starts SHUT. Two children permanently open under a heading spent three
+ * rows on one destination and pushed the rest of the nav down the screen;
+ * closed, a section costs exactly what a link costs.
  *
  * Replaces a slide-down drawer whose rows were 12px uppercase links — legible,
  * but sized for a desktop nav rather than for a thumb.
@@ -58,6 +63,17 @@ export function MobileMenu({
   // keyboard user's first Tab still reaches the close button.
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // Which section is open, by label. One at a time: two expanded sections in a
+  // sheet this size is the flat list the nesting was meant to replace.
+  const [openSection, setOpenSection] = useState<string | null>(null);
+
+  // Every exit collapses on the way out, so the menu opens the same way each
+  // time rather than reopening on whatever was last poked.
+  const handleClose = useCallback(() => {
+    setOpenSection(null);
+    onClose();
+  }, [onClose]);
+
   // While the panel covers the screen, the page behind it must not scroll —
   // otherwise flicking the menu scrolls the article underneath and the reader
   // loses their place for having opened a menu.
@@ -75,7 +91,7 @@ export function MobileMenu({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") handleClose();
     };
     window.addEventListener("keydown", onKey);
     const id = window.setTimeout(() => panelRef.current?.focus(), 0);
@@ -83,7 +99,7 @@ export function MobileMenu({
       window.removeEventListener("keydown", onKey);
       window.clearTimeout(id);
     };
-  }, [open, onClose]);
+  }, [open, handleClose]);
 
   if (!open) return null;
 
@@ -91,39 +107,33 @@ export function MobileMenu({
   const signedIn = status === "signedIn";
 
   return (
-    <>
-      {/* The scrim is not decoration — it is the tap target. A sheet that shows
-          the page behind it but ignores taps on that page is worse than a panel
-          that covers everything: people reach for what they can see. */}
-      <div
-        className="lg:hidden fixed inset-0 z-[59] bg-ink/40"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-      <div
-        id="mobile-nav"
-        ref={panelRef}
-        tabIndex={-1}
-        // max-h plus min-h-0 on the list below keeps the old guarantee: if the
-        // nav ever outgrows the screen it scrolls inside itself rather than
-        // pushing the buttons off the bottom. svh rather than vh — measured
-        // with the URL bar shown, so the sheet does not resize mid-scroll.
-        className="lg:hidden fixed inset-x-0 top-0 z-[60] max-h-[100svh] bg-paper flex flex-col rounded-b-2xl shadow-2xl bta-menu-in outline-none"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Menu"
-      >
+    // NO SCRIM. It existed to catch taps on the page showing beside a
+    // short sheet. Nothing shows beside this one, so a scrim would be an
+    // invisible layer under an opaque panel.
+    <div
+      id="mobile-nav"
+      ref={panelRef}
+      tabIndex={-1}
+      // svh rather than vh — measured with the URL bar shown, so the sheet
+      // does not resize mid-scroll on iOS. min-h-0 on the list below keeps
+      // the old guarantee: a nav longer than the screen scrolls inside
+      // itself instead of pushing the account buttons off the bottom.
+      className="lg:hidden fixed inset-0 z-[60] h-[100svh] bg-paper flex flex-col bta-menu-in outline-none"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Menu"
+    >
       {/* Its own header rather than the site header showing through: the panel
           covers the whole screen, so it has to carry the wordmark and the way
           out. */}
       <div className="flex items-center justify-between px-6 h-16 shrink-0 border-b border-hairline">
-        <Link href="/" onClick={onClose} className="flex items-center shrink-0">
+        <Link href="/" onClick={handleClose} className="flex items-center shrink-0">
           {/* Same single-file mark as the header, same height. */}
           <SiteLogo className="h-8 w-auto" />
         </Link>
         <button
           type="button"
-          onClick={onClose}
+          onClick={handleClose}
           aria-label="Close menu"
           className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-ink/[0.07] text-ink hover:bg-ink/[0.12] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral"
         >
@@ -133,45 +143,83 @@ export function MobileMenu({
         </button>
       </div>
 
-      {/* The links. NOT flex-1 any more — that is what stretched the list and
-          opened the gap. Still scrollable in its own right so a longer list
-          never pushes the buttons off the bottom of the screen. */}
-      <nav className="min-h-0 overflow-y-auto overscroll-contain px-6">
+      {/* The links take the slack. flex-1 with min-h-0 so a list longer than
+          the screen scrolls inside this element rather than growing the sheet
+          and pushing the account block out of reach. */}
+      <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6">
         {items.map((item) => {
           if (item.children) {
+            const expanded = openSection === item.label;
+            // A child page lights the SECTION name while the section is shut,
+            // so collapsing by default never costs the "you are here" mark.
+            const inside = item.children.some((k) =>
+              k.href === "/" ? pathname === "/" : pathname.startsWith(k.href),
+            );
             return (
-              // A HEADING, NOT A LINK. The section name is a label for the two
-              // rows under it; making it tappable as well would give the drawer
-              // two ways to reach the same page a thumb-width apart.
               <div key={item.label} className="border-b border-hairline">
-                <div className="pt-5 pb-2 text-[0.7rem] uppercase tracking-[0.18em] text-ink-muted font-semibold">
+                {/* A BUTTON, NOT A LINK. The section name opens the section;
+                    making it navigate as well would give a thumb two different
+                    outcomes for the same tap depending on where it landed. */}
+                <button
+                  type="button"
+                  onClick={() => setOpenSection(expanded ? null : item.label)}
+                  aria-expanded={expanded}
+                  className={cn(
+                    "w-full flex items-center justify-between gap-3 py-4 text-left",
+                    "text-[0.9375rem] tracking-tight transition-colors",
+                    "focus-visible:outline-none focus-visible:text-coral",
+                    inside ? "text-coral font-semibold" : "text-ink font-medium hover:text-coral",
+                  )}
+                >
                   {item.label}
-                </div>
-                {item.children.map((k, i) => {
-                  // NOT isCurrent: that one lights the Teams chip for every
-                  // page on its menu, which is right for the desktop chip and
-                  // wrong here - it lit Team Explorer and Conference Power
-                  // Rankings at the same time. A child is current only if it
-                  // is the page you are on.
-                  const on = k.href === "/" ? pathname === "/" : pathname.startsWith(k.href);
-                  return (
-                    <Link
-                      key={k.href}
-                      href={k.href}
-                      onClick={onClose}
-                      aria-current={on ? "page" : undefined}
-                      className={cn(
-                        // Indented and hairline-separated from each other, but
-                        // not from the heading: the group reads as one block.
-                        "flex items-center justify-between py-4 pl-3 text-base tracking-tight transition-colors",
-                        i > 0 && "border-t border-hairline/60",
-                        on ? "text-coral font-semibold" : "text-ink font-medium hover:text-coral",
-                      )}
-                    >
-                      {k.label}
-                    </Link>
-                  );
-                })}
+                  <svg
+                    viewBox="0 0 24 24"
+                    width={15}
+                    height={15}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    className={cn(
+                      "shrink-0 text-ink-muted transition-transform duration-200",
+                      expanded && "rotate-90",
+                    )}
+                  >
+                    <path d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+                {expanded && (
+                  // No hairlines between the children: indented, lighter, and
+                  // tucked under a row that is already divided from the list,
+                  // they read as one group without borrowing the rule that
+                  // separates top-level destinations.
+                  <div className="pb-3">
+                    {item.children.map((k) => {
+                      // NOT isCurrent: that one lights the Teams chip for every
+                      // page on its menu, which is right for the desktop chip
+                      // and wrong here - it lit Team Explorer and Conference
+                      // Power Rankings at the same time. A child is current
+                      // only if it is the page you are on.
+                      const on = k.href === "/" ? pathname === "/" : pathname.startsWith(k.href);
+                      return (
+                        <Link
+                          key={k.href}
+                          href={k.href}
+                          onClick={handleClose}
+                          aria-current={on ? "page" : undefined}
+                          className={cn(
+                            "flex items-center py-2.5 pl-3 text-sm tracking-tight transition-colors",
+                            on ? "text-coral font-semibold" : "text-ink-soft font-medium hover:text-coral",
+                          )}
+                        >
+                          {k.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           }
@@ -180,11 +228,11 @@ export function MobileMenu({
             <Link
               key={item.href}
               href={item.href}
-              onClick={onClose}
+              onClick={handleClose}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex items-center justify-between py-5 border-b border-hairline",
-                "text-base tracking-tight transition-colors",
+                "flex items-center justify-between py-4 border-b border-hairline",
+                "text-[0.9375rem] tracking-tight transition-colors",
                 active ? "text-coral font-semibold" : "text-ink font-medium hover:text-coral",
               )}
             >
@@ -204,10 +252,13 @@ export function MobileMenu({
           Mixing --ink rather than a surface token: on the dark theme
           --paper-deep resolves to a colour the sheet is nearly painted in
           already, so it would not read.
-          The safe-area padding is gone with the pinning. env() is only ever
-          non-zero on gesture phones, where it would have added a band of dead
-          space under a sheet that no longer touches the bottom of the screen. */}
-      <div className="shrink-0 px-6 pt-4 pb-5 border-t border-hairline bg-ink/[0.04] rounded-b-2xl">
+          Back on the bottom edge, so the safe-area padding is back with it:
+          without it the sign-in buttons sit under the home indicator on a
+          gesture phone. */}
+      <div
+        className="shrink-0 px-6 pt-4 border-t border-hairline bg-ink/[0.04]"
+        style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}
+      >
         {/* Theme, above the account actions. It is a setting rather than a
             destination, so it sits with the other chrome at the foot of the
             sheet instead of in the nav list — which is exactly what the tint
@@ -226,7 +277,7 @@ export function MobileMenu({
             )}
             <Link
               href="/account/"
-              onClick={onClose}
+              onClick={handleClose}
               className="flex items-center justify-center h-12 w-full rounded-lg bg-coral text-white text-sm font-semibold hover:bg-coral-soft transition-colors"
             >
               Your account
@@ -236,14 +287,14 @@ export function MobileMenu({
           <div className="grid grid-cols-2 gap-3">
             <Link
               href="/account/login/"
-              onClick={onClose}
+              onClick={handleClose}
               className="flex items-center justify-center h-12 rounded-lg border border-ink/15 text-ink text-sm font-semibold hover:bg-paper-deep transition-colors"
             >
               Sign in
             </Link>
             <Link
               href="/pricing/"
-              onClick={onClose}
+              onClick={handleClose}
               className="flex items-center justify-center h-12 rounded-lg bg-coral text-white text-sm font-semibold hover:bg-coral-soft transition-colors"
             >
               Sign up
@@ -251,7 +302,6 @@ export function MobileMenu({
           </div>
         )}
       </div>
-      </div>
-    </>
+    </div>
   );
 }
