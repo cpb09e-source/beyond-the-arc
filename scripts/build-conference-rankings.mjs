@@ -300,8 +300,6 @@ const joinKey = (name) => {
   return TOURNEY_ALIASES[n] ?? n;
 };
 
-/** Rounds a team reaching them has played, for the Sweet 16 tally. */
-const DEEP_ROUNDS = new Set(["Sweet 16", "Elite Eight", "Final Four", "Champion"]);
 
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const round = (v, dp) => (v === null ? null : Math.round(v * 10 ** dp) / 10 ** dp);

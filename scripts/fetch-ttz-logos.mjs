@@ -12,7 +12,6 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 const ROOT = process.cwd()
 const OUT = path.join(ROOT, 'public/ttz-logos')
@@ -34,26 +33,6 @@ const SR_NAME_ALIASES = {
   ucf: 'ucf', 'siu edwardsville': 'siu edwardsville', 'ut martin': 'tennessee martin',
   umkc: 'kansas city', ualbany: 'albany', 'miami fl': 'miami fl', 'miami florida': 'miami fl',
   'miami oh': 'miami oh', 'miami ohio': 'miami oh',
-}
-function lookup(name) {
-  const k = normalize(name)
-  if (TEAMS[k]) return TEAMS[k]
-  if (TEAMS_BY_MARKET[k]) return TEAMS_BY_MARKET[k]
-  const alias = SR_NAME_ALIASES[k]
-  if (alias && TEAMS[alias]) return TEAMS[alias]
-  const stateToSt = k.replace(/\bstate\b/g, 'st')
-  if (stateToSt !== k) {
-    if (TEAMS[stateToSt]) return TEAMS[stateToSt]
-    if (TEAMS_BY_MARKET[stateToSt]) return TEAMS_BY_MARKET[stateToSt]
-  }
-  const noSuffix = k
-    .replace(/\b(wildcats|tigers|bulldogs|huskies|hurricanes|cowboys|raiders|spartans|gators|tar heels|cougars|bears|aggies|red raiders|sun devils|seminoles|jayhawks|wolverines|lions|cyclones|cavaliers|panthers|fighting irish|heels|tide|crimson|jaguars|knights|colonels|musketeers|cardinals)\b/g, '')
-    .trim().replace(/\s+/g, ' ')
-  if (noSuffix !== k && noSuffix.length > 0) {
-    if (TEAMS[noSuffix]) return TEAMS[noSuffix]
-    if (TEAMS_BY_MARKET[noSuffix]) return TEAMS_BY_MARKET[noSuffix]
-  }
-  return null
 }
 
 // EVERY known team, rather than the distinct schools in the 32-0 index.

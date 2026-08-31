@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Trophy } from "lucide-react";
 import { TeamLogo } from "@/components/team-logo";
 import { TeamName } from "@/components/team-name";
-import type { CoachSeason, TourneyRound } from "@/lib/coaches";
 import { TournamentSuccess } from "@/components/coaches/tournament-success";
 import { SeasonBySeasonTable } from "@/components/coaches/season-by-season-table";
 import {
@@ -108,7 +106,7 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
   // the bench for, ordered chronologically. We cross-reference the year's
   // game-logs by (team name, date) so the modal has the full GameLog (with
   // game_id for the box score) rather than the slimmer TourneyGame shape.
-  let marchGames: GameLog[] = [];
+  const marchGames: GameLog[] = [];
   {
     // Newest season leftmost — the coach's most recent tournament run reads
     // first, with their earlier appearances trailing off to the right. Within
@@ -157,7 +155,6 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
   // size (3 seasons) so single-season flukes don't dominate.
   const sortedByWins = [...allProfiles].sort((a, b) => b.career_wins - a.career_wins);
   const winsRank = sortedByWins.findIndex((p) => p.slug === profile.slug) + 1;
-  const winsRankTotal = sortedByWins.length;
 
   // Composite résumé rank — where this coach stands across the full pool by
   // the multi-component score (see computeCompositeScore in lib/coaches.ts).

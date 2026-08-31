@@ -5,10 +5,10 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { TeamName } from "@/components/team-name";
-import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import { dataUrl } from "@/lib/data-url";
 import { SeedChip } from "./seed-chip";
 import { NbaBadge } from "./nba-badge";
+import { useMounted } from "@/lib/use-mounted";
 
 type Draftee = { year: number; pick: number | null; team: string | null; college: string | null };
 let DRAFTEES_CACHE: Record<string, Draftee> | null = null;
@@ -134,8 +134,7 @@ export function BoxscoreModal({
   const [bartIndex, setBartIndex] = useState<Record<string, number>>({});
   const [profileableIds, setProfileableIds] = useState<Set<number>>(() => new Set());
   // Portal target — set after mount so createPortal is client-only (SSR-safe).
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  const mounted = useMounted();
 
   useEffect(() => {
     if (!open) return;
@@ -245,7 +244,7 @@ function Body({
   profileableIds: Set<number>;
   onClose: () => void;
 }) {
-  const [home, away] = data.teams; // SR returns winner first in our scrape; order doesn't matter for display
+  const [_home, away] = data.teams; // SR returns winner first in our scrape; order doesn't matter for display
   // Sort: visually put the higher-scoring team second (visual rhythm — "vs.")
   // Actually SR's bracket-page order is fine: winner first. Keep that.
   void away;

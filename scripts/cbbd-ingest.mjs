@@ -122,7 +122,6 @@ function writeGz(fp, data) {
   fs.mkdirSync(path.dirname(fp), { recursive: true });
   fs.writeFileSync(fp, zlib.gzipSync(JSON.stringify(data)));
 }
-const readGz = (fp) => JSON.parse(zlib.gunzipSync(fs.readFileSync(fp)).toString());
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

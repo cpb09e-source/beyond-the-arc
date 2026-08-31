@@ -338,7 +338,7 @@ async function main() {
   // `npm run snapshot:coaches`). Keys are Bart raw names → apply overrideTeamName
   // so they line up with the team display names used everywhere else.
   type CoachEntry = { name: string; first_name: string; last_name: string; espn_id: string | null };
-  let coachByTeam = new Map<string, CoachEntry>();
+  const coachByTeam = new Map<string, CoachEntry>();
   try {
     const raw = JSON.parse(await fs.readFile(path.resolve("src/data/team-coaches.json"), "utf8")) as Record<string, CoachEntry>;
     for (const [bartName, info] of Object.entries(raw)) coachByTeam.set(overrideTeamName(bartName), info);

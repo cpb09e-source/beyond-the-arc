@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
@@ -32,8 +32,11 @@ export function CoachSeasonPick({
   const [shiftX, setShiftX] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) { setShiftX(0); return; }
+  // MEASURE WHILE OPEN, never write state on the way out: the old first line
+  // zeroed shiftX on every close, which is a render whose only product is a
+  // number nothing reads while the popover is shut.
+  useLayoutEffect(() => {
+    if (!open) return;
     function reposition() {
       const el = containerRef.current;
       if (!el) return;

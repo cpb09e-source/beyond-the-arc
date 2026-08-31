@@ -241,7 +241,7 @@ async function processGame(game) {
 async function main() {
   const games = JSON.parse(await fs.readFile(path.join(SRC, "tournament-games.json"), "utf8"));
   const allGames = [];
-  for (const [year, list] of Object.entries(games)) {
+  for (const [_year, list] of Object.entries(games)) {
     for (const g of list) {
       if (!g.boxscore_url) continue;
       allGames.push(g);

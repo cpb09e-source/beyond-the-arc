@@ -10,7 +10,10 @@ import { FindGameModal } from "@/components/teams/find-game-modal";
  * without pulling the modal's full client tree at the call site.
  */
 export function FindGameTrigger({
-  teamId,
+  // teamId is part of the props contract the team page passes, and the
+  // modal does not need it. Renamed rather than dropped so the shape
+  // stays visible at the call site.
+  teamId: _teamId,
   teamName,
   defaultYear,
 }: {

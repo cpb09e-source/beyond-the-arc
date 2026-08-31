@@ -198,8 +198,6 @@ const GROUPS = {
   ],
 };
 
-/** Stats ranked only over players past the per-40 minutes floor. */
-const PER40 = new Set(Object.values(GROUPS).flat().map(([k]) => k).filter((k) => k.endsWith("_40")));
 
 // ── Bart-side identity ─────────────────────────────────────────────────────
 
@@ -934,7 +932,7 @@ function buildSeason(season) {
     const cols = defs.map(([k]) => k);
     const dirs = defs.map(([, d]) => d);
     const vals = cols.map((k) => V.get(k) ?? ids.map(() => null));
-    const pcts = defs.map(([k, d], ci) => {
+    const pcts = defs.map(([_k, d], ci) => {
       if (d === 0) return null;
       // Per-40 stats rank only over players past the floor. Everyone else is
       // already null in `vals`, so the ranker excludes them for free — but say

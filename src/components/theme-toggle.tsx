@@ -1,7 +1,7 @@
 "use client";
 
 import { Sun, Moon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { cn } from "@/lib/utils";
 
 type Theme = "light" | "dark";
@@ -59,20 +59,48 @@ function applyTheme(t: Theme) {
  * kicker line (≈18px tall). Inactive options sit on the page color;
  * the active option lifts onto `bg-paper` with a hairline shadow.
  */
+/**
+ * Subscribe to the one thing that actually holds the theme: the `data-theme`
+ * attribute on <html>, which the pre-hydration script in layout.tsx sets
+ * before React exists.
+ *
+ * A MutationObserver rather than a React state, because React is not the owner
+ * here — the attribute is, and it can change from outside this component (the
+ * inline script on load, or a second toggle in the mobile menu). Watching it
+ * means both controls agree without either knowing about the other.
+ */
+function subscribeToTheme(onChange: () => void): () => void {
+  if (typeof document === "undefined") return () => {};
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
+  return () => observer.disconnect();
+}
+
 export function ThemeToggle({ className }: { className?: string }) {
-  const [theme, setTheme] = useState<Theme>("light");
-  const [mounted, setMounted] = useState(false);
+  /**
+   * READ FROM THE DOM, NOT FROM STATE SEEDED BY AN EFFECT.
+   *
+   * This used to be useState("light") plus an effect that read the real value
+   * on mount and set it — which is the hydration-safe trick this hook exists
+   * to replace. The effect version rendered the wrong theme once, then
+   * corrected itself, and needed a `mounted` flag to keep the server and the
+   * first client render agreeing. useSyncExternalStore does all three jobs:
+   * the server snapshot is "light", the client snapshot is the attribute, and
+   * the subscription keeps them in step afterwards.
+   */
+  const theme = useSyncExternalStore<Theme>(subscribeToTheme, readTheme, () => "light");
+  // No `mounted` flag any more — the server snapshot IS the pre-mount answer,
+  // so there is nothing to wait for.
+  const mounted = true;
 
-  useEffect(() => {
-    setTheme(readTheme());
-    setMounted(true);
-  }, []);
-
-  function pick(t: Theme) {
-    if (t === theme) return;
-    setTheme(t);
+  const pick = useCallback((t: Theme) => {
+    // applyTheme writes the attribute; the observer above turns that into the
+    // re-render. Nothing sets React state directly.
     applyTheme(t);
-  }
+  }, []);
 
   return (
     <div

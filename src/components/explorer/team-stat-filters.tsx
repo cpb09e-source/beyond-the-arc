@@ -2,10 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Lock, Plus, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Lock } from "lucide-react";
 import { roundNice } from "@/components/filters/range-row";
 import {
   FILTER_COLUMNS, GROUP_LABEL, MAX_FILTERS, parseSpec, specToParams, teamStatColumn,

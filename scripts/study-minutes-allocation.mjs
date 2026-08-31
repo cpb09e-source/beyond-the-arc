@@ -47,9 +47,6 @@ const rawOf = (p) => {
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
 const norm = (s) => (s ?? "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
   .replace(/[^a-z\s]/g, " ").replace(/\s+/g, " ").trim().replace(/\s+(jr|sr|ii|iii|iv|v)$/, "");
-const il = (s) => { const t = norm(s).split(" "); return t.length >= 2 ? `${t[0][0]} ${t[t.length - 1]}` : null; };
-const normTeam = (s) => (s ?? "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
-  .replace(/\bstate\b/g, "st").replace(/[^a-z0-9]+/g, "");
 
 const yc = new Map();
 const loadYear = (y) => {

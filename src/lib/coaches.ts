@@ -530,7 +530,7 @@ function flattenSeasons(raw: RawSourceData): CoachSeason[] {
   const haveHistorical2026 = new Set<string>();
   for (const s of out) if (s.year === LATEST_YEAR) haveHistorical2026.add(s.team);
 
-  for (const [bartName, espnCoach] of Object.entries(raw.espn)) {
+  for (const [bartName, _espnCoach] of Object.entries(raw.espn)) {
     const team = overrideTeam(bartName);
     if (haveHistorical2026.has(team)) continue;
     const m = raw.meta.get(team);
@@ -634,7 +634,7 @@ function attachCoachNames(seasons: CoachSeason[], raw: RawSourceData): SeasonWit
  * Group seasons by coach (by name — keep collisions visible like Mark Madsen
  * being listed at 3 schools) and build profiles.
  */
-function profilesFromSeasons(seasons: SeasonWithCoach[], raw: RawSourceData): CoachProfile[] {
+function profilesFromSeasons(seasons: SeasonWithCoach[], _raw: RawSourceData): CoachProfile[] {
   const byCoach = new Map<string, SeasonWithCoach[]>();
   for (const s of seasons) {
     const key = s.coach_name;

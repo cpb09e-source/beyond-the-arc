@@ -19,6 +19,7 @@ import { POWER_CONFS } from "@/lib/conf-tiers";
 import { ScopeCollapse, scopeSummary } from "@/components/filters/scope-collapse";
 import { FREE_LIMITS } from "@/lib/access";
 import { useEntitlement } from "@/lib/use-entitlement";
+import { useMounted } from "@/lib/use-mounted";
 
 const CONF_GROUP_LABELS = { power: "Power Conferences", midmajor: "Mid-Majors" } as const;
 
@@ -60,13 +61,21 @@ export function FilterBar({
     filters: urlSpec.filters,
   });
 
-  // Re-sync draft when the URL changes from outside (browser nav, sort click
-  // doesn't affect these fields but the dep is safe). Cheap because state
-  // updates are reference-compared at the consumer level.
-  useEffect(() => {
+  /**
+   * Re-sync the draft when the URL changes from outside — browser back, a
+   * shared link, a saved filter applied elsewhere.
+   *
+   * ADJUSTED DURING RENDER rather than in an effect. As an effect this painted
+   * the panel once with the previous URL's values still in the fields, then
+   * again with the new ones; here the correction happens before anything is
+   * shown. `search` is the whole query string, so a sort click re-runs it
+   * harmlessly — the values it writes are the ones already there.
+   */
+  const [syncedSearch, setSyncedSearch] = useState(search);
+  if (syncedSearch !== search) {
+    setSyncedSearch(search);
     setDraft({ years: urlSpec.years, conf: urlSpec.conf, teams: urlSpec.teams, filters: urlSpec.filters });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }
 
   function patch(next: Partial<typeof draft>) {
     setDraft((d) => ({ ...d, ...next }));
@@ -282,8 +291,7 @@ export function ConferenceRankingsModal({
   }, []);
 
   // SSR safety: only mount the portal after the client picks it up.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  const mounted = useMounted();
   if (!mounted) return null;
 
   const body = (

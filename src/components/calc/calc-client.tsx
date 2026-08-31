@@ -40,8 +40,6 @@ import {
 import { isExhibitionGame, ALL_SEASONS, SEASON_CEIL } from "@/lib/seasons";
 import { resolveQuery, searchKeysFor, normName, type ParsedQuery, type ResolvedQuery } from "@/lib/query-parse";
 import { attachGameBox, type GameBoxFile } from "@/lib/game-box";
-import { dataUrl } from "@/lib/data-url";
-import { getTeamColors } from "@/lib/team-colors";
 import {
   quadFor,
   ratingKey,

@@ -58,7 +58,7 @@ async function getJson(url) {
       if (r.status === 429 || r.status >= 500) { await sleep(3000 * (attempt + 1)); continue; }
       if (!r.ok) return { error: r.status };
       return { data: await r.json() };
-    } catch (e) { await sleep(2000 * (attempt + 1)); }
+    } catch { await sleep(2000 * (attempt + 1)); }
   }
   return { error: "retries" };
 }

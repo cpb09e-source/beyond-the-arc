@@ -46,7 +46,7 @@ async function pullDate(date) {
       const data = await r.json();
       fs.writeFileSync(fp, zlib.gzipSync(JSON.stringify(data)));
       return `ok(${Array.isArray(data) ? data.length : 0})`;
-    } catch (e) { if (attempt) return "fail(timeout)"; await sleep(2500); }
+    } catch { if (attempt) return "fail(timeout)"; await sleep(2500); }
   }
   return "fail";
 }

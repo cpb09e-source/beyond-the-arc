@@ -202,8 +202,6 @@ for (const [team, entry] of Object.entries(preview.teams ?? {})) {
   // has been recorded. See the note at the top of this file.
   const retIds = new Set(returners.map((p) => p.bart_id));
   const seniors = seniorsByTeam.get(team) ?? [];
-  const seniorsBack = seniors.filter((id) => retIds.has(id)).length;
-  const incoming = (entry.roster ?? []).length - returners.length;
   /**
    * THE ROSTER DIFF IS THE ONLY TEST NOW.
    *

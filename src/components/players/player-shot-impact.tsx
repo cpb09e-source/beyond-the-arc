@@ -48,17 +48,31 @@ function tileVars(pct: number | null): React.CSSProperties {
 
 /** Per-season shooting splits for one player; null = no data for that year. */
 export function useShotProfile(bartPlayerId: number, year: number | null): Shooting | null {
-  const [s, setS] = useState<Shooting | null>(null);
+  /**
+   * THE FETCHED YEAR IS STORED WITH THE DATA, which is what lets the null case
+   * be answered without setting state.
+   *
+   * The old version began the effect with `if (year === null) { setS(null); }`
+   * — a synchronous state write on every render where there is nothing to
+   * fetch. Keeping the key alongside the value means "no year" and "a year we
+   * have not fetched yet" are both answered at the bottom of this function,
+   * by comparison, and state is only ever written when bytes arrive.
+   */
+  const [got, setGot] = useState<{ key: string; data: Shooting | null } | null>(null);
+  const key = `${bartPlayerId}|${year}`;
+
   useEffect(() => {
-    if (year === null) { setS(null); return; }
+    if (year === null) return;
     let cancelled = false;
     fetch(`/data/shooting-${year}.json`)
       .then(jr)
-      .then((j) => { if (!cancelled) setS(j?.players?.[String(bartPlayerId)] ?? null); })
-      .catch(() => { if (!cancelled) setS(null); });
+      .then((j) => { if (!cancelled) setGot({ key, data: j?.players?.[String(bartPlayerId)] ?? null }); })
+      .catch(() => { if (!cancelled) setGot({ key, data: null }); });
     return () => { cancelled = true; };
-  }, [bartPlayerId, year]);
-  return s;
+  }, [bartPlayerId, year, key]);
+  // Only answer with data fetched for THIS player-season; anything else is
+  // either not fetched yet or left over from the last one.
+  return got?.key === key ? got.data : null;
 }
 
 /** Zone diet bars — % of shots taken and FG% at Rim / Mid / 3PT. */

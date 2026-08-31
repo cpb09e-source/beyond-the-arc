@@ -465,12 +465,6 @@ export function parseSpec(searchParams: Record<string, string | string[] | undef
   };
 }
 
-// ---------- query ----------
-// PostgREST can't join sibling tables directly — pivot from `teams` and pull
-// both stat tables through it via the FK each one has to teams(id).
-function foreignTable(col: TeamStatColumn): string {
-  return col.source === "trank" ? "team_trank_stats" : "team_season_stats";
-}
 
 export type TeamRow = {
   // identity

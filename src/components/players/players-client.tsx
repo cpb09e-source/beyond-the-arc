@@ -24,7 +24,6 @@ import { suggestPlayerName } from "@/lib/saved-filters";
 import { SortableTh, StatLabel } from "@/components/explorer/sortable-th";
 import { Select } from "@/components/select";
 import {
-  DEFAULT_PLAYER_SPEC,
   // PLAYER_COLS is gone from here: the raw_row offsets it names are now read
   // only by scripts/build-players-explorer.mjs, at build time.
   PLAYER_STAT_COLUMNS,
@@ -257,14 +256,6 @@ function seasonsKicker(years: number[]): string {
   return `${years.length} seasons`;
 }
 
-function fmtNum(x: number | null, digits = 1): string {
-  if (x === null || x === undefined) return "—";
-  return x.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
-}
-function fmtPct(x: number | null): string {
-  if (x === null || x === undefined) return "—";
-  return (x * 100).toLocaleString("en-US", { maximumFractionDigits: 1 }) + "%";
-}
 function teamSlug(name: string): string {
   return name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
@@ -1766,20 +1757,6 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   );
 }
 
-function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <th className={`px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium ${className}`}>{children}</th>;
-}
-function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-3 py-2.5 ${className}`}>{children}</td>;
-}
-function HeaderField({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
-  return (
-    <label className={cn("flex flex-col gap-1", className)}>
-      <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">{label}</span>
-      {children}
-    </label>
-  );
-}
 
 /**
  * Coalesce a scroll-driven callback to at most one call per frame.
@@ -2117,26 +2094,3 @@ function paginationItems(page: number, totalPages: number): Array<number | "…"
   return out;
 }
 
-function ValuePctCell({
-  value, pct, format, emphasized = false,
-}: {
-  value: number | null;
-  pct: number | null;
-  format: "num1" | "pct1";
-  emphasized?: boolean;
-}) {
-  const display =
-    value === null || value === undefined
-      ? "—"
-      : format === "pct1"
-      ? (value * 100).toLocaleString("en-US", { maximumFractionDigits: 1 }) + "%"
-      : value.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  return (
-    <td className={`px-3 py-2.5 text-right tabular ${emphasized ? "font-medium" : ""}`}>
-      <span className="inline-flex flex-col items-end gap-0.5 leading-tight">
-        <span>{display}</span>
-        <PercentileChip pct={pct} />
-      </span>
-    </td>
-  );
-}

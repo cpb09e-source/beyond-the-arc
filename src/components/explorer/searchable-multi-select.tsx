@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { SearchableOption } from "./searchable-select";
 
@@ -70,18 +70,36 @@ export function SearchableMultiSelect({
   // one page never collide.
   const listboxId = useId();
 
-  useEffect(() => {
-    if (open) {
-      setQuery("");
-      setActiveIdx(0);
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
-  }, [open]);
+  /**
+   * Open, cleared, focused — in the handler rather than in an effect on
+   * `open`. Clearing the query is part of what opening means, not a
+   * synchronisation with anything outside React, and as an effect it cost a
+   * second render after the popover had already painted the old query.
+   */
+  const openMenu = useCallback(() => {
+    setQuery("");
+    setActiveIdx(0);
+    setOpen(true);
+    // The input does not exist until the popover paints.
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
 
   // On open, measure the trigger and shift the (left-anchored) popover left if
   // it would overflow the viewport. Re-measure on resize while open.
-  useEffect(() => {
-    if (!open || align === "right") { setShiftX(0); return; }
+  /**
+   * MEASURE ONLY WHILE OPEN, and never write state on the way out.
+   *
+   * The old version began `if (!open) { setShiftX(0); return; }`, which set
+   * state synchronously on every close — a render whose only purpose was to
+   * zero a number nothing reads while the popover is shut (the style is only
+   * applied when open). Now closing does nothing and opening measures, which
+   * is also the only moment the measurement can be correct.
+   *
+   * useLayoutEffect, not useEffect: this shifts the panel horizontally, and
+   * doing it after paint is a visible jump.
+   */
+  useLayoutEffect(() => {
+    if (!open || align === "right") return;
     function reposition() {
       const el = containerRef.current;
       if (!el) return;
@@ -123,9 +141,14 @@ export function SearchableMultiSelect({
     );
   }, [options, query]);
 
-  useEffect(() => {
-    setActiveIdx((i) => Math.max(0, Math.min(i, filtered.length - 1)));
-  }, [filtered.length]);
+  /**
+   * The active row, clamped to the list actually on screen — DERIVED, not
+   * stored. Typing narrows `filtered`, and chasing that with an effect meant
+   * one render with an index past the end of the list and another to correct
+   * it. `activeIdx` stays the reader's intent; `activeSafe` is what the list
+   * and the keyboard handler use.
+   */
+  const activeSafe = Math.max(0, Math.min(activeIdx, filtered.length - 1));
 
   function toggle(v: string) {
     if (disabledValues?.has(v)) return;
@@ -142,7 +165,7 @@ export function SearchableMultiSelect({
       setActiveIdx((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const picked = filtered[activeIdx];
+      const picked = filtered[activeSafe];
       if (picked) toggle(picked.value);
       setQuery("");
       setActiveIdx(0);
@@ -199,7 +222,7 @@ export function SearchableMultiSelect({
       ) : (
         <button
           type="button"
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => (open ? setOpen(false) : openMenu())}
           aria-label={ariaLabel}
           aria-haspopup="listbox"
           aria-expanded={open}
@@ -256,7 +279,7 @@ export function SearchableMultiSelect({
                     )}
                     {g.items.map((o) => {
                       const idx = filtered.indexOf(o);
-                      const isActive = idx === activeIdx;
+                      const isActive = idx === activeSafe;
                       const isSelected = value.includes(o.value);
                       const isDisabled = disabledValues?.has(o.value) ?? false;
                       return (

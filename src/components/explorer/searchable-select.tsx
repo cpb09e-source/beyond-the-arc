@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export type SearchableOption = {
@@ -40,15 +40,21 @@ export function SearchableSelect({
   const listRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Reset search when reopening
-  useEffect(() => {
-    if (open) {
-      setQuery("");
-      setActiveIdx(0);
-      // focus the search input after the popover paints
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
-  }, [open]);
+  /**
+   * Open, cleared, focused — in the handler, not in an effect.
+   *
+   * This was a useEffect on `open` that reset the query and the active index.
+   * The reset is not a synchronisation with anything outside React; it is part
+   * of what opening MEANS, and doing it in an effect made it a second render
+   * pass after the popover had already painted with the old query in it.
+   */
+  const openMenu = useCallback(() => {
+    setQuery("");
+    setActiveIdx(0);
+    setOpen(true);
+    // Focus after the popover paints — the input does not exist until then.
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }, []);
 
   // Close on outside click / escape
   useEffect(() => {
@@ -78,10 +84,16 @@ export function SearchableSelect({
     );
   }, [options, query]);
 
-  // Re-clamp active index whenever filter shrinks
-  useEffect(() => {
-    setActiveIdx((i) => Math.max(0, Math.min(i, filtered.length - 1)));
-  }, [filtered.length]);
+  /**
+   * The active row, clamped to the list that is actually on screen.
+   *
+   * DERIVED, not stored. Typing narrows `filtered`, and the old code chased
+   * that with an effect that re-set the index — one render showing an index
+   * past the end of the list, then another to fix it. The clamp is a function
+   * of two things we already have, so it is computed rather than remembered:
+   * `activeIdx` stays the reader's intent, `activeSafe` is what the list uses.
+   */
+  const activeSafe = Math.max(0, Math.min(activeIdx, filtered.length - 1));
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "ArrowDown") {
@@ -92,7 +104,7 @@ export function SearchableSelect({
       setActiveIdx((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const picked = filtered[activeIdx];
+      const picked = filtered[activeSafe];
       if (picked) {
         onChange(picked.value);
         setOpen(false);
@@ -115,7 +127,7 @@ export function SearchableSelect({
       <button
         type="button"
         ref={buttonRef}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => (open ? setOpen(false) : openMenu())}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -154,7 +166,7 @@ export function SearchableSelect({
                   )}
                   {g.items.map((o) => {
                     const idx = filtered.indexOf(o);
-                    const isActive = idx === activeIdx;
+                    const isActive = idx === activeSafe;
                     const isSelected = o.value === value;
                     return (
                       <button

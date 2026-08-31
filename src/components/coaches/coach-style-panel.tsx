@@ -1,6 +1,5 @@
 import { STYLE_DIMENSIONS, type CoachStyle } from "@/lib/coaches";
 import { PercentileChip, pctColor, pctBg } from "@/components/percentile-chip";
-import { cn } from "@/lib/utils";
 
 /**
  * Style fingerprint — what kind of basketball a coach's teams played, against

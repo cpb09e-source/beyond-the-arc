@@ -11,6 +11,7 @@ import {
 import { StatChipStrip, buildStatChips, type StatChip } from "@/components/filters/stat-chips";
 import { FilterGroup } from "@/components/filters/filter-group";
 import type { CoachRow } from "@/app/coaches/page";
+import { useMounted } from "@/lib/use-mounted";
 
 /**
  * Stat-range drawer for /coaches — the counterpart to the players and teams
@@ -211,11 +212,7 @@ export function CoachStatFilters({
   // to synchronise mid-render and no reason to pay for a cascading setState.
   const [draft, setDraft] = useState<RangeState>(state);
 
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMounted(true);
-  }, []);
+  const mounted = useMounted();
   const slot = mounted && typeof document !== "undefined"
     ? document.getElementById(COACH_DRAWER_SLOT_ID)
     : null;

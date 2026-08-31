@@ -10,6 +10,7 @@ import { CompareShareCard, type ShareRow } from "@/components/share/compare-shar
 import { confDisplay } from "@/lib/conf-display";
 import type { CoachRow } from "@/app/coaches/page";
 import * as htmlToImage from "html-to-image";
+import { useMounted } from "@/lib/use-mounted";
 
 /**
  * Head-to-head compare modal — pick 2-4 coaches and see them side by side.
@@ -19,7 +20,6 @@ import * as htmlToImage from "html-to-image";
  * a green tint; worst gets a coral tint; ties get neither.
  */
 
-const MAX_SLOTS = 4;
 
 type Direction = "higher" | "lower" | "depth" | "none";
 
@@ -90,9 +90,8 @@ export function CompareModal({
 }) {
   const [slots, setSlots] = useState<(string | null)[]>([null, null, null, null]);
   const [openPickerSlot, setOpenPickerSlot] = useState<number | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
 
-  useEffect(() => setMounted(true), []);
 
   // Esc to close; lock body scroll while open.
   useEffect(() => {
@@ -112,13 +111,24 @@ export function CompareModal({
     };
   }, [open, onClose, openPickerSlot]);
 
-  // Reset slots when modal closes so reopening starts fresh.
-  useEffect(() => {
+  /**
+   * Reopening starts fresh — ADJUSTED DURING RENDER, not in an effect.
+   *
+   * This is React's own escape hatch for "a piece of state should reset when a
+   * prop changes" (react.dev, "You Might Not Need an Effect"). As an effect it
+   * was a render of the closing modal still holding four filled slots, then a
+   * second render to empty them; done here the reset lands in the same pass
+   * that saw `open` go false, and React discards the first result without ever
+   * painting it.
+   */
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
     if (!open) {
       setSlots([null, null, null, null]);
       setOpenPickerSlot(null);
     }
-  }, [open]);
+  }
 
   const coachBySlug = useMemo(() => {
     const m = new Map<string, CoachRow>();
@@ -656,8 +666,16 @@ function SlotPicker({
   const [q, setQ] = useState("");
   const [hIdx, setHIdx] = useState(0);
 
+  // Same adjust-during-render reset as the modal above: clearing the search
+  // is what closing MEANS, not a synchronisation with anything outside React.
+  const [pickerWasOpen, setPickerWasOpen] = useState(open);
+  if (pickerWasOpen !== open) {
+    setPickerWasOpen(open);
+    if (!open) { setQ(""); setHIdx(0); }
+  }
+
   useEffect(() => {
-    if (!open) { setQ(""); setHIdx(0); return; }
+    if (!open) return;
     function onDown(e: MouseEvent) {
       if (!containerRef.current?.contains(e.target as Node)) onOpenChange(false);
     }
@@ -681,17 +699,19 @@ function SlotPicker({
     ).slice(0, 60);
   }, [allCoaches, excluded, q]);
 
-  // Reset highlight to top whenever the filtered list changes (typing).
-  useEffect(() => { setHIdx(0); }, [q]);
+  // The highlight belongs to the CURRENT query, so it is clamped where it is
+  // read rather than reset by an effect after the new list has already
+  // painted with a stale row highlighted.
+  const hSafe = Math.max(0, Math.min(hIdx, filtered.length - 1));
 
   // Keep the highlighted row in view as user arrow-navigates.
   useEffect(() => {
     if (!open) return;
-    const el = listRef.current?.children[hIdx] as HTMLElement | undefined;
+    const el = listRef.current?.children[hSafe] as HTMLElement | undefined;
     if (el && typeof el.scrollIntoView === "function") {
       el.scrollIntoView({ block: "nearest" });
     }
-  }, [hIdx, open]);
+  }, [hSafe, open]);
 
   function onInputKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (filtered.length === 0) return;
@@ -704,7 +724,7 @@ function SlotPicker({
     } else if (e.key === "Enter" || e.key === "Tab") {
       // Both keys pick the highlighted coach. Enter and Tab also advance to
       // the next empty slot (parent reads `advance=true` and opens it).
-      const pick = filtered[hIdx];
+      const pick = filtered[hSafe];
       if (pick) {
         e.preventDefault();
         onPick(pick.slug, true);
@@ -786,7 +806,7 @@ function SlotPicker({
                   onMouseEnter={() => setHIdx(i)}
                   className={cn(
                     "w-full px-3 py-1.5 flex items-center gap-2 text-left transition-colors",
-                    i === hIdx ? "bg-paper-deep" : "hover:bg-paper-deep/60",
+                    i === hSafe ? "bg-paper-deep" : "hover:bg-paper-deep/60",
                   )}
                 >
                   {c.current_team && <TeamLogo name={c.current_team} size={20} />}

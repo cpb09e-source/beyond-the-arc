@@ -23,6 +23,7 @@ import {
   type GameLog,
 } from "@/lib/game-filters";
 import type { GameLog as StaticGameLog } from "@/lib/static-data";
+import { useMounted } from "@/lib/use-mounted";
 
 /**
  * "Find a game" modal — per-team variant of the /calc page. User stacks
@@ -93,8 +94,7 @@ export function FindGameModal({
   }, [onClose]);
 
   // SSR-safe portal mount — only render after the client picks up.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  const mounted = useMounted();
 
   // Lazy-load any year we don't have cached yet. Parallel fetches with a
   // module-level cache shared with /calc.

@@ -15,9 +15,6 @@ function teamSlug(name: string): string {
 function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
 }
-function fullSeasonLabel(y: number): string {
-  return `${y - 1}-${y.toString().slice(-2)}`;
-}
 
 // "How far they got" → numeric depth. Higher = deeper run.
 const ROUND_DEPTH: Record<TourneyRound, number> = {

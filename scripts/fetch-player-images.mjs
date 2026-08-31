@@ -220,13 +220,6 @@ async function fetchEspnTeams() {
   return j?.sports?.[0]?.leagues?.[0]?.teams?.map((t) => t.team) ?? [];
 }
 
-async function fetchEspnRoster(espnTeamId) {
-  const url = `${ESPN_BASE}/teams/${espnTeamId}/roster`;
-  const res = await fetch(url, { headers: UA });
-  if (!res.ok) return [];
-  const j = await res.json();
-  return j?.athletes ?? [];
-}
 
 // rate limit: 3 req/sec polite for ESPN
 const MIN_INTERVAL_MS = 350;

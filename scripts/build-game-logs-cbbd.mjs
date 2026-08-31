@@ -58,7 +58,6 @@ const CONF_BY_TEAM_YEAR = (() => {
   return m;
 })();
 
-const int = (v) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null);
 const n2 = (v) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 100) / 100 : null);
 /** CBBD sends percentages 0-100; every other surface on the site stores 0-1. */
 const pct = (v) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 10) / 1000 : null);

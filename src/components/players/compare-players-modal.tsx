@@ -15,6 +15,7 @@ import { pctColor } from "@/components/percentile-chip";
 import { STAT_META, fmtValue, seasonLabel } from "./where-they-rank";
 import type { PlayerRanks, PlayerRanksSeason } from "@/lib/static-data";
 import * as htmlToImage from "html-to-image";
+import { useMounted } from "@/lib/use-mounted";
 
 /**
  * Head-to-head Compare Players modal — pick up to 4 (player, season) slots
@@ -34,7 +35,6 @@ import * as htmlToImage from "html-to-image";
  *     of the rest of the site rather than recomputing anything new.
  */
 
-const MAX_SLOTS = 4;
 
 type Direction = "higher" | "lower" | "none";
 
@@ -203,14 +203,13 @@ const ROWS: Row[] = [
 export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [slots, setSlots] = useState<(string | null)[]>([null, null, null, null]);
   const [openPickerSlot, setOpenPickerSlot] = useState<number | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [index, setIndex] = useState<IndexEntry[] | null>(null);
   const [indexLoading, setIndexLoading] = useState(false);
   // Per-player rank cache. Keyed by bartId. Each entry is either the full
   // PlayerRanks payload, "loading", or "error" if the fetch failed.
   const [ranksByBart, setRanksByBart] = useState<Record<number, PlayerRanks | "loading" | "error">>({});
 
-  useEffect(() => setMounted(true), []);
 
   // Lazy-load the players-index on first open. Cached for the session so
   // re-opening is instant.
@@ -248,12 +247,24 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
     };
   }, [open, onClose, openPickerSlot]);
 
-  useEffect(() => {
+  /**
+   * Reopening starts fresh — ADJUSTED DURING RENDER, not in an effect.
+   *
+   * This is React's own escape hatch for "a piece of state should reset when a
+   * prop changes" (react.dev, "You Might Not Need an Effect"). As an effect it
+   * was a render of the closing modal still holding four filled slots, then a
+   * second render to empty them; done here the reset lands in the same pass
+   * that saw `open` go false, and React discards the first result without ever
+   * painting it.
+   */
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
     if (!open) {
       setSlots([null, null, null, null]);
       setOpenPickerSlot(null);
     }
-  }, [open]);
+  }
 
   const options = useMemo<Opt[]>(() => {
     if (!index) return [];
@@ -931,8 +942,16 @@ function SlotPicker({
   const [q, setQ] = useState("");
   const [hIdx, setHIdx] = useState(0);
 
+  // Same adjust-during-render reset as the modal above: clearing the search
+  // is what closing MEANS, not a synchronisation with anything outside React.
+  const [pickerWasOpen, setPickerWasOpen] = useState(open);
+  if (pickerWasOpen !== open) {
+    setPickerWasOpen(open);
+    if (!open) { setQ(""); setHIdx(0); }
+  }
+
   useEffect(() => {
-    if (!open) { setQ(""); setHIdx(0); return; }
+    if (!open) return;
     function onDown(e: MouseEvent) {
       if (!containerRef.current?.contains(e.target as Node)) onOpenChange(false);
     }

@@ -30,7 +30,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { midrankPercentiles } from "./lib/percentile.mjs";
-import zlib from "node:zlib";
 
 const args = process.argv.slice(2);
 const SEASON = Number(args[args.indexOf("--season") + 1] || 2026);

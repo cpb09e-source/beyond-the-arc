@@ -18,6 +18,7 @@ import {
   type TeamFilterSpec,
 } from "@/lib/team-filters";
 import * as htmlToImage from "html-to-image";
+import { useMounted } from "@/lib/use-mounted";
 
 /**
  * Head-to-head Compare Teams modal — pick up to 4 (team, season) slots and
@@ -30,7 +31,6 @@ import * as htmlToImage from "html-to-image";
  * 14-15 Kentucky vs 24-25 Duke uses each team's own-year z-scores.
  */
 
-const MAX_SLOTS = 4;
 
 type Direction = "higher" | "lower" | "depth" | "none";
 
@@ -150,9 +150,8 @@ export function CompareTeamsModal({
 }) {
   const [slots, setSlots] = useState<(string | null)[]>([null, null, null, null]);
   const [openPickerSlot, setOpenPickerSlot] = useState<number | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
 
-  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!open) return;
@@ -171,12 +170,24 @@ export function CompareTeamsModal({
     };
   }, [open, onClose, openPickerSlot]);
 
-  useEffect(() => {
+  /**
+   * Reopening starts fresh — ADJUSTED DURING RENDER, not in an effect.
+   *
+   * This is React's own escape hatch for "a piece of state should reset when a
+   * prop changes" (react.dev, "You Might Not Need an Effect"). As an effect it
+   * was a render of the closing modal still holding four filled slots, then a
+   * second render to empty them; done here the reset lands in the same pass
+   * that saw `open` go false, and React discards the first result without ever
+   * painting it.
+   */
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
     if (!open) {
       setSlots([null, null, null, null]);
       setOpenPickerSlot(null);
     }
-  }, [open]);
+  }
 
   // Flat option list: every (team, year) we have. Pre-sorted by year desc then
   // team alpha so the natural picker default reads "most recent first".
@@ -914,8 +925,16 @@ function SlotPicker({
   const [q, setQ] = useState("");
   const [hIdx, setHIdx] = useState(0);
 
+  // Same adjust-during-render reset as the modal above: clearing the search
+  // is what closing MEANS, not a synchronisation with anything outside React.
+  const [pickerWasOpen, setPickerWasOpen] = useState(open);
+  if (pickerWasOpen !== open) {
+    setPickerWasOpen(open);
+    if (!open) { setQ(""); setHIdx(0); }
+  }
+
   useEffect(() => {
-    if (!open) { setQ(""); setHIdx(0); return; }
+    if (!open) return;
     function onDown(e: MouseEvent) {
       if (!containerRef.current?.contains(e.target as Node)) onOpenChange(false);
     }
