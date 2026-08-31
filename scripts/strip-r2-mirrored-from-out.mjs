@@ -41,6 +41,10 @@ const DIRS = [
   // upload timeout R2 was set up to avoid, arriving by a different door.
   "data/lineup-stats",
   "data/team-seasons",
+  // Same again, 2026-08-31. readAssistForPlayer() reads these at BUILD time
+  // and the numbers reach the browser as props on the player page, so no
+  // request can ask for the files. 13 MB across 12 of them.
+  "data/assist-players",
 ];
 
 /**
@@ -53,6 +57,11 @@ const DIRS = [
  */
 const FILES = [
   "data/teams-all.json",
+  // 12.6 MB, and the same story as teams-all: readAssistNetwork() reads it
+  // once at BUILD time and the panel gets its numbers as props. It was
+  // suspected of belonging on R2 — it does not, because nothing fetches it.
+  // R2 is for files the browser asks for; this one it never does.
+  "data/assist-network.json",
 ];
 
 let removed = 0;

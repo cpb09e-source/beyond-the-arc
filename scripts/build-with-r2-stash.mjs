@@ -67,6 +67,18 @@ const BUILD_ONLY_DIRS = [
   // header explains why the postbuild hook could not be trusted there.
   "data/lineup-stats",
   "data/team-seasons",
+  // Read at build time by readAssistForPlayer(), delivered as props.
+  "data/assist-players",
+];
+
+/**
+ * Build-time-only FILES, the same category as the dirs above: read off the
+ * filesystem while the pages render, never fetched by a browser. Together they
+ * are ~25 MB that was being uploaded on every deploy for nobody to request.
+ */
+const BUILD_ONLY_FILES = [
+  "data/teams-all.json",
+  "data/assist-network.json",
 ];
 
 async function main() {
@@ -192,6 +204,17 @@ async function main() {
   // /coaches/ on the May 20 2026 deploy). The CLI upload of ~215k files
   // is slow but only happens once per data change; subsequent deploys
   // dedupe by content hash and finish in <2 min.
+
+  console.log("\n→ Stripping build-only files from out/…");
+  for (const f of BUILD_ONLY_FILES) {
+    const full = path.join(OUT, f);
+    try {
+      await rm(full, { force: true });
+      console.log(`   stripped ${f}`);
+    } catch (e) {
+      console.warn(`   could not strip ${f}: ${e.message}`);
+    }
+  }
 
   console.log("\n→ Stripping build-only dirs from out/…");
   for (const d of BUILD_ONLY_DIRS) {

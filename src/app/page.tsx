@@ -6,6 +6,9 @@ import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/l
 import fs from "node:fs/promises";
 import path from "node:path";
 import { PageHeading } from "@/components/page-heading";
+import { TablePreview } from "@/components/table-preview";
+import { DEFAULT_SPEC, processTeams } from "@/lib/team-filters";
+import { teamSlug } from "@/lib/team-slug";
 
 // Compact bracket-round → short label (R64→R1 to match fan parlance).
 // Mirrors the maps in /coaches/[slug] and /teams/[slug]/[year].
@@ -107,13 +110,43 @@ export default async function HomePage() {
     }
   }
 
+  /**
+   * The server's own render of the default table — top 25 by aNET, the
+   * explorer's own default, through the explorer's own code path so the order
+   * and the numbers cannot disagree with what replaces it.
+   */
+  const previewRows = processTeams(initialTeams, { ...DEFAULT_SPEC, years: [latestYear] }).rows.slice(0, 25);
+  const fmt1 = (v: number | null | undefined) => (typeof v === "number" ? v.toFixed(1) : "—");
+  const previewProps = {
+    nameHeader: "Team",
+    rows: previewRows.map((t) => ({
+      name: t.team_name,
+      team: t.team_name,
+      meta: t.team_conference ?? undefined,
+      href: `/teams/${teamSlug(t.team_name)}/${latestYear}`,
+    })),
+    columns: [
+      { label: "Record", values: previewRows.map((t) => t.record ?? "—") },
+      { label: "aNET", values: previewRows.map((t) => fmt1(t.a_net)) },
+      { label: "aORTG", values: previewRows.map((t) => fmt1(t.a_ortg)) },
+      { label: "aDRTG", values: previewRows.map((t) => fmt1(t.a_drtg)) },
+    ],
+    caption: `Top 25 of ${initialTeams.length} teams by adjusted net rating. The full table, with every column and filter, loads here.`,
+  };
+
   return (
     <>
       {/* Same padding rhythm as /players so the two tables sit at the same
           height on the page. */}
       <section className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-3 pb-8 lg:pt-9 lg:pb-10">
         <PageHeading label="Team ratings" />
-        <Suspense fallback={<div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-10 text-center text-ink-muted">Loading teams…</div>}>
+        {/* THE FALLBACK IS THE PRERENDERED PAGE. ExplorerClient reads
+            useSearchParams, so on a static export this boundary's fallback is
+            all the HTML there is — it used to be the words "Loading teams",
+            which is what a crawler saw and what a reader looked at for a
+            second. Now it is the same twenty-five teams, in the same order,
+            computed by the same processTeams the client is about to run. */}
+        <Suspense fallback={<TablePreview {...previewProps} />}>
           <ExplorerClient
             initialTeams={initialTeams}
             teamsIndex={teamsIndex}
