@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import { popoverStyle, usePopoverAnchor } from "@/components/explorer/use-popover-anchor";
 import { ALL_YEARS } from "@/lib/team-filters";
 import { PREVIEW_SEASON } from "@/lib/seasons";
 import { seasonLabel } from "@/lib/league-averages";
@@ -62,7 +64,14 @@ export function MultiYearSelect({
   const [open, setOpen] = useState(false);
   /** Whether the notice has been shown during THIS opening. */
   const [noticed, setNoticed] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  /**
+   * The panel is fixed and portalled, because the toolbar this sits in is
+   * inside a card with `overflow-hidden` — see use-popover-anchor. As an
+   * absolutely-positioned child it was cropped at the card's bottom edge, so
+   * on a table filtered down to a few rows the season list lost everything
+   * below about the fifth season.
+   */
+  const { anchorRef: containerRef, popRef, at } = usePopoverAnchor({ open, width: 240 });
   /**
    * Every open and every close resets it, so the next visit says it again.
    *
@@ -80,7 +89,13 @@ export function MultiYearSelect({
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
-      if (!containerRef.current?.contains(e.target as Node)) { setOpen(false); setNoticed(false); }
+      const t = e.target as Node;
+      // BOTH refs. The panel is portalled to the body, so it is not a
+      // descendant of the wrapper any more and a wrapper-only test reads
+      // every click on a season as a click outside the picker — which closed
+      // it on the first tick of the first checkbox.
+      if (containerRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false); setNoticed(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") { setOpen(false); setNoticed(false); }
@@ -91,7 +106,7 @@ export function MultiYearSelect({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, containerRef, popRef]);
 
   function toggle(year: number) {
     flagNotice();
@@ -140,8 +155,15 @@ export function MultiYearSelect({
         <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted text-[0.7rem]">▾</span>
       </button>
 
-      {open && (
-        <div className="absolute z-50 top-full left-0 mt-1 w-60 bg-card border border-hairline rounded-lg shadow-lg overflow-hidden">
+      {open && at && typeof document !== "undefined" && createPortal(
+        <div
+          ref={popRef}
+          style={popoverStyle(at)}
+          // overflow-y-auto, not overflow-hidden: the anchor hands back the
+          // real gap to the viewport edge as maxHeight, and thirteen seasons
+          // do not always fit in it.
+          className="z-60 bg-card border border-hairline rounded-lg shadow-lg overflow-y-auto overflow-x-hidden"
+        >
           <div className="px-3 pt-2 pb-1 text-[0.65rem] uppercase tracking-widest text-coral font-medium">
             Seasons
           </div>
@@ -182,7 +204,8 @@ export function MultiYearSelect({
             <Chip onClick={selectAll}>All</Chip>
             <Chip onClick={clearAll}>Clear</Chip>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

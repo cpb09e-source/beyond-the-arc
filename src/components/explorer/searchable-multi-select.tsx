@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { popoverStyle, usePopoverAnchor } from "@/components/explorer/use-popover-anchor";
 import { cn } from "@/lib/utils";
 import type { SearchableOption } from "./searchable-select";
 
@@ -71,12 +73,25 @@ export function SearchableMultiSelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
-  // How far to nudge the popover left so it never bleeds off the right edge of
-  // a narrow viewport (the popover is left-anchored to its trigger).
-  const [shiftX, setShiftX] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  /**
+   * Fixed and portalled — see use-popover-anchor for why the card's
+   * overflow-hidden makes that necessary. This replaces a `shiftX` that
+   * nudged the panel left when it would bleed off a narrow viewport: the
+   * anchor clamps to both edges, so the nudge is now part of the placement
+   * rather than a transform applied after it, and the same measurement also
+   * bounds the panel's height instead of letting a 360-team list run past the
+   * bottom of the screen.
+   *
+   * The inline mode matches the trigger's width, which is what `w-full` meant
+   * when the panel was still a child of it.
+   */
+  const { anchorRef: containerRef, popRef, at } = usePopoverAnchor({
+    open,
+    width: inlineSearch ? "trigger" : 240,
+    align,
+  });
   // Ties the inline combobox to the list it controls. useId so two pickers on
   // one page never collide.
   const listboxId = useId();
@@ -95,40 +110,14 @@ export function SearchableMultiSelect({
     requestAnimationFrame(() => inputRef.current?.focus());
   }, []);
 
-  // On open, measure the trigger and shift the (left-anchored) popover left if
-  // it would overflow the viewport. Re-measure on resize while open.
-  /**
-   * MEASURE ONLY WHILE OPEN, and never write state on the way out.
-   *
-   * The old version began `if (!open) { setShiftX(0); return; }`, which set
-   * state synchronously on every close — a render whose only purpose was to
-   * zero a number nothing reads while the popover is shut (the style is only
-   * applied when open). Now closing does nothing and opening measures, which
-   * is also the only moment the measurement can be correct.
-   *
-   * useLayoutEffect, not useEffect: this shifts the panel horizontally, and
-   * doing it after paint is a visible jump.
-   */
-  useLayoutEffect(() => {
-    if (!open || align === "right") return;
-    function reposition() {
-      const el = containerRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      const panelW = 240; // matches w-60
-      const margin = 8;
-      const overflow = rect.left + panelW - (window.innerWidth - margin);
-      setShiftX(overflow > 0 ? -overflow : 0);
-    }
-    reposition();
-    window.addEventListener("resize", reposition);
-    return () => window.removeEventListener("resize", reposition);
-  }, [open, align]);
-
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
-      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+      // Both refs — the panel is portalled, so it is no longer inside the
+      // wrapper and a wrapper-only test closes the menu on its own options.
+      const t = e.target as Node;
+      if (containerRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -139,7 +128,7 @@ export function SearchableMultiSelect({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, containerRef, popRef]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return options;
@@ -273,14 +262,12 @@ export function SearchableMultiSelect({
         </button>
       )}
 
-      {open && (
+      {open && at && typeof document !== "undefined" && createPortal(
         <div
-          className={cn(
-            "absolute z-50 top-full mt-1 max-w-[calc(100vw-2rem)] bg-card border border-hairline rounded-lg shadow-lg overflow-hidden",
-            inlineSearch ? "w-full left-0" : cn("w-60", align === "right" ? "right-0" : "left-0"),
-          )}
+          ref={popRef}
+          className="z-60 flex flex-col bg-card border border-hairline rounded-lg shadow-lg overflow-hidden"
           id={listboxId}
-          style={!inlineSearch && shiftX ? { transform: `translateX(${shiftX}px)` } : undefined}
+          style={popoverStyle(at)}
           role="listbox"
         >
           {!inlineSearch && (
@@ -301,7 +288,7 @@ export function SearchableMultiSelect({
               />
             </div>
           )}
-          <div ref={listRef} className="max-h-72 overflow-y-auto py-1">
+          <div ref={listRef} className="flex-1 min-h-0 max-h-72 overflow-y-auto py-1">
             {filtered.length === 0 ? (
               <div className="px-3 py-4 text-sm text-ink-muted text-center">No matches</div>
             ) : (
@@ -379,7 +366,8 @@ export function SearchableMultiSelect({
               Clear
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+import { popoverStyle, usePopoverAnchor } from "@/components/explorer/use-popover-anchor";
 
 export type SearchableOption = {
   value: string;
@@ -38,7 +40,8 @@ export function SearchableSelect({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  /** Fixed and portalled, for the reason in use-popover-anchor. */
+  const { anchorRef: containerRef, popRef, at } = usePopoverAnchor({ open, width: 288 });
 
   /**
    * Open, cleared, focused — in the handler, not in an effect.
@@ -60,7 +63,10 @@ export function SearchableSelect({
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
-      if (!containerRef.current?.contains(e.target as Node)) setOpen(false);
+      // Both refs: the panel is portalled out of this wrapper.
+      const t = e.target as Node;
+      if (containerRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -71,7 +77,7 @@ export function SearchableSelect({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, containerRef, popRef]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return options;
@@ -137,9 +143,11 @@ export function SearchableSelect({
         <span aria-hidden className="text-ink-muted text-xs">▾</span>
       </button>
 
-      {open && (
+      {open && at && typeof document !== "undefined" && createPortal(
         <div
-          className="absolute z-50 top-full left-0 mt-1 w-72 max-w-[calc(100vw-2rem)] bg-card border border-hairline rounded-lg shadow-lg overflow-hidden"
+          ref={popRef}
+          className="z-60 flex flex-col bg-card border border-hairline rounded-lg shadow-lg overflow-hidden"
+          style={popoverStyle(at)}
           role="listbox"
         >
           <div className="p-2 border-b border-hairline">
@@ -153,7 +161,7 @@ export function SearchableSelect({
               className="w-full h-8 px-2 text-sm rounded border border-hairline bg-paper text-ink focus:outline-none focus:ring-2 focus:ring-coral/40"
             />
           </div>
-          <div ref={listRef} className="max-h-72 overflow-y-auto py-1">
+          <div ref={listRef} className="flex-1 min-h-0 max-h-72 overflow-y-auto py-1">
             {filtered.length === 0 ? (
               <div className="px-3 py-4 text-sm text-ink-muted text-center">No matches</div>
             ) : (
@@ -192,7 +200,8 @@ export function SearchableSelect({
               ))
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

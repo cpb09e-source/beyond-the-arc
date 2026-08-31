@@ -28,12 +28,19 @@ const DURATION = 320;
  * -10px and fades up: the height carries the page below, the transform carries
  * the controls, and the two together are what reads as sliding down.
  *
- * THE OVERFLOW DANCE IS LOAD-BEARING. The inner box has to clip while the row
- * is growing or the controls spill out of a box that has not finished opening.
- * But these bars hold SearchableMultiSelect and MultiYearSelect, whose menus
- * are absolutely positioned and have to escape the box entirely — clip them
- * and the team picker opens into a sliver. So the clip is released a beat
- * after the transition ends, and re-applied the instant a close begins.
+ * THE OVERFLOW DANCE. The inner box has to clip while the row is growing or
+ * the controls spill out of a box that has not finished opening. So the clip
+ * is released a beat after the transition ends, and re-applied the instant a
+ * close begins.
+ *
+ * IT USED TO BE LOAD-BEARING FOR THE MENUS TOO, and is not any more. These
+ * bars hold SearchableMultiSelect and MultiYearSelect, whose panels were
+ * absolutely positioned: clipping them opened the team picker into a sliver,
+ * so the release had to happen or the filter bar was broken. Both now render
+ * fixed and portalled to the body (see use-popover-anchor), which no ancestor
+ * overflow can reach. The release is kept because the clip is only wanted
+ * during the growth anyway — but a menu appearing cut off is no longer a
+ * symptom to look for here.
  *
  * The settle is on a TIMER rather than `transitionend`: reduced-motion users
  * get no transition and therefore no event, and a menu that never un-clips for
