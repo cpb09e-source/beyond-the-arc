@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
 import { SiteLogo } from "@/components/site-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -51,7 +52,16 @@ export function MobileMenu({
    */
   items: ReadonlyArray<
     | { href: string; label: string; children?: undefined }
-    | { href?: undefined; label: string; children: ReadonlyArray<{ href: string; label: string }> }
+    | {
+        href?: undefined;
+        label: string;
+        children: ReadonlyArray<{
+          href: string;
+          label: string;
+          desc?: string;
+          icon?: LucideIcon;
+        }>;
+      }
   >;
   isCurrent: (pathname: string, href: string) => boolean;
   pathname: string;
@@ -195,7 +205,7 @@ export function MobileMenu({
                   // tucked under a row that is already divided from the list,
                   // they read as one group without borrowing the rule that
                   // separates top-level destinations.
-                  <div className="pb-3">
+                  <div className="pb-3 pl-2 pr-1">
                     {item.children.map((k) => {
                       // NOT isCurrent: that one lights the Teams chip for every
                       // page on its menu, which is right for the desktop chip
@@ -203,6 +213,7 @@ export function MobileMenu({
                       // Power Rankings at the same time. A child is current
                       // only if it is the page you are on.
                       const on = k.href === "/" ? pathname === "/" : pathname.startsWith(k.href);
+                      const Icon = k.icon;
                       return (
                         <Link
                           key={k.href}
@@ -210,11 +221,41 @@ export function MobileMenu({
                           onClick={handleClose}
                           aria-current={on ? "page" : undefined}
                           className={cn(
-                            "flex items-center py-2.5 pl-3 text-sm tracking-tight transition-colors",
-                            on ? "text-coral font-semibold" : "text-ink-soft font-medium hover:text-coral",
+                            // THE SAME ROW AS THE DESKTOP PANEL, at the same
+                            // sizes. Ramp and Clerk both carry the icon and the
+                            // blurb straight into the mobile drawer rather than
+                            // flattening to text, and they are right to: the
+                            // phone is where you have the least context about
+                            // which of two similarly-named tables you want.
+                            "flex items-start gap-3 rounded-lg px-2 py-2.5 -mx-1 transition-colors",
+                            on && "bg-coral/[0.07]",
                           )}
                         >
-                          {k.label}
+                          {Icon && (
+                            <span
+                              className={cn(
+                                "mt-px flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 transition-colors",
+                                on
+                                  ? "bg-coral/12 ring-coral/25 text-coral"
+                                  : "bg-ink/[0.06] ring-ink/10 text-ink-soft",
+                              )}
+                            >
+                              <Icon size={17} strokeWidth={1.9} aria-hidden />
+                            </span>
+                          )}
+                          <span className="min-w-0">
+                            <span className={cn(
+                              "block text-sm leading-tight tracking-tight transition-colors",
+                              on ? "text-coral font-semibold" : "text-ink font-semibold",
+                            )}>
+                              {k.label}
+                            </span>
+                            {k.desc && (
+                              <span className="mt-0.5 block text-xs leading-snug text-ink-muted">
+                                {k.desc}
+                              </span>
+                            )}
+                          </span>
                         </Link>
                       );
                     })}

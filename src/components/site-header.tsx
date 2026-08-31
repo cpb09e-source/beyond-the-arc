@@ -5,7 +5,7 @@ import { SiteLogo } from "@/components/site-logo";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
-  Search, ChevronDown, Table2, ListOrdered, Trophy, Users, CalendarRange,
+  Search, ChevronDown, Table2, ListOrdered, Trophy,
   type LucideIcon,
 } from "lucide-react";
 import { SearchDialog } from "@/components/search/search-dialog";
@@ -47,12 +47,23 @@ type SubnavItem = {
  *
  * The rule for anything added here: if the line could be deleted without the
  * reader losing a fact, delete it.
+ *
+ * THE ICON ENCODES THE PAGE TYPE, NOT THE SUBJECT, and that is why the two
+ * menus repeat icons. You already know whether you are looking at teams or
+ * players — you opened the menu that says so — and spending the icon on that
+ * again tells you nothing. What it can tell you is the SHAPE of the page, so
+ * an explorer is a table in both menus and a game log is a ranked list in
+ * both, and the pairing is visible at a glance across the two.
+ *
+ * This started as one icon per page chosen on its own merits, which is how
+ * the two game logs ended up with a calendar and a list between them: the
+ * same kind of page, drawn two different ways, one menu apart.
  */
 const SUBNAV: Record<string, ReadonlyArray<SubnavItem>> = {
   "/": [
     { href: "/", label: "Team Explorer", icon: Table2,
       desc: "Rate and compare full team seasons" },
-    { href: "/teams/games", label: "Team Game Log Explorer", icon: CalendarRange,
+    { href: "/teams/games", label: "Team Game Log Explorer", icon: ListOrdered,
       desc: "The best single-game team performances" },
     { href: "/conferences", label: "Conference Power Rankings", icon: Trophy,
       desc: "How the leagues stack up against each other" },
@@ -60,7 +71,7 @@ const SUBNAV: Record<string, ReadonlyArray<SubnavItem>> = {
   // Players is two tables for the same reason Teams is: the explorer rates a
   // season, the game log rates a night, and neither is a view of the other.
   "/players": [
-    { href: "/players", label: "Player Explorer", icon: Users,
+    { href: "/players", label: "Player Explorer", icon: Table2,
       desc: "Rate and compare full player seasons" },
     { href: "/players/games", label: "Game Log Explorer", icon: ListOrdered,
       desc: "The best single games anyone has had" },
