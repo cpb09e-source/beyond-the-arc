@@ -177,8 +177,7 @@ export function ScheduleTicker({
           // which is the one game anybody scrolls to the end to look at — ends
           // exactly flush with the scroll edge, measured at 0px of overhang. Its
           // ring paints outside the element box, so the right side of that ring
-          // was shaved and the tile read as cut off. The first tile has the same
-          // exposure on the left.
+          // was shaved and the tile read as cut off.
           className="overflow-x-auto overscroll-x-contain select-none cursor-grab p-1 -m-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
           style={{ scrollSnapType: "x proximity" }}
         >
@@ -261,12 +260,10 @@ function GameCell({
         // Tournament cells get a subtle inset wash + hairline ring colored
         // by result — green for a win, red for a loss — so the March
         // Madness stretch reads as a color-coded mini-bracket.
-        // 18/48 rather than 12/35. The tiles were pale enough that the fill
-        // read as tinted paper and the ring did the identifying on its own;
-        // a tournament run is the thing people scroll this strip to find, so
-        // it can afford to be the loudest thing in it.
-        isTourney && game.won === true && "bg-good/18 ring-1 ring-good/48",
-        isTourney && game.won === false && "bg-bad/18 ring-1 ring-bad/48",
+        // 16/45 rather than 12/35. With a brighter token behind them the
+        // tiles can carry a little more fill without turning into blocks.
+        isTourney && game.won === true && "bg-good/16 ring-1 ring-good/45",
+        isTourney && game.won === false && "bg-bad/16 ring-1 ring-bad/45",
         isTourney && game.won === null && "bg-paper-deep ring-1 ring-hairline",
       )}
     >
@@ -284,20 +281,15 @@ function GameCell({
           {game.tournamentRound}
         </span>
       )}
-      {/* THE W/L CHIP BORROWS THE PERCENTILE RAMP'S ENDPOINTS.
-          It was a 22% wash of --good/--bad under text of the same colour,
-          which is a tint of a hue rather than the hue, and next to the solid
-          percentile chips everywhere else on the site it looked washed out.
-          --pct-bg-7 / --pct-fg-7 is the ramp's top stop and --pct-bg-1 /
-          --pct-fg-1 its bottom: a saturated fill under a dark, same-hue
-          label, already tuned for both themes and already what a reader here
-          associates with good and bad. A win is the top of a two-value scale,
-          so it can use the top of the ramp rather than approximating it. */}
       <span
         className={cn(
           "inline-flex items-center justify-center text-[0.55rem] font-semibold tabular w-6 h-4 rounded-sm leading-none pointer-events-none",
-          game.won === true && "bg-[var(--pct-bg-7)] text-[var(--pct-fg-7)]",
-          game.won === false && "bg-[var(--pct-bg-1)] text-[var(--pct-fg-1)]",
+          // STILL A TINT UNDER A COLOURED LETTER. Swapping this for a solid
+          // fill with a dark same-hue label was tried and reverted: it made
+          // the W and the L read as boxes rather than as a green W and a red
+          // L, which is the thing anybody scanning this strip is looking for.
+          game.won === true && "bg-good/22 text-good",
+          game.won === false && "bg-bad/22 text-bad",
           game.won === null && "bg-paper-deep text-ink-muted",
         )}
       >
