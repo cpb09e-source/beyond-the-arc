@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { TeamLogo } from "@/components/team-logo";
 import { midrankPercentileMap } from "@/lib/percentile";
 import { TeamName } from "@/components/team-name";
@@ -16,6 +17,8 @@ import {
   TeamRail,
   TeamBottomBar,
   TAB_ANCHORS,
+  RAIL_WIDTH,
+  RAIL_GAP,
   type TeamTab,
 } from "@/components/teams/team-tabs";
 import { SortableRosterTable } from "@/components/teams/sortable-roster-table";
@@ -469,8 +472,24 @@ export function TeamPageView({
             px-6 mobile inset is the one it always had, and matches the text
             sections below, which add px-2 to the row's px-4 to reach the same
             24px. The tables stay at 16px on purpose. */}
-        <div className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-10 pb-8">
-          <div className="flex flex-wrap items-center gap-6 lg:gap-10">
+        <div className={cn("mx-auto max-w-[108rem] px-6 lg:px-10 pt-10 pb-8 lg:flex", RAIL_GAP)}>
+          {/* A SPACER THE WIDTH OF THE RAIL, so the hero starts where the page
+              content starts rather than where the vertical menu does.
+
+              The hero used to run the full width of the row, which put the
+              crest and the team's name hard against the left edge while every
+              section below them began 232px further in — the page had two left
+              margins and the eye had to find the second one. Indenting the hero
+              gives the whole page one edge, and leaves the corner above the
+              rail empty, which is what a nav column wants anyway.
+
+              An empty div rather than a padding utility because the number is
+              the rail's, not the hero's: it reads RAIL_WIDTH and RAIL_GAP from
+              team-tabs, so the two rows cannot drift apart. And it is behind
+              `showTabs` for the same reason the rail is — a preview page has no
+              rail, so there is nothing to align to. */}
+          {showTabs && <div aria-hidden className={cn("hidden lg:block shrink-0", RAIL_WIDTH)} />}
+          <div className="min-w-0 flex-1 flex flex-wrap items-center gap-6 lg:gap-10">
             {/* Desktop only. Above lg the crest sits beside the whole block and
                 items-center is right, because the block is short relative to a
                 96px mark. */}

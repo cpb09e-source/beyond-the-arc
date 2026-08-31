@@ -160,6 +160,18 @@ function hrefFor(t: (typeof TABS)[number], p: NavProps): string {
  * reaches the top and then holds — a fixed rail on a short viewport would
  * clip its own last item with no way to reach it.
  */
+/**
+ * The rail's width and the gap after it, as classes rather than numbers.
+ *
+ * EXPORTED BECAUSE THE HERO HAS TO MATCH IT. The hero sits in its own row
+ * above this one and indents itself by exactly this much so its left edge
+ * lands on the content column rather than on the rail. Two rows agreeing on a
+ * measurement is the kind of thing that drifts the first time one of them is
+ * touched, so they read the same constants instead of both hardcoding 13rem.
+ */
+export const RAIL_WIDTH = "w-52";
+export const RAIL_GAP = "lg:gap-6";
+
 export function TeamRail(props: NavProps) {
   return (
     <nav
@@ -175,7 +187,7 @@ export function TeamRail(props: NavProps) {
       // read from the section, deliberately: the whole point of one container
       // width is that this navigation holds still between tabs, and matching
       // each tab's own first margin would start it moving again.
-      className="hidden lg:block shrink-0 w-52 mt-5 sticky top-4 self-start z-20"
+      className={cn("hidden lg:block shrink-0 mt-5 sticky top-4 self-start z-20", RAIL_WIDTH)}
     >
       <ul className="flex flex-col gap-0.5">
         {TABS.map((t) => {
