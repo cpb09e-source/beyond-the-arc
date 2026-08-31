@@ -69,7 +69,11 @@ men's teams returned), and rosters for UConn/USC/Notre Dame come back men's.
 Women's coverage would need a different source entirely.
 
 
-### 0. Game Log Explorer — BUILT 2026-08-30, UNCOMMITTED, NOT DEPLOYED
+### 0. Game Log Explorer — BUILT AND COMMITTED 2026-08-30, NOT DEPLOYED
+
+Commits `368bdfe` (mobile menu), `e1ba7f9` (explorer + gating), `357e6c9`
+(archive backup + game-index on R2), `75594d3` (women's feasibility). Not
+pushed. `/players/games` returns 404 in production until the next deploy.
 
 **Both open questions below were decided the same day and are done.** Gated as
 a five-row preview (`GAME_LOG_ACCESS`); corpus gitignored and mirrored to the
@@ -260,7 +264,15 @@ Stripe dashboard, not from here.
 `/.netlify/functions/<name>` 404s. Hit `/api/create-checkout-session`.
 
 
-### 5. Canonical host — FIXED AND BUILT, NOT YET DEPLOYED
+### 5. Canonical host — DONE, LIVE (verified 2026-08-30)
+
+Shipped with the 2026-08-29 deploy. Verified in production:
+`https://btacbb.xyz/robots.txt` says `Host: https://btacbb.xyz`, and
+`https://beyond-the-arc.netlify.app/` now answers **301 → btacbb.xyz**.
+Both hosts no longer serve 200. Nothing left to do here; the history below
+is kept because the failure mode was subtle.
+
+<details><summary>How it was found and fixed</summary>
 
 Found 2026-08-25 while checking `NEXT_PUBLIC_SITE_URL`. The variable was not
 set anywhere, and the fallback is NOT the real domain:
@@ -296,8 +308,7 @@ sitemap.xml  40,022 <loc> on btacbb.xyz,  0 on beyond-the-arc.netlify.app
 og:url       https://btacbb.xyz/teams/vermont/2026/   (deep pages too)
 ```
 
-**Still not live** — it takes the deploy. The 301 in netlify.toml also only
-takes effect once deployed, so until then both hosts keep answering 200.
+</details>
 
 ### 6. Enforcement layer — RESEARCH DONE, PLAN STILL OWED
 
