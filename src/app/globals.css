@@ -22,8 +22,15 @@
   --coral-soft: #3f8ee6;     /* hover/secondary accent */
   --court: #d4a574;          /* hardwood accent (subtle dividers) */
   --court-ink: #8a6224;      /* hardwood dark enough to set text on a court tint */
-  --good: #4a7c59;           /* chart positive — forest green */
-  --bad: #b94c4c;            /* chart negative — muted red */
+  /* MORE CHROMA THAN THE PAIR THEY REPLACE, AND MORE CONTRAST — the old
+     #4a7c59 / #b94c4c read as sage and brick, which at the 12-20% fills these
+     get used at came out grey and pink rather than green and red. Measured
+     against --paper: 4.65 and 5.23, where the old pair sat at 4.55 and 4.68,
+     so the legibility of every +/- number and percentile chip using them as
+     TEXT went up rather than down. Saturation was the dull part, not
+     lightness; pushing lightness instead would have cost the contrast. */
+  --good: #17804a;           /* chart positive — green */
+  --bad: #c0332e;            /* chart negative — red */
   /* Trophy gold, for the one thing on the site that is genuinely a trophy:
      a national title, a runner-up, a top-100 recruit rank. Kept separate from
      --court, which is hardwood and deliberately too muted to carry a badge. */
@@ -132,8 +139,10 @@
   --coral-soft: #84baff;
   --court: #b88a52;
   --court-ink: #d9ae6e;      /* lighter than --court here — it sets text on a dark tint */
-  --good: #5fb87a;
-  --bad: #e2706e;
+  /* Same move as the light pair: more chroma, and 8.28 / 6.28 against the
+     #1C1C1C ground where the old values sat at 7.00 / 5.50. */
+  --good: #4ecb84;
+  --bad: #ff6f6a;
   /* Lifted to carry on #1C1C1C, same as the accent above it. --gold-ink stays
      dark because it only ever sits ON a gold fill, which is light in both
      themes. */
