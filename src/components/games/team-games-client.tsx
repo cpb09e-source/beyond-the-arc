@@ -47,7 +47,33 @@ import {
 const ROW_HOVER = "group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))]";
 const DEFAULT_YEAR = 2026;
 const LIMIT_OPTIONS = [50, 100, 250, 500];
-const BASE = "/teams/games";
+const DEFAULT_BASE = "/teams/games";
+
+/**
+ * Locks the explorer to one team's season.
+ *
+ * WHY THE TEAM PAGE RUNS THIS COMPONENT RATHER THAN ITS OWN TABLE. A team's
+ * game log and this explorer are the same object at two widths — same rows,
+ * same views, same columns, same percentile chips against the same cohort.
+ * Building a second one would have meant two tables to keep in step, which is
+ * exactly the trap game-stat-rows was extracted to avoid, and they would have
+ * drifted the first time a view gained a column.
+ *
+ * So the scoped mode hides the three pickers that would contradict the page
+ * around it — the season is in the URL, the team is the page — and leaves
+ * everything else exactly as it is on /teams/games.
+ *
+ * THE TEAM IS MATCHED BY SLUG, not by name. The page knows "Duke" from
+ * teams-all.json and the index knows it from the game logs; those agree today
+ * for every team, but a slug comparison cannot be broken by an ampersand or a
+ * saint's abbreviation the way a string equality can.
+ */
+export type TeamGamesScope = {
+  slug: string;
+  season: number;
+  /** Where sort links and filter edits write. The team page's own URL. */
+  basePath: string;
+};
 
 /** Two filters are the same question. Used to toggle shortcuts on and off. */
 const sameFilter = (a: TeamGameFilter, b: TeamGameFilter) =>
@@ -76,7 +102,7 @@ type Spec = {
   sortDir: "asc" | "desc";
 };
 
-function parseSpec(params: URLSearchParams): Spec {
+function parseSpec(params: URLSearchParams, fallbackSort: { by: string; dir: "asc" | "desc" }): Spec {
   const years = (params.get("ys") ?? "").split(",").map((s) => Number(s.trim()))
     .filter((n) => TEAM_GAME_SEASONS.includes(n));
   const limit = Number(params.get("n"));
@@ -95,8 +121,8 @@ function parseSpec(params: URLSearchParams): Spec {
       .slice(0, MAX_GAME_COLS),
     filters: parseTeamFilters(params.get("f")),
     limit: LIMIT_OPTIONS.includes(limit) ? limit : 100,
-    sortBy: sortBy && teamGameStat(sortBy) ? sortBy : "net",
-    sortDir: order === "asc" ? "asc" : "desc",
+    sortBy: sortBy && teamGameStat(sortBy) ? sortBy : fallbackSort.by,
+    sortDir: order ? (order === "asc" ? "asc" : "desc") : fallbackSort.dir,
   };
 }
 
@@ -198,17 +224,60 @@ function seasonPercentiles(pack: TeamGamePack, stat: { key: string; get: (r: num
 
 // ── The page ───────────────────────────────────────────────────────────────
 
-export function TeamGamesClient() {
+export function TeamGamesClient({ scope }: { scope?: TeamGamesScope } = {}) {
   const router = useRouter();
   const search = useSearchParams();
   const params = useMemo(() => new URLSearchParams(search.toString()), [search]);
-  const spec = useMemo(() => parseSpec(params), [params]);
+  const base = scope?.basePath ?? DEFAULT_BASE;
+  /**
+   * DEFAULT SORT DIFFERS BY MODE, and it is the one thing that should.
+   *
+   * The explorer opens on NET because its question is "which were the best
+   * games", over 139,000 of them. A team's own log is a log: 38 rows in the
+   * order they happened, which is how anybody reads a schedule and how the
+   * ticker directly above it is already laid out. Opening it on NET would put
+   * the November cupcake first and bury the game the reader came to find.
+   */
+  const spec = useMemo(
+    () => parseSpec(params, scope ? { by: "date", dir: "asc" } : { by: "net", dir: "desc" }),
+    [params, scope],
+  );
 
   const { paid, signedIn } = useEntitlement();
-  const previewCapped = effectiveGameLogAccess(paid).kind === "preview";
+  /**
+   * NOT GATED ON A TEAM PAGE. The schedule ticker eight inches above this
+   * shows every result of the same season for free, and the Pass is sold on
+   * the cross-team, cross-season search — "who beat a ranked team by 20" over
+   * twelve years — not on a team's own 38 games. Adding "games" to
+   * PAID_TEAM_TABS is the one line that reverses this.
+   */
+  const previewCapped = !scope && effectiveGameLogAccess(paid).kind === "preview";
+
+  const [packs, setPacks] = useState<Map<number, TeamGamePack>>(new Map());
 
   /** What the table runs, as opposed to what the reader asked for. */
   const scoped = useMemo((): Spec => {
+    if (scope) {
+      /**
+       * The slug resolves against the pack, which means it resolves to
+       * NOTHING until the pack lands. That is correct rather than merely
+       * tolerable: with no pack there are no rows to show either way, and the
+       * table is already showing its loading state. Resolving to a name we
+       * guessed would risk showing the wrong team for one frame.
+       */
+      const names = (packs.get(scope.season)?.teams.names ?? [])
+        .filter((n) => teamSlug(n) === scope.slug);
+      return {
+        ...spec,
+        years: [scope.season],
+        confs: [],
+        teams: names,
+        // A season is at most about 40 rows, so the reader never needs to ask
+        // for more of them and the "Top 100" selector is noise. 500 is the
+        // cap only in the sense that nothing reaches it.
+        limit: 500,
+      };
+    }
     if (!previewCapped) return spec;
     return {
       ...spec,
@@ -217,7 +286,7 @@ export function TeamGamesClient() {
       sortDir: "desc",
       limit: FREE_LIMITS.previewRows,
     };
-  }, [spec, previewCapped]);
+  }, [spec, previewCapped, scope, packs]);
 
   const view = useMemo(() => teamGameViewByKey(spec.view), [spec.view]);
 
@@ -242,7 +311,6 @@ export function TeamGamesClient() {
   );
   const cols = useMemo(() => [...pinnedCols, ...viewCols], [pinnedCols, viewCols]);
 
-  const [packs, setPacks] = useState<Map<number, TeamGamePack>>(new Map());
   const pending = useMemo(() => scoped.years.filter((y) => !packs.has(y)), [scoped.years, packs]);
 
   useEffect(() => {
@@ -294,8 +362,8 @@ export function TeamGamesClient() {
       if (next.limit === 100) p.delete("n"); else p.set("n", String(next.limit));
     }
     const qs = p.toString();
-    router.replace(qs ? `${BASE}?${qs}` : BASE, { scroll: false });
-  }, [params, router]);
+    router.replace(qs ? `${base}?${qs}` : base, { scroll: false });
+  }, [params, router, base]);
 
   // ── Option lists ─────────────────────────────────────────────────────────
   const confOptions = useMemo(() => {
@@ -376,19 +444,41 @@ export function TeamGamesClient() {
       const v = st?.fmt === "pct1" ? `${Math.round(f.value * 100)}%` : f.value;
       return `${st?.label ?? f.stat} ${TEAM_OP_LABEL[f.op]} ${v}`;
     }
-    return `${view.label} · ${seasonLabel(spec.years[0] ?? DEFAULT_YEAR)}`;
-  }, [activePresets, spec.filters, spec.years, view.label]);
+    return `${view.label} · ${seasonLabel(scope?.season ?? spec.years[0] ?? DEFAULT_YEAR)}`;
+  }, [activePresets, spec.filters, spec.years, view.label, scope]);
+
+  /**
+   * A saved view is a set of COLUMNS AND QUESTIONS, not a set of teams.
+   *
+   * Both modes share one saved list on purpose — the columns you want to see
+   * a game in are the columns you want everywhere — so the scope keys are
+   * stripped in both directions: applying an explorer view to a team page
+   * must not navigate that page to Kansas, and saving from a team page must
+   * not bake Duke into a view the reader later opens on /teams/games.
+   */
+  const stripScopeKeys = useCallback((query: string) => {
+    if (!scope) return query;
+    const p = new URLSearchParams(query);
+    for (const k of ["ys", "team", "conf", "n"]) p.delete(k);
+    return p.toString();
+  }, [scope]);
 
   const applySaved = useCallback((query: string) => {
-    router.replace(query ? `${BASE}?${query}` : BASE, { scroll: false });
-  }, [router]);
+    const q = stripScopeKeys(query);
+    router.replace(q ? `${base}?${q}` : base, { scroll: false });
+  }, [router, base, stripScopeKeys]);
 
   // ── Export ───────────────────────────────────────────────────────────────
   const exportEntity = useMemo((): ExportEntity<Hit> => ({
     title: "Team Game Log Explorer",
     sheetName: "Team games",
     wideHeader: "Team",
-    fileStem: "team-game-log",
+    // The scoped download is one team's season, so it says so in the filename
+    // rather than landing in the reader's downloads folder as the fourth
+    // "team-game-log.xlsx". The Team and Season columns stay in the sheet even
+    // though every row repeats them — a spreadsheet that has left this site
+    // cannot rely on the page it came from to say what it is.
+    fileStem: scope ? `${scope.slug}-${scope.season}-game-log` : "team-game-log",
     identity: [
       { header: "Team", width: 20, get: (h) => h.pack.teams.names[h.row[T.t]!] ?? "—" },
       { header: "Conf", get: (h) => h.pack.teams.confs[h.row[T.t]!] ?? "" },
@@ -401,7 +491,7 @@ export function TeamGamesClient() {
     ],
     num: (h, key) => teamGameStat(key)?.get(h.row) ?? null,
     pctOf: () => null,
-  }), []);
+  }), [scope]);
 
   /**
    * Export columns for ANY view, with the reader's pins leading.
@@ -429,9 +519,9 @@ export function TeamGamesClient() {
 
   const exportMeta = useCallback((label: string) => ({
     viewLabel: label,
-    seasons: spec.years.length === 1 ? seasonLabel(spec.years[0]!) : `${spec.years.length} seasons`,
-    conference: spec.confs.length ? spec.confs.join(", ") : "All conferences",
-    teams: spec.teams.length ? spec.teams.join(", ") : "All teams",
+    seasons: scoped.years.length === 1 ? seasonLabel(scoped.years[0]!) : `${scoped.years.length} seasons`,
+    conference: scoped.confs.length ? scoped.confs.join(", ") : "All conferences",
+    teams: scoped.teams.length ? scoped.teams.join(", ") : "All teams",
     filters: spec.filters.length
       ? spec.filters.map((f) => `${teamGameStat(f.stat)?.label ?? f.stat} ${TEAM_OP_LABEL[f.op]} ${f.value}`)
       : ["No filters"],
@@ -441,7 +531,7 @@ export function TeamGamesClient() {
     // rather than absent.
     search: "",
     url: typeof window === "undefined" ? "" : window.location.href,
-  }), [spec]);
+  }), [spec, scoped]);
 
   const buildExport = useCallback((): ExportInput<Hit> => ({
     cols: exportColsFor(view), rows: hits, entity: exportEntity, meta: exportMeta(view.label),
@@ -484,9 +574,30 @@ export function TeamGamesClient() {
   const busy = pending.length > 0;
   const multiYear = scoped.years.length > 1;
 
+  /**
+   * Identity columns, for the colSpan of the empty and loading rows: #, Team,
+   * W/L, Game, Site, Opponent, Date and the filler cell that eats the slack.
+   * The scoped table drops Team, because every row of it is the same team.
+   */
+  const idCols = scope ? 7 : 8;
+
   return (
-    <div className="bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5 mt-6 max-md:mt-2 -mx-6 lg:mx-0">
+    <div className={cn(
+      "bg-card border border-ink/10 border-x-0 lg:border-x rounded-none lg:rounded-xl shadow-md overflow-hidden ring-0 lg:ring-1 ring-ink/5",
+      // The explorer is the page, so it bleeds to the edge of a phone and sets
+      // its own top margin. Inside a team page it is one section among seven,
+      // and the section owns the spacing — otherwise it sits 24px lower than
+      // Roster does and 24px out of line with everything above it.
+      scope ? "mt-0" : "mt-6 max-md:mt-2 -mx-6 lg:mx-0",
+    )}>
       <div className="px-3 lg:px-4 py-2.5 border-b border-hairline flex items-center flex-wrap gap-x-3 gap-y-2">
+        {/* SEASON, CONFERENCE AND TEAM ARE THE PAGE. A team page states all
+            three in its hero and its URL, so a picker for any of them is an
+            invitation to contradict the page you are on — pick Kansas here and
+            the heading still says Duke. The Opponent picker survives because
+            it is the one of the four that asks something this page has not
+            already answered. */}
+        {!scope && (<>
         <label className="inline-flex items-center gap-1.5 min-w-0">
           <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">Seasons</span>
           <MultiYearSelect
@@ -514,6 +625,7 @@ export function TeamGamesClient() {
             renderIcon={(o) => <TeamLogo name={o.value} size={18} />}
           />
         </label>
+        </>)}
 
         <label className="inline-flex items-center gap-1.5 min-w-0">
           <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">Opp</span>
@@ -539,7 +651,7 @@ export function TeamGamesClient() {
         </label>
 
         <SavedFiltersMenu
-          currentQuery={params.toString()}
+          currentQuery={stripScopeKeys(params.toString())}
           suggestedName={suggestedName}
           onApply={applySaved}
           scope="team-games"
@@ -551,7 +663,7 @@ export function TeamGamesClient() {
           build={buildExport}
           buildAll={buildExportAll}
           rowCount={hits.length}
-          colCount={cols.length + 8}
+          colCount={cols.length + idCols}
           disabled={busy || hits.length === 0}
         />
 
@@ -613,7 +725,7 @@ export function TeamGamesClient() {
            The player log lost its own box in the same pass. */
         trailing={
           <>
-            {!previewCapped && (
+            {!previewCapped && !scope && (
               <select
                 value={spec.limit}
                 onChange={(e) => update({ limit: Number(e.target.value) })}
@@ -636,14 +748,20 @@ export function TeamGamesClient() {
           <thead>
             <tr>
               <th className="sticky top-0 left-0 z-40 w-10 min-w-10 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
-              <th className="sticky top-0 z-40 bg-paper-deep border-b border-hairline px-2 sm:px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Team</th>
+              {/* Dropped when the table is one team's: thirty-eight rows of
+                  the same crest and the same word is a column that carries no
+                  information and costs the Opponent column its width. The
+                  row-number cell keeps the sticky left edge either way. */}
+              {!scope && (
+                <th className="sticky top-0 z-40 bg-paper-deep border-b border-hairline px-2 sm:px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Team</th>
+              )}
               <SortableTh
                 statKey="won"
                 label="W/L"
                 title="Sort wins to the top"
                 defaultDir="desc"
                 align="left"
-                basePath={BASE}
+                basePath={base}
                 defaultSort={scoped.sortBy}
                 idleArrows
                 locked={previewCapped}
@@ -656,9 +774,14 @@ export function TeamGamesClient() {
                 statKey="date"
                 label="Date"
                 title="Sort by date"
-                defaultDir="desc"
+                // Matches the default sort, which differs by mode — see the
+                // note on `spec`. With `desc` here the scoped table opened in
+                // season order under a header arrow pointing the other way,
+                // because this is also what SortableTh reads when the URL
+                // carries no `order` of its own.
+                defaultDir={scope ? "asc" : "desc"}
                 align="left"
-                basePath={BASE}
+                basePath={base}
                 defaultSort={scoped.sortBy}
                 idleArrows
                 locked={previewCapped}
@@ -674,7 +797,7 @@ export function TeamGamesClient() {
                   label={c.label}
                   title={c.title}
                   defaultDir={c.lowerBetter ? "asc" : "desc"}
-                  basePath={BASE}
+                  basePath={base}
                   defaultSort={scoped.sortBy}
                   idleArrows
                   locked={previewCapped}
@@ -686,9 +809,9 @@ export function TeamGamesClient() {
           </thead>
           <tbody>
             {busy ? (
-              <tr><td colSpan={cols.length + 8} className="px-4 py-16 text-center text-ink-muted">Loading team games…</td></tr>
+              <tr><td colSpan={cols.length + idCols} className="px-4 py-16 text-center text-ink-muted">Loading team games…</td></tr>
             ) : hits.length === 0 ? (
-              <tr><td colSpan={cols.length + 8} className="px-4 py-12 text-center text-ink-soft">No game matches these filters.</td></tr>
+              <tr><td colSpan={cols.length + idCols} className="px-4 py-12 text-center text-ink-soft">No game matches these filters.</td></tr>
             ) : (
               hits.map((h, i) => {
                 const zebra = i % 2 === 0 ? "bg-paper" : "bg-card";
@@ -705,19 +828,21 @@ export function TeamGamesClient() {
                     <td className={cn("sticky left-0 z-20 w-10 min-w-10 px-1 sm:px-2 py-1.5 text-center text-ink-muted tabular text-xs font-semibold transition-colors", zebra, ROW_HOVER)}>
                       {i + 1}
                     </td>
-                    <td className={cn("sticky z-20 px-2 sm:px-3 py-1.5 whitespace-nowrap transition-colors", zebra, ROW_HOVER)}>
-                      <span className="inline-flex items-center gap-2 min-w-0">
-                        <TeamLogo name={team} size={20} />
-                        <Link
-                          href={`/teams/${teamSlug(team)}/${pack.season}/`}
-                          title={`${team} — ${confDisplay(conf) || conf}`}
-                          prefetch={false}
-                          className="font-medium text-ink hover:text-coral transition-colors"
-                        >
-                          {team}
-                        </Link>
-                      </span>
-                    </td>
+                    {!scope && (
+                      <td className={cn("sticky z-20 px-2 sm:px-3 py-1.5 whitespace-nowrap transition-colors", zebra, ROW_HOVER)}>
+                        <span className="inline-flex items-center gap-2 min-w-0">
+                          <TeamLogo name={team} size={20} />
+                          <Link
+                            href={`/teams/${teamSlug(team)}/${pack.season}/`}
+                            title={`${team} — ${confDisplay(conf) || conf}`}
+                            prefetch={false}
+                            className="font-medium text-ink hover:text-coral transition-colors"
+                          >
+                            {team}
+                          </Link>
+                        </span>
+                      </td>
+                    )}
                     <td className={cn("px-2 py-1.5 text-center text-xs transition-colors", ROW_HOVER)}>
                       <span className={cn("font-semibold", won ? "text-good" : "text-ink-muted")}>
                         {won ? "W" : "L"}

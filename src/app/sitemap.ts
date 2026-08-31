@@ -75,7 +75,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
-  // /teams/<slug>/<year>/{roster,history,shooting,lineups,on-off} — the tab
+  // /teams/<slug>/<year>/{games,roster,history,shooting,lineups,on-off} — the tab
   // routes. Indexing them is the entire reason they are routes rather than
   // client-side tabs, so they belong here.
   //
@@ -85,7 +85,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // not emit would be a sitemap full of 404s, so both sides go through the
   // same helper rather than reimplementing the rule.
   for (const { slug, year } of await tabbedSeasonParams()) {
-    for (const seg of ["roster", "history", "shooting", "lineups", "on-off"]) {
+    for (const seg of ["games", "roster", "history", "shooting", "lineups", "on-off"]) {
       entries.push({
         url: `${BASE_URL}/teams/${slug}/${year}/${seg}/`,
         lastModified: now,

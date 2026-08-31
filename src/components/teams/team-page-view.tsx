@@ -33,6 +33,7 @@ import type { AssistNetwork, ClockSplits } from "@/lib/static-data";
 import { ScheduleTicker } from "@/components/teams/schedule-ticker";
 import { TeamStatsPanel, type TeamSplits } from "@/components/teams/team-stats-panel";
 import { FindGameTrigger } from "@/components/teams/find-game-trigger";
+import { TeamGameLogSection } from "@/components/teams/team-game-log-section";
 import { TourneyTimeline } from "@/components/teams/tourney-timeline";
 import { PlayerHeadshotStrip } from "@/components/teams/player-headshot-strip";
 import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog, RankedStat } from "@/lib/static-data";
@@ -450,6 +451,7 @@ export function TeamPageView({
   const showAll = tab === "all";
   const show = {
     overview: showAll || tab === "overview",
+    games:    showAll || tab === "games",
     roster:   showAll || tab === "roster",
     history:  showAll || tab === "history",
     shooting: showAll || tab === "shooting",
@@ -580,7 +582,13 @@ export function TeamPageView({
                     </span>
                   );
                 })()}
-                {!preview && (
+                {/* PARKED, not deleted — same treatment as the tournament
+                    timeline below. The Game Log section now answers the same
+                    question in the page rather than in a modal over it, and
+                    with filters, columns and sorting the button's own dialog
+                    does not have. Flip the `false` to bring it back; the props
+                    it needs are all still in scope. */}
+                {false && !preview && (
                   <span className="order-3 lg:order-none">
                     <FindGameTrigger
                       teamId={current.id}
@@ -705,6 +713,39 @@ export function TeamPageView({
           where that renders. */}
       {show.overview && !preview && (
         <section className="px-2 lg:px-0 mt-8">{ranksBlock}</section>
+      )}
+
+      {/* Game Log — the explorer, scoped to this team-season.
+
+          WHERE IT WRITES ITS STATE. Sorting a column and adding a filter are
+          URL changes, and the URL differs by mode: a tab route owns
+          /teams/<slug>/<year>/games, while a one-page season owns the season
+          page itself and this section is an anchor inside it. Passing the
+          wrong one would send a reader to a 404 on their first click of a
+          column header, so it is derived from the same `showAll` the sections
+          are, rather than assumed.
+
+          Not on preview pages: they have no games. */}
+      {!preview && show.games && (
+        <section id={TAB_ANCHORS.games} className="px-2 lg:px-0 mt-5 mb-20 scroll-mt-20">
+          <div className="flex items-baseline gap-3 mb-3">
+            <span className="text-[0.65rem] uppercase tracking-widest text-coral font-bold">
+              Game Log
+            </span>
+            <span className="text-[0.6rem] text-ink-muted hidden sm:inline">
+              every game of the season · filter, sort, add columns
+            </span>
+          </div>
+          <TeamGameLogSection
+            slug={slug}
+            season={current.year}
+            basePath={
+              showAll
+                ? (overviewHref ?? `/teams/${slug}/${current.year}/`)
+                : `/teams/${slug}/${current.year}/games/`
+            }
+          />
+        </section>
       )}
 
       {/* Preview rosters render above, right under the schedule. */}

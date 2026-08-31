@@ -2,18 +2,18 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 /**
- * Navigation for a team page's six sections.
+ * Navigation for a team page's seven sections.
  *
  * TWO SHAPES, ONE LIST. Above lg it is a vertical rail beside the content;
  * below lg it is a bar fixed to the bottom of the screen. Both render the same
  * TABS array in the same order, so there is one place to add a section.
  *
- * WHY IT STOPPED BEING A STRIP. Six labels do not fit across a phone. The old
- * strip scrolled horizontally, which meant On/Off sat past the right edge with
- * nothing but a scrollbar to say so — the last two sections were effectively
- * undiscoverable on the device most people read on. A bottom bar fits all six
- * at icon size, never scrolls, and sits under the thumb instead of at the top
- * of a page the reader has already scrolled past.
+ * WHY IT STOPPED BEING A STRIP. Six labels did not fit across a phone, and
+ * there are seven now. The old strip scrolled horizontally, which meant On/Off
+ * sat past the right edge with nothing but a scrollbar to say so — the last
+ * two sections were effectively undiscoverable on the device most people read
+ * on. A bottom bar fits them all, never scrolls, and sits under the thumb
+ * instead of at the top of a page the reader has already scrolled past.
  *
  * THE RAIL IS ON THE LEFT, AND ITS POSITION NEVER MOVES. That second part is
  * why the sections all share one max-width now. They used to differ — 88rem for
@@ -35,11 +35,13 @@ import { cn } from "@/lib/utils";
  * Preview pages get no navigation at all — see the note in team-tab-route.ts.
  */
 
-export type TeamTab = "overview" | "roster" | "history" | "shooting" | "lineups" | "onoff";
+export type TeamTab =
+  | "overview" | "games" | "roster" | "history" | "shooting" | "lineups" | "onoff";
 
 /** Anchor ids, also used as the section ids in team-page-view. */
 export const TAB_ANCHORS: Record<TeamTab, string> = {
   overview: "overview",
+  games: "game-log",
   roster: "roster",
   history: "school-history",
   shooting: "shooting",
@@ -53,9 +55,10 @@ export const TAB_ANCHORS: Record<TeamTab, string> = {
  * below it, and a table of contents in a different order than its contents is
  * worse than none.
  *
- * `short` is the bottom bar's label. A phone gives each of six items about
- * 62px, so "School History" and "Shooting" have to shorten — and "Shots" is
- * what the tab is actually about, not an abbreviation of the word above it.
+ * `short` is the bottom bar's label. A phone gives each of seven items about
+ * 55px, so "School History", "Shooting" and "Game Log" have to shorten — and
+ * "Shots" is what the tab is actually about, not an abbreviation of the word
+ * above it.
  */
 const TABS: Array<{
   key: TeamTab;
@@ -72,6 +75,28 @@ const TABS: Array<{
         <rect x="8.9" y="2.5" width="4.6" height="4.6" rx="1" />
         <rect x="2.5" y="8.9" width="4.6" height="4.6" rx="1" />
         <rect x="8.9" y="8.9" width="4.6" height="4.6" rx="1" />
+      </>
+    ),
+  },
+  {
+    // SECOND, not last. The game log is the season's record of what happened,
+    // so it belongs against Overview — everything below it (roster, shooting,
+    // lineups) explains the games rather than listing them. It is also the
+    // section that answers the question the schedule ticker in the hero raises
+    // and cannot finish: the ticker shows 38 results in a strip you drag, this
+    // is the same 38 with the box beside them.
+    //
+    // "Games" on the bottom bar. Seven labels across a 390px phone is about
+    // 55px each — "Overview" still sets at roughly 53 — so the long form
+    // would have been the one item that clipped.
+    key: "games", label: "Game Log", short: "Games", segment: "games",
+    // A list with markers, not another table glyph: the site header already
+    // spends Table2 on the two explorers and ListOrdered on the two game logs,
+    // and this is the same object as those, one team narrower.
+    icon: (
+      <>
+        <path d="M2.6 4.4h1.3M2.6 8h1.3M2.6 11.6h1.3" />
+        <path d="M6.8 4.4h6.6M6.8 8h6.6M6.8 11.6h6.6" />
       </>
     ),
   },
@@ -240,14 +265,14 @@ export function TeamRail(props: NavProps) {
 /**
  * The bottom bar. Below lg only.
  *
- * TYPE, NOT ICONS. It used to set an icon over a 9.6px label in each of six
- * cells, which is the stock phone tab bar and reads like one. The label had to
- * be that small because six of them plus six glyphs is what fits, so the type
+ * TYPE, NOT ICONS. It used to set an icon over a 9.6px label in each cell,
+ * which is the stock phone tab bar and reads like one. The label had to be
+ * that small because six of them plus six glyphs is what fits, so the type
  * size was a consequence of the shape rather than a decision.
  *
  * Dropping the glyphs buys the labels their size back and lets the bar be what
  * this page actually needs: an index. A team page is tables, not an app, and
- * six section names in small caps under an accent rule is how a printed
+ * seven section names in small caps under an accent rule is how a printed
  * programme would list them. The icons were the weaker half anyway — a circle
  * inside a circle for Shooting and two overlapping discs for On/Off are marks
  * you learn from the label beneath them, not marks that save you reading it.
@@ -306,13 +331,29 @@ export function TeamBottomBar(props: NavProps) {
                 prefetch={false}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "relative flex items-center justify-center h-[2.875rem] px-0.5 transition-colors",
-                  // 0.625rem uppercase with a hair of tracking. Six labels
-                  // across 390px leaves about 62px each and "Overview" is the
-                  // longest — it sets at roughly 53px here, so nothing clips.
+                  "relative flex items-center justify-center h-[2.875rem] px-0 transition-colors",
+                  // 0.5625rem uppercase with a hair of tracking, AND THE
+                  // NUMBERS ARE MEASURED RATHER THAN GUESSED.
+                  //
+                  // Seven labels across a 390px phone is a 54px cell. At the
+                  // 0.625rem/0.04em this used to set, "OVERVIEW" measures 59px
+                  // and was quietly truncating — six labels fitted, seven do
+                  // not. At 0.5625rem/0.03em it measures 52, and dropping the
+                  // cell's own px-0.5 gives back the 4px that padding was
+                  // taking, so the longest label clears by two. Every other
+                  // label is 33-44px and has room to spare.
+                  //
+                  // The alternative was shortening "Overview" the way Shooting
+                  // and School History are shortened, and it was rejected: the
+                  // bar is the phone's only view of this navigation, and the
+                  // one item a reader taps most should not be the one whose
+                  // name disagrees with the rail. A pixel of type size is the
+                  // cheaper thing to spend. There is no room for an eighth
+                  // section either way.
+                  //
                   // Uppercase is doing real work: it evens out the ascenders so
-                  // six words of different shapes read as one row of equals.
-                  "text-[0.625rem] font-bold uppercase tracking-[0.04em] whitespace-nowrap truncate",
+                  // words of different shapes read as one row of equals.
+                  "text-[0.5625rem] font-bold uppercase tracking-[0.03em] whitespace-nowrap truncate",
                   isActive ? "" : "text-ink-muted",
                 )}
                 style={isActive ? { color: "var(--accent, var(--color-coral))" } : undefined}
