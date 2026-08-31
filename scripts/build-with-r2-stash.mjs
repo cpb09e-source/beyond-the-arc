@@ -42,6 +42,7 @@ const STRIP_DIRS = [
   // Added 2026-08-30 with the Game Log Explorer. 80 MB in twelve files: not a
   // file-count problem like the rest of this list, a git-history one.
   "data/game-index",
+  "data/team-game-index",
 ];
 
 /**

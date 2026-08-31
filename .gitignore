@@ -98,3 +98,6 @@ gated-data/
 # scripts/build-game-index.mjs and served from R2 in production. Tracking it
 # would write 80 MB into git history on every rebuild.
 /public/data/game-index/
+
+# Team Game Log corpus — 19 MB in 12 files, rebuilt in full, served from R2.
+/public/data/team-game-index/

@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 const SUBNAV: Record<string, ReadonlyArray<{ href: string; label: string }>> = {
   "/": [
     { href: "/", label: "Team Explorer" },
+    { href: "/teams/games", label: "Team Game Log Explorer" },
     { href: "/conferences", label: "Conference Power Rankings" },
   ],
   // Players is two tables for the same reason Teams is: the explorer rates a

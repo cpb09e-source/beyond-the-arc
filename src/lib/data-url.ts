@@ -40,6 +40,9 @@ const R2_DIRS = [
   // and public/data is tracked in git — so shipping it through the deploy
   // would write 80 MB into history every time the corpus is regenerated.
   "/data/game-index/",
+  // Its team-side twin: twelve files, 1.7 MB each, same git-history
+  // argument.
+  "/data/team-game-index/",
 ] as const;
 
 export function dataUrl(path: string): string {
