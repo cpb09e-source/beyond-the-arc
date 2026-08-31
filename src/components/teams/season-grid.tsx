@@ -88,42 +88,34 @@ function winsOf(record: string | null): number {
 
 /** One opaque hover fill so the frozen and scrolling halves read as one row. */
 /**
- * The right edge of the frozen Season column.
+ * The right edge of the frozen Season column. A hairline, and nothing else.
  *
- * The column is sticky and everything else scrolls UNDER it, which worked
- * silently until the seed chip arrived: the chip sits at the cell's right edge,
- * and a record emerging from underneath came out flush against it with nothing
- * between them. It reads as the seed bleeding into the record — measured, the
- * chip ends 9px short of the boundary, so the two are never actually
- * overlapping, but 9px of gap is not enough to say so.
+ * IT USED TO CAST A SHADOW, and the argument for one is on the record: the
+ * seed chip sits at this cell's right edge, and a record emerging from
+ * underneath comes out close to it — measured, the chip ends 9px short of the
+ * boundary, never actually overlapping, but 9px is not much gap to say so. The
+ * shadow was there to make the edge read as something content passes BEHIND
+ * rather than as a column rule.
  *
- * A hairline alone did not carry it. The shadow is what makes the edge read as
- * something content passes BEHIND rather than as a column rule, and the extra
- * right padding gives the chip room so the emerging text is never within a few
- * pixels of it.
+ * It did not survive contact with a phone. At 6px of blur it was the widest
+ * soft thing on the screen, and turning it down to a 2px hint did not save it
+ * either: the real problem was that it had nothing to agree with. This is the
+ * only sticky column on the site — the explorer, /players and both game logs
+ * all have one — that treated its edge as anything but an opaque background
+ * and a rule. One table wearing a depth effect the other four do not is a
+ * inconsistency you notice before you notice what it was for.
  *
- * WIDENED AGAIN 2026-08-31, on a phone screenshot where the chip looked sliced
- * by the edge. Measured in Chrome at 390px the chip clears it by 12.7px and
- * renders clean at every scroll position, so the slicing is most likely an iOS
- * sticky-repaint artifact during momentum scroll — the sticky cell lags a frame
- * and the shadow paints across it. That is not something CSS can assert away,
- * but 12px was thin for a round chip against a shadowed edge, so the mobile
- * padding goes to 16px and the desktop to 20px.
+ * What actually solved the chip problem was the PADDING, not the shadow. The
+ * cell carries pr-4 sm:pr-5 (16px mobile, 20px desktop, widened 2026-08-31 from
+ * 12px), which puts real space between the chip and the boundary, and that
+ * space does the job on its own now that nothing is painting over it.
  *
- * AND TURNED DOWN, same day. 6px of blur at 0.10 (0.45 in dark) was a smudge
- * rather than an edge on a phone, where the column is a third of the screen
- * and the shadow is the widest soft thing on the page. It also had nothing to
- * agree with: this is the ONLY sticky column on the site that casts a shadow —
- * the explorer, /players and both game logs give theirs an opaque background
- * and nothing else — so it read as belonging to a different site.
- *
- * 2px of offset and 3px of blur keeps what the shadow was for (content passes
- * BEHIND this edge, it is not a column rule) and drops what it was not. The
- * hairline still does most of the work; the shadow is now the hint that there
- * is depth behind it, which is all it was ever supposed to be.
+ * Worth knowing if the slicing ever comes back: on iOS the chip can look cut
+ * during momentum scroll, which measurement in Chrome could never reproduce —
+ * the sticky cell lags a frame while the row under it repaints. That is a
+ * repaint artifact, not a layout one, and no amount of edge styling fixes it.
  */
-const STICKY_EDGE =
-  "border-r border-hairline shadow-[2px_0_3px_-2px_rgba(26,34,56,0.07)] dark:shadow-[2px_0_3px_-2px_rgba(0,0,0,0.28)]";
+const STICKY_EDGE = "border-r border-hairline";
 
 const ROW_HOVER = "group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))]";
 /** Resting tint marking the Four Factors band, mirroring the explorer and /players. */
