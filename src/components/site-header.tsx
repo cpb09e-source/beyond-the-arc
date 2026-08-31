@@ -4,7 +4,10 @@ import Link from "next/link";
 import { SiteLogo } from "@/components/site-logo";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Search, ChevronDown } from "lucide-react";
+import {
+  Search, ChevronDown, Table2, ListOrdered, Trophy, Users, CalendarRange,
+  type LucideIcon,
+} from "lucide-react";
 import { SearchDialog } from "@/components/search/search-dialog";
 import { AccountNav } from "@/components/account/account-nav";
 import { MobileMenu } from "@/components/mobile-menu";
@@ -19,17 +22,48 @@ import { cn } from "@/lib/utils";
  * seven already needed the xl gutter given back to fit at 1024. A menu adds
  * a page without adding a word.
  */
-const SUBNAV: Record<string, ReadonlyArray<{ href: string; label: string }>> = {
+type SubnavItem = {
+  href: string;
+  label: string;
+  /** The one thing the title does not say — see the note below. */
+  desc: string;
+  icon: LucideIcon;
+};
+
+/**
+ * THE BLURBS ARE BACK, AND THEY HAD TO EARN IT.
+ *
+ * They were here once and were removed for a good reason: they "explained
+ * pages whose names already say what they are, and turned a two-item menu into
+ * a paragraph you had to read to click." That objection was correct about
+ * those blurbs. It is not an argument against all of them.
+ *
+ * What every one of these says now is THE UNIT, which is the only thing that
+ * actually separates these pages and the one thing no title carries. Team
+ * Explorer and Team Game Log Explorer are not a page and a sub-page; one rates
+ * a season and the other rates a night, and a reader who does not know that
+ * picks wrong. "The best single-game performances" is not a restatement of
+ * "Game Log Explorer" — it is the answer to why you would open it.
+ *
+ * The rule for anything added here: if the line could be deleted without the
+ * reader losing a fact, delete it.
+ */
+const SUBNAV: Record<string, ReadonlyArray<SubnavItem>> = {
   "/": [
-    { href: "/", label: "Team Explorer" },
-    { href: "/teams/games", label: "Team Game Log Explorer" },
-    { href: "/conferences", label: "Conference Power Rankings" },
+    { href: "/", label: "Team Explorer", icon: Table2,
+      desc: "Rate and compare full team seasons" },
+    { href: "/teams/games", label: "Team Game Log Explorer", icon: CalendarRange,
+      desc: "The best single-game team performances" },
+    { href: "/conferences", label: "Conference Power Rankings", icon: Trophy,
+      desc: "How the leagues stack up against each other" },
   ],
   // Players is two tables for the same reason Teams is: the explorer rates a
   // season, the game log rates a night, and neither is a view of the other.
   "/players": [
-    { href: "/players", label: "Player Explorer" },
-    { href: "/players/games", label: "Game Log Explorer" },
+    { href: "/players", label: "Player Explorer", icon: Users,
+      desc: "Rate and compare full player seasons" },
+    { href: "/players/games", label: "Game Log Explorer", icon: ListOrdered,
+      desc: "The best single games anyone has had" },
   ],
 };
 
@@ -94,7 +128,7 @@ function NavMenu({
 }: {
   label: string;
   href: string;
-  items: ReadonlyArray<{ href: string; label: string }>;
+  items: ReadonlyArray<SubnavItem>;
   active: boolean;
   pathname: string;
 }) {
@@ -127,24 +161,59 @@ function NavMenu({
         // No gap between the chip and the panel: a few pixels of nothing is
         // enough to drop the hover on the way down and close the menu under
         // the pointer.
-        <div className="absolute left-0 top-full pt-1 w-56">
-          <div className="rounded-lg border border-ink/12 bg-card shadow-lg ring-1 ring-ink/5 py-1">
+        <div className="absolute left-0 top-full pt-1 w-[21rem]">
+          <div className="rounded-xl border border-ink/12 bg-card shadow-xl ring-1 ring-ink/5 p-1.5">
+            {/* The section eyebrow, which is the nav label again on purpose:
+                the panel can sit some way from its trigger, and naming the
+                menu inside it is what keeps a hover-opened surface anchored to
+                the word that opened it. Clerk does exactly this. */}
+            <div className="px-2.5 pt-1.5 pb-1 text-[0.6rem] uppercase tracking-[0.16em] text-ink-muted font-semibold">
+              {label}
+            </div>
             {items.map((k) => {
               const here = k.href === "/" ? pathname === "/" : pathname.startsWith(k.href);
+              const Icon = k.icon;
               return (
                 <Link
                   key={k.href}
                   href={k.href}
                   onClick={() => setOpen(false)}
                   className={cn(
-                    // TITLES ONLY. The blurbs under them explained pages whose
-                    // names already say what they are, and turned a two-item
-                    // menu into a paragraph you had to read to click.
-                    "block px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
-                    here ? "bg-coral/6 text-coral" : "text-ink hover:bg-paper-deep/60",
+                    // `group` so the icon tile can answer the row's hover
+                    // rather than needing its own.
+                    "group flex items-start gap-3 rounded-lg px-2.5 py-2.5 transition-colors",
+                    here ? "bg-coral/[0.07]" : "hover:bg-paper-deep/70",
                   )}
                 >
-                  {k.label}
+                  <span
+                    className={cn(
+                      "mt-px flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 transition-colors",
+                      here
+                        ? "bg-coral/12 ring-coral/25 text-coral"
+                        // bg-ink, NOT bg-paper-deep. `ink` is the text colour,
+                        // so a low-alpha wash of it self-inverts: a dark tint
+                        // on the light card, a light one on the dark card.
+                        // paper-deep sat a hair off the dark card and the
+                        // tiles simply disappeared there.
+                        : "bg-ink/[0.06] ring-ink/10 text-ink-soft group-hover:text-coral",
+                    )}
+                  >
+                    <Icon size={17} strokeWidth={1.9} aria-hidden />
+                  </span>
+                  <span className="min-w-0">
+                    <span className={cn(
+                      "block text-sm font-semibold leading-tight transition-colors",
+                      here ? "text-coral" : "text-ink",
+                    )}>
+                      {k.label}
+                    </span>
+                    {/* Not whitespace-nowrap: the panel has a fixed width and
+                        the description is allowed to use two lines. Clamping
+                        it to one is what forced the old blurbs to be vague. */}
+                    <span className="mt-0.5 block text-xs leading-snug text-ink-muted">
+                      {k.desc}
+                    </span>
+                  </span>
                 </Link>
               );
             })}
