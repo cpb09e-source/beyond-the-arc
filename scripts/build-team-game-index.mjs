@@ -199,7 +199,20 @@ for (const season of seasons) {
       return Math.abs(est - logged) / logged <= 0.10 ? logged : est;
     })();
 
-    const ratable = poss !== null && poss >= 40;
+    /**
+     * NO BOX, NO RATING. `est` is null when the box carries no counting stats
+     * at all — 90 rows across 141,666, where fga/oreb/tov/fta are all absent
+     * rather than zero. Those rows fall back to the log's possession count,
+     * and there is then nothing left to check it against.
+     *
+     * Queens 96-87 over Stetson is the case: an empty box, a logged 42
+     * possessions, and therefore an offensive rating of 228.6 that survived
+     * every other guard here precisely because the row agreed with itself.
+     * Where the denominator cannot be verified the honest output is no rating,
+     * not a confident wrong one — the rest of the row is already blank, so
+     * this is consistent with what the reader sees beside it.
+     */
+    const ratable = est !== null && poss !== null && poss >= 40;
     const ortg = ratable ? (g.pts_scored / poss) * 100 : null;
     const drtg = ratable ? (g.pts_against / poss) * 100 : null;
 

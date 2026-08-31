@@ -79,6 +79,33 @@ function parseTarget(pathname: string): { dir: string; year: number } | null {
   return dir ? { dir, year } : null;
 }
 
+/**
+ * THE ROUTE, DECLARED ON THE FUNCTION — and why it is also in netlify.toml.
+ *
+ * Production has always routed this through a netlify.toml redirect
+ * (`/api/season/* -> /.netlify/functions/season/:splat`, status 200). That
+ * works in production and ONLY in production: `netlify functions:serve`, which
+ * is what `npm run dev` runs on :9999, does not read netlify.toml. It reads
+ * this. So locally the app fetched /api/season/2021 and got a 404 while the
+ * function sat there answering perfectly well on
+ * /.netlify/functions/season/2021.
+ *
+ * The effect was that THE PAYWALL WAS THE ONE FEATURE THAT COULD NOT BE TESTED
+ * LOCALLY — an archive season in the explorer always failed, and always with
+ * the same message a real entitlement failure produces ("unavailable right
+ * now"), so the gap read as a bug in the gate rather than a gap in dev
+ * routing. Every other function in this directory declares its own path; this
+ * was the only one that did not.
+ *
+ * BOTH SHAPES, EXPLICITLY, because parseTarget honours both and a splat would
+ * not tell you that. The pathname the function receives is identical under
+ * either routing mechanism, which is what makes adding this safe: the redirect
+ * stays where it is, the two agree, and dev now matches prod.
+ */
+export const config = {
+  path: ["/api/season/:year", "/api/season/:kind/:year"],
+};
+
 export default async (req: Request, _context: Context) => {
   if (req.method !== "GET") {
     return Response.json({ error: "GET only" }, { status: 405 });

@@ -146,6 +146,166 @@ let txt = 0;
 })(OUT);
 check("RSC .txt payloads present", txt > 100, `${txt} found`);
 
+// ── 5. The R2 mirror lists agree ──────────────────────────────────────────
+/**
+ * FOUR LISTS DESCRIBE THE SAME SET OF DIRECTORIES, and nothing made them agree.
+ *
+ *   src/lib/data-url.ts            R2_DIRS  — what the browser fetches from R2
+ *   scripts/sync-data-to-r2.mjs    ALL_DIRS — what actually gets uploaded
+ *   scripts/strip-r2-mirrored-from-out.mjs  — what is deleted from out/
+ *
+ * Get them out of step and the failure is silent in the worst direction. A dir
+ * added to R2_DIRS but not to the sync list points the browser at a 404 —
+ * which is exactly what happened twice on this project, first with game-index
+ * and then, with the lesson already written down, again with team-game-index.
+ * A dir synced and NOT stripped ships megabytes twice.
+ *
+ * READ OUT OF THE SOURCE FILES, not re-declared here. A fourth hand-kept copy
+ * of the list inside its own consistency check would be the same bug wearing a
+ * hat.
+ */
+function dirsFrom(file, re, clean) {
+  const src = fs.readFileSync(path.resolve(file), "utf8");
+  // Comments in these files mention directory names in prose; only the string
+  // literals in the array count.
+  return new Set([...src.matchAll(re)].map((m) => clean(m[1])));
+}
+
+try {
+  const urlDirs = dirsFrom(
+    "src/lib/data-url.ts",
+    /^\s*"\/data\/([a-z0-9-]+)\/",/gm,
+    (d) => d,
+  );
+  const syncDirs = dirsFrom(
+    "scripts/sync-data-to-r2.mjs",
+    /^\s*"public\/data\/([a-z0-9-]+)",/gm,
+    (d) => d,
+  );
+  const stripDirs = dirsFrom(
+    "scripts/strip-r2-mirrored-from-out.mjs",
+    /^\s*"data\/([a-z0-9-]+)",/gm,
+    (d) => d,
+  );
+
+  // A guard on the guard: if a refactor changes these files' formatting the
+  // regexes go quiet, and a check that silently matches nothing passes forever.
+  check(
+    "R2 dir lists were actually parsed",
+    urlDirs.size > 3 && syncDirs.size > 3 && stripDirs.size > 3,
+    `data-url ${urlDirs.size}, sync ${syncDirs.size}, strip ${stripDirs.size}`,
+  );
+
+  const notSynced = [...urlDirs].filter((d) => !syncDirs.has(d));
+  check(
+    "every R2-served dir is in the sync list",
+    notSynced.length === 0,
+    notSynced.length ? `${notSynced.join(", ")} would 404 in the browser` : "",
+  );
+
+  const notStripped = [...syncDirs].filter((d) => !stripDirs.has(d));
+  check(
+    "every synced dir is stripped from out/",
+    notStripped.length === 0,
+    notStripped.length ? `${notStripped.join(", ")} would ship twice` : "",
+  );
+
+  // Present on disk, so `npm run sync:r2` has something to upload.
+  const missingLocally = [...syncDirs].filter(
+    (d) => !fs.existsSync(path.resolve("public/data", d)),
+  );
+  check(
+    "every synced dir exists locally",
+    missingLocally.length === 0,
+    missingLocally.join(", "),
+  );
+} catch (e) {
+  check("R2 mirror lists readable", false, e.message);
+}
+
+// ── 6. The numbers are not obviously wrong ────────────────────────────────
+/**
+ * RANGE ASSERTIONS ON THE DATA ITSELF, because every other check in this file
+ * asks whether a FILE exists and none of them asks whether it is sane.
+ *
+ * The bug that earned this section: the Team Game Log Explorer shipped an
+ * offensive rating of 592.3 — Houston 77-52 over Tulane, on an upstream
+ * possession count of 13 — and the corpus held ratings up to 11,500. It sat at
+ * the top of the default sort, on the site, looking exactly like a number.
+ * Nothing here would have caught it, and no amount of clicking around a staging
+ * copy would have either, because a wrong number renders perfectly.
+ *
+ * Bounds are deliberately loose. This is a smoke alarm for a broken
+ * denominator or an empty season, not a model of college basketball: the real
+ * extremes measured across all 13 seasons are ORTG 171, pace 98, and these sit
+ * well outside them. A check that fires on a merely unusual game would be
+ * turned off within a month.
+ *
+ * Reads public/data rather than out/, because these files are R2-mirrored and
+ * section 3 has just confirmed they are NOT in out/.
+ */
+/**
+ * [column index, label, min, max] against team-game-index's packed rows.
+ *
+ * THE RATING FLOOR IS 30, NOT 40, AND THAT WAS MEASURED. Savannah St. scored
+ * 26 on Louisville in 2015 for an offensive rating of 34.7, and Arkansas Pine
+ * Bluff 25 on Missouri for 36.2. Both are real, both have complete box scores,
+ * and a bound that flagged them is a bound that gets switched off. Sixteen rows
+ * in the corpus sit under 45 and the lowest real one is 34.7.
+ */
+const RANGES = {
+  ortg: [21, "ORtg", 30, 200],
+  drtg: [22, "DRtg", 30, 200],
+  pace: [7, "pace", 40, 110],
+};
+const TGI = path.resolve("public/data/team-game-index");
+if (fs.existsSync(TGI)) {
+  const seasons = fs.readdirSync(TGI).filter((f) => f.endsWith(".json"));
+  const empty = [];
+  const outOfRange = [];
+  let inconsistent = 0;
+  let scanned = 0;
+
+  for (const file of seasons) {
+    const pack = JSON.parse(fs.readFileSync(path.join(TGI, file), "utf8"));
+    const rows = pack.rows ?? [];
+    if (rows.length === 0) { empty.push(file); continue; }
+    for (const r of rows) {
+      scanned++;
+      for (const [key, [i, label, lo, hi]] of Object.entries(RANGES)) {
+        // 0 is this format's null — the builder writes it where a value was
+        // suppressed, so it is a pass, not a zero.
+        const v = r[i];
+        if (!v) continue;
+        const real = v / 10;
+        if (real < lo || real > hi) {
+          if (outOfRange.length < 5) {
+            outOfRange.push(`${file.replace(".json", "")} ${label} ${real.toFixed(1)}`);
+          }
+          void key;
+        }
+      }
+      // The row has to agree with itself: PTS / POSS * 100 is the ORtg printed
+      // beside it. This is what makes the table checkable by a reader, and it
+      // is the invariant the 592.3 broke.
+      const [pts, poss, ortg] = [r[4], r[6], r[21]];
+      if (ortg && poss > 0 && Math.abs((pts / poss) * 100 - ortg / 10) > 1.5) inconsistent++;
+    }
+  }
+
+  check("every team-game season has rows", empty.length === 0, empty.join(", "));
+  check(
+    "team-game ratings and pace are in range",
+    outOfRange.length === 0,
+    outOfRange.join("; "),
+  );
+  check(
+    "team-game ORtg agrees with PTS and POSS",
+    inconsistent === 0,
+    inconsistent ? `${inconsistent} of ${scanned.toLocaleString()} rows disagree` : "",
+  );
+}
+
 // ── Report ────────────────────────────────────────────────────────────────
 for (const line of ok) console.log(`  ok    ${line}`);
 for (const line of warn) console.log(`  warn  ${line}`);
