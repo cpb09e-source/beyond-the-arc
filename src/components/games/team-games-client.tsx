@@ -25,6 +25,8 @@ import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-se
 import { DownloadMenu } from "@/components/explorer/download-menu";
 import { GateBar } from "@/components/explorer/gate-bar";
 import { useDragPan } from "@/lib/use-drag-pan";
+import { midrankPercentileMap } from "@/lib/percentile";
+import { PercentileChip } from "@/components/percentile-chip";
 import { useEntitlement } from "@/lib/use-entitlement";
 import { effectiveGameLogAccess, FREE_LIMITS } from "@/lib/access";
 import { confDisplay } from "@/lib/conf-display";
@@ -151,6 +153,34 @@ function selectRows(packs: TeamGamePack[], spec: Spec, filters: TeamGameFilter[]
     }
   }
   return { hits, matched };
+}
+
+/**
+ * Percentiles for one stat over one season's games, computed once and kept.
+ *
+ * THE COHORT IS EVERY GAME IN THE SEASON, not the rows on screen. A percentile
+ * that moved when you filtered would answer a different question each time —
+ * "best of the eleven 100-point games you asked for" rather than "where this
+ * sits among every game played" — and the column would go flat exactly when a
+ * filter made it interesting.
+ *
+ * Cached at module scope keyed by season and stat: switching views or sorting
+ * recomputes nothing, and a season already scanned costs a Map lookup. An
+ * 11,500-row midrank is a few milliseconds; twelve seasons of eight columns is
+ * not, if it runs on every render.
+ */
+const PCT_CACHE = new Map<string, Map<number, number>>();
+
+function seasonPercentiles(pack: TeamGamePack, stat: { key: string; get: (r: number[]) => number | null; lowerBetter?: boolean }) {
+  const key = `${pack.season}|${stat.key}`;
+  const hit = PCT_CACHE.get(key);
+  if (hit) return hit;
+  const m = midrankPercentileMap(
+    pack.rows.map((r, i) => [i, stat.get(r)] as const),
+    !stat.lowerBetter,
+  );
+  PCT_CACHE.set(key, m);
+  return m;
 }
 
 // ── The page ───────────────────────────────────────────────────────────────
@@ -350,6 +380,24 @@ export function TeamGamesClient() {
     () => TEAM_GAME_VIEWS.map((v) => ({ key: v.key, label: v.label, group: "Views", desc: v.desc })),
     [],
   );
+
+  /**
+   * One map per percentile-bearing column in the current view, keyed
+   * "<season>|<row index>". Only the columns actually on screen, and only the
+   * seasons actually loaded.
+   */
+  const pcts = useMemo(() => {
+    const out = new Map<string, Map<string, number>>();
+    for (const c of cols) {
+      if (!c.pct) continue;
+      const merged = new Map<string, number>();
+      for (const pack of active) {
+        for (const [i, v] of seasonPercentiles(pack, c)) merged.set(`${pack.season}|${i}`, v);
+      }
+      out.set(c.key, merged);
+    }
+    return out;
+  }, [cols, active]);
 
   const gridScrollRef = useRef<HTMLDivElement>(null);
   const panHandlers = useDragPan(gridScrollRef);
@@ -628,6 +676,7 @@ export function TeamGamesClient() {
                     )}
                     {cols.map((c) => {
                       const v = c.get(h.row);
+                      const pct = c.pct ? pcts.get(c.key)?.get(`${pack.season}|${h.idx}`) ?? null : null;
                       return (
                         <td
                           key={c.key}
@@ -638,7 +687,15 @@ export function TeamGamesClient() {
                             ROW_HOVER,
                           )}
                         >
-                          {fmtTeamGameValue(v, c.fmt)}
+                          {/* Value over chip, the same stack the team explorer
+                              and /conferences use. Columns without a chip keep
+                              a spacer so the rows stay one height. */}
+                          <span className="inline-flex flex-col items-end gap-0.5">
+                            <span>{fmtTeamGameValue(v, c.fmt)}</span>
+                            {pct !== null
+                              ? <PercentileChip pct={pct} />
+                              : <span className="h-5" aria-hidden="true" />}
+                          </span>
                         </td>
                       );
                     })}

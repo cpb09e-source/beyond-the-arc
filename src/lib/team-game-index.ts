@@ -71,6 +71,25 @@ export type TeamGameStat = {
   get: (r: number[]) => number | null;
   lowerBetter?: boolean;
   filterable?: boolean;
+  /**
+   * Show a percentile chip beside this column.
+   *
+   * RATES ONLY, AND THAT IS THE WHOLE RULE. A percentile answers "is this
+   * number good?", which is a real question about 134.3 ORtg or a 53.4% eFG
+   * and a meaningless one about the rest:
+   *
+   *   Raw counts — PTS, REB, FGM — are what the table is usually sorted by,
+   *   so the top row is the 100th percentile BY DEFINITION and the chip only
+   *   restates the sort.
+   *
+   *   Context — AP rank, seed, W, halves — has no distribution worth ranking.
+   *   The percentile of a 3-seed is not a fact about anything.
+   *
+   *   Pace is a rate but not a virtue. Fast is not better than slow, so a
+   *   chip that colours 95 possessions green would be asserting something
+   *   the site does not believe.
+   */
+  pct?: boolean;
 };
 
 const S = (
@@ -89,28 +108,29 @@ export const TEAM_GAME_STATS: TeamGameStat[] = [
     (r) => {
       const o = ten(r[T.ortg]!), d = ten(r[T.drtg]!);
       return o === null || d === null ? null : o - d;
-    }),
+    }, { pct: true }),
   S("margin", "MARGIN", "int", "Final margin. Negative in a loss.",
     (r) => r[T.pts]! - r[T.pa]!),
   S("pts", "PTS", "int", "Points scored.", (r) => r[T.pts]!),
   S("pa", "OPP", "int", "Points allowed.", (r) => r[T.pa]!, { lowerBetter: true }),
   S("poss", "POSS", "int", "Possessions.", (r) => r[T.poss]!),
   S("pace", "PACE", "num1", "Possessions per 40 minutes.", (r) => ten(r[T.pace]!)),
-  S("ortg", "ORtg", "num1", "Offensive rating — points per 100 possessions.", (r) => ten(r[T.ortg]!)),
+  S("ortg", "ORtg", "num1", "Offensive rating — points per 100 possessions.",
+    (r) => ten(r[T.ortg]!), { pct: true }),
   S("drtg", "DRtg", "num1", "Defensive rating — points allowed per 100 possessions.",
-    (r) => ten(r[T.drtg]!), { lowerBetter: true }),
+    (r) => ten(r[T.drtg]!), { lowerBetter: true, pct: true }),
 
   S("fgm", "FGM", "int", "Field goals made.", (r) => r[T.fgm]!),
   S("fga", "FGA", "int", "Field goals attempted.", (r) => r[T.fga]!),
-  S("fg_pct", "FG%", "pct1", "Field goal percentage.", (r) => div(r[T.fgm]!, r[T.fga]!)),
+  S("fg_pct", "FG%", "pct1", "Field goal percentage.", (r) => div(r[T.fgm]!, r[T.fga]!), { pct: true }),
   S("fg3m", "3PM", "int", "Three-pointers made.", (r) => r[T.fg3m]!),
   S("fg3a", "3PA", "int", "Three-pointers attempted.", (r) => r[T.fg3a]!),
-  S("fg3_pct", "3P%", "pct1", "Three-point percentage.", (r) => div(r[T.fg3m]!, r[T.fg3a]!)),
+  S("fg3_pct", "3P%", "pct1", "Three-point percentage.", (r) => div(r[T.fg3m]!, r[T.fg3a]!), { pct: true }),
   S("ftm", "FTM", "int", "Free throws made.", (r) => r[T.ftm]!),
   S("fta", "FTA", "int", "Free throws attempted.", (r) => r[T.fta]!),
-  S("ft_pct", "FT%", "pct1", "Free throw percentage.", (r) => div(r[T.ftm]!, r[T.fta]!)),
+  S("ft_pct", "FT%", "pct1", "Free throw percentage.", (r) => div(r[T.ftm]!, r[T.fta]!), { pct: true }),
   S("ts", "TS%", "pct1", "True shooting — points per shooting possession, free throws included.",
-    (r) => div(r[T.pts]!, 2 * (r[T.fga]! + 0.44 * r[T.fta]!))),
+    (r) => div(r[T.pts]!, 2 * (r[T.fga]! + 0.44 * r[T.fta]!)), { pct: true }),
 
   S("oreb", "OREB", "int", "Offensive rebounds.", (r) => r[T.oreb]!),
   S("dreb", "DREB", "int", "Defensive rebounds.", (r) => r[T.reb]! - r[T.oreb]!),
@@ -123,19 +143,20 @@ export const TEAM_GAME_STATS: TeamGameStat[] = [
 
   // ── The four factors, and what the defence allowed ──────────────────────
   S("efg", "eFG%", "pct1", "Effective field goal percentage — a three counted for what it is worth.",
-    (r) => per(r[T.efg]!)),
+    (r) => per(r[T.efg]!), { pct: true }),
   S("ftr", "FTR", "pct1", "Free throw rate — free throws attempted per field goal attempt.",
-    (r) => per(r[T.ftr]!)),
+    (r) => per(r[T.ftr]!), { pct: true }),
   S("tovr", "TOV%", "pct1", "Turnover rate — turnovers per possession.",
-    (r) => per(r[T.tovr]!), { lowerBetter: true }),
+    (r) => per(r[T.tovr]!), { lowerBetter: true, pct: true }),
   S("orbr", "ORB%", "pct1", "Offensive rebound rate — share of own misses rebounded.",
-    (r) => per(r[T.orbr]!)),
+    (r) => per(r[T.orbr]!), { pct: true }),
   S("efgd", "eFG% D", "pct1", "Effective field goal percentage allowed.",
-    (r) => per(r[T.efgd]!), { lowerBetter: true }),
-  S("ftrd", "FTR D", "pct1", "Free throw rate allowed.", (r) => per(r[T.ftrd]!), { lowerBetter: true }),
-  S("tovd", "TOV% D", "pct1", "Turnover rate forced.", (r) => per(r[T.tovd]!)),
+    (r) => per(r[T.efgd]!), { lowerBetter: true, pct: true }),
+  S("ftrd", "FTR D", "pct1", "Free throw rate allowed.",
+    (r) => per(r[T.ftrd]!), { lowerBetter: true, pct: true }),
+  S("tovd", "TOV% D", "pct1", "Turnover rate forced.", (r) => per(r[T.tovd]!), { pct: true }),
   S("orbd", "ORB% D", "pct1", "Offensive rebound rate allowed.",
-    (r) => per(r[T.orbd]!), { lowerBetter: true }),
+    (r) => per(r[T.orbd]!), { lowerBetter: true, pct: true }),
 
   // ── Situational ────────────────────────────────────────────────────────
   S("lead", "LEAD", "int", "Largest lead held.", (r) => r[T.lead]!),
