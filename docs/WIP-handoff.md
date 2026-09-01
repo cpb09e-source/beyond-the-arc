@@ -256,10 +256,13 @@ May 2026 infinite-404 incident. Do not strip them.
 
 ### 3. Smaller, carried over
 
-- **`npx eslint src scripts` reports 19 errors and 23 warnings**, measured
-  2026-09-01. An earlier note said 45/60; that was stale. Nearly all are
-  `react-hooks/set-state-in-effect`, all pre-existing. Lint does NOT gate the
-  build.
+- **Lint is at 0 errors, 30 warnings** (2026-09-01). Three things got it
+  there: `.netlify/**` is ignored (esbuild's function bundles were 24,048
+  warnings of nobody's code, burying the real ones); five reset-derived-state
+  effects became render-phase adjustments; ten genuine false positives carry a
+  one-line disable with the reason. The 30 left are Netlify's required
+  default-export shape (7), `<img>` in a static export (4) and unused locals in
+  data scripts. Lint does NOT gate the build.
 - **The `useSearchParams` refactor for `/` and `/players/` is DONE.** An
   earlier note said both shipped zero `<tr>`; measured 2026-09-01 they ship 128
   and 29 real rows, rendered by `TablePreview` as the Suspense fallback. What
@@ -270,9 +273,14 @@ May 2026 infinite-404 incident. Do not strip them.
   like `assist-players/`.
 - **The fixed-Tailwind-palette item is DONE.** An earlier note claimed nine
   files still used palette colours that cannot follow dark mode; zero remain.
-- **The View dropdowns in both game log explorers are still native
-  `<select>`s** and draw the OS panel on dark. Same fix the teammate picker
-  got: `usePopoverAnchor` + a portal.
+- **Every dropdown on the site is now the portalled listbox** — the native
+  `<select>` is gone, including both game log explorers' View pickers. Three
+  bugs came out of that work and are fixed: a 4px bleed above sticky section
+  headings (`py-1` → `pb-1`, since a sticky offset resolves against the
+  scrollport's PADDING edge), an 87px trigger opening a 588px panel
+  (`width: max-content` is defeated by `w-full` children — the options are
+  `min-w-full` now), and the scope bars' View select being `compact` while
+  every field beside it was h-10.
 - **`stat-picker`, `download-menu` and `saved-filters-menu`** each hand-rolled
   the popover arithmetic before `usePopoverAnchor` existed. Cleanup, not a bug.
 - **The Find-a-game button is hidden** on team pages pending a decision.
@@ -314,14 +322,24 @@ loses to an existing file and every matching path exists in the export.
 
 ### 6. The production deploy itself
 
+**The strip lists were unified 2026-09-01, and they had drifted.**
+`scripts/lib/out-strip-lists.mjs` is now the only copy of "what must not be in
+`out/`"; `build-with-r2-stash.mjs`, `strip-r2-mirrored-from-out.mjs` and
+`verify-deploy-ready.mjs` all import it. Before that the wrapper — the script
+netlify.toml names, and the only one that runs on Netlify, because the npm
+`postbuild` hook does not fire when it is invoked directly — was missing
+`data/team-season-games` (4,631 files, 40 MB), `data/live` and
+`data/team-splits` (~14 MB). The gate that exists to catch exactly this held a
+third copy that was four dirs short, so it would have reported a pass.
+
 The build is not the risk; the upload is. Sequence, when authorized:
 
 1. `node scripts/build-with-r2-stash.mjs` — the entry point netlify.toml names.
    (`npm run build` runs the same strip via `postbuild`, but the wrapper is
    what has been proven on this project.)
-2. Confirm the strip: `out/data/lineup-stats`, `out/data/team-seasons`,
-   `out/data/team-season-games` and `out/data/live` must NOT exist, alongside
-   the older R2 dirs. `head -8 out/robots.txt` should say `btacbb.xyz`.
+2. `node scripts/verify-deploy-ready.mjs` — 25 checks, exits 1 on any
+   failure, and it reads the strip list from the same module the strippers do.
+   It replaces the by-hand confirmation this step used to describe.
 3. `npm run sync:r2` — the new `team-season-games` and `live` dirs need it.
 4. `netlify deploy --prod --dir=out --no-build`, run BACKGROUNDED.
 5. `netlify api listSiteDeploys` until `ready`. NEVER trust the exit code.
