@@ -15,14 +15,26 @@ in one important way: the season being played is no longer prebuilt. Read
 
 ## Standing constraints — these override any instinct to be helpful
 
-**PUSHING IS NOW ALLOWED; BUILDING AND DEPLOYING ARE NOT.** The old rule was
-"no push, no build, no deploy". Colin lifted the push half on 2026-09-01 ("you
-can push") and 50 commits went up. Build and deploy still have not been run
-this session and remain his call. Ask before either.
+**PUSHING IS ALLOWED; BUILDING AND DEPLOYING ARE STILL HIS CALL.** Colin
+lifted the push half on 2026-09-01 ("you can push"), then authorised one build
+and deploy that same day ("build and deploy go ahead"). That authorisation was
+for THAT deploy. Ask again before the next one.
 
-**PRODUCTION IS OLD.** The last deploy is 2026-08-31. Every commit after it —
-the live-season architecture, per-team game files, the admin page, the site
-banner — exists only in git. Do not describe any of it as live.
+**PRODUCTION IS CURRENT as of 2026-09-01 23:08 UTC** — deploy
+`6a974a4a10f35a71b4b98c0b`, state `ready`, verified through
+`netlify api listSiteDeploys` rather than the CLI's exit code. Everything
+through commit `b688a7422e` is live: the live-season architecture, per-team
+game files, the admin page and banner, the portalled dropdowns, the nav fix.
+
+Numbers from that run, for the next estimate: build 32,868 pages; hashing
+343,647 files and 9 functions; **322,726 files uploaded, 71 minutes**. The 45
+minutes budgeted was low — a deploy that touches nearly every page dedupes
+almost nothing (161,098 of 343,647 requested by the CDN).
+
+Netlify's own auto-build fires on every push and fails with `Canceled build
+due to no content change` at the "checking build content for changes" stage.
+Those `error` rows in the deploy list are expected and publish nothing — the
+pattern predates today. The `ready` rows are the manual CLI deploys.
 
 **Never commit these stray untracked files.** They sit in the tree
 permanently and are not part of the project:
