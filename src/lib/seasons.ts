@@ -60,6 +60,34 @@ export const SEASON_CEIL = 2026;
 export const PREVIEW_SEASON = 2027;
 
 /**
+ * The season being PLAYED — the one whose numbers change while people are
+ * looking at them, or null between seasons.
+ *
+ * A team page for this season is not baked. Its numbers are fetched from
+ * /data/live/team/<slug>.json at load, so the nightly job rewrites 365 small
+ * files instead of triggering a build and a full-site upload. Everything from
+ * SEASON_FLOOR to SEASON_CEIL is frozen and keeps its prebuilt HTML. See
+ * src/lib/live-team-page.ts for the whole argument.
+ *
+ * NULL TODAY, and that is not a placeholder — 2026-27 has not tipped off. When
+ * it does this becomes PREVIEW_SEASON's value and that page stops being a
+ * projection, which is one edit in one place by design.
+ *
+ * SEPARATE FROM PREVIEW_SEASON ON PURPOSE, even though they will hold the same
+ * number for most of a year. A preview season has no games and renders a
+ * projection; a live season has games and renders results. They coincide the
+ * day the season starts and diverge again the day it ends, and a surface that
+ * asks "is this the upcoming season" is asking something different from one
+ * that asks "do these numbers move".
+ */
+export const LIVE_SEASON: number | null = null;
+
+/** Whether this season's page is served as data rather than baked HTML. */
+export function isLiveSeason(year: number): boolean {
+  return LIVE_SEASON !== null && year === LIVE_SEASON;
+}
+
+/**
  * Seasons omitted from every list, picker, and route.
  *
  * EMPTY, and kept rather than deleted. It is the right tool for a season we

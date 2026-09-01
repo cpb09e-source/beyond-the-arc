@@ -107,3 +107,8 @@ gated-data/
 # tracking it would write 40 MB of history for data that is already regenerable
 # in one command: npx tsx scripts/build-team-season-games.mts
 /public/data/team-season-games/
+
+# The live season's team pages as data — one ~137 KB file per team, rewritten
+# by the nightly job and served from R2. Regenerable in one command:
+#   npx tsx scripts/build-live-team-pages.mts
+/public/data/live/

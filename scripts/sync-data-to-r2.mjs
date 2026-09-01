@@ -69,6 +69,8 @@ const ALL_DIRS = [
   "public/data/team-game-index",
   // 4,745 small files — one per team-season. Count, not size.
   "public/data/team-season-games",
+  // The live season, rewritten nightly. Frequency, not count or size.
+  "public/data/live",
 ];
 
 /**

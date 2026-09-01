@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { readTeam, readAllTeams } from "@/lib/static-data";
 import { TeamPageView, PREVIEW_SEASON_YEAR, PREVIEW_SEASON_LABEL } from "@/components/teams/team-page-view";
+import { LiveTeamPage } from "@/components/teams/live-team-page";
+import { isLiveSeason } from "@/lib/seasons";
 import { loadTeamPageData } from "@/lib/team-page-data";
 import { isTabbedSeason } from "@/lib/team-tab-route";
 
@@ -101,5 +103,16 @@ export default async function TeamSeasonPage({
   // section on this page, with the strip scrolling to anchors. Preview pages
   // are always the latter, and get no strip at all. See team-tab-route.ts.
   const tabbed = !data.preview && (await isTabbedSeason(slug, year));
-  return <TeamPageView {...data} tab={tabbed ? "overview" : "all"} />;
+  const tab = tabbed ? "overview" as const : "all" as const;
+
+  /**
+   * The live season is fetched, not baked — see src/lib/live-team-page.ts.
+   * `data` is still loaded and passed down: it is the last build's numbers,
+   * and it is both what this page ships as HTML for search engines and what
+   * stays on screen if the live file cannot be reached.
+   */
+  if (isLiveSeason(year)) {
+    return <LiveTeamPage slug={slug} fallback={data} tab={tab} />;
+  }
+  return <TeamPageView {...data} tab={tab} />;
 }

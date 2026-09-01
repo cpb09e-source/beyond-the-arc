@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { TeamPageView } from "@/components/teams/team-page-view";
+import { LiveTeamPage } from "@/components/teams/live-team-page";
+import { isLiveSeason } from "@/lib/seasons";
 import { loadTeamPageData } from "@/lib/team-page-data";
 import { tabbedSeasonParams, tabMetadata } from "@/lib/team-tab-route";
 
@@ -33,5 +35,14 @@ export default async function TeamTabPage({
   const data = await loadTeamPageData(slug, year);
   if (!data) notFound();
 
+  /**
+   * The live season is fetched, not baked — see src/lib/live-team-page.ts.
+   * `data` is still loaded here and passed down: it is the last build's
+   * numbers, and it is what this page ships as HTML and what stays on screen
+   * if the live file cannot be reached.
+   */
+  if (isLiveSeason(year)) {
+    return <LiveTeamPage slug={slug} fallback={data} tab="onoff" />;
+  }
   return <TeamPageView {...data} tab="onoff" />;
 }

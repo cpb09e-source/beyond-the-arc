@@ -48,6 +48,14 @@ const R2_DIRS = [
   // Here for the ORIGINAL reason in this list: 365 teams x 13 seasons is 4,745
   // files, and file count is what times out a Netlify upload.
   "/data/team-season-games/",
+  /**
+   * The live season's team pages, as data — one file per team, rewritten by
+   * the nightly job. Here for a THIRD reason, distinct from the other two: not
+   * file count and not git history, but WRITE FREQUENCY. Anything a nightly job
+   * rewrites cannot live in the deploy, because putting it there means a build
+   * and a full-site upload to publish a number. See src/lib/live-team-page.ts.
+   */
+  "/data/live/",
 ] as const;
 
 export function dataUrl(path: string): string {

@@ -14,6 +14,7 @@
     "restore:archive": "node scripts/backup-archive-to-r2.mjs --restore",
     "build:game-index": "node scripts/build-game-index.mjs",
     "build:team-season-games": "tsx scripts/build-team-season-games.mts",
+    "build:live-teams": "tsx scripts/build-live-team-pages.mts",
     "sync:bart": "tsx scripts/sync-bart.mts",
     "derive:positions": "tsx scripts/derive-positions.mts",
     "fetch:photos": "node scripts/fetch-player-images.mjs",

@@ -26,6 +26,7 @@ const DIRS = [
   "data/game-index",
   "data/team-game-index",
   "data/team-season-games",
+  "data/live",
   // NOT R2-mirrored — stripped for a different reason. team-splits is read at
   // BUILD time by readTeamSplits() and reaches the browser as props on the team
   // page, so nothing ever fetches it over the network. Left in place it would
