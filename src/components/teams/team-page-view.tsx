@@ -38,7 +38,7 @@ import { TourneyTimeline } from "@/components/teams/tourney-timeline";
 import { PlayerHeadshotStrip } from "@/components/teams/player-headshot-strip";
 import type { StaticPlayerRow, StaticTeamSeasonRow, ConfRecord, GameLog, RankedStat } from "@/lib/static-data";
 import { confDisplay } from "@/lib/conf-display";
-import { contrastOn, getTeamColors, readableInk } from "@/lib/team-colors";
+import { contrastOn, getTeamColors, readableInk, readableOnPaper } from "@/lib/team-colors";
 
 function fmtNum(x: number | null, digits = 1): string {
   if (x === null || x === undefined) return "—";
@@ -373,11 +373,24 @@ export function TeamPageView({
    * page colour — see globals.css.
    */
   const accentFillDark = accentColor ? readableInk(accentColor, { min: 0.46, max: 0.72 }) : null;
+  /**
+   * And the same guarantee on the light page, which had the mirror problem.
+   *
+   * The dark clamp lifts a colour that is too dark to read on #1C1C1C; this
+   * lowers one that is too light to read on the cream. Only the colours that
+   * fail move at all — see readableOnPaper — so the navies and maroons that
+   * make up most of the file arrive here untouched.
+   *
+   * TEXT ONLY. --accent-tint below keeps the true brand colour deliberately:
+   * it is a 10% hover wash, nothing is read off it, and it is the one of these
+   * variables the schedule ticker uses.
+   */
+  const accentLight = accentColor ? readableOnPaper(accentColor) : null;
   // --accent carries the LIGHT value. The dark theme overrides it from
   // globals.css with !important, which it needs because these are inline
   // styles and inline outranks any stylesheet rule — see the note there.
   const cssVars: React.CSSProperties = {
-    ["--accent" as string]: accentColor ?? "#ed5a4f",
+    ["--accent" as string]: accentLight ?? "#ed5a4f",
     ["--accent-tint" as string]: accentColor ? `${accentColor}1a` : "rgba(237, 90, 79, 0.08)",
     ["--accent-dark" as string]: accentDark ?? "#4d9bff",
     // The tint is a hover wash. At 10% alpha a near-black is invisible on the

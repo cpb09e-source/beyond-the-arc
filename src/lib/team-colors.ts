@@ -117,6 +117,70 @@ function pickPrimary(c1: string, c2: string): string {
 }
 
 /**
+ * WCAG relative luminance, and the contrast ratio built on it.
+ *
+ * DELIBERATELY NOT the `luminance()` above. That one is the 0.299/0.587/0.114
+ * perceived-brightness average, which is the right tool for ranking two brand
+ * colours against each other and the wrong one for asking whether text can be
+ * read: the sRGB gamma step below is what makes a saturated yellow measure as
+ * the very bright colour it looks like. Iowa's #FFCD00 is 0.79 by the average
+ * and 0.66 by this — and against the cream page that is the difference between
+ * "probably fine" and a measured 1.41.
+ */
+function wcagLuminance(hex: string): number {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex);
+  if (!m) return 0;
+  const v = parseInt(m[1]!, 16);
+  const ch = [(v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff].map((c) => {
+    const x = c / 255;
+    return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+  }) as [number, number, number];
+  return 0.2126 * ch[0] + 0.7152 * ch[1] + 0.0722 * ch[2];
+}
+
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [wcagLuminance(a), wcagLuminance(b)].sort((x, y) => y - x) as [number, number];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** The light theme's page colour. Mirrors --paper in globals.css. */
+const LIGHT_PAPER = "#faf7f2";
+
+/**
+ * A brand colour dark enough to READ on the cream page, and otherwise itself.
+ *
+ * The mirror of the dark theme's clamp, and it has to exist for the same
+ * reason: a brand primary is chosen to look like the school, not to sit on our
+ * background. Warm and pale ones vanish — Iowa's gold measures 1.41 against
+ * --paper, Wichita St. 1.43, Missouri 1.82, Army 1.89, Tennessee 2.62 — which
+ * is the same complaint as San Diego's navy on the dark ground, one theme over.
+ *
+ * A CONTRAST TARGET, NOT A LIGHTNESS CAP, and that is the whole design. A cap
+ * moves every colour above it, including the hundreds that were already
+ * legible, and repaints the site for no reason. This returns the colour
+ * untouched the moment it clears the bar and otherwise walks lightness down
+ * only as far as it must, so a team changes exactly if it was failing and by
+ * exactly as much as it was failing by. Hue and saturation are preserved
+ * throughout — a dark Iowa gold is still gold.
+ *
+ * ONLY FOR TEXT. --accent-tint and --accent-fill keep the true colour: a 10%
+ * hover wash and a badge with its own chosen foreground are surfaces, and
+ * nothing has to be read off them. That is also what keeps the schedule ticker
+ * out of this — it reads --accent-tint and never --accent.
+ */
+export function readableOnPaper(hex: string, target = 4.5): string {
+  if (contrastRatio(hex, LIGHT_PAPER) >= target) return hex;
+  for (let cap = 0.48; cap >= 0.04; cap -= 0.02) {
+    const c = readableInk(hex, { min: 0, max: cap });
+    if (contrastRatio(c, LIGHT_PAPER) >= target) return c;
+  }
+  // Unreachable for any hue: lightness 0.04 is near-black. A GREYSCALE input
+  // is the one that can arrive here, because readableInk returns those
+  // untouched (it has no hue to rebuild from), so it gets a neutral ink.
+  return "#2b2b2b";
+}
+
+/**
  * Black or white, whichever can be read on this colour.
  *
  * Exported because the team pages need it for a colour this module never sees:
