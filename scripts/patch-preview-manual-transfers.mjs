@@ -38,6 +38,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { readManualTransfers } from "./lib/manual-transfers.mjs";
 
 const DATA = path.resolve("public/data");
 const PREVIEW = path.join(DATA, "season-preview.json");
@@ -54,82 +55,21 @@ const DRY = process.argv.includes("--dry");
  * Destination is written the way we name teams; the shorthand a human types
  * ("UNC", "Cincy") is mapped in DEST_ALIAS below.
  */
-const MOVES = [
-  ["BJ Edwards", "Oklahoma"],
-  ["Kaleb Banks", "Tulsa"],
-  ["Skyy Clark", "LSU"],
-  ["Brody Robinson", "Creighton"],
-  ["Seth Trimble", "Louisville"],
-  ["Javon Bennett", "Gonzaga"],
-  ["Amarri Monroe", "Syracuse"],
-  ["Chendall Weaver", "Houston"],
-  ["Cameron Fens", "UNC"],
-  ["Jalen Washington", "Tennessee"],
-  ["L.J. Cason", "Miami"],
-  ["RJ Godfrey", "Arizona"],
-  ["MJ Collins Jr.", "Cincy"],
-  ["Jahki Howard", "Long Island"],
-  ["Curtis Williams Jr.", "High Point"],
-  ["Daquan Davis", "Long Island"],
-  ["Chris Johnson", "Oregon State"],
-  ["Skylar Wicks", "Gonzaga"],
-  ["Malique Ewin", "Oregon"],
-  ["Jamichael Stillwell", "Texas Tech"],
-  ["Tavari Johnson", "Charleston"],
-  ["Chauncey Wiggins", "Gonzaga"],
-  // 2026-08-18 — these three were added to patch-portal-manual.mts and written
-  // into portal.json without being added here, so the portal knew about the
-  // move and the team pages did not: AJ Storr was still listed on Mississippi,
-  // and Payne and King were on no roster at all. The two lists have to be
-  // edited together.
-  ["AJ Storr", "UNLV"],
-  ["Stephon Payne", "New Mexico St."],
-  ["Fredrick King", "Creighton"],
-  // 2026-08-19
-  ["Reed Bailey", "St. John's"],
-  ["Braxton Stacker", "UNC Greensboro"],
-  ["Jordan Pope", "Texas A&M"],
-  ["Kenny Noland", "Michigan"],
-  // 2026-08-20
-  ["Lamar Washington", "Boise St."],
-  ["Duke Brennan", "Oklahoma"],
-  ["Jerald Colonel", "FIU"],
-  // 2026-08-21
-  ["Jaxon Kohler", "BYU"],
-  ["Lance Waddles", "Campbell"],
-  ["Cooper Noard", "Samford"],
-  ["Treysen Eaglestaff", "UC San Diego"],
-  ["Kimani Hamilton", "Mississippi St."],
-  // 2026-08-22
-  ["Donovan Dent", "LSU"],
-  // 2026-08-24
-  // Returned to Missouri — see the note in patch-portal-manual.mts. The two
-  // lists must stay in step.
-  ["Mark Mitchell", "Missouri"],
-  ["Iaroslav Niagu", "Colorado"],
-  // 2026-08-25 — added to patch-portal-manual.mts on the day and missed here,
-  // the same drift the note above records. Ole Miss is "Mississippi" in this
-  // naming.
-  ["Keyshawn Hall", "St. John's"],
-  ["Nick Townsend", "Stanford"],
-  ["Corey Stephenson", "Mississippi"],
-  // 2026-08-26
-  ["Langston Reynolds", "Northern Colorado"],
-  ["Dominick Nelson", "Utah Valley"],
-  ["KC Ibekwe", "Portland St."],
-  // 2026-08-27
-  ["Xaivian Lee", "Gonzaga"],
-  // "Butta" Johnson in the wild; Efrem in the corpus, which is what matches.
-  ["Efrem Johnson", "Virginia Tech"],
-  // 2026-08-28
-  ["Micah Handlogten", "Mississippi"],
-  ["Tre Holloman", "Grand Canyon"],
-  ["Dan Skillings Jr.", "Grand Canyon"],
-  // Utah Tech guard, 31 games in 2025-26. One "Noah Bolanga" in the corpus.
-  ["Noah Bolanga", "Abilene Christian"],
-  // Queens sophomore, 34 games in 2025-26.
-  ["Maban Jabriel", "Maryland"],
-];
+/**
+ * The moves, from the table the admin page edits.
+ *
+ * THIS WAS A HARDCODED ARRAY, and an identical one lived in
+ * patch-portal-manual.mts with a comment in each telling whoever edited it to
+ * keep the other in step. That is a contract enforced by nothing: a move added
+ * to one and not the other leaves the portal table and the team pages
+ * disagreeing about where a player is, and neither file is wrong on its own
+ * terms. Both read scripts/lib/manual-transfers.mjs now, which reads Supabase.
+ *
+ * The reader THROWS if it cannot reach the table rather than returning an
+ * empty list, because an empty list here would run to completion and publish
+ * every one of these players at the school they left.
+ */
+const MOVES = (await readManualTransfers()).map((m) => [m.name, m.destination]);
 
 /** Common shorthand → the name season-preview.json uses. */
 const DEST_ALIAS = {

@@ -500,9 +500,9 @@ export function TransfersPanel() {
   const [name, setName] = useState("");
   const [pid, setPid] = useState("");
   const [dest, setDest] = useState("");
-  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [teams, setTeams] = useState<string[]>([]);
+  const [showList, setShowList] = useState(false);
   const [flash, setFlash] = useFlash();
 
   // 12 KB of names, from the same export the site is built from. A failure
@@ -533,9 +533,8 @@ export function TransfersPanel() {
         player_name: name.trim(),
         destination: dest.trim(),
         bart_player_id: pid.trim() ? Number(pid.trim()) : null,
-        note: note.trim() || undefined,
       });
-      setName(""); setPid(""); setDest(""); setNote("");
+      setName(""); setPid(""); setDest("");
       setFlash({ text: "Added. It applies on the next pipeline run.", bad: false });
       load();
     } catch (e) {
@@ -592,26 +591,6 @@ export function TransfersPanel() {
           />
         </label>
         <DestinationField value={dest} onChange={setDest} teams={teams} />
-        {/*
-          PROVENANCE, and the label says so because "Note" did not.
-          These rows outrank portal.json and the roster scrape both — they are
-          asserted on one person's say-so — so the only thing that makes a
-          six-month-old claim reviewable is a record of where it came from.
-          The placeholder is an example rather than an instruction for the same
-          reason: "beat writer" is a useful answer and "note" prompts nothing.
-        */}
-        <label className="flex flex-col gap-1 flex-1 min-w-[11rem]">
-          <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">
-            Where you saw it
-          </span>
-          <input
-            className={INPUT}
-            value={note}
-            placeholder="His Instagram post, 8/17"
-            title="Optional. Where the move was confirmed — his own post, a beat writer, the school's roster page."
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </label>
         <button type="button" className={cn(BTN, "border-coral/40 bg-coral/10")} disabled={busy || !name.trim() || !dest.trim()} onClick={add}>
           Add
         </button>
@@ -631,44 +610,39 @@ export function TransfersPanel() {
       )}
 
       {/*
-        COLLAPSED BY DEFAULT, because the list is 53 rows on the day it is
-        seeded and only grows. What someone opens this panel to do is ADD a
-        move; reading the existing ones is the rarer errand, and an unrolled
-        list pushes the run controls and the last-run record below the fold on
-        every visit.
+        ONE BUTTON, NOT A DISCLOSURE TRIANGLE.
 
-        A native <details> rather than useState: it keeps the open state
-        through a re-render on its own, it is keyboard- and screen-reader-
-        correct without any aria, and Ctrl-F finds text inside a closed one in
-        current browsers — which matters for a list whose whole purpose is
-        looking someone up.
+        Collapsed by default because the list is 53 rows the day it is seeded
+        and only grows, and what someone opens this panel to do is ADD a move.
+        Left open it pushed the run controls and the last-run record 2,900px
+        down the page on every visit.
+
+        A button rather than <details> because it is the only control on this
+        page that was not one, and a caret sitting among four rectangular
+        buttons read as a different kind of thing than it was. The label states
+        the action and the count, so nothing has to be inferred from a glyph.
       */}
-      {active.length > 0 && (
-        <details className="mt-4 group">
-          <summary className="flex items-center gap-2 cursor-pointer text-sm text-ink list-none [&::-webkit-details-marker]:hidden">
-            <span
-              aria-hidden
-              className="text-ink-muted text-[0.7rem] transition-transform group-open:rotate-90"
-            >
-              ▶
-            </span>
-            <span className="font-semibold">{active.length} active</span>
-            {/* Hidden once open: "show" on an expanded list is a lie, and the
-                rotated caret already says what state it is in. */}
-            <span className="text-ink-muted text-[0.7rem] group-open:hidden">show</span>
-          </summary>
-          <TransferList rows={active} onFlip={flip} busy={busy} />
-        </details>
-      )}
+      {(active.length > 0 || withdrawn.length > 0) && (
+        <div className="mt-4">
+          <button type="button" className={BTN} onClick={() => setShowList((v) => !v)}>
+            {showList ? "Hide" : "Show"} {active.length} {active.length === 1 ? "move" : "moves"}
+            {withdrawn.length > 0 && ` · ${withdrawn.length} withdrawn`}
+          </button>
 
-      {withdrawn.length > 0 && (
-        <details className="mt-3 group">
-          <summary className="flex items-center gap-2 cursor-pointer text-sm text-ink-muted list-none [&::-webkit-details-marker]:hidden">
-            <span aria-hidden className="text-[0.7rem] transition-transform group-open:rotate-90">▶</span>
-            <span className="font-semibold">{withdrawn.length} withdrawn</span>
-          </summary>
-          <TransferList rows={withdrawn} onFlip={flip} busy={busy} />
-        </details>
+          {showList && (
+            <>
+              {active.length > 0 && <TransferList rows={active} onFlip={flip} busy={busy} />}
+              {withdrawn.length > 0 && (
+                <>
+                  <p className="mt-4 text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">
+                    Withdrawn
+                  </p>
+                  <TransferList rows={withdrawn} onFlip={flip} busy={busy} />
+                </>
+              )}
+            </>
+          )}
+        </div>
       )}
     </Panel>
   );
@@ -691,7 +665,6 @@ function TransferList({
             )}
             <span className="text-ink-muted"> → </span>
             {t.destination}
-            {t.note && <span className="block text-[0.7rem] text-ink-muted mt-0.5">{t.note}</span>}
           </span>
           <span className="text-[0.7rem] text-ink-muted tabular-nums whitespace-nowrap">{t.confirmed_on}</span>
           <button type="button" className={BTN} disabled={busy} onClick={() => onFlip(t)}>

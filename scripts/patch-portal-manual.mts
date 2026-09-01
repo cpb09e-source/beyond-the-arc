@@ -41,6 +41,8 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
+// @ts-expect-error — plain .mjs helper with no type declarations.
+import { readManualTransfers } from "./lib/manual-transfers.mjs";
 import {
   computeCohortStats,
   productionFor,
@@ -63,141 +65,7 @@ const DRY = process.argv.includes("--dry");
  * thing that field is read for. Add new moves as a NEW batch; never append to
  * an older one.
  */
-const BATCHES: Array<{ confirmed: string; moves: Array<[string, string]> }> = [
-  {
-    confirmed: "2026-08-17T00:00:00",
-    moves: [
-      ["BJ Edwards", "Oklahoma"],
-      ["Kaleb Banks", "Tulsa"],
-      ["Skyy Clark", "LSU"],
-      ["Brody Robinson", "Creighton"],
-      ["Seth Trimble", "Louisville"],
-      ["Javon Bennett", "Gonzaga"],
-      ["Amarri Monroe", "Syracuse"],
-      ["Chendall Weaver", "Houston"],
-      ["Cameron Fens", "North Carolina"],
-      ["Jalen Washington", "Tennessee"],
-      ["L.J. Cason", "Miami FL"],
-      ["RJ Godfrey", "Arizona"],
-      ["MJ Collins Jr.", "Cincinnati"],
-      ["Jahki Howard", "LIU"],
-      ["Curtis Williams Jr.", "High Point"],
-      ["Daquan Davis", "LIU"],
-      ["Chris Johnson", "Oregon St."],
-      ["Skylar Wicks", "Gonzaga"],
-      ["Malique Ewin", "Oregon"],
-      ["Jamichael Stillwell", "Texas Tech"],
-      ["Tavari Johnson", "Charleston"],
-      ["Chauncey Wiggins", "Gonzaga"],
-    ],
-  },
-  {
-    confirmed: "2026-08-18T00:00:00",
-    moves: [
-      ["AJ Storr", "UNLV"],
-      ["Stephon Payne", "New Mexico St."],
-      ["Fredrick King", "Creighton"],
-    ],
-  },
-  {
-    confirmed: "2026-08-19T00:00:00",
-    moves: [
-      ["Reed Bailey", "St. John's"],
-      ["Braxton Stacker", "UNC Greensboro"],
-      ["Jordan Pope", "Texas A&M"],
-      ["Kenny Noland", "Michigan"],
-    ],
-  },
-  {
-    confirmed: "2026-08-20T00:00:00",
-    moves: [
-      ["Lamar Washington", "Boise St."],
-      ["Duke Brennan", "Oklahoma"],
-      ["Jerald Colonel", "FIU"],
-    ],
-  },
-  {
-    confirmed: "2026-08-21T00:00:00",
-    moves: [
-      ["Jaxon Kohler", "BYU"],
-      ["Lance Waddles", "Campbell"],
-      ["Cooper Noard", "Samford"],
-      ["Treysen Eaglestaff", "UC San Diego"],
-      ["Kimani Hamilton", "Mississippi St."],
-    ],
-  },
-  {
-    confirmed: "2026-08-22T00:00:00",
-    moves: [
-      ["Donovan Dent", "LSU"],
-    ],
-  },
-  {
-    confirmed: "2026-08-24T00:00:00",
-    moves: [
-      // CORRECTED IN PLACE, not moved to a new batch. He entered the portal
-      // on this date and was reported to Kentucky; he has since returned to
-      // Missouri. The entry date is when he entered, which has not changed —
-      // re-dating it would make a month-old move sort as today's news.
-      // Missouri -> Missouri is deliberate: see the same-team guard in
-      // rescore-portal.mjs, which keeps a withdraw-and-return out of both
-      // sides of the class ledger.
-      ["Mark Mitchell", "Missouri"],
-      ["Iaroslav Niagu", "Colorado"],
-    ],
-  },
-  {
-    confirmed: "2026-08-25T00:00:00",
-    moves: [
-      ["Keyshawn Hall", "St. John's"],
-      ["Nick Townsend", "Stanford"],
-      // Ole Miss is "Mississippi" in the Bart naming this corpus uses; there is
-      // no "Ole Miss" entry, and an unresolved school would land the row with a
-      // null conference.
-      ["Corey Stephenson", "Mississippi"],
-    ],
-  },
-  {
-    confirmed: "2026-08-26T00:00:00",
-    moves: [
-      // A return: Northern Colorado was his school for 24 and 25 before a
-      // senior year at Minnesota.
-      ["Langston Reynolds", "Northern Colorado"],
-      // Also a return — Utah Valley in 25, Iowa St. in 26, back again now.
-      ["Dominick Nelson", "Utah Valley"],
-      // "Portland St." in the Bart naming, not "Portland State"; the corpus
-      // carries a separate "Portland" and the two are different schools.
-      ["KC Ibekwe", "Portland St."],
-    ],
-  },
-  {
-    confirmed: "2026-08-27T00:00:00",
-    moves: [
-      ["Xaivian Lee", "Gonzaga"],
-      // He goes by Butta; the corpus has him as Efrem, and these scripts match
-      // on the corpus name. Changing it here would resolve to nobody.
-      ["Efrem Johnson", "Virginia Tech"],
-    ],
-  },
-  {
-    confirmed: "2026-08-28T00:00:00",
-    moves: [
-      // Ole Miss is "Mississippi" in the Bart naming, as above.
-      ["Micah Handlogten", "Mississippi"],
-      // The corpus has him as "Tre Holloman" from 2024 on; a "Trejuan
-      // Holloman" also exists on 2023 and is the same player under his full
-      // name, so the short form is what resolves to one id here.
-      ["Tre Holloman", "Grand Canyon"],
-      // Same shape: "Daniel Skillings" on 2023, "Dan Skillings Jr." from 2024.
-      ["Dan Skillings Jr.", "Grand Canyon"],
-      // Utah Tech guard, 31 games in 2025-26. One "Noah Bolanga" in the
-      // corpus, so the join is unambiguous.
-      ["Noah Bolanga", "Abilene Christian"],
-      // Queens sophomore, 34 games in 2025-26.
-      ["Maban Jabriel", "Maryland"],
-    ],
-  },
-];
+// BATCHES was here. See the note on MOVES below.
 
 /**
  * Entries On3 joined to the WRONG player, by cbba_player_id.
@@ -223,8 +91,22 @@ const IDENTITY_FIXES: Array<{ cbba_player_id: number; bart_player_id: number; na
   },
 ];
 
-const MOVES: Array<[string, string, string]> = BATCHES.flatMap(
-  (b) => b.moves.map(([name, dest]) => [name, dest, b.confirmed] as [string, string, string]),
+/**
+ * The moves, from the table the admin page edits.
+ *
+ * THIS WAS TWO HARDCODED ARRAYS — the BATCHES list that used to sit above, and
+ * an identical flat one in patch-preview-manual-transfers.mjs, each carrying a
+ * comment telling whoever edited it to keep the other in step. Nothing enforced
+ * that, and a move added to one and not the other left the portal table and the
+ * team pages disagreeing about where a player is.
+ *
+ * STILL BATCHED BY DATE, and that survives the move: the portal table's default
+ * sort is on date_entered, so a move stamped with the wrong day sorts as though
+ * it had been known for longer than it was. The date now comes from the row's
+ * own confirmed_on rather than from which array literal it was typed into.
+ */
+const MOVES: Array<[string, string, string]> = (await readManualTransfers()).map(
+  (m) => [m.name, m.destination, m.confirmed] as [string, string, string],
 );
 
 const YEARS = Array.from({ length: 14 }, (_, i) => 2013 + i);
