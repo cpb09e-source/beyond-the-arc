@@ -630,12 +630,42 @@ export function TransfersPanel() {
         </p>
       )}
 
-      {active.length > 0 && <TransferList rows={active} onFlip={flip} busy={busy} />}
+      {/*
+        COLLAPSED BY DEFAULT, because the list is 53 rows on the day it is
+        seeded and only grows. What someone opens this panel to do is ADD a
+        move; reading the existing ones is the rarer errand, and an unrolled
+        list pushes the run controls and the last-run record below the fold on
+        every visit.
+
+        A native <details> rather than useState: it keeps the open state
+        through a re-render on its own, it is keyboard- and screen-reader-
+        correct without any aria, and Ctrl-F finds text inside a closed one in
+        current browsers — which matters for a list whose whole purpose is
+        looking someone up.
+      */}
+      {active.length > 0 && (
+        <details className="mt-4 group">
+          <summary className="flex items-center gap-2 cursor-pointer text-sm text-ink list-none [&::-webkit-details-marker]:hidden">
+            <span
+              aria-hidden
+              className="text-ink-muted text-[0.7rem] transition-transform group-open:rotate-90"
+            >
+              ▶
+            </span>
+            <span className="font-semibold">{active.length} active</span>
+            {/* Hidden once open: "show" on an expanded list is a lie, and the
+                rotated caret already says what state it is in. */}
+            <span className="text-ink-muted text-[0.7rem] group-open:hidden">show</span>
+          </summary>
+          <TransferList rows={active} onFlip={flip} busy={busy} />
+        </details>
+      )}
 
       {withdrawn.length > 0 && (
-        <details className="mt-4">
-          <summary className="text-[0.7rem] uppercase tracking-widest text-ink-muted font-medium cursor-pointer">
-            Withdrawn ({withdrawn.length})
+        <details className="mt-3 group">
+          <summary className="flex items-center gap-2 cursor-pointer text-sm text-ink-muted list-none [&::-webkit-details-marker]:hidden">
+            <span aria-hidden className="text-[0.7rem] transition-transform group-open:rotate-90">▶</span>
+            <span className="font-semibold">{withdrawn.length} withdrawn</span>
           </summary>
           <TransferList rows={withdrawn} onFlip={flip} busy={busy} />
         </details>
