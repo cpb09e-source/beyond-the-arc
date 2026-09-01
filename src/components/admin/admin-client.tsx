@@ -150,16 +150,29 @@ export function AdminClient() {
         <section className="rounded-xl border border-ink/10 bg-card shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-hairline flex items-center justify-between gap-3">
             <h2 className="text-sm font-semibold text-ink">Last run</h2>
-            {status && (
-              <span
-                className={cn(
-                  "text-[0.6rem] uppercase tracking-widest font-bold px-2 py-0.5 rounded",
-                  status.outcome === "ok" ? "bg-good/15 text-good" : "bg-bad/15 text-bad",
-                )}
-              >
-                {status.outcome === "ok" ? "Succeeded" : "Failed"}
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {/* A DRY RUN IS NOT A RUN, and the record could not say so.
+                  --dry-run writes the same status file with every step marked
+                  skipped, so a rehearsal showed here as "Succeeded" with the
+                  time it was rehearsed — which reads as "the pipeline ran and
+                  the data is current". It is the one thing this panel exists
+                  to answer. */}
+              {status?.dryRun && (
+                <span className="text-[0.6rem] uppercase tracking-widest font-bold px-2 py-0.5 rounded bg-ink/10 text-ink-muted">
+                  Dry run
+                </span>
+              )}
+              {status && (
+                <span
+                  className={cn(
+                    "text-[0.6rem] uppercase tracking-widest font-bold px-2 py-0.5 rounded",
+                    status.outcome === "ok" ? "bg-good/15 text-good" : "bg-bad/15 text-bad",
+                  )}
+                >
+                  {status.outcome === "ok" ? "Succeeded" : "Failed"}
+                </span>
+              )}
+            </div>
           </div>
 
           {statusState === "loading" && (
