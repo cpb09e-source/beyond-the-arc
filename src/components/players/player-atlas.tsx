@@ -186,7 +186,7 @@ function StatBand({ now }: { now: StatLine }) {
     // No rule above the band. Bare figures needed one to separate them from the
     // vitals; a row of bordered cells is already a block, and a hairline on top
     // of it is a second edge doing the first one's job.
-    <div className="xl:hidden mt-5 grid grid-cols-4 md:grid-cols-7 gap-2">
+    <div className="mt-5 grid grid-cols-4 md:grid-cols-7 gap-2">
       {cells.map((c) => (
         <div
           key={c.unit}

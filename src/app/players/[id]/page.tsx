@@ -105,7 +105,23 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   // surface the transfer in the hero with a redacted-current + new-school
   // treatment. Only kicks in when status === "Transferred" AND team_to is set.
   const portalEntry = await readPortalEntryForBartId(bartId);
+  /**
+   * NOT A TRANSFER IF HE ENDED UP WHERE HE STARTED.
+   *
+   * The banner exists because a portal commit is news about next season. A
+   * player who entered the portal and withdrew has no such news: the
+   * destination is the school whose name is already at the top of this page,
+   * so the banner read "Transfer → Missouri" directly under MISSOURI. Mark
+   * Mitchell is the case — see the same-team guards in rescore-portal.mjs and
+   * patch-preview-manual-transfers.mjs, which this completes on the page side.
+   *
+   * Compared against the portal row's own origin rather than the page's
+   * current team: `current` is the newest season we hold, which for a summer
+   * move is still the old school, so testing against it would suppress the
+   * banner for every genuine transfer.
+   */
   const transfer = portalEntry && portalEntry.status === "Transferred" && portalEntry.team_to
+    && portalEntry.team_to !== portalEntry.team_from
     ? { from: current.team_name, to: portalEntry.team_to, toConf: portalEntry.conf_to }
     : null;
 
