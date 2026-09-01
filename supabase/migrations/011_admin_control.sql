@@ -44,11 +44,12 @@ create policy "site_config: public read"
 --
 -- Hand-confirmed portal moves that the automated feeds miss.
 --
--- WHAT THIS REPLACES. The same list is currently hardcoded TWICE, in
+-- WHAT THIS REPLACED. The same list was hardcoded TWICE, in
 -- patch-preview-manual-transfers.mjs and in patch-portal-manual.mts, and each
--- file carries a comment telling whoever edits it to keep the other in step.
--- A move added to one and not the other leaves the portal table and the team
--- pages disagreeing about where a player is. One table, read by both.
+-- file carried a comment telling whoever edited it to keep the other in step —
+-- a contract enforced by nothing. A move added to one and not the other left
+-- the portal table and the team pages disagreeing about where a player is.
+-- Both scripts read this table now, through scripts/lib/manual-transfers.mjs.
 --
 -- `active` rather than DELETE: a move that turns out to be wrong is a thing
 -- that was believed on a date and then withdrawn, and the withdrawal is worth

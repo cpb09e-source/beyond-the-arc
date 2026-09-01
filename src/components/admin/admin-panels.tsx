@@ -604,8 +604,9 @@ export function TransfersPanel() {
 
       {rows !== null && rows.length === 0 && (
         <p className="mt-4 text-sm text-ink-muted">
-          Nothing yet. The existing hand-confirmed moves still live in the two patch scripts —
-          seed them with <code className="font-mono text-xs">npm run seed:transfers</code>.
+          Nothing yet. Add a move above — the pipeline applies it on its next run.
+          To restore the original hand-confirmed list, run{" "}
+          <code className="font-mono text-xs">npm run seed:transfers</code>.
         </p>
       )}
 

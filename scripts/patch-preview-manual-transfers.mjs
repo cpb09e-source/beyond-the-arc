@@ -47,16 +47,11 @@ const INDEX = path.join(DATA, "players-index.json");
 const DRY = process.argv.includes("--dry");
 
 /**
- * Confirmed by hand, in the order the batches were added — 22 on 2026-08-17,
- * three on 2026-08-18, two on 2026-08-19. Keep in step with the BATCHES list in
- * patch-portal-manual.mts: a move added to one and not the other leaves the
- * portal table and the team pages disagreeing about where the player is.
+ * The moves, from the table the admin page edits.
  *
  * Destination is written the way we name teams; the shorthand a human types
- * ("UNC", "Cincy") is mapped in DEST_ALIAS below.
- */
-/**
- * The moves, from the table the admin page edits.
+ * ("UNC", "Cincy") is mapped in DEST_ALIAS below, and the admin form now
+ * offers the real names so a new shorthand does not have to be added there.
  *
  * THIS WAS A HARDCODED ARRAY, and an identical one lived in
  * patch-portal-manual.mts with a comment in each telling whoever edited it to
