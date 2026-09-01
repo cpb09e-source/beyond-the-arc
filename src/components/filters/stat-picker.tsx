@@ -452,12 +452,26 @@ export function StatPicker({
             />
           </div>
 
-          <div id={listId} role="listbox" ref={listRef} className="max-h-72 overflow-y-auto py-1">
+          <div
+            id={listId}
+            role="listbox"
+            ref={listRef}
+            /**
+             * pb-1, NOT py-1. A sticky offset resolves against the scrollport's
+             * PADDING edge, so 4px of top padding left a 4px strip above the
+             * pinned heading with nothing covering it — rows scrolled through
+             * the gap and showed as a sliver of the previous section. Removing
+             * the top padding lets the heading pin flush to the border, which
+             * is the only edge that is actually opaque.
+             */
+            className="max-h-72 overflow-y-auto pb-1"
+          >
             {matches.length === 0 && (
               <p className="px-3 py-6 text-center text-sm text-ink-muted">No stat matches “{q.trim()}”.</p>
             )}
             {sections.map((section) => (
               <div key={section.group ?? "all"}>
+                {!section.group && <div className="h-1" aria-hidden />}
                 {section.group && (
                   <div
                     /**

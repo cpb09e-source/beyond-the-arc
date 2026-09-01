@@ -190,8 +190,27 @@ export function Select({
       {open && at && typeof document !== "undefined" && createPortal(
         <div
           ref={popRef}
-          style={{ ...popoverStyle(at), width: undefined, minWidth: at.width }}
-          className="z-60 overflow-y-auto rounded-lg border border-hairline bg-popover shadow-xl py-1"
+          /**
+           * max-content, NOT auto.
+           *
+           * `width: undefined` on a fixed-position element makes it shrink to
+           * fit the AVAILABLE space — viewport minus `left` — and the option
+           * buttons are `w-full`, so they expanded to fill it. A 120px trigger
+           * opened a 660px panel.
+           *
+           * max-content sizes the panel to its widest row instead, which is
+           * what a dropdown should do: at least as wide as the control it came
+           * from, never wider than it needs, and never off the screen.
+           */
+          style={{
+            ...popoverStyle(at),
+            width: "max-content",
+            minWidth: at.width,
+            maxWidth: `calc(100vw - ${Math.round(at.left) + 8}px)`,
+          }}
+          /* pb-1 rather than py-1 — see the note in stat-picker: top padding
+             leaves an uncovered strip above a heading pinned at top-0. */
+          className="z-60 overflow-y-auto rounded-lg border border-hairline bg-popover shadow-xl pb-1"
         >
           <ul id={listId} role="listbox" aria-label={ariaLabel}>
             {sections.map((section) => (
@@ -202,6 +221,7 @@ export function Select({
                     of its own, which is both what lets it stick for the whole
                     section and what keeps an arrow key from ever landing on
                     it. */}
+                {!section.group && <div className="h-1" aria-hidden />}
                 {section.group && (
                   <div className="sticky top-0 z-10 bg-popover px-2.5 pt-2 pb-1 text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">
                     {section.group}
@@ -218,7 +238,22 @@ export function Select({
                   onMouseEnter={() => setActive(i)}
                   onClick={() => choose(r.value)}
                   className={cn(
-                    "w-full text-left px-2.5 py-1.5 capitalize transition-colors",
+                    /**
+                     * min-w-full, NOT w-full.
+                     *
+                     * The panel is sized with `width: max-content` so it fits
+                     * its longest row. A percentage width on a child defeats
+                     * that: during intrinsic sizing the browser resolves
+                     * `width: 100%` against the available space instead of the
+                     * content, so an 87px trigger opened a 588px panel — the
+                     * full distance to the right edge of the window.
+                     *
+                     * A block with `min-width: 100%` contributes only its text
+                     * to the panel's max-content, then fills the panel once
+                     * that width is settled, so the hover highlight still
+                     * spans the whole row.
+                     */
+                    "block min-w-full whitespace-nowrap text-left px-2.5 py-1.5 capitalize transition-colors",
                     compact ? "text-xs" : "text-sm",
                     r.value === value ? "text-ink font-semibold" : "text-ink",
                     i === active ? "bg-ink/[0.06]" : "hover:bg-ink/[0.04]",
