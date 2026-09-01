@@ -215,6 +215,10 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
   // re-opening is instant.
   useEffect(() => {
     if (!open || index || indexLoading) return;
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- the effect IS
+       the external system here: it starts a fetch, and this flag is how the
+       render learns one is in flight. There is nothing to derive during render
+       because the answer does not exist yet. */
     setIndexLoading(true);
     // players-index.json is a top-level file and stays in /public, so this
     // one is correct as a bare path. dataUrl() would return it unchanged.
@@ -291,6 +295,10 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
       const bartId = Number(idStr);
       if (!Number.isFinite(bartId)) continue;
       if (ranksByBart[bartId] !== undefined) continue;
+      /* eslint-disable-next-line react-hooks/set-state-in-effect -- the
+         "loading" marker is also the de-dupe key: the guard above skips any
+         id already in the map, so writing it here is what stops a second
+         render from firing the same fetch again. */
       setRanksByBart((prev) => ({ ...prev, [bartId]: "loading" }));
       // dataUrl(), NOT the bare path. player-ranks is one of the eight dirs
       // stripped out of `out/` and mirrored to R2 — the raw path is a 404 in
@@ -989,7 +997,16 @@ function SlotPicker({
     return matched.slice(0, 80);
   }, [options, excluded, q]);
 
-  useEffect(() => { setHIdx(0); }, [q]);
+  /**
+   * A NEW SEARCH STARTS AT THE TOP OF ITS OWN LIST, adjusted during render.
+   *
+   * Typing a letter rebuilds `matched`; the highlight has to come back to row
+   * 0 or the keyboard is pointed at a row from the previous list. Done in an
+   * effect this committed one frame with the stale index — long enough for the
+   * scroll-into-view effect below to chase it.
+   */
+  const [hIdxFor, setHIdxFor] = useState(q);
+  if (hIdxFor !== q) { setHIdxFor(q); setHIdx(0); }
 
   useEffect(() => {
     if (!open) return;

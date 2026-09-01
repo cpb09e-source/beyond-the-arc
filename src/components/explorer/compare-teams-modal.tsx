@@ -984,7 +984,16 @@ function SlotPicker({
     return matched.slice(0, 80);
   }, [options, excluded, q]);
 
-  useEffect(() => { setHIdx(0); }, [q]);
+  /**
+   * A NEW SEARCH STARTS AT THE TOP OF ITS OWN LIST, adjusted during render.
+   *
+   * Typing a letter rebuilds `matched`; the highlight has to come back to row
+   * 0 or the keyboard is pointed at a row from the previous list. Done in an
+   * effect this committed one frame with the stale index — long enough for the
+   * scroll-into-view effect below to chase it.
+   */
+  const [hIdxFor, setHIdxFor] = useState(q);
+  if (hIdxFor !== q) { setHIdxFor(q); setHIdx(0); }
 
   useEffect(() => {
     if (!open) return;

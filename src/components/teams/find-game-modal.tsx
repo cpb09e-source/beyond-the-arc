@@ -102,6 +102,10 @@ export function FindGameModal({
     const missing = years.filter((y) => !yearData[y]);
     if (missing.length === 0) return;
     let cancelled = false;
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- the effect IS
+       the external system here: it starts a fetch, and this flag is how the
+       render learns one is in flight. There is nothing to derive during render
+       because the answer does not exist yet. */
     setLoading(true);
     Promise.all(missing.map((y) => loadGamesForYear(y).then((arr) => ({ y, arr }))))
       .then((results) => {

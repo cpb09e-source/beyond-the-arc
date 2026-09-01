@@ -138,6 +138,10 @@ export function BoxscoreModal({
 
   useEffect(() => {
     if (!open) return;
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- clearing the
+       previous game's box score as the fetch for the next one starts. The
+       modal is reused across games, so without this it shows the last game's
+       numbers under the new game's title until the network answers. */
     setData(null);
     setErr(null);
     let cancelled = false;

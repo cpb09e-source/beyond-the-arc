@@ -501,8 +501,23 @@ export function ExplorerClient({
       pageSafe,
     };
   }, [allTeams, scopedSpec, tableSearch, page]);
-  // Reset to page 1 when the result set changes (filters, sort, search, limit).
-  useEffect(() => { setPage(1); }, [spec, tableSearch]);
+  /**
+   * PAGE 1, ADJUSTED DURING RENDER RATHER THAN IN AN EFFECT.
+   *
+   * This was `useEffect(() => setPage(1), [...])`. An effect runs AFTER the
+   * browser has been handed a frame, so a reader on page 7 who narrows the
+   * filters got one committed paint of "page 7 of 2" — an empty table — before
+   * the reset landed. Setting state during render makes React throw that
+   * render away and re-run with page 1, so the empty frame never exists.
+   *
+   * The comparison is against the memoised result set itself, not its inputs,
+   * which is the same trigger the dependency array had.
+   */
+  const [pagedFor, setPagedFor] = useState<{ spec: unknown; search: string }>({ spec, search: tableSearch });
+  if (pagedFor.spec !== spec || pagedFor.search !== tableSearch) {
+    setPagedFor({ spec, search: tableSearch });
+    setPage(1);
+  }
   const multiYear = scopedSpec.years.length > 1;
 
   const view = useMemo(() => viewByKey(spec.view), [spec.view]);

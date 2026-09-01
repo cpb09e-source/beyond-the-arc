@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { type RangeStat } from "@/components/filters/range-row";
 import { PACK_STAT_COLUMNS, PACK_STAT_BY_KEY } from "@/lib/player-stat-pack";
 import { type PickOption } from "@/components/filters/stat-picker";
@@ -90,8 +90,24 @@ export function PlayerFilterBar({
     filters: urlSpec.filters,
   });
 
-  // Re-sync draft when the URL changes from outside (browser nav, etc.).
-  useEffect(() => {
+  /**
+   * RE-SYNC THE DRAFT WHEN THE URL CHANGES FROM OUTSIDE — browser Back, a
+   * saved-filter link, a reset from elsewhere on the page.
+   *
+   * Adjusted during render rather than in an effect. The bar's controls read
+   * from `draft`, so an effect meant one committed frame showing the filters
+   * from the page you just navigated away from; on Back that is the wrong
+   * scope displayed over the right results.
+   *
+   * KEYED ON `search`, NOT `urlSpec`. parsePlayerSpec builds a fresh object
+   * every render, so comparing that would set state on every pass and never
+   * settle. The ReadonlyURLSearchParams from useSearchParams is stable until
+   * the URL actually changes, which is precisely the trigger wanted here —
+   * and is what the old effect's dependency array was doing.
+   */
+  const [syncedSearch, setSyncedSearch] = useState(search);
+  if (syncedSearch !== search) {
+    setSyncedSearch(search);
     setDraft({
       years: urlSpec.years,
       conf: urlSpec.conf,
@@ -100,8 +116,7 @@ export function PlayerFilterBar({
       pos: urlSpec.pos,
       filters: urlSpec.filters,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
+  }
 
   function patch(next: Partial<Draft>) {
     setDraft((d) => ({ ...d, ...next }));

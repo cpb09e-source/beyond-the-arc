@@ -777,6 +777,10 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   useEffect(() => {
     const toFetch = spec.years.filter((y) => !rawByYear[y]);
     if (toFetch.length === 0) {
+      /* eslint-disable-next-line react-hooks/set-state-in-effect -- every year
+         asked for is already cached, so the fetch that would have cleared this
+         flag never runs. Without it the table keeps its loading state forever
+         the moment a reader goes back to a season they have already seen. */
       setLoading(false);
       return;
     }
@@ -1178,8 +1182,24 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     };
   }, [prefiltered, deferredQuery, spec.limit, page, previewCapped]);
 
-  // Reset to page 1 whenever the result set changes (filters, sort, search, limit).
-  useEffect(() => { setPage(1); }, [prefiltered, deferredQuery, spec.limit, spec.sortBy, spec.sortDir]);
+  /**
+   * PAGE 1, ADJUSTED DURING RENDER RATHER THAN IN AN EFFECT.
+   *
+   * This was `useEffect(() => setPage(1), [...])`. An effect runs AFTER the
+   * browser has been handed a frame, so a reader on page 7 who narrows the
+   * filters got one committed paint of "page 7 of 2" — an empty table — before
+   * the reset landed. Setting state during render makes React throw that
+   * render away and re-run with page 1, so the empty frame never exists.
+   *
+   * The comparison is against the memoised result set itself, not its inputs,
+   * which is the same trigger the dependency array had.
+   */
+  const resetKey = `${spec.limit}|${spec.sortBy}|${spec.sortDir}|${deferredQuery}`;
+  const [pagedFor, setPagedFor] = useState<{ rows: unknown; key: string }>({ rows: prefiltered, key: resetKey });
+  if (pagedFor.rows !== prefiltered || pagedFor.key !== resetKey) {
+    setPagedFor({ rows: prefiltered, key: resetKey });
+    setPage(1);
+  }
   const multiYear = spec.years.length > 1;
   // Any visible row served by the estimated box-score model → show the legend.
   const anyEstimated = players.some((p) => p.epm_estimated && p.epm !== null);
@@ -1880,6 +1900,10 @@ function VScrollRail({ target }: { target: React.RefObject<HTMLDivElement | null
     const el = target.current;
     if (!el) return;
     const q = rafCoalesce(sync);
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- the first
+       measurement. sync() reads scrollHeight and clientHeight off the DOM;
+       those are not knowable during render, and skipping this call leaves the
+       rail with no thumb until the reader happens to scroll. */
     sync();
     el.addEventListener("scroll", q.call, { passive: true });
     const ro = new ResizeObserver(q.call);
@@ -1905,7 +1929,11 @@ function VScrollRail({ target }: { target: React.RefObject<HTMLDivElement | null
     const railH = rail.clientHeight;
     const maxTop = railH - thumb.h;
     const next = Math.min(maxTop, Math.max(0, drag.current.startTop + (e.clientY - drag.current.startY)));
-    el.scrollTop = (next / maxTop) * (el.scrollHeight - el.clientHeight);
+    // scrollTo, not `el.scrollTop = …`. Identical behaviour (the default
+    // `behavior` is instant), but assigning through a ref that arrived as a
+    // prop reads to the compiler as writing to the prop itself. The arrows
+    // above already drive the same element with scrollBy.
+    el.scrollTo({ top: (next / maxTop) * (el.scrollHeight - el.clientHeight) });
   };
   const onThumbUp = () => { drag.current = null; };
   const onTrackClick = (e: React.MouseEvent) => {
@@ -1968,6 +1996,10 @@ function HScrollRail({ target }: { target: React.RefObject<HTMLDivElement | null
     const el = target.current;
     if (!el) return;
     const q = rafCoalesce(sync);
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- the first
+       measurement. sync() reads scrollHeight and clientHeight off the DOM;
+       those are not knowable during render, and skipping this call leaves the
+       rail with no thumb until the reader happens to scroll. */
     sync();
     el.addEventListener("scroll", q.call, { passive: true });
     const ro = new ResizeObserver(q.call);
@@ -1990,7 +2022,8 @@ function HScrollRail({ target }: { target: React.RefObject<HTMLDivElement | null
     const railW = state.vw - 56;
     const maxLeft = railW - state.w;
     const next = Math.min(maxLeft, Math.max(0, drag.current.startLeft + (e.clientX - drag.current.startX)));
-    el.scrollLeft = (next / maxLeft) * (el.scrollWidth - el.clientWidth);
+    // scrollTo — see the note in VScrollRail's thumb handler.
+    el.scrollTo({ left: (next / maxLeft) * (el.scrollWidth - el.clientWidth) });
   };
   const onUp = () => { drag.current = null; };
 

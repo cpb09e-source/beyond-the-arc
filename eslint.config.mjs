@@ -12,6 +12,20 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    /**
+     * NETLIFY'S OWN BUILD OUTPUT, and the reason this list had to be restated.
+     *
+     * `netlify dev` bundles each function into .netlify/functions-serve/ —
+     * esbuild output with every dependency inlined, including the whole AWS
+     * SDK and Stripe's client. Linting it produced 24,048 warnings and 352
+     * errors against code nobody here wrote and nobody can edit, which buried
+     * the 19 real findings in src/ under a 24,000-line report. A report that
+     * long is not read, so in practice the linter had stopped working.
+     */
+    ".netlify/**",
+    // Playwright MCP scratch: page snapshots and console logs from a browser
+    // check, written into the repo root and gitignored.
+    ".playwright-mcp/**",
   ]),
   {
     rules: {

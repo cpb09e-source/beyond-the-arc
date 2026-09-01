@@ -196,6 +196,12 @@ export function ScheduleTicker({
                         <GameCell
                           key={`${g.game_date}-${i}`}
                           game={g}
+                          /* eslint-disable-next-line react-hooks/refs --
+                             handleCellClick reads suppressClickRef, and the
+                             compiler cannot see that GameCell only ever calls
+                             this from a click. It is an event handler; the ref
+                             is read when the pointer is released, which is the
+                             one thing a ref is for. */
                           onClick={() => handleCellClick(g)}
                         />
                       ))}

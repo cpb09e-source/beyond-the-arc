@@ -54,6 +54,11 @@ export function ShareScreenshotSheet({
   // bought for nothing.
   useEffect(() => {
     const u = URL.createObjectURL(blob);
+    /* eslint-disable-next-line react-hooks/set-state-in-effect --
+       createObjectURL allocates a handle the browser holds until it is
+       revoked, so it belongs in an effect with its cleanup and not in a render
+       that React may run twice and throw one result away. The state is the
+       handle, and the handle cannot exist before the effect runs. */
     setUrl(u);
     return () => URL.revokeObjectURL(u);
   }, [blob]);
