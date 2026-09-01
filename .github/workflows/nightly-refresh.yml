@@ -1,0 +1,148 @@
+# The in-season nightly refresh.
+#
+# WHAT IT REPLACES. Until the live-season pages became data (see
+# src/lib/live-team-page.ts) publishing a night's numbers meant an 8-minute
+# build and an upload of 319,000 files, on Colin's machine, at 3am, every
+# night. Now it is: pull, derive, write ~365 small files, upload them. Nothing
+# about the site is rebuilt and no machine at home has to be awake.
+#
+# WHY GITHUB ACTIONS AND NOT A NETLIFY SCHEDULED FUNCTION. The chain reads the
+# CBBD archive under data/cbbd — 907 MB that is gitignored and is not in the
+# deploy — and it shells out to Python for the EPM fit. A Netlify function has
+# neither. This repo is public, so Actions minutes are free and unlimited.
+#
+# TRIGGERS ARE DELIBERATELY LIMITED TO THESE TWO. No push, no pull_request:
+# this is a public repo, and a workflow that runs on a fork's PR is how secrets
+# get exfiltrated. workflow_dispatch is what the admin page's "Run now" button
+# calls.
+name: Nightly refresh
+
+on:
+  schedule:
+    # 11:00 UTC — 6am ET, after the late West Coast games have settled and
+    # Bart's overnight update has landed. Cron here is always UTC, so this
+    # drifts an hour against ET when the clocks change; that is fine for a job
+    # whose input is "yesterday".
+    - cron: "0 11 * * *"
+  workflow_dispatch:
+    inputs:
+      phases:
+        description: "Which phases to run"
+        type: choice
+        default: ingest,derive,publish
+        options:
+          - ingest,derive,publish
+          - publish
+          - derive,publish
+          - ingest
+      season:
+        description: "Season to refresh (blank = LIVE_SEASON)"
+        type: string
+        required: false
+      dry_run:
+        description: "Print the chain without running it"
+        type: boolean
+        default: false
+      no_sync:
+        description: "Build the files but do not upload to R2"
+        type: boolean
+        default: false
+
+# NEVER TWO AT ONCE. Every step reads the file the previous step wrote, so two
+# overlapping runs interleave their writes and publish a season assembled from
+# both. A manual run while the nightly is going is the likely way that happens.
+# cancel-in-progress is false on purpose: the running job is the one with real
+# work done, so the newcomer waits rather than killing it.
+concurrency:
+  group: nightly-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    # The full chain is a pull plus an EPM fit plus 365 page builds. This is a
+    # ceiling that catches a hang, not an estimate — a healthy run is far
+    # under it, and the default 6 hours is long enough to hide one.
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: npm ci
+
+      # NOT continue-on-error. The EPM fit is a derive step, so a phase that
+      # skips derive does not need these — but a silent skip here surfaces
+      # later as an ImportError halfway through a chain that has already
+      # written files, which is a worse place to find out.
+      - name: Install Python deps for the EPM fit
+        run: pip install -r requirements.txt
+
+      # THE ARCHIVE IS THE EXPENSIVE INPUT. 907 MB, gitignored, and every
+      # derivation reads it. Restoring it from R2 on each run would dominate
+      # the job, so it is cached and the restore is the cold-start path.
+      #
+      # The key is the run id, which is never reused, so every run saves a NEW
+      # entry and the cache rolls forward: this run restores the last run's
+      # archive, adds a day of games to it, and saves the result under its own
+      # id. restore-keys turns the lookup into a prefix match, so a key that by
+      # definition never hits still finds the most recent archive. A fixed key
+      # would be immutable once written and the archive would freeze on day one.
+      - name: Restore the CBBD archive from cache
+        id: archive-cache
+        uses: actions/cache@v4
+        with:
+          path: data/cbbd
+          key: cbbd-archive-${{ github.run_id }}
+          restore-keys: |
+            cbbd-archive-
+
+      - name: Seed the archive from R2 (cold start only)
+        if: steps.archive-cache.outputs.cache-matched-key == ''
+        run: node scripts/backup-archive-to-r2.mjs --restore
+        env:
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ARCHIVE_BUCKET: ${{ secrets.R2_ARCHIVE_BUCKET }}
+
+      - name: Refresh
+        run: |
+          npx tsx scripts/nightly-refresh.mts \
+            --phase "${{ inputs.phases || 'ingest,derive,publish' }}" \
+            ${{ inputs.season && format('--season {0}', inputs.season) || '' }} \
+            ${{ inputs.dry_run == true && '--dry-run' || '' }} \
+            ${{ inputs.no_sync == true && '--no-sync' || '' }}
+        env:
+          CBBD_API_KEY: ${{ secrets.CBBD_API_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          # The freeze runs to 2026-10-01 and the season starts after it, so
+          # this is not normally needed. It is here so a deliberate preseason
+          # run is a workflow input away rather than an edit to this file.
+          BTA_ALLOW_NETWORK: ${{ vars.BTA_ALLOW_NETWORK }}
+
+      # ALWAYS, INCLUDING ON FAILURE. The status file records which step died
+      # and how far the run got, which is exactly what is wanted when the run
+      # did not finish. Uploading it only on success would keep it for the runs
+      # nobody needs to read.
+      - name: Keep the run record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: refresh-status
+          path: public/data/live/refresh-status.json
+          if-no-files-found: warn
+          retention-days: 30

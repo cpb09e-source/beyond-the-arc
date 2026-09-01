@@ -1,0 +1,11 @@
+# Python dependencies for the EPM fit — scripts/compute-epm.py and
+# scripts/compute-epm-extras.py, the two Python steps in the nightly chain.
+#
+# PINNED TO MAJORS, not to exact versions. These are the majors the archive's
+# numbers were produced under locally (numpy 2.4, pandas 3.0, scipy 1.17), and
+# a ridge fit is exactly the kind of thing where a major bump can move the
+# third decimal place without erroring. A CI runner silently a major ahead
+# would publish ratings that disagree with the ones already on the site.
+numpy>=2.4,<3
+pandas>=3.0,<4
+scipy>=1.17,<2
