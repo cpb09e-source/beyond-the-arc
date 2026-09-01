@@ -21,6 +21,17 @@ export type TeamGamePack = {
   teams: { names: string[]; confs: string[] };
   opps: string[];
   rows: number[][];
+  /**
+   * Percentiles that arrived with the file, one array per stat key, aligned to
+   * `rows` by index. Present only on the per-team files (see
+   * loadTeamSeasonGames); the full-season pack has none and is ranked on the
+   * client as it always was.
+   *
+   * A null entry means the stat was missing for that game, which is what an
+   * absent key means in the map the client builds — so both paths render the
+   * same chip, or the same nothing.
+   */
+  pct?: Record<string, Array<number | null>>;
 };
 
 /** Column offsets. Mirrors FIELDS in scripts/build-team-game-index.mjs. */
@@ -51,6 +62,40 @@ export function loadTeamGameIndex(season: number): Promise<TeamGamePack | null> 
     .then((j) => (j ? { ...j, epochMs: Date.parse(`${j.epoch}T00:00:00Z`) } as TeamGamePack : null))
     .catch(() => null);
   CACHE.set(season, p);
+  return p;
+}
+
+const TEAM_CACHE = new Map<string, Promise<TeamGamePack | null>>();
+
+/**
+ * One team's games for one season — about 9 KB, against the 1.6 MB the season
+ * costs.
+ *
+ * WHY IT IS A SEPARATE FILE AND NOT A FILTER. The chip beside every number is
+ * ranked against every game in the season, so a client holding one team cannot
+ * compute it; that is why the team page used to download the season to draw
+ * thirty rows. These files carry the ranking already done, over the same
+ * cohort, by the same function — scripts/build-team-season-games.mts imports
+ * this module's own TEAM_GAME_STATS rather than restating the formulas.
+ *
+ * It also closes a hole in the paywall. Team pages are free at every season by
+ * decision, but the season corpora behind the explorers are not, and a free
+ * 2019 team page fetching the whole 2019 corpus handed out exactly the bytes
+ * the gate withholds.
+ *
+ * A miss resolves to null, and the caller falls back to the season file — so a
+ * team-season with no per-team file renders correctly and slowly rather than
+ * not at all.
+ */
+export function loadTeamSeasonGames(season: number, slug: string): Promise<TeamGamePack | null> {
+  const key = `${season}|${slug}`;
+  const hit = TEAM_CACHE.get(key);
+  if (hit) return hit;
+  const p = fetch(dataUrl(`/data/team-season-games/${season}/${slug}.json`))
+    .then((r) => (r.ok ? (r.json() as Promise<Omit<TeamGamePack, "epochMs">>) : null))
+    .then((j) => (j ? { ...j, epochMs: Date.parse(`${j.epoch}T00:00:00Z`) } as TeamGamePack : null))
+    .catch(() => null);
+  TEAM_CACHE.set(key, p);
   return p;
 }
 

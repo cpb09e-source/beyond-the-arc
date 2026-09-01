@@ -43,6 +43,11 @@ const R2_DIRS = [
   // Its team-side twin: twelve files, 1.7 MB each, same git-history
   // argument.
   "/data/team-game-index/",
+  // The per-team slice of that twin — one ~9 KB file per team-season, which a
+  // team page's Game Log section reads instead of the whole 1.6 MB corpus.
+  // Here for the ORIGINAL reason in this list: 365 teams x 13 seasons is 4,745
+  // files, and file count is what times out a Netlify upload.
+  "/data/team-season-games/",
 ] as const;
 
 export function dataUrl(path: string): string {

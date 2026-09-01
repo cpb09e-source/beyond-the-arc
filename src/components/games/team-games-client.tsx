@@ -40,7 +40,7 @@ import {
   HOME, NEUTRAL, T, TEAM_GAME_GROUP_LABEL, TEAM_GAME_PICK_OPTIONS,
   TEAM_GAME_PRESETS, TEAM_GAME_SEASONS, TEAM_GAME_STATS, TEAM_GAME_STAT_BY_KEY,
   TEAM_GAME_VIEWS, TEAM_OP_LABEL, WON,
-  fmtTeamGameDate, fmtTeamGameValue, loadTeamGameIndex, parseTeamFilters,
+  fmtTeamGameDate, fmtTeamGameValue, loadTeamGameIndex, loadTeamSeasonGames, parseTeamFilters,
   passesTeamFilters, serializeTeamFilters, teamGameStat, teamGameViewByKey,
   type TeamGameFilter, type TeamGamePack, type TeamGameView,
 } from "@/lib/team-game-index";
@@ -209,17 +209,39 @@ function selectRows(packs: TeamGamePack[], spec: Spec, filters: TeamGameFilter[]
  * 11,500-row midrank is a few milliseconds; twelve seasons of eight columns is
  * not, if it runs on every render.
  */
-const PCT_CACHE = new Map<string, Map<number, number>>();
+/**
+ * KEYED BY THE PACK OBJECT, not by season and stat.
+ *
+ * There are two kinds of pack now and both are labelled with the same season —
+ * the full corpus the explorer loads, and the ~30-row per-team file a team
+ * page loads. A "2026|net" key cannot tell them apart, and the entry cached
+ * from one would be handed to the other with row indices that mean something
+ * else entirely. The pack itself is the only honest identity; packs are cached
+ * by their loaders, so the same object comes back and this still computes once.
+ */
+const PCT_CACHE = new WeakMap<TeamGamePack, Map<string, Map<number, number>>>();
 
 function seasonPercentiles(pack: TeamGamePack, stat: { key: string; get: (r: number[]) => number | null; lowerBetter?: boolean }) {
-  const key = `${pack.season}|${stat.key}`;
-  const hit = PCT_CACHE.get(key);
+  let byStat = PCT_CACHE.get(pack);
+  if (!byStat) { byStat = new Map(); PCT_CACHE.set(pack, byStat); }
+  const hit = byStat.get(stat.key);
   if (hit) return hit;
-  const m = midrankPercentileMap(
-    pack.rows.map((r, i) => [i, stat.get(r)] as const),
-    !stat.lowerBetter,
-  );
-  PCT_CACHE.set(key, m);
+
+  /**
+   * A per-team file ships the ranking already done, over the whole season,
+   * which is a cohort this pack no longer contains — so this branch is not an
+   * optimisation, it is the only correct source. Ranking thirty games against
+   * each other would answer "best of Duke's own nights" while the header still
+   * says the chip means "among every game played".
+   */
+  const shipped = pack.pct?.[stat.key];
+  const m = shipped
+    ? new Map(shipped.flatMap((v, i) => (v === null ? [] : [[i, v] as [number, number]])))
+    : midrankPercentileMap(
+        pack.rows.map((r, i) => [i, stat.get(r)] as const),
+        !stat.lowerBetter,
+      );
+  byStat.set(stat.key, m);
   return m;
 }
 
@@ -314,10 +336,27 @@ export function TeamGamesClient({ scope }: { scope?: TeamGamesScope } = {}) {
 
   const pending = useMemo(() => scoped.years.filter((y) => !packs.has(y)), [scoped.years, packs]);
 
+  /**
+   * SCOPED TO A TEAM PAGE, FETCH THAT TEAM'S FILE — 9 KB rather than 1.6 MB,
+   * with the season's percentiles already in it.
+   *
+   * Falling back to the season corpus on a miss is deliberate: a team-season
+   * whose per-team file has not been built yet (a new season mid-pipeline, a
+   * team the split did not cover) still renders, just slowly. The alternative
+   * is an empty table on a page that used to work.
+   */
+  const loadFor = useCallback(
+    (y: number) =>
+      scope
+        ? loadTeamSeasonGames(y, scope.slug).then((p) => p ?? loadTeamGameIndex(y))
+        : loadTeamGameIndex(y),
+    [scope],
+  );
+
   useEffect(() => {
     if (!pending.length) return;
     let live = true;
-    Promise.all(pending.map((y) => loadTeamGameIndex(y).then((p) => [y, p] as const))).then((got) => {
+    Promise.all(pending.map((y) => loadFor(y).then((p) => [y, p] as const))).then((got) => {
       if (!live) return;
       setPacks((prev) => {
         const next = new Map(prev);
@@ -327,7 +366,7 @@ export function TeamGamesClient({ scope }: { scope?: TeamGamesScope } = {}) {
       });
     });
     return () => { live = false; };
-  }, [pending]);
+  }, [pending, loadFor]);
 
   const active = useMemo(
     () => scoped.years.map((y) => packs.get(y)).filter((p): p is TeamGamePack => !!p),

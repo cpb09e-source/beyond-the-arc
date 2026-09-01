@@ -101,3 +101,9 @@ gated-data/
 
 # Team Game Log corpus — 19 MB in 12 files, rebuilt in full, served from R2.
 /public/data/team-game-index/
+
+# Per-team slice of that corpus — 4,631 files, 40 MB, rebuilt in full whenever
+# team-game-index is, served from R2. Derived entirely from the line above, so
+# tracking it would write 40 MB of history for data that is already regenerable
+# in one command: npx tsx scripts/build-team-season-games.mts
+/public/data/team-season-games/

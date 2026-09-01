@@ -8,14 +8,18 @@ import { TeamGamesClient } from "@/components/games/team-games-client";
  *
  * WHY THIS FILE EXISTS AT ALL, given it renders one component: the fetch.
  *
- * The table's corpus is /data/team-game-index/<year>.json, about 1.5 MB for a
- * season, and the client asks for it as soon as it mounts. That is the right
- * behaviour on /teams/games, where the table IS the page. It is the wrong
- * behaviour here, because of the half of the team pages that have no tab
- * routes: those seasons render all seven sections as one scroll (see
- * team-tab-route.ts), so a game log that fetched on mount would pull a
- * megawidth of JSON on every visit to a 2016 team page, for a section three
- * screens below the fold that most readers never reach.
+ * It used to be a big one. The table's corpus was the whole season's
+ * /data/team-game-index/<year>.json — about 1.6 MB to draw thirty rows,
+ * because the percentile chips are ranked against every game in the season and
+ * the client could only do that by holding the season. In scoped mode it now
+ * reads /data/team-season-games/<year>/<slug>.json instead, about 9 KB, with
+ * the ranking already done over the same cohort. See loadTeamSeasonGames.
+ *
+ * The lazy mount survives that, and is worth keeping for the reason it was
+ * built: half the team pages have no tab routes, so those seasons render all
+ * seven sections as one scroll (see team-tab-route.ts) and this one sits three
+ * screens below the fold where most readers never reach it. 9 KB is cheap, but
+ * it is not free, and neither is the work of mounting a table nobody looks at.
  *
  * So the client is mounted on approach rather than on render. In route mode
  * the section is the top of the page and the observer fires on the first
