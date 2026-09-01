@@ -198,6 +198,34 @@ export function AccountClient() {
         </ul>
       </section>
 
+      {/* STAFF ONLY, AND THE ONLY WAY IN.
+          /admin is not in the nav and never will be — the header's width
+          budget is already argued over in account-nav.tsx, and an eighth
+          entry that 99.9% of readers must ignore is the wrong thing to spend
+          it on. The account page is where someone signed in as staff already
+          is, so the door belongs here.
+
+          m.staff rather than a second role check: describeMembership already
+          owns "what is this account", and reading profile.role again here
+          would be a second opinion on a question that has an answer. */}
+      {m.staff && (
+        <section className="mt-6 rounded-xl border border-hairline bg-card p-6">
+          <span className="label text-ink-muted">Staff</span>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+            <p className="text-sm text-ink-soft leading-snug max-w-[28rem]">
+              The nightly refresh — what it did last night, which step failed,
+              and the button to run it again.
+            </p>
+            <Link
+              href="/admin/"
+              className="h-10 shrink-0 inline-flex items-center rounded px-4 text-sm font-semibold border border-ink/15 text-ink hover:bg-paper-deep transition-colors"
+            >
+              Open admin
+            </Link>
+          </div>
+        </section>
+      )}
+
       {/* Session */}
       <section className="mt-6 flex flex-wrap items-center justify-between gap-4">
         <div className="max-w-[30rem]">
