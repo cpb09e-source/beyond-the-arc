@@ -109,12 +109,40 @@ type GridCol = {
  * a separate function rather than a second use of viewGrid because the file
  * wants a percentile column beside every value, which the table does not.
  */
+/**
+ * Flatten fetched group files into (season|column) -> player -> value maps.
+ *
+ * MODULE SCOPE, AND TAKING THE MAP AS AN ARGUMENT, because the export needs
+ * the same flattening over packs that are NOT the ones in state. A multi-view
+ * download fetches the groups its other sheets need and has to read them
+ * immediately — setPacks would not have re-rendered yet, and waiting a render
+ * to write a file is a race, not a design.
+ */
+function packLookups(packs: Map<string, IndexedPack>) {
+  const val = new Map<string, Map<number, number | null>>();
+  const pct = new Map<string, Map<number, number | null>>();
+  let anyPbpThin = false;
+  for (const [key, pk] of packs) {
+    const year = key.split("|")[0]!;
+    for (const [col, m] of pk.value) val.set(`${year}|${col}`, m);
+    for (const [col, m] of pk.pct) pct.set(`${year}|${col}`, m);
+    if (pk.pbpCoverage < 0.9) anyPbpThin = true;
+  }
+  return { val, pct, anyPbpThin };
+}
+
 function exportColsFor(v: PlayerView): ExportCol[] {
   return v.bands.flatMap((band) => band.keys.flatMap((key): ExportCol[] => {
     const summary = PLAYER_STAT_COLUMNS.find((c) => c.key === key);
     if (summary && !summary.filterOnly) {
+      // Same test the on-screen grid makes below. Only the stats in PCT_KEYS
+      // have a percentile map built for them; naming any other field here
+      // produced a header with nothing under it — "GP Pctl" was the visible
+      // one, blank in every row of every players export.
+      const field = summary.field as string;
       return [{
-        label: summary.label, total: summary.field as string, pct: summary.field as string,
+        label: summary.label, total: field,
+        pct: (PCT_KEYS as readonly string[]).includes(field) ? field : "",
         fmt: summary.format === "pct1" ? "pct1" : "num1", band: band.label,
       }];
     }
@@ -654,18 +682,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
    * and each season has its own file — and by bart id rather than the row id,
    * because that is what the build script keys on.
    */
-  const packLook = useMemo(() => {
-    const val = new Map<string, Map<number, number | null>>();
-    const pct = new Map<string, Map<number, number | null>>();
-    let anyPbpThin = false;
-    for (const [key, pk] of packs) {
-      const year = key.split("|")[0]!;
-      for (const [col, m] of pk.value) val.set(`${year}|${col}`, m);
-      for (const [col, m] of pk.pct) pct.set(`${year}|${col}`, m);
-      if (pk.pbpCoverage < 0.9) anyPbpThin = true;
-    }
-    return { val, pct, anyPbpThin };
-  }, [packs]);
+  const packLook = useMemo(() => packLookups(packs), [packs]);
 
   const packValue = useMemo(() => (p: PlayerSummary, key: string): number | null => (
     p.bart_player_id == null ? null
@@ -1059,18 +1076,77 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
    * The same rows, dressed once per chosen view. Tabs come out in REGISTRY
    * order rather than tick order, so the workbook matches the View dropdown.
    */
-  const buildExportAll = useCallback((viewKeys: string[]): MultiExportInput<PlayerSummary> => {
-    const single = buildExport();
+  /**
+   * THE OTHER SHEETS' NUMBERS HAVE TO BE FETCHED FIRST.
+   *
+   * Stat packs load per view, on demand — a reader who opens one view holds
+   * one view's group files. This builds a tab for every view they ticked, and
+   * it used to build them against whatever happened to be in state, so every
+   * sheet but the one on screen came out with its pack columns empty. Only the
+   * handful of stats living on PlayerSummary survived, which is why the
+   * damage looked so arbitrary: a Traditional Boxscore tab exported from the
+   * Overview view kept GP, MPG, PPG and AST/TOV and lost PTS, REB, AST, TOV,
+   * STL and BLK. Measured on an eleven-tab export: 20 of 37 cells empty on the
+   * first sheet whose packs had never been asked for.
+   *
+   * So the groups are collected across every selected view and fetched before
+   * a cell is written. loadStatPack caches, so the ones already held cost
+   * nothing, and what gets fetched is also handed to setPacks — the reader is
+   * about to have those columns on screen anyway if they switch views.
+   */
+  const buildExportAll = useCallback(async (viewKeys: string[]): Promise<MultiExportInput<PlayerSummary>> => {
     const wanted = new Set(viewKeys);
+    const sheetViews = PLAYER_VIEWS.filter((v) => wanted.has(v.key) && !v.custom);
+
+    const groups = new Set<PackGroup>();
+    for (const v of sheetViews) for (const g of playerViewPackGroups(v)) groups.add(g);
+    for (const g of groupsFor([...spec.cols, ...spec.filters.map((f) => f.stat)])) groups.add(g);
+
+    const missing: Array<[number, PackGroup]> = [];
+    for (const y of scopedSpec.years) for (const g of groups) {
+      if (!packs.has(`${y}|${g}`)) missing.push([y, g]);
+    }
+
+    let ready = packs;
+    if (missing.length) {
+      const got = await Promise.all(
+        missing.map(([y, g]) => loadStatPack(y, g).then((pk) => [`${y}|${g}`, pk] as const)),
+      );
+      ready = new Map(packs);
+      for (const [k, pk] of got) if (pk) ready.set(k, pk);
+      setPacks(ready);
+    }
+
+    // Readers over the packs we now actually hold, not over the render's.
+    const look = packLookups(ready);
+    const val = (p: PlayerSummary, key: string) => (
+      p.bart_player_id == null ? null : look.val.get(`${p.year}|${key}`)?.get(p.bart_player_id) ?? null
+    );
+    const pctFor = (p: PlayerSummary, key: string) => (
+      p.bart_player_id == null ? null : look.pct.get(`${p.year}|${key}`)?.get(p.bart_player_id) ?? null
+    );
+    const entity = playerEntity<PlayerSummary>(
+      (r, key) => {
+        const v = (r as unknown as Record<string, unknown>)[key];
+        if (typeof v === "number" && Number.isFinite(v)) return v;
+        return key ? val(r, key) : null;
+      },
+      (r, key) => {
+        if (!key) return null;
+        if ((PCT_KEYS as readonly string[]).includes(key)) return pctMaps[key as PctKey]?.get(r.id) ?? null;
+        return pctFor(r, key);
+      },
+    );
+
+    const single = buildExport();
     return {
-      sheets: PLAYER_VIEWS.filter((v) => wanted.has(v.key) && !v.custom)
-        .map((v) => ({ name: v.label, cols: exportColsFor(v) })),
+      sheets: sheetViews.map((v) => ({ name: v.label, cols: exportColsFor(v) })),
       rows: single.rows,
-      entity: exportEntity,
+      entity,
       meta: single.meta,
       slug: wanted.size === PLAYER_VIEWS.filter((v) => !v.custom).length ? "all-views" : "views",
     };
-  }, [buildExport, exportEntity]);
+  }, [buildExport, packs, scopedSpec.years, spec.cols, spec.filters, pctMaps]);
 
   const exportFieldCount = useMemo(
     // Value plus percentile per stat, plus the five identity columns.

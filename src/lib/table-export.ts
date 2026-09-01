@@ -48,7 +48,20 @@ export type ExportEntity<R> = {
   /** Tab name for the single-sheet export. */
   sheetName: string;
   /** Leftmost columns, identifying the row. */
-  identity: Array<{ header: string; width?: number; get: (r: R) => string | number | null }>;
+  identity: Array<{
+    header: string;
+    width?: number;
+    get: (r: R) => string | number | null;
+    /**
+     * An absolute URL this cell should link to, if any.
+     *
+     * ABSOLUTE, NECESSARILY. The workbook is downloaded and opened outside
+     * the browser — often on another machine, weeks later — so a site-root
+     * path resolves against nothing. Only the xlsx carries these; a CSV has
+     * nowhere to put a link and prints the name alone, which is correct.
+     */
+    href?: (r: R) => string | null;
+  }>;
   /** Reads a stat by key. */
   num: (r: R, key: string) => number | null;
   /** Reads a percentile by key. */
@@ -123,6 +136,8 @@ type Field<R> = {
   kind: "text" | "num1" | "signed" | "pct1" | "int" | "pgSigned" | "pctl";
   /** Pulls the raw value out of a row. */
   get: (r: R) => string | number | null;
+  /** xlsx only — makes the cell a link to this URL. */
+  href?: (r: R) => string | null;
 };
 
 const IDENTITY_BAND = "";
@@ -165,6 +180,17 @@ export const TEAM_ENTITY: ExportEntity<TeamRow> = {
  * packs.
  */
 export type PlayerExportRow = {
+  /**
+   * THE ROUTE'S ID, WHICH IS NOT `id`.
+   *
+   * A player row carries both: `id` keys the explorer's own percentile maps,
+   * and `bart_player_id` is what /players/<id> is built from. Linking on `id`
+   * produced URLs that were confidently wrong — 53048 was a 404 and 47876 was
+   * a different player's page under the right name — which is the worst
+   * failure available here, because a link that lands somewhere plausible is
+   * one nobody checks.
+   */
+  bart_player_id: number | null;
   name: string;
   team_name: string;
   team_conference: string | null;
@@ -182,7 +208,12 @@ export function playerEntity<R extends PlayerExportRow>(
     wideHeader: "Player",
     fileStem: "players",
     identity: [
-      { header: "Player", width: 24, get: (r) => r.name },
+      {
+        header: "Player", width: 24, get: (r) => r.name,
+        // Absolute, and to the canonical host — see the note on `href`. The
+        // workbook is read outside the browser that produced it.
+        href: (r) => (r.bart_player_id == null ? null : `${SITE_ORIGIN}/players/${r.bart_player_id}/`),
+      },
       { header: "Team", width: 20, get: (r) => r.team_name },
       { header: "Conference", width: 15, get: (r) => r.team_conference ?? "" },
       { header: "Season", get: (r) => exportSeasonLabel(r.year) },
@@ -218,7 +249,7 @@ export function exportFields<R>(cols: ExportCol[], entity: ExportEntity<R>): Fie
   // entity supplies it: a saved file that does not say which season it is from
   // is a trap the moment it is opened beside another one.
   const out: Field<R>[] = entity.identity.map((f) => ({
-    header: f.header, band: IDENTITY_BAND, kind: "text" as const, get: f.get,
+    header: f.header, band: IDENTITY_BAND, kind: "text" as const, get: f.get, href: f.href,
   }));
 
   for (const c of cols) {
@@ -236,12 +267,25 @@ export function exportFields<R>(cols: ExportCol[], entity: ExportEntity<R>): Fie
         get: (r) => entity.num(r, c.perGame!),
       });
     }
-    out.push({
-      header: `${c.label} Pctl`,
-      band: c.band,
-      kind: "pctl",
-      get: (r) => entity.pctOf(r, c.pct),
-    });
+    /**
+     * NO KEY, NO COLUMN.
+     *
+     * This used to push a Pctl column for every stat regardless, which made
+     * the `pct: ""` that callers set for a stat with no percentile do nothing
+     * — the milestone counts have carried that flag since they were added and
+     * still shipped an empty column beside each of them, and the players
+     * export shipped a permanently blank "GP Pctl". An empty column does not
+     * read as "this stat has no percentile"; it reads as a number we failed
+     * to compute.
+     */
+    if (c.pct) {
+      out.push({
+        header: `${c.label} Pctl`,
+        band: c.band,
+        kind: "pctl",
+        get: (r) => entity.pctOf(r, c.pct),
+      });
+    }
   }
 
   const seen = new Map<string, number>();
@@ -283,6 +327,16 @@ export function buildCsv<R>(input: ExportInput<R>): string {
 // ---------------------------------------------------------------------------
 // workbook
 // ---------------------------------------------------------------------------
+
+/**
+ * Where a link in a workbook points.
+ *
+ * HARDCODED TO THE CANONICAL HOST rather than read from window.location. A
+ * file downloaded from a preview deploy or from localhost would otherwise
+ * carry links that work on nobody's machine but the author's — and this is
+ * the one artefact of the site designed to be sent to someone else.
+ */
+const SITE_ORIGIN = "https://btacbb.xyz";
 
 const PALETTE = {
   paper: "FAF7F2",
@@ -521,6 +575,18 @@ function entitySheet<R>(
         return typeof v === "number"
           ? { v, s: pctStyle(v) }
           : { v: null, s: { align: "center", fill: striped ? ZEBRA : undefined } as XlsxStyle };
+      }
+      const link = f.href?.(r) ?? null;
+      if (link && typeof v === "string" && v) {
+        // Styled as a link because an unstyled one is invisible: the cell
+        // reads exactly like the text beside it and nobody discovers it is
+        // clickable. Coral rather than Excel's default blue, so the workbook
+        // still looks like it came from this site.
+        // PALETTE.accent, and no `underline`: that flag draws a bottom
+        // BORDER in this writer, not an underlined font, so it would rule a
+        // line across the cell rather than mark the text. Colour alone is
+        // what a spreadsheet reader recognises as a link.
+        return { v, s: { ...bodyStyle(f.kind, striped), color: PALETTE.accent }, link } as XlsxCell;
       }
       return { v, s: bodyStyle(f.kind, striped) } as XlsxCell;
     }));

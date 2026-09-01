@@ -86,7 +86,12 @@ export function DownloadMenu<R>({
   /** Assembles the export input. Called only when a format is chosen. */
   build: () => ExportInput<R>;
   /** The same rows under each named view, one tab per key, in registry order. */
-  buildAll: (viewKeys: string[]) => MultiExportInput<R>;
+  /**
+   * May be async: the players explorer fetches the stat packs its other tabs
+   * need before it can write them, and a synchronous signature is what let it
+   * write empty cells instead.
+   */
+  buildAll: (viewKeys: string[]) => MultiExportInput<R> | Promise<MultiExportInput<R>>;
   /** Every view over a fixed ten teams — what a locked reader can still have. */
   buildSample?: () => MultiExportInput<R>;
   rowCount: number;
@@ -199,7 +204,7 @@ export function DownloadMenu<R>({
     await new Promise((r) => requestAnimationFrame(() => r(null)));
     try {
       if (kind === "sample") await downloadAllViews(buildSample!());
-      else if (kind === "xlsx-all") await downloadAllViews(buildAll(picked));
+      else if (kind === "xlsx-all") await downloadAllViews(await buildAll(picked));
       else if (kind === "csv") downloadCsv(build());
       else await downloadWorkbook(build());
       closeMenu();

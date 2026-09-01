@@ -169,7 +169,20 @@ export type XlsxStyle = {
   wrap?: boolean;
 };
 
-export type XlsxCell = { v: string | number | null; s?: XlsxStyle };
+export type XlsxCell = {
+  v: string | number | null;
+  s?: XlsxStyle;
+  /**
+   * An external URL this cell links to.
+   *
+   * A REAL RELATIONSHIP, NOT A HYPERLINK() FORMULA. The formula is one line
+   * cheaper here and worse everywhere it lands: the cell reads as a formula
+   * in the bar, it breaks if the file is opened somewhere that does not
+   * evaluate it, and it survives a copy-paste as text rather than as a link.
+   * A relationship is what a spreadsheet someone was handed should contain.
+   */
+  link?: string;
+};
 export type XlsxRow = XlsxCell[];
 
 export type XlsxSheet = {
@@ -357,13 +370,14 @@ class StyleTable {
   }
 }
 
-function sheetXml(sheet: XlsxSheet, styles: StyleTable): string {
+function sheetXml(sheet: XlsxSheet, styles: StyleTable, links: Array<{ ref: string; target: string }>): string {
   const width = sheet.rows.reduce((n, r) => Math.max(n, r.length), 0);
   const lastCol = colLetter(Math.max(0, width - 1));
   const rowsXml = sheet.rows.map((row, ri) => {
     const r = ri + 1;
     const cells = row.map((cell, ci) => {
       const ref = `${colLetter(ci)}${r}`;
+      if (cell.link) links.push({ ref, target: cell.link });
       const s = styles.id(cell.s);
       const sAttr = s ? ` s="${s}"` : "";
       // An empty cell that carries a style is still written: it is what paints
@@ -397,14 +411,23 @@ function sheetXml(sheet: XlsxSheet, styles: StyleTable): string {
     ? `<mergeCells count="${sheet.merges.length}">${sheet.merges.map((m) => `<mergeCell ref="${m}"/>`).join("")}</mergeCells>`
     : "";
 
+  // AFTER autoFilter and BEFORE mergeCells. The schema fixes this order and
+  // Excel refuses to open a file that gets it wrong, offering to "repair" it
+  // by dropping the sheet.
+  const hyperlinks = links.length
+    ? `<hyperlinks>${links.map((l, i) => `<hyperlink ref="${l.ref}" r:id="rIdL${i + 1}"/>`).join("")}</hyperlinks>`
+    : "";
+
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-    `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+    `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"` +
+    ` xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
     `<dimension ref="A1:${lastCol}${Math.max(1, sheet.rows.length)}"/>` +
     `<sheetViews><sheetView${sheet.showGridLines === false ? ` showGridLines="0"` : ""} workbookViewId="0">${pane}</sheetView></sheetViews>` +
     `<sheetFormatPr defaultRowHeight="15"/>` +
     cols +
     `<sheetData>${rowsXml}</sheetData>` +
     filter +
+    hyperlinks +
     merges +
     `</worksheet>`;
 }
@@ -415,7 +438,8 @@ export async function buildXlsx(sheets: XlsxSheet[]): Promise<Blob> {
   const styles = new StyleTable();
   // Sheet XML is rendered first so every style it uses is interned before
   // styles.xml is serialised.
-  const sheetXmls = sheets.map((s) => sheetXml(s, styles));
+  const sheetLinks: Array<Array<{ ref: string; target: string }>> = sheets.map(() => []);
+  const sheetXmls = sheets.map((s, i) => sheetXml(s, styles, sheetLinks[i]!));
 
   const rels = sheets.map((_, i) =>
     `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`,
@@ -467,6 +491,28 @@ export async function buildXlsx(sheets: XlsxSheet[]): Promise<Blob> {
     },
     { name: "xl/styles.xml", data: enc.encode(styles.xml()) },
     ...sheetXmls.map((xml, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, data: enc.encode(xml) })),
+    /**
+     * One rels part per sheet that actually has links.
+     *
+     * TargetMode="External" is what makes these URLs rather than references
+     * into the package; without it Excel looks for a part named
+     * "https://..." inside the zip, finds nothing, and repairs the file by
+     * deleting the sheet. Sheets with no links get no part at all — an empty
+     * Relationships document is legal but is one more thing to be wrong.
+     */
+    ...sheetLinks.flatMap((links, i) => (links.length ? [{
+      name: `xl/worksheets/_rels/sheet${i + 1}.xml.rels`,
+      data: enc.encode(
+        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        links.map((l, n) =>
+          `<Relationship Id="rIdL${n + 1}"` +
+          ` Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"` +
+          ` Target="${esc(l.target)}" TargetMode="External"/>`,
+        ).join("") +
+        `</Relationships>`,
+      ),
+    }] : [])),
   ];
 
   return makeZip(files);
