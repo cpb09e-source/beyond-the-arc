@@ -35,6 +35,7 @@ import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { teamSlug } from "@/lib/team-slug";
 import type { ExportCol, ExportEntity, ExportInput, MultiExportInput } from "@/lib/table-export";
+import { EXPORT_ORIGIN } from "@/lib/table-export";
 import {
   HOME, NEUTRAL, T, TEAM_GAME_GROUP_LABEL, TEAM_GAME_PICK_OPTIONS,
   TEAM_GAME_PRESETS, TEAM_GAME_SEASONS, TEAM_GAME_STATS, TEAM_GAME_STAT_BY_KEY,
@@ -480,11 +481,23 @@ export function TeamGamesClient({ scope }: { scope?: TeamGamesScope } = {}) {
     // cannot rely on the page it came from to say what it is.
     fileStem: scope ? `${scope.slug}-${scope.season}-game-log` : "team-game-log",
     identity: [
-      { header: "Team", width: 20, get: (h) => h.pack.teams.names[h.row[T.t]!] ?? "—" },
+      {
+        header: "Team", width: 20, get: (h) => h.pack.teams.names[h.row[T.t]!] ?? "—",
+        href: (h) => {
+          const t = h.pack.teams.names[h.row[T.t]!];
+          return t ? `${EXPORT_ORIGIN}/teams/${teamSlug(t)}/${h.pack.season}/` : null;
+        },
+      },
       { header: "Conf", get: (h) => h.pack.teams.confs[h.row[T.t]!] ?? "" },
       { header: "Season", get: (h) => seasonLabel(h.pack.season) },
       { header: "Date", get: (h) => fmtTeamGameDate(h.pack, h.row) },
-      { header: "Opponent", width: 20, get: (h) => h.pack.opps[h.row[T.o]!] ?? "—" },
+      {
+        header: "Opponent", width: 20, get: (h) => h.pack.opps[h.row[T.o]!] ?? "—",
+        href: (h) => {
+          const o = h.pack.opps[h.row[T.o]!];
+          return o ? `${EXPORT_ORIGIN}/teams/${teamSlug(o)}/${h.pack.season}/` : null;
+        },
+      },
       { header: "Site", get: (h) => (h.row[T.f]! & NEUTRAL ? "N" : h.row[T.f]! & HOME ? "H" : "A") },
       { header: "Result", get: (h) => (h.row[T.f]! & WON ? "W" : "L") },
       { header: "Score", get: (h) => `${h.row[T.pts]}-${h.row[T.pa]}` },

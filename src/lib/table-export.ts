@@ -27,6 +27,7 @@
  */
 import { buildXlsx, saveBlob, colLetter, safeSheetName, type XlsxCell, type XlsxRow, type XlsxSheet, type XlsxStyle } from "@/lib/xlsx";
 import type { TeamRow } from "@/lib/team-filters";
+import { teamSlug } from "@/lib/team-slug";
 
 /**
  * WHAT AN EXPORTABLE ROW LOOKS LIKE, without saying what it is.
@@ -159,7 +160,13 @@ export const TEAM_ENTITY: ExportEntity<TeamRow> = {
   wideHeader: "Team",
   fileStem: "teams",
   identity: [
-    { header: "Team", width: 22, get: (r) => r.team_name },
+    {
+      header: "Team", width: 22, get: (r) => r.team_name,
+      // To the season on the row, not to the team's latest — a workbook of
+      // 2019 rows whose links all landed on 2025-26 would be quietly wrong in
+      // the direction nobody checks.
+      href: (r) => `${SITE_ORIGIN}/teams/${teamSlug(r.team_name)}/${r.team_year}/`,
+    },
     { header: "Conference", width: 15, get: (r) => r.team_conference ?? "" },
     { header: "Season", get: (r) => exportSeasonLabel(r.team_year) },
     { header: "Record", get: (r) => r.record ?? "" },
@@ -336,7 +343,8 @@ export function buildCsv<R>(input: ExportInput<R>): string {
  * carry links that work on nobody's machine but the author's — and this is
  * the one artefact of the site designed to be sent to someone else.
  */
-const SITE_ORIGIN = "https://btacbb.xyz";
+export const EXPORT_ORIGIN = "https://btacbb.xyz";
+const SITE_ORIGIN = EXPORT_ORIGIN;
 
 const PALETTE = {
   paper: "FAF7F2",
