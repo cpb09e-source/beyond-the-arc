@@ -1,19 +1,28 @@
 # Where we are — handoff
 
-Written 2026-08-25, last updated 2026-08-31. Read this first after a `/clear`.
+Written 2026-08-25, last updated **2026-09-01**. Read this first after a `/clear`.
 Everything below is state that lives nowhere else: decisions made in
 conversation, findings from investigation, and constraints that are not
 derivable from the code.
 
 Delete sections as they land. Keep the constraints.
 
+**2026-09-01 was a large session — 21 commits.** The site's architecture changed
+in one important way: the season being played is no longer prebuilt. Read
+"The live season is data" below before touching anything under `/teams`.
+
 ---
 
 ## Standing constraints — these override any instinct to be helpful
 
-**No push. No build. No deploy.** Colin's words: "dont push or build anything
-need to make a bunch more changes you can commit work thats it for now."
-Committing IS allowed and expected. This stands until he explicitly lifts it.
+**PUSHING IS NOW ALLOWED; BUILDING AND DEPLOYING ARE NOT.** The old rule was
+"no push, no build, no deploy". Colin lifted the push half on 2026-09-01 ("you
+can push") and 50 commits went up. Build and deploy still have not been run
+this session and remain his call. Ask before either.
+
+**PRODUCTION IS OLD.** The last deploy is 2026-08-31. Every commit after it —
+the live-season architecture, per-team game files, the admin page, the site
+banner — exists only in git. Do not describe any of it as live.
 
 **Never commit these stray untracked files.** They sit in the tree
 permanently and are not part of the project:
@@ -23,9 +32,21 @@ permanently and are not part of the project:
 **12 `porpag-*.json` files are `built_at`-only churn.** They dirty on nearly
 every script run. Check the diff and `git checkout --` them before committing.
 
-**Data freeze until 2026-10-01** — `scripts/lib/data-freeze.mjs` blocks
-network fetches. Escape hatch is `BTA_ALLOW_NETWORK=1`. Reading the local
-`data/cbbd/` archive is unaffected and is how all the new builders work.
+**Data freeze until 2026-10-01** — but read the next paragraph, because the
+guard is not where it looks like it is.
+
+**THE INGEST SCRIPTS DO NOT GUARD THE FREEZE THEMSELVES.** `assertUnfrozen`
+lives in `daily-refresh.mjs`, `build-season-preview.mjs` and (since
+2026-09-01) `nightly-refresh.mts`. It is in NONE of `cbbd-ingest.mjs`,
+`pull-team-box-v2.mjs`, `pull-player-box-v2.mjs`, `pull-rankings.mjs`,
+`pull-adjusted-ratings.mjs`, `pull-shooting-splits.mjs` or `sync-bart.mts`.
+Running any of them directly pulls live data mid-freeze. Found the bad way on
+2026-09-01: a wrapper was assumed to be guarded because the scripts under it
+looked like they would be, and the run pulled Bart's 2027 feed and upserted 365
+teams and 4,965 players into Supabase. Damage was limited — 2027 is the living
+preview season, not the frozen archive, and the tree stayed clean — but this is
+the second recurrence of the same mistake. Escape hatch is still
+`BTA_ALLOW_NETWORK=1`.
 
 **Deploy, when authorized:** `netlify deploy --prod --dir=out --no-build`,
 run BACKGROUNDED. A 10-minute Bash timeout once killed the CLI mid-upload and
@@ -34,161 +55,189 @@ orphaned a deploy stuck at `uploading`. Verify with
 
 **Secrets never enter the transcript.** Check key shapes only (`sk_live`,
 `whsec_`, `price_`). Netlify masks secret-flagged vars as `************`;
-that is NOT the same as the variable being missing. This already caused one
-wrong conclusion about `SUPABASE_SERVICE_ROLE_KEY`.
+that is NOT the same as the variable being missing.
 
 **Screenshots must be under 2000px on the long edge** or the API cannot read
-them. This blocked four separate requests in the last session. Ask for a
-resize rather than guessing at what an image shows.
+them. Ask for a resize rather than guessing at what an image shows.
 
 ---
 
 ## Open work
 
-### THE PAYWALL IS ON — and it covers the EXPLORERS ONLY.
+### THE LIVE SEASON IS DATA, NOT A REBUILD — the 2026-09-01 change
 
-Deployed 2026-08-31 (deploy 6a94e21c499f03829072b574, 66 min). Verified in
-production: /data/teams-by-year/2019.json is 404, /api/season/2019 is 401
-signed out and 200 with 1.28 MB for a subscriber.
+The problem it solves: publishing a night's numbers used to mean an 8-minute
+build and an upload of 319,000 files. Right for an archive, absurd for a season
+being played.
 
-**Entity pages are free at every season, by decision.** /teams/duke/2014,
-player pages and coach pages all render in full for everyone. A gate on team
-pages shipped in that same deploy and was reverted within the hour — see the
-note at the top of §1 in src/lib/access.ts for why, and for what it cost while
-it was on (a static export gates subscribers too).
+**`LIVE_SEASON` in `src/lib/seasons.ts` is `null` today.** When 2026-27 tips
+off it becomes `2027`. That one line is the switch, and NOTHING nightly does
+anything until it is set — the pipeline exits 1 saying there is no season.
 
-Original notes below, still true of the data gate itself.
+How it works: a team page for `LIVE_SEASON` renders `LiveTeamPage`, which
+fetches `/data/live/team/<slug>.json` (~132 KB) and renders the SAME
+`TeamPageView` the frozen routes use. That works because `TeamPageView` carries
+no `"use client"` directive, which makes it a *shared* component — server in
+the server routes, client in the live one. The archive pays no bundle cost and
+there is no second renderer to drift. Full argument in
+`src/lib/live-team-page.ts`.
 
-`FREE_SEASONS = [2026, 2025]` in src/lib/access.ts. Everything from 2013-14 to
-2023-24 is now paid. One line to reverse.
+The page still ships the last build's numbers as HTML and passes them down as
+the fallback, so it is not a spinner, Google still gets a complete page, and a
+failed fetch keeps real numbers and says so.
 
-What that turns on, and what it does not:
+Built by `scripts/build-live-team-pages.mts`, which verifies its own codec on
+every team — decode the JSON again and deep-compare. That caught a real
+discrepancy on its first run.
 
-**Real data gates — bytes withheld.** teams-by-year and players-explorer for
-the ten paid seasons are staged into the function bundle and deleted from
-out/; the build fails if either leaks. Verified end to end: signed out 401,
-unknown corpus 400, subscriber 200.
+**Not yet done: player pages.** They are still baked, and this is the gap that
+will show. A player page is a CAREER page — the live season is one row inside a
+mostly-frozen page — so the team trick does not transfer, and the route is 384
+lines of inline loads with no `loadPlayerPageData` to swap. The design is an
+overlay that patches just the live row, leaving the frozen ones baked. The
+forcing function is consistency: Duke's roster row will be live and Cooper
+Flagg's career table will not.
 
-**Team-season pages for paid seasons are now a gate page** — ArchiveSeasonGate,
-in front of all six routes (main + roster/shooting/lineups/on-off/history).
-loadTeamPageData is never called for a gated season, so the numbers are not in
-the HTML at all. Confirmed: /teams/duke/2019 has zero stat markers, /2026 is
-untouched.
+### THE NIGHTLY PIPELINE — built, on GitHub, currently OFF
 
-**THIS ONE COSTS SUBSCRIBERS, and it is the trade to revisit first.** A static
-export ships one HTML for everyone, so a Pass holder sees the same gate page.
-Half of what a team page renders (lineup-stats, team-seasons) is build-only
-input that is stripped from the deploy, so there is no endpoint their browser
-could fetch it back from. They are sent to the Team Explorer instead, which is
-properly gated and holds the same season. Fixing it properly means a
-team-season endpoint — days of work, not a tweak.
+`scripts/nightly-refresh.mts` is `daily-refresh.mjs`'s documented in-season
+chain, wired, minus its last two steps (the build and the deploy — no longer
+needed). Phases: `ingest` (network, freeze-guarded), `derive` (local),
+`publish` (writes the files, then syncs R2), and `rollback`.
 
-**Still leaking, deliberately: player pages and coach pages.** /players/76149
-embeds 24-25, 23-24 and 22-23 rows in its HTML, and always will — a career
-table is the entire point of the page, and gating it would gut the site's
-most-linked and most-indexed URLs to protect one player's numbers at a time.
-The archive's value is cross-sectional (rank, filter, compare across everyone),
-and that is gated. Revisit only if the individual pages start being used as a
-way around the wall.
+`sync-bart` was moved from the documented publish step into ingest: it fetches
+barttorvik.com, and a pull inside publish would cost that phase the one
+property it exists to have.
 
-**Before the deploy, in this order:** rebuild -> `npm run sync:r2` -> deploy.
-The build now also stages gated-data/, which netlify.toml ships with the
-function via included_files.
+`.github/workflows/nightly-refresh.yml` runs it at 11:00 UTC. **The workflow is
+`disabled_manually`** — and disabling ALSO blocks `workflow_dispatch`, so it
+cannot be run by hand either until `gh workflow enable`.
 
+**Before it can run:** eight repository secrets (`CBBD_API_KEY`,
+`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `R2_ENDPOINT`,
+`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_ARCHIVE_BUCKET`).
+All eight are in `.env.local` and can be piped to `gh secret set` without being
+typed or shown.
 
-### CBBD_API_KEY is DEAD — Colin is fixing it (told 2026-08-30)
+Triggers are limited to `schedule` and `workflow_dispatch` deliberately: the
+repo is PUBLIC, and a workflow that runs on a fork's PR is how secrets leak.
+Public also means Actions minutes are free and unlimited.
 
-`CBBD_API_KEY` in `.env.local` returns **401 Unauthorized on every endpoint**,
-including `/conferences`. Colin's read: the subscription payment failed on his
-end; he plans to sort it out within a few days of 2026-08-30. Do not debug it
-as a code problem, and do not "fix" it by repointing scripts at the other key
-unless he asks.
+The 907 MB CBBD archive rides in the Actions cache keyed by run id so it rolls
+forward, seeded from R2 on a cold start. **That cold start is proven** — the
+archive backup verified 2026-09-01 at 2,106 files / 945.3 MB / 0 missing.
 
-**Re-tested 2026-08-31** against `/games/players?season=2021` — still
-`401 {"message":"Unauthorized"}`. The key parses cleanly (152 chars, no
-whitespace, byte-identical to what the pull scripts' own `.env.local` parser
-extracts), so there is nothing to fix on this side. It now blocks item 8.
+**Rollback** is `scripts/r2-snapshot.mjs`: one generation under `_prev/`,
+server-side copies, snapshotted BEFORE each publish (taken after, "previous"
+would mean the run that just happened, and rolling back a bad night would
+restore it). It refuses when there is no snapshot rather than reporting success
+for restoring nothing.
 
-`CBB_DATA_API_KEY` (the other key in `.env.local`) is live and returns 200.
+### THE ADMIN PAGE — `/admin`, behind `role = 'admin'`
 
-**Nine scripts read the dead one** — `cbbd-ingest.mjs`, `cbbd-repair-plays.mjs`,
-`pull-adjusted-ratings.mjs`, `pull-missing-plays.mjs`, `pull-player-box-v2.mjs`,
-`pull-rankings.mjs`, `pull-shooting-splits.mjs`, `pull-team-box-v2.mjs`,
-`pull-team-box.mjs`. The first pull attempted after the key is restored will
-work; one attempted before it will fail on auth, not on the freeze.
+Reachable from `/account` (a staff card), deliberately not in the nav — the
+header's width budget is argued over in `account-nav.tsx`.
 
-Nothing is blocked meanwhile: the data freeze runs to 2026-10-01 and every
-`build-*` script reads the local `data/cbbd` archive, which needs no key.
+Both `cpb09e@gmail.com` and `test@test.com` are `role = 'admin'`. Note that
+makes the test account no longer a clean free-tier test.
 
-Also settled the same day: **CBBD has no women's basketball.** `?gender=women`,
+The page's own role check is PRESENTATION — a static export ships its JS to
+everyone. The real boundary is `requireAdmin` in `netlify/shared/billing.mts`,
+which every write goes through. Nothing on the page decides anything.
+
+What it does today: shows the last pipeline run from
+`/data/live/refresh-status.json`; edits the **site banner**; adds, withdraws
+and restores **manual transfers**. The four Run buttons are STUBS — there is no
+dispatch endpoint yet, and they need a GitHub PAT plus the workflow re-enabled.
+
+`supabase/migrations/011_admin_control.sql` is APPLIED. Verify any time with
+`npm run verify:admin` — 7 checks, including that anon cannot read
+`manual_transfers`, tested against a deliberately seeded row because an empty
+table passes that check for the wrong reason.
+
+**The banner is in Supabase, not R2**, because R2 serves an hour of cache and
+an announcement nobody sees for an hour is not an announcement. Its look lives
+in `BannerView`, shared with the admin preview so the preview cannot drift.
+
+**The manual transfer list is now ONE table**, read by both
+`patch-preview-manual-transfers.mjs` and `patch-portal-manual.mts` through
+`scripts/lib/manual-transfers.mjs`. 213 lines of duplicated literal deleted.
+The reader THROWS if it cannot reach the table — an empty list would run to
+completion and publish 53 players at the schools they left.
+`scripts/seed-manual-transfers.mjs` carries the original 53 moves as a frozen
+fixture, for bootstrapping a fresh environment or restoring the table.
+
+**An admin change does NOT appear instantly.** The patchers rewrite
+`season-preview.json` (fetched at runtime → live after a file upload) and
+`portal.json` (read with `fs.readFile` at BUILD time → needs a rebuild). So a
+transfer reaches team previews quickly and the portal page only after a build.
+
+**The paywall line cannot be made runtime-controllable** without the
+presigned-URL work. `stage-gated-data.mjs` reads `FREE_SEASONS` at build time
+and physically moves gated corpora into the function bundle; the wall is
+enforced by where files sit, so a runtime toggle would only make the client
+disagree with the filesystem. Checked 2026-09-01 before promising it.
+
+### PER-TEAM GAME FILES — landed 2026-09-01
+
+A team page's Game Log used to download the whole season's 1.6 MB corpus to
+draw ~30 rows, because the percentile chips are ranked against every game in
+the season and a client holding one team cannot compute that.
+`scripts/build-team-season-games.mts` splits each season into one ~9 KB file
+per team with the ranking already done, over the same cohort. 4,631 files,
+40 MB, gitignored, R2-mirrored.
+
+It imports `TEAM_GAME_STATS` and `midrankPercentileMap` from `src/` rather than
+restating 45 column formulas, so the two paths cannot drift.
+
+This also closed a real paywall hole: team pages are free at every season, so a
+free 2019 team page was fetching the whole gated 2019 corpus.
+
+A miss falls back to the season file, so it is safe to deploy in either order
+relative to the R2 sync.
+
+### THE PAYWALL IS ON — and it covers the EXPLORERS ONLY
+
+Deployed 2026-08-31. `FREE_SEASONS = [2026, 2025]` in `src/lib/access.ts`;
+2013-14 through 2023-24 are paid. Entity pages (team, player, coach) are free
+at every season by decision — a gate on team pages shipped in that deploy and
+was reverted within the hour, because a static export gates subscribers too.
+See the note at the top of §1 in `src/lib/access.ts`.
+
+Still leaking deliberately: player and coach pages embed old-season rows in
+their HTML and always will. A career table is the entire point of the page, and
+the archive's value is cross-sectional, which is gated.
+
+**Still owed: the presigned-R2 work.** The game-log corpora
+(`game-index/*.json` at ~6.3 MB, `team-game-index/*.json` at ~1.6 MB) are on
+the PUBLIC bucket for every season including paid ones.
+`netlify/functions/data-url.mts` is the signing endpoint — built, not live.
+Remaining: create the private bucket, route paid-season files there, delete
+them from the public bucket, switch the client path, extend
+`verify-deploy-ready.mjs`. **Ordering: the client must deploy BEFORE the
+objects move**, or production's game logs break.
+
+### CBBD_API_KEY — status uncertain, probably fixed
+
+Recorded 2026-08-30 as returning 401 on every endpoint; Colin said he would
+sort the subscription. During the accidental freeze crossing on 2026-09-01 the
+CBBD pull scripts all exited 0, which suggests the key works again. Not
+confirmed deliberately. Nine scripts read it.
+
+Also settled 2026-08-30: **CBBD has no women's basketball.** `?gender=women`,
 `?league=womens` and `?division=women` are all silently ignored (identical 364
-men's teams returned), and rosters for UConn/USC/Notre Dame come back men's.
-Women's coverage would need a different source entirely.
-
-
-### 0. Game Log Explorer — BUILT AND COMMITTED 2026-08-30, NOT DEPLOYED
-
-Commits `368bdfe` (mobile menu), `e1ba7f9` (explorer + gating), `357e6c9`
-(archive backup + game-index on R2), `75594d3` (women's feasibility). Not
-pushed. `/players/games` returns 404 in production until the next deploy.
-
-**Both open questions below were decided the same day and are done.** Gated as
-a five-row preview (`GAME_LOG_ACCESS`); corpus gitignored and mirrored to the
-public R2 bucket, already uploaded and serving. The `data/cbbd` backup script
-landed alongside it — `npm run backup:archive`, blocked only on the Cloudflare
-bucket and token, which is dashboard work. See `docs/data-storage-and-backup.md`.
-
-**Before the next deploy: `npm run sync:r2`.** The build now strips
-`data/game-index` from `out/`, so a deploy without a prior sync would 404 the
-whole page. (Already synced once, 2026-08-30 — but rebuild the corpus and it
-needs it again.)
-
-New page at /players/games, nested under a Players nav menu beside the existing
-explorer. One row per player per game, default-sorted by Game Score, with a
-shortcuts row (40-point games, triple-doubles, 5x5, ...), a filter builder,
-player search, and CSV/Excel download. Full write-up in
-docs/game-log-explorer.md.
-
-Two things to decide before it ships:
-
-- **80 MB of new data** under public/data/game-index/ (12 files, one per
-  season, ~7 MB each, ~2.3 MB gzipped over the wire). Everything in
-  public/data is tracked, so committing it is consistent with the repo — but
-  it is 80 MB of git history. The alternative is R2: add the dir to R2_DIRS in
-  src/lib/data-url.ts, to the strip list, and to the sync script. The page
-  fetches through plain /data paths today.
-- **Gating.** Shipped ungated, with alwaysFree on the download menu, exactly
-  like /conferences. The free-vs-paid worksheet still has no row for either
-  page.
-
-Rebuild the corpus with: node scripts/build-game-index.mjs — whenever
-player-games or players-explorer is rebuilt. It is deliberately NOT wired into
-next build; it is a data build like the other pull/build scripts.
-
-Verified against source: the 2026 top-scoring row (Dennis Parker Jr., 53 vs
-Coppin St., 12/14/25) matches player-games exactly, and the 5x5 filter across
-2023-2026 returns exactly one game — Maliq Brown, Syracuse vs Louisville,
-2/7/24.
-
-
-The team page redesign landed. Six tabs — Overview, Roster, School History,
-Shooting, Lineups, On/Off — with real routes on the recent seasons plus every
-Vermont season, and an anchor fallback everywhere else.
+men's teams returned). Women's coverage needs a different source entirely.
 
 ### 1. Redesign the Shooting tab — AGREED, NOT STARTED
 
-The one tab that was only relocated, never rethought. It is still the two
-DistributionPanels (Shooting, Four Factors) plus the clock-splits and
-assist-network panels that used to be a separate Play-by-play tab.
-
-It is also where the new play-by-play columns belong and do not yet appear:
-`rima`/`rimm`/`mida`/`midm` are in every lineup row, so rim rate, rim FG% and
-mid-range splits are already computed per five-man unit and per player, and the
-Shooting tab shows none of them.
+The one tab only relocated, never rethought. It is where the new play-by-play
+columns belong and do not yet appear: `rima`/`rimm`/`mida`/`midm` are in every
+lineup row, so rim rate, rim FG% and mid-range splits are already computed per
+five-man unit and per player, and the Shooting tab shows none of them.
 
 ### 2. Build measured — DEPLOY is the risk, not the build
 
-Measured 2026-08-25 with `npm run build` on this machine, after the full bake:
+Measured 2026-08-25 with `npm run build`, after the full bake:
 
 ```
 build time      8m 12s
@@ -197,241 +246,104 @@ files in out/   319,479
 out/ size       11.34 GB
 ```
 
-**The 60-75 minute estimate given earlier in that session was wrong by roughly
-8x.** It came from extrapolating dev-server render times (~125 ms/page), which
-do not resemble build-time prerendering at all — dev compiles per request and
-caches nothing between them. Never estimate a build from dev renders again;
-the documented expectation of ~7 min was right and 8m12s is consistent with it.
+**The 60-75 minute estimate given earlier was wrong by roughly 8x.** It came
+from extrapolating dev-server render times (~125 ms/page), which do not
+resemble build-time prerendering at all — dev compiles per request and caches
+nothing. Never estimate a build from dev renders again.
 
-Where the size goes:
-
-```
-.txt   267,975 files   5.73 GB   RSC payloads, ~8 per route
-.html   30,649 files   5.03 GB   ~164 KB average
-.webp   20,198 files   0.29 GB
-teams/  149,763 files  5.85 GB
-players/141,488 files  4.75 GB
-```
-
-The `.txt` files are LOAD-BEARING — see the standing note about the May 2026
-infinite-404 incident. Do not strip them.
-
-**What actually changed:** file count went from ~215k to 319k. The deploy memory
-records ~30 min for the first upload of 215k files after a clean CDN cache, with
-Netlify deduping by content hash so later deploys push only what changed
-(typically under 2 min). Most team pages changed here, so the next deploy is
-closer to a first deploy than an incremental one — budget 45 min or more, run it
-BACKGROUNDED, and verify with `netlify api listSiteDeploys` rather than the exit
-code.
-
-Note the measured build used `npm run build`, not the documented production
-entry point `node scripts/build-with-r2-stash.mjs`. The wrapper additionally
-strips `data/players-by-year` (48 MB), so a production build is marginally
-smaller than the number above.
+The `.txt` RSC payloads (267,975 files, 5.73 GB) are LOAD-BEARING — see the
+May 2026 infinite-404 incident. Do not strip them.
 
 ### 3. Smaller, carried over
 
-- **`npx eslint src scripts` reports 45 errors and 60 warnings**, measured
-  2026-08-25. Nearly all are `react-hooks/set-state-in-effect`, spread across
-  `searchable-multi-select.tsx`, `theme-toggle.tsx` and others. All
-  pre-existing. Lint does NOT gate the build — `next build` passes — so this is
-  cleanup, not a deploy blocker.
+- **`npx eslint src scripts` reports 19 errors and 23 warnings**, measured
+  2026-09-01. An earlier note said 45/60; that was stale. Nearly all are
+  `react-hooks/set-state-in-effect`, all pre-existing. Lint does NOT gate the
+  build.
 - **`useSearchParams` refactor** — `/` and `/players/` still ship zero `<tr>`
   and blank the table for 1-2s while JS boots.
-- **`assist-network.json` is 12 MB and committed** — probably belongs in R2 like
-  `assist-players/`.
-- **Nine files still use fixed Tailwind palette colours** that cannot follow
-  dark mode: `schedule-ticker`, `overview-tab`, `season-by-season-table`,
-  `find-game-modal`, `where-they-rank`, `seed-chip` and three others.
+- **`assist-network.json` is 12 MB and committed** — probably belongs in R2
+  like `assist-players/`.
+- **The fixed-Tailwind-palette item is DONE.** An earlier note claimed nine
+  files still used palette colours that cannot follow dark mode; zero remain.
+- **The View dropdowns in both game log explorers are still native
+  `<select>`s** and draw the OS panel on dark. Same fix the teammate picker
+  got: `usePopoverAnchor` + a portal.
+- **`stat-picker`, `download-menu` and `saved-filters-menu`** each hand-rolled
+  the popover arithmetic before `usePopoverAnchor` existed. Cleanup, not a bug.
+- **The Find-a-game button is hidden** on team pages pending a decision.
 
 ### 4. Stripe — VERIFIED WORKING 2026-08-25
 
-Previously recorded here as "set up, not verified", with a guess that the
-products were made in TEST mode and a list of env vars (`STRIPE_PRODUCT_ID`,
-`STRIPE_PRICE_3MONTH`, `STRIPE_PRICE_6MONTH`) that DO NOT EXIST. That whole
-section was wrong. Measured against the live API:
-
-```
-STRIPE_SECRET_KEY      sk_live_…  (107 chars)
-STRIPE_PRICE_MONTHLY   price_…    GET /v1/prices/{id}  ->  200   livemode  $8/month
-STRIPE_PRICE_YEARLY    price_…    GET /v1/prices/{id}  ->  200   livemode  $50/year
-```
-
-Both price ids resolve against the LIVE key, so they are live-mode prices, and
-the amounts match the copy in `account-client.tsx` exactly. `PAID_PLANS` in
-`netlify/shared/billing.mts` maps `monthly`/`yearly` to those two var names and
-nothing else. Checkout is reachable in production: `/pricing` is in MOBILE_NAV,
-which routes to `/account` and its "Continue to payment" button.
-
-Verify without printing secrets — read the values into shell vars, print only
-prefixes and lengths, and let curl report the status code:
-
-```sh
-KEY=$(netlify env:get STRIPE_SECRET_KEY --context production | tr -d '\r\n ')
-PM=$(netlify env:get STRIPE_PRICE_MONTHLY --context production | tr -d '\r\n ')
-curl -s -o /dev/null -w "%{http_code}\n" -u "$KEY:" https://api.stripe.com/v1/prices/$PM
-```
+`STRIPE_SECRET_KEY` (`sk_live_…`), `STRIPE_PRICE_MONTHLY` ($8/month) and
+`STRIPE_PRICE_YEARLY` ($50/year) all resolve against the LIVE key, so they are
+live-mode prices. `PAID_PLANS` in `netlify/shared/billing.mts` maps
+`monthly`/`yearly` to those two var names and nothing else.
 
 Test-mode and live-mode price ids are both `price_…` and the same length, so
 SHAPE CANNOT TELL THEM APART. A 404 from the live key is the only real test.
 
-**All four are now flagged secret** (2026-08-25). Use
-`netlify env:set <KEY> --secret --force` — it converts an EXISTING variable in
-place and needs no value argument, so there is no read-back-and-rewrite step to
-corrupt. Verified through the API rather than the CLI, because the CLI masks
-secrets and a masked read cannot distinguish "set" from "wiped":
+All four are flagged secret, which **EMPTIES the `dev` context** — Netlify
+refuses to hand secrets to local dev, so local checkout is broken by design and
+returns a clear 503 from `getStripe()`'s shape check. To restore it, put
+TEST-mode keys in `.env.local`. Never the live key: a local dev server pointed
+at live Stripe creates real checkout sessions.
 
-```sh
-TOKEN=$(node -e "const c=require(process.env.APPDATA+'/netlify/Config/config.json');\
-const u=c.users;process.stdout.write(u[Object.keys(u)[0]].auth.token)")
-curl -s -H "Authorization: Bearer $TOKEN" \
-  "https://api.netlify.com/api/v1/accounts/cpb09e/env?site_id=$SITE_ID"
-```
+Flagging a var secret makes it unreadable by CLI, including to you. If the live
+key is ever needed again it comes from the Stripe dashboard, not from Netlify.
 
-That returns `is_secret` plus a per-context list of which contexts hold a
-value. Note every secret's value reads as 20 characters there regardless of its
-real length — that is the mask, not the value.
-
-**Flagging EMPTIES the `dev` context.** Netlify refuses to hand secrets to
-local dev, so all four now read `dev:EMPTY` while `production`,
-`deploy-preview`, `branch-deploy` and `dev-server` keep their values.
-
-`.env.local` carries `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_YEARLY` and
-`STRIPE_PRODUCT_ID`, but NOT `STRIPE_SECRET_KEY` or `STRIPE_WEBHOOK_SECRET`, so
-local checkout is now broken. Confirmed rather than assumed:
-
-```
-POST http://localhost:9999/api/create-checkout-session
-503 {"error":"Payments are not configured on this deploy
-     (STRIPE_SECRET_KEY missing or not an API key)."}
-```
-
-That is `getStripe()`'s shape check doing its job — a clear config error instead
-of a confusing 401. To restore local checkout, put a TEST-mode secret key and
-TEST-mode price ids in `.env.local`. Do NOT put the live key there; a local dev
-server pointed at live Stripe creates real checkout sessions.
-
-**Flagging a var secret makes it UNREADABLE, including to you.** `netlify
-env:get` returns a mask afterwards, so the live secret key can no longer be
-recovered from Netlify by CLI. If it is ever needed again it comes from the
-Stripe dashboard, not from here.
-
-**Functions are served on custom paths, not the default.** Every one declares
-`export const config = { path: "/api/<name>" }`, so
-`/.netlify/functions/<name>` 404s. Hit `/api/create-checkout-session`.
-
+**Functions are served on custom paths.** Every one declares
+`export const config = { path: "/api/<name>" }`, so `/.netlify/functions/<name>`
+404s. Hit `/api/create-checkout-session`.
 
 ### 5. Canonical host — DONE, LIVE (verified 2026-08-30)
 
-Shipped with the 2026-08-29 deploy. Verified in production:
 `https://btacbb.xyz/robots.txt` says `Host: https://btacbb.xyz`, and
-`https://beyond-the-arc.netlify.app/` now answers **301 → btacbb.xyz**.
-Both hosts no longer serve 200. Nothing left to do here; the history below
-is kept because the failure mode was subtle.
+`beyond-the-arc.netlify.app` answers **301 → btacbb.xyz**. Nothing left to do.
 
-<details><summary>How it was found and fixed</summary>
+`NEXT_PUBLIC_SITE_URL` is in `.env.local` — it must be, because the first three
+consumers (`layout.tsx` metadataBase, `robots.ts`, `sitemap.ts`) are BUILD-time
+and builds run locally. Setting it only in the Netlify dashboard would have
+fixed nothing about the sitemap. `netlify.toml` also carries a `force = true`
+301 from the subdomain; `force` is required, because a redirect without it
+loses to an existing file and every matching path exists in the export.
 
-Found 2026-08-25 while checking `NEXT_PUBLIC_SITE_URL`. The variable was not
-set anywhere, and the fallback is NOT the real domain:
-
-```
-src/app/layout.tsx:61   metadataBase  ->  https://beyond-the-arc.netlify.app
-src/app/robots.ts:6     Host, Sitemap ->  https://beyond-the-arc.netlify.app
-src/app/sitemap.ts:23   every <loc>   ->  https://beyond-the-arc.netlify.app
-netlify/shared/billing.mts:102  Stripe return URLs (runtime, req origin)
-```
-
-The site's actual custom domain is `btacbb.xyz`. Both hosts answered HTTP 200
-with no redirect between them, so all 30,000 pages were live and indexable
-twice, and the live `robots.txt` was naming the WRONG one as `Host`.
-
-Three parts, two of them done:
-
-1. `.env.local` now sets `NEXT_PUBLIC_SITE_URL=https://btacbb.xyz`. This is the
-   one that matters most and the one easiest to get wrong: the first three
-   consumers are BUILD-time, builds run LOCALLY, and a local build does not
-   read the Netlify dashboard. Setting it only in Netlify would have fixed
-   nothing about the sitemap.
-2. `netlify.toml` gained a `force = true` 301 from the subdomain to the custom
-   domain. `force` is required — a redirect without it loses to an existing
-   file, and every matching path exists in the export.
-3. Netlify also has the variable now, for `siteOrigin()` in the functions.
-
-Rebuilt 2026-08-25 and verified in `out/`:
-
-```
-robots.txt   Host: https://btacbb.xyz   Sitemap: https://btacbb.xyz/sitemap.xml
-sitemap.xml  40,022 <loc> on btacbb.xyz,  0 on beyond-the-arc.netlify.app
-og:url       https://btacbb.xyz/teams/vermont/2026/   (deep pages too)
-```
-
-</details>
-
-### 6. Enforcement layer — RESEARCH DONE, PLAN STILL OWED
-
-Nothing gates anything. `describeMembership()` still has one consumer, the
-account badge. The decisive constraint has not changed: prebuilt pages EMBED
-old-season data in their HTML, so gating the JSON fetches would not hold.
-
-The tab split makes option 3 more attractive than it was — gating by DEPTH
-rather than by SEASON is now a routing decision, and the deep tabs (Lineups,
-On/Off, School History) are exactly the surfaces nobody needs indexed.
-
-### 7. The production deploy itself
+### 6. The production deploy itself
 
 The build is not the risk; the upload is. Sequence, when authorized:
 
-0. `out/` was rebuilt 2026-08-25 after the canonical-host fix and is current.
-   Rebuild anyway if anything in `src/`, `public/data/` or `.env.local` has
-   changed since.
 1. `node scripts/build-with-r2-stash.mjs` — the entry point netlify.toml names.
-   The 8m12s measurement used `npm run build` instead. Same strip runs either
-   way (`postbuild` fires it), but the wrapper does it inside the build's own
-   Node process, and the wrapper is what has been proven on this project.
-2. Confirm the strip: `out/data/lineup-stats` and `out/data/team-seasons` must
-   NOT exist, alongside the nine older R2 dirs. Confirm the host too —
-   `head -8 out/robots.txt` should say `btacbb.xyz`, not the netlify.app one.
-3. `netlify deploy --prod --dir=out --no-build`, run BACKGROUNDED. A 10-minute
-   Bash timeout once killed the CLI mid-upload and orphaned a deploy stuck at
-   `uploading`.
-4. `netlify api listSiteDeploys` until `ready`. NEVER trust the exit code.
+   (`npm run build` runs the same strip via `postbuild`, but the wrapper is
+   what has been proven on this project.)
+2. Confirm the strip: `out/data/lineup-stats`, `out/data/team-seasons`,
+   `out/data/team-season-games` and `out/data/live` must NOT exist, alongside
+   the older R2 dirs. `head -8 out/robots.txt` should say `btacbb.xyz`.
+3. `npm run sync:r2` — the new `team-season-games` and `live` dirs need it.
+4. `netlify deploy --prod --dir=out --no-build`, run BACKGROUNDED.
+5. `netlify api listSiteDeploys` until `ready`. NEVER trust the exit code.
 
-Budget 45 minutes or more. File count went ~215k -> 319,479. Netlify dedupes by
-content hash, so a normal incremental deploy runs under 2 min, but nearly every
-team page changed in this redesign — this one behaves like a first deploy.
+Budget 45 minutes or more. Netlify dedupes by content hash, so a normal
+incremental deploy runs under 2 min — but this one follows a redesign that
+touched nearly every team page.
 
-### 8. The COVID season's per-player game logs — BLOCKED ON THE KEY ONLY
+### 7. The COVID season's per-player game logs — BLOCKED ON THE KEY ONLY
 
-2020-21 came back on 2026-08-31 (commits `d4c5228`, `efe4841`, `78a337e`): it
-is no longer excluded, it is FLAGGED — real, visible, marked where seasons can
-be pooled. See `FLAGGED_SEASONS` in `src/lib/seasons.ts` for the full argument.
+2020-21 is FLAGGED, not excluded — see `FLAGGED_SEASONS` in
+`src/lib/seasons.ts`. Team pages, the team explorer and the Team Game Log
+Explorer carry it in full. Gonzaga's 31-1 has a page; so does Jalen Suggs.
 
-**What landed**, all rebuilt offline from the archive already on disk:
+What is missing: `data/cbbd/2021/` holds 3 files where every neighbouring
+season holds 163. Absent are `box-players-full.json.gz` and ~157
+`plays-*.json.gz`. So there are no per-player game logs for that season and no
+`game-index/2021`, which is why `GAME_SEASONS` in `src/lib/game-index.ts` stops
+at 2020 while `TEAM_GAME_SEASONS` does not.
 
-| artifact | result |
-| --- | --- |
-| `game-box-by-year/2021` | 8,243 rows, 100% join, **0 misses** |
-| `team-game-index/2021` | 7,906 team-games, 349 teams |
-| `team-splits/2021`, `player-photo-index/2021` | built |
-| `gated-data/` | 10 -> 11 seasons staged |
+**No local workaround exists.** Checked 2026-08-31 and do not re-check:
+`shooting-players.json.gz` is season-level per player, `box-epm-2021.json` is
+model output, and `build-player-games-cbbd.mjs` reads
+`box-players-full.json.gz` and nothing else.
 
-Team pages, the team explorer and the Team Game Log Explorer carry 2021 in
-full. Gonzaga's 31-1 has a page; so does Jalen Suggs, whose only college season
-that is.
-
-**What is still missing, and why.** `data/cbbd/2021/` holds 3 files where every
-neighbouring season holds 163. Absent: `box-players-full.json.gz` and ~157
-`plays-*.json.gz`. So there are no per-player game logs for that season — all
-24,653 files under `public/data/player-games/` contain zero 2021 rows — and
-therefore no `game-index/2021`, which is why `GAME_SEASONS` in
-`src/lib/game-index.ts` still stops at 2020 while `TEAM_GAME_SEASONS` does not.
-
-**No local workaround exists.** Checked on 2026-08-31 and do not re-check:
-`shooting-players.json.gz` for 2021 is season-level per player, not per game;
-`box-epm-2021.json` is model output, not box scores;
-`build-player-games-cbbd.mjs` reads `box-players-full.json.gz` and nothing else.
-
-**The chain, verified step by step — only step 1 is blocked:**
+The chain, verified step by step — only step 1 is blocked:
 
 ```bash
 node scripts/pull-player-box-v2.mjs      --season 2021   # needs a live key
@@ -440,35 +352,29 @@ node scripts/build-game-index.mjs        --season 2021
 node scripts/sync-data-to-r2.mjs --only game-index
 ```
 
-Then one line: add `2021` to `GAME_SEASONS` in `src/lib/game-index.ts`, where
-the doc comment already says it is waiting for exactly this.
+Then one line: add `2021` to `GAME_SEASONS`, where the doc comment already says
+it is waiting for exactly this.
 
-Two things confirmed by reading the scripts rather than assuming:
-
-- `build-player-games-cbbd.mjs --season 2021` **merges**. It reads each existing
-  player file, drops that season's rows and appends the new ones, so it will not
-  clobber the other twelve seasons across 24,653 files.
-- Both builders accept `--season`, so neither `SEASONS` constant needs editing.
+`build-player-games-cbbd.mjs --season 2021` **merges** — it reads each existing
+player file, drops that season's rows and appends the new ones, so it will not
+clobber the other twelve seasons across 24,653 files. Both builders accept
+`--season`, so no `SEASONS` constant needs editing.
 
 The pull is small: 2021 ran 2020-11-25 to 2021-04-05, **124 distinct game
-days**, 8,243 team-game rows. At 7-day windows and a 1.1s pause that is a couple
-of minutes and well under a hundred requests.
+days**, 8,243 team-game rows. A couple of minutes, well under a hundred
+requests. The same file also unblocks `porpag-2021`.
 
-The same file also unblocks `porpag-2021` (`build-bta-porpag.mjs` reads
-`box-players-full.json.gz` too, and is the only top-level per-season family
-still missing 2021).
+Still out of reach after that: shot charts, lineups, on/off, assist networks,
+clock splits. Those need the ~157 `plays-*.json.gz` day files via
+`pull-missing-plays.mjs` — a separate and much larger pull. The pages already
+degrade honestly ("No lineup data for 20-21"), so this is a gap, not a bug.
 
-**Still out of reach even after that pull:** shot charts, lineups, on/off,
-assist networks, clock splits. Those need the ~157 `plays-*.json.gz` day files
-via `pull-missing-plays.mjs` — a separate and much larger pull. The pages
-already degrade honestly ("No lineup data for 20-21"), so this is a gap, not a
-bug.
+If the key is a dead end, the fallback is an ESPN backfill for 2021 player box
+scores — parity exists (see `docs/womens-basketball-feasibility.md`) but it
+means a new scraper plus a name-matching join onto Bart IDs. Do not start that
+without Colin saying so.
 
-If the key turns out to be a dead end, the fallback is an ESPN backfill for
-2021 player box scores — ESPN has the data at parity (see
-`docs/womens-basketball-feasibility.md` for what was established about its
-feed), but it means a new scraper plus a name-matching join onto Bart IDs. Do
-not start that without Colin saying so.
+---
 
 ## Things learned the hard way — do not re-derive these
 
@@ -593,6 +499,40 @@ revert earlier edits in the same batch.** This ate a set of imports in
 left 18.8% of teams unresolved; theirs leaves 1.7%.
 
 **Colin spells it Offense and Defense.** The British spellings were mine.
+
+**Tailwind v4 compiles `rotate-90` to the standalone `rotate` property, not
+`transform`.** `getComputedStyle(el).transform` reports `"none"` for an element
+that is visibly rotated; read `.rotate` instead. This nearly got a working
+caret reported as broken.
+
+**Disabling a GitHub workflow blocks `workflow_dispatch` too.** `gh workflow
+disable` stops every trigger, not just the schedule — `gh workflow run`
+afterwards answers "could not find any workflows named …". There is no way to
+hold the cron while keeping manual runs with a plain disable; that needs a gate
+job inside the workflow.
+
+**A Supabase session lives in localStorage, not cookies.** `context.clearCookies()`
+does not sign a test browser out. Clear `localStorage` and `sessionStorage`.
+
+**PostgREST returns an empty set, not an error, when RLS denies a read.** So
+"zero rows" and "no access" are indistinguishable unless there is a row that
+should have come back. Any test that RLS is protecting a table must seed a row
+with the service key first, or it passes for the wrong reason on an empty
+table — which is its state on exactly the day someone runs the test.
+
+**`season-preview.json` is fetched at runtime; `portal.json` is read at build
+time.** `season-preview.tsx` does `fetch("/data/season-preview.json")`, while
+`app/portal/page.tsx` does `fs.readFile`. So a manual transfer reaches team
+preview pages with a file upload and the portal page only after a rebuild. Two
+files, same patch script, different publishing costs.
+
+**A component with no `"use client"` directive is SHARED, not server-only.**
+Imported from a Server Component it renders on the server; imported from a
+Client Component the bundler compiles a client copy. That is what lets
+`TeamPageView` serve both the frozen routes and `LiveTeamPage` with no second
+renderer and no bundle cost to the archive. Next's `use-client` docs are
+explicit that the directive is only needed on entry points from a Server
+Component.
 
 ---
 
