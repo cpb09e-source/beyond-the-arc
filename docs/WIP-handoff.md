@@ -260,8 +260,12 @@ May 2026 infinite-404 incident. Do not strip them.
   2026-09-01. An earlier note said 45/60; that was stale. Nearly all are
   `react-hooks/set-state-in-effect`, all pre-existing. Lint does NOT gate the
   build.
-- **`useSearchParams` refactor** — `/` and `/players/` still ship zero `<tr>`
-  and blank the table for 1-2s while JS boots.
+- **The `useSearchParams` refactor for `/` and `/players/` is DONE.** An
+  earlier note said both shipped zero `<tr>`; measured 2026-09-01 they ship 128
+  and 29 real rows, rendered by `TablePreview` as the Suspense fallback. What
+  DOES still ship header-only markup is the two game log explorers —
+  `/teams/games/` and `/players/games/`, 2 `<tr>` each — which have no
+  TablePreview equivalent.
 - **`assist-network.json` is 12 MB and committed** — probably belongs in R2
   like `assist-players/`.
 - **The fixed-Tailwind-palette item is DONE.** An earlier note claimed nine
