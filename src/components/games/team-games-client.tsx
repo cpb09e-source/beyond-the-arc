@@ -694,12 +694,16 @@ export function TeamGamesClient({ scope }: { scope?: TeamGamesScope } = {}) {
           {/* Select, not a native <select>: the OS draws a native list and
               draws it white, which on the dark theme looked like another
               product's control. See the header of components/select.tsx. */}
+          {/* NOT `compact`. Every other control on this row is the h-10
+              text-sm select; a compact one is h-8 text-xs, which on a row of
+              five fields reads as a different kind of control rather than as
+              the same control holding a shorter value. compact exists for the
+              row-count box in a table toolbar, where h-8 IS the row. */}
           <Select
             value={view.key}
             onChange={(v) => update({ view: v })}
             ariaLabel="Table view"
-            compact
-            className="max-w-48"
+            className="w-48"
           >
             {TEAM_GAME_VIEWS.map((v) => (
               <option key={v.key} value={v.key} title={v.desc}>{v.label}</option>

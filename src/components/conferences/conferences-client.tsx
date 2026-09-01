@@ -437,12 +437,16 @@ export function ConferencesClient() {
 
         <label className="inline-flex items-center gap-1.5 min-w-0">
           <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">View</span>
+          {/* NOT `compact`. Every other control on this row is the h-10
+              text-sm select; a compact one is h-8 text-xs, which on a row of
+              five fields reads as a different kind of control rather than as
+              the same control holding a shorter value. compact exists for the
+              row-count box in a table toolbar, where h-8 IS the row. */}
           <Select
             value={view.key}
             onChange={(v) => update({ view: v })}
             ariaLabel="Table view"
-            compact
-            className="max-w-44"
+            className="w-44"
           >
             {viewOptions.map((v) => (
               <option key={v.key} value={v.key} title={v.desc}>{v.label}</option>
@@ -456,8 +460,7 @@ export function ConferencesClient() {
             value={spec.split}
             onChange={(v) => update({ split: v })}
             ariaLabel="Stat split"
-            compact
-            className="max-w-52"
+            className="w-52"
           >
             {SPLITS.map((sp) => (
               <option key={sp.key} value={sp.key}>{sp.label}</option>
