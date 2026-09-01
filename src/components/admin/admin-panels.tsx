@@ -592,9 +592,25 @@ export function TransfersPanel() {
           />
         </label>
         <DestinationField value={dest} onChange={setDest} teams={teams} />
-        <label className="flex flex-col gap-1 flex-1 min-w-[10rem]">
-          <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Note (optional)</span>
-          <input className={INPUT} value={note} placeholder="Confirmed on his own account" onChange={(e) => setNote(e.target.value)} />
+        {/*
+          PROVENANCE, and the label says so because "Note" did not.
+          These rows outrank portal.json and the roster scrape both — they are
+          asserted on one person's say-so — so the only thing that makes a
+          six-month-old claim reviewable is a record of where it came from.
+          The placeholder is an example rather than an instruction for the same
+          reason: "beat writer" is a useful answer and "note" prompts nothing.
+        */}
+        <label className="flex flex-col gap-1 flex-1 min-w-[11rem]">
+          <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">
+            Where you saw it
+          </span>
+          <input
+            className={INPUT}
+            value={note}
+            placeholder="His Instagram post, 8/17"
+            title="Optional. Where the move was confirmed — his own post, a beat writer, the school's roster page."
+            onChange={(e) => setNote(e.target.value)}
+          />
         </label>
         <button type="button" className={cn(BTN, "border-coral/40 bg-coral/10")} disabled={busy || !name.trim() || !dest.trim()} onClick={add}>
           Add
