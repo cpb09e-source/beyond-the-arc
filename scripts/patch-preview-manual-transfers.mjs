@@ -103,7 +103,9 @@ const MOVES = [
   // 2026-08-22
   ["Donovan Dent", "LSU"],
   // 2026-08-24
-  ["Mark Mitchell", "Kentucky"],
+  // Returned to Missouri — see the note in patch-portal-manual.mts. The two
+  // lists must stay in step.
+  ["Mark Mitchell", "Missouri"],
   ["Iaroslav Niagu", "Colorado"],
   // 2026-08-25 — added to patch-portal-manual.mts on the day and missed here,
   // the same drift the note above records. Ole Miss is "Mississippi" in this
@@ -242,10 +244,29 @@ for (const [name, destRaw] of MOVES) {
   const pe = portalBy.get(tight(name));
   const ix = lookupIndex(name);
 
+  /**
+   * GOING BACK IS NOT TRANSFERRING IN.
+   *
+   * A player who entered the portal, committed elsewhere and then returned
+   * ends up with the destination equal to the school he last PLAYED for. The
+   * relocation branch below would carry his previous preview team across as
+   * the origin, which is the school he never suited up for — Mark Mitchell
+   * landed on Missouri's roster reading "transfer, from Kentucky", a sentence
+   * with no true half in it. The preview already has a `returning` status for
+   * exactly this player, used by 2,078 rows, and it carries no origin.
+   *
+   * Read off portal.json's last_team, which is where he actually played, not
+   * off the preview row, which is where a previous correction put him.
+   */
+  const lastPlayed = pe?.last_team ?? pe?.team_from ?? null;
+  const isReturn = lastPlayed != null && (DEST_ALIAS[lastPlayed] ?? lastPlayed) === dest;
+
   // Already where he belongs: make sure he reads as a transfer, then leave him.
   if (cur && cur.team === dest) {
     const fixes = [];
-    if (cur.row.status !== "transfer") { cur.row.status = "transfer"; fixes.push("status → transfer"); }
+    const want = isReturn ? "returning" : "transfer";
+    if (cur.row.status !== want) { cur.row.status = want; fixes.push(`status → ${want}`); }
+    if (isReturn && cur.row.from) { delete cur.row.from; fixes.push("cleared from"); }
     // portal.json outranks players-index.json here. The index is the thinner
     // corpus — it has no Jahki Howard at all, and stops Daquan Davis at Florida
     // St. a year before his Providence season — so a row first written from the
@@ -255,7 +276,11 @@ for (const [name, destRaw] of MOVES) {
       const id = pe?.bart_player_id ?? (ix && !ix.ambiguous ? ix.id : null);
       if (id != null) { cur.row.bart_id = id; fixes.push(`bart ${id}`); }
     }
-    const origin = pe?.team_from ?? (ix && ix.t !== dest ? ix.t : null);
+    // Not for a returner: `from` is the school he came FROM, and a player who
+    // went back to where he already was came from nowhere. Without this guard
+    // the block below immediately re-adds the origin the return branch just
+    // cleared, and the row reads "returning, from Missouri" on Missouri.
+    const origin = isReturn ? null : (pe?.team_from ?? (ix && ix.t !== dest ? ix.t : null));
     if (origin && cur.row.from !== origin) {
       fixes.push(cur.row.from ? `from "${cur.row.from}" → "${origin}"` : `from ${origin}`);
       cur.row.from = origin;
@@ -268,7 +293,7 @@ for (const [name, destRaw] of MOVES) {
       if (st) { Object.assign(cur.row, st); fixes.push(`stats from rank file (epm ${st.epm}, ${st.pts} ppg)`); }
     }
     if (fixes.length) { moved++; lines.push(`= ${name.padEnd(21)} already on ${dest} — ${fixes.join(", ")}`); }
-    else { noop++; lines.push(`· ${name.padEnd(21)} already on ${dest} as a transfer, unchanged`); }
+    else { noop++; lines.push(`· ${name.padEnd(21)} already on ${dest} as a ${want}, unchanged`); }
     continue;
   }
 
@@ -277,8 +302,13 @@ for (const [name, destRaw] of MOVES) {
     const src = doc.teams[cur.team];
     src.roster = src.roster.filter((r) => r !== cur.row);
     const row = cur.row;
-    row.status = "transfer";
-    row.from = cur.team;
+    if (isReturn) {
+      row.status = "returning";
+      delete row.from;
+    } else {
+      row.status = "transfer";
+      row.from = cur.team;
+    }
     if (row.bart_id == null && ix && !ix.ambiguous) row.bart_id = ix.id;
     t.roster.push(row);
     at.set(tight(name), { team: dest, row });

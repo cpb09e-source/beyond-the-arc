@@ -810,12 +810,43 @@ const returnerNotes = [];
   const cohortStats = computeCohortStats(bySeason);
 
   for (const e of entries) {
+    /**
+     * CLEARED FIRST, EVERY RUN. These three keys are provenance for a rating
+     * this rule replaced, and they were only ever written, never removed — so
+     * an entry that qualified on one run and stopped qualifying on the next
+     * kept them, and the file went out claiming a "return" basis and a season
+     * year for a rating that had since been recomputed from something else.
+     *
+     * Found by correcting Mark Mitchell's destination: the run before the
+     * correction stamped him as a returner, the run after it correctly did
+     * not, and the stamp stayed. The rule recomputes from scratch every time
+     * and its bookkeeping has to as well.
+     */
+    delete e.rating_last_season;
+    delete e.rating_year;
+    delete e.rating_basis;
     if (!e.team_to || e.bart_player_id == null || e.last_year == null) continue;
     const seasons = bySeason.get(e.bart_player_id) ?? [];
     // The most recent season at the destination that is not the one he is
     // leaving. Name comparison goes through the same canonicaliser the
     // entries themselves were cleaned with.
     const target = resolveSchool(e.team_to) ?? e.team_to;
+    /**
+     * HE HAS TO HAVE LEFT TO BE COMING BACK.
+     *
+     * The rule below finds the newest season at the destination older than the
+     * one being left, and prefers it when it rates higher — right for a player
+     * who spent a year elsewhere and is returning to a school he was good at.
+     * It is wrong for a player who entered the portal and withdrew, because for
+     * him the destination and the origin are the same school: the "prior
+     * season at the destination" it finds is simply his own season before last,
+     * and preferring it discards the most recent evidence in favour of older,
+     * better-looking evidence from the very same place.
+     *
+     * Mark Mitchell is the case that exposed it — Missouri to Missouri, re-rated
+     * 64 on 2026 up to 81 on 2025, a promotion earned by going nowhere.
+     */
+    if ((resolveSchool(e.team_from) ?? e.team_from) === target) continue;
     const prior = seasons.find(
       (sn) => sn.year < e.last_year && (resolveSchool(sn.team_name) ?? sn.team_name) === target,
     );
@@ -898,6 +929,22 @@ function bucket(name, conf) {
 }
 for (const e of entries) {
   if (!e.team_from || !e.team_to) continue;
+  /**
+   * A PLAYER WHO ENDED UP WHERE HE STARTED IS NOT A TRANSFER.
+   *
+   * Entering the portal and returning is a real thing that happens, and the
+   * entry stays in the table because it is news. But the two lines below bucket
+   * every row into its old school's out_players AND its new school's
+   * in_players, so a same-team row charged one school for losing a player it
+   * never lost and credited it for adding one it already had — twice the noise
+   * for an event that moved nobody. It roughly cancels in the net, which is
+   * exactly why it would never have been noticed.
+   *
+   * Two rows today: Mark Mitchell, who committed to Kentucky and went back to
+   * Missouri, and Isaac Harrell at Elon, who has been scored this way since
+   * the scraper first logged him.
+   */
+  if (e.team_from === e.team_to) continue;
   /**
    * WHO COUNTS. A class total should be a statement about players who will
    * change a rotation, so the same three-part production baseline the table

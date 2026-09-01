@@ -135,7 +135,14 @@ const BATCHES: Array<{ confirmed: string; moves: Array<[string, string]> }> = [
   {
     confirmed: "2026-08-24T00:00:00",
     moves: [
-      ["Mark Mitchell", "Kentucky"],
+      // CORRECTED IN PLACE, not moved to a new batch. He entered the portal
+      // on this date and was reported to Kentucky; he has since returned to
+      // Missouri. The entry date is when he entered, which has not changed —
+      // re-dating it would make a month-old move sort as today's news.
+      // Missouri -> Missouri is deliberate: see the same-team guard in
+      // rescore-portal.mjs, which keeps a withdraw-and-return out of both
+      // sides of the class ledger.
+      ["Mark Mitchell", "Missouri"],
       ["Iaroslav Niagu", "Colorado"],
     ],
   },
