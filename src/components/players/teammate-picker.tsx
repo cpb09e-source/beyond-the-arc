@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { PlayerPhoto } from "@/components/player-photo";
 import { popoverStyle, usePopoverAnchor } from "@/components/explorer/use-popover-anchor";
+import { classBadgeStyle } from "@/lib/class-badge";
 import { cn } from "@/lib/utils";
 
 /**
@@ -45,9 +46,19 @@ export function TeammatePicker({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
-  // 15rem, matching the trigger, so the panel reads as the control opening
-  // rather than as a menu that happens to be near it.
-  const { anchorRef, popRef, at } = usePopoverAnchor({ open, width: 240 });
+  /**
+   * ANCHORED TO THE BUTTON, NOT TO THE ROW, and sized to match it.
+   *
+   * The ref started on the outer flex row, which also holds the "Teammates"
+   * label — so the panel lined up with the LABEL's left edge and appeared to
+   * burst out to the left of the control it belongs to. The anchor has to be
+   * the thing the reader clicked.
+   *
+   * "trigger" width rather than a number for the same reason: a panel that is
+   * exactly as wide as the button reads as that button opening, where any
+   * other width reads as a menu that happens to be nearby.
+   */
+  const { anchorRef, popRef, at } = usePopoverAnchor({ open, width: "trigger" });
 
   const go = useCallback((id: number) => {
     setOpen(false);
@@ -95,30 +106,50 @@ export function TeammatePicker({
   if (teammates.length === 0) return null;
 
   return (
-    <div ref={anchorRef} className="hidden lg:flex items-center gap-2 justify-end">
+    <div className="hidden lg:flex items-center gap-2 justify-end">
       <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">
         Teammates
       </span>
-      <button
-        type="button"
-        onClick={() => { setOpen((o) => !o); setActive(0); }}
-        // Not "a ${teamName} teammate" — that reads "a Arizona" for every
-        // vowel-initial school.
-        aria-label={`${teamName} teammates`}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        className="relative w-48 h-10 pl-3 pr-8 rounded-md border border-ink/15 bg-card text-ink text-sm text-left shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
-      >
-        Select…
-        <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted text-[0.7rem]">▾</span>
-      </button>
+      <div ref={anchorRef} className="w-48">
+        <button
+          type="button"
+          onClick={() => { setOpen((o) => !o); setActive(0); }}
+          // Not "a ${teamName} teammate" — that reads "a Arizona" for every
+          // vowel-initial school.
+          aria-label={`${teamName} teammates`}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          className="relative w-full h-10 pl-3 pr-8 rounded-md border border-ink/15 bg-card text-ink text-sm text-left shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+        >
+          Select…
+          <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted text-[0.7rem]">▾</span>
+        </button>
+      </div>
 
       {open && at && typeof document !== "undefined" && createPortal(
         <div
           ref={popRef}
           role="listbox"
           aria-label={`${teamName} teammates`}
-          style={popoverStyle(at)}
+          /**
+           * WIDER THAN THE TRIGGER WHERE THE NAMES NEED IT.
+           *
+           * The trigger's 12rem truncated "Devin McGlockton" and "Jalen
+           * Washington" to an ellipsis, which is the one thing a list of names
+           * must not do — the reader is scanning for a person, and half a
+           * surname is not a person. So the button's width becomes a MINIMUM
+           * and the panel grows to its longest row.
+           *
+           * Overflowing the hero card is fine and was asked for; overflowing
+           * the VIEWPORT is not, so the growth is capped at the room to the
+           * right of where the panel starts.
+           */
+          style={{
+            ...popoverStyle(at),
+            width: undefined,
+            minWidth: at.width,
+            maxWidth: `calc(100vw - ${Math.round(at.left) + 8}px)`,
+          }}
           // bg-popover, not bg-card: this is the same surface the explorers'
           // menus use, and it is what the theme darkens on the dark side.
           className="z-60 flex flex-col overflow-hidden rounded-lg border border-hairline bg-popover shadow-xl"
@@ -148,9 +179,23 @@ export function TeammatePicker({
                   eager
                   className="shrink-0 rounded-full"
                 />
-                <span className="min-w-0 flex-1 truncate text-sm text-ink">{t.name}</span>
+                {/* whitespace-nowrap and NO truncate: the panel sizes to the
+                    longest name rather than cutting it. */}
+                <span className="flex-1 whitespace-nowrap text-sm text-ink">{t.name}</span>
+                {/* The players explorer's class badge, from the shared palette
+                    — a junior is the same amber here as in the table the
+                    reader may have arrived from. A graduate season has no
+                    colour by design and falls back to plain muted text. */}
                 {t.cls && (
-                  <span className="shrink-0 text-xs text-ink-muted tabular">{t.cls}</span>
+                  <span
+                    className={cn(
+                      "shrink-0 ml-1 inline-flex items-center rounded px-1.5 py-px text-[0.6rem] font-semibold",
+                      classBadgeStyle(t.cls) ? "" : "text-ink-muted",
+                    )}
+                    style={classBadgeStyle(t.cls)}
+                  >
+                    {t.cls}
+                  </span>
                 )}
               </button>
             ))}

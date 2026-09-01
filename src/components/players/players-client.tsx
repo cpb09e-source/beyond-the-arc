@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { CLASS_BADGE } from "@/lib/class-badge";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { midrankPercentileMap } from "@/lib/percentile";
@@ -266,13 +267,6 @@ function seasonLabel(y: number): string {
  * now, with a deep-fill dark set, and the player page's hero renders the same
  * four so a junior is the same amber wherever it appears.
  */
-const CLASS_BADGE: Record<string, { bg: string; fg: string }> = {
-  Fr: { bg: "var(--cls-fr-bg)", fg: "var(--cls-fr-fg)" },   // teal
-  So: { bg: "var(--cls-so-bg)", fg: "var(--cls-so-fg)" },   // violet
-  Jr: { bg: "var(--cls-jr-bg)", fg: "var(--cls-jr-fg)" },   // amber
-  Sr: { bg: "var(--cls-sr-bg)", fg: "var(--cls-sr-fg)" },   // magenta
-};
-
 function seasonBadge(y: number): string {
   return `${String(y - 1).slice(-2)}/${String(y).slice(-2)}`;
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CLASS_BADGE } from "@/lib/class-badge";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { TopHundredSeal } from "@/components/players/top-hundred-seal";
@@ -104,18 +105,6 @@ const CLASS_LABEL: Record<string, string> = {
   Sr: "Senior",
 };
 
-/**
- * The same four the players explorer uses, by token, so a junior is the same
- * amber on both surfaces. Defined in globals.css with a dark set — see the note
- * beside CLASS_BADGE in players-client.
- */
-const CLASS_BADGE: Record<string, { bg: string; fg: string }> = {
-  Fr: { bg: "var(--cls-fr-bg)", fg: "var(--cls-fr-fg)" },
-  So: { bg: "var(--cls-so-bg)", fg: "var(--cls-so-fg)" },
-  Jr: { bg: "var(--cls-jr-bg)", fg: "var(--cls-jr-fg)" },
-  Sr: { bg: "var(--cls-sr-bg)", fg: "var(--cls-sr-fg)" },
-};
-
 function Badge({
   children, bg, border, fg, title,
 }: {
@@ -141,17 +130,17 @@ type DraftChip = { team: string; logo: string | null; round: number; pick: numbe
  * The stat band — seven figures for the season on screen. Counting stats on the
  * first row, shooting on the second.
  *
- * BELOW xl ONLY, and the breakpoint is the whole argument. The career table
- * under this hero is the canonical record, and where it shows all twenty of its
- * columns at once a summary above it is twelve numbers repeated a card apart —
- * which is exactly why this band was taken out once already. But that table
- * swipes sideways whenever it does not fit, and MEASURED, it needs about 1293px
- * of wrapper to lay out: at 1440 it fits exactly, at 1280 it is 13px short, and
- * at 1024 it overflows by 269px because it bottoms out on its own 58rem minimum
- * and the reader is left with three or four columns of a twenty-column row.
+ * EVERY WIDTH. It was xl:hidden, on the argument that the career table below
+ * is the canonical record and states these figures in full wherever it can lay
+ * out all twenty of its columns — measured at about 1293px of wrapper, so 1440
+ * fits exactly and 1280 is 13px short.
  *
- * xl is 1280 — the last breakpoint where the table is within a hairline of
- * answering for itself. lg was the obvious guess and it is wrong by 256px.
+ * The argument holds and the conclusion still went. A summary the reader has to
+ * scroll to a second card to find is not a duplicate of that card; it is the
+ * line the hero should have carried in the first place, and hiding it above
+ * 1280 made the widest screens the only ones without it. Repetition a card
+ * apart is a cheaper fault than a hero that answers "what is he doing this
+ * year" only on a laptop.
  *
  * THE SEASON ONLY. A career figure under each of these was tried and dropped:
  * it doubled the band's height for a line the career table states in full a
