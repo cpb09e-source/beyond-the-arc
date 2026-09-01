@@ -113,6 +113,23 @@ export function Select({
     popRef.current?.querySelector<HTMLElement>(`[data-idx="${active}"]`)?.scrollIntoView({ block: "nearest" });
   }, [active, open, popRef]);
 
+  /**
+   * Contiguous runs of one optgroup, so its heading can stick.
+   *
+   * sticky is bounded by the element's own parent, so a heading rendered
+   * inside a single option's <li> would have that one row's height to stick
+   * within. The heading and its options have to share a box.
+   */
+  const sections = useMemo(() => {
+    const out: Array<{ group: string | undefined; items: Array<{ r: Row; i: number }> }> = [];
+    rows.forEach((r, i) => {
+      const last = out[out.length - 1];
+      if (last && last.group === r.group) last.items.push({ r, i });
+      else out.push({ group: r.group, items: [{ r, i }] });
+    });
+    return out;
+  }, [rows]);
+
   const current = rows.find((r) => r.value === value);
 
   return (
@@ -177,17 +194,22 @@ export function Select({
           className="z-60 overflow-y-auto rounded-lg border border-hairline bg-popover shadow-xl py-1"
         >
           <ul id={listId} role="listbox" aria-label={ariaLabel}>
-            {rows.map((r, i) => (
-              <li key={`${r.group ?? ""}|${r.value}`}>
-                {/* The group heading rides with its first member rather than
-                    being its own row, so a heading can never be the thing an
-                    arrow key lands on. */}
-                {r.group && r.group !== rows[i - 1]?.group && (
-                  <div className="px-2.5 pt-2 pb-1 text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">
-                    {r.group}
+            {sections.map((section) => (
+              <li key={section.group ?? "all"}>
+                {/* STICKY, and therefore OPAQUE — a see-through sticky header
+                    lets the rows passing under it show through. The heading is
+                    a sibling of its options inside this <li> rather than a row
+                    of its own, which is both what lets it stick for the whole
+                    section and what keeps an arrow key from ever landing on
+                    it. */}
+                {section.group && (
+                  <div className="sticky top-0 z-10 bg-popover px-2.5 pt-2 pb-1 text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">
+                    {section.group}
                   </div>
                 )}
+                {section.items.map(({ r, i }) => (
                 <button
+                  key={r.value}
                   type="button"
                   role="option"
                   aria-selected={r.value === value}
@@ -204,6 +226,7 @@ export function Select({
                 >
                   {r.label}
                 </button>
+                ))}
               </li>
             ))}
           </ul>

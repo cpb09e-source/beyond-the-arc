@@ -380,6 +380,30 @@ export function StatPicker({
   // fragments that no longer mean anything.
   const grouped = q.trim() === "";
 
+  /**
+   * Contiguous runs of one group, so a heading can stick.
+   *
+   * The heading used to live inside the wrapper div of the FIRST option in its
+   * run, which meant `position: sticky` had that one option's height to stick
+   * within — it would have unstuck immediately. Sticky positions against the
+   * nearest scrolling ancestor but is bounded by its own PARENT's box, so the
+   * heading and every option under it have to share one.
+   *
+   * The original flat index rides along on each item: the keyboard highlight
+   * and the roving tabindex both index into `matches`, and regrouping the
+   * render must not renumber them.
+   */
+  const sections = useMemo(() => {
+    const out: Array<{ group: string | null; items: Array<{ o: PickOption; i: number }> }> = [];
+    matches.forEach((o, i) => {
+      const group = grouped ? o.group : null;
+      const last = out[out.length - 1];
+      if (last && last.group === group) last.items.push({ o, i });
+      else out.push({ group, items: [{ o, i }] });
+    });
+    return out;
+  }, [matches, grouped]);
+
   return (
     <div className="relative" ref={wrapRef}>
       <button
@@ -432,16 +456,29 @@ export function StatPicker({
             {matches.length === 0 && (
               <p className="px-3 py-6 text-center text-sm text-ink-muted">No stat matches “{q.trim()}”.</p>
             )}
-            {matches.map((o, i) => {
-              const first = grouped && (i === 0 || matches[i - 1]!.group !== o.group);
-              return (
-                <div key={o.key}>
-                  {first && (
-                    <div className="px-3 pt-2.5 pb-1 text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">
-                      {groupLabel[o.group] ?? o.group}
-                    </div>
-                  )}
+            {sections.map((section) => (
+              <div key={section.group ?? "all"}>
+                {section.group && (
+                  <div
+                    /**
+                     * STICKY, AND OPAQUE BECAUSE IT IS STICKY. A translucent
+                     * sticky header lets the rows it is covering show through
+                     * as they pass under it — the same failure the lineup grid
+                     * and School History hit with their highlight rows. bg-popover
+                     * is the panel's own surface, so it reads as part of the
+                     * panel rather than as a floating label.
+                     *
+                     * z-10 for the same reason: the buttons below are later in
+                     * the DOM and would otherwise paint over it.
+                     */
+                    className="sticky top-0 z-10 bg-popover px-3 pt-2.5 pb-1 text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted"
+                  >
+                    {groupLabel[section.group] ?? section.group}
+                  </div>
+                )}
+                {section.items.map(({ o, i }) => (
                   <button
+                    key={o.key}
                     type="button"
                     role="option"
                     data-idx={i}
@@ -489,9 +526,9 @@ export function StatPicker({
                     )}
                     <span className="truncate">{o.label}</span>
                   </button>
-                </div>
-              );
-            })}
+                ))}
+              </div>
+            ))}
           </div>
 
           {/* THE CEILING EXPLAINS ITSELF, IN THE BOX, THE MOMENT IT IS HIT.
