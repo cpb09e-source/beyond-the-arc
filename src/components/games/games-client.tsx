@@ -775,7 +775,15 @@ export function GamesClient() {
                       </span>
                     </td>
                     <td className={cn("px-2 py-1.5 text-center text-xs transition-colors", ROW_HOVER)}>
-                      <span className={cn("font-semibold", won ? "text-good" : "text-ink-muted")}>
+                      {/* A RED L, not a grey one. The muted L was the odd
+                          member of a set: the schedule ticker, the game
+                          overview's result tiles and the coach page all pair a
+                          green W with a red L, and only this column dropped the
+                          loss to neutral — so a page could show the same game
+                          two ways. It also made the column half-scannable,
+                          since a colour that only marks wins means the eye has
+                          to read every other row rather than see it. */}
+                      <span className={cn("font-semibold", won ? "text-good" : "text-bad")}>
                         {won ? "W" : "L"}
                       </span>
                     </td>
