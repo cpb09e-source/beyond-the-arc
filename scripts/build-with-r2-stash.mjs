@@ -22,65 +22,22 @@
 import { rm } from "node:fs/promises";
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
+import { R2_MIRRORED_DIRS, BUILD_ONLY_DIRS, BUILD_ONLY_FILES } from "./lib/out-strip-lists.mjs";
 
 const ROOT = process.cwd();
 const OUT = path.join(ROOT, "out");
 
-const STRIP_DIRS = [
-  "data/player-games",
-  "data/player",
-  "data/player-ranks",
-  "data/player-splits",
-  "data/tournament-box",
-  "data/team",
-  // These two were R2-served but missing from this list (present in
-  // strip-r2-mirrored-from-out.mjs) — game-players since it shipped, shots
-  // since 2026-07. Harmless while absent (just re-uploaded dead weight), but
-  // the lists are supposed to mirror R2_DIRS in src/lib/data-url.ts exactly.
-  "data/game-players",
-  "data/shots",
-  // Added 2026-08-30 with the Game Log Explorer. 80 MB in twelve files: not a
-  // file-count problem like the rest of this list, a git-history one.
-  "data/game-index",
-  "data/team-game-index",
-];
-
 /**
- * Not R2-mirrored — build-time inputs that no browser asks for, so shipping
- * them is pure upload weight.
+ * WHAT GETS STRIPPED LIVES IN scripts/lib/out-strip-lists.mjs.
  *
- * players-by-year is the Supabase row for every player-season (48 MB across 13
- * files). readPlayersForYear() reads it off the filesystem to build the team
- * pages, and 19 pipeline scripts read it offline, so it stays in public/ — but
- * since /players moved to the slim players-explorer payload nothing fetches it
- * over the network any more.
+ * It used to live here as well, and the two copies drifted: this file — the
+ * one netlify.toml names, and therefore the one that actually runs — was
+ * missing data/team-season-games (4,631 files, 40 MB), data/live and
+ * data/team-splits (~14 MB). The postbuild hook that knew about all three does
+ * not fire when this script is invoked directly, which is exactly how it is
+ * invoked. Read that file's header for the full account.
  */
-const BUILD_ONLY_DIRS = [
-  "data/players-by-year",
-  // Added with the lineups/on-off work. Both are read by the server at build
-  // time and reach the browser as PROPS on the team page, so no request can
-  // ask for either — same category as players-by-year above.
-  //   lineup-stats  29 MB / 2,008 files
-  //   team-seasons  7.6 MB / 368 files
-  // strip-r2-mirrored-from-out.mjs also lists them, and npm run build fires it
-  // as a postbuild hook, so in practice they are removed twice. Listed here
-  // anyway because this file is the one that reliably runs on Netlify — the
-  // header explains why the postbuild hook could not be trusted there.
-  "data/lineup-stats",
-  "data/team-seasons",
-  // Read at build time by readAssistForPlayer(), delivered as props.
-  "data/assist-players",
-];
-
-/**
- * Build-time-only FILES, the same category as the dirs above: read off the
- * filesystem while the pages render, never fetched by a browser. Together they
- * are ~25 MB that was being uploaded on every deploy for nobody to request.
- */
-const BUILD_ONLY_FILES = [
-  "data/teams-all.json",
-  "data/assist-network.json",
-];
+const STRIP_DIRS = R2_MIRRORED_DIRS;
 
 async function main() {
   // Regenerate the per-season shards the home page fetches at runtime BEFORE

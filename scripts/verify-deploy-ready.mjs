@@ -14,6 +14,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { ALL_STRIP_DIRS, BUILD_ONLY_FILES, R2_MIRRORED_DIRS } from "./lib/out-strip-lists.mjs";
 
 const OUT = path.resolve("out");
 const fail = [];
@@ -115,13 +116,16 @@ if (paywallOff) {
 }
 
 // ── 3. The strips ran ─────────────────────────────────────────────────────
-const MUST_BE_GONE = [
-  "data/player-games", "data/player", "data/player-ranks", "data/player-splits",
-  "data/tournament-box", "data/team", "data/game-players", "data/shots",
-  "data/game-index", "data/players-by-year", "data/lineup-stats",
-  "data/team-seasons", "data/assist-players",
-  "data/teams-all.json", "data/assist-network.json",
-];
+/**
+ * READ FROM scripts/lib/out-strip-lists.mjs, not restated here.
+ *
+ * The copy that used to sit in this file was four dirs short of what the
+ * postbuild hook strips — team-game-index, team-season-games, live and
+ * team-splits — so the gate would have passed a deploy carrying every one of
+ * them. A check with a stale copy of the list it is checking is worse than no
+ * check: it reports a pass.
+ */
+const MUST_BE_GONE = [...ALL_STRIP_DIRS, ...BUILD_ONLY_FILES];
 const stillThere = MUST_BE_GONE.filter(exists);
 check("R2-mirrored and build-only data stripped", stillThere.length === 0, stillThere.join(", "));
 
@@ -182,11 +186,9 @@ try {
     /^\s*"public\/data\/([a-z0-9-]+)",/gm,
     (d) => d,
   );
-  const stripDirs = dirsFrom(
-    "scripts/strip-r2-mirrored-from-out.mjs",
-    /^\s*"data\/([a-z0-9-]+)",/gm,
-    (d) => d,
-  );
+  // Straight from the module both strippers import — there is no third copy to
+  // parse any more, and nothing to drift.
+  const stripDirs = new Set(R2_MIRRORED_DIRS.map((d) => d.replace(/^data\//, "")));
 
   // A guard on the guard: if a refactor changes these files' formatting the
   // regexes go quiet, and a check that silently matches nothing passes forever.
