@@ -35,6 +35,8 @@ on:
           - publish
           - derive,publish
           - ingest
+          # Puts last night's files back. Never part of a scheduled run.
+          - rollback
       season:
         description: "Season to refresh (blank = LIVE_SEASON)"
         type: string

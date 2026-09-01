@@ -74,6 +74,7 @@ const DRY = has("--dry-run");
 const NO_SYNC = has("--no-sync");
 const seasonArg = arg("--season");
 const SEASON = seasonArg ? Number(seasonArg) : LIVE_SEASON;
+// rollback is absent from the default on purpose — see ROLLBACK.
 const PHASES = (arg("--phase") ?? "ingest,derive,publish").split(",").map((s) => s.trim());
 
 if (SEASON === null || !Number.isFinite(SEASON)) {
@@ -173,6 +174,9 @@ const DERIVE: Step[] = [
  */
 const PUBLISH: Step[] = [
   { cmd: "npx", args: ["tsx", "scripts/export-static-data.mts"], note: "reads DERIVE's files, throws if absent" },
+  // Keeps the admin page's destination typeahead current — a new or renamed
+  // program has to be offerable the season it appears, not the season after.
+  { cmd: "node", args: ["scripts/build-team-names.mjs"], note: "team names for the admin typeahead" },
   { cmd: "node", args: ["scripts/build-team-game-index.mjs", "--season", YEAR] },
   { cmd: "node", args: ["scripts/build-game-index.mjs", "--season", YEAR] },
   { cmd: "npx", args: ["tsx", "scripts/build-team-season-games.mts", "--season", YEAR], note: "per-team game files" },
@@ -185,6 +189,12 @@ const PUBLISH: Step[] = [
  * directories that are the only ones a nightly run can have changed.
  */
 const SYNC: Step[] = [
+  /**
+   * SNAPSHOT FIRST, and the order is the whole point. Taken after the upload,
+   * "previous" would mean the run that just happened, and rolling back a bad
+   * night would restore the bad night.
+   */
+  { cmd: "node", args: ["scripts/r2-snapshot.mjs", "--snapshot"], note: "keep last night, so a bad run can be undone" },
   { cmd: "node", args: ["scripts/sync-data-to-r2.mjs", "--only", "live"], note: "the live team pages" },
   { cmd: "node", args: ["scripts/sync-data-to-r2.mjs", "--only", "team-season-games"] },
   { cmd: "node", args: ["scripts/sync-data-to-r2.mjs", "--only", "team-game-index"] },
@@ -234,10 +244,25 @@ function writeStatus(outcome: "ok" | "failed", failedAt: string | null) {
   console.log(`\nstatus -> public/data/live/refresh-status.json`);
 }
 
+/**
+ * ROLLBACK — put last night's files back, and nothing else.
+ *
+ * A phase rather than a separate script so it runs through the same runner,
+ * writes the same status record and is dispatched the same way. The thing you
+ * reach for when the site is wrong is not the moment to be using a code path
+ * nothing else exercises.
+ *
+ * It is never part of a default run: PHASES has to name it explicitly.
+ */
+const ROLLBACK: Step[] = [
+  { cmd: "node", args: ["scripts/r2-snapshot.mjs", "--restore"], note: "restore the previous publish" },
+];
+
 const GROUPS: Array<[string, Step[]]> = [
   ["ingest", INGEST],
   ["derive", DERIVE],
   ["publish", NO_SYNC ? PUBLISH : [...PUBLISH, ...SYNC]],
+  ["rollback", ROLLBACK],
 ];
 
 console.log(`\n=== BTA nightly refresh - season ${SEASON} ===`);

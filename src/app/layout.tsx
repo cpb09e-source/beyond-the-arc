@@ -3,6 +3,7 @@ import { Schibsted_Grotesk, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth/auth-provider";
 import { SiteHeader } from "@/components/site-header";
+import { SiteBanner } from "@/components/site-banner";
 import { ScoreTicker } from "@/components/scoreboard/score-ticker";
 import { SHOW_SCORE_TICKER } from "@/lib/flags";
 import { SiteFooter } from "@/components/site-footer";
@@ -123,6 +124,9 @@ export default function RootLayout({
             show who is signed in on every page; it holds no secrets, only the
             token the browser already has. */}
         <AuthProvider>
+        {/* Above the header, because an announcement that scrolls away with the
+            page is one most readers never see. */}
+        <SiteBanner />
         <SiteHeader />
         {/* Score rail, under the nav on every page. Renders nothing when there
             are no games, so it costs zero height in the offseason. In demo mode

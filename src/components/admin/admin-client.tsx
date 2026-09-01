@@ -6,6 +6,7 @@ import { useAuthOptional } from "@/lib/auth/auth-provider";
 import { dataUrl } from "@/lib/data-url";
 import { LIVE_SEASON } from "@/lib/seasons";
 import { cn } from "@/lib/utils";
+import { BannerPanel, TransfersPanel } from "@/components/admin/admin-panels";
 
 /**
  * /admin — what the nightly pipeline did, and the button that will run it.
@@ -68,6 +69,24 @@ function ago(iso: string): string {
   return `${Math.round(hrs / 24)} days ago`;
 }
 
+/**
+ * What the buttons will dispatch, in the order someone reaches for them.
+ *
+ * Rollback is last and styled as the exception it is: it discards tonight's
+ * publish and puts the previous one back. It is never part of a scheduled run
+ * and the pipeline will not include it unless it is named.
+ */
+const RUNS: Array<{ label: string; phases: string; why: string; primary?: boolean; danger?: boolean }> = [
+  { label: "Run everything", phases: "ingest,derive,publish", primary: true,
+    why: "Pull the night's games, rebuild, publish." },
+  { label: "Re-publish only", phases: "publish",
+    why: "Rebuild the published files from what is already on disk. No network." },
+  { label: "Derive and publish", phases: "derive,publish",
+    why: "Recompute from the archive without re-pulling." },
+  { label: "Roll back last publish", phases: "rollback", danger: true,
+    why: "Restore the previous run's files. One generation only." },
+];
+
 export function AdminClient() {
   const auth = useAuthOptional();
   const [status, setStatus] = useState<RefreshStatus | null>(null);
@@ -117,11 +136,15 @@ export function AdminClient() {
       <header className="mb-6">
         <p className="text-[0.6rem] uppercase tracking-widest text-coral font-bold mb-1">Admin</p>
         <h1 className="text-2xl font-semibold text-ink">Nightly refresh</h1>
-        <p className="text-ink-muted text-sm mt-1">
-          The in-season pipeline: pull the night&rsquo;s games, rebuild the derived numbers,
-          publish the live season&rsquo;s files. The site is never rebuilt.
-        </p>
       </header>
+
+      {/* THE TWO THINGS THAT CHANGE WITHOUT A DEPLOY, first, because they are
+          the ones an administrator comes here to do. The run record below is
+          something you read; these are things you act on. */}
+      <div className="grid gap-4 mb-4">
+        <BannerPanel />
+        <TransfersPanel />
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] items-start">
         <section className="rounded-xl border border-ink/10 bg-card shadow-sm overflow-hidden">
@@ -208,17 +231,36 @@ export function AdminClient() {
         <aside className="rounded-xl border border-ink/10 bg-card shadow-sm p-4">
           <h2 className="text-sm font-semibold text-ink mb-3">Run it</h2>
 
-          <button
-            type="button"
-            disabled
-            className="w-full h-10 rounded-md bg-coral/90 text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Run now
-          </button>
+          {/* THE PHASES ARE SEPARATE BECAUSE THEY FAIL SEPARATELY. Re-publishing
+              after a fixed builder should not re-pull a night of box scores,
+              and an upstream outage should not cost the derivations that
+              already succeeded. Same reasoning as the script's own phases. */}
+          <div className="flex flex-col gap-1.5">
+            {RUNS.map((r) => (
+              <button
+                key={r.phases}
+                type="button"
+                disabled
+                title={r.why}
+                className={cn(
+                  "w-full h-9 rounded-md text-sm font-semibold border transition-colors",
+                  "disabled:opacity-40 disabled:cursor-not-allowed",
+                  r.danger
+                    ? "border-bad/40 bg-bad/10 text-bad"
+                    : r.primary
+                      ? "border-coral/40 bg-coral/10 text-ink"
+                      : "border-ink/15 text-ink",
+                )}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
 
           <p className="text-[0.7rem] text-ink-muted mt-2 leading-relaxed">
-            Not wired yet. It needs the repository secrets loaded and the workflow
-            re-enabled — until then this would fail rather than do nothing, which is worse.
+            Not wired yet. These need the repository secrets loaded and the workflow
+            re-enabled — until then they would fail rather than do nothing, which is worse.
+            Every one of them runs on GitHub, not here.
           </p>
 
           <hr className="my-4 border-hairline" />

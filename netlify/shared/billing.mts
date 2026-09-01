@@ -97,6 +97,61 @@ export async function requireUser(req: Request): Promise<AuthedUser | null> {
   return { id: data.user.id, email: data.user.email ?? null };
 }
 
+/**
+ * Identity plus staff role, or the Response to return instead.
+ *
+ * THE SERVER-SIDE HALF OF THE ADMIN GATE. /admin hides itself in the browser
+ * from anyone whose profile is not role='admin', but that is presentation —
+ * the page's JavaScript ships to everyone and a static export cannot gate a
+ * route. This is the check that actually decides anything: every admin write
+ * goes through a function that calls this first, and the browser's opinion is
+ * never consulted.
+ *
+ * Separate from requirePaid rather than a flag on it, because they answer
+ * different questions and conflating them would be a real bug: role='admin'
+ * implies paid, but paid emphatically does not imply admin, and a Season Pass
+ * holder must never reach a write endpoint.
+ */
+export async function requireAdmin(
+  req: Request,
+  tag: string,
+): Promise<{ user: AuthedUser } | { response: Response }> {
+  const user = await requireUser(req);
+  if (!user) {
+    return { response: Response.json({ error: "Sign in." }, { status: 401 }) };
+  }
+
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    return {
+      response: Response.json(
+        { error: "Admin checks are not configured on this deploy." },
+        { status: 503 },
+      ),
+    };
+  }
+
+  const { data, error } = await admin
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (error) {
+    console.error(`[${tag}] profile read failed:`, error.message);
+    return { response: Response.json({ error: "Could not verify your account." }, { status: 503 }) };
+  }
+
+  if ((data as { role: string | null } | null)?.role !== "admin") {
+    // 404 rather than 403. A 403 confirms the endpoint exists and that the
+    // caller was simply not important enough, which is an invitation. There
+    // is nothing here for a non-administrator to learn.
+    return { response: Response.json({ error: "Not found." }, { status: 404 }) };
+  }
+
+  return { user };
+}
+
 /** Absolute site origin, for Stripe's return URLs. */
 export function siteOrigin(req: Request): string {
   const configured = process.env.NEXT_PUBLIC_SITE_URL;
