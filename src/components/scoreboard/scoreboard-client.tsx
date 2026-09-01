@@ -6,6 +6,7 @@ import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { confDisplay } from "@/lib/conf-display";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/select";
 import { IS_DEMO } from "@/lib/flags";
 import { DatePicker } from "./date-picker";
 import {
@@ -176,15 +177,14 @@ export function ScoreboardClient() {
       {confOptions.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-6">
           <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">Conference</span>
-          <select
+          <Select
             value={conf}
-            onChange={(e) => setConf(e.target.value)}
-            aria-label="Filter by conference"
-            className="h-9 px-2.5 rounded-md border border-ink/15 bg-card text-ink text-base sm:text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40"
+            onChange={setConf}
+            ariaLabel="Filter by conference"
           >
             <option value="">All Conferences</option>
             {confOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
+          </Select>
           {conf && (
             <button type="button" onClick={() => setConf("")} className="text-xs text-coral hover:underline">
               Clear

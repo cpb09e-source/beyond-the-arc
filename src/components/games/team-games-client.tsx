@@ -19,6 +19,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { TeamLogo } from "@/components/team-logo";
+import { Select } from "@/components/select";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { MultiYearSelect } from "@/components/explorer/multi-year-select";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
@@ -690,16 +691,20 @@ export function TeamGamesClient({ scope }: { scope?: TeamGamesScope } = {}) {
 
         <label className="inline-flex items-center gap-1.5 min-w-0">
           <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">View</span>
-          <select
+          {/* Select, not a native <select>: the OS draws a native list and
+              draws it white, which on the dark theme looked like another
+              product's control. See the header of components/select.tsx. */}
+          <Select
             value={view.key}
-            onChange={(e) => update({ view: e.target.value })}
-            aria-label="Table view"
-            className="h-8 max-w-48 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 transition-colors"
+            onChange={(v) => update({ view: v })}
+            ariaLabel="Table view"
+            compact
+            className="max-w-48"
           >
             {TEAM_GAME_VIEWS.map((v) => (
               <option key={v.key} value={v.key} title={v.desc}>{v.label}</option>
             ))}
-          </select>
+          </Select>
         </label>
 
         <SavedFiltersMenu
@@ -778,14 +783,14 @@ export function TeamGamesClient({ scope }: { scope?: TeamGamesScope } = {}) {
         trailing={
           <>
             {!previewCapped && !scope && (
-              <select
-                value={spec.limit}
-                onChange={(e) => update({ limit: Number(e.target.value) })}
-                aria-label="Rows shown"
-                className="h-8 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40"
+              <Select
+                value={String(spec.limit)}
+                onChange={(v) => update({ limit: Number(v) })}
+                ariaLabel="Rows shown"
+                compact
               >
                 {LIMIT_OPTIONS.map((n) => <option key={n} value={n}>Top {n}</option>)}
-              </select>
+              </Select>
             )}
           </>
         }

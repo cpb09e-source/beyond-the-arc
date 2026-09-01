@@ -945,10 +945,9 @@ export function ExplorerClient({
               <span className="hidden sm:inline text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">
                 View
               </span>
-              <select
+              <Select
                 value={spec.view || TABLE_VIEWS[0]!.key}
-                onChange={(e) => {
-                  const v = e.target.value;
+                onChange={(v) => {
                   const next: TeamFilterSpec = {
                     ...spec,
                     view: v === TABLE_VIEWS[0]!.key ? "" : v,
@@ -962,8 +961,9 @@ export function ExplorerClient({
                   const p = specToParams(next).toString();
                   startTransition(() => router.replace(p ? `/?${p}` : "/", { scroll: false }));
                 }}
-                aria-label="Table view"
-                className="field-sm-phone h-8 max-w-40 sm:max-w-none rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 transition-colors"
+                ariaLabel="Table view"
+                compact
+                className="max-w-44"
               >
                 {/* MARKED ONLY WHERE THE MARK IS TRUE.
                     This said "· Pass" on every gated view, which was ten of
@@ -998,7 +998,7 @@ export function ExplorerClient({
                     })}
                   </optgroup>
                 ))}
-              </select>
+              </Select>
             </label>
 
             {/* Between the view select and Compare: it belongs with View —

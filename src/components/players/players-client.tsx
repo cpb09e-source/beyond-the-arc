@@ -1292,10 +1292,9 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">
                 View
               </span>
-              <select
+              <Select
                 value={spec.view || PLAYER_VIEWS[0]!.key}
-                onChange={(e) => {
-                  const key = e.target.value;
+                onChange={(key) => {
                   const v = playerViewByKey(key);
                   updateSpec({
                     ...spec,
@@ -1308,15 +1307,19 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                     sortDir: v.sortDir,
                   });
                 }}
-                aria-label="Table view"
-                className="h-8 max-w-44 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 transition-colors"
+                ariaLabel="Table view"
+                compact
+                className="max-w-44"
               >
                 {playerViewGroups().map((g) => (
                   <optgroup key={g.group} label={g.group}>
-                    {/* A native <option> renders text and nothing else, hence
-                        a word rather than a padlock. Shown only to readers it
-                        applies to - a subscriber has no use for a list of
-                        labels naming what they already bought. */}
+                    {/* A WORD RATHER THAN A PADLOCK. This used to be forced —
+                        a native <option> renders text and nothing else — and
+                        the constraint has lifted now that the panel is ours,
+                        but the word is still the better choice: an icon in a
+                        list of view names has to be learned, and "Paid" does
+                        not. Shown only to readers it applies to; a subscriber
+                        has no use for labels naming what they already bought. */}
                     {g.views.map((v) => {
                       const locked = !paid && playerViewAccess(v.key).kind === "preview";
                       return (
@@ -1331,7 +1334,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                     })}
                   </optgroup>
                 ))}
-              </select>
+              </Select>
             </label>
             {SHOW_COMPARE && (
               <button

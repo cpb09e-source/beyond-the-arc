@@ -3,6 +3,7 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import { hexbin as d3hexbin } from "d3-hexbin";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/select";
 import { dataUrl } from "@/lib/data-url";
 import { StatInfo } from "@/components/players/stat-info";
 import { pctBg, pctColor } from "@/components/percentile-chip";
@@ -226,14 +227,13 @@ export function PlayerShotChart({
             </h2>
           </div>
           {yrs.length > 1 && (
-            <select
-              value={year ?? undefined}
-              onChange={(e) => setYear(Number(e.target.value))}
-              className="h-9 px-2.5 rounded-md border border-ink/15 bg-card text-ink text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40"
-              aria-label="Season"
+            <Select
+              value={year != null ? String(year) : ""}
+              onChange={(v) => setYear(Number(v))}
+              ariaLabel="Season"
             >
               {yrs.map((y) => <option key={y} value={y}>{seasonLabel(y)}</option>)}
-            </select>
+            </Select>
           )}
         </div>
 

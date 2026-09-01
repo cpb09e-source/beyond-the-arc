@@ -12,6 +12,7 @@
 import { useEffect, useRef } from "react";
 import { Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/select";
 
 /** The comparators a row can express. */
 export type RowComparator = "gt" | "gte" | "lt" | "lte";
@@ -116,20 +117,19 @@ export function FilterRow({
         {label}
       </span>
 
-      <select
+      <Select
         value={row.op}
-        onChange={(e) => onChange(row.id, { op: e.target.value as RowComparator })}
+        onChange={(v) => onChange(row.id, { op: v as RowComparator })}
         disabled={valueLocked}
-        aria-label={`Comparison for ${label}`}
-        className={cn(
-          "h-8 w-14 shrink-0 px-1 rounded-md border border-ink/15 bg-card text-ink text-sm text-center focus:outline-none focus:ring-2 focus:ring-coral/40",
-          valueLocked && "opacity-50",
-        )}
+        ariaLabel={`Comparison for ${label}`}
+        compact
+        align="center"
+        className="w-14 shrink-0"
       >
         {OPS.map((o) => (
           <option key={o.op} value={o.op}>{o.symbol}</option>
         ))}
-      </select>
+      </Select>
 
       {/* SIZED TO THE VALUE, NOT TO THE PLACEHOLDER. Almost everything typed
           here is two or three digits — "70", "19", "43" — and the widest

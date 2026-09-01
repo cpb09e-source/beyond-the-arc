@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/select";
 import { midrankPercentileMap } from "@/lib/percentile";
 import { PercentileChip } from "@/components/percentile-chip";
 import { SortableTh } from "@/components/explorer/sortable-th";
@@ -436,30 +437,32 @@ export function ConferencesClient() {
 
         <label className="inline-flex items-center gap-1.5 min-w-0">
           <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">View</span>
-          <select
+          <Select
             value={view.key}
-            onChange={(e) => update({ view: e.target.value })}
-            aria-label="Table view"
-            className="h-8 max-w-44 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 transition-colors"
+            onChange={(v) => update({ view: v })}
+            ariaLabel="Table view"
+            compact
+            className="max-w-44"
           >
             {viewOptions.map((v) => (
               <option key={v.key} value={v.key} title={v.desc}>{v.label}</option>
             ))}
-          </select>
+          </Select>
         </label>
 
         <label className="inline-flex items-center gap-1.5 min-w-0">
           <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">Split</span>
-          <select
+          <Select
             value={spec.split}
-            onChange={(e) => update({ split: e.target.value })}
-            aria-label="Stat split"
-            className="h-8 max-w-52 rounded-md border border-ink/15 bg-card text-ink text-sm px-2 shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 transition-colors"
+            onChange={(v) => update({ split: v })}
+            ariaLabel="Stat split"
+            compact
+            className="max-w-52"
           >
             {SPLITS.map((sp) => (
               <option key={sp.key} value={sp.key}>{sp.label}</option>
             ))}
-          </select>
+          </Select>
         </label>
 
         <DownloadMenu
