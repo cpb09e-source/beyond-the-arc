@@ -212,7 +212,17 @@ export async function loadPlayerPageData(bartId: number) {
 
   return {
     bartId, player, current, stats, transfer, ranks, overviewOptions,
-    positionByYear, heroRanks, logRows, teammates, gamePct, logLadders,
+    positionByYear, heroRanks, logRows, teammates, logLadders,
     draft, rsci, draftTeam,
+    /**
+     * ONE NUMBER, NOT THE WHOLE PERCENTILE FILE.
+     *
+     * gamePct is the national ladder set — 107 KB — and the page reads exactly
+     * one integer off it. Returning the object made every live player bundle
+     * 148 KB where 41 KB would do, which across ~5,000 active players is 530 MB
+     * of difference. logLadders above is the part of it that is actually
+     * needed, already narrowed to this player's seasons and buckets.
+     */
+    minAtt: gamePct?.min_att ?? 2,
   };
 }

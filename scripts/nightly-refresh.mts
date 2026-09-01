@@ -181,6 +181,7 @@ const PUBLISH: Step[] = [
   { cmd: "node", args: ["scripts/build-game-index.mjs", "--season", YEAR] },
   { cmd: "npx", args: ["tsx", "scripts/build-team-season-games.mts", "--season", YEAR], note: "per-team game files" },
   { cmd: "npx", args: ["tsx", "scripts/build-live-team-pages.mts", "--season", YEAR], note: "the live team pages" },
+  { cmd: "npx", args: ["tsx", "scripts/build-live-player-pages.mts", "--season", YEAR], note: "the live player pages" },
 ];
 
 /**

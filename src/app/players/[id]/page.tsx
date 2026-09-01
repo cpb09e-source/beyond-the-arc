@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { readPlayer, readRankedPlayerIds } from "@/lib/static-data";
 import { loadPlayerPageData, fmtNum, fromEnd, seasonLabel } from "@/lib/player-page-data";
 import { PlayerPageView } from "@/components/players/player-page-view";
+import { LivePlayerPage } from "@/components/players/live-player-page";
+import { isLiveSeason } from "@/lib/seasons";
 
 export async function generateStaticParams() {
   // Only emit profile pages for ranked players. Unranked players (didn't
@@ -56,5 +58,17 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   const data = await loadPlayerPageData(bartId);
   if (!data) notFound();
 
+  /**
+   * A player with a row in the season being PLAYED reads that page as data —
+   * see src/lib/live-player-page.ts. `data` is still loaded and passed down: it
+   * is the last build's numbers, what this page ships as HTML for crawlers, and
+   * what stays on screen if the live file cannot be reached.
+   *
+   * Tested on the seasons, not on LIVE_SEASON alone: a career that ended in
+   * 2019 never moves again and must not pay for a fetch.
+   */
+  if (data.player.seasons.some((s) => isLiveSeason(s.year))) {
+    return <LivePlayerPage fallback={data} />;
+  }
   return <PlayerPageView {...data} />;
 }

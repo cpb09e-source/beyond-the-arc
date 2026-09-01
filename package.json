@@ -15,6 +15,7 @@
     "build:game-index": "node scripts/build-game-index.mjs",
     "build:team-season-games": "tsx scripts/build-team-season-games.mts",
     "build:live-teams": "tsx scripts/build-live-team-pages.mts",
+    "build:live-players": "tsx scripts/build-live-player-pages.mts",
     "refresh:nightly": "tsx scripts/nightly-refresh.mts",
     "seed:transfers": "node scripts/seed-manual-transfers.mjs",
     "r2:snapshot": "node scripts/r2-snapshot.mjs",

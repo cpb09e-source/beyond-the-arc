@@ -25,7 +25,7 @@ import type { PlayerPageData } from "@/lib/player-page-data";
  */
 export function PlayerPageView({
   bartId, player, current, stats, transfer, overviewOptions, positionByYear,
-  heroRanks, logRows, teammates, gamePct, logLadders, draft, rsci, draftTeam,
+  heroRanks, logRows, teammates, minAtt, logLadders, draft, rsci, draftTeam,
 }: PlayerPageData) {
     /**
    * Transfer banner. The draft used to supersede it here; the draft is now a
@@ -135,7 +135,7 @@ export function PlayerPageView({
                 rows={logRows}
                 playerName={stats.name ?? `Player ${bartId}`}
                 ladders={logLadders}
-                minAtt={gamePct?.min_att ?? 2}
+                minAtt={minAtt}
                 emptySeason={current.year}
               />
             </div>
