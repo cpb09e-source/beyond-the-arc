@@ -7,6 +7,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { cn } from "@/lib/utils";
+import { activeHref } from "@/lib/nav-active";
 
 /**
  * The mobile menu — a FULL-SCREEN sheet, like Ramp's: its own wordmark and
@@ -162,9 +163,7 @@ export function MobileMenu({
             const expanded = openSection === item.label;
             // A child page lights the SECTION name while the section is shut,
             // so collapsing by default never costs the "you are here" mark.
-            const inside = item.children.some((k) =>
-              k.href === "/" ? pathname === "/" : pathname.startsWith(k.href),
-            );
+            const inside = activeHref(pathname, item.children.map((k) => k.href)) !== null;
             return (
               <div key={item.label} className="border-b border-hairline">
                 {/* A BUTTON, NOT A LINK. The section name opens the section;
@@ -207,12 +206,15 @@ export function MobileMenu({
                   // separates top-level destinations.
                   <div className="pb-3 pl-2 pr-1">
                     {item.children.map((k) => {
+                      const activeChild = activeHref(pathname, item.children!.map((c) => c.href));
                       // NOT isCurrent: that one lights the Teams chip for every
                       // page on its menu, which is right for the desktop chip
                       // and wrong here - it lit Team Explorer and Conference
                       // Power Rankings at the same time. A child is current
-                      // only if it is the page you are on.
-                      const on = k.href === "/" ? pathname === "/" : pathname.startsWith(k.href);
+                      // only if it is the page you are on, and only the most
+                      // specific child at that: the startsWith this used to do
+                      // lit /players and /players/games together.
+                      const on = k.href === activeChild;
                       const Icon = k.icon;
                       return (
                         <Link

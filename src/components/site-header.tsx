@@ -13,6 +13,7 @@ import { AccountNav } from "@/components/account/account-nav";
 import { MobileMenu } from "@/components/mobile-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
+import { activeHref } from "@/lib/nav-active";
 
 /**
  * The pages that hang off a nav label rather than being one.
@@ -144,6 +145,8 @@ function NavMenu({
   pathname: string;
 }) {
   const [open, setOpen] = useState(false);
+  // One entry at most, and the most specific one — see activeHref.
+  const activeInMenu = activeHref(pathname, items.map((k) => k.href));
   return (
     <div
       className="relative"
@@ -182,7 +185,10 @@ function NavMenu({
               {label}
             </div>
             {items.map((k) => {
-              const here = k.href === "/" ? pathname === "/" : pathname.startsWith(k.href);
+              // Longest match, not startsWith: on /players/games a prefix test
+              // lit Player Explorer and Game Log Explorer together. See
+              // activeHref.
+              const here = k.href === activeInMenu;
               const Icon = k.icon;
               return (
                 <Link
