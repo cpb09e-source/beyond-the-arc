@@ -90,6 +90,21 @@ export function SavedFiltersMenu({
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
   const [problem, setProblem] = useState<string | null>(null);
+  /**
+   * The saved view the reader is WORKING FROM, which is not the same as the
+   * one the table currently equals.
+   *
+   * `active` below matches on the query being byte-identical, so it appeared
+   * exactly when there was nothing to update and vanished at the first edit —
+   * add one filter to a view you just opened and the panel forgot it existed,
+   * offering "Save these filters" and a freshly suggested name. Updating meant
+   * retyping the old name from memory and trusting the by-name overwrite.
+   *
+   * This is a hint, not a claim: it survives the edits, and it is resolved
+   * against the list on every render, so deleting the entry underneath it
+   * simply falls back to saving a new one.
+   */
+  const [workingId, setWorkingId] = useState<string | null>(null);
   const [at, setAt] = useState<{ left: number; top: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
@@ -152,8 +167,12 @@ export function SavedFiltersMenu({
     if (naming) nameRef.current?.select();
   }, [naming]);
 
-  /** The saved entry the table is currently showing, if any. */
+  /** The saved entry the table currently EQUALS, if any. */
   const active = saved.find((e) => e.query === currentQuery);
+  /** The entry the reader opened and has since been editing, if it still exists. */
+  const working = saved.find((e) => e.id === workingId);
+  /** Something to update: opened from the list, and since changed. */
+  const dirty = working && working.query !== currentQuery ? working : null;
 
   /** Write, and say so if the browser refuses. The store re-reads itself. */
   function commit(next: SavedFilter[]) {
@@ -178,12 +197,32 @@ export function SavedFiltersMenu({
       return;
     }
     setProblem(null);
-    commit(upsertSaved(saved, trimmed, currentQuery));
+    const next = upsertSaved(saved, trimmed, currentQuery);
+    commit(next);
+    // Whatever was just written is now the view being worked from, so a
+    // further edit offers to update THIS one rather than the one it branched
+    // off.
+    setWorkingId(next.find((x) => x.name.toLowerCase() === trimmed.toLowerCase())?.id ?? null);
     setNaming(false);
   }
 
-  function startNaming() {
-    setName(active ? active.name : suggestedName);
+  /**
+   * Overwrite the view being worked from, in one click.
+   *
+   * NO NAMING STEP. The name is not in question — the reader opened this view
+   * and changed the table, and being asked to confirm its name is a dialog
+   * that can only be answered one way. upsertSaved matches on name, so this
+   * replaces in place and keeps the id.
+   */
+  function update(entry: SavedFilter) {
+    setProblem(null);
+    commit(upsertSaved(saved, entry.name, currentQuery));
+    setWorkingId(entry.id);
+    setNaming(false);
+  }
+
+  function startNaming(seed?: string) {
+    setName(seed ?? working?.name ?? active?.name ?? suggestedName);
     setProblem(null);
     setNaming(true);
   }
@@ -286,14 +325,46 @@ export function SavedFiltersMenu({
                  the list, which made the current selection look like a
                  half-drawn entry in that list. The button already says what
                  it saves, and the table itself is the summary. */
-              <button
-                type="button"
-                onClick={startNaming}
-                className="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-coral px-3 py-1.5 text-sm font-medium text-white hover:bg-coral-soft transition-colors"
-              >
-                <Bookmark size={13} aria-hidden />
-                {active ? `Update “${active.name}”` : "Save these filters"}
-              </button>
+              /* THREE STATES, because there are three situations.
+ 
+                 Editing a view you opened: updating it is the likely intent
+                 and gets the filled button, with "Save as new" beside it for
+                 the reader who was branching rather than revising. Neither is
+                 hidden behind the other.
+ 
+                 Table equals a saved view: nothing to update, so the single
+                 button is a plain save.
+ 
+                 Nothing opened: a plain save. */
+              dirty ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => update(dirty)}
+                    title={`Overwrite “${dirty.name}” with the table as it is now`}
+                    className="flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-md bg-coral px-3 py-1.5 text-sm font-medium text-white hover:bg-coral-soft transition-colors"
+                  >
+                    <Bookmark size={13} aria-hidden />
+                    <span className="truncate">Update “{dirty.name}”</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => startNaming(suggestedName)}
+                    className="shrink-0 rounded-md border border-ink/20 px-2.5 py-1.5 text-xs font-medium text-ink-soft hover:border-ink/35 hover:text-ink transition-colors"
+                  >
+                    Save as new
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => startNaming()}
+                  className="w-full inline-flex items-center justify-center gap-1.5 rounded-md bg-coral px-3 py-1.5 text-sm font-medium text-white hover:bg-coral-soft transition-colors"
+                >
+                  <Bookmark size={13} aria-hidden />
+                  {active ? `Update “${active.name}”` : "Save these filters"}
+                </button>
+              )
             )}
           </div>
 
@@ -311,7 +382,10 @@ export function SavedFiltersMenu({
                     <button
                       type="button"
                       role="menuitem"
-                      onClick={() => { onApply(e.query); closeMenu(); }}
+                      // Opening a view is what makes it the one being worked
+                      // from — that is the only moment the reader states which
+                      // view they mean.
+                      onClick={() => { setWorkingId(e.id); onApply(e.query); closeMenu(); }}
                       className="flex-1 min-w-0 text-left px-3 py-2 hover:bg-paper-deep/60 transition-colors"
                     >
                       <div className="flex items-center gap-1.5">
