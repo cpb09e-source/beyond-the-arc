@@ -19,6 +19,7 @@
     "seed:transfers": "node scripts/seed-manual-transfers.mjs",
     "r2:snapshot": "node scripts/r2-snapshot.mjs",
     "build:team-names": "node scripts/build-team-names.mjs",
+    "verify:admin": "node scripts/verify-admin-tables.mjs",
     "sync:bart": "tsx scripts/sync-bart.mts",
     "derive:positions": "tsx scripts/derive-positions.mts",
     "fetch:photos": "node scripts/fetch-player-images.mjs",
