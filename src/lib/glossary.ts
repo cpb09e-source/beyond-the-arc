@@ -1,28 +1,75 @@
 /**
  * Glossary content.
  *
- * Two kinds of entry live here, and the distinction is deliberate.
+ * ── IT IS SOURCED, NOT TYPED ──────────────────────────────────────────────
+ *
+ * Every stat the site can put in a column comes from a live catalogue, and
+ * this file reads all of them:
+ *
+ *   PLAYER_STAT_COLUMNS   the players explorer's summary row        (36)
+ *   PACK_STAT_COLUMNS     its extended per-view catalogue          (104)
+ *   TEAM_STAT_COLUMNS     the team explorer and conference views   (132)
+ *   LINEUP_STATS          lineups and on/off                        (24)
+ *   TEAM_GAME_STATS       the team game log explorer
+ *   GAME_PICK_OPTIONS     the player game log explorer
+ *
+ * Retyping them here is how a glossary goes stale: a column gets added to an
+ * explorer, nobody remembers this file, and the page quietly describes last
+ * year's site. Sourcing means a new column shows up here the moment it ships,
+ * with the description its own tooltip already carries.
+ *
+ * Duplicates are expected and resolved by first-wins in SOURCES order — eFG%
+ * is a player column, a team column, a lineup column and a game-log column,
+ * and it is one entry.
+ *
+ * ── TWO KINDS OF OURS, AND THE DIFFERENCE MATTERS ─────────────────────────
+ *
+ *   "original"  we invented the metric. EPM and its halves, eWins, PORP, the
+ *               coach fingerprint and résumé score exist because we built
+ *               them; there is no upstream definition to look up.
+ *
+ *   "computed"  the concept is public, but the number is ours because nobody
+ *               publishes it for college basketball. Fast-break points are
+ *               estimated by us from the play feed, second-chance points are
+ *               reconstructed possession by possession, the lead-state records
+ *               are counted out of play-by-play we archive ourselves.
+ *
+ * NEITHER FLAG IS HAND-MAINTAINED WHERE THE SOURCE ALREADY KNOWS. The pack
+ * marks its play-by-play columns `pbp: true` and the team catalogue marks its
+ * calculated ones `source: "derived"`; both are read directly. Only the
+ * metrics with no such flag — the EPM family, the adjusted ratings, the
+ * schedule-strength model, the lead-state counts, the roster-continuity set —
+ * are listed by key below, next to the comment in their own file that says so.
+ *
+ * ── WHAT IS AND IS NOT SPELLED OUT ────────────────────────────────────────
  *
  * PUBLIC STATISTICS (True Shooting, eFG, PPP, PIR, Four Factors, tempo) are
- * standard and their formulas are written out. Nothing is given away by stating
- * arithmetic anyone can look up, and a glossary that withholds it is just
- * annoying.
+ * standard and their formulas are written out. Nothing is given away by
+ * stating arithmetic anyone can look up, and a glossary that withholds it is
+ * just annoying.
  *
- * BTA-ORIGINAL METRICS (EPM and its halves, eWins, PORP, the coach fingerprint)
- * are described by WHAT THEY MEASURE AND HOW THEY BEHAVE, not by their
- * coefficients, constants, penalties or thresholds. A reader should finish an
- * entry knowing what the number means, when to trust it and when not to —
- * without being handed the recipe.
+ * BTA-ORIGINAL METRICS are described by WHAT THEY MEASURE AND HOW THEY BEHAVE,
+ * not by their coefficients, constants, penalties or thresholds. A reader
+ * should finish an entry knowing what the number means, when to trust it and
+ * when not to — without being handed the recipe.
  *
  * Entries are a FLAT list carrying a category, not a nested tree: the page is
  * browsed alphabetically with the category as a filter, so a term only has to
  * appear once and sorts by its own name.
- *
- * Player stat rows are sourced from PLAYER_STAT_COLUMNS rather than retyped, so
- * a column added to the explorer cannot silently go missing here. Entries that
- * need more than a tooltip's worth of explanation override it below.
  */
 import { PLAYER_STAT_COLUMNS, PLAYER_STAT_GROUP_LABEL, type PlayerStatGroup } from "@/lib/players";
+import { PACK_STAT_COLUMNS } from "@/lib/player-stat-pack";
+import { TEAM_STAT_COLUMNS, GROUP_LABEL as TEAM_GROUP_LABEL } from "@/lib/team-filters";
+import { LINEUP_STATS } from "@/lib/lineup-stats";
+import { TEAM_GAME_STATS } from "@/lib/team-game-index";
+import { GAME_PICK_OPTIONS } from "@/lib/game-index";
+
+/**
+ * "original" — we invented it; there is no upstream definition.
+ * "computed" — public concept, but we are the ones producing the number for
+ *              college basketball, out of a feed we archive ourselves.
+ */
+export type Origin = "original" | "computed";
 
 export type GlossaryEntry = {
   term: string;
@@ -32,19 +79,45 @@ export type GlossaryEntry = {
   category: string;
   /** Formula, only where the statistic is a public standard. */
   formula?: string;
-  /** Marks a metric we build ourselves. */
-  original?: boolean;
+  /** Marks a metric that is ours, and in which of the two senses. */
+  origin?: Origin;
   /** Honest limitation — rendered in a quieter voice. */
   caveat?: string;
   /** Extra search terms that are not in the term or body. */
   aka?: string[];
 };
 
+/**
+ * Ours, by key, where the catalogue carries no flag of its own. Each group
+ * cites the file that establishes it rather than asking to be trusted.
+ */
+const ORIGINAL_KEYS = new Set([
+  // players.ts: "BTA EPM — ridge RAPM over play-by-play stints"
+  "epm", "off_epm", "def_epm", "box_epm", "onoff_epm", "ewins", "bta_porpag",
+]);
+
+const COMPUTED_KEYS = new Set([
+  // team-filters.ts: "aNET is the headline: our own schedule-adjusted net rating"
+  "a_net", "a_ortg", "a_drtg", "adjt", "prior_net",
+  // team-filters.ts: "Schedule strength, our own model"
+  "adj_sos", "nc_sos", "conf_sos", "sos_wp",
+  // Counted out of the play-by-play archive; no upstream publishes them.
+  "wins_no_trail", "wire_wins", "wins_trailing_5", "wins_trailing_10",
+  "wins_trailing_15", "wins_trailing_20", "losses_no_lead", "wire_losses",
+  "losses_leading_5", "losses_leading_10", "losses_leading_15",
+  "losses_leading_20", "pbp_games",
+  // Roster continuity, assembled from two seasons of our own minutes.
+  "cont_pct", "ret_min_pct", "rrot_pct", "ret_prior_min", "prior_team_min",
+  "ret_curr_min", "team_min", "in_transfer_min", "proven_min_pct",
+  // "reconstructed from play-by-play, so blank unless every game has PBP"
+  "scp_diff", "scp_diff_pg",
+]);
+
 /** Longer copy for the metrics we build ourselves — overrides the tooltip text. */
 const OVERRIDES: Record<string, Omit<GlossaryEntry, "category">> = {
   EPM: {
     term: "EPM — Estimated Plus-Minus",
-    original: true,
+    origin: "original",
     aka: ["plus minus", "impact", "all-in-one", "rapm"],
     body:
       "Our headline all-in-one rating: how many points per 100 possessions a player is worth "
@@ -65,12 +138,12 @@ const OVERRIDES: Record<string, Omit<GlossaryEntry, "category">> = {
   },
   "Off EPM": {
     term: "Off EPM",
-    original: true,
+    origin: "original",
     body: "The offensive half of EPM: points per 100 possessions added on offense versus an average player.",
   },
   "Def EPM": {
     term: "Def EPM",
-    original: true,
+    origin: "original",
     body:
       "The defensive half of EPM, per 100 possessions, signed so that positive is always better. "
       + "A +3 defender saves three points per 100 possessions against an average one.",
@@ -78,7 +151,7 @@ const OVERRIDES: Record<string, Omit<GlossaryEntry, "category">> = {
   },
   Box: {
     term: "Box — box-score EPM",
-    original: true,
+    origin: "original",
     aka: ["box epm", "prior"],
     body:
       "The box-score half of EPM — what a player's counting stats alone say he is worth, before any "
@@ -88,7 +161,7 @@ const OVERRIDES: Record<string, Omit<GlossaryEntry, "category">> = {
   },
   "On/Off": {
     term: "On/Off",
-    original: true,
+    origin: "original",
     body:
       "The rawest view: his team's net rating per 100 possessions with him on the floor, minus the "
       + "same figure with him off it. Shooting variance is stripped out, but nothing else is — no "
@@ -99,7 +172,7 @@ const OVERRIDES: Record<string, Omit<GlossaryEntry, "category">> = {
   },
   eWins: {
     term: "eWins — Estimated Wins Added",
-    original: true,
+    origin: "original",
     aka: ["wins added", "value", "war"],
     body:
       "EPM is a rate; eWins is the total. It converts a player's per-possession impact into the "
@@ -117,7 +190,7 @@ const OVERRIDES: Record<string, Omit<GlossaryEntry, "category">> = {
   },
   PORP: {
     term: "PORP — Points Over Replacement",
-    original: true,
+    origin: "original",
     aka: ["porpag", "replacement"],
     body:
       "Points produced per game above what a freely available replacement-level player would have "
@@ -128,16 +201,125 @@ const OVERRIDES: Record<string, Omit<GlossaryEntry, "category">> = {
   },
 };
 
-/** Player statistics, from the live column definitions. */
-function playerEntries(): GlossaryEntry[] {
+/**
+ * One catalogue row, flattened to what a glossary entry needs. Every source
+ * below produces these; nothing downstream knows which explorer it came from.
+ */
+type Sourced = { key: string; label: string; desc: string; category: string; origin?: Origin };
+
+/**
+ * The dedupe key. Catalogues disagree about punctuation — the lineup table
+ * writes "+/-" with a hyphen and the box-score pack writes "+/−" with a
+ * true minus sign — and two spellings of one stat is exactly the kind of
+ * duplicate a reader reads as a mistake in the data.
+ */
+function normalise(label: string): string {
+  return label
+    .trim()
+    .toLowerCase()
+    .replace(/[‐-―−]/g, "-")
+    .replace(/\s+/g, " ");
+}
+
+function originFor(key: string, flagged?: Origin): Origin | undefined {
+  if (ORIGINAL_KEYS.has(key)) return "original";
+  if (COMPUTED_KEYS.has(key)) return "computed";
+  return flagged;
+}
+
+/** The players explorer's summary row. */
+function playerRows(): Sourced[] {
   const order: PlayerStatGroup[] = ["impact", "advanced", "offense", "shooting", "defense", "volume"];
   return order.flatMap((g) =>
-    PLAYER_STAT_COLUMNS.filter((c) => c.group === g).map((c) => {
-      const o = OVERRIDES[c.label];
-      const category = PLAYER_STAT_GROUP_LABEL[g];
-      return o ? { ...o, category } : { term: c.label, body: c.desc, category };
-    }),
+    PLAYER_STAT_COLUMNS.filter((c) => c.group === g).map((c) => ({
+      key: c.key, label: c.label, desc: c.desc, category: PLAYER_STAT_GROUP_LABEL[g],
+    })),
   );
+}
+
+const PACK_CATEGORY: Record<string, string> = {
+  info: "Player info", playtime: "Playing time", box: "Box score",
+  shooting: "Shooting", context: "Scoring context", advoff: "Playmaking & rebounding",
+  advdef: "Defensive rates", fouls: "Fouls", doubles: "Milestones", leaders: "Game leaders",
+};
+
+/** The extended per-view catalogue. `pbp` means we built it from the play feed. */
+function packRows(): Sourced[] {
+  return PACK_STAT_COLUMNS.map((c) => ({
+    key: c.key,
+    label: c.label,
+    desc: c.desc,
+    category: PACK_CATEGORY[c.group] ?? "Advanced",
+    origin: c.pbp ? ("computed" as Origin) : undefined,
+  }));
+}
+
+/**
+ * The team explorer.
+ *
+ * `source: "derived"` is NOT read as provenance. It means "subtracted in this
+ * file rather than stored", and eFG% − Opp eFG% is arithmetic anyone can do
+ * with two public numbers. Claiming it as ours would cheapen the badge on the
+ * things that genuinely are. The team columns that ARE ours are named by key
+ * in COMPUTED_KEYS, each next to the comment that establishes it.
+ */
+function teamRows(): Sourced[] {
+  return TEAM_STAT_COLUMNS.map((c) => ({
+    key: c.key,
+    label: c.label,
+    desc: c.desc,
+    category: `Team — ${TEAM_GROUP_LABEL[c.group]}`,
+  }));
+}
+
+/** Lineups and on/off share one catalogue, and it uses `title` for its gloss. */
+function lineupRows(): Sourced[] {
+  return LINEUP_STATS.map((c) => ({
+    key: `lineup_${c.key}`, label: c.label, desc: c.title, category: "Lineups & on/off",
+  }));
+}
+
+/** Both game log explorers. Mostly box stats, so most rows dedupe away. */
+function gameLogRows(): Sourced[] {
+  return [
+    ...TEAM_GAME_STATS.map((c) => ({
+      key: `tgame_${c.key}`, label: c.label, desc: c.title ?? "", category: "Game log",
+    })),
+    ...GAME_PICK_OPTIONS.map((c) => ({
+      key: `game_${c.key}`, label: c.label, desc: c.desc ?? "", category: "Game log",
+    })),
+  ].filter((r) => r.desc.trim().length > 0);
+}
+
+/**
+ * ORDER IS PRECEDENCE. A term defined in more than one catalogue keeps the
+ * first description, which is why the player and team explorers — the two with
+ * the most carefully written tooltips — come before the game logs.
+ */
+const SOURCES = [playerRows, packRows, teamRows, lineupRows, gameLogRows];
+
+function sourcedEntries(): GlossaryEntry[] {
+  const seen = new Set<string>();
+  const out: GlossaryEntry[] = [];
+  for (const source of SOURCES) {
+    for (const r of source()) {
+      const dedupe = normalise(r.label);
+      if (seen.has(dedupe)) continue;
+      seen.add(dedupe);
+      const o = OVERRIDES[r.label];
+      if (o) {
+        out.push({ ...o, category: r.category });
+        continue;
+      }
+      out.push({
+        term: r.label,
+        body: r.desc,
+        category: r.category,
+        ...(originFor(r.key, r.origin) ? { origin: originFor(r.key, r.origin) } : {}),
+      });
+    }
+  }
+  return out;
 }
 
 const MANUAL: GlossaryEntry[] = [
@@ -276,7 +458,7 @@ const MANUAL: GlossaryEntry[] = [
   {
     term: "Coach fingerprint",
     category: "Coaches",
-    original: true,
+    origin: "original",
     aka: ["style", "tendencies"],
     body:
       "A profile of how a coach's teams actually play, measured across nine dimensions of style — "
@@ -291,7 +473,7 @@ const MANUAL: GlossaryEntry[] = [
   {
     term: "Résumé score",
     category: "Coaches",
-    original: true,
+    origin: "original",
     body:
       "A career summary blending tournament results, regular-season winning and the quality of the "
       + "teams a coach did it with. It is a record of what has happened, not a projection of what "
@@ -339,20 +521,50 @@ const MANUAL: GlossaryEntry[] = [
   },
 ];
 
-export const GLOSSARY_ENTRIES: GlossaryEntry[] = [...playerEntries(), ...MANUAL];
+export const GLOSSARY_ENTRIES: GlossaryEntry[] = [...sourcedEntries(), ...MANUAL];
 
-/** Category chips, in a deliberate reading order rather than alphabetical. */
+/**
+ * Category chips, in a deliberate reading order rather than alphabetical.
+ *
+ * ANY CATEGORY PRESENT GETS A CHIP. The list below is the order, not the
+ * membership — a category that appears in the entries but not here is appended
+ * rather than dropped, because the alternative is what happened when the
+ * catalogues were first wired in: 236 entries reachable only by search,
+ * because their chip did not exist and nothing said so.
+ */
 export const GLOSSARY_CATEGORIES: string[] = (() => {
   const preferred = [
+    // The player, as the explorer presents him
     "Impact", "Advanced", "Shooting", "Offense", "Defense", "Volume",
-    "Team ratings", "Four Factors", "Coaches", "Reading the numbers", "Coverage",
+    // The extended catalogue behind the views
+    "Player info", "Playing time", "Box score", "Scoring context",
+    "Playmaking & rebounding", "Defensive rates", "Fouls",
+    "Milestones", "Game leaders",
+    // The team
+    "Team ratings", "Team — Overall", "Team — Record & Outcomes",
+    "Team — Roster & Experience", "Team — Scoring", "Team — Defense",
+    "Team — Differentials", "Four Factors",
+    // Everything else the site can show you
+    "Lineups & on/off", "Game log", "Coaches",
+    // How to read any of it
+    "Reading the numbers", "Coverage",
   ];
   const present = new Set(GLOSSARY_ENTRIES.map((e) => e.category));
-  return preferred.filter((c) => present.has(c));
+  const ordered = preferred.filter((c) => present.has(c));
+  const extra = [...present].filter((c) => !preferred.includes(c)).sort();
+  return [...ordered, ...extra];
 })();
 
-/** First letter used for the A-Z index. Non-letters bucket under "#". */
+/**
+ * First letter used for the A-Z index. Non-letters bucket under "#".
+ *
+ * THE FIRST CHARACTER, not the first letter anywhere in the term. Searching
+ * for a letter put "20/10 A" under A and "2ND CH" under N, which is not where
+ * anyone looks for either: a reader scanning an index runs down the first
+ * character on the line. Everything that opens with a digit or a symbol
+ * belongs in one bucket at the top.
+ */
 export function indexLetter(term: string): string {
-  const m = term.toUpperCase().match(/[A-Z]/);
-  return m ? m[0] : "#";
+  const first = term.trim().charAt(0).toUpperCase();
+  return first >= "A" && first <= "Z" ? first : "#";
 }

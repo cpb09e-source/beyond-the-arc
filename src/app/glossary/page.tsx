@@ -14,9 +14,13 @@ export default function GlossaryPage() {
       <header className="max-w-[46rem]">
         <h1 className="text-2xl lg:text-3xl font-semibold tracking-tight">Glossary</h1>
         <p className="mt-2 text-sm text-ink-muted leading-relaxed">
-          What every number on the site means, and — where it matters — what it cannot tell you.
-          Standard statistics are given with their formulas. The metrics we build ourselves are
-          described by what they measure and how they behave rather than by their internals.
+          Every number the site can put in a column, read straight from the tables that use it —
+          the players explorer, the team explorer, both game logs, lineups and on/off. Standard
+          statistics come with their formulas. The metrics we build ourselves are described by
+          what they measure and how they behave rather than by their internals, and carry one of
+          two marks: <strong className="text-ink font-semibold">BTA original</strong> for a metric
+          we invented, <strong className="text-ink font-semibold">BTA-built</strong> for a public
+          idea whose number is ours because nobody else produces it for college basketball.
         </p>
       </header>
       <GlossaryClient />
