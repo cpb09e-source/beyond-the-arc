@@ -339,9 +339,22 @@ production:**
   2. ~~`--push`~~ **DONE 2026-09-02.** All 22 paid objects (2014-2024 x both
      corpora, ~90 MB) are in the gated bucket. Push is additive and changes
      nothing production serves, so it was safe to run ahead of the deploy.
-  3. **STILL TO DO — set the three `R2_GATED_*` vars on NETLIFY.** They are in
-     `.env.local` only. Without them the signing function answers 503 and every
-     paid game log is empty for subscribers.
+  3. ~~Netlify env vars~~ **DONE 2026-09-02** — and it was FOUR, not three.
+     Netlify had no `R2_*` variables at all, so `R2_ENDPOINT` had to go up
+     alongside the three `R2_GATED_*` ones or `r2()` in the function returns
+     null and every request answers 503.
+
+     **The two key vars are NOT secret-flagged, deliberately.** They came back
+     readable from `netlify env:list --plain` (where `STRIPE_SECRET_KEY` comes
+     back blank), and that listing put the secret access key into a session
+     transcript. Rotation was offered and DECLINED — Colin's call, 2026-09-02,
+     do not raise it again. The exposure is bounded: that token is Object Read
+     & Write on `bta-gated` alone and cannot reach `bta-data`, the archive
+     bucket, or the Cloudflare account. If it is ever rotated, tick "Contains
+     secret values" on the way back in.
+
+     Note for anyone listing Netlify env in future: `--plain` prints values.
+     Use `cut -d= -f1` if you only need names.
   4. **STILL TO DO — deploy**, so the browser asks for a signature.
   5. **STILL TO DO, LAST — `node scripts/sync-gated-corpora.mjs --purge-public
      --yes`.** This is the step that actually closes the hole. Until it runs,
