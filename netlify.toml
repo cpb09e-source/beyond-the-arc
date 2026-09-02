@@ -137,3 +137,75 @@
   for = "/data/*/*.json"
   [headers.values]
     Cache-Control = "public, max-age=600, stale-while-revalidate=86400"
+
+# ---------------------------------------------------------------------------
+# PHOTOGRAPHS — keep-and-mitigate, decided 2026-09-02. See
+# docs/TODO-legal-sources.md §2 for the risk analysis behind these two rules.
+# ---------------------------------------------------------------------------
+
+# Keep headshots out of the image indexes.
+#
+# These are ESPN-sourced, and the copyright sits with ~360 athletics
+# departments rather than with us. Google Images and reverse-image search are
+# the one DISCOVERY path here that runs without a human deciding to look, so
+# closing it is the cheapest risk reduction available — and it is good practice
+# regardless: a wall of headshots competing in image search brings no readers to
+# a site whose value is numbers.
+#
+# X-Robots-Tag is the only mechanism that works on a binary file. `noindex` in a
+# <meta> tag needs an HTML document, and robots.txt only asks a crawler not to
+# FETCH — it cannot stop a URL it already knows about from being indexed. This
+# header is a directive on the asset itself and applies to every crawler that
+# honours it.
+#
+# Merges with the /images/* Cache-Control rule above rather than replacing it:
+# Netlify applies every matching rule, and these set a header that one does not.
+[[headers]]
+  for = "/images/players/*"
+  [headers.values]
+    X-Robots-Tag = "noindex"
+
+# Same for the coaches. Nothing renders these today — coach-photo.tsx has
+# SHOW_PHOTOS = false — but the files are still published and still fetchable at
+# their own URLs, so the header belongs here for as long as they ship.
+[[headers]]
+  for = "/images/coaches/*"
+  [headers.values]
+    X-Robots-Tag = "noindex"
+
+# ---------------------------------------------------------------------------
+# THE KILL SWITCH. Uncomment both blocks to take every photograph off the live
+# site, then deploy. Leave everything else alone.
+#
+# WHY IT LIVES HERE AND NOT IN THE COMPONENTS. The components have a build-time
+# flag too (NEXT_PUBLIC_BTA_PHOTOS=off), and that is the right permanent answer
+# — but it costs a full rebuild of ~23k pages plus an upload, which is the best
+# part of two hours. Config is the fast path: `out/` does not change, Netlify
+# re-uploads nothing, and the photos are gone in minutes. Use this to comply
+# NOW, then rebuild with the flag at leisure.
+#
+# `force = true` is REQUIRED. Without it a redirect loses to an existing file,
+# and all ~20k of these exist in the export — the rule would match nothing.
+#
+# The pages do not break. Both photo components fall back to an initials
+# monogram on the image's error event, so a 404 degrades every avatar on the
+# site automatically. That fallback is shipped and working today; it is what
+# every player without a headshot already renders.
+#
+# RUNBOOK on a takedown notice: uncomment → `netlify deploy --prod --dir=out
+# --no-build` → confirm the deploy reaches `ready` → reply to the sender saying
+# it is done. Responding fast and in good faith is the single behaviour that
+# keeps a notice from becoming anything more than a notice.
+# ---------------------------------------------------------------------------
+
+# [[redirects]]
+#   from   = "/images/players/*"
+#   to     = "/404.html"
+#   status = 404
+#   force  = true
+
+# [[redirects]]
+#   from   = "/images/coaches/*"
+#   to     = "/404.html"
+#   status = 404
+#   force  = true

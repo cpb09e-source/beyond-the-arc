@@ -85,28 +85,64 @@ The entire competitive set has independently landed on the same answer.
 | **Direct from the schools** | Plausible in principle — they produce headshots *for* publicity and want media using them — but it is ~360 separate permissions. The top 50 programmes would cover most traffic |
 | **Wikimedia Commons** | Coverage for 20,000 college players is far too thin to be a system |
 
-### 2.4 Recommendation
+### 2.4 Decision — KEEP AND MITIGATE, settled 2026-09-02
 
-**Drop them.** Three reasons:
+Colin's call, made with the analysis above in front of him: **the headshots
+stay.** The research recommended dropping them; the decision went the other
+way, and this section records what was decided and what shipped alongside it
+rather than re-arguing it.
 
-1. **It is nearly free to do.** `player-photo.tsx` already renders an initials
-   monogram whenever a photo is missing or fails to load — the fallback is
-   built, shipped and working. Emptying the mapping degrades every surface
-   automatically. This is roughly a ten-line change, not a project.
-2. **It is the only exposure on the site outside the facts shield.** Everything
-   else here is protected by *Feist* and *C.B.C.* The photos are the single
-   thing those cases do not cover, and they are decoration on a site whose
-   entire value is numbers.
-3. **The whole competitive set already ships without them.**
+**The reasoning that supports it.** Realistic enforcement risk at this size is
+low and, more to the point, *cheap to be wrong about*. The copyright holders
+are the athletics departments, not Disney; routine team headshots are almost
+never registered with the Copyright Office, so there are no statutory damages
+and actual damages from a 2cm-wide face on a stats site round to nothing. The
+realistic first contact is a takedown notice, not a claim. What converts a
+notice into something worse is ignoring it — so the whole mitigation strategy
+below is aimed at making compliance fast rather than at making discovery
+unlikely.
 
-If faces are worth real money later, get a Sportradar quote and put them back
-licensed. That is a decision to make with revenue on the table, not with 20,164
-files already on disk.
+**Logos are a separate and much easier question** and were never really in
+doubt: using a school's mark to identify that school's team is nominative fair
+use, the disclaimer is live in the footer bottom bar and on `/sources`, and the
+entire industry does the same thing. No action needed.
 
-**Still Colin's call.** Accepting and mitigating is a defensible business
-choice for a site this size — the practical risk is a takedown notice, and
-`/sources` already carries the takedown line. This section is the research he
-asked for, not an instruction.
+**Mitigations shipped with this decision:**
+
+| # | What | Where |
+|---|---|---|
+| 1 | `X-Robots-Tag: noindex` on `/images/players/*` and `/images/coaches/*` | `netlify.toml` |
+| 2 | Config kill switch — two commented `[[redirects]]` that 404 every photo path, no rebuild required | `netlify.toml` |
+| 3 | Build-time kill switch — `NEXT_PUBLIC_BTA_PHOTOS=off` | `player-photo.tsx`, `coach-photo.tsx` |
+| 4 | Takedown address, already live | `/sources` §corrections |
+
+Why two kill switches. The build flag is the correct permanent state but costs
+a full rebuild and upload — the better part of two hours. The redirect is
+config-only: `out/` does not change, Netlify re-uploads nothing, and the photos
+are gone in minutes. Comply with the fast one, then rebuild with the flag when
+convenient. Both land on the initials monogram that `player-photo.tsx` already
+renders for every player without a headshot, so nothing breaks either way.
+
+**Runbook if a notice arrives:** uncomment the two redirect blocks in
+`netlify.toml` → `netlify deploy --prod --dir=out --no-build` → poll
+`netlify api listSiteDeploys` until `ready` → reply to the sender confirming
+removal. Target the same day. Then rebuild with `NEXT_PUBLIC_BTA_PHOTOS=off` to
+make it permanent.
+
+**What this does not do.** None of it makes the images licensed. It makes the
+exposure low-consequence and fast to unwind, which is the right trade for a
+business at this stage — not a legal defence. Two things would change the
+calculus and are worth revisiting at the time: meaningful growth (press, a
+viral chart, real subscriber numbers), and any raise, sale or partnership,
+where diligence will find 20,164 unlicensed files. If faces are worth real
+money by then, get a Sportradar quote and put them back licensed.
+
+**Loose end:** the 34 coach photos ship in the export but nothing renders them
+— `coach-photo.tsx` has held `SHOW_PHOTOS = false` since the coverage was
+judged too sparse (17 of 804). They are still fetchable at their own URLs, so
+they carry the full risk and deliver no product value. Deleting
+`public/images/coaches/` would be a free reduction in exposure with zero
+visible change. Colin's call, not done unilaterally.
 
 ## 3. Sports Reference — attribution owed, method to fix
 
@@ -155,8 +191,10 @@ bulk-download 165k files" are not the same offer.
       That is a real commitment; it should be one he wants to make.
 - [ ] **Confirm the contact address.** Both pages use `cpb09e@gmail.com`. A
       role address would age better on a paid product.
-- [ ] Decide §2 (ESPN images). Research done 2026-09-02; recommendation is
-      drop, and the fallback that makes it cheap already exists.
+- [x] **§2 (ESPN images) — SETTLED 2026-09-02. Keep and mitigate**, decided by
+      Colin against the recommendation to drop. noindex headers and both kill
+      switches shipped with the decision; see §2.4 for the runbook. Open
+      sub-item: whether to delete the 34 unrendered coach photos.
 - [ ] Solicitor pass once the above are settled.
 
 ## 7. Still worth doing later

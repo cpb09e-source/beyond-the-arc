@@ -6,6 +6,27 @@ import { cn } from "@/lib/utils";
 
 const PHOTOS = photoMap as Record<string, string>;
 
+/**
+ * The permanent off switch for headshots. Build with NEXT_PUBLIC_BTA_PHOTOS=off
+ * and every avatar on the site becomes an initials monogram.
+ *
+ * WHY AN ENV VAR AND NOT A CONST. Under `output: "export"` this is inlined at
+ * build time either way, so the flag buys nothing at runtime — what it buys is
+ * that taking the photos down does not require editing, reviewing and
+ * committing a source file first. On the day a takedown notice arrives, the
+ * fewer decisions between the notice and compliance the better.
+ *
+ * NEXT_PUBLIC_ is not optional: this is a client component, and an unprefixed
+ * variable reads as undefined in the browser bundle, which would silently mean
+ * "photos on" — the failure mode points the wrong way.
+ *
+ * THIS IS THE SLOW PATH. It needs a full rebuild and a full upload. For an
+ * immediate takedown use the redirect kill switch in netlify.toml, which needs
+ * neither; the two are complementary, not alternatives. Both land on the same
+ * monogram fallback below.
+ */
+const SHOW_PHOTOS: boolean = process.env.NEXT_PUBLIC_BTA_PHOTOS !== "off";
+
 function initials(name: string): string {
   const parts = name
     .replace(/[^A-Za-z\s.'-]/g, " ")
@@ -51,7 +72,7 @@ export function PlayerPhoto({
   //   • size > 60 → use the full 600x436 source so the player-profile
   //     headshot (120px on retina = 240 device px) doesn't upscale the
   //     thumb's 174px height. Downsampling 600→240 = still crisp.
-  const fullSrc = bartPlayerId ? PHOTOS[String(bartPlayerId)] ?? null : null;
+  const fullSrc = SHOW_PHOTOS && bartPlayerId ? PHOTOS[String(bartPlayerId)] ?? null : null;
   const src = fullSrc
     ? (size <= 60 ? fullSrc.replace(/\.webp$/, "-sm.webp") : fullSrc)
     : null;

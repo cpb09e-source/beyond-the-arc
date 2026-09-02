@@ -17,7 +17,18 @@ const PHOTOS = photoMap as Record<string, string>;
  */
 // Annotated `boolean` rather than left to infer `false`, so TypeScript does not
 // narrow the photo branch to unreachable and start erroring inside it.
-const SHOW_PHOTOS: boolean = false;
+const HAVE_ENOUGH_COVERAGE: boolean = false;
+
+/**
+ * Two independent reasons to show nothing, kept as two flags because they are
+ * two different decisions. Coverage is a design judgement that flips back the
+ * day the manifest fills out; the env flag is the site-wide photo kill switch
+ * documented in player-photo.tsx and netlify.toml. Folding them into one
+ * constant would mean turning coverage on quietly re-enables photos that a
+ * takedown had switched off.
+ */
+const SHOW_PHOTOS: boolean =
+  HAVE_ENOUGH_COVERAGE && process.env.NEXT_PUBLIC_BTA_PHOTOS !== "off";
 
 function initials(name: string): string {
   const parts = name
