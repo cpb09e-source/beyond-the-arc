@@ -576,7 +576,10 @@ function DeployNote({ deploy }: { deploy: Loaded<Deploy> }) {
           {" · "}
           {d.behind === 0
             ? <span className="text-good font-semibold">current</span>
-            : <a href={d.compareUrl} target="_blank" rel="noreferrer" className="text-gold-ink font-semibold hover:underline">{d.behind} commit{d.behind === 1 ? "" : "s"} behind main</a>}
+            /* The accent, not gold: this is a link to a diff, and the tile
+               above already carries the amber. --gold-ink on a card is a
+               brown smudge in light and invisible in dark. */
+            : <a href={d.compareUrl} target="_blank" rel="noreferrer" className="text-coral font-semibold hover:underline">{d.behind} commit{d.behind === 1 ? "" : "s"} behind main</a>}
         </>
       )}
     </p>

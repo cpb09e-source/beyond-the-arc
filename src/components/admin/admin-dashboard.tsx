@@ -598,7 +598,7 @@ export function Badge({ tone, children }: { tone: "good" | "bad" | "muted" | "wa
         "inline-flex items-center gap-1 text-[0.65rem] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap border",
         tone === "good" && "bg-good/10 text-good border-good/25",
         tone === "bad" && "bg-bad/10 text-bad border-bad/25",
-        tone === "warn" && "bg-gold/15 text-gold-ink border-gold/40",
+        tone === "warn" && "bg-gold text-gold-ink border-gold",
         tone === "accent" && "bg-coral/10 text-coral border-coral/25",
         tone === "muted" && "bg-ink/[0.05] text-ink-muted border-hairline",
       )}
@@ -621,7 +621,9 @@ export function StateMark({ state }: { state: CheckState }) {
       className={cn(
         "inline-grid place-items-center w-4.5 h-4.5 rounded-full text-[0.6rem] font-bold shrink-0",
         state === "ok" && "bg-good/12 text-good",
-        state === "warn" && "bg-gold/20 text-gold-ink",
+        // Filled, not washed: --gold-ink only has contrast against gold
+        // itself, and a 20% wash of it on a dark card is not gold.
+        state === "warn" && "bg-gold text-gold-ink",
         state === "fail" && "bg-bad/12 text-bad",
         state === "skip" && "bg-ink/[0.06] text-ink-muted",
       )}
@@ -687,11 +689,12 @@ function median(xs: number[]): number {
 
 // ── Site checks ────────────────────────────────────────────────────────────
 
-const PROBE_GLYPH: Record<ProbeState, { glyph: string; cls: string; word: string }> = {
-  ok: { glyph: "✓", cls: "text-good", word: "ok" },
-  warn: { glyph: "!", cls: "text-gold-ink", word: "warning" },
-  fail: { glyph: "✕", cls: "text-bad", word: "failed" },
-  skip: { glyph: "·", cls: "text-ink-muted", word: "skipped" },
+/** Shape and screen-reader word per state; StateMark owns the colour. */
+const PROBE_GLYPH: Record<ProbeState, { glyph: string; word: string }> = {
+  ok: { glyph: "✓", word: "ok" },
+  warn: { glyph: "!", word: "warning" },
+  fail: { glyph: "✕", word: "failed" },
+  skip: { glyph: "·", word: "skipped" },
 };
 
 export function ChecksSection({
