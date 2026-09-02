@@ -38,12 +38,61 @@ type Ctx = { season: SplitSeason | null; split: string; basis: Basis };
 /** A stat's home block, which decides whether the basis toggle touches it. */
 type Block = "m" | "g" | "f" | "impact";
 
-type Def = { key: string; label: string; block: Block; fmt: Fmt; info?: string };
+type Def = {
+  key: string;
+  label: string;
+  block: Block;
+  fmt: Fmt;
+  info?: string;
+  /**
+   * Computed from other cells rather than read from one.
+   *
+   * NO PERCENTILE, DELIBERATELY. The chip means "this many percent of players
+   * at this position did worse in this split", and that requires the cohort's
+   * distribution for the stat — which is published for the stats we store and
+   * not for arithmetic done in the browser. A derived row shows its number and
+   * no chip, which is honest; inventing a percentile from the stats we happen
+   * to hold would be a different and much worse claim.
+   */
+  derive?: (ctx: Ctx) => number | null;
+};
+
+/** Views a card belongs to. `everything` is implicit — every card is in it. */
+type View = "overview" | "scoring" | "creation" | "defense";
 type Fmt = "int" | "num1" | "num2" | "pct1" | "signed1";
 
-const CARDS: Array<{ title: string; stats: Def[] }> = [
+/**
+ * The views, in the order they are offered.
+ *
+ * GROUPED BY THE QUESTION, NOT BY THE DATA SOURCE. "Advanced" and "Box Score"
+ * describe where a number came from, which is the site's problem and not the
+ * reader's; someone opening a player page wants to know whether he can score,
+ * whether he creates, or what he does when the other team has the ball. Each
+ * view is one of those questions and carries every card that helps answer it,
+ * including cards that appear in more than one — Role is context for all three,
+ * and repeating it beats making someone switch views to find out he played 22
+ * minutes a night.
+ *
+ * OVERVIEW IS UNCHANGED AND STAYS THE DEFAULT. It is the view that was here
+ * before, and anyone who never touches this control sees exactly the page they
+ * saw yesterday.
+ *
+ * `everything` has no card list because it is not a selection — it is the
+ * absence of one, and filtering for it would mean maintaining a list that has
+ * to be updated every time a card is added.
+ */
+const VIEW_OPTIONS: Array<{ key: View | "everything"; label: string }> = [
+  { key: "overview", label: "Overview" },
+  { key: "scoring", label: "Scoring & shooting" },
+  { key: "creation", label: "Creation & handling" },
+  { key: "defense", label: "Defense & rebounding" },
+  { key: "everything", label: "Everything" },
+];
+
+const CARDS: Array<{ title: string; views: View[]; stats: Def[] }> = [
   {
     title: "Impact",
+    views: ["overview"],
     stats: [
       { key: "epm", label: "EPM", block: "impact", fmt: "signed1",
         info: "Estimated Plus-Minus — points per 100 possessions versus an average D-I player, offense and defense combined. Fit over a whole season of play-by-play, so it does not split; this stays the full-season figure whatever slice is selected." },
@@ -86,6 +135,7 @@ const CARDS: Array<{ title: string; stats: Def[] }> = [
   // deliberate lower-case initials in eWins and eFG% from being shouted.
   {
     title: "Box Score",
+    views: ["overview"],
     stats: [
       { key: "pts", label: "PTS", block: "g", fmt: "num1" },
       { key: "reb", label: "REB", block: "g", fmt: "num1" },
@@ -108,6 +158,7 @@ const CARDS: Array<{ title: string; stats: Def[] }> = [
   },
   {
     title: "Volume",
+    views: ["overview"],
     stats: [
       { key: "fgm", label: "FGM", block: "g", fmt: "num1" },
       { key: "fga", label: "FGA", block: "g", fmt: "num1" },
@@ -119,6 +170,7 @@ const CARDS: Array<{ title: string; stats: Def[] }> = [
   },
   {
     title: "Shooting",
+    views: ["overview"],
     stats: [
       { key: "fg_pct", label: "FG%", block: "m", fmt: "pct1" },
       { key: "fg3_pct", label: "3P%", block: "m", fmt: "pct1" },
@@ -129,7 +181,161 @@ const CARDS: Array<{ title: string; stats: Def[] }> = [
         info: "True Shooting % — points per scoring attempt, weighting 2s, 3s and free throws together." },
     ],
   },
+
+  /* ------------------------------- Scoring -------------------------------
+   *
+   * The question is "how does he get his points", which Overview answers only
+   * in aggregate. The two-point figures are DERIVED: the archive stores total
+   * and three-point shooting, and the inside game is the difference between
+   * them — the number that actually separates two players with the same FG%.
+   */
+  {
+    title: "Scoring",
+    views: ["scoring"],
+    stats: [
+      { key: "pts", label: "PTS", block: "g", fmt: "num1" },
+      { key: "fg2m", label: "2PM", block: "g", fmt: "num1",
+        derive: (c) => sub(cellOf(c, "g", "fgm"), cellOf(c, "g", "fgm3")) },
+      { key: "fg2a", label: "2PA", block: "g", fmt: "num1",
+        derive: (c) => sub(cellOf(c, "g", "fga"), cellOf(c, "g", "fga3")) },
+      { key: "fgm3", label: "3PM", block: "g", fmt: "num1" },
+      { key: "fga3", label: "3PA", block: "g", fmt: "num1" },
+      { key: "ftm", label: "FTM", block: "g", fmt: "num1" },
+      { key: "fta", label: "FTA", block: "g", fmt: "num1" },
+    ],
+  },
+  {
+    title: "Efficiency",
+    views: ["scoring"],
+    stats: [
+      { key: "fg_pct", label: "FG%", block: "m", fmt: "pct1" },
+      { key: "fg2_pct", label: "2P%", block: "m", fmt: "pct1",
+        info: "Two-point percentage, derived from total makes and attempts less the three-point ones. It is where a rim or mid-range game shows up, which FG% blends away.",
+        derive: (c) => pctOf(sub(cellOf(c, "g", "fgm"), cellOf(c, "g", "fgm3")), sub(cellOf(c, "g", "fga"), cellOf(c, "g", "fga3"))) },
+      { key: "fg3_pct", label: "3P%", block: "m", fmt: "pct1" },
+      { key: "ft_pct", label: "FT%", block: "m", fmt: "pct1" },
+      { key: "efg_pct", label: "eFG%", block: "m", fmt: "pct1" },
+      { key: "ts_pct", label: "TS%", block: "m", fmt: "pct1" },
+      { key: "ppp", label: "PPP", block: "m", fmt: "num2" },
+    ],
+  },
+  {
+    title: "Shot Mix",
+    views: ["scoring"],
+    stats: [
+      { key: "tpar", label: "3PA rate", block: "m", fmt: "pct1",
+        info: "Share of shots taken from three. High is a spacer, low an interior scorer — neither is better, and it is the fastest read of what kind of scorer someone is.",
+        derive: (c) => pctOf(cellOf(c, "g", "fga3"), cellOf(c, "g", "fga")) },
+      { key: "ftr", label: "FT rate", block: "m", fmt: "pct1",
+        info: "Free throws attempted per field-goal attempt. The clearest measure of how often a player gets to the line rather than settling.",
+        derive: (c) => pctOf(cellOf(c, "g", "fta"), cellOf(c, "g", "fga")) },
+      { key: "pps", label: "Pts / shot", block: "m", fmt: "num2",
+        info: "Points per field-goal attempt, free throws included. A blunter cousin of true shooting that reads in the units the scoreboard uses.",
+        derive: (c) => ratio(cellOf(c, "g", "pts"), cellOf(c, "g", "fga")) },
+    ],
+  },
+
+  /* ------------------------------ Creation -------------------------------
+   *
+   * Passing and ball security are one question read as two cards: an assist
+   * total means something different at two turnovers than at five.
+   */
+  {
+    title: "Creation",
+    views: ["creation"],
+    stats: [
+      { key: "ast", label: "AST", block: "g", fmt: "num1" },
+      { key: "usage_pct", label: "Usage%", block: "m", fmt: "pct1" },
+      { key: "ortg", label: "ORtg", block: "m", fmt: "num1" },
+      { key: "ppp", label: "PPP", block: "m", fmt: "num2" },
+      { key: "off_epm", label: "Off EPM", block: "impact", fmt: "signed1" },
+    ],
+  },
+  {
+    title: "Ball Security",
+    views: ["creation"],
+    stats: [
+      { key: "tov", label: "TO", block: "g", fmt: "num1" },
+      { key: "ast_to", label: "AST / TO", block: "m", fmt: "num2",
+        info: "Assists per turnover. Reads the same under either basis, because both halves scale with minutes together.",
+        derive: (c) => ratio(cellOf(c, "g", "ast"), cellOf(c, "g", "tov")) },
+      { key: "pf", label: "PF", block: "g", fmt: "num1" },
+    ],
+  },
+
+  /* -------------------------- Defense and the glass ----------------------
+   *
+   * The half of the game Overview compresses into three rows. Defensive
+   * rebounds are in the archive and were shown nowhere — REB and ORB were,
+   * which left the reader to do the subtraction.
+   */
+  {
+    title: "Rebounding",
+    views: ["defense"],
+    stats: [
+      { key: "reb", label: "REB", block: "g", fmt: "num1" },
+      { key: "orb", label: "Off Reb", block: "g", fmt: "num1" },
+      { key: "drb", label: "Def Reb", block: "g", fmt: "num1" },
+      { key: "orb_share", label: "Off Reb share", block: "m", fmt: "pct1",
+        info: "What share of a player's own rebounds come at the offensive end. High marks a crasher; low marks someone who secures the defensive glass and goes.",
+        derive: (c) => pctOf(cellOf(c, "g", "orb"), cellOf(c, "g", "reb")) },
+    ],
+  },
+  {
+    title: "Defense",
+    views: ["defense"],
+    stats: [
+      { key: "stl", label: "STL", block: "g", fmt: "num1" },
+      { key: "blk", label: "BLK", block: "g", fmt: "num1" },
+      { key: "def_epm", label: "Def EPM", block: "impact", fmt: "signed1" },
+      { key: "drtg", label: "DRtg", block: "m", fmt: "num1" },
+      { key: "pf", label: "PF", block: "g", fmt: "num1" },
+    ],
+  },
+
+  /* -------------------------------- Role ---------------------------------
+   *
+   * Games, starts and minutes were in the archive and shown nowhere. They are
+   * the context every other number here is read against: 15 points is a
+   * different player at 22 minutes than at 36. Carried by all three of the
+   * non-Overview views for that reason.
+   */
+  {
+    title: "Role",
+    views: ["scoring", "creation", "defense"],
+    stats: [
+      { key: "gp", label: "Games", block: "m", fmt: "int" },
+      { key: "gs", label: "Starts", block: "m", fmt: "int" },
+      { key: "mpg", label: "Minutes /G", block: "m", fmt: "num1" },
+      { key: "usage_pct", label: "Usage%", block: "m", fmt: "pct1" },
+      { key: "game_score", label: "Game Score", block: "m", fmt: "num1",
+        info: "Hollinger's one-number summary of a box-score line, averaged. Roughly: 10 is a solid starter's night, 20 a very good one." },
+    ],
+  },
 ];
+
+/* --------------------------- derive helpers ------------------------------
+ *
+ * Each reads a raw cell for the CURRENT split and basis, so a derived stat
+ * respects both controls without knowing they exist. They return null rather
+ * than NaN or Infinity on a missing or zero denominator, which is what makes
+ * fmt() print an em-dash instead of a number nobody can defend.
+ */
+function cellOf(ctx: Ctx, block: "g" | "m", key: string): number | null {
+  if (!ctx.season) return null;
+  const blk = ctx.season.splits[ctx.split];
+  if (!blk) return null;
+  const src = block === "m" ? blk.m : ctx.basis === "f" ? blk.f : blk.g;
+  return src?.[key]?.[0] ?? null;
+}
+const sub = (a: number | null, b: number | null): number | null =>
+  a === null || b === null ? null : a - b;
+const ratio = (a: number | null, b: number | null): number | null =>
+  a === null || b === null || b === 0 ? null : a / b;
+const pctOf = (a: number | null, b: number | null): number | null => {
+  const r = ratio(a, b);
+  return r === null ? null : r * 100;
+};
 
 function fmt(v: number | null, f: Fmt): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return "—";
@@ -145,6 +351,10 @@ function fmt(v: number | null, f: Fmt): string {
 /** Where a stat's [value, percentile] lives for the current split and basis. */
 function read(ctx: Ctx, d: Def): Cell | null {
   if (!ctx.season) return null;
+  if (d.derive) {
+    const v = d.derive(ctx);
+    return v === null ? null : [v, null];
+  }
   if (d.block === "impact") return ctx.season.impact?.[d.key] ?? null;
   const blk = ctx.season.splits[ctx.split];
   if (!blk) return null;
@@ -166,6 +376,7 @@ export function PlayerStatsGrid({
 }) {
   const [split, setSplit] = useState("full");
   const [basis, setBasis] = useState<Basis>("g");
+  const [view, setView] = useState<View | "everything">("overview");
 
   // 2021 has no game logs, and neither does anyone below the cohort floor, so
   // the panel has to work without splits rather than render empty cards.
@@ -191,6 +402,22 @@ export function PlayerStatsGrid({
           {n} game{n === 1 ? "" : "s"} in this split
         </span>
         <div className="flex flex-wrap items-center gap-3">
+          {/* FIRST OF THE THREE, because the row then reads in the order the
+              questions are asked: which stats, then which games, then in what
+              units. Putting it after Split would have meant choosing a slice
+              of a panel you had not chosen yet. */}
+          <label className="flex items-center gap-2">
+            <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">View</span>
+            <Select
+              value={view}
+              onChange={(v) => setView(v as View | "everything")}
+              ariaLabel="Which stats to show"
+              compact
+              className="w-52"
+            >
+              {VIEW_OPTIONS.map((v) => <option key={v.key} value={v.key}>{v.label}</option>)}
+            </Select>
+          </label>
           <label className="flex items-center gap-2">
             <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Split</span>
             <Select value={active} onChange={setSplit} ariaLabel="Stat split" compact className="w-52">
@@ -207,7 +434,7 @@ export function PlayerStatsGrid({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 lg:gap-6">
-        {CARDS.map((card) => (
+        {CARDS.filter((c) => view === "everything" || c.views.includes(view)).map((card) => (
           <Card key={card.title} title={card.title}>
             {card.stats.map((d) => {
               const cell = read(ctx, d);
@@ -227,7 +454,13 @@ export function PlayerStatsGrid({
             })}
           </Card>
         ))}
-        {shooting && active === "full" && <ShotDietPanel s={shooting} />}
+        {/* Shot Diet is zone data rather than a card, so it is filtered here
+            rather than by the list above. It answers a scoring question, so it
+            rides with Overview and Scoring and sits out the other two. Still
+            full-season only: the zones are not split. */}
+        {shooting && active === "full"
+          && (view === "overview" || view === "scoring" || view === "everything")
+          && <ShotDietPanel s={shooting} />}
       </div>
 
       <p className="mt-3 text-[0.65rem] text-ink-muted">
