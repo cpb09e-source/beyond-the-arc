@@ -32,31 +32,81 @@ Every external host referenced by `scripts/` and `src/lib/`:
 from the same source. They are re-served from btacbb.xyz, which is now a paid
 site.
 
-Disney's terms of use, which cover ESPN, prohibit all three things we do:
+### 2.1 Three separate threads, not one
 
-- "reproduce, distribute, communicate to the public, make available to the
-  public, or transform any Disney Product"
-- "use the Disney Products for any commercial or business-related use"
-- "access, monitor, copy or extract the Disney Products using a robot, spider,
-  script, or other automated means"
+**a) Contract, with Disney/ESPN.** Their terms prohibit each of the three
+things we do — "reproduce, distribute, communicate to the public, make
+available to the public"; "use the Disney Products for any commercial or
+business-related use"; "access, monitor, copy or extract ... using a robot,
+spider, script, or other automated means". This is a breach of contract, and
+the realistic remedy is a cease-and-desist or an IP block, not damages.
 
-**Why this is different from the statistics.** Everything else on this site is
-facts, and facts are not copyrightable (*Feist v. Rural Telephone*, 499 U.S.
-340). A photograph is not a fact. It is a copyrighted work with an owner, and
-we are redistributing 20,000 of them commercially. This is the single largest
-piece of legal exposure on the site and it is not close.
+**b) Copyright — and the owner is NOT ESPN.** College headshots are produced
+by the schools' athletics departments; copyright sits with the university or
+with the photographer who shot them. ESPN is a distributor we took them from.
+So the party with a copyright claim is each of ~360 athletics departments,
+not Disney.
 
-**It needs a decision from Colin, not from me.** The options, cheapest first:
+That cuts both ways. It means more potential claimants — but their damages are
+weak: statutory damages require registration with the Copyright Office, and
+routine team headshots are almost never registered. Unregistered works get
+actual damages only, and the actual damages from a stats site showing a
+2cm-wide headshot are close to nothing. **The realistic worst case is a DMCA
+takedown, not a judgment.**
 
-1. **Drop the photos.** Rosters and player pages fall back to initials or a
-   silhouette. Costs a visual nicety, removes the exposure completely.
-2. **Replace the source.** School athletics sites publish headshots and many
-   are more permissive; some conferences licence media. Real work, keeps faces.
-3. **Accept and mitigate.** Keep them, respond fast to any takedown. The
-   `/sources` page already carries a takedown line, which helps and does not
-   cure it.
+**c) Right of publicity — the thread nobody expects, and the sharpest one.**
+Everything else on this site is protected by the same reasoning that decided
+*C.B.C. Distribution v. MLB Advanced Media*, 505 F.3d 818 (8th Cir. 2007):
+names and playing statistics are factual data, and the First Amendment beats a
+right-of-publicity claim over them.
 
-Nothing in this repo should be read as a recommendation to ignore it.
+Read the opinion carefully and the shield has a hole in exactly our shape. The
+court expressly noted that **CBC did not use the players' images** — only names
+and publicly known statistics. Photographs are not the factual data that case
+protects, and since 2021 college athletes hold commercial NIL rights in their
+own likeness. Our stats are inside the shield. Our headshots are outside it.
+
+### 2.2 What the comparable sites do
+
+Sports-Reference's college basketball section — the largest, best-resourced
+site in this space, with actual lawyers — shows **no player photograph at all**.
+Checked directly: their Cooper Flagg page carries 42 images and not one is him.
+Their NBA pages do have headshots, which they licence. KenPom and Bart Torvik
+show none either.
+
+The entire competitive set has independently landed on the same answer.
+
+### 2.3 Replacements, researched
+
+| Option | Verdict |
+|---|---|
+| **College Pressbox** — 8,000+ D-I headshots, $9.99/mo | **No.** Licence is "personal, noncommercial use only ... with no right to reproduce, distribute, communicate to the public, make available to the public". Scrapers "strictly prohibited". $9.99 buys media *access*, not redistribution |
+| **Sportradar Images API** (bundles College Pressbox + Getty for NCAA MBB) | **The real licensed path.** Enterprise pricing, custom quote, sales contact required. Correct if faces matter enough to pay for |
+| **Direct from the schools** | Plausible in principle — they produce headshots *for* publicity and want media using them — but it is ~360 separate permissions. The top 50 programmes would cover most traffic |
+| **Wikimedia Commons** | Coverage for 20,000 college players is far too thin to be a system |
+
+### 2.4 Recommendation
+
+**Drop them.** Three reasons:
+
+1. **It is nearly free to do.** `player-photo.tsx` already renders an initials
+   monogram whenever a photo is missing or fails to load — the fallback is
+   built, shipped and working. Emptying the mapping degrades every surface
+   automatically. This is roughly a ten-line change, not a project.
+2. **It is the only exposure on the site outside the facts shield.** Everything
+   else here is protected by *Feist* and *C.B.C.* The photos are the single
+   thing those cases do not cover, and they are decoration on a site whose
+   entire value is numbers.
+3. **The whole competitive set already ships without them.**
+
+If faces are worth real money later, get a Sportradar quote and put them back
+licensed. That is a decision to make with revenue on the table, not with 20,164
+files already on disk.
+
+**Still Colin's call.** Accepting and mitigating is a defensible business
+choice for a site this size — the practical risk is a takedown notice, and
+`/sources` already carries the takedown line. This section is the research he
+asked for, not an instruction.
 
 ## 3. Sports Reference — attribution owed, method to fix
 
@@ -105,7 +155,8 @@ bulk-download 165k files" are not the same offer.
       That is a real commitment; it should be one he wants to make.
 - [ ] **Confirm the contact address.** Both pages use `cpb09e@gmail.com`. A
       role address would age better on a paid product.
-- [ ] Decide §2 (ESPN images).
+- [ ] Decide §2 (ESPN images). Research done 2026-09-02; recommendation is
+      drop, and the fallback that makes it cheap already exists.
 - [ ] Solicitor pass once the above are settled.
 
 ## 7. Still worth doing later
