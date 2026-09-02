@@ -4,24 +4,41 @@ import { cn } from "@/lib/utils";
 /**
  * Navigation for a team page's seven sections.
  *
- * TWO SHAPES, ONE LIST. Above lg it is a vertical rail beside the content;
+ * TWO SHAPES, ONE LIST. Above lg it is a segmented control above the content;
  * below lg it is a bar fixed to the bottom of the screen. Both render the same
  * TABS array in the same order, so there is one place to add a section.
  *
- * WHY IT STOPPED BEING A STRIP. Six labels did not fit across a phone, and
- * there are seven now. The old strip scrolled horizontally, which meant On/Off
- * sat past the right edge with nothing but a scrollbar to say so — the last
- * two sections were effectively undiscoverable on the device most people read
- * on. A bottom bar fits them all, never scrolls, and sits under the thumb
- * instead of at the top of a page the reader has already scrolled past.
+ * WHY THE DESKTOP SHAPE STOPPED BEING A RAIL. Seven labels stacked vertically
+ * held a 232px column open on every team page, at every width, whether or not
+ * anyone was looking at it — and the page under it is tables, which is the one
+ * kind of content that wants the width back. Lying the list down returns the
+ * column and costs nothing but a row of height.
  *
- * THE RAIL IS ON THE LEFT, AND ITS POSITION NEVER MOVES. That second part is
- * why the sections all share one max-width now. They used to differ — 88rem for
- * most, 96rem for School History, 100rem for Lineups — and each centred itself,
- * so a rail pinned to the content's edge landed somewhere different on every
- * tab. Switching sections slid the navigation, which is the one element that
- * has to hold still. One container width for all ten sections fixes it at the
- * source; see the note in team-page-view.
+ * IT IS ENCLOSED, AND THAT IS THE POINT. A track around the whole set with the
+ * active section raised out of it on a card-coloured pill: seven items read as
+ * ONE CONTROL WITH SEVEN POSITIONS rather than seven links that happen to sit
+ * in a row, which is what an underline gives you. The affordance is legible
+ * before anything is hovered.
+ *
+ * NOT STICKY. It scrolls away with the masthead it belongs to. A control
+ * pinned to the top of a page whose sections are each one long table competes
+ * with the table's own sticky header, and two sticky rows stacked on a laptop
+ * is most of the fold.
+ *
+ * WHY THE PHONE IS DIFFERENT. Six labels did not fit across a phone and there
+ * are seven now. The old strip scrolled horizontally, which meant On/Off sat
+ * past the right edge with nothing but a scrollbar to say so — the last two
+ * sections were effectively undiscoverable on the device most people read on.
+ * A bottom bar fits them all, never scrolls, and sits under the thumb. This is
+ * why the desktop control does not simply become the phone one below lg.
+ *
+ * THE CONTROL'S POSITION NEVER MOVES. That is why the sections all share one
+ * max-width now. They used to differ — 88rem for most, 96rem for School
+ * History, 100rem for Lineups — and each centred itself, so navigation pinned
+ * to the content's edge landed somewhere different on every tab. Switching
+ * sections slid the navigation, which is the one element that has to hold
+ * still. One container width for all ten sections fixes it at the source; see
+ * the note in team-page-view.
  *
  * TWO MODES, ONE APPEARANCE. Where a season has real tab routes each item is a
  * link to that route and only that section renders. Where it does not, the
@@ -60,105 +77,38 @@ export const TAB_ANCHORS: Record<TeamTab, string> = {
  * "Shots" is what the tab is actually about, not an abbreviation of the word
  * above it.
  */
+/**
+ * BOTH SHAPES ARE TYPE. The glyphs that used to ride the rail are gone with
+ * it: the bottom bar dropped them first (a circle inside a circle for Shooting
+ * and two overlapping discs for On/Off are marks you learn from the label, not
+ * marks that save you reading it), and a horizontal control has the same
+ * argument plus a width one — an icon is ~25px per item in the row this shape
+ * exists to give back. They are in the history if the case is ever made again.
+ */
 const TABS: Array<{
   key: TeamTab;
   label: string;
   short: string;
   segment: string;
-  icon: React.ReactNode;
 }> = [
-  {
-    key: "overview", label: "Overview", short: "Overview", segment: "",
-    icon: (
-      <>
-        <rect x="2.5" y="2.5" width="4.6" height="4.6" rx="1" />
-        <rect x="8.9" y="2.5" width="4.6" height="4.6" rx="1" />
-        <rect x="2.5" y="8.9" width="4.6" height="4.6" rx="1" />
-        <rect x="8.9" y="8.9" width="4.6" height="4.6" rx="1" />
-      </>
-    ),
-  },
-  {
-    // SECOND, not last. The game log is the season's record of what happened,
-    // so it belongs against Overview — everything below it (roster, shooting,
-    // lineups) explains the games rather than listing them. It is also the
-    // section that answers the question the schedule ticker in the hero raises
-    // and cannot finish: the ticker shows 38 results in a strip you drag, this
-    // is the same 38 with the box beside them.
-    //
-    // "Games" on the bottom bar. Seven labels across a 390px phone is about
-    // 55px each — "Overview" still sets at roughly 53 — so the long form
-    // would have been the one item that clipped.
-    key: "games", label: "Game Log", short: "Games", segment: "games",
-    // A list with markers, not another table glyph: the site header already
-    // spends Table2 on the two explorers and ListOrdered on the two game logs,
-    // and this is the same object as those, one team narrower.
-    icon: (
-      <>
-        <path d="M2.6 4.4h1.3M2.6 8h1.3M2.6 11.6h1.3" />
-        <path d="M6.8 4.4h6.6M6.8 8h6.6M6.8 11.6h6.6" />
-      </>
-    ),
-  },
-  {
-    key: "roster", label: "Roster", short: "Roster", segment: "roster",
-    icon: (
-      <>
-        <circle cx="8" cy="5.6" r="2.6" />
-        <path d="M3 13.5c0-2.5 2.2-4.1 5-4.1s5 1.6 5 4.1" />
-      </>
-    ),
-  },
-  {
-    key: "history", label: "School History", short: "History", segment: "history",
-    icon: (
-      <>
-        <rect x="3" y="2.5" width="10" height="11" rx="1.2" />
-        <path d="M5.6 5.6h4.8M5.6 8h4.8M5.6 10.4h2.8" />
-      </>
-    ),
-  },
-  {
-    key: "shooting", label: "Shooting", short: "Shots", segment: "shooting",
-    icon: (
-      <>
-        <circle cx="8" cy="8" r="5.5" />
-        <circle cx="8" cy="8" r="1.6" />
-      </>
-    ),
-  },
-  {
-    key: "lineups", label: "Lineups", short: "Lineups", segment: "lineups",
-    icon: <path d="M2.8 13V7.4M6.3 13V3.4M9.7 13V9.2M13.2 13V5.6" />,
-  },
-  {
-    key: "onoff", label: "On/Off", short: "On/Off", segment: "on-off",
-    icon: (
-      <>
-        <path d="M2.5 8h11" />
-        <circle cx="5.4" cy="8" r="2.1" />
-        <circle cx="10.6" cy="8" r="2.1" />
-      </>
-    ),
-  },
+  { key: "overview", label: "Overview", short: "Overview", segment: "" },
+  // SECOND, not last. The game log is the season's record of what happened,
+  // so it belongs against Overview — everything below it (roster, shooting,
+  // lineups) explains the games rather than listing them. It is also the
+  // section that answers the question the schedule ticker in the hero raises
+  // and cannot finish: the ticker shows 38 results in a strip you drag, this
+  // is the same 38 with the box beside them.
+  //
+  // "Games" on the bottom bar. Seven labels across a 390px phone is about
+  // 55px each — "Overview" still sets at roughly 53 — so the long form would
+  // have been the one item that clipped.
+  { key: "games", label: "Game Log", short: "Games", segment: "games" },
+  { key: "roster", label: "Roster", short: "Roster", segment: "roster" },
+  { key: "history", label: "School History", short: "History", segment: "history" },
+  { key: "shooting", label: "Shooting", short: "Shots", segment: "shooting" },
+  { key: "lineups", label: "Lineups", short: "Lineups", segment: "lineups" },
+  { key: "onoff", label: "On/Off", short: "On/Off", segment: "on-off" },
 ];
-
-function Glyph({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      className={className}
-    >
-      {children}
-    </svg>
-  );
-}
 
 type NavProps = {
   active: TeamTab;
@@ -181,40 +131,19 @@ function hrefFor(t: (typeof TABS)[number], p: NavProps): string {
 }
 
 /**
- * The rail. Sticky rather than fixed, so it scrolls with the page until it
- * reaches the top and then holds — a fixed rail on a short viewport would
- * clip its own last item with no way to reach it.
- */
-/**
- * The rail's width and the gap after it, as classes rather than numbers.
+ * The desktop control.
  *
- * EXPORTED BECAUSE THE HERO HAS TO MATCH IT. The hero sits in its own row
- * above this one and indents itself by exactly this much so its left edge
- * lands on the content column rather than on the rail. Two rows agreeing on a
- * measurement is the kind of thing that drifts the first time one of them is
- * touched, so they read the same constants instead of both hardcoding 13rem.
+ * THE ACTIVE PILL TAKES --accent, the team's colour, guaranteed readable on
+ * both grounds by the clamps in team-page-view. Every item carries a border in
+ * both states — transparent when inactive — so the pill appearing cannot shift
+ * the row by a pixel.
  */
-export const RAIL_WIDTH = "w-52";
-export const RAIL_GAP = "lg:gap-6";
-
-export function TeamRail(props: NavProps) {
+export function TeamTabBar(props: NavProps) {
   return (
-    <nav
-      aria-label="Team sections"
-      // No order utility: the rail is first in the markup and first in the
-      // row, so the visual order and the tab order agree. Placing it visually
-      // before the content while leaving it after in the DOM would send a
-      // keyboard through the entire page and back to reach the navigation.
-      //
-      // mt-5 matches the top margin the first section in every tab carries, so
-      // the rail's first item lines up with the content beside it rather than
-      // with the column box, which sits 20px higher. It is a constant and not
-      // read from the section, deliberately: the whole point of one container
-      // width is that this navigation holds still between tabs, and matching
-      // each tab's own first margin would start it moving again.
-      className={cn("hidden lg:block shrink-0 mt-5 sticky top-4 self-start z-20", RAIL_WIDTH)}
-    >
-      <ul className="flex flex-col gap-0.5">
+    <nav aria-label="Team sections" className="hidden lg:block">
+      {/* inline-flex, so the track is exactly as wide as its seven items and
+          the empty space to the right stays page rather than control. */}
+      <ul className="inline-flex items-center gap-[2px] rounded-[10px] border border-hairline bg-paper-deep p-[3px]">
         {TABS.map((t) => {
           const isActive = t.key === props.active;
           return (
@@ -223,36 +152,16 @@ export function TeamRail(props: NavProps) {
                 href={hrefFor(t, props)}
                 prefetch={false}
                 aria-current={isActive ? "page" : undefined}
-                title={t.label}
                 className={cn(
-                  "group relative flex items-center gap-2.5 rounded-lg py-2 px-3 transition-colors",
+                  "flex items-center h-8 px-3 rounded-md border text-sm whitespace-nowrap transition-colors",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40",
                   isActive
-                    ? "text-ink"
-                    : "text-ink-muted hover:text-ink hover:bg-[color-mix(in_oklab,var(--accent,var(--color-coral))_8%,transparent)]",
+                    ? "border-hairline bg-card font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.08)]"
+                    : "border-transparent font-medium text-ink-muted hover:text-ink hover:bg-[color-mix(in_oklab,var(--accent,var(--color-coral))_8%,transparent)]",
                 )}
-                style={
-                  isActive
-                    ? {
-                        color: "var(--accent, var(--color-coral))",
-                        backgroundColor:
-                          "color-mix(in oklab, var(--accent, var(--color-coral)) 12%, transparent)",
-                      }
-                    : undefined
-                }
+                style={isActive ? { color: "var(--accent, var(--color-coral))" } : undefined}
               >
-                {/* Marker on the OUTER edge — the rail sits to the left of
-                    the content, so the bar belongs against the page edge and
-                    not between the label and the thing it labels. */}
-                <span
-                  aria-hidden
-                  className={cn(
-                    "absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r",
-                    isActive ? "opacity-100" : "opacity-0",
-                  )}
-                  style={{ backgroundColor: "var(--accent, var(--color-coral))" }}
-                />
-                <Glyph className="w-[1.15rem] h-[1.15rem] shrink-0">{t.icon}</Glyph>
-                <span className="text-sm font-medium whitespace-nowrap">{t.label}</span>
+                {t.label}
               </Link>
             </li>
           );

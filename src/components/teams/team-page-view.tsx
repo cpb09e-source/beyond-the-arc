@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { cn } from "@/lib/utils";
 import { TeamLogo } from "@/components/team-logo";
 import { midrankPercentileMap } from "@/lib/percentile";
 import { TeamName } from "@/components/team-name";
@@ -14,11 +13,9 @@ import { NationalRanks } from "@/components/teams/national-ranks";
 import { SortableSeasonsTable } from "@/components/teams/sortable-seasons-table";
 import { SeasonGrid, type SeasonGridRow } from "@/components/teams/season-grid";
 import {
-  TeamRail,
+  TeamTabBar,
   TeamBottomBar,
   TAB_ANCHORS,
-  RAIL_WIDTH,
-  RAIL_GAP,
   type TeamTab,
 } from "@/components/teams/team-tabs";
 import { SortableRosterTable } from "@/components/teams/sortable-roster-table";
@@ -513,24 +510,12 @@ export function TeamPageView({
             to the row's px-4 to reach the same 24px. The tables stay at 16px
             on purpose. BOTH ROWS MOVE TOGETHER: whatever the max-width is,
             it is the same here and below, or the hero steps in from the page. */}
-        <div className={cn("mx-auto max-w-[88rem] px-6 lg:px-10 pt-10 pb-8 lg:flex", RAIL_GAP)}>
-          {/* A SPACER THE WIDTH OF THE RAIL, so the hero starts where the page
-              content starts rather than where the vertical menu does.
-
-              The hero used to run the full width of the row, which put the
-              crest and the team's name hard against the left edge while every
-              section below them began 232px further in — the page had two left
-              margins and the eye had to find the second one. Indenting the hero
-              gives the whole page one edge, and leaves the corner above the
-              rail empty, which is what a nav column wants anyway.
-
-              An empty div rather than a padding utility because the number is
-              the rail's, not the hero's: it reads RAIL_WIDTH and RAIL_GAP from
-              team-tabs, so the two rows cannot drift apart. And it is behind
-              `showTabs` for the same reason the rail is — a preview page has no
-              rail, so there is nothing to align to. */}
-          {showTabs && <div aria-hidden className={cn("hidden lg:block shrink-0", RAIL_WIDTH)} />}
-          <div className="min-w-0 flex-1 flex flex-wrap items-center gap-6 lg:gap-10">
+        <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-10 pb-8">
+          {/* The hero used to indent itself by the width of the rail so its
+              left edge landed on the content column rather than on the menu.
+              With the menu lying down there is one left edge again and the
+              spacer is gone — everything on the page starts at the container. */}
+          <div className="min-w-0 flex flex-wrap items-center gap-6 lg:gap-10">
             {/* Desktop only. Above lg the crest sits beside the whole block and
                 items-center is right, because the block is short relative to a
                 96px mark. */}
@@ -676,31 +661,30 @@ export function TeamPageView({
           A season without real tab routes gets the same list scrolling to
           anchors instead — see team-tabs.tsx. */}
 
-      {/* EVERYTHING BELOW THE MASTHEAD SHARES A ROW WITH THE RAIL.
+      {/* THE MENU IS A BAND ABOVE THE SECTIONS, not a column beside them.
 
-          The rail has to be a sibling of the content rather than a band above
-          it, because it is vertical: it needs the full height of the sections
-          to stick against. The sections keep their own mx-auto max-widths and
-          simply centre inside whatever the row leaves them, so School History
-          at 96rem and Lineups at 100rem still cap where they always did on any
-          viewport wide enough — the rail is 2.5rem of icons until 2xl, which is
-          the only width where it takes real room, and by then there is room.
+          It was a vertical rail sharing this row with the content, which meant
+          the row had to be a flex container and the content column had to be
+          told it could shrink. Neither is needed now: the control is one row
+          of its own above everything, and the sections have the full width of
+          the container, which is what the tables wanted.
 
-          `min-w-0` on the content column is load-bearing. A flex child defaults
-          to min-width:auto, which refuses to shrink below its contents, and the
-          contents here include tables that scroll horizontally — without it the
-          row grows to the widest table and the whole page scrolls sideways. */}
-      <div className="mx-auto max-w-[88rem] px-4 lg:px-10 lg:flex lg:items-start lg:gap-6">
+          `min-w-0` stays on the content wrapper. The tables inside it scroll
+          horizontally, and without it a grid or flex ancestor added later
+          would let the widest table push the page sideways again. */}
+      <div className="mx-auto max-w-[88rem] px-4 lg:px-10">
         {showTabs && (
-          <TeamRail
-            active={tab === "all" ? "overview" : tab}
-            mode={tab === "all" ? "anchors" : "routes"}
-            slug={slug}
-            year={current.year}
-            overviewHref={overviewHref}
-          />
+          <div className="px-2 lg:px-0 mb-1">
+            <TeamTabBar
+              active={tab === "all" ? "overview" : tab}
+              mode={tab === "all" ? "anchors" : "routes"}
+              slug={slug}
+              year={current.year}
+              overviewHref={overviewHref}
+            />
+          </div>
         )}
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0">
 
       {/* The schedule sits BELOW the tab strip, not above it with the identity
           block.
