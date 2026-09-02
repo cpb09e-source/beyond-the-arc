@@ -88,6 +88,18 @@ const addDays = (d, n) => new Date(d.getTime() + n * 86400000);
 const dayDiff = (a, b) => Math.round((b.getTime() - a.getTime()) / 86400000);
 
 let calls = 0;
+
+/**
+ * Set by the first 401/403, and never cleared. Same guard, same reason as
+ * pull-player-box-v2.mjs — see the long note there.
+ *
+ * It matters MORE here. This file writes box-teams-full.json.gz, which is the
+ * expected-row set the player pull checks its own completeness against. An
+ * empty team box does not just lose this season, it makes the player pull's
+ * verdict read "complete vs team box (0)" and pass.
+ */
+let fatalAuth = null;
+
 async function getJson(url) {
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
@@ -97,6 +109,10 @@ async function getJson(url) {
       });
       calls++;
       if (r.status === 429 || r.status >= 500) { await sleep(3000 * (attempt + 1)); continue; }
+      if (r.status === 401 || r.status === 403) {
+        fatalAuth = `HTTP ${r.status} — CBBD rejected CBBD_API_KEY`;
+        return { error: fatalAuth };
+      }
       if (!r.ok) return { error: `HTTP ${r.status}` };
       return { data: await r.json() };
     } catch {
@@ -112,6 +128,9 @@ async function getJson(url) {
  * far enough (should always be 0).
  */
 async function fetchRange(season, from, to, sink, depth = 0) {
+  // Unwind the recursion the moment auth dies rather than splitting windows
+  // that are all going to be rejected the same way.
+  if (fatalAuth) return 1;
   // Pad outward so the days we actually want are never on the edge (see
   // OVERLAP_DAYS). Requesting beyond the season is harmless — the `season`
   // parameter already scopes the result set.
@@ -160,10 +179,27 @@ for (const season of seasons) {
   const sink = [];
   let failures = 0;
   let cursor = seasonStart;
-  while (cursor <= seasonEnd) {
+  while (cursor <= seasonEnd && !fatalAuth) {
     const end = addDays(cursor, 13) > seasonEnd ? seasonEnd : addDays(cursor, 13);
     failures += await fetchRange(season, cursor, end, sink);
     cursor = addDays(end, 1);
+  }
+
+  if (fatalAuth) {
+    console.error(
+      `
+✗ ${season}: ${fatalAuth}. Nothing written.
+
+` +
+      `  CBBD revokes a key when the Patreon subscription lapses, and
+` +
+      `  re-subscribing issues a NEW one — an active subscription does not
+` +
+      `  revive the old string. Replace CBBD_API_KEY in .env.local.
+`,
+    );
+    process.exitCode = 1;
+    break;
   }
 
   // Dedupe — split windows share no dates, but overlapping retries can repeat.
@@ -174,6 +210,21 @@ for (const season of seasons) {
     if (seen.has(k)) continue;
     seen.add(k);
     rows.push(r);
+  }
+
+  // An empty pull is a failed pull. Writing `[]` here would poison the file the
+  // player pull verifies against, AND trip the "already pulled" guard so the
+  // season could not be retried without --force.
+  if (rows.length === 0) {
+    console.error(
+      `
+✗ ${season}: pulled 0 rows from ${failures} failed window(s). Nothing written.
+` +
+      `  Existing data for this season is untouched.
+`,
+    );
+    process.exitCode = 1;
+    continue;
   }
 
   fs.writeFileSync(dst, zlib.gzipSync(JSON.stringify(rows)));

@@ -83,6 +83,22 @@ const addDays = (d, n) => new Date(d.getTime() + n * 86400000);
 const dayDiff = (a, b) => Math.round((b.getTime() - a.getTime()) / 86400000);
 
 let calls = 0;
+
+/**
+ * Set by the first 401/403, and never cleared.
+ *
+ * A rejected key does not become valid on the next window. Without this the
+ * run walks all 24 windows of a season, logs 24 identical auth failures, and
+ * arrives at the bottom with an empty sink — which used to be gzipped and
+ * written out as a real `box-players-full.json.gz`. That is worse than no file
+ * at all: `[]` makes the season look pulled, and the `already pulled` guard at
+ * the top of the season loop then refuses to try again without --force.
+ *
+ * Observed for real on 2026-09-02 against season 2021, with a key that had
+ * been revoked when the subscription lapsed.
+ */
+let fatalAuth = null;
+
 async function getJson(url) {
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
@@ -92,6 +108,10 @@ async function getJson(url) {
       });
       calls++;
       if (r.status === 429 || r.status >= 500) { await sleep(3000 * (attempt + 1)); continue; }
+      if (r.status === 401 || r.status === 403) {
+        fatalAuth = `HTTP ${r.status} — CBBD rejected CBBD_API_KEY`;
+        return { error: fatalAuth };
+      }
       if (!r.ok) return { error: `HTTP ${r.status}` };
       return { data: await r.json() };
     } catch {
@@ -102,6 +122,9 @@ async function getJson(url) {
 }
 
 async function fetchRange(season, from, to, sink) {
+  // Unwind the recursion the moment auth dies rather than splitting windows
+  // that are all going to be rejected the same way.
+  if (fatalAuth) return 1;
   const qFrom = addDays(from, -OVERLAP_DAYS);
   const qTo = addDays(to, OVERLAP_DAYS);
   const url = `${API}/games/players?season=${season}&startDateRange=${iso(qFrom)}&endDateRange=${iso(qTo)}`;
@@ -148,12 +171,26 @@ for (const season of seasons) {
   const sink = [];
   let failures = 0;
   let cursor = seasonStart;
-  while (cursor <= seasonEnd) {
+  while (cursor <= seasonEnd && !fatalAuth) {
     const end = addDays(cursor, START_WINDOW_DAYS - 1) > seasonEnd
       ? seasonEnd
       : addDays(cursor, START_WINDOW_DAYS - 1);
     failures += await fetchRange(season, cursor, end, sink);
     cursor = addDays(end, 1);
+  }
+
+  if (fatalAuth) {
+    console.error(
+      `\n✗ ${season}: ${fatalAuth}. Nothing written.\n\n` +
+      `  The key in .env.local is being rejected outright, so this is not a\n` +
+      `  transient failure and no amount of retrying will help. CBBD revokes a\n` +
+      `  key when the Patreon subscription lapses, and re-subscribing issues a\n` +
+      `  NEW one — an active subscription does not revive the old string.\n` +
+      `  Get the current key from collegebasketballdata.com and replace\n` +
+      `  CBBD_API_KEY in .env.local.\n`,
+    );
+    process.exitCode = 1;
+    break;
   }
 
   const seen = new Set();
@@ -163,6 +200,17 @@ for (const season of seasons) {
     if (seen.has(k)) continue;
     seen.add(k);
     rows.push(r);
+  }
+
+  // An empty pull is a failed pull, and writing it is actively harmful — see
+  // the fatalAuth note above for why a 22-byte `[]` is worse than no file.
+  if (rows.length === 0) {
+    console.error(
+      `\n✗ ${season}: pulled 0 rows from ${failures} failed window(s). Nothing written.\n` +
+      `  Existing data for this season is untouched.\n`,
+    );
+    process.exitCode = 1;
+    continue;
   }
 
   fs.writeFileSync(dst, zlib.gzipSync(JSON.stringify(rows)));
@@ -180,20 +228,28 @@ for (const season of seasons) {
    * Only a non-empty `missing` set is real loss.
    */
   let verdict = "";
+  // The verdict decides the EXIT CODE, not just the log line. This check is the
+  // only thing that knows whether the pull is complete, so a caller that reads
+  // $? has to hear about it — a chain that continues past a short season builds
+  // an index over data it does not have.
+  let complete = true;
   const teamPath = path.join(dir, "box-teams-full.json.gz");
   if (fs.existsSync(teamPath)) {
     try {
       const teamRows = JSON.parse(zlib.gunzipSync(fs.readFileSync(teamPath)).toString());
       const have = new Set(rows.map((r) => `${r.gameId}|${r.teamId}`));
       const missing = teamRows.filter((r) => !have.has(`${r.gameId}|${r.teamId}`)).length;
-      verdict = missing === 0
+      complete = missing === 0;
+      verdict = complete
         ? `  ✓ complete vs team box (${teamRows.length})`
         : `  ✗ MISSING ${missing} of ${teamRows.length} team-game rows`;
     } catch { /* team box unreadable — skip the check rather than fail the pull */ }
   }
+  if (!complete) process.exitCode = 1;
 
   console.log(
-    `✓ ${season}: ${rows.length} rows (${sink.length - rows.length} dupes dropped)  ` +
+    `${complete ? "✓" : "✗"} ${season}: ${rows.length} rows ` +
+    `(${sink.length - rows.length} dupes dropped)  ` +
     `${dates[0]}..${dates[dates.length - 1]}  feb29=${feb29}` +
     (failures ? `  (${failures} window(s) hit the cap)` : "") + verdict,
   );

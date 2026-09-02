@@ -293,22 +293,58 @@ them from the public bucket, switch the client path, extend
 `verify-deploy-ready.mjs`. **Ordering: the client must deploy BEFORE the
 objects move**, or production's game logs break.
 
-### CBBD_API_KEY — RESOLVED 2026-09-02. Active, Tier 3
+### CBBD_API_KEY — SUBSCRIPTION ACTIVE, KEY IS STALE. Needs replacing.
 
-Colin confirmed the subscription is live again and that he upgraded while
-sorting it. **Tier 3: $10/month, 75,000 requests**, shared with CBBD's football
-API. That number is now the repo variable `CBBD_MONTHLY_LIMIT` (set 2026-09-02),
-which is what makes the admin quota tile a gauge rather than a bare count.
+**The subscription is Tier 3: $10/month, 75,000 requests**, shared with CBBD's
+football API, confirmed by Colin 2026-09-02. That number is the repo variable
+`CBBD_MONTHLY_LIMIT`, which is what makes the admin quota tile a gauge rather
+than a bare count.
 
-History, so the 401s are not re-investigated: recorded 2026-08-30 as returning
-401 on every endpoint; the pull scripts then all exited 0 during the accidental
-freeze crossing on 2026-09-01, which suggested it was already fixed. Now
-confirmed deliberately. Nine scripts read it.
+**But the key in `.env.local` is dead.** Tested directly 2026-09-02:
+`GET /teams?season=2021` returns `401 {"message":"Unauthorized"}` with no
+`x-calllimit-remaining` header at all. The string is 152 chars starting `Tyfn`.
 
-**This unblocks the 2021 player game logs** — see §7, where step 1 was the only
-blocked step. The pull is ~124 game days, well under a hundred requests, which
-is nothing against 75,000. Still gated on the data freeze until 2026-10-01, or
-on `BTA_ALLOW_NETWORK=1` if Colin wants it sooner.
+**Re-subscribing does not revive a revoked key.** CBBD revokes on lapse and
+issues a NEW one, so an active Patreon membership and a working key are two
+separate facts. This was assumed to be one fact for most of a day. **Action:
+get the current key from collegebasketballdata.com and replace `CBBD_API_KEY`
+in `.env.local`.** Nine scripts read it. It is also one of the eight GitHub
+secrets, so set it there only after it is known good.
+
+Why the 2026-09-01 evidence was misleading: the pull scripts "all exited 0"
+during the accidental freeze crossing, which was read as the key working. It
+was not — they exited 0 *while failing*, which is the bug fixed below.
+
+**§7's 2021 backfill is still blocked, on the new key.** Everything else about
+it is ready and the pull is under a hundred requests.
+
+#### The pull scripts used to fail silently — fixed 2026-09-02
+
+Found by running the 2021 backfill. `pull-player-box-v2.mjs` walked all 24
+windows of the season, logged 24 identical 401s, then **wrote a 22-byte
+`box-players-full.json.gz` containing `[]` and exited 0**, printing
+`✓ 2021: 0 rows` and `✗ MISSING 10564 of 10564` on the same line. Any caller
+reading `$?` would have seen success.
+
+The empty file was the worse half. `[]` makes a season look pulled, and the
+`already pulled (use --force to redo)` guard at the top of the season loop then
+refuses to retry it.
+
+`pull-team-box-v2.mjs` had the identical defect, and there it compounds: it
+writes `box-teams-full.json.gz`, which is the expected-row set the PLAYER pull
+checks itself against. An empty team box makes the player pull's completeness
+verdict read `✓ complete vs team box (0)` and pass.
+
+Both now: bail on the first 401/403 rather than grinding the season (1 API call
+instead of 24), refuse to write an empty result, leave existing files untouched,
+and set `process.exitCode = 1`. The player pull also exits 1 when its row-parity
+check against the team box finds anything missing, which it previously only
+printed. Verified against the live 401.
+
+The other CBBD pulls (`pull-rankings`, `pull-adjusted-ratings`,
+`pull-shooting-splits`, `pull-missing-plays`) do not special-case 401 either and
+were not audited for the empty-write half. Worth a look before trusting an exit
+code from any of them.
 
 Also settled 2026-08-30: **CBBD has no women's basketball.** `?gender=women`,
 `?league=womens` and `?division=women` are all silently ignored (identical 364
