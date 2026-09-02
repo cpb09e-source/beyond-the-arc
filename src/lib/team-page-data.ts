@@ -40,7 +40,7 @@ import {
   attachRosterRanks,
   PREVIEW_SEASON_YEAR,
 } from "@/components/teams/team-page-view";
-import { buildShootingRanks, buildFourFactorRanks } from "@/components/teams/distribution-panel";
+import { buildShootingRanks, buildFourFactorRanks, buildShotProfileRanks, buildShotDefenseRanks, ranksAreEmpty } from "@/components/teams/distribution-panel";
 import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches";
 
 // Same SHORT_ROUND mapping the coach page uses for tournament-round badges,
@@ -99,6 +99,16 @@ export async function loadTeamPageData(slug: string, year?: number) {
   // show is an argument instead of a data re-export. See national-ranks.ts.
   const nationalRanks = nationalRanksForTeam(yearCohort, current, 8);
   const shootingRanks = buildShootingRanks(current, yearCohort);
+  /**
+   * Play-by-play shot profile. Null-when-empty rather than an array of dashes:
+   * before 2014 there is no play-by-play at all, so the panels are omitted
+   * instead of rendering seven em-dashes and implying the numbers are missing
+   * for this team specifically.
+   */
+  const shotProfileRanksAll = buildShotProfileRanks(current, yearCohort);
+  const shotDefenseRanksAll = buildShotDefenseRanks(current, yearCohort);
+  const shotProfileRanks = ranksAreEmpty(shotProfileRanksAll) ? null : shotProfileRanksAll;
+  const shotDefenseRanks = ranksAreEmpty(shotDefenseRanksAll) ? null : shotDefenseRanksAll;
   const fourFactorRanks = buildFourFactorRanks(current, yearCohort);
   const allGames = await readGameLogsForYear(effYear);
   // Tag any of this team's games that match a March Madness date so the
@@ -143,6 +153,8 @@ export async function loadTeamPageData(slug: string, year?: number) {
     rankedPlayerIds,
     confRecords,
     shootingRanks,
+    shotProfileRanks,
+    shotDefenseRanks,
     fourFactorRanks,
     scheduleGames,
     netRanks,

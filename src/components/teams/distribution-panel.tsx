@@ -27,7 +27,23 @@ export type DistributionRank = {
 
 // ---------- Stat-set definitions ----------
 
-type StatDef = { key: string; label: string; sub?: string; format: DistributionFormat };
+type StatDef = {
+  key: string;
+  label: string;
+  sub?: string;
+  format: DistributionFormat;
+  /**
+   * The stat is better LOW, so rank ascending.
+   *
+   * Needed the moment shot rates arrived. Every stat in the two original sets
+   * is better high, so buildRanks sorted descending and called it a percentile
+   * — but a mid-range rate is the worst shot in basketball taken more often,
+   * and a rim rate ALLOWED is a defence being carved up. Ranking those the
+   * same way would have painted the two teams who do them least in coral and
+   * called it a top-5 finish.
+   */
+  invert?: boolean;
+};
 
 const SHOOTING_STATS: StatDef[] = [
   { key: "ts_pct",    label: "True Shooting %", format: "pct" },
@@ -62,7 +78,9 @@ function buildRanks(
         return ts?.[stat.key] ?? null;
       })
       .filter((v): v is number => typeof v === "number");
-    allVals.sort((a, b) => b - a); // higher = better
+    // Sorted BEST-FIRST, whichever direction that is, so rank 1 always means
+    // best and the percentile the chip colours by always means the same thing.
+    allVals.sort((a, b) => (stat.invert ? a - b : b - a));
 
     const total = allVals.length;
     let rank: number | null = null;
@@ -87,6 +105,85 @@ export function buildFourFactorRanks(
   cohort: StaticTeamSeasonRow[],
 ): DistributionRank[] {
   return buildRanks(current, cohort, FOUR_FACTOR_STATS);
+}
+
+/**
+ * WHERE THE SHOTS COME FROM, AND WHETHER THEY GO IN.
+ *
+ * Every value here is reconstructed from the play-by-play archive — nobody
+ * reports it — which is why it is the part of the Shooting tab that exists
+ * nowhere else. The columns have been computed per five-man lineup and per
+ * player for a while; this is the first time the team itself has been asked.
+ *
+ * THE DIRECTIONS ARE OPINIONS AND ARE STATED AS SUCH:
+ *
+ *   Rim rate, higher better. The rim is the most efficient shot in the game,
+ *   and getting there more is the single clearest sign of an offence creating
+ *   advantages rather than settling.
+ *
+ *   Mid-range rate, LOWER better. The long two is the least efficient shot in
+ *   basketball — worth two points at roughly three-point difficulty. A team
+ *   taking many is usually being forced into them.
+ *
+ *   Corner-three share, higher better. The corner three is the shortest three
+ *   on the floor and converts several points per hundred better than one above
+ *   the break, so taking a larger share of threes from there is shot quality
+ *   rather than volume.
+ *
+ * The FG% rows carry no direction argument — making shots is better.
+ *
+ * COVERAGE DIFFERS INSIDE THIS PANEL and that is not a bug. The three RATES go
+ * back to 2014; the four ZONE percentages start in 2022, because the shot
+ * coordinates they need are not in the earlier play-by-play. An older season
+ * shows the rates and a dash for the rest, which is the honest answer.
+ */
+const SHOT_PROFILE_STATS: StatDef[] = [
+  { key: "rim_rate",        label: "Rim rate",      sub: "share of shots at the rim",   format: "pct" },
+  { key: "rim_fg_pct",      label: "Rim FG %",                                          format: "pct" },
+  { key: "mid_rate",        label: "Mid-range rate", sub: "the least efficient shot",   format: "pct", invert: true },
+  { key: "mid_fg_pct",      label: "Mid-range FG %",                                    format: "pct" },
+  { key: "corner3_share",   label: "Corner 3 share", sub: "of all threes taken",        format: "pct" },
+  { key: "corner3_fg_pct",  label: "Corner 3 FG %",                                     format: "pct" },
+  { key: "atb3_fg_pct",     label: "Above-break 3 FG %",                                format: "pct" },
+];
+
+/**
+ * WHAT THE DEFENCE FORCES — the same three rates, from the other side.
+ *
+ * Read as a defensive philosophy rather than a scoreline. Allowing few rim
+ * attempts and many mid-range ones is the shape of a defence doing its job:
+ * protect the paint, run shooters off the line, live with the long two. So rim
+ * and three rates allowed are better LOW, and the mid-range rate allowed is
+ * better HIGH — the one row on the team page where a bigger number being green
+ * is the whole point.
+ *
+ * There are no defensive zone percentages to pair with these. CBBD's shot
+ * locations attach to the shooter, not to who contested, so "rim FG% allowed"
+ * is not derivable from this archive.
+ */
+const SHOT_DEFENSE_STATS: StatDef[] = [
+  { key: "rim_rate_def",   label: "Rim rate allowed",       sub: "shots conceded at the rim", format: "pct", invert: true },
+  { key: "mid_rate_def",   label: "Mid-range rate forced",  sub: "higher is better here",     format: "pct" },
+  { key: "three_rate_def", label: "3-point rate allowed",                                     format: "pct", invert: true },
+];
+
+export function buildShotProfileRanks(
+  current: StaticTeamSeasonRow,
+  cohort: StaticTeamSeasonRow[],
+): DistributionRank[] {
+  return buildRanks(current, cohort, SHOT_PROFILE_STATS);
+}
+
+export function buildShotDefenseRanks(
+  current: StaticTeamSeasonRow,
+  cohort: StaticTeamSeasonRow[],
+): DistributionRank[] {
+  return buildRanks(current, cohort, SHOT_DEFENSE_STATS);
+}
+
+/** True when a rank set has nothing to show, so the caller can omit the panel. */
+export function ranksAreEmpty(ranks: DistributionRank[]): boolean {
+  return ranks.every((r) => r.value === null);
 }
 
 // ---------- Component ----------

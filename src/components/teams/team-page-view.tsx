@@ -270,6 +270,8 @@ export function TeamPageView({
   rankedPlayerIds,
   confRecords,
   shootingRanks,
+  shotProfileRanks,
+  shotDefenseRanks,
   fourFactorRanks,
   scheduleGames,
   netRanks,
@@ -291,6 +293,8 @@ export function TeamPageView({
   rankedPlayerIds: Set<number>;
   confRecords: Map<number, ConfRecord>;
   shootingRanks: DistributionRank[];
+  shotProfileRanks: DistributionRank[] | null;
+  shotDefenseRanks: DistributionRank[] | null;
   fourFactorRanks: DistributionRank[];
   scheduleGames: GameLog[];
   /** year → this team's aNET rank that season. See netRanksForTeam(). */
@@ -859,6 +863,28 @@ export function TeamPageView({
           )}
         </DistributionPanel>
       </section>
+      )}
+
+      {/* WHERE THE SHOTS COME FROM. Reconstructed from the play-by-play, so it
+          sits under Shooting with the rest of the shot-selection material
+          rather than in a tab named after the data source.
+
+          The columns behind this have been computed per lineup and per player
+          since those pages were built; the team itself was never asked, which
+          is the gap this closes. Rates go back to 2014 — including 2021 as of
+          2026-09-02 — and the zone percentages start in 2022, so an older
+          season shows the rates and a dash for the rest.
+
+          Omitted entirely, not dashed, when there is no play-by-play at all. */}
+      {show.shooting && (shotProfileRanks || shotDefenseRanks) && (
+        <section className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {shotProfileRanks
+            ? <DistributionPanel title="Shot Profile" ranks={shotProfileRanks} blurBody={preview} />
+            : <div />}
+          {shotDefenseRanks
+            ? <DistributionPanel title="Shot Defense" ranks={shotDefenseRanks} blurBody={preview} />
+            : <div />}
+        </section>
       )}
 
       {/* Play-by-play derivatives. Both are reconstructed from the CBBD plays
