@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { confDisplay } from "@/lib/conf-display";
+import { isPowerConference } from "@/lib/conf-tiers";
 import { cn } from "@/lib/utils";
 import { Select } from "@/components/select";
 import { IS_DEMO } from "@/lib/flags";
@@ -86,12 +87,45 @@ export function ScoreboardClient() {
     }
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [slate.games]);
-  // Matches on EITHER side, so picking the Big Ten keeps a Big Ten team's
-  // non-conference game — the thing a reader following that league wants.
-  const inConf = (g: ScoreGame) =>
-    !conf ||
-    (g.home.conference && confDisplay(g.home.conference) === conf) ||
-    (g.away.conference && confDisplay(g.away.conference) === conf);
+
+  /**
+   * The filter takes a GROUP token or a single conference's display name.
+   *
+   * Tokens are prefixed so they can never collide with a real conference name.
+   * A night's slate is thirty-odd leagues deep and the question a reader
+   * actually arrives with is nearly always one of four — everything, the
+   * ranked games, the high-major games, or everyone else — and answering that
+   * used to mean knowing which of thirty entries to pick.
+   *
+   * POWER AND MID ARE A PARTITION, not two overlapping filters. Power is any
+   * game with a high-major team on either side; mid is every game with none.
+   * Together they are the whole slate and nothing appears twice, so a reader
+   * flipping between them sees each game exactly once. Defining mid as "any
+   * game involving a mid-major" instead would put Duke at Vermont in both,
+   * which reads as a bug.
+   *
+   * isPowerConference, NOT POWER_CONFS directly. The scoreboard feed spells
+   * conferences its own way — "Big Ten", "Big 12", "Big East" — while
+   * POWER_CONFS holds Bart's codes. Only ACC and SEC collide, so a direct
+   * lookup half-worked and put Arizona under Mid Majors. See the long note in
+   * conf-tiers.ts.
+   */
+  const isPowerGame = (g: ScoreGame) =>
+    isPowerConference(g.home.conference) || isPowerConference(g.away.conference);
+
+  // Matches on EITHER side for a named conference, so picking the Big Ten keeps
+  // a Big Ten team's non-conference game — the thing a reader following that
+  // league wants.
+  const inConf = (g: ScoreGame) => {
+    if (!conf) return true;
+    if (conf === "@top25") return isRanked(g);
+    if (conf === "@power") return isPowerGame(g);
+    if (conf === "@mid") return !isPowerGame(g);
+    return Boolean(
+      (g.home.conference && confDisplay(g.home.conference) === conf) ||
+      (g.away.conference && confDisplay(g.away.conference) === conf),
+    );
+  };
 
   // Conference games group under their own conference; everything else is
   // non-conference. Sorted by tip so the page reads down the evening.
@@ -146,9 +180,11 @@ export function ScoreboardClient() {
               : slate.games.length === 0
               ? "No games on this date."
               : `${slate.games.length} game${slate.games.length === 1 ? "" : "s"}${
-                  IS_DEMO
-                    ? " · a real night from last season, while we wait for this one"
-                    : slate.source === "live"
+                  // No demo caption. The eyebrow above already says "Sample
+                  // slate", so explaining it again under the count was the
+                  // page apologising for itself in the one place a reader
+                  // looks for the number.
+                  slate.source === "live"
                     ? " · updating every minute"
                     : slate.source === "upcoming"
                     ? " · none tipped yet"
@@ -176,13 +212,30 @@ export function ScoreboardClient() {
 
       {confOptions.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-6">
-          <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">Conference</span>
+          {/* "Show", not "Conference" — two of the four groups above the divider
+              are not conferences, and a label that says otherwise makes Top 25
+              look misfiled. */}
+          <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">Show</span>
           <Select
             value={conf}
             onChange={setConf}
-            ariaLabel="Filter by conference"
+            ariaLabel="Filter the slate"
           >
-            <option value="">All Conferences</option>
+            <option value="">All</option>
+            <option value="@top25">Top 25</option>
+            <option value="@power">Power Conferences</option>
+            <option value="@mid">Mid Majors</option>
+            {/* The individual leagues stay, under the four groups rather than
+                instead of them. Someone who follows one conference is exactly
+                the reader most likely to use this control, and the groups
+                answer the common question without taking that away. */}
+            {/* A distinct value, not "" — the Select keys options by value and
+                reusing "" collided with All, which React reports as two
+                children with the same key. Disabled, so it can never be
+                chosen; unreachable in inConf either way. */}
+            {confOptions.length > 0 && (
+              <option value="@divider" disabled>──────────</option>
+            )}
             {confOptions.map((c) => <option key={c} value={c}>{c}</option>)}
           </Select>
           {conf && (
@@ -336,8 +389,19 @@ function GameCard({ g }: { g: ScoreGame }) {
         aria-label={`${g.away.team} at ${g.home.team} — full box score`}
         className="absolute inset-0 z-1 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/50" prefetch={false} />
       <div className="flex items-center justify-between gap-2 px-4 pt-3">
-        <span className="text-[0.58rem] uppercase tracking-[0.12em] font-semibold text-ink-muted truncate">
-          {g.neutralSite ? "Neutral site" : g.venue ?? ""}
+        {/* THE CREST ANSWERS "WHOSE GYM IS THIS". An arena name only reads as
+            a home team if you already know it — Gill Coliseum is Oregon State
+            to about a thousand people and a place name to everyone else. The
+            home side is otherwise signalled only by the small `@` beside the
+            away team, which is easy to miss at this size.
+
+            Nothing on a NEUTRAL site, because there is no home team to name and
+            a crest there would assert one. */}
+        <span className="flex items-center gap-1.5 min-w-0 text-[0.58rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">
+          {!g.neutralSite && g.venue && (
+            <TeamLogo name={g.home.team} size={14} className="shrink-0 opacity-80" />
+          )}
+          <span className="truncate">{g.neutralSite ? "Neutral site" : g.venue ?? ""}</span>
         </span>
         <span className={cn(
           "shrink-0 text-[0.58rem] uppercase tracking-[0.12em] font-bold tabular",

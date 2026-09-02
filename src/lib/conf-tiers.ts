@@ -16,6 +16,50 @@
 // P10 = Pac-10 (2008-2011, before it became the Pac-12). Same power tier.
 export const POWER_CONFS = new Set(["ACC", "B10", "B12", "P12", "P10", "SEC", "BE"]);
 
+/**
+ * Is this a high-major conference, whatever it is called here?
+ *
+ * THERE ARE THREE VOCABULARIES FOR A CONFERENCE ON THIS SITE and they do not
+ * agree, which is why POWER_CONFS on its own is not safe to test against an
+ * arbitrary string:
+ *
+ *   1. Bart's compact codes — B10, B12, BE, P12 — the wire format of
+ *      teams-all.json and what POWER_CONFS above holds.
+ *   2. CONF_DISPLAY's labels in conf-display.ts, which render those codes for
+ *      readers. Note it produces "Big 10", with a digit.
+ *   3. The SCOREBOARD feed, which carries neither: its games say "Big Ten",
+ *      "Big 12", "Big East" in full, spelled its own way.
+ *
+ * Testing the scoreboard's values against POWER_CONFS silently half-worked —
+ * "ACC" and "SEC" are spelled the same in both, so those matched while Big
+ * Ten, Big 12 and Big East did not. A Mid Majors filter therefore showed
+ * Arizona and Oklahoma State, which is the kind of wrong that looks like a
+ * data problem rather than a naming one. Found on the scoreboard, 2026-09-02.
+ *
+ * So this matches on a normalised form and accepts every spelling of each. Add
+ * aliases here rather than at a call site; a second copy of this list is how
+ * the next filter disagrees with this one.
+ *
+ * Pac-12 stays in for the archive. It has no members in the current data after
+ * realignment, but seasons back to 2014 do, and this function is asked about
+ * them.
+ */
+const POWER_ALIASES = new Set([
+  "acc", "atlantic coast",
+  "b10", "big 10", "big ten",
+  "b12", "big 12", "big twelve",
+  "be", "big east",
+  "sec", "southeastern",
+  "p12", "p10", "pac 12", "pac-12", "pac 10", "pac-10", "pacific 12",
+]);
+
+export function isPowerConference(conf: string | null | undefined): boolean {
+  if (!conf) return false;
+  // Fold punctuation and spacing so "Pac-12", "Pac 12" and "pac12" agree.
+  const k = conf.trim().toLowerCase().replace(/[.\-_]+/g, " ").replace(/\s+/g, " ");
+  return POWER_ALIASES.has(k) || POWER_ALIASES.has(k.replace(/\s+/g, ""));
+}
+
 // Conference → BTA PRTG multiplier. Tier comments map to the 2025-26 rankings.
 // Right column shows the gap vs the Tier 1 (top-5) baseline of ×1.19, which is
 // the lens the user designs against.
