@@ -23,7 +23,7 @@ export const metadata = {
 
 export default function TeamGameLogPage() {
   return (
-    <section className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-4 lg:pt-5 pb-4">
+    <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-4 lg:pt-5 pb-4">
       <PageHeading label="Team game log explorer" />
       {/* TeamGamesClient reads useSearchParams for its whole state, which a
           static export requires to sit inside a Suspense boundary. */}

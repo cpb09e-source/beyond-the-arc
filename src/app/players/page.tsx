@@ -97,7 +97,7 @@ export default async function PlayersOverviewPage() {
 
   return (
     <>
-      <section className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-3 pb-8 lg:pt-9 lg:pb-10">
+      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-3 pb-8 lg:pt-9 lg:pb-10">
         <PageHeading
           label="Player ratings"
         />

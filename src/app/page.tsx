@@ -138,7 +138,7 @@ export default async function HomePage() {
     <>
       {/* Same padding rhythm as /players so the two tables sit at the same
           height on the page. */}
-      <section className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-3 pb-8 lg:pt-9 lg:pb-10">
+      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-3 pb-8 lg:pt-9 lg:pb-10">
         <PageHeading label="Team ratings" />
         {/* THE FALLBACK IS THE PRERENDERED PAGE. ExplorerClient reads
             useSearchParams, so on a static export this boundary's fallback is

@@ -21,7 +21,7 @@ export const metadata = {
 
 export default function GameLogPage() {
   return (
-    <section className="mx-auto max-w-[108rem] px-6 lg:px-10 pt-4 lg:pt-5 pb-4">
+    <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-4 lg:pt-5 pb-4">
       <PageHeading label="Game log explorer" />
       {/* GamesClient reads useSearchParams for its whole state. A static export
           requires that hook to sit inside a Suspense boundary or the build

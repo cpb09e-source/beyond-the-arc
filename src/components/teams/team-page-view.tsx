@@ -508,11 +508,12 @@ export function TeamPageView({
         {/* Same container as the row below it. The masthead used to be 88rem
             against sections that were 88, 96 and 100 — with one width below,
             leaving the hero narrower would put the team's name 16px inside the
-            left edge of everything under it. Only the max-width changed: the
-            px-6 mobile inset is the one it always had, and matches the text
-            sections below, which add px-2 to the row's px-4 to reach the same
-            24px. The tables stay at 16px on purpose. */}
-        <div className={cn("mx-auto max-w-[108rem] px-6 lg:px-10 pt-10 pb-8 lg:flex", RAIL_GAP)}>
+            left edge of everything under it. The px-6 mobile inset is the one
+            it always had, and matches the text sections below, which add px-2
+            to the row's px-4 to reach the same 24px. The tables stay at 16px
+            on purpose. BOTH ROWS MOVE TOGETHER: whatever the max-width is,
+            it is the same here and below, or the hero steps in from the page. */}
+        <div className={cn("mx-auto max-w-[88rem] px-6 lg:px-10 pt-10 pb-8 lg:flex", RAIL_GAP)}>
           {/* A SPACER THE WIDTH OF THE RAIL, so the hero starts where the page
               content starts rather than where the vertical menu does.
 
@@ -689,7 +690,7 @@ export function TeamPageView({
           to min-width:auto, which refuses to shrink below its contents, and the
           contents here include tables that scroll horizontally — without it the
           row grows to the widest table and the whole page scrolls sideways. */}
-      <div className="mx-auto max-w-[108rem] px-4 lg:px-10 lg:flex lg:items-start lg:gap-6">
+      <div className="mx-auto max-w-[88rem] px-4 lg:px-10 lg:flex lg:items-start lg:gap-6">
         {showTabs && (
           <TeamRail
             active={tab === "all" ? "overview" : tab}
