@@ -293,12 +293,22 @@ them from the public bucket, switch the client path, extend
 `verify-deploy-ready.mjs`. **Ordering: the client must deploy BEFORE the
 objects move**, or production's game logs break.
 
-### CBBD_API_KEY — status uncertain, probably fixed
+### CBBD_API_KEY — RESOLVED 2026-09-02. Active, Tier 3
 
-Recorded 2026-08-30 as returning 401 on every endpoint; Colin said he would
-sort the subscription. During the accidental freeze crossing on 2026-09-01 the
-CBBD pull scripts all exited 0, which suggests the key works again. Not
+Colin confirmed the subscription is live again and that he upgraded while
+sorting it. **Tier 3: $10/month, 75,000 requests**, shared with CBBD's football
+API. That number is now the repo variable `CBBD_MONTHLY_LIMIT` (set 2026-09-02),
+which is what makes the admin quota tile a gauge rather than a bare count.
+
+History, so the 401s are not re-investigated: recorded 2026-08-30 as returning
+401 on every endpoint; the pull scripts then all exited 0 during the accidental
+freeze crossing on 2026-09-01, which suggested it was already fixed. Now
 confirmed deliberately. Nine scripts read it.
+
+**This unblocks the 2021 player game logs** — see §7, where step 1 was the only
+blocked step. The pull is ~124 game days, well under a hundred requests, which
+is nothing against 75,000. Still gated on the data freeze until 2026-10-01, or
+on `BTA_ALLOW_NETWORK=1` if Colin wants it sooner.
 
 Also settled 2026-08-30: **CBBD has no women's basketball.** `?gender=women`,
 `?league=womens` and `?division=women` are all silently ignored (identical 364

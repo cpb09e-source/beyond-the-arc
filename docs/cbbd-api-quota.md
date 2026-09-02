@@ -18,7 +18,22 @@ APIs):
 | 5 | $20 | 200,000 |
 | 6 | $30 | 500,000 |
 
-Measured remaining on the current plan while building this: ~19,500.
+**We are on Tier 3 — $10/month, 75,000 requests**, confirmed by Colin
+2026-09-02 from the Patreon page, along with the key being active again after
+the 401s of late August. Before that the tier was never written down anywhere,
+only the table, which made every "can we afford this?" question unanswerable.
+
+The number is now also the repo variable `CBBD_MONTHLY_LIMIT` (75000), which
+is what turns the admin quota tile from a bare count into a gauge that warns at
+80% and fails at 100%. If the tier changes, BOTH have to change — the variable
+is the one the dashboard believes.
+
+Note the tiers were renumbered and repriced at some point: `monetization-strategy.md`
+still records CBBD as "Free / $1 / $5 / $10", where $10 was the TOP tier. Today
+$10 is the bottom paid one. Any older note referring to "the $10 tier" is
+therefore ambiguous and should not be trusted to mean the top plan.
+
+Measured remaining while building this doc (2026-07-28, same plan): ~19,500.
 
 ## Why it usually doesn't matter
 
