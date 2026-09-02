@@ -14,7 +14,7 @@
  * ninety-nine thousand five hundred of them.
  */
 
-import { dataUrl } from "@/lib/data-url";
+import { loadSignedCorpus } from "@/lib/gated-corpus";
 
 // ── The packed file ────────────────────────────────────────────────────────
 
@@ -65,12 +65,13 @@ const CACHE = new Map<number, Promise<GamePack | null>>();
 export function loadGameIndex(season: number): Promise<GamePack | null> {
   const hit = CACHE.get(season);
   if (hit) return hit;
-  // dataUrl, not a bare path: this dir is R2-mirrored, so in production the
-  // file comes from the bucket and the copy under public/ is stripped from the
-  // deploy. In development the env var is unset and this resolves to the local
-  // path unchanged.
-  const p = fetch(dataUrl(`/data/game-index/${season}.json`))
-    .then((r) => (r.ok ? (r.json() as Promise<Omit<GamePack, "epochMs">>) : null))
+  // loadSignedCorpus, not a bare fetch: a FREE season is still an ordinary CDN
+  // object and costs nothing extra, but a PAID one now goes through
+  // /api/data-url for a short-lived signature because these objects live in a
+  // bucket with no public access. Until 2026-09-02 every season sat on the
+  // public bucket and the whole archive was readable without an account — the
+  // explorer's five-row preview was a sign, not a door. See lib/gated-corpus.ts.
+  const p = loadSignedCorpus<Omit<GamePack, "epochMs">>("games", season)
     .then((j) => (j ? { ...j, epochMs: Date.parse(`${j.epoch}T00:00:00Z`) } as GamePack : null))
     .catch(() => null);
   CACHE.set(season, p);

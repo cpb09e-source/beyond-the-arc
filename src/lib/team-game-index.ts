@@ -10,6 +10,7 @@
  * header for why neither is enough alone.
  */
 import { dataUrl } from "@/lib/data-url";
+import { loadSignedCorpus } from "@/lib/gated-corpus";
 
 // ── The packed file ────────────────────────────────────────────────────────
 
@@ -53,12 +54,17 @@ export const HOME = 1, NEUTRAL = 2, WON = 4, CONF = 8, TOURNEY = 16, POST = 32, 
 
 const CACHE = new Map<number, Promise<TeamGamePack | null>>();
 
-/** Fetch one season, once. A failure resolves to null rather than throwing. */
+/**
+ * Fetch one season, once. A failure resolves to null rather than throwing.
+ *
+ * Paid seasons go through /api/data-url for a signed URL — this corpus lives in
+ * a bucket with no public access. Free seasons stay ordinary CDN objects. See
+ * lib/gated-corpus.ts for why the bytes do not pass through the function.
+ */
 export function loadTeamGameIndex(season: number): Promise<TeamGamePack | null> {
   const hit = CACHE.get(season);
   if (hit) return hit;
-  const p = fetch(dataUrl(`/data/team-game-index/${season}.json`))
-    .then((r) => (r.ok ? (r.json() as Promise<Omit<TeamGamePack, "epochMs">>) : null))
+  const p = loadSignedCorpus<Omit<TeamGamePack, "epochMs">>("team-games", season)
     .then((j) => (j ? { ...j, epochMs: Date.parse(`${j.epoch}T00:00:00Z`) } as TeamGamePack : null))
     .catch(() => null);
   CACHE.set(season, p);

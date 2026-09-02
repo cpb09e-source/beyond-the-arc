@@ -95,6 +95,40 @@ if (paywallOff) {
   }
 
   /**
+   * THE SIGNED CORPORA — game-index and team-game-index.
+   *
+   * These are gated differently from the two above: too big for the function
+   * bundle (game-index is 6.3 MB a season against Netlify's 50 MB zipped
+   * limit), so instead of being staged into gated-data/ they live in a private
+   * R2 bucket and are handed out as presigned URLs. See
+   * netlify/functions/data-url.mts and scripts/sync-gated-corpora.mjs.
+   *
+   * WHAT THIS CAN AND CANNOT CHECK. The objects are on R2, not in out/, so a
+   * filesystem gate cannot prove they are private — only
+   * `sync-gated-corpora.mjs --verify` can, and it needs the network. What CAN
+   * be checked here is the half that a deploy actually controls: that the
+   * client which asks for a signature is present in the build. Shipping a
+   * build without it, after the objects have moved, is what breaks every game
+   * log in production.
+   */
+  const signedClient = fs.existsSync(path.resolve("src/lib/gated-corpus.ts"));
+  check("signed-corpus client exists", signedClient);
+  if (signedClient) {
+    const src = fs.readFileSync(path.resolve("src/lib/gated-corpus.ts"), "utf8");
+    // The function's own FREE_SEASONS is a separate list on purpose, but these
+    // two have to agree about the PREVIEW season or a preview-season game log
+    // asks for a signature that will never be granted.
+    check("signed-corpus client calls /api/data-url", src.includes("/api/data-url"));
+    for (const corpus of ["game-index", "team-game-index"]) {
+      const loader = corpus === "game-index" ? "src/lib/game-index.ts" : "src/lib/team-game-index.ts";
+      const ls = fs.readFileSync(path.resolve(loader), "utf8");
+      check(`${corpus}: loader goes through the gate`,
+        ls.includes("loadSignedCorpus"),
+        ls.includes("loadSignedCorpus") ? "" : `${loader} still fetches the bucket directly`);
+    }
+  }
+
+  /**
    * ENTITY PAGES ARE FREE AT EVERY SEASON — see the note at the top of §1 in
    * src/lib/access.ts. So this asserts the opposite of what it did for a few
    * hours on 2026-08-30: an archive team page must RENDER, not gate.

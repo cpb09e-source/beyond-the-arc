@@ -111,10 +111,14 @@ entire industry does the same thing. No action needed.
 
 | # | What | Where |
 |---|---|---|
-| 1 | `X-Robots-Tag: noindex` on `/images/players/*` and `/images/coaches/*` | `netlify.toml` |
-| 2 | Config kill switch — two commented `[[redirects]]` that 404 every photo path, no rebuild required | `netlify.toml` |
-| 3 | Build-time kill switch — `NEXT_PUBLIC_BTA_PHOTOS=off` | `player-photo.tsx`, `coach-photo.tsx` |
+| 1 | `X-Robots-Tag: noindex` on `/images/players/*` | `netlify.toml` |
+| 2 | Config kill switch — a commented `[[redirects]]` that 404s every headshot, no rebuild required | `netlify.toml` |
+| 3 | Build-time kill switch — `NEXT_PUBLIC_BTA_PHOTOS=off` | `player-photo.tsx` |
 | 4 | Takedown address, already live | `/sources` §corrections |
+
+The coach half of rows 1-3 is gone rather than shipped: those photos were
+deleted outright later the same day, along with `coach-photo.tsx`. See the end
+of this section.
 
 Why two kill switches. The build flag is the correct permanent state but costs
 a full rebuild and upload — the better part of two hours. The redirect is

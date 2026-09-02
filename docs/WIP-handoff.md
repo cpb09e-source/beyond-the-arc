@@ -309,14 +309,40 @@ Still leaking deliberately: player and coach pages embed old-season rows in
 their HTML and always will. A career table is the entire point of the page, and
 the archive's value is cross-sectional, which is gated.
 
-**Still owed: the presigned-R2 work.** The game-log corpora
-(`game-index/*.json` at ~6.3 MB, `team-game-index/*.json` at ~1.6 MB) are on
-the PUBLIC bucket for every season including paid ones.
-`netlify/functions/data-url.mts` is the signing endpoint — built, not live.
-Remaining: create the private bucket, route paid-season files there, delete
-them from the public bucket, switch the client path, extend
-`verify-deploy-ready.mjs`. **Ordering: the client must deploy BEFORE the
-objects move**, or production's game logs break.
+**The presigned-R2 work — CODE DONE 2026-09-02, three manual steps left.**
+
+The game-log corpora (`game-index/*.json` ~6.3 MB, `team-game-index/*.json`
+~1.6 MB) are still on the PUBLIC bucket for every season including paid ones,
+so the archive is still readable without an account until the steps below run.
+The Game Log Explorer's five-row preview is a sign, not a door — the browser
+already holds every row it declines to draw.
+
+Built and committed:
+
+  - `src/lib/gated-corpus.ts` — asks `/api/data-url` for a signature on a paid
+    season, fetches the public object on a free one. Both loaders
+    (`game-index.ts`, `team-game-index.ts`) now go through it.
+  - `scripts/sync-gated-corpora.mjs` — `--push`, `--verify`,
+    `--purge-public --yes`.
+  - `verify-deploy-ready.mjs` — 4 new checks (25 → 29) that the signing client
+    is actually in the build.
+  - `netlify/functions/data-url.mts` was already written; unchanged.
+
+**THE THREE STEPS, IN THIS ORDER. Getting it wrong breaks every game log in
+production:**
+
+  1. **Cloudflare dashboard.** Create an R2 bucket, e.g. `bta-gated`. Do NOT
+     enable public access, an r2.dev subdomain or a custom domain — that is the
+     entire gate, and a public bucket makes the presigning theatre. Add
+     `R2_GATED_BUCKET=bta-gated` to `.env.local` AND to Netlify.
+  2. **Deploy**, so the browser knows to ask for a signature, then
+     `node scripts/sync-gated-corpora.mjs --push` and `--verify`.
+  3. **Only then** `node scripts/sync-gated-corpora.mjs --purge-public --yes`.
+
+Purge before the deploy and production 404s until the deploy lands. The script
+refuses to delete a public object whose gated copy it cannot HEAD, which is the
+one unrecoverable mistake available here — but it cannot protect you from the
+ordering, so read the header before running it.
 
 ### CBBD_API_KEY — SUBSCRIPTION ACTIVE, KEY IS STALE. Needs replacing.
 
