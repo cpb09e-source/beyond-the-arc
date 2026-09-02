@@ -127,7 +127,28 @@ it.
 **Lesson, since this cost real time: verify a claim in this file against the
 code before repeating it.** Two "open" items today were already finished.
 
-### THE NIGHTLY PIPELINE — built, on GitHub, currently OFF
+### THE NIGHTLY PIPELINE — VERIFIED END TO END 2026-09-02, deliberately OFF
+
+**It runs.** Dry-run dispatch 33664852286 reached the pipeline's own off-season
+guard and stopped there:
+
+    No season to refresh. LIVE_SEASON in src/lib/seasons.ts is null
+
+Everything before that passed: checkout, setup-node, setup-python, `npm ci`,
+the Python deps, the archive cache restore, and the cold-start R2 seed. All ten
+secrets inject. That exit 1 is the correct off-season behaviour, not a fault.
+
+**The workflow is `disabled_manually` on purpose.** Re-enabling arms the 11:00
+UTC cron, and with `LIVE_SEASON` null that is a failed run and a failure email
+every morning. Enable it when the season tips and `LIVE_SEASON` becomes 2027 —
+those two things belong in the same change.
+
+Getting here took two fixes that no amount of local testing would have found,
+both recorded below: the cold-start seed was passing the wrong R2 credentials,
+and the runner was pinned to Node 22, on which the pipeline cannot even import.
+Nothing that only runs in CI should be called done until it has run in CI.
+
+### The original build notes
 
 `scripts/nightly-refresh.mts` is `daily-refresh.mjs`'s documented in-season
 chain, wired, minus its last two steps (the build and the deploy — no longer
