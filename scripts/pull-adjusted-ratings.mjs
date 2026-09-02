@@ -42,18 +42,54 @@ if (!KEY) { console.error("✗ CBBD_API_KEY missing from .env.local"); process.e
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * See pull-player-box-v2.mjs for why a rejected key has to stop the run rather
+ * than be retried per season: 13 identical 401s and an exit code of 0 is a run
+ * that reports success for having done nothing.
+ */
+let fatalAuth = null;
+let failures = 0;
+
 for (const season of SEASONS) {
+  if (fatalAuth) break;
   const fp = path.join(ROOT, "data/cbbd", String(season), "ratings-adjusted.json.gz");
   if (!FORCE && fs.existsSync(fp)) { console.log(`${season}: already archived`); continue; }
   const res = await fetch(`${API}/ratings/adjusted?season=${season}`, {
     headers: { Authorization: `Bearer ${KEY}`, accept: "application/json" },
   });
-  if (!res.ok) { console.error(`${season}: HTTP ${res.status} — skipped`); continue; }
-  const rows = await res.json();
+  if (res.status === 401 || res.status === 403) {
+    fatalAuth = `HTTP ${res.status} — CBBD rejected CBBD_API_KEY`;
+    console.error(
+      `\n✗ ${season}: ${fatalAuth}. Nothing written.\n\n` +
+      `  The key in .env.local is being rejected outright, so this is not a\n` +
+      `  transient failure and no amount of retrying will help. CBBD revokes a\n` +
+      `  key when the Patreon subscription lapses, and re-subscribing issues a\n` +
+      `  NEW one. Get the current key from collegebasketballdata.com and\n` +
+      `  replace CBBD_API_KEY in .env.local.\n`,
+    );
+    process.exitCode = 1;
+    break;
+  }
+  if (!res.ok) {
+    console.error(`${season}: HTTP ${res.status} — skipped`);
+    failures++;
+    process.exitCode = 1;
+    continue;
+  }
+  const body = await res.json();
+  const rows = Array.isArray(body) ? body : [];
+  // An empty or non-array response written out as `[]` makes the season look
+  // archived, and the `already archived` guard above then skips it forever.
+  if (rows.length === 0) {
+    console.error(`${season}: 0 teams returned — nothing written`);
+    failures++;
+    process.exitCode = 1;
+    continue;
+  }
   const rated = rows.filter((r) => typeof r.offensiveRating === "number").length;
   fs.mkdirSync(path.dirname(fp), { recursive: true });
   fs.writeFileSync(fp, zlib.gzipSync(JSON.stringify(rows)));
   console.log(`${season}: ${rows.length} teams (${rated} rated)`);
   await sleep(400);
 }
-console.log("\nDone.");
+console.log(failures ? `\nDone, with ${failures} failed season(s).` : "\nDone.");
