@@ -157,16 +157,13 @@ export default function TermsPage() {
         </p>
       </Clause>
 
-      {/* PLACEHOLDER JURISDICTION — MUST BE CONFIRMED BEFORE THIS DEPLOYS.
-          Ohio is a guess from nothing: the repository does not record where the
-          business is operated from, and governing law is the one clause here
-          that cannot be inferred from the code. It has to name the state the
-          proprietor actually operates in, or the clause is worse than absent —
-          it points a dispute at the wrong court. Tracked in
-          docs/TODO-legal-sources.md. */}
+      {/* Texas, confirmed by the operator 2026-09-02. This is the one clause on
+          the page that cannot be inferred from the code — it names where the
+          business is actually run from, and a guessed state points a dispute at
+          the wrong court. It changes only if the business moves. */}
       <Clause id="law" title="10. Governing law">
         <p>
-          These terms are governed by the laws of the State of Ohio, United States, and the courts
+          These terms are governed by the laws of the State of Texas, United States, and the courts
           of that state have jurisdiction over any dispute. If you are a consumer, this does not
           deprive you of the protection of the mandatory laws of the country where you live.
         </p>

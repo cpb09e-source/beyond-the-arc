@@ -98,10 +98,9 @@ bulk-download 165k files" are not the same offer.
 
 ## 6. Before these pages deploy
 
-- [ ] **Governing law is a placeholder.** `/terms` §10 says Ohio. That is a
-      guess from nothing — the repo does not record where the business
-      operates. Colin must confirm the state, or the clause points a dispute at
-      the wrong court. Flagged in the file too.
+- [x] **Governing law — SETTLED 2026-09-02. Texas**, confirmed by Colin, who
+      operates from there. `/terms` §10 now names Texas and the placeholder
+      warning is gone from the file.
 - [ ] **Confirm the refund promise.** `/terms` §4 offers 14 days, no questions.
       That is a real commitment; it should be one he wants to make.
 - [ ] **Confirm the contact address.** Both pages use `cpb09e@gmail.com`. A
