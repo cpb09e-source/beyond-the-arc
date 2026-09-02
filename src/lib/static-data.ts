@@ -218,7 +218,7 @@ const _splitsCache = new Map<number, TeamSplitsFile | null>();
 type TeamSplitsFile = {
   season: number;
   splits: { key: string; label: string }[];
-  stats: { key: string; group: string; label: string; fmt: "num1" | "pct1" | "x2" }[];
+  stats: { key: string; group: string; label: string; fmt: "num1" | "num2" | "pct1" | "x2"; neutral?: boolean }[];
   groups: Record<string, string>;
   teams: Record<string, Record<string, { games: number; v: (number | null)[]; p: (number | null)[] }>>;
 };

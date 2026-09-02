@@ -6,7 +6,7 @@ import { Select } from "@/components/select";
 import { BlurOverlay } from "@/components/teams/preview-blur";
 
 /**
- * Every advanced number we hold on a team, in six cards, sliced eight ways.
+ * Every advanced number we hold on a team, in nine cards, sliced eight ways.
  *
  * The payload is columnar — `stats` is the shared header and each split carries
  * parallel `v` (value) and `p` (percentile) arrays indexed against it. Built by
@@ -18,7 +18,7 @@ import { BlurOverlay } from "@/components/teams/preview-blur";
  * splits", and putting it in the URL would push a history entry per change.
  */
 
-export type TeamSplitStat = { key: string; group: string; label: string; fmt: "num1" | "pct1" | "x2" };
+export type TeamSplitStat = { key: string; group: string; label: string; fmt: "num1" | "num2" | "pct1" | "x2"; neutral?: boolean };
 export type TeamSplitRow = { games: number; v: (number | null)[]; p: (number | null)[] };
 export type TeamSplits = {
   season: number;
@@ -33,6 +33,7 @@ function fmtValue(v: number | null, fmt: TeamSplitStat["fmt"]): string {
   if (v === null || v === undefined) return "—";
   switch (fmt) {
     case "pct1": return v.toFixed(1) + "%";
+    case "num2": return v.toFixed(2);
     case "x2":   return v.toFixed(2) + "x";
     default:     return v.toFixed(1);
   }
@@ -64,9 +65,9 @@ function fmtValue(v: number | null, fmt: TeamSplitStat["fmt"]): string {
 type TeamStatsView = "overview" | "offense" | "defense" | "everything";
 
 const TEAM_VIEWS: Array<{ key: TeamStatsView; label: string; groups: string[] | null }> = [
-  { key: "overview", label: "Overview", groups: ["Core", "Box"] },
+  { key: "overview", label: "Overview", groups: ["Core", "Results", "Box"] },
   { key: "offense", label: "Scoring & shooting", groups: ["Core", "Shooting", "Misc", "AdvOff"] },
-  { key: "defense", label: "Defense & rebounding", groups: ["Core", "AdvDef", "Box"] },
+  { key: "defense", label: "Defense & rebounding", groups: ["Core", "OppShoot", "Allowed", "AdvDef", "Box"] },
   // null is not a group list — it is the absence of one. Filtering Everything
   // would mean a list that has to be updated every time a group is added.
   { key: "everything", label: "Everything", groups: null },
@@ -128,7 +129,11 @@ export function TeamStatsPanel({
                 {/* The chip is the point of the row: the value alone doesn't say
                     whether 70.8 possessions is fast or slow. */}
                 {row.p[i] !== null && row.p[i] !== undefined ? (
-                  <PercentileChip pct={row.p[i]!} className="flex-none w-9 justify-center">
+                  <PercentileChip
+                    pct={row.p[i]!}
+                    neutral={stat.neutral}
+                    className="flex-none w-9 justify-center"
+                  >
                     {row.p[i]}
                   </PercentileChip>
                 ) : (
@@ -189,7 +194,9 @@ export function TeamStatsPanel({
       {blurBody ? <BlurOverlay>{body}</BlurOverlay> : body}
       <p className="mt-3 text-[0.65rem] text-ink-muted">
         Chips are national percentiles within the selected split — a team&rsquo;s away numbers are
-        ranked against every other team&rsquo;s away numbers, not against the full season.
+        ranked against every other team&rsquo;s away numbers, not against the full season. Grey chips
+        mark stats with no good direction — tempo, shot diet and the scoring shares — where the rank
+        says how unusual a team is, not how good.
       </p>
     </div>
   );

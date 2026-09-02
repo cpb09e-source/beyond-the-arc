@@ -76,21 +76,35 @@ export function PercentileChip({
   pct,
   className,
   ariaLabel,
+  neutral = false,
   children,
 }: {
   pct: number | null;
   className?: string;
   ariaLabel?: string;
+  /**
+   * The stat has no good direction — tempo, shot diet, the shares of a scoring
+   * pie. The rank still reads (it says how unusual the team is) but it is
+   * painted in the ramp's own middle band rather than at one of its ends, so
+   * the colour stops making a claim the stat cannot support.
+   *
+   * Band 4 rather than a bespoke grey on purpose: it is the near-neutral paper
+   * the ramp already uses for average, so a neutral chip sits in the same
+   * family as every other chip instead of looking like a broken one.
+   */
+  neutral?: boolean;
   children?: React.ReactNode;
 }) {
   if (pct === null) return null;
+  const fg = neutral ? "var(--pct-fg-4)" : pctColor(pct);
+  const bg = neutral ? "var(--pct-bg-4)" : pctBg(pct);
   return (
     <span
       className={cn(
         "text-xs font-medium tabular inline-flex items-center justify-center min-w-7 px-1.5 py-0.5 rounded-none leading-none",
         className,
       )}
-      style={{ color: pctColor(pct), background: pctBg(pct) }}
+      style={{ color: fg, background: bg }}
       aria-label={ariaLabel ?? `${pct}th percentile`}
     >
       {children ?? pct}
