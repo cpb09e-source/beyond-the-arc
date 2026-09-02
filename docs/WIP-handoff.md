@@ -331,13 +331,21 @@ Built and committed:
 **THE THREE STEPS, IN THIS ORDER. Getting it wrong breaks every game log in
 production:**
 
-  1. **Cloudflare dashboard.** Create an R2 bucket, e.g. `bta-gated`. Do NOT
-     enable public access, an r2.dev subdomain or a custom domain — that is the
-     entire gate, and a public bucket makes the presigning theatre. Add
-     `R2_GATED_BUCKET=bta-gated` to `.env.local` AND to Netlify.
-  2. **Deploy**, so the browser knows to ask for a signature, then
-     `node scripts/sync-gated-corpora.mjs --push` and `--verify`.
-  3. **Only then** `node scripts/sync-gated-corpora.mjs --purge-public --yes`.
+  1. ~~Cloudflare bucket + token + `.env.local`~~ **DONE 2026-09-02.**
+     `bta-gated` exists with no public access. It needed its OWN R2 token —
+     the main one is scoped to `bta-data` and answers AccessDenied to
+     ListBuckets — so `R2_GATED_ACCESS_KEY_ID` / `R2_GATED_SECRET_ACCESS_KEY`
+     are in `.env.local` alongside `R2_GATED_BUCKET`.
+  2. ~~`--push`~~ **DONE 2026-09-02.** All 22 paid objects (2014-2024 x both
+     corpora, ~90 MB) are in the gated bucket. Push is additive and changes
+     nothing production serves, so it was safe to run ahead of the deploy.
+  3. **STILL TO DO — set the three `R2_GATED_*` vars on NETLIFY.** They are in
+     `.env.local` only. Without them the signing function answers 503 and every
+     paid game log is empty for subscribers.
+  4. **STILL TO DO — deploy**, so the browser asks for a signature.
+  5. **STILL TO DO, LAST — `node scripts/sync-gated-corpora.mjs --purge-public
+     --yes`.** This is the step that actually closes the hole. Until it runs,
+     all 22 objects are still readable by anyone on the public bucket.
 
 Purge before the deploy and production 404s until the deploy lands. The script
 refuses to delete a public object whose gated copy it cannot HEAD, which is the

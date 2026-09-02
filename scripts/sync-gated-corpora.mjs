@@ -59,6 +59,21 @@ import {
 dotenvConfig({ path: ".env.local" });
 
 /**
+ * Fail readably. The errors this script raises are operator errors — a wrong
+ * credential, a bucket it cannot see — and the person reading them is midway
+ * through a sequence where the next step deletes things. A V8 stack trace above
+ * the actual sentence is the wrong output for that moment.
+ */
+for (const ev of ["uncaughtException", "unhandledRejection"]) {
+  process.on(ev, (e) => {
+    console.error(`
+✗ ${e?.message ?? e}
+`);
+    process.exit(1);
+  });
+}
+
+/**
  * Seasons anyone may read. DUPLICATED from src/lib/access.ts, and from
  * netlify/functions/data-url.mts, on purpose.
  *
@@ -167,12 +182,34 @@ function paidObjects() {
   return out.sort((a, b) => a.key.localeCompare(b.key));
 }
 
+/**
+ * Size of an object, `null` if it genuinely is not there — or a THROW if the
+ * bucket could not be read at all.
+ *
+ * THE DISTINCTION IS THE WHOLE POINT. This used to swallow every error and
+ * return null, which meant a denied credential and an empty bucket produced
+ * identical output. That is harmless while pushing and dangerous afterwards:
+ * once the public copies are purged, a broken gated credential would print
+ * `public:absent gated:ABSENT` for all 22 objects and read as "the archive is
+ * gone" rather than "this token cannot see it". Worse, --purge-public's safety
+ * check reads this, so a credential failure would look like a missing push and
+ * silently refuse everything — the safe direction, but for an invented reason.
+ *
+ * NotFound / NoSuchKey is a real answer. Anything else is a broken connection
+ * to the bucket and has to be loud.
+ */
 async function head(Bucket, Key) {
   try {
     const r = await clientFor(Bucket).send(new HeadObjectCommand({ Bucket, Key }));
     return r.ContentLength ?? 0;
-  } catch {
-    return null;
+  } catch (err) {
+    const code = err?.name ?? "";
+    const status = err?.$metadata?.httpStatusCode;
+    if (code === "NotFound" || code === "NoSuchKey" || status === 404) return null;
+    throw new Error(
+      `Cannot read ${Bucket}/${Key}: ${code || err?.message || "unknown error"}. ` +
+      `This is an ACCESS failure, not a missing object — check the credentials for that bucket.`,
+    );
   }
 }
 
