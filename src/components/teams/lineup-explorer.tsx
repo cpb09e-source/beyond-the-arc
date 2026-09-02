@@ -388,7 +388,7 @@ export function LineupExplorer({
       </div>
 
       {/* ---- table */}
-      <div className="mt-3 border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-4 lg:mx-0">
+      <div className="mt-3 border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-6 lg:mx-0">
         {visible.length === 0 ? (
           <p className="px-5 lg:px-7 py-12 text-sm text-ink-muted max-w-2xl leading-relaxed">
             {rows.length === 0

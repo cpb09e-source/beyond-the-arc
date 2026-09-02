@@ -185,7 +185,7 @@ export function SeasonGrid({
     // and drop shadow — made By season look like the page's headline, which it
     // was when it lived at the foot of Overview. On its own tab it is simply
     // the content, and it should read like the roster does.
-    <div className="border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-4 lg:mx-0">
+    <div className="border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-6 lg:mx-0">
       <div className="overflow-x-auto overscroll-x-contain">
         <table className="w-full text-sm border-separate border-spacing-0">
         <thead>

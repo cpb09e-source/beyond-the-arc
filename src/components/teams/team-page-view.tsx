@@ -672,9 +672,9 @@ export function TeamPageView({
           `min-w-0` stays on the content wrapper. The tables inside it scroll
           horizontally, and without it a grid or flex ancestor added later
           would let the widest table push the page sideways again. */}
-      <div className="mx-auto max-w-[88rem] px-4 lg:px-10">
+      <div className="mx-auto max-w-[88rem] px-6 lg:px-10">
         {showTabs && (
-          <div className="px-2 lg:px-0 mb-1">
+          <div className="mb-1">
             <TeamTabBar
               active={tab === "all" ? "overview" : tab}
               mode={tab === "all" ? "anchors" : "routes"}
@@ -700,7 +700,7 @@ export function TeamPageView({
           the bytes stored per team-season for something a reader is one click
           from. */}
       {show.overview && scheduleGames.length > 0 && (
-        <section className="px-2 lg:px-0 mt-5">
+        <section className="mt-5">
           <ScheduleTicker games={scheduleGames} teamName={team.name} blurBody={preview} />
         </section>
       )}
@@ -723,7 +723,7 @@ export function TeamPageView({
           {/* mb-6 stands in for the hero's pb-8: the panel below opens with
               mt-2 on the assumption that whatever precedes it already paid for
               the gap, and here that is this section rather than the hero. */}
-          <section className="px-2 lg:px-0 mt-8 mb-6">{ranksBlock}</section>
+          <section className="mt-8 mb-6">{ranksBlock}</section>
         </>
       )}
 
@@ -733,7 +733,7 @@ export function TeamPageView({
           Deliberately tighter than a normal section break (the hero's own pb-8
           already contributes 32px) because the two belong together. */}
       {show.overview && teamSplits && (
-        <section id={TAB_ANCHORS.overview} className="px-2 lg:px-0 mt-8 scroll-mt-20">
+        <section id={TAB_ANCHORS.overview} className="mt-8 scroll-mt-20">
           <TeamStatsPanel splits={teamSplits} blurBody={preview} />
         </section>
       )}
@@ -747,7 +747,7 @@ export function TeamPageView({
           On a preview page it moves below the roster instead — see the note
           where that renders. */}
       {show.overview && !preview && (
-        <section className="px-2 lg:px-0 mt-8">{ranksBlock}</section>
+        <section className="mt-8">{ranksBlock}</section>
       )}
 
       {/* Game Log — the explorer, scoped to this team-season.
@@ -762,7 +762,7 @@ export function TeamPageView({
 
           Not on preview pages: they have no games. */}
       {!preview && show.games && (
-        <section id={TAB_ANCHORS.games} className="px-2 lg:px-0 mt-5 mb-20 scroll-mt-20">
+        <section id={TAB_ANCHORS.games} className="mt-5 mb-20 scroll-mt-20">
           <div className="flex items-baseline gap-3 mb-3">
             <span className="text-[0.65rem] uppercase tracking-widest text-coral font-bold">
               Game Log
@@ -839,7 +839,7 @@ export function TeamPageView({
       )}
 
       {show.shooting && (
-      <section id={TAB_ANCHORS.shooting} className="px-2 lg:px-0 mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8 scroll-mt-20">
+      <section id={TAB_ANCHORS.shooting} className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8 scroll-mt-20">
         <DistributionPanel title="Shooting" ranks={shootingRanks} blurBody={preview} />
         <DistributionPanel title="Four Factors" ranks={fourFactorRanks} blurBody={preview}>
           {current.four_factor_record && current.four_factor_record.games > 0 && (
@@ -871,7 +871,7 @@ export function TeamPageView({
           the shooting splits above rather than in a "play-by-play" tab named
           after where the data came from instead of what it says. */}
       {show.shooting && (clockSplits || assistNetwork) && (
-        <section className="px-2 lg:px-0 mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <section className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
           {clockSplits ? <ClockSplitsPanel splits={clockSplits} /> : <div />}
           {assistNetwork ? <AssistNetworkPanel network={assistNetwork} /> : <div />}
         </section>

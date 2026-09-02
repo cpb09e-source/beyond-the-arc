@@ -291,7 +291,7 @@ export function OnOffExplorer({
               belongs — on the first column's TEXT, which pads to px-4 to match
               the px-4 gutter the heading, blurb and note sit in. The surface
               runs to the edge; the words line up. */}
-          <div className="border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-4 lg:mx-0">
+          <div className="border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-6 lg:mx-0">
             {/* overscroll-x-contain ONLY — `none` also kills the vertical
                 rubber-band and this box scrolls in both axes. Documented at the
                 other grids. */}
@@ -328,7 +328,7 @@ export function OnOffExplorer({
                     ))}
                   </tr>
                   <tr>
-                    <Th sticky padClass="px-4 sm:px-2" label="Player" align="left" active={sort.key === "name"} dir={sort.dir} onClick={() => toggleSort("name", sec.key, "asc")} />
+                    <Th sticky padClass="px-6 sm:px-2" label="Player" align="left" active={sort.key === "name"} dir={sort.dir} onClick={() => toggleSort("name", sec.key, "asc")} />
                     <Th className="hidden sm:table-cell" label="On" title="Possessions with this player on the floor" active={sort.key === "onPoss"} dir={sort.dir} onClick={() => toggleSort("onPoss", sec.key, "desc")} />
                     <Th className="hidden sm:table-cell" label="Off" title="Possessions with this player off the floor" active={sort.key === "offPoss"} dir={sort.dir} onClick={() => toggleSort("offPoss", sec.key, "desc")} />
                     <Th className="hidden sm:table-cell" label="Pct" title="Share of team possessions this player was on the floor for" active={sort.key === "share"} dir={sort.dir} onClick={() => toggleSort("share", sec.key, "desc")} />
@@ -349,18 +349,18 @@ export function OnOffExplorer({
                 <tbody>
                   {shown.map((r) => (
                     <tr key={r.id} className="group transition-colors bg-paper odd:bg-card">
-                      {/* px-4 below sm so a player's name starts on the same
-                          line as the section heading above it. px-4 matches
+                      {/* px-6 below sm so a player's name starts on the same
+                          line as the section heading above it. px-6 matches
                           the gutter the team page's shared container sets, and
                           the surface is pulled back out to the screen edge by
-                          -mx-4 — so the fill bleeds and the words line up.
+                          -mx-6 — so the fill bleeds and the words line up.
 
                           This was px-8 while the section carried its own
                           padding on top of the page's. Once the sections were
                           normalised onto one container that doubled up, and the
                           heading, blurb and names all sat 16px right of the
                           section's own controls. */}
-                      <td className="sticky left-0 z-20 px-4 sm:px-3 py-1.5 border-r border-hairline whitespace-nowrap transition-colors bg-paper group-odd:bg-card">
+                      <td className="sticky left-0 z-20 px-6 sm:px-3 py-1.5 border-r border-hairline whitespace-nowrap transition-colors bg-paper group-odd:bg-card">
                         {r.bart != null ? (
                           <Link href={`/players/${r.bart}/`} prefetch={false} className="text-ink font-medium hover:text-coral transition-colors">
                             {r.name}

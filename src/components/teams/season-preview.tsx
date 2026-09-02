@@ -105,12 +105,13 @@ export function SeasonPreview({ teamName }: { teamName: string }) {
   const shortLabel = data!.label.split("-").map((y) => y.slice(-2)).join("-");
 
   return (
-    <section className="mx-auto max-w-[88rem] px-4 lg:px-10 mt-5">
-      {/* px-2 on top of the section's px-4 puts the heading on the same 24px
-          margin as the hero above it. The section can't simply use px-6: the
-          table inside bleeds to the screen edge with -mx-4, and that number is
-          fixed inside SortableRosterTable, which other pages also render. */}
-      <div className="mb-2 sm:mb-4 px-2 lg:px-0">
+    <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-5">
+      {/* No inset of its own. The section's px-6 is the page's one gutter —
+          24px on a phone, the same as the hero and the same as every other
+          page on the site — and SortableRosterTable bleeds out of exactly that
+          with -mx-6. The two numbers have to agree or the table stops meeting
+          the screen edge. */}
+      <div className="mb-2 sm:mb-4">
         <h2 className="font-display text-3xl text-ink whitespace-nowrap">Roster — {shortLabel}</h2>
       </div>
       <SortableRosterTable roster={roster} rankedPlayerIds={linkableIds} />

@@ -129,7 +129,7 @@ export function SortableRosterTable({
   }, []);
 
   return (
-    <div className="border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-4 lg:mx-0">
+    <div className="border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-6 lg:mx-0">
       <div className="overflow-x-auto overscroll-x-contain">
         <table className="w-full text-sm">
           <thead className="bg-paper-deep/70 text-left">
