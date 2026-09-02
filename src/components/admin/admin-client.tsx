@@ -8,6 +8,7 @@ import { BannerPanel, TransfersPanel } from "@/components/admin/admin-panels";
 import {
   Badge,
   ChecksSection,
+  DataChecksSection,
   Fact,
   HistoryStrip,
   Section,
@@ -15,6 +16,7 @@ import {
   Tile,
   WebhookNote,
   ago,
+  dataChecksTile,
   dur,
   pipelineTile,
   probesTile,
@@ -121,7 +123,7 @@ export function AdminClient() {
  * (one of which spends a CBBD call).
  */
 function Dashboard() {
-  const { status, history, overview, probes, checkedAt, refresh } = useDashboardData();
+  const { status, history, checks, overview, probes, checkedAt, refresh } = useDashboardData();
   const loading = status.state === "loading" || overview.state === "loading" || probes.state === "loading";
 
   return (
@@ -152,8 +154,9 @@ function Dashboard() {
         </div>
       </header>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         <Tile label="Nightly pipeline" model={pipelineTile(history, status)} href="#pipeline" />
+        <Tile label="Data checks" model={dataChecksTile(checks)} href="#data" />
         <Tile label="Site checks" model={probesTile(probes)} href="#checks" />
         <Tile label="Subscribers" model={subscribersTile(overview)} href="#subscribers" />
         <Tile label="Stripe webhook" model={webhookTile(overview)} href="#subscribers" />
@@ -164,6 +167,8 @@ function Dashboard() {
           <PipelineSection status={status} history={history} />
           <RunAside />
         </div>
+
+        <DataChecksSection checks={checks} />
 
         <ChecksSection probes={probes} checkedAt={checkedAt} onRerun={refresh} />
 

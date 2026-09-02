@@ -208,6 +208,19 @@ const SYNC: Step[] = [
   { cmd: "node", args: ["scripts/sync-data-to-r2.mjs", "--only", "game-index"] },
 ];
 
+/**
+ * The look-back. After the upload, so it can confirm the upload; a report
+ * rather than a gate, so a finding marks the run on the admin page instead of
+ * un-publishing a night that was probably fine. See its header for why.
+ */
+const CHECK: Step[] = [
+  {
+    cmd: "npx",
+    args: ["tsx", "scripts/check-live-data.mts", "--season", YEAR, ...(NO_SYNC ? ["--no-upload"] : [])],
+    note: "sanity checks → live/checks.json",
+  },
+];
+
 type Result = { step: string; note?: string; ms: number; status: "ok" | "failed" | "skipped" };
 
 const results: Result[] = [];
@@ -291,7 +304,7 @@ const ROLLBACK: Step[] = [
 const GROUPS: Array<[string, Step[]]> = [
   ["ingest", INGEST],
   ["derive", DERIVE],
-  ["publish", NO_SYNC ? PUBLISH : [...PUBLISH, ...SYNC]],
+  ["publish", NO_SYNC ? [...PUBLISH, ...CHECK] : [...PUBLISH, ...SYNC, ...CHECK]],
   ["rollback", ROLLBACK],
 ];
 

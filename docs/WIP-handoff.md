@@ -157,10 +157,36 @@ The page's own role check is PRESENTATION — a static export ships its JS to
 everyone. The real boundary is `requireAdmin` in `netlify/shared/billing.mts`,
 which every write goes through. Nothing on the page decides anything.
 
-What it does today: shows the last pipeline run from
-`/data/live/refresh-status.json`; edits the **site banner**; adds, withdraws
-and restores **manual transfers**. The four Run buttons are STUBS — there is no
-dispatch endpoint yet, and they need a GitHub PAT plus the workflow re-enabled.
+What it does today (a dashboard since 2026-09-01, committed, NOT deployed —
+Colin wants to test first): five tiles, each with its own source, each failing
+on its own —
+
+  - **Nightly pipeline** — `/data/live/refresh-status.json` + `refresh-history.json`
+    on R2 (Actions' disk is ephemeral; `scripts/publish-run-record.mjs` uploads
+    both after every run). Dry runs are shown but never count as "current".
+  - **Data checks** — `/data/live/checks.json`, written by
+    `scripts/check-live-data.mts` as the LAST publish step (after the R2 sync,
+    so it can HEAD what it uploaded). Slate vs index, index vs yesterday, one
+    team file per team, one live page per team, R2 has tonight's objects. A
+    REPORT, not a gate: exit 0 on findings; `counts` in the file is what
+    tomorrow compares against, read back from R2. `--no-upload` reads/writes
+    the local file only; `--date YYYY-MM-DD` picks a slate.
+  - **Site checks** — `src/components/admin/probes.ts`, the requests a reader
+    makes, made from the admin's browser now. The paywall-leak probes are
+    prodOnly (dev has the files in public/ legitimately).
+  - **Subscribers** / **Stripe webhook** — `/api/admin-config?what=overview`;
+    the webhook writes a heartbeat to `site_config.stripe_webhook`.
+
+Plus the **site banner** editor and **manual transfers**. The four Run buttons
+are STUBS — no dispatch endpoint yet; needs a GitHub PAT plus the workflow
+re-enabled (slice 3).
+
+Dev gotcha: `NEXT_PUBLIC_DATA_BASE` is set locally, so the dashboard reads
+`/data/live/*` from R2 even on :8899. To see a local report, route
+`**/live/checks.json*` to `http://localhost:3000/data/live/checks.json` in
+Playwright. Known quirk the checks surfaced: the frozen 2026 `games-*` archive
+is short 28 games on 2026-03-07 and 24 on 03-08 (the box archive has them all,
+and the index is built from box) — "more in the index than the slate" is fine.
 
 `supabase/migrations/011_admin_control.sql` is APPLIED. Verify any time with
 `npm run verify:admin` — 7 checks, including that anon cannot read

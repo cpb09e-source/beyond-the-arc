@@ -10,10 +10,11 @@ import { PROBES, freshUrl, runProbes, type ProbeResult, type ProbeState } from "
  * The dashboard's data, tiles and sections. admin-client.tsx owns the gate
  * and the page; this owns everything that is READ.
  *
- * ── FOUR SOURCES, LOADED INDEPENDENTLY ────────────────────────────────────
+ * ── FIVE SOURCES, LOADED INDEPENDENTLY ────────────────────────────────────
  *
  *   status    /data/live/refresh-status.json    what the last run did
  *   history   /data/live/refresh-history.json   one line per run, ~60 nights
+ *   checks    /data/live/checks.json            whether what it wrote adds up
  *   overview  /api/admin-config?what=overview   who is paying, Stripe heartbeat
  *   probes    the site itself, right now         see probes.ts
  *
@@ -60,6 +61,24 @@ export type RunLine = {
 
 export type RefreshHistory = { updatedAt: string; runs: RunLine[] };
 
+export type CheckState = "ok" | "warn" | "fail" | "skip";
+
+/**
+ * What scripts/check-live-data.mts wrote after the last publish: the slate
+ * against the index, the per-team files against yesterday's, the pages
+ * against the team list, R2 against tonight. It is the pipeline's own
+ * look-back, and the one source here that says whether the DATA is right
+ * rather than whether the job ran.
+ */
+export type Checks = {
+  at: string;
+  season: number;
+  /** The Eastern date examined. */
+  slate: string;
+  outcome: "ok" | "warn" | "fail";
+  checks: Array<{ id: string; label: string; state: CheckState; detail: string }>;
+};
+
 export type Loaded<T> =
   | { state: "loading" }
   | { state: "ready"; data: T }
@@ -99,6 +118,13 @@ function when(iso: string): string {
 }
 
 /** "npx tsx scripts/build-live-team-pages.mts --season 2027" → "build-live-team-pages" */
+/** "2026-03-07" → "Mar 7". The slate is a date, not a moment; no zone applies. */
+function shortDate(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!y || !m || !d) return ymd;
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
 function shortStep(cmd: string | null): string {
   if (!cmd) return "";
   const m = cmd.match(/scripts\/([\w-]+)\.[a-z]+/);
@@ -121,6 +147,7 @@ async function readJson<T>(path: string): Promise<Loaded<T>> {
 export function useDashboardData() {
   const [status, setStatus] = useState<Loaded<RefreshStatus>>({ state: "loading" });
   const [history, setHistory] = useState<Loaded<RefreshHistory>>({ state: "loading" });
+  const [checks, setChecks] = useState<Loaded<Checks>>({ state: "loading" });
   const [overview, setOverview] = useState<Loaded<Overview>>({ state: "loading" });
   const [probes, setProbes] = useState<Loaded<Map<string, ProbeResult>>>({ state: "loading" });
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
@@ -131,6 +158,7 @@ export function useDashboardData() {
     const done = <T,>(set: (v: Loaded<T>) => void) => (v: Loaded<T>) => { if (live) set(v); };
     readJson<RefreshStatus>("/data/live/refresh-status.json").then(done(setStatus));
     readJson<RefreshHistory>("/data/live/refresh-history.json").then(done(setHistory));
+    readJson<Checks>("/data/live/checks.json").then(done(setChecks));
     readOverview()
       .then((data) => done(setOverview)({ state: "ready", data }))
       .catch((e: unknown) => done(setOverview)({ state: "error", message: e instanceof Error ? e.message : "failed" }));
@@ -141,12 +169,13 @@ export function useDashboardData() {
   const refresh = useCallback(() => {
     setStatus({ state: "loading" });
     setHistory({ state: "loading" });
+    setChecks({ state: "loading" });
     setOverview({ state: "loading" });
     setProbes({ state: "loading" });
     setGeneration((g) => g + 1);
   }, []);
 
-  return { status, history, overview, probes, checkedAt, refresh };
+  return { status, history, checks, overview, probes, checkedAt, refresh };
 }
 
 // ── Health, derived ────────────────────────────────────────────────────────
@@ -198,6 +227,31 @@ export function probesTile(probes: Loaded<Map<string, ProbeResult>>): TileModel 
   if (fails) return { health: "bad", value: `${fails} failing`, sub: `${ok} of ${ran} ok` };
   if (warns) return { health: "warn", value: `${ok} of ${ran} ok`, sub: `${warns} slow or missing` };
   return { health: "good", value: `${ok} of ${ran} ok`, sub: skips ? `${skips} skipped locally` : "every check passed" };
+}
+
+/**
+ * A different question from the pipeline tile. That one says the job ran;
+ * this says what it produced adds up. A run can succeed and publish six
+ * games out of a forty-game slate, and only this tile knows.
+ */
+export function dataChecksTile(checks: Loaded<Checks>): TileModel {
+  if (checks.state === "loading") return { health: "loading", value: "…", sub: "reading the report" };
+  if (checks.state === "error") return { health: "warn", value: "Unreadable", sub: checks.message };
+  if (checks.state === "none") {
+    return LIVE_SEASON === null
+      ? { health: "off", value: "Off-season", sub: "no report" }
+      : { health: "warn", value: "No report", sub: "the nightly has not checked yet" };
+  }
+  const { outcome, checks: list, at, slate } = checks.data;
+  const fails = list.filter((c) => c.state === "fail").length;
+  const warns = list.filter((c) => c.state === "warn").length;
+  const ran = list.filter((c) => c.state !== "skip").length;
+  const age = Date.now() - Date.parse(at);
+  const sub = `slate ${shortDate(slate)} · ${ago(at)}`;
+  if (outcome === "fail") return { health: "bad", value: `${fails} failing`, sub };
+  if (outcome === "warn") return { health: "warn", value: `${warns} to look at`, sub };
+  if (LIVE_SEASON !== null && age > STALE_AFTER) return { health: "warn", value: "Stale", sub: `last checked ${ago(at)}` };
+  return { health: "good", value: `${ran} of ${ran} ok`, sub };
 }
 
 export function subscribersTile(overview: Loaded<Overview>): TileModel {
@@ -420,6 +474,59 @@ export function ChecksSection({
           </tbody>
         </table>
       </div>
+    </Section>
+  );
+}
+
+// ── Data checks ────────────────────────────────────────────────────────────
+
+export function DataChecksSection({ checks }: { checks: Loaded<Checks> }) {
+  const ready = checks.state === "ready" ? checks.data : null;
+  return (
+    <Section
+      id="data"
+      title="Data checks"
+      right={
+        ready && (
+          <span className="text-[0.65rem] text-ink-muted tabular-nums">
+            slate {shortDate(ready.slate)} · checked {ago(ready.at)}
+          </span>
+        )
+      }
+    >
+      <p className="px-4 pt-3 text-[0.7rem] text-ink-muted leading-relaxed">
+        What the last run wrote, looked at as a whole: the slate against the index, each team against yesterday, R2 against tonight.
+        A finding marks the run; it does not undo it.
+      </p>
+      {checks.state === "loading" && <p className="px-4 py-3 text-sm text-ink-muted">Reading the report…</p>}
+      {checks.state === "error" && <p className="px-4 py-3 text-sm text-bad">{checks.message}</p>}
+      {checks.state === "none" && (
+        <p className="px-4 py-3 text-sm text-ink-muted">
+          No report yet. The nightly writes one after every publish, from the same run that did the publishing.
+        </p>
+      )}
+      {ready && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm mt-2">
+            <tbody>
+              {ready.checks.map((c) => {
+                const g = PROBE_GLYPH[c.state];
+                return (
+                  <tr key={c.id} className="border-t border-hairline align-top">
+                    <td className="px-4 py-2 w-6">
+                      <span aria-label={g.word} className={cn("inline-block w-4 text-center text-xs font-bold", g.cls)}>{g.glyph}</span>
+                    </td>
+                    <td className="px-2 py-2 pr-6 w-px whitespace-nowrap text-ink">{c.label}</td>
+                    <td className={cn("px-4 py-2 text-xs leading-relaxed", c.state === "fail" ? "text-bad font-semibold" : c.state === "warn" ? "text-ink" : "text-ink-muted")}>
+                      {c.detail}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Section>
   );
 }
