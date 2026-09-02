@@ -165,13 +165,11 @@
   [headers.values]
     X-Robots-Tag = "noindex"
 
-# Same for the coaches. Nothing renders these today — coach-photo.tsx has
-# SHOW_PHOTOS = false — but the files are still published and still fetchable at
-# their own URLs, so the header belongs here for as long as they ship.
-[[headers]]
-  for = "/images/coaches/*"
-  [headers.values]
-    X-Robots-Tag = "noindex"
+# There is no coaches rule any more. public/images/coaches/ was deleted
+# 2026-09-02 — 34 ESPN-sourced photos that nothing rendered (coach-photo.tsx
+# had held SHOW_PHOTOS = false since the coverage was judged too sparse at 17
+# of 804) but that were still published and still fetchable at their own URLs.
+# Full risk, zero product value. Deleting them beat protecting them.
 
 # ---------------------------------------------------------------------------
 # THE KILL SWITCH. Uncomment both blocks to take every photograph off the live
@@ -200,12 +198,6 @@
 
 # [[redirects]]
 #   from   = "/images/players/*"
-#   to     = "/404.html"
-#   status = 404
-#   force  = true
-
-# [[redirects]]
-#   from   = "/images/coaches/*"
 #   to     = "/404.html"
 #   status = 404
 #   force  = true

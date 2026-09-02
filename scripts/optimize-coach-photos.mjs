@@ -1,5 +1,16 @@
 #!/usr/bin/env node
 /**
+ * ORPHANED 2026-09-02, KEPT ON PURPOSE. public/images/coaches/, the manifest
+ * this writes, and the CoachPhoto component that read it were all deleted:
+ * the photos were ESPN-sourced, nothing rendered them, and they carried the
+ * full legal exposure for no product value. Nothing consumes this script's
+ * output today.
+ *
+ * It survives because it is the recipe, and the recipe is still right. If
+ * coach photos come back they should come back LICENSED — Sportradar, or
+ * direct permission from the schools — and this is what turns whatever arrives
+ * into the two sizes the site wants. See docs/TODO-legal-sources.md section 2.
+ *
  * optimize-coach-photos.mjs — turn whatever lands in public/images/coaches/
  * into the two variants the site serves, and write the manifest the component
  * reads.

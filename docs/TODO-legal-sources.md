@@ -137,12 +137,20 @@ viral chart, real subscriber numbers), and any raise, sale or partnership,
 where diligence will find 20,164 unlicensed files. If faces are worth real
 money by then, get a Sportradar quote and put them back licensed.
 
-**Loose end:** the 34 coach photos ship in the export but nothing renders them
-— `coach-photo.tsx` has held `SHOW_PHOTOS = false` since the coverage was
-judged too sparse (17 of 804). They are still fetchable at their own URLs, so
-they carry the full risk and deliver no product value. Deleting
-`public/images/coaches/` would be a free reduction in exposure with zero
-visible change. Colin's call, not done unilaterally.
+**The coach photos are GONE, decided 2026-09-02.** All 34 deleted, along with
+the two manifests and the `CoachPhoto` component that read them — which turned
+out to have zero call sites, so the whole path was dead code sitting on live
+risk. They were ESPN-sourced like the player headshots, nothing rendered them
+(`SHOW_PHOTOS` had been false since coverage was judged too sparse at 17 of
+804), and they were still fetchable at their own URLs. Full exposure, no
+product value, so deleting beat protecting: the netlify.toml noindex rule and
+kill-switch redirect for `/images/coaches/*` went with them.
+
+`scripts/optimize-coach-photos.mjs` survives on purpose. It has no consumer
+now, but it is the recipe for turning arriving photos into the two sizes the
+site wants, and it is the right tool the day coach photos come back LICENSED.
+
+This leaves the player headshots as the site's only image exposure.
 
 ## 3. Sports Reference — attribution owed, method to fix
 
