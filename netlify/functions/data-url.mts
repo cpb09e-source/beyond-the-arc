@@ -72,11 +72,26 @@ function parseYear(raw: string | null): number | null {
 }
 
 let client: S3Client | null = null;
+
+/**
+ * PREFERS A CREDENTIAL SCOPED TO THE GATED BUCKET, falls back to the main pair.
+ *
+ * R2 API tokens can be scoped to specific buckets, and this account's main
+ * token is: it answers AccessDenied to ListBuckets, which means it was issued
+ * against bta-data alone and cannot see a bucket created later. The archive
+ * bucket already hit this and carries its own R2_ARCHIVE_* pair for the same
+ * reason.
+ *
+ * So R2_GATED_ACCESS_KEY_ID / R2_GATED_SECRET_ACCESS_KEY win when present. The
+ * fallback is not dead code: an account-wide token would make them unnecessary,
+ * and this way that setup works without an env var nobody needed. If signing
+ * returns AccessDenied in production, the scoped pair is what is missing.
+ */
 function r2(): S3Client | null {
   if (client) return client;
   const endpoint = process.env.R2_ENDPOINT;
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+  const accessKeyId = process.env.R2_GATED_ACCESS_KEY_ID ?? process.env.R2_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.R2_GATED_SECRET_ACCESS_KEY ?? process.env.R2_SECRET_ACCESS_KEY;
   if (!endpoint || !accessKeyId || !secretAccessKey) return null;
   client = new S3Client({
     region: "auto",

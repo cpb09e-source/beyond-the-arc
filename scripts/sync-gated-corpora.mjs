@@ -105,17 +105,50 @@ if (missing.length) {
     console.error("  1. R2 → Create bucket, e.g. bta-gated.");
     console.error("     Do NOT enable public access, an r2.dev subdomain or a custom domain.");
     console.error("     That is the whole gate — a public bucket makes presigning theatre.");
-    console.error("  2. Add R2_GATED_BUCKET=bta-gated to .env.local AND to Netlify,");
-    console.error("     where netlify/functions/data-url.mts reads it.\n");
+    console.error("  2. R2 -> API -> Create API token, Object Read & Write.");
+    console.error("     The main R2 token is scoped to bta-data and CANNOT see a new");
+    console.error("     bucket — it answers AccessDenied to ListBuckets. Scope the new");
+    console.error("     token to bta-gated, or to both buckets.");
+    console.error("  3. Add to .env.local AND to Netlify (the function reads them there):");
+    console.error("       R2_GATED_BUCKET=bta-gated");
+    console.error("       R2_GATED_ACCESS_KEY_ID=…");
+    console.error("       R2_GATED_SECRET_ACCESS_KEY=…");
+    console.error("     R2_ENDPOINT is already set — every bucket shares the account URL.");
+    console.error("     Omit the two key vars only if the token is account-wide.\n");
   }
   process.exit(1);
 }
 
-const client = new S3Client({
+/**
+ * TWO CLIENTS, BECAUSE THE TWO BUCKETS MAY NOT SHARE A CREDENTIAL.
+ *
+ * R2 tokens can be scoped to specific buckets and this account's main one is:
+ * it answers AccessDenied to ListBuckets, so it was issued against bta-data
+ * alone and cannot reach a bucket created afterwards. The archive bucket
+ * already carries its own R2_ARCHIVE_* pair for exactly this reason.
+ *
+ * R2_GATED_ACCESS_KEY_ID / R2_GATED_SECRET_ACCESS_KEY are therefore used for
+ * the private bucket when set, and the main pair is the fallback so an
+ * account-wide token needs no extra configuration. Public deletes always use
+ * the main pair — that is bta-data, which the main token owns.
+ */
+const publicClient = new S3Client({
   region: "auto",
   endpoint: R2_ENDPOINT,
   credentials: { accessKeyId: R2_ACCESS_KEY_ID, secretAccessKey: R2_SECRET_ACCESS_KEY },
 });
+
+const gatedClient = new S3Client({
+  region: "auto",
+  endpoint: R2_ENDPOINT,
+  credentials: {
+    accessKeyId: process.env.R2_GATED_ACCESS_KEY_ID ?? R2_ACCESS_KEY_ID,
+    secretAccessKey: process.env.R2_GATED_SECRET_ACCESS_KEY ?? R2_SECRET_ACCESS_KEY,
+  },
+});
+
+/** Whichever client owns the bucket being addressed. */
+const clientFor = (bucket) => (bucket === R2_GATED_BUCKET ? gatedClient : publicClient);
 
 /** Every paid season that has a file on disk, as {corpus, year, key, file}. */
 function paidObjects() {
@@ -136,7 +169,7 @@ function paidObjects() {
 
 async function head(Bucket, Key) {
   try {
-    const r = await client.send(new HeadObjectCommand({ Bucket, Key }));
+    const r = await clientFor(Bucket).send(new HeadObjectCommand({ Bucket, Key }));
     return r.ContentLength ?? 0;
   } catch {
     return null;
@@ -158,7 +191,7 @@ if (PUSH) {
     const body = await readFile(o.file);
     const existing = await head(R2_GATED_BUCKET, o.key);
     if (existing === body.length) { same++; console.log(`  = ${o.key} (${mb(body.length)})`); continue; }
-    await client.send(new PutObjectCommand({
+    await gatedClient.send(new PutObjectCommand({
       Bucket: R2_GATED_BUCKET,
       Key: o.key,
       Body: body,
@@ -224,7 +257,7 @@ if (PURGE) {
       console.log(`  = ${o.key} already gone`);
       continue;
     }
-    await client.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: o.key }));
+    await publicClient.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: o.key }));
     gone++;
     console.log(`  ✗ ${o.key} deleted from public`);
   }
