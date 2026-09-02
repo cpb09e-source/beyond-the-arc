@@ -102,13 +102,30 @@ Built by `scripts/build-live-team-pages.mts`, which verifies its own codec on
 every team — decode the JSON again and deep-compare. That caught a real
 discrepancy on its first run.
 
-**Not yet done: player pages.** They are still baked, and this is the gap that
-will show. A player page is a CAREER page — the live season is one row inside a
-mostly-frozen page — so the team trick does not transfer, and the route is 384
-lines of inline loads with no `loadPlayerPageData` to swap. The design is an
-overlay that patches just the live row, leaving the frozen ones baked. The
-forcing function is consistency: Duke's roster row will be live and Cooper
-Flagg's career table will not.
+**Player pages: DONE AND DEPLOYED.** This section said "not yet done" for a day
+after it shipped, and that stale line got reported to Colin twice as open work.
+It landed in `e682e9d79c` on 2026-09-01 and is live in production.
+
+  - `src/lib/live-player-page.ts` — the codec
+  - `src/components/players/live-player-page.tsx` — the client entry point
+  - `scripts/build-live-player-pages.mts` — the builder, which round-trips its
+    own codec and deep-compares, like the team one
+  - wired into `nightly-refresh.mts`, and `check-live-data.mts` checks the
+    written files with a fail threshold at a quarter of the pages missing
+
+It did NOT use the overlay design this section predicted. It ships the whole
+page's data rather than patching one row, because patching means the fetched
+numbers and the baked ones render through two code paths — the drift this
+project keeps refusing to accept. A player bundle is a few KB against a team's
+132, so the waste is theoretical. Only players with a live-season row get a
+file: about 5,000 of 25,474.
+
+`PlayerPageView` carries no `"use client"`, which is what lets one component
+serve both graphs — the same trick as `TeamPageView`. Do not add a directive to
+it.
+
+**Lesson, since this cost real time: verify a claim in this file against the
+code before repeating it.** Two "open" items today were already finished.
 
 ### THE NIGHTLY PIPELINE — built, on GitHub, currently OFF
 
