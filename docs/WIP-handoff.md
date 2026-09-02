@@ -121,6 +121,16 @@ needed). Phases: `ingest` (network, freeze-guarded), `derive` (local),
 barttorvik.com, and a pull inside publish would cost that phase the one
 property it exists to have.
 
+**THE PIPELINE REQUIRES NODE 24 AND SILENTLY COULD NOT START ON 22.**
+`nightly-refresh.mts` is `.mts` so Node treats it as ESM; package.json has no
+`"type"` field so every `.ts` it imports transpiles as CommonJS. Node 22 cannot
+see a named export across that boundary and dies before running a line:
+`SyntaxError: The requested module '@/lib/seasons' does not provide an export
+named 'LIVE_SEASON'` — an export that is plainly there at seasons.ts:83. Node
+24 resolves it. The workflow pinned 22; every local run has been on 24, which
+is exactly why a script that could never start in CI looked finished. Fixed
+2026-09-02 after run 33656543383. Do not lower the pin.
+
 `.github/workflows/nightly-refresh.yml` runs it at 11:00 UTC. **The workflow is
 `disabled_manually`** — and disabling ALSO blocks `workflow_dispatch`, so it
 cannot be run by hand either until `gh workflow enable`.

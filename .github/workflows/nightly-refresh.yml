@@ -70,9 +70,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # NODE 24, NOT 22, AND THE PIPELINE DOES NOT RUN ON 22.
+      #
+      # nightly-refresh.mts is `.mts`, so Node treats it as ESM. package.json
+      # has no `"type"` field, so every `.ts` it imports transpiles as
+      # CommonJS. Reaching a named export across that ESM→CJS boundary depends
+      # on Node's static detection of a transpiled module's exports, and Node
+      # 22 does not see through this one:
+      #
+      #   SyntaxError: The requested module '@/lib/seasons' does not provide
+      #   an export named 'LIVE_SEASON'
+      #
+      # LIVE_SEASON is exported, plainly, at src/lib/seasons.ts:83. Node 24
+      # resolves it; 22 does not. The pipeline has only ever been run on a
+      # machine with Node 24, which is why a script that could never start in
+      # CI still looked finished — the first real dispatch (run 33656543383,
+      # 2026-09-02) died on the import before executing a single line.
+      #
+      # Matching CI to the development machine is the point. Do not lower this
+      # to chase a runner default; the alternative fixes are a namespace import
+      # at every call site or `"type": "module"` across the whole package, and
+      # both are larger changes than the one this bug justifies.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - uses: actions/setup-python@v5
