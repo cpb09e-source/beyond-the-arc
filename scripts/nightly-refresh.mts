@@ -41,10 +41,16 @@
  *
  * ── IT WRITES ITS OWN STATUS ──────────────────────────────────────────────
  *
- * Every run records what it did to public/data/live/refresh-status.json, which
- * rides to R2 with everything else. That is what the admin page reads. A job
+ * Every run records what it did to public/data/live/refresh-status.json and
+ * then uploads it, plus a one-line-per-run history, with
+ * scripts/publish-run-record.mjs. That is what the admin page reads. A job
  * whose only record is a log on a machine nobody is looking at is a job that
  * fails silently for a week.
+ *
+ * It does NOT "ride to R2 with everything else", which is what this comment
+ * used to say: the sync runs inside the publish phase and the record is
+ * written after every phase, so the sync could only ever carry the previous
+ * night's. The upload has to be its own step, after the record exists.
  *
  * Usage:
  *   npx tsx scripts/nightly-refresh.mts                    # every phase
@@ -243,6 +249,29 @@ function writeStatus(outcome: "ok" | "failed", failedAt: string | null) {
   fs.mkdirSync(path.dirname(STATUS_PATH), { recursive: true });
   fs.writeFileSync(STATUS_PATH, JSON.stringify(status, null, 2));
   console.log(`\nstatus -> public/data/live/refresh-status.json`);
+  publishRecord();
+}
+
+/**
+ * Send the record to R2, where the admin page reads it.
+ *
+ * THIS IS WHAT MAKES THE RECORD REACH ANYONE. The sync steps in PUBLISH ran
+ * before writeStatus could exist, so they uploaded whatever status file was on
+ * disk from the night before — and on Actions there is no night before. The
+ * admin page was reading a record that was one run stale at best, and on a
+ * failed run nothing at all. See the header of scripts/publish-run-record.mjs.
+ *
+ * Deliberately NOT a tracked step: the record is already written by the time
+ * this runs, so its own failure has nowhere to be recorded except the log. It
+ * cannot change the outcome and it must not — a run that published every file
+ * and then could not upload its receipt still succeeded.
+ *
+ * --no-sync means "touch nothing on R2", and that includes this.
+ */
+function publishRecord() {
+  const args = ["scripts/publish-run-record.mjs", ...(NO_SYNC ? ["--no-upload"] : [])];
+  const r = spawnSync("node", args, { stdio: "inherit", shell: true, cwd: ROOT });
+  if (r.status !== 0) console.error("could not publish the run record — the run itself is unaffected");
 }
 
 /**

@@ -1,5 +1,6 @@
 import type { Context } from "@netlify/functions";
-import { getSupabaseAdmin, requireAdmin } from "../shared/billing.mts";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { ACTIVE_STATUSES, getSupabaseAdmin, requireAdmin } from "../shared/billing.mts";
 
 /**
  * admin-config — the write side of /admin.
@@ -23,6 +24,7 @@ import { getSupabaseAdmin, requireAdmin } from "../shared/billing.mts";
  *
  * GET  ?what=transfers          list the transfers, newest first
  * GET  ?what=banner             read the banner (admins; the site reads direct)
+ * GET  ?what=overview           subscriber counts + the Stripe webhook heartbeat
  * POST {what:"banner", value}   set the banner
  * POST {what:"transfer", ...}   add one
  * POST {what:"transfer", id, active}  withdraw or restore one
@@ -91,6 +93,7 @@ export default async function handler(req: Request, _ctx: Context) {
       if (error) { console.error(`[${TAG}] banner read:`, error.message); return bad("Could not read the banner.", 503); }
       return Response.json({ banner: (data as { value: unknown } | null)?.value ?? null });
     }
+    if (what === "overview") return overview(db);
     return bad("Unknown ?what.");
   }
 
@@ -160,4 +163,71 @@ export default async function handler(req: Request, _ctx: Context) {
   }
 
   return bad("Unknown what.");
+}
+
+/**
+ * The dashboard's numbers — who is paying, and whether Stripe is still talking
+ * to us.
+ *
+ * ONE READ OF THE WHOLE PROFILES TABLE, counted here. Six count queries would
+ * be six round trips for a table that fits in memory many times over, and the
+ * definitions below (what "cancelling" means, that past_due is still paid)
+ * are easier to keep straight in one place than spread across six filters.
+ * If the table ever outgrows this, the cap keeps the response bounded and the
+ * `truncated` flag says so rather than quietly undercounting.
+ *
+ * Emails are returned. This is behind requireAdmin, the administrator owns the
+ * database, and "who signed up this week" is unanswerable without them.
+ */
+async function overview(db: SupabaseClient) {
+  const CAP = 5000;
+  const { data, error } = await db
+    .from("profiles")
+    .select("email,role,subscription_status,subscription_tier,subscription_cancel_at,created_at")
+    .order("created_at", { ascending: false })
+    .limit(CAP);
+  if (error) { console.error(`[${TAG}] overview read:`, error.message); return bad("Could not read the accounts.", 503); }
+
+  type Row = {
+    email: string | null; role: string | null; subscription_status: string | null;
+    subscription_tier: string | null; subscription_cancel_at: string | null; created_at: string;
+  };
+  const rows = (data ?? []) as Row[];
+  const now = Date.now();
+  const DAY = 86_400_000;
+  const since = (days: number) => (r: Row) => now - Date.parse(r.created_at) <= days * DAY;
+  const paid = (r: Row) => ACTIVE_STATUSES.has(r.subscription_status ?? "");
+  const active = rows.filter(paid);
+
+  const subscribers = {
+    accounts: rows.length,
+    truncated: rows.length === CAP,
+    active: active.length,
+    monthly: active.filter((r) => r.subscription_tier === "bta_pro_monthly").length,
+    yearly: active.filter((r) => r.subscription_tier === "bta_pro_yearly").length,
+    pastDue: active.filter((r) => r.subscription_status === "past_due").length,
+    // Still paid today, already told Stripe to stop. The churn you can see coming.
+    cancelling: active.filter((r) => r.subscription_cancel_at !== null).length,
+    admins: rows.filter((r) => r.role === "admin").length,
+    new7d: rows.filter(since(7)).length,
+    new30d: rows.filter(since(30)).length,
+    paidNew30d: active.filter(since(30)).length,
+    recent: rows.slice(0, 10).map((r) => ({
+      email: r.email,
+      createdAt: r.created_at,
+      status: r.subscription_status,
+      tier: r.subscription_tier,
+      role: r.role,
+    })),
+  };
+
+  const { data: hb, error: hbErr } = await db
+    .from("site_config").select("value").eq("key", "stripe_webhook").maybeSingle();
+  if (hbErr) console.error(`[${TAG}] heartbeat read:`, hbErr.message);
+
+  return Response.json({
+    at: new Date(now).toISOString(),
+    subscribers,
+    webhook: (hb as { value: unknown } | null)?.value ?? null,
+  });
 }

@@ -90,3 +90,35 @@ export async function addTransfer(t: {
 export async function setTransferActive(id: string, active: boolean): Promise<void> {
   await call({ method: "POST", body: JSON.stringify({ what: "transfer", id, active }) });
 }
+
+// ── Dashboard ──────────────────────────────────────────────────────────────
+
+export type Overview = {
+  at: string;
+  subscribers: {
+    accounts: number;
+    truncated: boolean;
+    active: number;
+    monthly: number;
+    yearly: number;
+    pastDue: number;
+    cancelling: number;
+    admins: number;
+    new7d: number;
+    new30d: number;
+    paidNew30d: number;
+    recent: Array<{
+      email: string | null;
+      createdAt: string;
+      status: string | null;
+      tier: string | null;
+      role: string | null;
+    }>;
+  };
+  /** Written by the Stripe webhook on every verified event. Null until the first one lands. */
+  webhook: { at: string; type: string; handled: boolean; ok: boolean } | null;
+};
+
+export async function readOverview(): Promise<Overview> {
+  return (await call({ method: "GET", query: "?what=overview" })) as unknown as Overview;
+}

@@ -63,6 +63,8 @@ export default async (req: Request, _context: Context) => {
     return Response.json({ error: "Invalid signature." }, { status: 400 });
   }
 
+  let handled = true;
+  let failure: string | null = null;
   try {
     switch (event.type) {
       case "checkout.session.completed": {
@@ -93,18 +95,65 @@ export default async (req: Request, _context: Context) => {
       default:
         // Everything else is acknowledged and ignored. Returning non-2xx would
         // make Stripe retry events we simply do not act on.
+        handled = false;
         break;
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : "unknown";
-    console.error(`[stripe-webhook] handling ${event.type} failed:`, message);
+    failure = err instanceof Error ? err.message : "unknown";
+    console.error(`[stripe-webhook] handling ${event.type} failed:`, failure);
+  }
+
+  await recordHeartbeat(admin, event, handled, failure);
+
+  if (failure) {
     // 500 so Stripe retries — a transient database problem should not silently
     // cost someone the access they paid for.
     return Response.json({ error: "Handler failed." }, { status: 500 });
   }
-
   return Response.json({ received: true });
 };
+
+/**
+ * Leave a note that Stripe reached us, for the admin page.
+ *
+ * THE FAILURE THIS CATCHES IS SILENT EVERYWHERE ELSE. If the signing secret is
+ * rotated, or the endpoint is disabled in the Stripe dashboard, or a deploy
+ * loses the env var, nothing on this site changes: checkouts still complete,
+ * Stripe still takes the money, and the profile row is simply never updated.
+ * The customer finds out. Stripe's own dashboard shows the failures, but only
+ * to someone who goes and looks. This puts "last heard from Stripe: 41 days
+ * ago" where it will actually be seen.
+ *
+ * Written AFTER signature verification and only then, so the note proves the
+ * whole chain — endpoint reachable, secret correct, database writable — not
+ * merely that something POSTed here. Written on handler failure too, marked,
+ * because "Stripe is reaching us and we are failing" is a different problem
+ * from "Stripe is not reaching us" and the page should say which.
+ *
+ * Best-effort: a failed heartbeat is logged and otherwise ignored. It must
+ * never turn a successfully applied subscription into a 500 that makes Stripe
+ * retry an event we have already acted on.
+ *
+ * site_config is publicly readable by design (the banner lives there), so this
+ * holds nothing worth protecting: a timestamp, an event type and a yes/no.
+ */
+async function recordHeartbeat(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  event: Stripe.Event,
+  handled: boolean,
+  failure: string | null,
+): Promise<void> {
+  const value = {
+    at: new Date().toISOString(),
+    type: event.type,
+    handled,
+    ok: failure === null,
+  };
+  const { error } = await admin
+    .from("site_config")
+    .upsert({ key: "stripe_webhook", value, updated_at: value.at });
+  if (error) console.error("[stripe-webhook] heartbeat write failed:", error.message);
+}
 
 function resolveUserId(
   clientRef: string | null | undefined,

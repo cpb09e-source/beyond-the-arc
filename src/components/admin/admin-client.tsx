@@ -1,15 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuthOptional } from "@/lib/auth/auth-provider";
-import { dataUrl } from "@/lib/data-url";
 import { LIVE_SEASON } from "@/lib/seasons";
 import { cn } from "@/lib/utils";
 import { BannerPanel, TransfersPanel } from "@/components/admin/admin-panels";
+import {
+  Badge,
+  ChecksSection,
+  Fact,
+  HistoryStrip,
+  Section,
+  SubscribersSection,
+  Tile,
+  WebhookNote,
+  ago,
+  dur,
+  pipelineTile,
+  probesTile,
+  subscribersTile,
+  useDashboardData,
+  webhookTile,
+  type Loaded,
+  type RefreshHistory,
+  type RefreshStatus,
+  type StepStatus,
+} from "@/components/admin/admin-dashboard";
 
 /**
- * /admin — what the nightly pipeline did, and the button that will run it.
+ * /admin — is the site working, is the pipeline running, is anyone paying.
  *
  * ── WHAT THIS GATE IS AND IS NOT ──────────────────────────────────────────
  *
@@ -21,53 +40,28 @@ import { BannerPanel, TransfersPanel } from "@/components/admin/admin-panels";
  *
  * That is acceptable here only because THE PAGE HOLDS NOTHING SECRET. The run
  * record it shows is a public R2 object, and it is public because it contains
- * step names and durations, which are not worth protecting. The one thing that
- * would need protecting — the token that triggers a run — never comes near the
- * browser: the Run button will call a Netlify function that holds it, and that
- * function will do its own server-side check. Nothing on this page is trusted
- * to decide anything.
+ * step names and durations, which are not worth protecting. The probes make
+ * the same requests any visitor makes. The one thing that is not public — who
+ * is paying — comes from a function that does its own server-side admin check
+ * on every call (requireAdmin), and a non-admin who reaches this component
+ * gets a 403 from it, not a number. Nothing on this page is trusted to decide
+ * anything.
  *
- * ── THE BUTTON IS DELIBERATELY INERT ──────────────────────────────────────
+ * ── THE ORDER IS THE ORDER OF ALARM ───────────────────────────────────────
+ *
+ * Tiles first, because on the morning something broke the whole page has to
+ * answer "what" before it is scrolled. Then the sections the tiles point at,
+ * in the same order. The two editorial panels — banner, transfers — come last:
+ * they are the things an administrator comes here to DO, but nobody does them
+ * while something is red, and a status page that opens with a form is a form.
+ *
+ * ── THE RUN BUTTONS ARE DELIBERATELY INERT ────────────────────────────────
  *
  * There is no dispatch endpoint yet and the workflow is disabled, so a button
  * that appeared to work would be lying twice over. It renders disabled with
  * the reason attached, which is more useful than hiding it: the point of the
  * shell is to see the shape of the finished thing.
  */
-
-type StepStatus = "ok" | "failed" | "skipped";
-
-type RefreshStatus = {
-  season: number;
-  phases: string[];
-  startedAt: string;
-  finishedAt: string;
-  durationMs: number;
-  outcome: "ok" | "failed";
-  failedAt: string | null;
-  dryRun: boolean;
-  steps: Array<{ step: string; note?: string; ms: number; status: StepStatus }>;
-};
-
-/** "4m 12s" — a nightly step's duration, which is never hours and often under a second. */
-function dur(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${s}s`;
-  return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, "0")}s`;
-}
-
-/** "3 hours ago" — the only question anyone asks of a nightly job's timestamp. */
-function ago(iso: string): string {
-  const then = Date.parse(iso);
-  if (Number.isNaN(then)) return iso;
-  const mins = Math.round((Date.now() - then) / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins} min ago`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 48) return `${hrs} hour${hrs === 1 ? "" : "s"} ago`;
-  return `${Math.round(hrs / 24)} days ago`;
-}
 
 /**
  * What the buttons will dispatch, in the order someone reaches for them.
@@ -87,23 +81,10 @@ const RUNS: Array<{ label: string; phases: string; why: string; primary?: boolea
     why: "Restore the previous run's files. One generation only." },
 ];
 
+const WORKFLOW_URL = "https://github.com/cpb09e-source/beyond-the-arc/actions/workflows/nightly-refresh.yml";
+
 export function AdminClient() {
   const auth = useAuthOptional();
-  const [status, setStatus] = useState<RefreshStatus | null>(null);
-  const [statusState, setStatusState] = useState<"loading" | "none" | "ready">("loading");
-
-  useEffect(() => {
-    let live = true;
-    fetch(dataUrl("/data/live/refresh-status.json"))
-      .then((r) => (r.ok ? (r.json() as Promise<RefreshStatus>) : null))
-      .then((j) => {
-        if (!live) return;
-        if (j) { setStatus(j); setStatusState("ready"); } else setStatusState("none");
-      })
-      .catch(() => { if (live) setStatusState("none"); });
-    return () => { live = false; };
-  }, []);
-
   const isAdmin = auth?.profile?.role === "admin";
   const settling = !auth || auth.status === "loading" || auth.profileLoading;
 
@@ -131,193 +112,227 @@ export function AdminClient() {
     );
   }
 
+  return <Dashboard />;
+}
+
+/**
+ * Split from the gate so the data hook runs only for an administrator. A
+ * non-admin never fires the overview call (which would 403) or the probes
+ * (one of which spends a CBBD call).
+ */
+function Dashboard() {
+  const { status, history, overview, probes, checkedAt, refresh } = useDashboardData();
+  const loading = status.state === "loading" || overview.state === "loading" || probes.state === "loading";
+
   return (
     <Shell>
-      <header className="mb-6">
-        <p className="text-[0.6rem] uppercase tracking-widest text-coral font-bold mb-1">Admin</p>
-        <h1 className="text-2xl font-semibold text-ink">Nightly refresh</h1>
+      <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[0.6rem] uppercase tracking-widest text-coral font-bold mb-1">Admin</p>
+          <h1 className="text-2xl font-semibold text-ink">Dashboard</h1>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[0.7rem] text-ink-muted">
+            Live season{" "}
+            <strong className="text-ink">{LIVE_SEASON === null ? "none" : LIVE_SEASON}</strong>
+          </span>
+          {checkedAt && !loading && (
+            <span className="text-[0.7rem] text-ink-muted tabular-nums">
+              checked {ago(new Date(checkedAt).toISOString())}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={loading}
+            className="h-8 px-3 rounded-md text-xs font-semibold border border-ink/15 text-ink hover:bg-paper-deep transition-colors disabled:opacity-50"
+          >
+            {loading ? "Checking…" : "Refresh"}
+          </button>
+        </div>
       </header>
 
-      {/* THE TWO THINGS THAT CHANGE WITHOUT A DEPLOY, first, because they are
-          the ones an administrator comes here to do. The run record below is
-          something you read; these are things you act on. */}
-      <div className="grid gap-4 mb-4">
-        <BannerPanel />
-        <TransfersPanel />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <Tile label="Nightly pipeline" model={pipelineTile(history, status)} href="#pipeline" />
+        <Tile label="Site checks" model={probesTile(probes)} href="#checks" />
+        <Tile label="Subscribers" model={subscribersTile(overview)} href="#subscribers" />
+        <Tile label="Stripe webhook" model={webhookTile(overview)} href="#subscribers" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] items-start">
-        <section className="rounded-xl border border-ink/10 bg-card shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-hairline flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-ink">Last run</h2>
-            <div className="flex items-center gap-2">
-              {/* A DRY RUN IS NOT A RUN, and the record could not say so.
-                  --dry-run writes the same status file with every step marked
-                  skipped, so a rehearsal showed here as "Succeeded" with the
-                  time it was rehearsed — which reads as "the pipeline ran and
-                  the data is current". It is the one thing this panel exists
-                  to answer. */}
-              {status?.dryRun && (
-                <span className="text-[0.6rem] uppercase tracking-widest font-bold px-2 py-0.5 rounded bg-ink/10 text-ink-muted">
-                  Dry run
-                </span>
-              )}
-              {status && (
-                <span
-                  className={cn(
-                    "text-[0.6rem] uppercase tracking-widest font-bold px-2 py-0.5 rounded",
-                    status.outcome === "ok" ? "bg-good/15 text-good" : "bg-bad/15 text-bad",
-                  )}
-                >
-                  {status.outcome === "ok" ? "Succeeded" : "Failed"}
-                </span>
-              )}
-            </div>
-          </div>
+      <div className="grid gap-4">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] items-start">
+          <PipelineSection status={status} history={history} />
+          <RunAside />
+        </div>
 
-          {statusState === "loading" && (
-            <p className="px-4 py-6 text-sm text-ink-muted">Reading the run record…</p>
-          )}
+        <ChecksSection probes={probes} checkedAt={checkedAt} onRerun={refresh} />
 
-          {statusState === "none" && (
-            <div className="px-4 py-6">
-              <p className="text-sm text-ink">No run recorded yet.</p>
-              <p className="text-sm text-ink-muted mt-1">
-                The pipeline writes its record on every run, including a failed one. Nothing
-                has run since it was built.
-              </p>
-            </div>
-          )}
+        <SubscribersSection overview={overview} footer={<WebhookNote overview={overview} />} />
 
-          {statusState === "ready" && status && (
-            <>
-              <dl className="px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 border-b border-hairline">
-                <Fact label="Season" value={String(status.season)} />
-                <Fact label="Finished" value={ago(status.finishedAt)} />
-                <Fact label="Took" value={dur(status.durationMs)} />
-                <Fact label="Phases" value={status.phases.join(", ")} />
-              </dl>
-
-              {status.failedAt && (
-                <p className="px-4 py-3 text-sm text-bad border-b border-hairline">
-                  Stopped at <code className="font-mono text-xs">{status.failedAt}</code>. Nothing
-                  after it ran.
-                </p>
-              )}
-
-              {/* Wide content scrolls inside its own box — a step is a full command line
-                  and the page must not scroll sideways because of one. */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-[0.6rem] uppercase tracking-widest text-ink-muted">
-                      <th className="px-4 py-2 font-medium">Step</th>
-                      <th className="px-4 py-2 font-medium text-right tabular-nums">Time</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {status.steps.map((s, i) => (
-                      <tr key={i} className="border-t border-hairline align-top">
-                        <td className="px-4 py-2">
-                          <span className="flex items-start gap-2">
-                            <StepDot status={s.status} />
-                            <span className="min-w-0">
-                              <code className="font-mono text-xs text-ink break-all">{s.step}</code>
-                              {s.note && (
-                                <span className="block text-[0.7rem] text-ink-muted mt-0.5">{s.note}</span>
-                              )}
-                            </span>
-                          </span>
-                        </td>
-                        <td className="px-4 py-2 text-right tabular-nums text-ink-muted whitespace-nowrap">
-                          {s.status === "skipped" ? "—" : dur(s.ms)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </section>
-
-        <aside className="rounded-xl border border-ink/10 bg-card shadow-sm p-4">
-          <h2 className="text-sm font-semibold text-ink mb-3">Run it</h2>
-
-          {/* THE PHASES ARE SEPARATE BECAUSE THEY FAIL SEPARATELY. Re-publishing
-              after a fixed builder should not re-pull a night of box scores,
-              and an upstream outage should not cost the derivations that
-              already succeeded. Same reasoning as the script's own phases. */}
-          <div className="flex flex-col gap-1.5">
-            {RUNS.map((r) => (
-              <button
-                key={r.phases}
-                type="button"
-                disabled
-                title={r.why}
-                className={cn(
-                  "w-full h-9 rounded-md text-sm font-semibold border transition-colors",
-                  "disabled:opacity-40 disabled:cursor-not-allowed",
-                  r.danger
-                    ? "border-bad/40 bg-bad/10 text-bad"
-                    : r.primary
-                      ? "border-coral/40 bg-coral/10 text-ink"
-                      : "border-ink/15 text-ink",
-                )}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-
-          <p className="text-[0.7rem] text-ink-muted mt-2 leading-relaxed">
-            Not wired yet. These need the repository secrets loaded and the workflow
-            re-enabled — until then they would fail rather than do nothing, which is worse.
-            Every one of them runs on GitHub, not here.
-          </p>
-
-          <hr className="my-4 border-hairline" />
-
-          <h3 className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium mb-2">
-            Meanwhile
-          </h3>
-          <ul className="text-[0.7rem] text-ink-muted space-y-2 leading-relaxed">
-            <li>
-              <a
-                href="https://github.com/cpb09e-source/beyond-the-arc/actions/workflows/nightly-refresh.yml"
-                target="_blank"
-                rel="noreferrer"
-                className="text-coral hover:underline"
-              >
-                Run it on GitHub
-              </a>{" "}
-              — the same job, with the same inputs.
-            </li>
-            <li>
-              Live season:{" "}
-              <strong className="text-ink">
-                {LIVE_SEASON === null ? "none" : LIVE_SEASON}
-              </strong>
-              {LIVE_SEASON === null && " — nothing is being played, so a run has nothing to publish."}
-            </li>
-          </ul>
-        </aside>
+        <h2 className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium mt-2">Actions</h2>
+        <BannerPanel />
+        <TransfersPanel />
       </div>
     </Shell>
   );
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
-  return <main className="mx-auto max-w-5xl px-6 lg:px-10 py-10">{children}</main>;
+// ── Pipeline ───────────────────────────────────────────────────────────────
+
+function PipelineSection({ status, history }: { status: Loaded<RefreshStatus>; history: Loaded<RefreshHistory> }) {
+  const s = status.state === "ready" ? status.data : null;
+  return (
+    <Section
+      id="pipeline"
+      title="Last run"
+      right={
+        <div className="flex items-center gap-2">
+          {/* A DRY RUN IS NOT A RUN, and the record could not say so.
+              --dry-run writes the same status file with every step marked
+              skipped, so a rehearsal showed here as "Succeeded" with the
+              time it was rehearsed — which reads as "the pipeline ran and
+              the data is current". It is the one thing this panel exists
+              to answer. */}
+          {s?.dryRun && <Badge tone="muted">Dry run</Badge>}
+          {s && <Badge tone={s.outcome === "ok" ? "good" : "bad"}>{s.outcome === "ok" ? "Succeeded" : "Failed"}</Badge>}
+        </div>
+      }
+    >
+      {history.state === "ready" && <HistoryStrip runs={history.data.runs} />}
+
+      {status.state === "loading" && (
+        <p className="px-4 py-6 text-sm text-ink-muted">Reading the run record…</p>
+      )}
+
+      {status.state === "error" && (
+        <p className="px-4 py-6 text-sm text-bad">Could not read the run record: {status.message}</p>
+      )}
+
+      {status.state === "none" && (
+        <div className="px-4 py-6">
+          <p className="text-sm text-ink">No run recorded yet.</p>
+          <p className="text-sm text-ink-muted mt-1">
+            The pipeline writes its record on every run, including a failed one. Nothing
+            has run since it was built.
+          </p>
+        </div>
+      )}
+
+      {s && (
+        <>
+          <dl className="px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 border-b border-hairline">
+            <Fact label="Season" value={String(s.season)} />
+            <Fact label="Finished" value={ago(s.finishedAt)} />
+            <Fact label="Took" value={dur(s.durationMs)} />
+            <Fact label="Phases" value={s.phases.join(", ")} />
+          </dl>
+
+          {s.failedAt && (
+            <p className="px-4 py-3 text-sm text-bad border-b border-hairline">
+              Stopped at <code className="font-mono text-xs">{s.failedAt}</code>. Nothing
+              after it ran.
+            </p>
+          )}
+
+          {/* Wide content scrolls inside its own box — a step is a full command line
+              and the page must not scroll sideways because of one. */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-[0.6rem] uppercase tracking-widest text-ink-muted">
+                  <th className="px-4 py-2 font-medium">Step</th>
+                  <th className="px-4 py-2 font-medium text-right tabular-nums">Time</th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.steps.map((step, i) => (
+                  <tr key={i} className="border-t border-hairline align-top">
+                    <td className="px-4 py-2">
+                      <span className="flex items-start gap-2">
+                        <StepDot status={step.status} />
+                        <span className="min-w-0">
+                          <code className="font-mono text-xs text-ink break-all">{step.step}</code>
+                          {step.note && (
+                            <span className="block text-[0.7rem] text-ink-muted mt-0.5">{step.note}</span>
+                          )}
+                        </span>
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-right tabular-nums text-ink-muted whitespace-nowrap">
+                      {step.status === "skipped" ? "—" : dur(step.ms)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </Section>
+  );
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+function RunAside() {
   return (
-    <div>
-      <dt className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">{label}</dt>
-      <dd className="text-sm text-ink mt-0.5">{value}</dd>
-    </div>
+    <aside className="rounded-xl border border-ink/10 bg-card shadow-sm p-4">
+      <h2 className="text-sm font-semibold text-ink mb-3">Run it</h2>
+
+      {/* THE PHASES ARE SEPARATE BECAUSE THEY FAIL SEPARATELY. Re-publishing
+          after a fixed builder should not re-pull a night of box scores,
+          and an upstream outage should not cost the derivations that
+          already succeeded. Same reasoning as the script's own phases. */}
+      <div className="flex flex-col gap-1.5">
+        {RUNS.map((r) => (
+          <button
+            key={r.phases}
+            type="button"
+            disabled
+            title={r.why}
+            className={cn(
+              "w-full h-9 rounded-md text-sm font-semibold border transition-colors",
+              "disabled:opacity-40 disabled:cursor-not-allowed",
+              r.danger
+                ? "border-bad/40 bg-bad/10 text-bad"
+                : r.primary
+                  ? "border-coral/40 bg-coral/10 text-ink"
+                  : "border-ink/15 text-ink",
+            )}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
+
+      <p className="text-[0.7rem] text-ink-muted mt-2 leading-relaxed">
+        Not wired yet. These need the repository secrets loaded and the workflow
+        re-enabled — until then they would fail rather than do nothing, which is worse.
+        Every one of them runs on GitHub, not here.
+      </p>
+
+      <hr className="my-4 border-hairline" />
+
+      <h3 className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium mb-2">
+        Meanwhile
+      </h3>
+      <ul className="text-[0.7rem] text-ink-muted space-y-2 leading-relaxed">
+        <li>
+          <a href={WORKFLOW_URL} target="_blank" rel="noreferrer" className="text-coral hover:underline">
+            Run it on GitHub
+          </a>{" "}
+          — the same job, with the same inputs.
+        </li>
+        <li>
+          Live season:{" "}
+          <strong className="text-ink">{LIVE_SEASON === null ? "none" : LIVE_SEASON}</strong>
+          {LIVE_SEASON === null && " — nothing is being played, so a run has nothing to publish."}
+        </li>
+      </ul>
+    </aside>
   );
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return <main className="mx-auto max-w-6xl px-6 lg:px-10 py-10">{children}</main>;
 }
 
 /**
