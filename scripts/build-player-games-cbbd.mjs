@@ -36,7 +36,12 @@ import { norm, etDate, buildPlayerIndex, resolvePlayer } from "./lib/cbbd-join.m
 
 const ROOT = process.cwd();
 const OUT_DIR = path.join(ROOT, "public/data/player-games");
-const SEASONS = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2022, 2023, 2024, 2025, 2026];
+// 2021 JOINED THE RUN 2026-09-02, when box-players-full.json.gz was finally
+// pulled. It is NOT excluded site-wide — see FLAGGED_SEASONS in
+// src/lib/seasons.ts, which marks the COVID season as incomparable, not as
+// absent. What is still missing for it is the play-by-play (~157
+// plays-*.json.gz day files), a separate and much larger pull.
+const SEASONS = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026];
 
 const args = process.argv.slice(2);
 const oneSeason = args.includes("--season") ? Number(args[args.indexOf("--season") + 1]) : null;

@@ -13,7 +13,7 @@
  * Percentage stats are stored as fractions but typed as percentages, so their
  * bounds are scaled to match the box the reader types in.
  *
- * Measured over 12 seasons. Stats with fewer than 100 observations are
+ * Measured over 13 seasons. Stats with fewer than 100 observations are
  * omitted: a 1st percentile over eighty players is one unusual player.
  */
 export const PLAYER_STAT_BOUNDS: Record<string, [number, number]> = {
@@ -27,7 +27,7 @@ export const PLAYER_STAT_BOUNDS: Record<string, [number, number]> = {
   "ast_ratio": [0, 45],
   "ast_tov": [0, 4],
   "ast_usg": [0, 2],
-  "blk": [0, 70],
+  "blk": [0, 60],
   "blk_40": [0, 4],
   "blk_pct": [0, 12],
   "blk_pf": [0, 1],
@@ -60,7 +60,7 @@ export const PLAYER_STAT_BOUNDS: Record<string, [number, number]> = {
   "fg3a": [0, 250],
   "fg3a_40": [0, 12],
   "fg3a_pg": [0, 8],
-  "fg3m": [0, 100],
+  "fg3m": [0, 90],
   "fga": [0, 500],
   "fga_40": [4, 20],
   "fga_pg": [0, 16],
@@ -90,14 +90,14 @@ export const PLAYER_STAT_BOUNDS: Record<string, [number, number]> = {
   "led_t_ast": [0, 25],
   "led_t_blk": [0, 25],
   "led_t_pa": [0, 25],
-  "led_t_pr": [0, 25],
+  "led_t_pr": [0, 20],
   "led_t_pra": [0, 25],
   "led_t_prasb": [0, 25],
   "led_t_pts": [0, 20],
   "led_t_reb": [0, 25],
   "led_t_stl": [0, 18],
   "mid_pct": [10, 60],
-  "min": [0, 1400],
+  "min": [0, 1200],
   "mpg": [0, 40],
   "net_rtg": [-60, 80],
   "off_epm": [-3, 3],

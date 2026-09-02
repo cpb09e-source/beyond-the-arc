@@ -49,16 +49,28 @@ const ROOT = process.cwd();
 const OUT_DIR = path.join(ROOT, "public/data/player-stats");
 const CBBD = path.join(ROOT, "data/cbbd");
 
-// 2021 has a team box but no player box and no play-by-play in the archive, and
-// is excluded site-wide anyway (src/lib/seasons.ts).
-const ALL_SEASONS = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2022, 2023, 2024, 2025, 2026];
+// 2021 JOINED THE RUN 2026-09-02, when box-players-full.json.gz was finally
+// pulled. It is NOT excluded site-wide — see FLAGGED_SEASONS in
+// src/lib/seasons.ts, which marks the COVID season as incomparable, not as
+// absent. What is still missing for it is the play-by-play (~157
+// plays-*.json.gz day files), a separate and much larger pull.
+// PBP-derived stats therefore come back empty for 2021 rather than absent:
+// the plays reader degrades to an empty file list when the directory is not
+// there, so box-derived groups populate normally and the play-by-play ones
+// are null. That is the same honest degradation the team pages already show.
+const ALL_SEASONS = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026];
 
 /**
- * Seasons with a ROSTER, which is one more than the seasons with stats: 2021
- * has no player box and no play-by-play, so nothing is built for it, but its
- * roster is what identifies a player who only ever played that year.
+ * Seasons with a ROSTER. This used to be ALL_SEASONS plus 2021, because 2021
+ * had no player box and nothing was built for it, yet its roster was still what
+ * identified a player who only ever played that year. 2021 is in ALL_SEASONS
+ * now, so the two lists are the same and the append would have duplicated it.
+ *
+ * Kept as its own name rather than collapsed into ALL_SEASONS: the distinction
+ * is real and will matter again the moment another season has a roster without
+ * stats.
  */
-const ROSTER_SEASONS = [...ALL_SEASONS, 2021].sort((a, b) => a - b);
+const ROSTER_SEASONS = [...ALL_SEASONS];
 
 const args = process.argv.slice(2);
 const opt = (n) => { const i = args.indexOf(`--${n}`); return i > -1 ? args[i + 1] : null; };

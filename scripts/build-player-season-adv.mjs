@@ -35,9 +35,12 @@ import { norm, buildPlayerIndex, resolvePlayer } from "./lib/cbbd-join.mjs";
 
 const ROOT = process.cwd();
 const OUT = path.join(ROOT, "public/data/player-season-adv.json");
-// 2021 has a team box but no player box in the archive, and is excluded
-// site-wide anyway (src/lib/seasons.ts).
-const SEASONS = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2022, 2023, 2024, 2025, 2026];
+// 2021 JOINED THE RUN 2026-09-02, when box-players-full.json.gz was finally
+// pulled. It is NOT excluded site-wide — see FLAGGED_SEASONS in
+// src/lib/seasons.ts, which marks the COVID season as incomparable, not as
+// absent. What is still missing for it is the play-by-play (~157
+// plays-*.json.gz day files), a separate and much larger pull.
+const SEASONS = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026];
 
 const TEAM_MAP = JSON.parse(fs.readFileSync(path.join(ROOT, "src/data/cbbd-team-map.json"), "utf8"));
 
