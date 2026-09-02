@@ -38,6 +38,40 @@ function fmtValue(v: number | null, fmt: TeamSplitStat["fmt"]): string {
   }
 }
 
+/**
+ * Which stat groups each view shows, by the group KEY the data uses.
+ *
+ * THE CARDS COME FROM THE DATA, not from a list in this file — every group in
+ * team-splits is rendered, in the order it appears there. So a view is a
+ * filter over group keys rather than a second definition of the panels, and
+ * adding a stat to an existing group needs no change here.
+ *
+ * GROUPED BY THE QUESTION, matching the player overview. Someone reading a
+ * team wants to know how good they are, how they score, or how they defend —
+ * "Adv Offense" and "Box Score" describe where a number came from, which is
+ * this site's problem rather than the reader's.
+ *
+ * CORE RIDES IN EVERY VIEW, for the same reason Role does on the player page:
+ * net rating, tempo and the four factors are the context every other number is
+ * read against, and nobody should switch views to find out a team plays at 62
+ * possessions. Box Score appears twice because rebounds, steals and blocks are
+ * as much a defensive answer as an offensive one.
+ *
+ * A GROUP IN THE DATA AND IN NO VIEW would show only under Everything. That is
+ * the safe direction — it stays reachable — but if a group is added upstream
+ * it belongs in a view here too.
+ */
+type TeamStatsView = "overview" | "offense" | "defense" | "everything";
+
+const TEAM_VIEWS: Array<{ key: TeamStatsView; label: string; groups: string[] | null }> = [
+  { key: "overview", label: "Overview", groups: ["Core", "Box"] },
+  { key: "offense", label: "Scoring & shooting", groups: ["Core", "Shooting", "Misc", "AdvOff"] },
+  { key: "defense", label: "Defense & rebounding", groups: ["Core", "AdvDef", "Box"] },
+  // null is not a group list — it is the absence of one. Filtering Everything
+  // would mean a list that has to be updated every time a group is added.
+  { key: "everything", label: "Everything", groups: null },
+];
+
 export function TeamStatsPanel({
   splits,
   blurBody = false,
@@ -54,6 +88,7 @@ export function TeamStatsPanel({
     [splits],
   );
   const [split, setSplit] = useState(available[0]?.key ?? "full");
+  const [view, setView] = useState<TeamStatsView>("overview");
   const row = splits.rows[split] ?? splits.rows.full;
 
   const cards = useMemo(() => {
@@ -63,8 +98,12 @@ export function TeamStatsPanel({
       if (!byGroup.has(stat.group)) { byGroup.set(stat.group, []); order.push(stat.group); }
       byGroup.get(stat.group)!.push({ stat, i });
     });
-    return order.map((g) => ({ group: g, label: splits.groups[g] ?? g, items: byGroup.get(g)! }));
-  }, [splits]);
+    const all = order.map((g) => ({ group: g, label: splits.groups[g] ?? g, items: byGroup.get(g)! }));
+    const wanted = TEAM_VIEWS.find((v) => v.key === view)?.groups;
+    // Filtered AFTER grouping, so the cards keep the order the data gives them
+    // rather than the order this file happens to list them in.
+    return wanted ? all.filter((c) => wanted.includes(c.group)) : all;
+  }, [splits, view]);
 
   if (!row) return null;
 
@@ -112,6 +151,25 @@ export function TeamStatsPanel({
             {row.games} game{row.games === 1 ? "" : "s"}
           </span>
         </div>
+        <div className="flex flex-wrap items-center gap-3">
+        {/* View sits BEFORE Split, so the row reads in the order the questions
+            are asked: which stats, then which games. Same order, same labels
+            as the player overview — the two panels are read the same way and
+            should not disagree about what the control is called. */}
+        <label className="flex items-center gap-2">
+          <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">View</span>
+          <Select
+            value={view}
+            onChange={(v) => setView(v as TeamStatsView)}
+            ariaLabel="Which stats to show"
+            compact
+            className="w-52"
+          >
+            {TEAM_VIEWS.map((v) => (
+              <option key={v.key} value={v.key}>{v.label}</option>
+            ))}
+          </Select>
+        </label>
         <label className="flex items-center gap-2">
           <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Split</span>
           <Select
@@ -126,6 +184,7 @@ export function TeamStatsPanel({
             ))}
           </Select>
         </label>
+        </div>
       </div>
       {blurBody ? <BlurOverlay>{body}</BlurOverlay> : body}
       <p className="mt-3 text-[0.65rem] text-ink-muted">
