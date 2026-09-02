@@ -68,19 +68,36 @@ export default function TermsPage() {
         </p>
       </Clause>
 
-      <Clause id="refunds" title="4. Refunds">
+      <Clause id="trial" title="4. The free trial">
         <p>
-          If the site has not been what you expected, write within 14 days of a charge and you will
-          be refunded that charge. Beyond that window, refunds are at our discretion, and a
-          long-running subscription is not retroactively refundable.
+          A new subscription starts with a <strong className="text-ink">five-day free trial</strong>,
+          with full access to everything a paid pass includes. One trial per customer.
+        </p>
+        <Plainly>
+          Your card is taken before the trial starts, and it is charged automatically when the five
+          days are up. Cancel at any point during the trial and you are never charged at all. Your
+          account page shows the exact date of the first charge from the moment the trial begins.
+        </Plainly>
+      </Clause>
+
+      <Clause id="refunds" title="5. Refunds">
+        <p>
+          The trial exists so that nobody has to buy something they have not used. If you are unsure,
+          cancel before it ends and it costs you nothing.
         </p>
         <p>
-          If you are a consumer in the UK or EU, this does not affect your statutory cancellation
+          After the first charge, refunds are at our discretion. Write and explain — a charge you did
+          not expect, or a subscription you forgot was running, is worth asking about, and this is
+          not a business that wants money from people who are not using the site. What we do not
+          offer is a retroactive refund of a long-running subscription.
+        </p>
+        <p>
+          If you are a consumer in the UK or EU, none of this affects your statutory cancellation
           rights.
         </p>
       </Clause>
 
-      <Clause id="use" title="5. What you may and may not do with the data">
+      <Clause id="use" title="6. What you may and may not do with the data">
         <p>
           A subscription is for you. Sharing an account, or scripting it to pull data on behalf of
           other people, is not permitted.
@@ -105,7 +122,7 @@ export default function TermsPage() {
         </Plainly>
       </Clause>
 
-      <Clause id="accuracy" title="6. Accuracy, and what this site is not">
+      <Clause id="accuracy" title="7. Accuracy, and what this site is not">
         <p>
           The numbers are derived from third-party feeds (see{" "}
           <Link href="/sources" className="text-coral hover:underline">sources</Link>) and from models
@@ -124,7 +141,7 @@ export default function TermsPage() {
         </p>
       </Clause>
 
-      <Clause id="accounts" title="7. Your account">
+      <Clause id="accounts" title="8. Your account">
         <p>
           Keep your sign-in details to yourself; you are responsible for what happens under your
           account. We may suspend or close an account that breaches these terms, and will refund the
@@ -138,7 +155,7 @@ export default function TermsPage() {
         </p>
       </Clause>
 
-      <Clause id="ip" title="8. Ownership">
+      <Clause id="ip" title="9. Ownership">
         <p>
           The metrics we build, the writing, the design and the code are ours. The underlying
           statistics are facts and belong to nobody; the feeds they arrive through belong to the
@@ -149,7 +166,7 @@ export default function TermsPage() {
         </p>
       </Clause>
 
-      <Clause id="changes" title="9. Changes to these terms">
+      <Clause id="changes" title="10. Changes to these terms">
         <p>
           We may update these terms. The date at the top of this page always reflects the current
           version, and a change that materially affects paying subscribers will be sent by email
@@ -161,7 +178,7 @@ export default function TermsPage() {
           the page that cannot be inferred from the code — it names where the
           business is actually run from, and a guessed state points a dispute at
           the wrong court. It changes only if the business moves. */}
-      <Clause id="law" title="10. Governing law">
+      <Clause id="law" title="11. Governing law">
         <p>
           These terms are governed by the laws of the State of Texas, United States, and the courts
           of that state have jurisdiction over any dispute. If you are a consumer, this does not

@@ -21,6 +21,22 @@ import {
  * A user who completes checkout and closes the tab still gets their
  * subscription, because the entitlement never depended on them coming back.
  */
+
+/**
+ * Free trial length, in days. Five, chosen 2026-09-02.
+ *
+ * THE TRIAL NEEDED NO ENTITLEMENT WORK. `trialing` was already in
+ * ACTIVE_STATUSES in billing.mts and in LIVE_STATUSES in the webhook, so a
+ * trialing subscriber has always been granted everything a paying one gets.
+ * This constant is the whole feature on the server side.
+ *
+ * A CARD IS STILL COLLECTED UP FRONT. Stripe Checkout in subscription mode
+ * takes the payment method before starting the trial, so the charge on day
+ * five needs nothing from the customer and there is no separate conversion
+ * step. It also means the trial ends by charging rather than by expiring,
+ * which is why /terms says so plainly and /account shows the date.
+ */
+const TRIAL_DAYS = 5;
 export default async (req: Request, _context: Context) => {
   if (req.method !== "POST") {
     return Response.json({ error: "POST only" }, { status: 405 });
@@ -71,6 +87,37 @@ export default async (req: Request, _context: Context) => {
     const customer = await ensureCustomer(stripe, admin, user);
     const origin = siteOrigin(req);
 
+    /**
+     * ONE TRIAL PER CUSTOMER, EVER.
+     *
+     * trial_period_days is granted per checkout session, not per customer, so
+     * without this someone could cancel on day four and re-subscribe for
+     * another free five days indefinitely. Asking Stripe whether this customer
+     * has ever had a subscription is the authoritative answer and costs one
+     * API call — better than a `has_trialed` column, which would be a second
+     * source of truth that drifts the first time a subscription is created or
+     * deleted from the Stripe dashboard.
+     *
+     * `status: "all"` matters. A returning customer's old subscription is
+     * `canceled`, and the default listing hides exactly the case being checked
+     * for.
+     *
+     * FAILING OPEN IS THE RIGHT DIRECTION. If the lookup throws we grant the
+     * trial rather than refusing checkout: the downside is one person getting a
+     * second five-day trial, against blocking a paying customer over a
+     * transient Stripe error.
+     */
+    let trialDays: number | undefined = TRIAL_DAYS;
+    try {
+      const prior = await stripe.subscriptions.list({ customer, status: "all", limit: 1 });
+      if (prior.data.length > 0) trialDays = undefined;
+    } catch (err) {
+      console.warn(
+        "[create-checkout-session] trial-eligibility lookup failed, granting trial:",
+        err instanceof Error ? err.message : err,
+      );
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer,
@@ -78,7 +125,10 @@ export default async (req: Request, _context: Context) => {
       // Both ids ride along so the webhook can resolve the account without a
       // lookup, and without trusting anything the browser said.
       client_reference_id: user.id,
-      subscription_data: { metadata: { supabase_user_id: user.id, plan } },
+      subscription_data: {
+        metadata: { supabase_user_id: user.id, plan },
+        ...(trialDays ? { trial_period_days: trialDays } : {}),
+      },
       metadata: { supabase_user_id: user.id, plan },
       success_url: `${origin}/account/?checkout=success`,
       cancel_url: `${origin}/pricing/?checkout=cancelled`,

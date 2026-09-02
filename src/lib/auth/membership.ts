@@ -105,11 +105,18 @@ export function describeMembership(profile: Profile | null): Membership {
     // than the exact string so a monthly or renamed price does not fall
     // through to "Free" and tell a paying subscriber they have no plan.
     const monthly = /month/i.test(tier);
+    // A trial has everything a paid pass has — `trialing` is in
+    // ACTIVE_STATUSES — so the only honest difference is that the first charge
+    // has not happened yet. Say that, rather than describing the features
+    // twice: someone on day three wants to know when they get billed.
+    const trialing = status === "trialing";
     return {
       plan: "Season Pass",
-      blurb: monthly
-        ? "All thirteen seasons, real EPM, lineups and the all-years Win Calculator. Billed monthly."
-        : "All thirteen seasons, real EPM, lineups and the all-years Win Calculator.",
+      blurb: trialing
+        ? "Free trial — full access to everything. Cancel before it ends and you are never charged."
+        : monthly
+          ? "All thirteen seasons, real EPM, lineups and the all-years Win Calculator. Billed monthly."
+          : "All thirteen seasons, real EPM, lineups and the all-years Win Calculator.",
       paid: true,
       renewsAt: parseDate(profile.subscription_renews_at),
       cancelAt: parseDate(profile.subscription_cancel_at),

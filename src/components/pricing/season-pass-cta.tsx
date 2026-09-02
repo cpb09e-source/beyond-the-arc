@@ -84,12 +84,26 @@ export function SeasonPassCta() {
         </div>
       </div>
 
-      <Link
-        href={`/account/signup/?plan=${period}`}
-        className="inline-flex items-center justify-center rounded-md px-4 py-2.5 text-sm font-semibold bg-coral text-white hover:bg-coral-soft transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral focus-visible:ring-offset-2"
-      >
-        {yearly ? "Get the Season Pass" : "Start monthly"}
-      </Link>
+      {/* THE TRIAL IS THE OFFER, so it goes on the button rather than in small
+          print underneath. Both periods get the same five days.
+
+          The line below it is not a disclaimer to bury — it is the reason the
+          button is safe to press, and saying "then $8/month" out loud is also
+          what stops the first charge being a surprise. A trial that hides its
+          end date converts slightly better and generates chargebacks, which
+          cost more than the subscription was worth. */}
+      <div>
+        <Link
+          href={`/account/signup/?plan=${period}`}
+          className="w-full inline-flex items-center justify-center rounded-md px-4 py-2.5 text-sm font-semibold bg-coral text-accent-foreground hover:bg-coral-soft transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-coral focus-visible:ring-offset-2"
+        >
+          Start 5 days free
+        </Link>
+        <p className="mt-2 text-xs text-ink-muted">
+          {yearly ? "Then $50 a year." : "Then $8 a month."} Cancel any time in the first five days
+          and you are not charged.
+        </p>
+      </div>
     </div>
   );
 }

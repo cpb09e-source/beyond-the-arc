@@ -118,7 +118,7 @@ export function SignupClient() {
       title="Create your account"
       intro={
         plan === "yearly" || plan === "monthly"
-          ? "One step before the Season Pass: the pass attaches to an account, so this comes first. Creating it is free, and you are not asked for a card until the next screen."
+          ? "One step before the Season Pass: the pass attaches to an account, so this comes first. Creating it is free, you are not asked for a card until the next screen, and the first five days are free after that."
           : plan === "program"
             ? "Programs are set up by hand, so start with an account and we will take it from there."
             : "Free, and it stays free. An account saves your teams and players, and it is what a Season Pass attaches to if you ever want one."

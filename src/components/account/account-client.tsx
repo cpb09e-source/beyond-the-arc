@@ -52,7 +52,7 @@ export function AccountClient() {
         <div className="mt-6 flex flex-wrap gap-3">
           <Link
             href="/account/login/"
-            className="h-11 inline-flex items-center rounded px-5 text-sm font-semibold bg-coral text-white hover:bg-coral-soft transition-colors"
+            className="h-11 inline-flex items-center rounded px-5 text-sm font-semibold bg-coral text-accent-foreground hover:bg-coral-soft transition-colors"
           >
             Sign in
           </Link>
@@ -124,7 +124,7 @@ export function AccountClient() {
                 // the busy flag here would only flicker the button on a page
                 // that is already leaving.
               }}
-              className="h-10 inline-flex items-center rounded px-4 text-sm font-semibold bg-coral text-white hover:bg-coral-soft transition-colors disabled:opacity-50"
+              className="h-10 inline-flex items-center rounded px-4 text-sm font-semibold bg-coral text-accent-foreground hover:bg-coral-soft transition-colors disabled:opacity-50"
             >
               {billingBusy ? "Opening Stripe…" : "Continue to payment"}
             </button>
@@ -163,7 +163,14 @@ export function AccountClient() {
               </div>
             ) : renews ? (
               <div>
-                <dt className="label text-ink-muted">Renews</dt>
+                {/* During a trial this date is the FIRST charge, not a renewal.
+                    Stripe collects the card before the trial starts, so the
+                    money moves on this day whether or not anyone comes back to
+                    the site — calling it "Renews" would be the one piece of
+                    wording on this page capable of causing a chargeback. */}
+                <dt className="label text-ink-muted">
+                  {m.status === "trialing" ? "First charge" : "Renews"}
+                </dt>
                 <dd className="mt-1 text-sm text-ink tabular">{renews}</dd>
               </div>
             ) : null}
@@ -174,7 +181,7 @@ export function AccountClient() {
           <div className="mt-5 pt-4 border-t border-hairline flex flex-wrap items-center gap-3">
             <Link
               href="/pricing/"
-              className="h-10 inline-flex items-center rounded px-4 text-sm font-semibold bg-coral text-white hover:bg-coral-soft transition-colors"
+              className="h-10 inline-flex items-center rounded px-4 text-sm font-semibold bg-coral text-accent-foreground hover:bg-coral-soft transition-colors"
             >
               See what a Season Pass adds
             </Link>
