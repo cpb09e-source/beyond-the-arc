@@ -92,6 +92,21 @@ export type Checks = {
   slate: string;
   outcome: "ok" | "warn" | "fail";
   checks: Array<{ id: string; label: string; state: CheckState; detail: string }>;
+  /** Absent on a report written before the meter existed. */
+  quota?: Quota | null;
+};
+
+/**
+ * The CBBD month, counted by the ingest itself (scripts/lib/cbbd-meter.mjs).
+ * `limit` is CBBD_MONTHLY_LIMIT on the runner or null — the API does not
+ * report a ceiling and the plans change, so nothing here guesses one.
+ */
+export type Quota = {
+  month: string;
+  calls: number;
+  limit: number | null;
+  history: Array<{ month: string; calls: number }>;
+  ingestOnly: true;
 };
 
 export type Loaded<T> =
@@ -456,6 +471,49 @@ export function webhookTile(overview: Loaded<Overview>): TileModel {
   if (!hb.ok) return { health: "bad", value: "Failing", sub: `handler failed on ${hb.type}`, meter };
   if (monthly > 0 && age > WEBHOOK_QUIET) return { health: "warn", value: ago(hb.at), sub: `quiet with ${monthly} monthly`, meter };
   return { health: "good", value: ago(hb.at), sub: hb.type, meter };
+}
+
+/**
+ * What is left of the month's CBBD calls.
+ *
+ * The one tile that is about NEXT week rather than last night: run out and
+ * the ingest starts answering 429 at 3am with no warning. It is grey, not
+ * green, when no limit is configured — a count with nothing to measure it
+ * against is not a state of health, and colouring it green would say the
+ * quota had been checked when nothing was checked.
+ *
+ * The number is a FLOOR. The live functions (scoreboard, game) spend from the
+ * same quota and cannot write to the meter, and a lost archive cache resets
+ * the month. The check row in the data section carries that sentence in full;
+ * there is no room for it here.
+ */
+export function quotaTile(checks: Loaded<Checks>): TileModel {
+  if (checks.state === "loading") return { health: "loading", value: "…", sub: "reading the meter" };
+  if (checks.state !== "ready") return { health: "off", value: "Unknown", sub: "no report to read it from" };
+  const q = checks.data.quota;
+  if (!q) return { health: "off", value: "Not counted", sub: "the next ingest starts the meter" };
+  const spent = q.calls.toLocaleString();
+
+  if (q.limit === null) {
+    const peak = Math.max(0, ...q.history.map((m) => m.calls));
+    return {
+      health: "off",
+      value: spent,
+      sub: peak > q.calls ? `this month · ${peak.toLocaleString()} is the high` : "this month · no limit set",
+      meter: peak > 0
+        ? { kind: "split", parts: [{ tone: "accent", pct: (q.calls / peak) * 100, title: `${spent} against a ${peak.toLocaleString()} high` }] }
+        : undefined,
+    };
+  }
+
+  const pct = (q.calls / q.limit) * 100;
+  const tone: MeterTone = pct >= 100 ? "bad" : pct >= 80 ? "warn" : "good";
+  return {
+    health: pct >= 100 ? "bad" : pct >= 80 ? "warn" : "good",
+    value: spent,
+    sub: `of ${q.limit.toLocaleString()} · ${Math.round(pct)}%`,
+    meter: { kind: "split", parts: [{ tone, pct: Math.min(100, pct), title: `${Math.round(pct)}% of ${q.limit.toLocaleString()}` }] },
+  };
 }
 
 /**

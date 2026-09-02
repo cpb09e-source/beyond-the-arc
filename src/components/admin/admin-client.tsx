@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   Activity, ArrowLeftRight, CreditCard, ExternalLink, Globe, LayoutGrid, Megaphone,
-  Play, RefreshCw, Rocket, ShieldCheck, Undo2, Users,
+  Play, RefreshCw, Rocket, ShieldCheck, Undo2, Users, Zap,
 } from "lucide-react";
 import { dispatchRun } from "@/lib/admin-api";
 import { WORKFLOW_URL, type Deploy, type Workflow } from "@/lib/github-runs";
@@ -30,6 +30,7 @@ import {
   dur,
   pipelineTile,
   probesTile,
+  quotaTile,
   subscribersTile,
   useDashboardData,
   webhookTile,
@@ -158,6 +159,7 @@ function Dashboard() {
   const dep = deployTile(deploy);
   const subs = subscribersTile(overview);
   const hook = webhookTile(overview);
+  const quota = quotaTile(checks);
 
   /**
    * The rail carries each pane's health, so a pane you are not looking at can
@@ -170,7 +172,7 @@ function Dashboard() {
       items: [
         { id: "overview", label: "Overview", icon: <LayoutGrid {...ICON} />, health: worst([pipeline.health, data.health, site.health, dep.health]) },
         { id: "pipeline", label: "Pipeline", icon: <Activity {...ICON} />, health: worst([pipeline.health, dep.health]) },
-        { id: "data", label: "Data checks", icon: <ShieldCheck {...ICON} />, health: data.health },
+        { id: "data", label: "Data checks", icon: <ShieldCheck {...ICON} />, health: worst([data.health, quota.health]) },
         { id: "checks", label: "Site checks", icon: <Globe {...ICON} />, health: site.health },
       ],
     },
@@ -240,13 +242,14 @@ function Dashboard() {
     >
       {view === "overview" && (
         <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
             <Tile label="Pipeline" icon={<Activity {...ICON} />} model={pipeline} onClick={() => go("pipeline")} />
             <Tile label="Data checks" icon={<ShieldCheck {...ICON} />} model={data} onClick={() => go("data")} />
             <Tile label="Site checks" icon={<Globe {...ICON} />} model={site} onClick={() => go("checks")} />
             <Tile label="Deploy" icon={<Rocket {...ICON} />} model={dep} onClick={() => go("pipeline")} />
             <Tile label="Subscribers" icon={<Users {...ICON} />} model={subs} onClick={() => go("subscribers")} />
             <Tile label="Stripe" icon={<CreditCard {...ICON} />} model={hook} onClick={() => go("subscribers")} />
+            <Tile label="CBBD quota" icon={<Zap {...ICON} />} model={quota} onClick={() => go("data")} />
           </div>
 
           {/* The run panel is tall and the status cards are short, so they

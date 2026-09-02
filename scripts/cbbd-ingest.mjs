@@ -30,6 +30,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
+import { record as recordCalls } from "./lib/cbbd-meter.mjs";
 
 // ---- config ----
 const API = "https://api.collegebasketballdata.com";
@@ -91,6 +92,21 @@ function* dateRange(from, to) {
 
 // ---- fetch ----
 let calls = 0;
+
+/**
+ * Bank what this run spent, once, whatever way it ends.
+ *
+ * The quota is monthly and CBBD does not report a running total, so the only
+ * count that exists is this one — and the runs that most need counting are
+ * the ones that die on a 429, which is exactly when an early process.exit
+ * would throw the number away. See scripts/lib/cbbd-meter.mjs.
+ */
+let banked = false;
+function bankCalls() {
+  if (banked) return;
+  banked = true;
+  if (!DRY) recordCalls(calls);
+}
 async function get(pathname, params = {}) {
   const url = new URL(API + pathname);
   for (const [k, v] of Object.entries(params)) if (v != null) url.searchParams.set(k, String(v));
@@ -267,7 +283,7 @@ async function main() {
       process.stdout.write(`\r  ${date}: ${r.games ?? 0} games (${calls} calls total)   `);
     } catch (e) {
       console.error(`\n  ✗ ${date}: ${e.message}`);
-      if (String(e.message).startsWith("429")) process.exit(2);
+      if (String(e.message).startsWith("429")) { bankCalls(); process.exit(2); }
     }
   }
   // Box in ~2-week chunks.
@@ -279,4 +295,8 @@ async function main() {
   console.log(`\n✓ done — ${pulled} slates pulled, ${skipped} already archived, ${games} games, ${plays.toLocaleString()} plays, ${calls} API calls`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main()
+  .catch((e) => { console.error(e); process.exitCode = 1; })
+  // exitCode rather than exit(1) above, so this still runs. The calls were
+  // spent whether or not the run finished.
+  .finally(bankCalls);

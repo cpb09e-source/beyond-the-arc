@@ -196,6 +196,17 @@ on its own —
   - **Subscribers** / **Stripe webhook** — `/api/admin-config?what=overview`;
     the webhook writes a heartbeat to `site_config.stripe_webhook`.
 
+  - **CBBD quota** — `quota` inside `checks.json`. `scripts/lib/cbbd-meter.mjs`
+    keeps a per-month count at `data/cbbd/.meter.json`, which the ingest adds
+    to at the end of every run (including one that dies on a 429 — the calls
+    were still spent). It lives inside the archive directory because that is
+    what survives: Actions caches `data/cbbd` on a rolling key and the R2
+    archive backup walks dotfiles too. THE NUMBER IS A FLOOR — `scoreboard.mts`
+    and `game.mts` call CBBD live from the same quota and cannot write to it,
+    and a lost cache resets the month. Set the repo VARIABLE
+    `CBBD_MONTHLY_LIMIT` (a number, not a secret) to turn the count into a
+    gauge that warns at 80% and fails at 100%; unset, the tile is grey and
+    says so rather than inventing a ceiling the API never reports.
   - **Deploy** — `/build-info.json` (written into `out/` by
     `scripts/build-with-r2-stash.mjs`) plus GitHub's `compare` for how far main
     has moved. "Behind" is normal between deploys, not an alarm.

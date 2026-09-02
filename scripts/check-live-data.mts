@@ -49,6 +49,8 @@ import { config as dotenvConfig } from "dotenv";
 import { S3Client, GetObjectCommand, HeadObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { LIVE_SEASON } from "@/lib/seasons";
 import { teamSlug } from "@/lib/team-slug";
+// @ts-expect-error — plain .mjs, no declaration file; scripts/ is outside tsconfig.
+import { read as readMeter, months as meterMonths, monthKey } from "./lib/cbbd-meter.mjs";
 
 dotenvConfig({ path: ".env.local" });
 
@@ -84,6 +86,23 @@ type Counts = {
   indexRows: number;
 };
 
+/**
+ * What the ingest has spent this month. The limit comes from the environment
+ * because CBBD's plans change and the number is nowhere in the API: with
+ * CBBD_MONTHLY_LIMIT set this is a gauge, without it a running count with
+ * nothing to compare against except its own history. Never invented.
+ */
+type Quota = {
+  /** UTC, "2026-09". */
+  month: string;
+  calls: number;
+  limit: number | null;
+  /** Trailing months, oldest first. */
+  history: Array<{ month: string; calls: number }>;
+  /** The functions that call CBBD live cannot write to the meter. Always true. */
+  ingestOnly: true;
+};
+
 type Report = {
   at: string;
   season: number;
@@ -92,6 +111,7 @@ type Report = {
   outcome: "ok" | "warn" | "fail";
   checks: Check[];
   counts: Counts;
+  quota: Quota | null;
 };
 
 const checks: Check[] = [];
@@ -339,6 +359,44 @@ function checkLivePlayerPages(prior: Counts | null): number {
  * games the index is identical. It is wrong when a slate was played and the
  * index on R2 predates it.
  */
+/**
+ * ── THE CBBD QUOTA ────────────────────────────────────────────────────────
+ *
+ * Not a check on the data — a check on whether there will BE data next week.
+ * CBBD bills monthly and answers 429 when the month is gone, and the first
+ * anyone hears of it is an ingest that dies at 3am. The count comes from
+ * scripts/lib/cbbd-meter.mjs, which the ingest writes at the end of every
+ * run; read its header for why the number is a floor rather than a total.
+ *
+ * With no CBBD_MONTHLY_LIMIT there is no threshold to cross, so this reports
+ * and never warns. Guessing a plan's ceiling would produce an alarm at 80% of
+ * a number nobody chose.
+ */
+function checkQuota(): Quota | null {
+  const meter = readMeter();
+  if (!meter) {
+    add("quota", "CBBD quota", "skip", "no meter yet — the next ingest starts one");
+    return null;
+  }
+  const month = monthKey();
+  const history = meterMonths(meter) as Array<{ month: string; calls: number }>;
+  const calls = history.find((m) => m.month === month)?.calls ?? 0;
+  const raw = Number(process.env.CBBD_MONTHLY_LIMIT);
+  const limit = Number.isFinite(raw) && raw > 0 ? raw : null;
+  const spent = calls.toLocaleString();
+
+  if (limit === null) {
+    const peak = Math.max(0, ...history.map((m) => m.calls));
+    add("quota", "CBBD quota", "ok",
+      `${spent} calls this month (ingest only)${peak > calls ? `, against a ${peak.toLocaleString()} high` : ""} — set CBBD_MONTHLY_LIMIT to make this a gauge`);
+  } else {
+    const pct = Math.round((calls / limit) * 100);
+    const detail = `${spent} of ${limit.toLocaleString()} this month — ${pct}% (ingest only; the live functions spend from the same quota and are not counted)`;
+    add("quota", "CBBD quota", calls >= limit ? "fail" : pct >= 80 ? "warn" : "ok", detail);
+  }
+  return { month, calls, limit, history, ingestOnly: true };
+}
+
 async function checkR2(finals: number, pack: Pack | null) {
   if (NO_UPLOAD || !s3) { add("r2", "R2 has tonight's files", "skip", "--no-upload"); return; }
   const slug = pack?.teams.names[0] ? teamSlug(pack.teams.names[0]) : "duke";
@@ -374,6 +432,8 @@ async function main() {
   const livePlayerPages = checkLivePlayerPages(prior);
   await checkR2(finals, pack);
 
+  const quota = checkQuota();
+
   const rank: Record<State, number> = { ok: 0, skip: 0, warn: 1, fail: 2 };
   const worst = Math.max(...checks.map((c) => rank[c.state]));
   const report: Report = {
@@ -383,6 +443,7 @@ async function main() {
     outcome: worst === 2 ? "fail" : worst === 1 ? "warn" : "ok",
     checks,
     counts: { season: SEASON!, teamSeasonRows, liveTeamPages, livePlayerPages, indexRows },
+    quota,
   };
 
   fs.mkdirSync(path.dirname(OUT_PATH), { recursive: true });

@@ -135,6 +135,11 @@ jobs:
           # this is not normally needed. It is here so a deliberate preseason
           # run is a workflow input away rather than an edit to this file.
           BTA_ALLOW_NETWORK: ${{ vars.BTA_ALLOW_NETWORK }}
+          # The month's CBBD ceiling, as a repository VARIABLE (not a secret —
+          # it is a number on an invoice). Unset, the dashboard counts calls
+          # and says so; set, it becomes a gauge that warns at 80%. The API
+          # does not report a ceiling, so this is the only way to have one.
+          CBBD_MONTHLY_LIMIT: ${{ vars.CBBD_MONTHLY_LIMIT }}
 
       # ALWAYS, INCLUDING ON FAILURE. The status file records which step died
       # and how far the run got, which is exactly what is wanted when the run
