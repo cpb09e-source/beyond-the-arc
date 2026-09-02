@@ -1,6 +1,6 @@
 # Where we are — handoff
 
-Written 2026-08-25, last updated **2026-09-01**. Read this first after a `/clear`.
+Written 2026-08-25, last updated **2026-09-02**. Read this first after a `/clear`.
 Everything below is state that lives nowhere else: decisions made in
 conversation, findings from investigation, and constraints that are not
 derivable from the code.
@@ -11,6 +11,16 @@ Delete sections as they land. Keep the constraints.
 in one important way: the season being played is no longer prebuilt. Read
 "The live season is data" below before touching anything under `/teams`.
 
+**2026-09-02 was much larger — 34 commits.** The CBBD key was replaced and 2021 was
+backfilled end to end, the presigned-R2 paywall work was built, a five-day
+Stripe trial went in, and the team and player stat panels were rebuilt. None of
+it is deployed. See "Production is behind" immediately below.
+
+**VERIFY BEFORE YOU REPORT.** This document has twice described finished work
+as open, and both times it was read out to Colin as the next thing to do. If a
+section says something is missing, check the filesystem or the code before
+repeating it. Sections here are dated; the repo is not.
+
 ---
 
 ## Standing constraints — these override any instinct to be helpful
@@ -20,13 +30,24 @@ lifted the push half on 2026-09-01 ("you can push"), then authorised one build
 and deploy that same day ("build and deploy go ahead"). That authorisation was
 for THAT deploy. Ask again before the next one.
 
-**PRODUCTION IS CURRENT as of 2026-09-01 23:08 UTC** — deploy
-`6a974a4a10f35a71b4b98c0b`, state `ready`, verified through
-`netlify api listSiteDeploys` rather than the CLI's exit code. Everything
-through commit `b688a7422e` is live: the live-season architecture, per-team
-game files, the admin page and banner, the portalled dropdowns, the nav fix.
+**PRODUCTION IS 42 COMMITS BEHIND as of 2026-09-02** (41 at the time of
+writing, plus this doc update). The last successful
+deploy was `6a974a4a10f35a71b4b98c0b` on 2026-09-01 23:08 UTC, state `ready`,
+verified through `netlify api listSiteDeploys` rather than the CLI's exit code.
+Everything through commit `b688a7422e` is live: the live-season architecture,
+per-team game files, the admin page and banner, the portalled dropdowns, the
+nav fix.
 
-Numbers from that run, for the next estimate: build 32,868 pages; hashing
+Everything after `b688a7422e` is local only — the legal pages, the glossary
+rewrite, the footer map, the headshot decision, the CBBD fixes, the whole 2021
+backfill, the gated-corpus code, the Stripe trial, the scoreboard work, the
+team-page tabs, and both stat panels.
+
+**The deploy is also the gate on the paywall leak.** Step 5 of the presigned-R2
+work — the purge that actually closes it — cannot run until the deploy lands,
+because purging first 404s every game log in production. See that section.
+
+Numbers from the last run, for the next estimate: build 32,868 pages; hashing
 343,647 files and 9 functions; **322,726 files uploaded, 71 minutes**. The 45
 minutes budgeted was low — a deploy that touches nearly every page dedupes
 almost nothing (161,098 of 343,647 requested by the CDN).
@@ -362,7 +383,7 @@ Built and committed:
     (`game-index.ts`, `team-game-index.ts`) now go through it.
   - `scripts/sync-gated-corpora.mjs` — `--push`, `--verify`,
     `--purge-public --yes`.
-  - `verify-deploy-ready.mjs` — 4 new checks (25 → 29) that the signing client
+  - `verify-deploy-ready.mjs` — 4 new checks that the signing client
     is actually in the build.
   - `netlify/functions/data-url.mts` was already written; unchanged.
 
@@ -403,30 +424,26 @@ refuses to delete a public object whose gated copy it cannot HEAD, which is the
 one unrecoverable mistake available here — but it cannot protect you from the
 ordering, so read the header before running it.
 
-### CBBD_API_KEY — SUBSCRIPTION ACTIVE, KEY IS STALE. Needs replacing.
+### CBBD_API_KEY — RESOLVED 2026-09-02. Working key in place.
 
 **The subscription is Tier 3: $10/month, 75,000 requests**, shared with CBBD's
 football API, confirmed by Colin 2026-09-02. That number is the repo variable
 `CBBD_MONTHLY_LIMIT`, which is what makes the admin quota tile a gauge rather
 than a bare count.
 
-**But the key in `.env.local` is dead.** Tested directly 2026-09-02:
-`GET /teams?season=2021` returns `401 {"message":"Unauthorized"}` with no
-`x-calllimit-remaining` header at all. The string is 152 chars starting `Tyfn`.
+**The key in `.env.local` is the current one and works** — 64 characters, not
+the 152-character string that was dead. It pulled all of 2021 on 2026-09-02.
 
-**Re-subscribing does not revive a revoked key.** CBBD revokes on lapse and
-issues a NEW one, so an active Patreon membership and a working key are two
-separate facts. This was assumed to be one fact for most of a day. **Action:
-get the current key from collegebasketballdata.com and replace `CBBD_API_KEY`
-in `.env.local`.** Nine scripts read it. It is also one of the eight GitHub
-secrets, so set it there only after it is known good.
+Keep this, because it cost a day: **re-subscribing does not revive a revoked
+key.** CBBD revokes on lapse and issues a NEW one, so an active Patreon
+membership and a working key are two separate facts. Two near-miss strings went
+past on the way to the right one — a real CBBD key is 64 chars, and anything
+noticeably longer is something else. Nine scripts read it, and it is one of the
+ten GitHub secrets, so set it there only after it is known good.
 
 Why the 2026-09-01 evidence was misleading: the pull scripts "all exited 0"
 during the accidental freeze crossing, which was read as the key working. It
 was not — they exited 0 *while failing*, which is the bug fixed below.
-
-**§7's 2021 backfill is still blocked, on the new key.** Everything else about
-it is ready and the pull is under a hundred requests.
 
 #### The pull scripts used to fail silently — fixed 2026-09-02
 
@@ -451,21 +468,42 @@ and set `process.exitCode = 1`. The player pull also exits 1 when its row-parity
 check against the team box finds anything missing, which it previously only
 printed. Verified against the live 401.
 
-The other CBBD pulls (`pull-rankings`, `pull-adjusted-ratings`,
-`pull-shooting-splits`, `pull-missing-plays`) do not special-case 401 either and
-were not audited for the empty-write half. Worth a look before trusting an exit
-code from any of them.
+**The sweep is finished — all seven pulls now behave.** `pull-missing-plays`
+was fixed alongside the 2021 backfill; `pull-rankings`, `pull-adjusted-ratings`
+and `pull-shooting-splits` on 2026-09-02 in `30df91f690`.
+
+`pull-shooting-splits` had the worst version: it loops 34 conferences per
+season, so a dead key logged 34 warnings and wrote an empty archive, and its
+conference list is fetched once up front — a 401 there produced zero
+conferences and would have written an empty file for every season in the range.
+
+All three now stop the run on 401/403, refuse to write a zero-row file, and set
+`process.exitCode = 1`. `pull-rankings` also stopped trusting the response
+shape (an error object wearing a 200 used to survive `Array.isArray(x) ? x : []`
+and land as an empty archive), and `pull-shooting-splits` says when a season was
+written but a conference failed. Verified both directions against a live 401 and
+against the real key.
 
 Also settled 2026-08-30: **CBBD has no women's basketball.** `?gender=women`,
 `?league=womens` and `?division=women` are all silently ignored (identical 364
 men's teams returned). Women's coverage needs a different source entirely.
 
-### 1. Redesign the Shooting tab — AGREED, NOT STARTED
+### 1. The Shooting tab — PARTLY DONE 2026-09-02
 
-The one tab only relocated, never rethought. It is where the new play-by-play
-columns belong and do not yet appear: `rima`/`rimm`/`mida`/`midm` are in every
-lineup row, so rim rate, rim FG% and mid-range splits are already computed per
-five-man unit and per player, and the Shooting tab shows none of them.
+The play-by-play shot columns landed in `7f521676d9`. `rima`/`rimm`/`mida`/
+`midm` now drive two new `DistributionPanel`s on the tab — **Shot Profile**
+(where a team's shots come from) and **Shot Defense** (where it lets the other
+side shoot from) — built by `buildShotProfileRanks` / `buildShotDefenseRanks` in
+`distribution-panel.tsx`. `StatDef` gained `invert` there, because a rim rate
+allowed sorts the other way from a rim rate taken.
+
+The tab now carries: Shooting, Four Factors, Shot Profile, Shot Defense, Shot
+Clock and Assist Network. Both new panels render `null` rather than an empty
+frame before 2014, where there is no play-by-play.
+
+What is still open is the per-player half — the same rim/mid splits exist per
+five-man unit and per player and appear on neither the player page nor the
+lineups tab.
 
 ### 2. Build measured — DEPLOY is the risk, not the build
 
@@ -486,6 +524,41 @@ nothing. Never estimate a build from dev renders again.
 The `.txt` RSC payloads (267,975 files, 5.73 GB) are LOAD-BEARING — see the
 May 2026 infinite-404 incident. Do not strip them.
 
+### 2a. Landed 2026-09-02 and NOT deployed — do not report these as open
+
+Listed because this document's failure mode is describing finished work as
+todo. All of it is local only until the deploy runs.
+
+- **Legal and attribution.** `/sources` (attribution page), `/terms` with Texas
+  governing law, the footer rebuilt as a site map, and a glossary that reads
+  every column the site has rather than a hand-kept subset. Still outstanding:
+  a business gmail to replace `cpb09e@gmail.com` as the public contact, which
+  Colin said he would provide.
+- **ESPN headshots stay** — Colin's call, against the recommendation to drop
+  them. Mitigations shipped instead: `NEXT_PUBLIC_BTA_PHOTOS=off` kills every
+  headshot at build time from one env var, and `netlify.toml` sends
+  `X-Robots-Tag: noindex` for `/images/players/*`. The 34 coach photos were
+  deleted outright — they rendered on no page at all.
+- **Scoreboard.** Demo caption removed, home crest beside the venue (not on
+  neutral sites), and a Show filter with All / Top 25 / Power Conferences /
+  Mid Majors. That filter needed `isPowerConference()` in `conf-tiers.ts`,
+  because **three conference vocabularies exist** — Bart codes (`B10`, `B12`,
+  `BE`), `CONF_DISPLAY` labels ("Big 10", with a digit) and the scoreboard
+  feed's full names ("Big Ten"). Only ACC and SEC spell the same in all three,
+  which is why Arizona and Oklahoma State first showed up as mid-majors.
+- **Old seasons get real tabs, for zero build cost.** Only the newest few
+  seasons get tab ROUTES — a tabbed team-season is 76 files against an
+  untabbed one's 10, so routing all 3,166 older ones would add ~209,000 files
+  and ~43 minutes to a deploy. Instead `AnchorTabShell` sets `data-team-tab` on
+  a wrapper and CSS hides the panes that are not active. Every section stays in
+  the HTML, so indexing and no-JS are unchanged.
+- **Player and team stat panels rebuilt.** The player overview gained nine
+  cards and a View picker; Team Stats went from 48 stats to 77 across nine
+  cards, opening on Everything. Read the two commits for the reasoning —
+  `6f8cda2a93` in particular carries three data corrections worth knowing
+  about, including that opponent-relative rates were dividing our counts over
+  every game by the opponent's over only the 95.6% that have a sibling box row.
+
 ### 3. Smaller, carried over
 
 - **Lint is at 0 errors, 30 warnings** (2026-09-01). Three things got it
@@ -501,8 +574,15 @@ May 2026 infinite-404 incident. Do not strip them.
   DOES still ship header-only markup is the two game log explorers —
   `/teams/games/` and `/players/games/`, 2 `<tr>` each — which have no
   TablePreview equivalent.
-- **`assist-network.json` is 12 MB and committed** — probably belongs in R2
-  like `assist-players/`.
+- **`assist-network.json` needs nothing done to it.** Checked 2026-09-02 and
+  do not re-check: it is 14 MB and committed, but it is already in
+  `BUILD_ONLY_FILES` and stripped from `out/` by both the wrapper and the
+  postbuild hook, so it costs zero deploy bytes. Nothing in the browser fetches
+  it — `readJson` in `static-data.ts` is a build-time server read. R2 is for
+  files a request can ask for, and no request can ask for this one.
+  `assist-players/` is build-only for the same reason, so "move it to R2 like
+  assist-players" was wrong twice over. Three commits have ever touched it, in
+  a 1.5 GB repo, so the git weight is not a problem either.
 - **The fixed-Tailwind-palette item is DONE.** An earlier note claimed nine
   files still used palette colours that cannot follow dark mode; zero remain.
 - **Every dropdown on the site is now the portalled listbox** — the native
@@ -517,7 +597,19 @@ May 2026 infinite-404 incident. Do not strip them.
   the popover arithmetic before `usePopoverAnchor` existed. Cleanup, not a bug.
 - **The Find-a-game button is hidden** on team pages pending a decision.
 
-### 4. Stripe — VERIFIED WORKING 2026-08-25
+### 4. Stripe — VERIFIED WORKING 2026-08-25, five-day trial added 2026-09-02
+
+**The trial is live in code, not yet in production** (`ea595b9d53`).
+`TRIAL_DAYS = 5` in `netlify/functions/create-checkout-session.mts`, with a
+one-trial-per-customer guard: the function lists the customer's subscriptions
+and omits the trial if they have ever had one, so cancel-and-resubscribe cannot
+farm free weeks. The guard FAILS OPEN — a Stripe error there grants the trial
+rather than blocking the sale, which is the right way round for a checkout
+path. `/terms` describes it.
+
+No refund policy was added. The 14-day refund promise that used to sit in
+`/terms` §4 was a real commitment nobody had decided to make; the trial replaced
+it, and a five-day trial before any charge is the stronger offer anyway.
 
 `STRIPE_SECRET_KEY` (`sk_live_…`), `STRIPE_PRICE_MONTHLY` ($8/month) and
 `STRIPE_PRICE_YEARLY` ($50/year) all resolve against the LIVE key, so they are
@@ -569,16 +661,27 @@ The build is not the risk; the upload is. Sequence, when authorized:
 1. `node scripts/build-with-r2-stash.mjs` — the entry point netlify.toml names.
    (`npm run build` runs the same strip via `postbuild`, but the wrapper is
    what has been proven on this project.)
-2. `node scripts/verify-deploy-ready.mjs` — 25 checks, exits 1 on any
-   failure, and it reads the strip list from the same module the strippers do.
-   It replaces the by-hand confirmation this step used to describe.
+2. `node scripts/verify-deploy-ready.mjs` — exits 1 on any failure, and it
+   reads the strip list from the same module the strippers do. It replaces the
+   by-hand confirmation this step used to describe. (Don't quote a check count
+   here; three of the calls are inside loops, so the number in the output is
+   not the number of `check(` call sites and the figure goes stale silently.)
+   Four checks added 2026-09-02 assert the presigned-R2 signing client is in
+   the build and that both game-log loaders go through `loadSignedCorpus`, so a
+   deploy cannot ship a paywall that never asks for a signature.
 3. `npm run sync:r2` — the new `team-season-games` and `live` dirs need it.
 4. `netlify deploy --prod --dir=out --no-build`, run BACKGROUNDED.
 5. `netlify api listSiteDeploys` until `ready`. NEVER trust the exit code.
 
-Budget 45 minutes or more. Netlify dedupes by content hash, so a normal
-incremental deploy runs under 2 min — but this one follows a redesign that
-touched nearly every team page.
+Budget **75 minutes**, not 45. The 2026-09-01 deploy measured 71 minutes for
+322,726 files. Netlify dedupes by content hash, so a normal incremental deploy
+runs under 2 min — but a deploy that touches nearly every team page dedupes
+almost nothing, and both stat panels and the team-page tabs did exactly that.
+
+**6a. AND THEN, ONLY THEN:** `node scripts/sync-gated-corpora.mjs
+--purge-public --yes`. This is step 5 of the presigned-R2 work and the thing
+that actually closes the paywall leak. Running it before the deploy 404s every
+game log in production.
 
 ### 7. The COVID season's per-player game logs — LANDED 2026-09-02
 
@@ -607,15 +710,23 @@ was never a data problem — the archive pull worked first time on a valid key.
 493 distinct opponents against 2022's 111,582 and 680. Cancelled games and
 gutted non-conference schedules. Do not read the gap as a short pull.
 
-**NOT YET REBUILT, and this is the open half.** Ten scripts read
-`box-players-full.json.gz` and only four have run. Still missing:
-`public/data/porpag-2021.json` (the only gap in an otherwise complete 2014-2026
-run) and `data/cbbd/2021/box-epm-2021.json`. The blockers are cost, not
-correctness: `build-player-season-adv.mjs`, `build-player-stat-pack.mjs`,
-`build-cbbd-player-season.mjs` and `build-team-season-stats.mjs` take **no
-`--season` flag**, so each one rebuilds all thirteen seasons and churns the
-twelve `built_at`-only porpag files. `compute-epm.py` is a Python refit on top.
-Worth doing deliberately in one pass, not incidentally.
+**THE DERIVED LAYER IS DONE TOO** — `36ac5b6d51`, same day. Both files that
+were missing now exist: `public/data/porpag-2021.json` (closing the only gap in
+an otherwise complete 2014-2026 run) and `public/data/box-epm-2021.json`. The
+scripts that take no `--season` flag were run in one deliberate pass, and the
+twelve `built_at`-only porpag files were checked out afterwards rather than
+committed.
+
+Note on `box-epm-*.json`: its `players` array is 0 for **every** season, not
+just 2021. That is a site-wide stub, not a 2021 hole — do not chase it as one.
+
+**THE PLAY-BY-PLAY LANDED AS WELL** — `73565e31a2`. 802,560 plays across 138
+day files, which unblocks shot charts and clock splits for 2021. Four dates
+(the 1st of each month) hang server-side even at a 120-second timeout and were
+partially recovered through a UTC bucket spill; 13, 15, 5 and 8 games
+respectively are still short on those days. Lineups and on/off remain
+impossible for 2021 for a reason that has nothing to do with the pull:
+`onFloor` is 0.0% of plays before 2024.
 
 Historical detail, kept because it explains the years of delay:
 
@@ -624,7 +735,8 @@ Historical detail, kept because it explains the years of delay:
 model output, and `build-player-games-cbbd.mjs` reads
 `box-players-full.json.gz` and nothing else.
 
-The chain, verified step by step — only step 1 is blocked:
+The chain, kept for the next season that needs one — all four steps ran
+successfully on 2026-09-02:
 
 ```bash
 node scripts/pull-player-box-v2.mjs      --season 2021   # needs a live key
@@ -645,15 +757,10 @@ The pull is small: 2021 ran 2020-11-25 to 2021-04-05, **124 distinct game
 days**, 8,243 team-game rows. A couple of minutes, well under a hundred
 requests. The same file also unblocks `porpag-2021`.
 
-Still out of reach after that: shot charts, lineups, on/off, assist networks,
-clock splits. Those need the ~157 `plays-*.json.gz` day files via
-`pull-missing-plays.mjs` — a separate and much larger pull. The pages already
-degrade honestly ("No lineup data for 20-21"), so this is a gap, not a bug.
-
-If the key is a dead end, the fallback is an ESPN backfill for 2021 player box
-scores — parity exists (see `docs/womens-basketball-feasibility.md`) but it
-means a new scraper plus a name-matching join onto Bart IDs. Do not start that
-without Colin saying so.
+The ESPN-backfill fallback was never needed and should not be started. Parity
+exists (see `docs/womens-basketball-feasibility.md`) but it means a new scraper
+plus a name-matching join onto Bart IDs, and the CBBD pull worked first time on
+a valid key.
 
 ---
 
