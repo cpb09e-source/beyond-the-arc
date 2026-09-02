@@ -22,13 +22,27 @@ export const metadata: Metadata = {
  *
  * If any of that changes, this page is wrong the same day and has to change
  * with the code.
+ *
+ * TWO CLAUSES WERE CUT ON COLIN'S INSTRUCTION, 2026-09-02. Recorded because
+ * both were carrying a disclosure and not just prose, and because the same
+ * pass cut the matching clause on /sources — so neither fact survives anywhere
+ * on the site now:
+ *
+ *   - "Who else handles it" named the four processors (Supabase, Stripe,
+ *     Netlify, Cloudflare R2) and said the data is not sold or shared.
+ *   - "What is stored in your browser" listed the four first-party items above
+ *     and carried the reason this site runs no consent banner: there are no
+ *     advertising or analytics cookies to consent to.
+ *
+ * The behaviour is unchanged and still true — this is a question of what the
+ * page says, not what the app does. Raised with Colin; restoring either is a
+ * sentence rather than a rewrite.
  */
 export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy"
       updated="2026-09-02"
-      lede="What we collect, which is very little, and what we do with it, which is less."
     >
       <Clause id="summary" title="The short version">
         <Plainly>
@@ -64,28 +78,6 @@ export default function PrivacyPage() {
           numbers, expiry dates and security codes are entered on Stripe&apos;s own pages and never
           touch this site or its servers. We receive back only what we need to know whether your
           subscription is active.
-        </p>
-      </Clause>
-
-      <Clause id="browser" title="What is stored in your browser">
-        <p>
-          Your sign-in session, your light-or-dark choice, any filter views you save in the
-          explorers, and — briefly — which plan you clicked before signing in. All of it is
-          first-party, none of it is shared with anyone, and clearing your browser data removes it.
-        </p>
-        <p>There are no advertising or analytics cookies to consent to, because there are none.</p>
-      </Clause>
-
-      <Clause id="processors" title="Who else handles it">
-        <ul className="list-disc pl-5 flex flex-col gap-1.5">
-          <li><strong className="text-ink">Supabase</strong> — accounts, sign-in and the subscription record.</li>
-          <li><strong className="text-ink">Stripe</strong> — payments and billing.</li>
-          <li><strong className="text-ink">Netlify</strong> — hosting and server logs.</li>
-          <li><strong className="text-ink">Cloudflare R2</strong> — serving the data files behind the pages.</li>
-        </ul>
-        <p>
-          Each is a processor acting on our instructions. We do not sell your data, we do not share
-          it for advertising, and we have never been asked for it by anyone.
         </p>
       </Clause>
 

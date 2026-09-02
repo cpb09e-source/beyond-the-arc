@@ -12,10 +12,9 @@ import Link from "next/link";
  * nobody can tell is stale.
  */
 export function LegalPage({
-  title, lede, updated, children,
+  title, updated, children,
 }: {
   title: string;
-  lede: string;
   /** ISO date. Shown as "2 September 2026". */
   updated: string;
   children: React.ReactNode;
@@ -27,9 +26,13 @@ export function LegalPage({
   return (
     <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-4 lg:pt-5 pb-20">
       <div className="max-w-[46rem]">
+        {/* NO STANDFIRST. Each of these pages used to carry a one-line summary
+            under the heading, and all three said a version of "this page is
+            honest and readable" — a claim the page either earns in its first
+            clause or does not earn at all. The first clause now lands
+            immediately, which is what a reader came for. */}
         <h1 className="text-2xl lg:text-3xl font-semibold tracking-tight">{title}</h1>
-        <p className="mt-2 text-sm text-ink-muted leading-relaxed">{lede}</p>
-        <p className="mt-3 text-xs text-ink-soft">Last updated {when}</p>
+        <p className="mt-2 text-xs text-ink-soft">Last updated {when}</p>
       </div>
 
       <div className="mt-8 max-w-[46rem] flex flex-col gap-8">{children}</div>

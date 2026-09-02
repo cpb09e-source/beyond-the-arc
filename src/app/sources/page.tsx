@@ -19,17 +19,27 @@ export const metadata: Metadata = {
  * from, and it owes the people who did the collecting their name in public.
  *
  * IT ALSO SAYS WHAT WE DO NOT USE, which is the half most attribution pages
- * skip. The recruiting-rank decision in particular is deliberate and worth
- * stating: we carry RSCI's consensus number and not a single service's
- * proprietary ranking, because a consensus index is published to be
- * reproduced with credit and a proprietary list is somebody's product.
+ * skip.
+ *
+ * TWO CLAUSES WERE CUT ON COLIN'S INSTRUCTION, 2026-09-02, and the reasoning
+ * is recorded here rather than lost:
+ *
+ *   - "Who else touches the site" (Netlify / R2 / Supabase / Stripe). The
+ *     matching clause on /privacy was cut in the same pass, so the site now
+ *     names its processors nowhere. Raised with Colin as a disclosure gap
+ *     rather than a styling one.
+ *   - "Recruiting and the transfer portal". This one DID carry something no
+ *     other page does — the RSCI credit. The site still renders RSCI consensus
+ *     ranks (player-atlas, player-page-view, sortable-roster-table,
+ *     season-preview), and RSCI publishes on the condition of attribution, so
+ *     that credit now appears nowhere. Raised with Colin; if it should come
+ *     back it is one sentence, not a clause.
  */
 export default function SourcesPage() {
   return (
     <LegalPage
       title="Sources & attribution"
       updated="2026-09-02"
-      lede="Everything here is built on data collected by other people. This page names all of them, says what we take, and says what we deliberately leave alone."
     >
       <Clause id="stats" title="College basketball statistics">
         <p>
@@ -59,26 +69,6 @@ export default function SourcesPage() {
         </p>
       </Clause>
 
-      <Clause id="recruiting" title="Recruiting and the transfer portal">
-        <p>
-          The recruit national-rank badge is the{" "}
-          <strong className="text-ink">Recruiting Services Consensus Index (RSCI)</strong>, published
-          at rscihoops.com. RSCI is an average of the major services rather than any one
-          service&apos;s product, and it is published expressly to be reproduced with attribution.
-        </p>
-        <p>
-          Transfer portal movement — who entered, and where they landed — is fact-checked against
-          public reporting including <strong className="text-ink">On3</strong>. We carry the fact of
-          a commitment. We do not carry On3&apos;s, 247Sports&apos;, ESPN&apos;s or Rivals&apos;
-          proprietary rating or ranking numbers.
-        </p>
-        <Plainly>
-          A player&apos;s destination is a fact and we will report it. A recruiting service&apos;s
-          rank number is that service&apos;s product, and if you want it you should go and get it
-          from them.
-        </Plainly>
-      </Clause>
-
       <Clause id="images" title="Photographs, logos and school marks">
         <p>
           Team logos and school names are the trademarks of their institutions. Beyond the Arc is an
@@ -90,16 +80,6 @@ export default function SourcesPage() {
           Player and coach photographs are used for identification alongside that person&apos;s
           statistics. If you hold rights in an image on this site and want it removed, write and it
           will be taken down — see below.
-        </p>
-      </Clause>
-
-      <Clause id="infrastructure" title="Who else touches the site">
-        <p>
-          Hosting is <strong className="text-ink">Netlify</strong>; data files are served from{" "}
-          <strong className="text-ink">Cloudflare R2</strong>. Accounts and sign-in run on{" "}
-          <strong className="text-ink">Supabase</strong>. Payments are handled entirely by{" "}
-          <strong className="text-ink">Stripe</strong> — card details never reach this site. There is
-          no advertising network and no third-party analytics on any page.
         </p>
       </Clause>
 

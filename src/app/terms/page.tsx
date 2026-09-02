@@ -27,7 +27,6 @@ export default function TermsPage() {
     <LegalPage
       title="Terms of service"
       updated="2026-09-02"
-      lede="The agreement between you and Beyond the Arc. Written to be read — if a clause is unclear, that is a fault worth reporting."
     >
       <Clause id="who" title="1. Who you are dealing with">
         <p>
