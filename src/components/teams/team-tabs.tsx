@@ -124,6 +124,26 @@ type NavProps = {
   overviewHref?: string;
 };
 
+/**
+ * The right element for the destination.
+ *
+ * NEXT'S Link MUST NOT CARRY AN IN-PAGE ANCHOR. It routes through
+ * history.pushState, and pushState does not fire `hashchange` — so the strip
+ * changed the URL to #shooting and every hash listener on the page slept
+ * through it, leaving the panes showing Overview. Found the moment the
+ * client-side tabs went in.
+ *
+ * A plain <a> does a real hash navigation, fires the event, costs no router
+ * work for a destination that was never a route, and still scrolls when JS is
+ * off. Link stays for the tab ROUTES, where it belongs.
+ */
+function TabLink({
+  mode, href, children, ...rest
+}: { mode: NavProps["mode"]; href: string; children: React.ReactNode } & React.ComponentProps<"a">) {
+  if (mode === "anchors") return <a href={href} {...rest}>{children}</a>;
+  return <Link href={href} prefetch={false} {...rest}>{children}</Link>;
+}
+
 function hrefFor(t: (typeof TABS)[number], p: NavProps): string {
   if (p.mode === "anchors") return `#${TAB_ANCHORS[t.key]}`;
   if (t.key === "overview") return p.overviewHref ?? `/teams/${p.slug}/${p.year}/`;
@@ -148,9 +168,9 @@ export function TeamTabBar(props: NavProps) {
           const isActive = t.key === props.active;
           return (
             <li key={t.key}>
-              <Link
+              <TabLink
+                mode={props.mode}
                 href={hrefFor(t, props)}
-                prefetch={false}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
                   "flex items-center h-8 px-3 rounded-md border text-sm whitespace-nowrap transition-colors",
@@ -162,7 +182,7 @@ export function TeamTabBar(props: NavProps) {
                 style={isActive ? { color: "var(--accent, var(--color-coral))" } : undefined}
               >
                 {t.label}
-              </Link>
+              </TabLink>
             </li>
           );
         })}
@@ -235,9 +255,9 @@ export function TeamBottomBar(props: NavProps) {
           const isActive = t.key === props.active;
           return (
             <li key={t.key} className="flex-1 min-w-0">
-              <Link
+              <TabLink
+                mode={props.mode}
                 href={hrefFor(t, props)}
-                prefetch={false}
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
                   "relative flex items-center justify-center h-[2.875rem] px-0 transition-colors",
@@ -280,7 +300,7 @@ export function TeamBottomBar(props: NavProps) {
                   style={{ backgroundColor: "var(--accent, var(--color-coral))" }}
                 />
                 {t.short}
-              </Link>
+              </TabLink>
             </li>
           );
         })}

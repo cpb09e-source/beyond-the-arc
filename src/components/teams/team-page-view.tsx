@@ -21,6 +21,7 @@ import {
 import { SortableRosterTable } from "@/components/teams/sortable-roster-table";
 import { DistributionPanel, type DistributionRank } from "@/components/teams/distribution-panel";
 import { AssistNetworkPanel } from "@/components/teams/assist-network-panel";
+import { AnchorTabShell, AnchorTabBar, AnchorBottomBar } from "@/components/teams/anchor-tab-shell";
 import { ClockSplitsPanel } from "@/components/teams/clock-splits-panel";
 import { LineupExplorer, type LineupFile } from "@/components/teams/lineup-explorer";
 import { OnOffExplorer } from "@/components/teams/on-off-explorer";
@@ -488,6 +489,24 @@ export function TeamPageView({
   const sample = isSampleTeam(slug);
 
   const showAll = tab === "all";
+  /**
+   * THE INVARIANT: every block gated by `show.X` must have `data-pane="X"` on
+   * its root element.
+   *
+   * On a season with tab routes only one pane renders and the attribute is
+   * inert. On a season without them every pane is in the HTML and CSS hides
+   * all but the active one, so a block that renders under `show.overview` and
+   * carries no attribute is a block that never hides — the schedule ticker and
+   * the rank panels were both missed on the first pass and sat under Shooting
+   * looking like a layout bug.
+   *
+   * There is no way to enforce this from here; the gate is a boolean and the
+   * markup is inline. Grep both lists and check they agree when adding a
+   * section:
+   *
+   *   grep -n 'show\.[a-z]* &&' team-page-view.tsx
+   *   grep -n 'data-pane'        team-page-view.tsx
+   */
   const show = {
     overview: showAll || tab === "overview",
     games:    showAll || tab === "games",
@@ -502,8 +521,22 @@ export function TeamPageView({
   // "Shooting" would open on a blurred panel.
   const showTabs = !preview;
 
+  /**
+   * A season with tab ROUTES keeps a plain wrapper — its URL already says which
+   * tab is showing and the server renders only that one. A season without them
+   * gets the client shell, which sets data-team-tab so CSS can hide the panes
+   * the reader is not looking at. See anchor-tab-shell.tsx for the cost
+   * argument; the short version is that this buys the same behaviour for zero
+   * pages and zero deploy time.
+   *
+   * The preview season is excluded with the strip itself: its sections are
+   * reordered around a game-less year, so a tab promising "Shooting" would open
+   * on a blurred panel.
+   */
+  const Shell = tab === "all" && showTabs ? AnchorTabShell : PlainShell;
+
   return (
-    <div className="team-accent" style={cssVars}>
+    <Shell cssVars={cssVars}>
       {/* Hero */}
       <section>
         {/* Same container as the row below it. The masthead used to be 88rem
@@ -679,13 +712,20 @@ export function TeamPageView({
       <div className="mx-auto max-w-[88rem] px-6 lg:px-10">
         {showTabs && (
           <div className="mb-1">
-            <TeamTabBar
-              active={tab === "all" ? "overview" : tab}
-              mode={tab === "all" ? "anchors" : "routes"}
-              slug={slug}
-              year={current.year}
-              overviewHref={overviewHref}
-            />
+            {/* In anchor mode the strip follows the hash instead of being
+                pinned to Overview — otherwise switching a pane would move the
+                content and leave the pill behind. */}
+            {tab === "all" ? (
+              <AnchorTabBar slug={slug} year={current.year} overviewHref={overviewHref} />
+            ) : (
+              <TeamTabBar
+                active={tab}
+                mode="routes"
+                slug={slug}
+                year={current.year}
+                overviewHref={overviewHref}
+              />
+            )}
           </div>
         )}
         <div className="min-w-0">
@@ -704,7 +744,7 @@ export function TeamPageView({
           the bytes stored per team-season for something a reader is one click
           from. */}
       {show.overview && scheduleGames.length > 0 && (
-        <section className="mt-5">
+        <section data-pane="overview" className="mt-5">
           <ScheduleTicker games={scheduleGames} teamName={team.name} blurBody={preview} />
         </section>
       )}
@@ -737,7 +777,7 @@ export function TeamPageView({
           Deliberately tighter than a normal section break (the hero's own pb-8
           already contributes 32px) because the two belong together. */}
       {show.overview && teamSplits && (
-        <section id={TAB_ANCHORS.overview} className="mt-8 scroll-mt-20">
+        <section id={TAB_ANCHORS.overview} data-pane="overview" className="mt-8 scroll-mt-20">
           <TeamStatsPanel splits={teamSplits} blurBody={preview} />
         </section>
       )}
@@ -751,7 +791,7 @@ export function TeamPageView({
           On a preview page it moves below the roster instead — see the note
           where that renders. */}
       {show.overview && !preview && (
-        <section className="mt-8">{ranksBlock}</section>
+        <section data-pane="overview" className="mt-8">{ranksBlock}</section>
       )}
 
       {/* Game Log — the explorer, scoped to this team-season.
@@ -766,7 +806,7 @@ export function TeamPageView({
 
           Not on preview pages: they have no games. */}
       {!preview && show.games && (
-        <section id={TAB_ANCHORS.games} className="mt-5 mb-20 scroll-mt-20">
+        <section id={TAB_ANCHORS.games} data-pane="games" className="mt-5 mb-20 scroll-mt-20">
           <div className="flex items-baseline gap-3 mb-3">
             <span className="text-[0.65rem] uppercase tracking-widest text-coral font-bold">
               Game Log
@@ -789,7 +829,7 @@ export function TeamPageView({
 
       {/* Preview rosters render above, right under the schedule. */}
       {!preview && show.roster && (
-      <section id={TAB_ANCHORS.roster} className="mt-5 scroll-mt-20">
+      <section id={TAB_ANCHORS.roster} data-pane="roster" className="mt-5 scroll-mt-20">
         {/* Player headshot strip — faces + names before the spreadsheet. */}
         {roster.length > 0 && (
           <div className="mb-3 sm:mb-5">
@@ -824,7 +864,7 @@ export function TeamPageView({
           margins. The rest of the page stays at 88rem: prose and panels do not
           want the extra width. */}
       {show.history && (
-      <section id={TAB_ANCHORS.history} className="mt-5 mb-20 scroll-mt-20">
+      <section id={TAB_ANCHORS.history} data-pane="history" className="mt-5 mb-20 scroll-mt-20">
         {seasonGrid ? (
           <SeasonGrid
             rows={seasonGrid}
@@ -843,7 +883,7 @@ export function TeamPageView({
       )}
 
       {show.shooting && (
-      <section id={TAB_ANCHORS.shooting} className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8 scroll-mt-20">
+      <section id={TAB_ANCHORS.shooting} data-pane="shooting" className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8 scroll-mt-20">
         <DistributionPanel title="Shooting" ranks={shootingRanks} blurBody={preview} />
         <DistributionPanel title="Four Factors" ranks={fourFactorRanks} blurBody={preview}>
           {current.four_factor_record && current.four_factor_record.games > 0 && (
@@ -877,7 +917,7 @@ export function TeamPageView({
 
           Omitted entirely, not dashed, when there is no play-by-play at all. */}
       {show.shooting && (shotProfileRanks || shotDefenseRanks) && (
-        <section className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <section data-pane="shooting" className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
           {shotProfileRanks
             ? <DistributionPanel title="Shot Profile" ranks={shotProfileRanks} blurBody={preview} />
             : <div />}
@@ -897,7 +937,7 @@ export function TeamPageView({
           the shooting splits above rather than in a "play-by-play" tab named
           after where the data came from instead of what it says. */}
       {show.shooting && (clockSplits || assistNetwork) && (
-        <section className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <section data-pane="shooting" className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
           {clockSplits ? <ClockSplitsPanel splits={clockSplits} /> : <div />}
           {assistNetwork ? <AssistNetworkPanel network={assistNetwork} /> : <div />}
         </section>
@@ -916,7 +956,7 @@ export function TeamPageView({
           column being visible and being scrolled to. Still inside the site
           header's 108rem. */}
       {show.lineups && !preview && (
-        <section id={TAB_ANCHORS.lineups} className="mt-5 mb-20 scroll-mt-20">
+        <section id={TAB_ANCHORS.lineups} data-pane="lineups" className="mt-5 mb-20 scroll-mt-20">
           {sample && !!lineupStats && <SampleBanner teamName={team.name} />}
           {lineupStats ? (
             // The EMPTY case is never gated. "No lineup data before 2023-24"
@@ -953,7 +993,7 @@ export function TeamPageView({
           every five-man unit containing the player, OFF every unit without
           him. Null before 2024 for the same reason Lineups is. */}
       {show.onoff && !preview && (
-        <section id={TAB_ANCHORS.onoff} className="mt-5 mb-20 scroll-mt-20">
+        <section id={TAB_ANCHORS.onoff} data-pane="onoff" className="mt-5 mb-20 scroll-mt-20">
           {sample && !!lineupStats && <SampleBanner teamName={team.name} />}
           {lineupStats ? (
             sample ? (
@@ -990,16 +1030,30 @@ export function TeamPageView({
           BOTTOM_BAR_CLEARANCE, which lives beside the bar so the two cannot
           drift apart. */}
       {showTabs && (
-        <TeamBottomBar
-          active={tab === "all" ? "overview" : tab}
-          mode={tab === "all" ? "anchors" : "routes"}
-          slug={slug}
-          year={current.year}
-          overviewHref={overviewHref}
-        />
+        tab === "all" ? (
+          <AnchorBottomBar slug={slug} year={current.year} overviewHref={overviewHref} />
+        ) : (
+          <TeamBottomBar
+            active={tab}
+            mode="routes"
+            slug={slug}
+            year={current.year}
+            overviewHref={overviewHref}
+          />
+        )
       )}
-    </div>
+    </Shell>
   );
+}
+
+/**
+ * The wrapper for a season that HAS tab routes. Same element and same classes
+ * the page always had — it exists only so the two branches have one shape and
+ * the conditional above reads as a choice of shell rather than a choice of
+ * markup.
+ */
+function PlainShell({ cssVars, children }: { cssVars: React.CSSProperties; children: React.ReactNode }) {
+  return <div className="team-accent" style={cssVars}>{children}</div>;
 }
 
 function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {

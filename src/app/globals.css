@@ -1190,3 +1190,34 @@ body {
   .bta-menu-in { animation: none; }
 }
 
+
+/* ── Team page: client-side tabs on seasons that have no tab routes ────────
+ *
+ * Only the most recent TABBED_SEASONS seasons get real routes — a tabbed
+ * team-season costs 76 files in the export against an untabbed one's 10, so
+ * routing all 3,166 older ones would add ~209,000 files and roughly 43 minutes
+ * to a full deploy. These rules give those seasons the same behaviour for
+ * nothing: every pane is still in the HTML, and all but the active one is
+ * hidden.
+ *
+ * WHY :not() AND NOT A SHOW RULE. The active pane keeps whatever display its
+ * own classes give it — the Shooting panes are `grid`, others are block — and
+ * a rule that re-showed them would have to guess which. Hiding the rest leaves
+ * the survivor untouched.
+ *
+ * !important IS LOAD-BEARING. `[data-pane]` is one attribute selector against
+ * Tailwind utilities like `grid` that also set display; without it the grid
+ * sections would refuse to hide.
+ *
+ * The attribute only exists when JS has run, so with JS off nothing is hidden
+ * and the page is the long scroll it has always been.
+ */
+[data-team-tab="overview"] [data-pane]:not([data-pane="overview"]),
+[data-team-tab="games"] [data-pane]:not([data-pane="games"]),
+[data-team-tab="roster"] [data-pane]:not([data-pane="roster"]),
+[data-team-tab="history"] [data-pane]:not([data-pane="history"]),
+[data-team-tab="shooting"] [data-pane]:not([data-pane="shooting"]),
+[data-team-tab="lineups"] [data-pane]:not([data-pane="lineups"]),
+[data-team-tab="onoff"] [data-pane]:not([data-pane="onoff"]) {
+  display: none !important;
+}
