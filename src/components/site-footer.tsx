@@ -27,9 +27,17 @@ export function SiteFooter() {
           <SiteLogo className="h-9 w-auto group-hover:opacity-80 transition-opacity" />
         </Link>
         <span className="hidden sm:inline text-ink-muted">·</span>
-        <span className="text-xs sm:text-sm">
+        <span className="hidden md:inline text-xs sm:text-sm">
           Editorial-grade college basketball analytics.
         </span>
+        {/* The legal set, reachable from every page — which is the only place
+            attribution and terms are any use. Kept to the right so the line
+            still reads as chrome rather than as navigation. */}
+        <nav aria-label="Site information" className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+          <Link href="/sources" className="hover:text-ink transition-colors">Sources</Link>
+          <Link href="/terms" className="hover:text-ink transition-colors">Terms</Link>
+          <Link href="/privacy" className="hover:text-ink transition-colors">Privacy</Link>
+        </nav>
       </div>
     </footer>
   );

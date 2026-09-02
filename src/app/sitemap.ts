@@ -39,13 +39,32 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const entries: MetadataRoute.Sitemap = [];
   const now = new Date();
 
-  // Top-level pages — high priority, weekly refresh
-  for (const path of ["", "/players", "/teams", "/coaches", "/portal", "/calc"]) {
+  // Top-level pages — high priority, weekly refresh.
+  //
+  // /conferences, /scoreboard, /glossary and /pricing were missing from this
+  // list while being fully public, indexable pages: the sitemap said they did
+  // not exist and robots.txt said they did.
+  for (const path of [
+    "", "/players", "/teams", "/coaches", "/portal", "/calc",
+    "/conferences", "/scoreboard", "/glossary", "/pricing",
+  ]) {
     entries.push({
       url: `${BASE_URL}${path}/`,
       lastModified: now,
       changeFrequency: "weekly",
       priority: path === "" ? 1.0 : 0.8,
+    });
+  }
+
+  // Sources, terms and privacy. Indexed deliberately — on a paid site they are
+  // a trust signal a reader goes looking for, and one that is missing reads
+  // badly. Low priority and rarely changed, which is exactly what they are.
+  for (const path of ["/sources", "/terms", "/privacy"]) {
+    entries.push({
+      url: `${BASE_URL}${path}/`,
+      lastModified: now,
+      changeFrequency: "yearly",
+      priority: 0.3,
     });
   }
 
