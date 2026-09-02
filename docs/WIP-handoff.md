@@ -125,11 +125,26 @@ property it exists to have.
 `disabled_manually`** — and disabling ALSO blocks `workflow_dispatch`, so it
 cannot be run by hand either until `gh workflow enable`.
 
-**Before it can run:** eight repository secrets (`CBBD_API_KEY`,
-`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `R2_ENDPOINT`,
-`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_ARCHIVE_BUCKET`).
-All eight are in `.env.local` and can be piped to `gh secret set` without being
-typed or shown.
+**IT IS TEN SECRETS, NOT EIGHT.** The eight listed here for weeks —
+`CBBD_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
+`R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`,
+`R2_ARCHIVE_BUCKET` — were set 2026-09-02 and are correct as far as they go,
+but the archive bucket has **its own credentials**: `R2_ARCHIVE_ACCESS_KEY_ID`
+and `R2_ARCHIVE_SECRET_ACCESS_KEY`. Both are in `.env.local` and both were
+missing from this list and from the workflow.
+
+That split is deliberate. The archive bucket is private — no public access, no
+r2.dev subdomain — and its token is scoped to that bucket alone, so it cannot
+share the public data bucket's wide keys. See the header of
+`scripts/backup-archive-to-r2.mjs`.
+
+Found by the first real dispatch (run 33655219414). Everything up to it passed
+— checkout, node, python, `npm ci`, the cache restore — which is the useful
+half of the result: **the eight secrets inject correctly.** The cold-start seed
+then died on `Missing from .env.local: R2_ARCHIVE_ACCESS_KEY_ID,
+R2_ARCHIVE_SECRET_ACCESS_KEY`, because the workflow was handing that step the
+PUBLIC bucket's keys, which the script never reads. The workflow is fixed; the
+two secrets still need setting.
 
 Triggers are limited to `schedule` and `workflow_dispatch` deliberately: the
 repo is PUBLIC, and a workflow that runs on a fork's PR is how secrets leak.

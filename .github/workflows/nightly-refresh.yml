@@ -110,11 +110,25 @@ jobs:
       - name: Seed the archive from R2 (cold start only)
         if: steps.archive-cache.outputs.cache-matched-key == ''
         run: node scripts/backup-archive-to-r2.mjs --restore
+        # THE ARCHIVE BUCKET HAS ITS OWN CREDENTIALS. This step used to pass
+        # R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY — the PUBLIC data bucket's
+        # keys, which backup-archive-to-r2.mjs never reads — so the cold start
+        # died with "Missing from .env.local: R2_ARCHIVE_ACCESS_KEY_ID,
+        # R2_ARCHIVE_SECRET_ACCESS_KEY" on the first real dispatch (run
+        # 33655219414, 2026-09-02).
+        #
+        # The split is deliberate, not an accident to tidy away: the archive
+        # bucket is private with no public access and no r2.dev subdomain, and
+        # its token is scoped to that bucket alone. Handing this step the
+        # public bucket's wide credentials would defeat the point. See the
+        # header of scripts/backup-archive-to-r2.mjs.
+        #
+        # R2_ENDPOINT is shared — both buckets sit on the same account URL.
         env:
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ARCHIVE_BUCKET: ${{ secrets.R2_ARCHIVE_BUCKET }}
+          R2_ARCHIVE_ACCESS_KEY_ID: ${{ secrets.R2_ARCHIVE_ACCESS_KEY_ID }}
+          R2_ARCHIVE_SECRET_ACCESS_KEY: ${{ secrets.R2_ARCHIVE_SECRET_ACCESS_KEY }}
 
       - name: Refresh
         run: |
