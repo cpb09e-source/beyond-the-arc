@@ -19,7 +19,7 @@
  * Mirror DIRS with R2_DIRS in src/lib/data-url.ts when adding new R2
  * subdirs.
  */
-import { rm } from "node:fs/promises";
+import { rm, writeFile } from "node:fs/promises";
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 import { R2_MIRRORED_DIRS, BUILD_ONLY_DIRS, BUILD_ONLY_FILES } from "./lib/out-strip-lists.mjs";
@@ -183,6 +183,35 @@ async function main() {
     } catch (e) {
       console.warn(`   could not strip ${d}: ${e.message}`);
     }
+  }
+
+  /**
+   * WHICH COMMIT THIS IS. A static export carries no build metadata, so a
+   * deployed site cannot say what it was built from — and this site is
+   * deployed by hand, which means "is what is live current" is a real
+   * question with no other answer. The admin page reads this and asks GitHub
+   * how far main has moved past it.
+   *
+   * It is written before the strips run, not after, only because it must not
+   * be in a directory any of them touch: out/build-info.json is a top-level
+   * file and nothing strips it. `dirty` is here because a build from a tree
+   * with uncommitted changes is NOT the commit it names, and a deploy that
+   * quietly disagrees with the repository is the thing worth knowing.
+   */
+  const git = (args) => spawnSync("git", args, { cwd: ROOT, encoding: "utf8" }).stdout?.trim() ?? "";
+  const buildInfo = {
+    sha: git(["rev-parse", "HEAD"]),
+    branch: git(["rev-parse", "--abbrev-ref", "HEAD"]),
+    builtAt: new Date().toISOString(),
+    dirty: git(["status", "--porcelain"]).length > 0,
+  };
+  if (buildInfo.sha) {
+    await writeFile(path.join(OUT, "build-info.json"), JSON.stringify(buildInfo));
+    console.log(`
+→ build-info.json — ${buildInfo.sha.slice(0, 7)} on ${buildInfo.branch}${buildInfo.dirty ? " (dirty)" : ""}`);
+  } else {
+    console.log("
+→ No git metadata; skipping build-info.json.");
   }
 
   // The paywall, last: it deletes the paid seasons from out/ and stages them

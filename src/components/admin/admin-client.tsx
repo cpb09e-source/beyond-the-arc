@@ -1,6 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { dispatchRun } from "@/lib/admin-api";
+import { WORKFLOW_URL, type Deploy, type Workflow } from "@/lib/github-runs";
 import { useAuthOptional } from "@/lib/auth/auth-provider";
 import { LIVE_SEASON } from "@/lib/seasons";
 import { cn } from "@/lib/utils";
@@ -17,6 +20,7 @@ import {
   WebhookNote,
   ago,
   dataChecksTile,
+  deployTile,
   dur,
   pipelineTile,
   probesTile,
@@ -57,16 +61,24 @@ import {
  * they are the things an administrator comes here to DO, but nobody does them
  * while something is red, and a status page that opens with a form is a form.
  *
- * ── THE RUN BUTTONS ARE DELIBERATELY INERT ────────────────────────────────
+ * ── THE RUN BUTTONS START A JOB SOMEWHERE ELSE ────────────────────────────
  *
- * There is no dispatch endpoint yet and the workflow is disabled, so a button
- * that appeared to work would be lying twice over. It renders disabled with
- * the reason attached, which is more useful than hiding it: the point of the
- * shell is to see the shape of the finished thing.
+ * A button posts to /api/dispatch-run, which holds the GitHub token and asks
+ * GitHub to start the workflow. Nothing runs here, and nothing here can see
+ * the run except by asking GitHub how it is going — which the page does,
+ * without a token, because the repository is public (github-runs.ts). So a
+ * press is followed by a few seconds in which GitHub has accepted the
+ * request and not yet listed the run; the aside says so rather than showing
+ * nothing, because nothing looks like the button did not work.
+ *
+ * The buttons are disabled while a run is going. The workflow's own
+ * concurrency group would queue a second one rather than overlap it, but a
+ * queued run that starts twenty minutes later is a surprise, and a surprise
+ * that re-pulls a night of box scores costs quota.
  */
 
 /**
- * What the buttons will dispatch, in the order someone reaches for them.
+ * What the buttons dispatch, in the order someone reaches for them.
  *
  * Rollback is last and styled as the exception it is: it discards tonight's
  * publish and puts the previous one back. It is never part of a scheduled run
@@ -82,8 +94,6 @@ const RUNS: Array<{ label: string; phases: string; why: string; primary?: boolea
   { label: "Roll back last publish", phases: "rollback", danger: true,
     why: "Restore the previous run's files. One generation only." },
 ];
-
-const WORKFLOW_URL = "https://github.com/cpb09e-source/beyond-the-arc/actions/workflows/nightly-refresh.yml";
 
 export function AdminClient() {
   const auth = useAuthOptional();
@@ -123,7 +133,7 @@ export function AdminClient() {
  * (one of which spends a CBBD call).
  */
 function Dashboard() {
-  const { status, history, checks, overview, probes, checkedAt, refresh } = useDashboardData();
+  const { status, history, checks, overview, probes, workflow, deploy, checkedAt, refresh, expectRun } = useDashboardData();
   const loading = status.state === "loading" || overview.state === "loading" || probes.state === "loading";
 
   return (
@@ -154,10 +164,11 @@ function Dashboard() {
         </div>
       </header>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-        <Tile label="Nightly pipeline" model={pipelineTile(history, status)} href="#pipeline" />
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+        <Tile label="Nightly pipeline" model={pipelineTile(history, status, workflow)} href="#pipeline" />
         <Tile label="Data checks" model={dataChecksTile(checks)} href="#data" />
         <Tile label="Site checks" model={probesTile(probes)} href="#checks" />
+        <Tile label="Deploy" model={deployTile(deploy)} href="#run" />
         <Tile label="Subscribers" model={subscribersTile(overview)} href="#subscribers" />
         <Tile label="Stripe webhook" model={webhookTile(overview)} href="#subscribers" />
       </div>
@@ -165,7 +176,7 @@ function Dashboard() {
       <div className="grid gap-4">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] items-start">
           <PipelineSection status={status} history={history} />
-          <RunAside />
+          <RunAside workflow={workflow} deploy={deploy} onDispatched={expectRun} />
         </div>
 
         <DataChecksSection checks={checks} />
@@ -277,9 +288,51 @@ function PipelineSection({ status, history }: { status: Loaded<RefreshStatus>; h
   );
 }
 
-function RunAside() {
+type Dispatch =
+  | { state: "idle" }
+  | { state: "sending"; phases: string }
+  | { state: "sent"; phases: string }
+  | { state: "error"; message: string };
+
+function RunAside({
+  workflow, deploy, onDispatched,
+}: { workflow: Loaded<Workflow>; deploy: Loaded<Deploy>; onDispatched: () => void }) {
+  const [dispatch, setDispatch] = useState<Dispatch>({ state: "idle" });
+  const [dryRun, setDryRun] = useState(false);
+
+  const wf = workflow.state === "ready" ? workflow.data : null;
+  const running = wf?.running ?? null;
+  const disabled = wf?.state !== undefined && wf.state !== "active";
+  const last = wf?.runs.find((r) => r.status === "completed") ?? null;
+  // Sent and not yet listed: keep the buttons down for the seconds in between.
+  const pending = dispatch.state === "sending" || (dispatch.state === "sent" && !running);
+  const canRun = wf !== null && !disabled && !running && !pending;
+
+  /**
+   * "Sent" stops meaning anything once the run appears — `pending` already
+   * ignores it then — but it must also expire on its own, or a dispatch
+   * GitHub accepted and never listed would hold the buttons down forever.
+   */
+  useEffect(() => {
+    if (dispatch.state !== "sent") return;
+    const id = setTimeout(() => setDispatch({ state: "idle" }), 90_000);
+    return () => clearTimeout(id);
+  }, [dispatch.state]);
+
+  async function run(phases: string, label: string) {
+    if (phases === "rollback" && !window.confirm("Roll back the last publish? Tonight's files on R2 are replaced with the previous run's. One generation only.")) return;
+    setDispatch({ state: "sending", phases });
+    try {
+      await dispatchRun({ phases, dryRun });
+      setDispatch({ state: "sent", phases: label });
+      onDispatched();
+    } catch (e) {
+      setDispatch({ state: "error", message: e instanceof Error ? e.message : "The request failed." });
+    }
+  }
+
   return (
-    <aside className="rounded-xl border border-ink/10 bg-card shadow-sm p-4">
+    <aside id="run" className="rounded-xl border border-ink/10 bg-card shadow-sm p-4 scroll-mt-24">
       <h2 className="text-sm font-semibold text-ink mb-3">Run it</h2>
 
       {/* THE PHASES ARE SEPARATE BECAUSE THEY FAIL SEPARATELY. Re-publishing
@@ -291,48 +344,121 @@ function RunAside() {
           <button
             key={r.phases}
             type="button"
-            disabled
+            disabled={!canRun}
+            onClick={() => run(r.phases, r.label)}
             title={r.why}
             className={cn(
               "w-full h-9 rounded-md text-sm font-semibold border transition-colors",
               "disabled:opacity-40 disabled:cursor-not-allowed",
               r.danger
-                ? "border-bad/40 bg-bad/10 text-bad"
+                ? "border-bad/40 bg-bad/10 text-bad hover:bg-bad/20"
                 : r.primary
-                  ? "border-coral/40 bg-coral/10 text-ink"
-                  : "border-ink/15 text-ink",
+                  ? "border-coral/40 bg-coral/10 text-ink hover:bg-coral/20"
+                  : "border-ink/15 text-ink hover:bg-paper-deep",
             )}
           >
-            {r.label}
+            {dispatch.state === "sending" && dispatch.phases === r.phases ? "Asking GitHub…" : r.label}
           </button>
         ))}
       </div>
 
-      <p className="text-[0.7rem] text-ink-muted mt-2 leading-relaxed">
-        Not wired yet. These need the repository secrets loaded and the workflow
-        re-enabled — until then they would fail rather than do nothing, which is worse.
-        Every one of them runs on GitHub, not here.
-      </p>
+      <label className="mt-2 flex items-center gap-2 text-[0.7rem] text-ink-muted cursor-pointer select-none">
+        <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} className="accent-coral" />
+        Dry run — print the chain on GitHub without running it
+      </label>
+
+      {/* What is happening, in one line. Order of precedence: a run going
+          beats a dispatch waiting to be listed beats the last result. */}
+      <div className="mt-3 text-[0.7rem] leading-relaxed">
+        {workflow.state === "loading" && <p className="text-ink-muted">Asking GitHub…</p>}
+        {workflow.state === "error" && <p className="text-bad">{workflow.message}</p>}
+        {running && (
+          <p className="text-ink">
+            <span className="inline-block w-2 h-2 rounded-full bg-coral animate-pulse mr-1.5 align-middle" />
+            <strong>{running.status === "in_progress" ? "Running" : "Queued"}</strong>
+            {" · "}{running.event === "schedule" ? "the nightly" : "a button"}, {ago(running.startedAt ?? running.createdAt)}
+            {" · "}<a href={running.url} target="_blank" rel="noreferrer" className="text-coral hover:underline">watch</a>
+          </p>
+        )}
+        {pending && dispatch.state === "sent" && (
+          <p className="text-ink-muted">
+            <strong className="text-ink">{dispatch.phases}</strong> sent. GitHub lists a run a few seconds after accepting it…
+          </p>
+        )}
+        {dispatch.state === "error" && <p className="text-bad">{dispatch.message}</p>}
+        {disabled && wf && (
+          <p className="text-bad">
+            The workflow is <strong>{wf.state.replace("_", " ")}</strong> on GitHub. Nothing will run until it is enabled there.
+          </p>
+        )}
+        {!running && !pending && last && (
+          <p className="text-ink-muted">
+            Last on GitHub:{" "}
+            <span className={cn("font-semibold", last.conclusion === "success" ? "text-good" : "text-bad")}>{last.conclusion ?? "unknown"}</span>
+            {" · "}{last.event === "schedule" ? "nightly" : "manual"} · {ago(last.updatedAt)}
+            {" · "}<a href={last.url} target="_blank" rel="noreferrer" className="text-coral hover:underline">log</a>
+          </p>
+        )}
+        {wf && wf.runs.length === 0 && <p className="text-ink-muted">No runs on GitHub yet.</p>}
+      </div>
 
       <hr className="my-4 border-hairline" />
 
       <h3 className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium mb-2">
-        Meanwhile
+        Deploy
       </h3>
+      <DeployNote deploy={deploy} />
+
+      <hr className="my-4 border-hairline" />
+
       <ul className="text-[0.7rem] text-ink-muted space-y-2 leading-relaxed">
         <li>
           <a href={WORKFLOW_URL} target="_blank" rel="noreferrer" className="text-coral hover:underline">
-            Run it on GitHub
+            The workflow on GitHub
           </a>{" "}
-          — the same job, with the same inputs.
+          — the same job, with the same inputs, and every log.
         </li>
         <li>
           Live season:{" "}
           <strong className="text-ink">{LIVE_SEASON === null ? "none" : LIVE_SEASON}</strong>
-          {LIVE_SEASON === null && " — nothing is being played, so a run has nothing to publish."}
+          {LIVE_SEASON === null && " — nothing is being played, so a run has nothing to publish and will say so."}
         </li>
       </ul>
     </aside>
+  );
+}
+
+/**
+ * Which commit a reader is looking at. A deploy is a manual `netlify deploy`
+ * and the nightly never does one, so "behind" is normal between deploys —
+ * the number is here so the decision to deploy is made with it, not guessed.
+ */
+function DeployNote({ deploy }: { deploy: Loaded<Deploy> }) {
+  if (deploy.state === "loading") return <p className="text-[0.7rem] text-ink-muted">Asking the site…</p>;
+  if (deploy.state === "error") return <p className="text-[0.7rem] text-bad">{deploy.message}</p>;
+  if (deploy.state === "none") {
+    return (
+      <p className="text-[0.7rem] text-ink-muted leading-relaxed">
+        This build predates <code className="text-ink">build-info.json</code>. The next build writes one and this will say which commit is live.
+      </p>
+    );
+  }
+  const d = deploy.data;
+  return (
+    <p className="text-[0.7rem] text-ink-muted leading-relaxed">
+      <a href={`https://github.com/cpb09e-source/beyond-the-arc/commit/${d.sha}`} target="_blank" rel="noreferrer" className="font-mono text-ink hover:underline">{d.sha.slice(0, 7)}</a>
+      {" on "}<span className={cn(d.branch === "main" ? "text-ink" : "text-bad font-semibold")}>{d.branch}</span>
+      {d.dirty && <span title="Uncommitted changes were present at build time"> +local</span>}
+      {" · built "}{ago(d.builtAt)}
+      {d.behind !== null && (
+        <>
+          {" · "}
+          {d.behind === 0
+            ? <span className="text-good font-semibold">current</span>
+            : <a href={d.compareUrl} target="_blank" rel="noreferrer" className="text-gold-ink font-semibold hover:underline">{d.behind} commit{d.behind === 1 ? "" : "s"} behind main</a>}
+        </>
+      )}
+    </p>
   );
 }
 

@@ -25,9 +25,9 @@ async function token(): Promise<string> {
   return t;
 }
 
-async function call(init: RequestInit & { query?: string }): Promise<Record<string, unknown>> {
+async function call(init: RequestInit & { query?: string; endpoint?: string }): Promise<Record<string, unknown>> {
   const t = await token();
-  const res = await fetch(ENDPOINT + (init.query ?? ""), {
+  const res = await fetch((init.endpoint ?? ENDPOINT) + (init.query ?? ""), {
     ...init,
     headers: { "content-type": "application/json", authorization: `Bearer ${t}` },
   });
@@ -121,4 +121,23 @@ export type Overview = {
 
 export async function readOverview(): Promise<Overview> {
   return (await call({ method: "GET", query: "?what=overview" })) as unknown as Overview;
+}
+
+// ── The Run buttons ────────────────────────────────────────────────────────
+
+export type DispatchRequest = {
+  /** One of the workflow's own choices — see netlify/functions/dispatch-run.mts. */
+  phases: string;
+  season?: number | null;
+  dryRun?: boolean;
+  noSync?: boolean;
+};
+
+/**
+ * Start the nightly on GitHub. Resolves when GitHub has ACCEPTED the request,
+ * which is seconds before the run is listed anywhere; the caller polls
+ * github-runs.ts to see it appear.
+ */
+export async function dispatchRun(r: DispatchRequest): Promise<void> {
+  await call({ method: "POST", endpoint: "/api/dispatch-run", body: JSON.stringify(r) });
 }

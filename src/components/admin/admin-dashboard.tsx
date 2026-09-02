@@ -5,18 +5,23 @@ import { readOverview, type Overview } from "@/lib/admin-api";
 import { LIVE_SEASON } from "@/lib/seasons";
 import { cn } from "@/lib/utils";
 import { PROBES, freshUrl, runProbes, type ProbeResult, type ProbeState } from "@/components/admin/probes";
+import {
+  POLL_MS, RateLimited, readBuildInfo, readDeploy, readRuns, readWorkflow, type Deploy, type Workflow,
+} from "@/lib/github-runs";
 
 /**
  * The dashboard's data, tiles and sections. admin-client.tsx owns the gate
  * and the page; this owns everything that is READ.
  *
- * ── FIVE SOURCES, LOADED INDEPENDENTLY ────────────────────────────────────
+ * ── SEVEN SOURCES, LOADED INDEPENDENTLY ───────────────────────────────────
  *
  *   status    /data/live/refresh-status.json    what the last run did
  *   history   /data/live/refresh-history.json   one line per run, ~60 nights
  *   checks    /data/live/checks.json            whether what it wrote adds up
  *   overview  /api/admin-config?what=overview   who is paying, Stripe heartbeat
  *   probes    the site itself, right now         see probes.ts
+ *   workflow  api.github.com                     is a run going, is it enabled
+ *   deploy    /build-info.json + api.github.com  which commit is live, how far behind
  *
  * Each has its own loading state and its own failure, and a tile reports the
  * one it depends on. The alternative — one big load, one spinner — means an
@@ -30,7 +35,7 @@ import { PROBES, freshUrl, runProbes, type ProbeResult, type ProbeState } from "
  * run record read on the morning a run failed. freshUrl() bypasses both.
  */
 
-export type Health = "good" | "warn" | "bad" | "off" | "loading";
+export type Health = "good" | "warn" | "bad" | "off" | "loading" | "live";
 
 export type StepStatus = "ok" | "failed" | "skipped";
 
@@ -150,6 +155,8 @@ export function useDashboardData() {
   const [checks, setChecks] = useState<Loaded<Checks>>({ state: "loading" });
   const [overview, setOverview] = useState<Loaded<Overview>>({ state: "loading" });
   const [probes, setProbes] = useState<Loaded<Map<string, ProbeResult>>>({ state: "loading" });
+  const [workflow, setWorkflow] = useState<Loaded<Workflow>>({ state: "loading" });
+  const [deploy, setDeploy] = useState<Loaded<Deploy>>({ state: "loading" });
   const [checkedAt, setCheckedAt] = useState<number | null>(null);
   const [generation, setGeneration] = useState(0);
 
@@ -163,8 +170,49 @@ export function useDashboardData() {
       .then((data) => done(setOverview)({ state: "ready", data }))
       .catch((e: unknown) => done(setOverview)({ state: "error", message: e instanceof Error ? e.message : "failed" }));
     runProbes().then((data) => { if (live) { setProbes({ state: "ready", data }); setCheckedAt(Date.now()); } });
+    const ghError = (e: unknown): Loaded<never> => ({ state: "error", message: e instanceof Error ? e.message : "GitHub did not answer" });
+    readWorkflow()
+      .then((data) => done(setWorkflow)({ state: "ready", data }))
+      .catch((e: unknown) => done(setWorkflow)(ghError(e)));
+    // The deploy is two reads in sequence: the site says which commit it is,
+    // then GitHub says how far main has moved. No build-info means an older
+    // build, which is "none" and not an error.
+    readBuildInfo()
+      .then((info) => (info ? readDeploy(info).then((data) => done(setDeploy)({ state: "ready", data })) : done(setDeploy)({ state: "none" })))
+      .catch((e: unknown) => done(setDeploy)(ghError(e)));
     return () => { live = false; };
   }, [generation]);
+
+  /**
+   * While a run is going, ask GitHub again every POLL_MS — and only then.
+   * A completed run is a fact that does not change, and the budget is sixty
+   * an hour (see github-runs.ts). `wanted` lets a dispatch start the poll
+   * before GitHub lists the run, for the few seconds in between.
+   */
+  const [wanted, setWanted] = useState(0);
+  const running = workflow.state === "ready" && workflow.data.running !== null;
+  useEffect(() => {
+    if (!running && wanted === 0) return;
+    let live = true;
+    const tick = async () => {
+      if (document.visibilityState === "hidden") return;
+      try {
+        const r = await readRuns();
+        if (!live) return;
+        setWorkflow((w) => (w.state === "ready" ? { state: "ready", data: { ...w.data, ...r } } : w));
+        // A dispatch has appeared, or finished: stop looking for it.
+        if (r.running || wanted > 0) setWanted((n) => (r.running ? 0 : Math.max(0, n - 1)));
+      } catch (e) {
+        if (live && e instanceof RateLimited) setWorkflow({ state: "error", message: e.message });
+      }
+    };
+    // Right after a dispatch, look sooner: the run is listed within seconds.
+    const id = setInterval(tick, wanted > 0 ? 8_000 : POLL_MS);
+    return () => { live = false; clearInterval(id); };
+  }, [running, wanted]);
+
+  /** Called after a dispatch: poll quickly for up to ~a minute until the run shows. */
+  const expectRun = useCallback(() => setWanted(8), []);
 
   const refresh = useCallback(() => {
     setStatus({ state: "loading" });
@@ -172,10 +220,12 @@ export function useDashboardData() {
     setChecks({ state: "loading" });
     setOverview({ state: "loading" });
     setProbes({ state: "loading" });
+    setWorkflow({ state: "loading" });
+    setDeploy({ state: "loading" });
     setGeneration((g) => g + 1);
   }, []);
 
-  return { status, history, checks, overview, probes, checkedAt, refresh };
+  return { status, history, checks, overview, probes, workflow, deploy, checkedAt, refresh, expectRun };
 }
 
 // ── Health, derived ────────────────────────────────────────────────────────
@@ -199,7 +249,14 @@ function lastReal(history: Loaded<RefreshHistory>, status: Loaded<RefreshStatus>
 
 export type TileModel = { health: Health; value: string; sub: string };
 
-export function pipelineTile(history: Loaded<RefreshHistory>, status: Loaded<RefreshStatus>): TileModel {
+export function pipelineTile(history: Loaded<RefreshHistory>, status: Loaded<RefreshStatus>, workflow?: Loaded<Workflow>): TileModel {
+  // A run in progress outranks everything the record says: the record is
+  // about the last run, and the next one is happening.
+  if (workflow?.state === "ready" && workflow.data.running) {
+    const r = workflow.data.running;
+    const since = r.startedAt ?? r.createdAt;
+    return { health: "live", value: "Running", sub: `${r.status === "in_progress" ? "started" : "queued"} ${ago(since)}` };
+  }
   if (history.state === "loading" || status.state === "loading") return { health: "loading", value: "…", sub: "reading the record" };
   const run = lastReal(history, status);
   if (!run) {
@@ -289,12 +346,33 @@ export function webhookTile(overview: Loaded<Overview>): TileModel {
 
 // ── Tiles ──────────────────────────────────────────────────────────────────
 
+/**
+ * The deploy is a fact about the SITE, not the data: a static export goes
+ * live only when someone runs `netlify deploy`, and nothing on this page can
+ * tell otherwise which commit a reader is seeing. "Behind" is not an alarm —
+ * the nightly publishes data without a deploy — it is a count of what a
+ * reader is not getting yet.
+ */
+export function deployTile(deploy: Loaded<Deploy>): TileModel {
+  if (deploy.state === "loading") return { health: "loading", value: "…", sub: "asking the site" };
+  if (deploy.state === "error") return { health: "warn", value: "Unknown", sub: deploy.message };
+  if (deploy.state === "none") return { health: "off", value: "Unknown", sub: "built before build-info.json" };
+  const d = deploy.data;
+  const short = d.sha.slice(0, 7);
+  const built = `built ${ago(d.builtAt)}`;
+  if (d.branch !== "main") return { health: "warn", value: `On ${d.branch}`, sub: `${short} · ${built}` };
+  if (d.behind === null) return { health: "good", value: short, sub: built };
+  if (d.behind > 0) return { health: "warn", value: `${d.behind} behind`, sub: `${short} · ${built}` };
+  return { health: "good", value: "Current", sub: `${short}${d.dirty ? " +local" : ""} · ${built}` };
+}
+
 const TONE: Record<Health, { stripe: string; value: string }> = {
   good: { stripe: "bg-good", value: "text-ink" },
   warn: { stripe: "bg-gold", value: "text-ink" },
   bad: { stripe: "bg-bad", value: "text-bad" },
   off: { stripe: "bg-ink/20", value: "text-ink-muted" },
   loading: { stripe: "bg-ink/10 animate-pulse", value: "text-ink-muted" },
+  live: { stripe: "bg-coral animate-pulse", value: "text-ink" },
 };
 
 /**
