@@ -80,16 +80,24 @@ export function loadGameIndex(season: number): Promise<GamePack | null> {
 /**
  * Seasons with a file on disk.
  *
- * 2021 IS MISSING FOR A DATA REASON, not a policy one — the COVID season is
- * shown everywhere else on the site (see FLAGGED_SEASONS in lib/seasons). This
+ * 2021 LANDED 2026-09-02 and the run of years is now unbroken. It had been
+ * missing for a data reason rather than a policy one — the COVID season shows
+ * everywhere else on the site (see FLAGGED_SEASONS in lib/seasons), but this
  * index is pivoted from the per-player game logs, and the CBBD archive for
- * 2021 has the team box but no `box-players-full`, so there are no per-player
- * rows to pivot: every one of the 24,653 player files has zero 2021 games.
+ * 2021 held the team box with no `box-players-full`, so there was nothing to
+ * pivot: every one of the 24,653 player files had zero 2021 games.
  *
- * Restoring it needs one archive pull, not a rebuild. Add 2021 here the moment
- * that file lands and scripts/build-game-index.mjs has produced the season.
+ * The fix was the one archive pull the old note here predicted, blocked all
+ * that time on a dead CBBD key rather than on anything in the code. The pull
+ * came back 10,564 team-game rows, complete against the team box with nothing
+ * missing, and built 81,312 player-game rows across 4,867 players.
+ *
+ * 2021 IS SMALLER THAN ITS NEIGHBOURS AND THAT IS CORRECT — 81,312 rows and
+ * 493 distinct opponents against 2022's 111,582 and 680. Cancelled games and
+ * gutted non-conference schedules, not a short pull. Verified same-shaped as
+ * 2022: same 7 keys, same 22 fields, same 6 classes.
  */
-export const GAME_SEASONS = [2026, 2025, 2024, 2023, 2022, 2020, 2019, 2018, 2017, 2016, 2015, 2014];
+export const GAME_SEASONS = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014];
 
 // ── Reading a row ──────────────────────────────────────────────────────────
 

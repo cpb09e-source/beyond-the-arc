@@ -470,7 +470,7 @@ Budget 45 minutes or more. Netlify dedupes by content hash, so a normal
 incremental deploy runs under 2 min — but this one follows a redesign that
 touched nearly every team page.
 
-### 7. The COVID season's per-player game logs — BLOCKED ON THE KEY ONLY
+### 7. The COVID season's per-player game logs — LANDED 2026-09-02
 
 2020-21 is FLAGGED, not excluded — see `FLAGGED_SEASONS` in
 `src/lib/seasons.ts`. Team pages, the team explorer and the Team Game Log
@@ -481,6 +481,33 @@ season holds 163. Absent are `box-players-full.json.gz` and ~157
 `plays-*.json.gz`. So there are no per-player game logs for that season and no
 `game-index/2021`, which is why `GAME_SEASONS` in `src/lib/game-index.ts` stops
 at 2020 while `TEAM_GAME_SEASONS` does not.
+
+**DONE. The pull ran 2026-09-02** once Colin replaced the dead CBBD key. It
+was never a data problem — the archive pull worked first time on a valid key.
+
+  - 10,564 team-game rows, **complete against the team box with 0 missing**
+  - 81,312 player-game rows across 4,867 players, merged into the existing
+    24,653 player files without touching the other twelve seasons
+  - `game-index/2021.json` at 5.0 MB, verified same-shaped as 2022 (same 7
+    keys, 22 fields, 6 classes) and synced to R2 (1 uploaded, 25 skipped)
+  - `2021` added to `GAME_SEASONS`, which now matches `TEAM_GAME_SEASONS`
+  - 46 API calls against a 75,000 monthly quota
+
+**2021 is smaller than its neighbours and that is correct** — 81,312 rows and
+493 distinct opponents against 2022's 111,582 and 680. Cancelled games and
+gutted non-conference schedules. Do not read the gap as a short pull.
+
+**NOT YET REBUILT, and this is the open half.** Ten scripts read
+`box-players-full.json.gz` and only four have run. Still missing:
+`public/data/porpag-2021.json` (the only gap in an otherwise complete 2014-2026
+run) and `data/cbbd/2021/box-epm-2021.json`. The blockers are cost, not
+correctness: `build-player-season-adv.mjs`, `build-player-stat-pack.mjs`,
+`build-cbbd-player-season.mjs` and `build-team-season-stats.mjs` take **no
+`--season` flag**, so each one rebuilds all thirteen seasons and churns the
+twelve `built_at`-only porpag files. `compute-epm.py` is a Python refit on top.
+Worth doing deliberately in one pass, not incidentally.
+
+Historical detail, kept because it explains the years of delay:
 
 **No local workaround exists.** Checked 2026-08-31 and do not re-check:
 `shooting-players.json.gz` is season-level per player, `box-epm-2021.json` is

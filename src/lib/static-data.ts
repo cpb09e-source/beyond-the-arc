@@ -1084,7 +1084,12 @@ export async function readPlayer(bartId: number): Promise<{
     /**
      * The CBBD-derived aggregates (scripts/build-player-season-adv.mjs). Only
      * the fields the career table reads are declared; the object carries more.
-     * Absent for 2021, which has no player box in the archive at all.
+     *
+     * Was absent for 2021 because the archive had no player box at all. That
+     * pull landed 2026-09-02, so the gap is closed at the SOURCE — but this
+     * field stays null for 2021 until build-player-season-adv.mjs is re-run
+     * for that season. Nothing here needs changing when it is; the aggregates
+     * simply start arriving.
      */
     advanced_stats: { gs: number | null; tov: number | null; tov_pg: number | null } | null;
   }>;
