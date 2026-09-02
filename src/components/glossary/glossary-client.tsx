@@ -153,7 +153,7 @@ export function GlossaryClient() {
           </button>
         </div>
       ) : (
-        <div className="mt-8 max-w-[62rem]">
+        <div className="mt-8">
           {grouped.map(([L, entries]) => (
             <section key={L} className="mb-8">
               {/* The letter is a margin mark, not a banner: it sits in the
@@ -182,8 +182,12 @@ export function GlossaryClient() {
                       {e.origin && <OriginMark origin={e.origin} />}
                     </dt>
 
+                    {/* The row runs the full page width like every other table
+                        on the site, but the definition keeps a reading measure
+                        of its own — a 1,200px line of prose is a page-width
+                        row, not a readable one. */}
                     <dd className="min-w-0">
-                      <p className="text-[0.82rem] text-ink-soft leading-relaxed">{e.body}</p>
+                      <p className="text-[0.82rem] text-ink-soft leading-relaxed max-w-[78ch]">{e.body}</p>
 
                       {e.formula && (
                         <code
@@ -195,7 +199,7 @@ export function GlossaryClient() {
                       )}
 
                       {e.caveat && (
-                        <p className="mt-2 text-[0.75rem] text-ink-muted leading-relaxed">
+                        <p className="mt-2 text-[0.75rem] text-ink-muted leading-relaxed max-w-[78ch]">
                           <span className="uppercase tracking-[0.12em] text-[0.6rem] font-semibold mr-1.5">
                             Caveat
                           </span>
