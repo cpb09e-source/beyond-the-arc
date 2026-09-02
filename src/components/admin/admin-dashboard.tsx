@@ -11,7 +11,7 @@ import {
 
 /**
  * The dashboard's data, tiles and sections. admin-client.tsx owns the gate
- * and the page; this owns everything that is READ.
+ * and the page; admin-shell.tsx owns the frame; this owns everything READ.
  *
  * ── SEVEN SOURCES, LOADED INDEPENDENTLY ───────────────────────────────────
  *
@@ -33,6 +33,16 @@ import {
  * R2 serves an hour of max-age and a week of stale-while-revalidate, which is
  * the right policy for data that changes once a day and the wrong one for a
  * run record read on the morning a run failed. freshUrl() bypasses both.
+ *
+ * ── EVERY METER IS MEASURED, NOTHING IS DRAWN FOR TEXTURE ─────────────────
+ *
+ * Each tile carries a strip under its number, and every one of them is real:
+ * the pipeline's is the last forty nights, the checks' is one cell per check,
+ * the deploy's is one cell per commit waiting, the subscribers' is the split
+ * between monthly and yearly, the webhook's is how far into its quiet window
+ * Stripe has gone. A tile with nothing to measure gets no strip rather than a
+ * decorative one — a bar that is not a measurement teaches the eye to skip
+ * every bar on the page, including the four that mean something.
  */
 
 export type Health = "good" | "warn" | "bad" | "off" | "loading" | "live";
@@ -122,7 +132,6 @@ function when(iso: string): string {
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
-/** "npx tsx scripts/build-live-team-pages.mts --season 2027" → "build-live-team-pages" */
 /** "2026-03-07" → "Mar 7". The slate is a date, not a moment; no zone applies. */
 function shortDate(ymd: string): string {
   const [y, m, d] = ymd.split("-").map(Number);
@@ -130,6 +139,7 @@ function shortDate(ymd: string): string {
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
+/** "npx tsx scripts/build-live-team-pages.mts --season 2027" → "build-live-team-pages" */
 function shortStep(cmd: string | null): string {
   if (!cmd) return "";
   const m = cmd.match(/scripts\/([\w-]+)\.[a-z]+/);
@@ -247,43 +257,123 @@ function lastReal(history: Loaded<RefreshHistory>, status: Loaded<RefreshStatus>
   return null;
 }
 
-export type TileModel = { health: Health; value: string; sub: string };
+// ── Meters ─────────────────────────────────────────────────────────────────
+
+export type MeterTone = "good" | "warn" | "bad" | "off" | "accent" | "live";
+
+/**
+ * Two shapes, because there are two kinds of thing worth measuring here.
+ *
+ *   cells  one mark per event — a night, a check, a commit. Reads as a
+ *          countable series: four amber marks in forty is a different fact
+ *          from four amber marks in five.
+ *   split  proportions of one whole — monthly against yearly, elapsed
+ *          against a deadline.
+ */
+export type Meter =
+  | { kind: "cells"; cells: Array<{ tone: MeterTone; title?: string }>; empty?: number }
+  | { kind: "split"; parts: Array<{ tone: MeterTone; pct: number; title?: string }> };
+
+const FILL: Record<MeterTone, string> = {
+  good: "bg-good/75",
+  warn: "bg-gold",
+  bad: "bg-bad",
+  off: "bg-ink/20",
+  accent: "bg-coral",
+  live: "bg-coral animate-pulse",
+};
+
+const TRACK = "bg-ink/[0.07]";
+
+export function MeterBar({ meter, className }: { meter: Meter; className?: string }) {
+  if (meter.kind === "split") {
+    const total = meter.parts.reduce((n, p) => n + p.pct, 0);
+    return (
+      <div className={cn("flex h-1.5 rounded-full overflow-hidden", TRACK, className)}>
+        {meter.parts.map((p, i) => (
+          <span key={i} title={p.title} style={{ width: `${Math.min(100, p.pct)}%` }} className={cn("h-full", FILL[p.tone])} />
+        ))}
+        {total < 100 && <span className="flex-1" />}
+      </div>
+    );
+  }
+  return (
+    <div className={cn("flex items-stretch gap-[2px] h-1.5", className)}>
+      {meter.cells.map((c, i) => (
+        <span key={i} title={c.title} className={cn("flex-1 min-w-[2px] rounded-[1px]", FILL[c.tone])} />
+      ))}
+      {Array.from({ length: meter.empty ?? 0 }, (_, i) => (
+        <span key={`e${i}`} className={cn("flex-1 min-w-[2px] rounded-[1px]", TRACK)} />
+      ))}
+    </div>
+  );
+}
+
+const CHECK_TONE: Record<CheckState, MeterTone> = { ok: "good", warn: "warn", fail: "bad", skip: "off" };
+
+// ── Tile models ────────────────────────────────────────────────────────────
+
+export type TileModel = { health: Health; value: string; sub: string; meter?: Meter };
+
+/** The last forty nights, newest on the right. Cheap to read, honest about gaps. */
+function runCells(history: Loaded<RefreshHistory>): Meter | undefined {
+  if (history.state !== "ready" || !history.data.runs.length) return undefined;
+  const runs = history.data.runs.slice(-40);
+  return {
+    kind: "cells",
+    cells: runs.map((r) => ({
+      tone: r.dryRun ? "off" : r.outcome === "ok" ? "good" : "bad",
+      title: r.dryRun
+        ? `${when(r.startedAt)} · dry run`
+        : `${when(r.startedAt)} · ${r.outcome === "ok" ? "succeeded" : `failed at ${shortStep(r.failedAt)}`} · ${dur(r.durationMs)}`,
+    })),
+    empty: Math.max(0, 40 - runs.length),
+  };
+}
 
 export function pipelineTile(history: Loaded<RefreshHistory>, status: Loaded<RefreshStatus>, workflow?: Loaded<Workflow>): TileModel {
+  const meter = runCells(history);
   // A run in progress outranks everything the record says: the record is
   // about the last run, and the next one is happening.
   if (workflow?.state === "ready" && workflow.data.running) {
     const r = workflow.data.running;
     const since = r.startedAt ?? r.createdAt;
-    return { health: "live", value: "Running", sub: `${r.status === "in_progress" ? "started" : "queued"} ${ago(since)}` };
+    return { health: "live", value: "Running", sub: `${r.status === "in_progress" ? "started" : "queued"} ${ago(since)}`, meter };
   }
   if (history.state === "loading" || status.state === "loading") return { health: "loading", value: "…", sub: "reading the record" };
   const run = lastReal(history, status);
   if (!run) {
     return LIVE_SEASON === null
-      ? { health: "off", value: "Off-season", sub: "no run recorded" }
-      : { health: "warn", value: "No run yet", sub: "nothing has published" };
+      ? { health: "off", value: "Off-season", sub: "no run recorded", meter }
+      : { health: "warn", value: "No run yet", sub: "nothing has published", meter };
   }
   const age = Date.now() - Date.parse(run.finishedAt);
   if (run.outcome === "failed") {
-    return { health: "bad", value: "Failed", sub: `${shortStep(run.failedAt)} · ${ago(run.finishedAt)}` };
+    return { health: "bad", value: "Failed", sub: `${shortStep(run.failedAt)} · ${ago(run.finishedAt)}`, meter };
   }
-  if (LIVE_SEASON === null) return { health: "off", value: "Off-season", sub: `last run ${ago(run.finishedAt)}` };
-  if (age > STALE_AFTER) return { health: "warn", value: "Late", sub: `last run ${ago(run.finishedAt)}` };
-  return { health: "good", value: ago(run.finishedAt), sub: `Succeeded · ${dur(run.durationMs)}` };
+  if (LIVE_SEASON === null) return { health: "off", value: "Off-season", sub: `last run ${ago(run.finishedAt)}`, meter };
+  if (age > STALE_AFTER) return { health: "warn", value: "Late", sub: `last run ${ago(run.finishedAt)}`, meter };
+  return { health: "good", value: ago(run.finishedAt), sub: `Succeeded · ${dur(run.durationMs)}`, meter };
 }
 
 export function probesTile(probes: Loaded<Map<string, ProbeResult>>): TileModel {
   if (probes.state !== "ready") return { health: "loading", value: "…", sub: `running ${PROBES.length} checks` };
   const results = [...probes.data.values()];
+  const meter: Meter = {
+    kind: "cells",
+    cells: PROBES.map((p) => {
+      const r = probes.data.get(p.id);
+      return { tone: r ? CHECK_TONE[r.state] : "off", title: `${p.label} — ${r?.detail ?? "…"}` };
+    }),
+  };
   const fails = results.filter((r) => r.state === "fail").length;
   const warns = results.filter((r) => r.state === "warn").length;
   const skips = results.filter((r) => r.state === "skip").length;
   const ran = results.length - skips;
   const ok = results.filter((r) => r.state === "ok").length;
-  if (fails) return { health: "bad", value: `${fails} failing`, sub: `${ok} of ${ran} ok` };
-  if (warns) return { health: "warn", value: `${ok} of ${ran} ok`, sub: `${warns} slow or missing` };
-  return { health: "good", value: `${ok} of ${ran} ok`, sub: skips ? `${skips} skipped locally` : "every check passed" };
+  if (fails) return { health: "bad", value: `${fails} failing`, sub: `${ok} of ${ran} ok`, meter };
+  if (warns) return { health: "warn", value: `${ok} of ${ran} ok`, sub: `${warns} slow or missing`, meter };
+  return { health: "good", value: `${ok} of ${ran} ok`, sub: skips ? `${skips} skipped locally` : "every check passed", meter };
 }
 
 /**
@@ -300,15 +390,16 @@ export function dataChecksTile(checks: Loaded<Checks>): TileModel {
       : { health: "warn", value: "No report", sub: "the nightly has not checked yet" };
   }
   const { outcome, checks: list, at, slate } = checks.data;
+  const meter: Meter = { kind: "cells", cells: list.map((c) => ({ tone: CHECK_TONE[c.state], title: `${c.label} — ${c.detail}` })) };
   const fails = list.filter((c) => c.state === "fail").length;
   const warns = list.filter((c) => c.state === "warn").length;
   const ran = list.filter((c) => c.state !== "skip").length;
   const age = Date.now() - Date.parse(at);
   const sub = `slate ${shortDate(slate)} · ${ago(at)}`;
-  if (outcome === "fail") return { health: "bad", value: `${fails} failing`, sub };
-  if (outcome === "warn") return { health: "warn", value: `${warns} to look at`, sub };
-  if (LIVE_SEASON !== null && age > STALE_AFTER) return { health: "warn", value: "Stale", sub: `last checked ${ago(at)}` };
-  return { health: "good", value: `${ran} of ${ran} ok`, sub };
+  if (outcome === "fail") return { health: "bad", value: `${fails} failing`, sub, meter };
+  if (outcome === "warn") return { health: "warn", value: `${warns} to look at`, sub, meter };
+  if (LIVE_SEASON !== null && age > STALE_AFTER) return { health: "warn", value: "Stale", sub: `last checked ${ago(at)}`, meter };
+  return { health: "good", value: `${ran} of ${ran} ok`, sub, meter };
 }
 
 export function subscribersTile(overview: Loaded<Overview>): TileModel {
@@ -319,8 +410,19 @@ export function subscribersTile(overview: Loaded<Overview>): TileModel {
     s.paidNew30d ? `+${s.paidNew30d} paid this month` : `${s.accounts} accounts`,
     s.cancelling ? `${s.cancelling} cancelling` : null,
   ].filter(Boolean).join(" · ");
-  if (s.pastDue) return { health: "warn", value: `${s.active} paid`, sub: `${s.pastDue} past due · ${sub}` };
-  return { health: s.active ? "good" : "off", value: `${s.active} paid`, sub };
+  // The split is the plan mix, not a target: monthly and yearly are the whole
+  // of `active`, so the bar is full whenever anyone is paying at all.
+  const meter: Meter | undefined = s.active > 0
+    ? {
+      kind: "split",
+      parts: [
+        { tone: "accent" as MeterTone, pct: (s.monthly / s.active) * 100, title: `${s.monthly} monthly` },
+        { tone: "good" as MeterTone, pct: (s.yearly / s.active) * 100, title: `${s.yearly} yearly` },
+      ].filter((p) => p.pct > 0),
+    }
+    : undefined;
+  if (s.pastDue) return { health: "warn", value: `${s.active} paid`, sub: `${s.pastDue} past due · ${sub}`, meter };
+  return { health: s.active ? "good" : "off", value: `${s.active} paid`, sub, meter };
 }
 
 /**
@@ -339,19 +441,29 @@ export function webhookTile(overview: Loaded<Overview>): TileModel {
   if (!hb) return { health: "off", value: "Never", sub: "no event since the heartbeat was added" };
   const monthly = overview.data.subscribers.monthly;
   const age = Date.now() - Date.parse(hb.at);
-  if (!hb.ok) return { health: "bad", value: "Failing", sub: `handler failed on ${hb.type}` };
-  if (monthly > 0 && age > WEBHOOK_QUIET) return { health: "warn", value: ago(hb.at), sub: `quiet with ${monthly} monthly` };
-  return { health: "good", value: ago(hb.at), sub: hb.type };
+  // How far into the quiet window this silence has gone. Only drawn when the
+  // window means something — with no monthly subscriber there is no deadline.
+  const meter: Meter | undefined = monthly > 0
+    ? {
+      kind: "split",
+      parts: [{
+        tone: age > WEBHOOK_QUIET ? "warn" : "good",
+        pct: Math.min(100, (age / WEBHOOK_QUIET) * 100),
+        title: `${ago(hb.at)} of a ${Math.round(WEBHOOK_QUIET / DAY)}-day window`,
+      }],
+    }
+    : undefined;
+  if (!hb.ok) return { health: "bad", value: "Failing", sub: `handler failed on ${hb.type}`, meter };
+  if (monthly > 0 && age > WEBHOOK_QUIET) return { health: "warn", value: ago(hb.at), sub: `quiet with ${monthly} monthly`, meter };
+  return { health: "good", value: ago(hb.at), sub: hb.type, meter };
 }
-
-// ── Tiles ──────────────────────────────────────────────────────────────────
 
 /**
  * The deploy is a fact about the SITE, not the data: a static export goes
  * live only when someone runs `netlify deploy`, and nothing on this page can
  * tell otherwise which commit a reader is seeing. "Behind" is not an alarm —
  * the nightly publishes data without a deploy — it is a count of what a
- * reader is not getting yet.
+ * reader is not getting yet, and the meter counts it one commit at a time.
  */
 export function deployTile(deploy: Loaded<Deploy>): TileModel {
   if (deploy.state === "loading") return { health: "loading", value: "…", sub: "asking the site" };
@@ -360,80 +472,161 @@ export function deployTile(deploy: Loaded<Deploy>): TileModel {
   const d = deploy.data;
   const short = d.sha.slice(0, 7);
   const built = `built ${ago(d.builtAt)}`;
-  if (d.branch !== "main") return { health: "warn", value: `On ${d.branch}`, sub: `${short} · ${built}` };
+  const behindMeter: Meter | undefined = d.behind === null ? undefined
+    : d.behind === 0
+      ? { kind: "split", parts: [{ tone: "good", pct: 100, title: "the deployed commit is main" }] }
+      : { kind: "cells", cells: Array.from({ length: Math.min(d.behind, 24) }, () => ({ tone: "warn" as MeterTone })), empty: Math.max(0, 24 - d.behind) };
+  if (d.branch !== "main") return { health: "warn", value: `On ${d.branch}`, sub: `${short} · ${built}`, meter: behindMeter };
   if (d.behind === null) return { health: "good", value: short, sub: built };
-  if (d.behind > 0) return { health: "warn", value: `${d.behind} behind`, sub: `${short} · ${built}` };
-  return { health: "good", value: "Current", sub: `${short}${d.dirty ? " +local" : ""} · ${built}` };
+  if (d.behind > 0) return { health: "warn", value: `${d.behind} behind`, sub: `${short} · ${built}`, meter: behindMeter };
+  return { health: "good", value: "Current", sub: `${short}${d.dirty ? " +local" : ""} · ${built}`, meter: behindMeter };
 }
 
-const TONE: Record<Health, { stripe: string; value: string }> = {
-  good: { stripe: "bg-good", value: "text-ink" },
-  warn: { stripe: "bg-gold", value: "text-ink" },
-  bad: { stripe: "bg-bad", value: "text-bad" },
-  off: { stripe: "bg-ink/20", value: "text-ink-muted" },
-  loading: { stripe: "bg-ink/10 animate-pulse", value: "text-ink-muted" },
-  live: { stripe: "bg-coral animate-pulse", value: "text-ink" },
+// ── Tiles ──────────────────────────────────────────────────────────────────
+
+const TONE: Record<Health, { dot: string; value: string; word: string }> = {
+  good: { dot: "bg-good", value: "text-ink", word: "healthy" },
+  warn: { dot: "bg-gold", value: "text-ink", word: "needs a look" },
+  bad: { dot: "bg-bad", value: "text-bad", word: "failing" },
+  off: { dot: "bg-ink/25", value: "text-ink-muted", word: "idle" },
+  loading: { dot: "bg-ink/20 animate-pulse", value: "text-ink-muted", word: "loading" },
+  live: { dot: "bg-coral animate-pulse", value: "text-ink", word: "running" },
 };
 
 /**
- * One tile. The stripe carries the state and the value carries the number, so
- * a row of six reads at a glance as "green green amber green" before any of
- * the words are read — which is the whole point of a top row.
+ * One tile: icon, label, number, meter, one line of why.
  *
- * An anchor, not a button: it jumps to the section that explains it.
+ * The health lives in a dot beside the label rather than a stripe down the
+ * side — six stripes in a row is a bar chart of nothing, and the dot leaves
+ * the card's edge to the border, which is what separates the six of them.
+ *
+ * A button, not an anchor: it opens the pane that explains it, and the pane
+ * is a view rather than a place further down the page.
  */
-export function Tile({ label, model, href }: { label: string; model: TileModel; href: string }) {
+export function Tile({
+  label, icon, model, onClick,
+}: { label: string; icon?: React.ReactNode; model: TileModel; onClick?: () => void }) {
   const tone = TONE[model.health];
   return (
-    <a
-      href={href}
-      className="relative overflow-hidden rounded-xl border border-ink/10 bg-card shadow-sm px-4 py-3 pl-5 flex flex-col gap-0.5 hover:border-ink/25 transition-colors focus:outline-none focus:ring-2 focus:ring-coral/40"
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "group text-left rounded-xl border border-hairline bg-card px-3.5 py-3 flex flex-col gap-2.5",
+        "shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all",
+        "hover:border-ink/20 hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] hover:-translate-y-px",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40",
+      )}
     >
-      <span aria-hidden className={cn("absolute left-0 top-0 bottom-0 w-1.5", tone.stripe)} />
-      <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">{label}</span>
-      <span className={cn("text-xl font-semibold tabular-nums leading-tight truncate", tone.value)}>{model.value}</span>
+      <span className="flex items-center gap-2 min-w-0">
+        {icon && (
+          <span className="grid place-items-center w-5 h-5 rounded-[5px] bg-ink/[0.06] text-ink-muted shrink-0 group-hover:text-ink-soft transition-colors">
+            {icon}
+          </span>
+        )}
+        <span className="text-[0.63rem] uppercase tracking-[0.12em] text-ink-muted font-semibold truncate">{label}</span>
+        <span aria-label={tone.word} className={cn("ml-auto shrink-0 w-1.5 h-1.5 rounded-full", tone.dot)} />
+      </span>
+
+      {/* Sized by what it is: "2 paid" is a figure and gets figure size,
+          "built before build-info.json" is a sentence and gets sentence size.
+          One size for both makes every long state shout. */}
+      <span className={cn(
+        "leading-none font-semibold tabular-nums truncate",
+        model.value.length > 12 ? "text-[1.05rem]" : "text-[1.4rem]",
+        tone.value,
+      )}>
+        {model.value}
+      </span>
+
+      {model.meter && <MeterBar meter={model.meter} />}
+
       <span className="text-[0.7rem] text-ink-muted truncate" title={model.sub}>{model.sub}</span>
-    </a>
+    </button>
   );
 }
 
 // ── Shared chrome ──────────────────────────────────────────────────────────
 
+/** The card every panel is built in. One border, one hairline, no nesting. */
 export function Section({
-  id, title, right, children,
-}: { id: string; title: string; right?: React.ReactNode; children: React.ReactNode }) {
+  id, title, icon, description, right, children,
+}: {
+  id?: string;
+  title: string;
+  icon?: React.ReactNode;
+  description?: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <section id={id} className="rounded-xl border border-ink/10 bg-card shadow-sm overflow-hidden scroll-mt-6">
-      <div className="px-4 py-3 border-b border-hairline flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-ink">{title}</h2>
-        {right}
+    <section
+      id={id}
+      className="rounded-xl border border-hairline bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden"
+    >
+      <div className="px-4 py-3 border-b border-hairline flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h2 className="text-[0.85rem] font-semibold text-ink flex items-center gap-2">
+            {icon && <span className="text-ink-muted">{icon}</span>}
+            {title}
+          </h2>
+          {description && (
+            <p className="text-[0.7rem] text-ink-muted leading-relaxed mt-1 max-w-[68ch]">{description}</p>
+          )}
+        </div>
+        {right && <div className="shrink-0 flex items-center gap-2">{right}</div>}
       </div>
       {children}
     </section>
   );
 }
 
+/** A labelled figure. Used in fours and eights, so it sets its own baseline. */
 export function Fact({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
   return (
-    <div title={hint}>
-      <dt className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">{label}</dt>
-      <dd className="text-sm text-ink mt-0.5 tabular-nums">{value}</dd>
+    <div title={hint} className="min-w-0">
+      <dt className="text-[0.6rem] uppercase tracking-[0.12em] text-ink-muted font-semibold">{label}</dt>
+      <dd className="text-[0.95rem] text-ink mt-1 tabular-nums font-medium truncate">{value}</dd>
     </div>
   );
 }
 
-export function Badge({ tone, children }: { tone: "good" | "bad" | "muted" | "warn"; children: React.ReactNode }) {
+export function Badge({ tone, children }: { tone: "good" | "bad" | "muted" | "warn" | "accent"; children: React.ReactNode }) {
   return (
     <span
       className={cn(
-        "text-[0.6rem] uppercase tracking-widest font-bold px-2 py-0.5 rounded whitespace-nowrap",
-        tone === "good" && "bg-good/15 text-good",
-        tone === "bad" && "bg-bad/15 text-bad",
-        tone === "warn" && "bg-gold/25 text-ink",
-        tone === "muted" && "bg-ink/10 text-ink-muted",
+        "inline-flex items-center gap-1 text-[0.65rem] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap border",
+        tone === "good" && "bg-good/10 text-good border-good/25",
+        tone === "bad" && "bg-bad/10 text-bad border-bad/25",
+        tone === "warn" && "bg-gold/15 text-gold-ink border-gold/40",
+        tone === "accent" && "bg-coral/10 text-coral border-coral/25",
+        tone === "muted" && "bg-ink/[0.05] text-ink-muted border-hairline",
       )}
     >
       {children}
+    </span>
+  );
+}
+
+/**
+ * The state of one row, as shape AND colour. Red and green are the one pair a
+ * large share of readers cannot separate, so the glyph carries it too, and the
+ * label is on the element for a screen reader.
+ */
+export function StateMark({ state }: { state: CheckState }) {
+  const g = PROBE_GLYPH[state];
+  return (
+    <span
+      aria-label={g.word}
+      className={cn(
+        "inline-grid place-items-center w-4.5 h-4.5 rounded-full text-[0.6rem] font-bold shrink-0",
+        state === "ok" && "bg-good/12 text-good",
+        state === "warn" && "bg-gold/20 text-gold-ink",
+        state === "fail" && "bg-bad/12 text-bad",
+        state === "skip" && "bg-ink/[0.06] text-ink-muted",
+      )}
+    >
+      {g.glyph}
     </span>
   );
 }
@@ -448,21 +641,23 @@ export function Badge({ tone, children }: { tone: "good" | "bad" | "muted" | "wa
  */
 export function HistoryStrip({ runs }: { runs: RunLine[] }) {
   if (!runs.length) return null;
+  const real = runs.filter((r) => !r.dryRun);
   const max = Math.max(1, ...runs.map((r) => (r.dryRun ? 0 : r.durationMs)));
+  const failed = runs.filter((r) => r.outcome === "failed").length;
   return (
-    <div className="px-4 py-3 border-b border-hairline">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">
+    <div className="px-4 py-3.5 border-b border-hairline">
+      <div className="flex items-center justify-between gap-3 mb-2.5">
+        <span className="text-[0.6rem] uppercase tracking-[0.12em] text-ink-muted font-semibold">
           Last {runs.length} run{runs.length === 1 ? "" : "s"}
         </span>
-        <span className="text-[0.65rem] text-ink-muted tabular-nums">
-          {runs.filter((r) => r.outcome === "failed").length} failed · median{" "}
-          {dur(median(runs.filter((r) => !r.dryRun).map((r) => r.durationMs)))}
+        <span className="flex items-center gap-3 text-[0.68rem] text-ink-muted tabular-nums">
+          <span>median <strong className="text-ink font-semibold">{dur(median(real.map((r) => r.durationMs)))}</strong></span>
+          <span className={failed ? "text-bad font-semibold" : ""}>{failed} failed</span>
         </span>
       </div>
-      <div className="flex items-end gap-[3px] h-10">
+      <div className="flex items-end gap-[3px] h-12">
         {runs.map((r) => {
-          const pct = r.dryRun ? 12 : Math.max(8, Math.round((r.durationMs / max) * 100));
+          const pct = r.dryRun ? 10 : Math.max(8, Math.round((r.durationMs / max) * 100));
           const title = r.dryRun
             ? `${when(r.startedAt)} · dry run`
             : `${when(r.startedAt)} · ${r.outcome === "ok" ? "succeeded" : `failed at ${shortStep(r.failedAt)}`} · ${dur(r.durationMs)}`;
@@ -471,8 +666,8 @@ export function HistoryStrip({ runs }: { runs: RunLine[] }) {
               key={r.startedAt}
               title={title}
               className={cn(
-                "flex-1 min-w-1 max-w-3.5 rounded-sm",
-                r.dryRun ? "bg-ink/15" : r.outcome === "ok" ? "bg-good/70" : "bg-bad",
+                "flex-1 min-w-1 max-w-3.5 rounded-sm transition-opacity hover:opacity-100",
+                r.dryRun ? "bg-ink/15" : r.outcome === "ok" ? "bg-good/60 hover:bg-good" : "bg-bad",
               )}
               style={{ height: `${pct}%` }}
             />
@@ -494,7 +689,7 @@ function median(xs: number[]): number {
 
 const PROBE_GLYPH: Record<ProbeState, { glyph: string; cls: string; word: string }> = {
   ok: { glyph: "✓", cls: "text-good", word: "ok" },
-  warn: { glyph: "!", cls: "text-gold", word: "warning" },
+  warn: { glyph: "!", cls: "text-gold-ink", word: "warning" },
   fail: { glyph: "✕", cls: "text-bad", word: "failed" },
   skip: { glyph: "·", cls: "text-ink-muted", word: "skipped" },
 };
@@ -505,52 +700,42 @@ export function ChecksSection({
   const running = probes.state !== "ready";
   return (
     <Section
-      id="checks"
+      id="panel-checks"
       title="Site checks"
+      description="The requests a reader makes, made from here, now. Green is a status code, not a promise."
       right={
-        <div className="flex items-center gap-2">
+        <>
           {checkedAt && !running && (
-            <span className="text-[0.65rem] text-ink-muted">checked {ago(new Date(checkedAt).toISOString())}</span>
+            <span className="text-[0.65rem] text-ink-muted tabular-nums">checked {ago(new Date(checkedAt).toISOString())}</span>
           )}
           <button
             type="button"
             onClick={onRerun}
             disabled={running}
-            className="h-7 px-2.5 rounded-md text-[0.7rem] font-semibold border border-ink/15 text-ink hover:bg-paper-deep transition-colors disabled:opacity-50"
+            className="h-7 px-2.5 rounded-lg text-[0.7rem] font-semibold border border-hairline text-ink hover:bg-ink/[0.04] transition-colors disabled:opacity-50"
           >
             {running ? "Running…" : "Run again"}
           </button>
-        </div>
+        </>
       }
     >
-      <p className="px-4 pt-3 text-[0.7rem] text-ink-muted leading-relaxed">
-        The requests a reader makes, made from here, now. Green is a status code, not a promise.
-      </p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm mt-2">
-          <tbody>
-            {PROBES.map((p) => {
-              const r = probes.state === "ready" ? probes.data.get(p.id) : undefined;
-              const g = r ? PROBE_GLYPH[r.state] : null;
-              return (
-                <tr key={p.id} className="border-t border-hairline align-top">
-                  <td className="px-4 py-2 w-6">
-                    <span aria-label={g?.word ?? "running"} className={cn("inline-block w-4 text-center text-xs font-bold", g ? g.cls : "text-ink-muted animate-pulse")}>
-                      {g ? g.glyph : "…"}
-                    </span>
-                  </td>
-                  <td className="px-2 py-2">
-                    <span className="text-ink" title={p.why}>{p.label}</span>
-                    {p.cost && <span className="ml-2 text-[0.65rem] text-ink-muted">{p.cost}</span>}
-                  </td>
-                  <td className={cn("px-4 py-2 text-right tabular-nums whitespace-nowrap text-xs", r?.state === "fail" ? "text-bad font-semibold" : "text-ink-muted")}>
-                    {r ? r.detail : "…"}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="divide-y divide-hairline">
+        {PROBES.map((p) => {
+          const r = probes.state === "ready" ? probes.data.get(p.id) : undefined;
+          return (
+            <div key={p.id} className="px-4 py-2.5 flex items-center gap-3 hover:bg-ink/[0.02] transition-colors">
+              {r ? <StateMark state={r.state} /> : <span className="w-4.5 h-4.5 rounded-full bg-ink/[0.06] animate-pulse shrink-0" />}
+              <span className="text-[0.82rem] text-ink min-w-0 truncate" title={p.why}>{p.label}</span>
+              {p.cost && <span className="text-[0.62rem] text-ink-muted border border-hairline rounded px-1.5 py-px shrink-0">{p.cost}</span>}
+              <span className={cn(
+                "ml-auto text-[0.72rem] tabular-nums whitespace-nowrap shrink-0",
+                r?.state === "fail" ? "text-bad font-semibold" : "text-ink-muted",
+              )}>
+                {r ? r.detail : "…"}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </Section>
   );
@@ -562,8 +747,9 @@ export function DataChecksSection({ checks }: { checks: Loaded<Checks> }) {
   const ready = checks.state === "ready" ? checks.data : null;
   return (
     <Section
-      id="data"
+      id="panel-data"
       title="Data checks"
+      description="What the last run wrote, looked at as a whole: the slate against the index, each team against yesterday, R2 against tonight. A finding marks the run; it does not undo it."
       right={
         ready && (
           <span className="text-[0.65rem] text-ink-muted tabular-nums">
@@ -572,37 +758,27 @@ export function DataChecksSection({ checks }: { checks: Loaded<Checks> }) {
         )
       }
     >
-      <p className="px-4 pt-3 text-[0.7rem] text-ink-muted leading-relaxed">
-        What the last run wrote, looked at as a whole: the slate against the index, each team against yesterday, R2 against tonight.
-        A finding marks the run; it does not undo it.
-      </p>
-      {checks.state === "loading" && <p className="px-4 py-3 text-sm text-ink-muted">Reading the report…</p>}
-      {checks.state === "error" && <p className="px-4 py-3 text-sm text-bad">{checks.message}</p>}
+      {checks.state === "loading" && <p className="px-4 py-4 text-sm text-ink-muted">Reading the report…</p>}
+      {checks.state === "error" && <p className="px-4 py-4 text-sm text-bad">{checks.message}</p>}
       {checks.state === "none" && (
-        <p className="px-4 py-3 text-sm text-ink-muted">
+        <p className="px-4 py-4 text-sm text-ink-muted">
           No report yet. The nightly writes one after every publish, from the same run that did the publishing.
         </p>
       )}
       {ready && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm mt-2">
-            <tbody>
-              {ready.checks.map((c) => {
-                const g = PROBE_GLYPH[c.state];
-                return (
-                  <tr key={c.id} className="border-t border-hairline align-top">
-                    <td className="px-4 py-2 w-6">
-                      <span aria-label={g.word} className={cn("inline-block w-4 text-center text-xs font-bold", g.cls)}>{g.glyph}</span>
-                    </td>
-                    <td className="px-2 py-2 pr-6 w-px whitespace-nowrap text-ink">{c.label}</td>
-                    <td className={cn("px-4 py-2 text-xs leading-relaxed", c.state === "fail" ? "text-bad font-semibold" : c.state === "warn" ? "text-ink" : "text-ink-muted")}>
-                      {c.detail}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="divide-y divide-hairline">
+          {ready.checks.map((c) => (
+            <div key={c.id} className="px-4 py-2.5 flex items-start gap-3 hover:bg-ink/[0.02] transition-colors">
+              <span className="mt-px"><StateMark state={c.state} /></span>
+              <span className="text-[0.82rem] text-ink shrink-0 w-40 truncate" title={c.label}>{c.label}</span>
+              <span className={cn(
+                "text-[0.72rem] leading-relaxed min-w-0",
+                c.state === "fail" ? "text-bad font-semibold" : c.state === "warn" ? "text-ink" : "text-ink-muted",
+              )}>
+                {c.detail}
+              </span>
+            </div>
+          ))}
         </div>
       )}
     </Section>
@@ -623,8 +799,9 @@ function planLabel(tier: string | null, status: string | null, role: string | nu
 export function SubscribersSection({ overview, footer }: { overview: Loaded<Overview>; footer?: React.ReactNode }) {
   return (
     <Section
-      id="subscribers"
+      id="panel-subscribers"
       title="Subscribers"
+      description="Counted server-side on every load — this panel is the only thing here that reads the accounts table."
       right={overview.state === "ready" && overview.data.subscribers.truncated
         ? <Badge tone="warn">counts capped</Badge>
         : undefined}
@@ -637,9 +814,9 @@ export function SubscribersSection({ overview, footer }: { overview: Loaded<Over
         const s = overview.data.subscribers;
         return (
           <>
-            <dl className="px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 border-b border-hairline">
-              <Fact label="Paying now" value={<><strong>{s.active}</strong> <span className="text-ink-muted">· {s.monthly} monthly, {s.yearly} yearly</span></>} />
-              <Fact label="New paid, 30 days" value={s.paidNew30d} />
+            <dl className="px-4 py-4 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-4 border-b border-hairline">
+              <Fact label="Paying now" value={<><span className="text-ink">{s.active}</span> <span className="text-ink-muted font-normal text-[0.78rem] ml-1">{s.monthly} monthly · {s.yearly} yearly</span></>} />
+              <Fact label="New paid, 30d" value={s.paidNew30d} />
               <Fact label="Cancelling" value={s.cancelling} hint="Still paid today, already told Stripe to stop." />
               <Fact label="Past due" value={s.pastDue} hint="A card failed and Stripe is retrying. Access continues." />
               <Fact label="Accounts" value={s.accounts} />
@@ -647,31 +824,23 @@ export function SubscribersSection({ overview, footer }: { overview: Loaded<Over
               <Fact label="New, 30 days" value={s.new30d} />
               <Fact label="Staff" value={s.admins} />
             </dl>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-[0.6rem] uppercase tracking-widest text-ink-muted">
-                    <th className="px-4 py-2 font-medium">Latest sign-ups</th>
-                    <th className="px-4 py-2 font-medium">Plan</th>
-                    <th className="px-4 py-2 font-medium text-right">Joined</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {s.recent.map((r) => {
-                    const p = planLabel(r.tier, r.status, r.role);
-                    return (
-                      <tr key={`${r.email}-${r.createdAt}`} className="border-t border-hairline">
-                        <td className="px-4 py-2 text-ink truncate max-w-64">{r.email ?? <span className="text-ink-muted">no email</span>}</td>
-                        <td className="px-4 py-2"><Badge tone={p.tone}>{p.text}</Badge></td>
-                        <td className="px-4 py-2 text-right text-ink-muted tabular-nums whitespace-nowrap">{ago(r.createdAt)}</td>
-                      </tr>
-                    );
-                  })}
-                  {s.recent.length === 0 && (
-                    <tr><td colSpan={3} className="px-4 py-4 text-ink-muted">No accounts yet.</td></tr>
-                  )}
-                </tbody>
-              </table>
+            <div className="px-4 pt-3 pb-1 text-[0.6rem] uppercase tracking-[0.12em] text-ink-muted font-semibold">
+              Latest sign-ups
+            </div>
+            <div className="divide-y divide-hairline">
+              {s.recent.map((r) => {
+                const p = planLabel(r.tier, r.status, r.role);
+                return (
+                  <div key={`${r.email}-${r.createdAt}`} className="px-4 py-2.5 flex items-center gap-3 hover:bg-ink/[0.02] transition-colors">
+                    <span className="text-[0.82rem] text-ink truncate min-w-0 flex-1">
+                      {r.email ?? <span className="text-ink-muted">no email</span>}
+                    </span>
+                    <Badge tone={p.tone}>{p.text}</Badge>
+                    <span className="text-[0.7rem] text-ink-muted tabular-nums whitespace-nowrap shrink-0 w-24 text-right">{ago(r.createdAt)}</span>
+                  </div>
+                );
+              })}
+              {s.recent.length === 0 && <p className="px-4 py-4 text-sm text-ink-muted">No accounts yet.</p>}
             </div>
           </>
         );
@@ -687,20 +856,22 @@ export function WebhookNote({ overview }: { overview: Loaded<Overview> }) {
   if (overview.state !== "ready") return null;
   const hb = overview.data.webhook;
   return (
-    <div className="px-4 py-3 border-t border-hairline text-[0.7rem] text-ink-muted leading-relaxed">
-      <span className="text-[0.6rem] uppercase tracking-widest font-medium mr-2">Stripe webhook</span>
-      {hb ? (
-        <>
-          last verified event <strong className="text-ink">{hb.type}</strong> {ago(hb.at)}
-          {hb.handled ? "" : " (acknowledged, not acted on)"}
-          {!hb.ok && <span className="text-bad font-semibold"> — the handler failed; Stripe will retry.</span>}
-        </>
-      ) : (
-        <>
-          nothing recorded yet. The webhook writes a note on every event it verifies; the first
-          renewal, or a test event from the Stripe dashboard, will fill this in.
-        </>
-      )}
+    <div className="px-4 py-3 border-t border-hairline text-[0.72rem] text-ink-muted leading-relaxed flex items-start gap-2">
+      <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold shrink-0 pt-px">Stripe webhook</span>
+      <span className="min-w-0">
+        {hb ? (
+          <>
+            last verified event <strong className="text-ink font-semibold">{hb.type}</strong> {ago(hb.at)}
+            {hb.handled ? "" : " (acknowledged, not acted on)"}
+            {!hb.ok && <span className="text-bad font-semibold"> — the handler failed; Stripe will retry.</span>}
+          </>
+        ) : (
+          <>
+            nothing recorded yet. The webhook writes a note on every event it verifies; the first
+            renewal, or a test event from the Stripe dashboard, will fill this in.
+          </>
+        )}
+      </span>
     </div>
   );
 }

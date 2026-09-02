@@ -2,12 +2,17 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import {
+  Activity, ArrowLeftRight, CreditCard, ExternalLink, Globe, LayoutGrid, Megaphone,
+  Play, RefreshCw, Rocket, ShieldCheck, Undo2, Users,
+} from "lucide-react";
 import { dispatchRun } from "@/lib/admin-api";
 import { WORKFLOW_URL, type Deploy, type Workflow } from "@/lib/github-runs";
 import { useAuthOptional } from "@/lib/auth/auth-provider";
 import { LIVE_SEASON } from "@/lib/seasons";
 import { cn } from "@/lib/utils";
 import { BannerPanel, TransfersPanel } from "@/components/admin/admin-panels";
+import { AdminShell, useView, type NavGroup, type ViewId } from "@/components/admin/admin-shell";
 import {
   Badge,
   ChecksSection,
@@ -15,6 +20,7 @@ import {
   Fact,
   HistoryStrip,
   Section,
+  StateMark,
   SubscribersSection,
   Tile,
   WebhookNote,
@@ -50,16 +56,16 @@ import {
  * the same requests any visitor makes. The one thing that is not public — who
  * is paying — comes from a function that does its own server-side admin check
  * on every call (requireAdmin), and a non-admin who reaches this component
- * gets a 403 from it, not a number. Nothing on this page is trusted to decide
+ * gets a 404 from it, not a number. Nothing on this page is trusted to decide
  * anything.
  *
- * ── THE ORDER IS THE ORDER OF ALARM ───────────────────────────────────────
+ * ── THE OVERVIEW IS THE ALARM, THE PANES ARE THE WORK ─────────────────────
  *
- * Tiles first, because on the morning something broke the whole page has to
- * answer "what" before it is scrolled. Then the sections the tiles point at,
- * in the same order. The two editorial panels — banner, transfers — come last:
- * they are the things an administrator comes here to DO, but nobody does them
- * while something is red, and a status page that opens with a form is a form.
+ * Overview answers "what is wrong" in one screen — six tiles, the last run,
+ * both check panels — and nothing on it is a form. Everything an
+ * administrator DOES lives one click away in its own pane, because nobody
+ * edits a banner while something is red, and a status page that opens with a
+ * text field is a form with some numbers above it.
  *
  * ── THE RUN BUTTONS START A JOB SOMEWHERE ELSE ────────────────────────────
  *
@@ -68,7 +74,7 @@ import {
  * the run except by asking GitHub how it is going — which the page does,
  * without a token, because the repository is public (github-runs.ts). So a
  * press is followed by a few seconds in which GitHub has accepted the
- * request and not yet listed the run; the aside says so rather than showing
+ * request and not yet listed the run; the panel says so rather than showing
  * nothing, because nothing looks like the button did not work.
  *
  * The buttons are disabled while a run is going. The workflow's own
@@ -95,13 +101,17 @@ const RUNS: Array<{ label: string; phases: string; why: string; primary?: boolea
     why: "Restore the previous run's files. One generation only." },
 ];
 
+const VIEWS: readonly ViewId[] = ["overview", "pipeline", "data", "checks", "subscribers", "banner", "transfers"];
+
+const ICON = { size: 14, strokeWidth: 2 } as const;
+
 export function AdminClient() {
   const auth = useAuthOptional();
   const isAdmin = auth?.profile?.role === "admin";
   const settling = !auth || auth.status === "loading" || auth.profileLoading;
 
   if (settling) {
-    return <Shell><p className="text-ink-muted text-sm">Checking your account…</p></Shell>;
+    return <Gate><p className="text-ink-muted text-sm">Checking your account…</p></Gate>;
   }
 
   /**
@@ -114,42 +124,86 @@ export function AdminClient() {
    */
   if (!isAdmin) {
     return (
-      <Shell>
+      <Gate>
         <h1 className="text-xl font-semibold text-ink mb-2">Nothing here</h1>
         <p className="text-ink-muted text-sm">
           This page is for site administration.{" "}
           <Link href="/" className="text-coral hover:underline">Back to Beyond the Arc</Link>.
         </p>
-      </Shell>
+      </Gate>
     );
   }
 
   return <Dashboard />;
 }
 
+function Gate({ children }: { children: React.ReactNode }) {
+  return <main className="mx-auto max-w-6xl px-6 lg:px-10 py-10">{children}</main>;
+}
+
 /**
  * Split from the gate so the data hook runs only for an administrator. A
- * non-admin never fires the overview call (which would 403) or the probes
+ * non-admin never fires the overview call (which would 404) or the probes
  * (one of which spends a CBBD call).
  */
 function Dashboard() {
   const { status, history, checks, overview, probes, workflow, deploy, checkedAt, refresh, expectRun } = useDashboardData();
+  const [view, go] = useView(VIEWS);
+
   const loading = status.state === "loading" || overview.state === "loading" || probes.state === "loading";
 
+  const pipeline = pipelineTile(history, status, workflow);
+  const data = dataChecksTile(checks);
+  const site = probesTile(probes);
+  const dep = deployTile(deploy);
+  const subs = subscribersTile(overview);
+  const hook = webhookTile(overview);
+
+  /**
+   * The rail carries each pane's health, so a pane you are not looking at can
+   * still raise its hand. Overview's own dot is the worst of them: it is the
+   * pane that would have told you.
+   */
+  const groups: NavGroup[] = [
+    {
+      title: "Operations",
+      items: [
+        { id: "overview", label: "Overview", icon: <LayoutGrid {...ICON} />, health: worst([pipeline.health, data.health, site.health, dep.health]) },
+        { id: "pipeline", label: "Pipeline", icon: <Activity {...ICON} />, health: worst([pipeline.health, dep.health]) },
+        { id: "data", label: "Data checks", icon: <ShieldCheck {...ICON} />, health: data.health },
+        { id: "checks", label: "Site checks", icon: <Globe {...ICON} />, health: site.health },
+      ],
+    },
+    {
+      title: "Revenue",
+      items: [
+        {
+          id: "subscribers",
+          label: "Subscribers",
+          icon: <Users {...ICON} />,
+          health: worst([subs.health, hook.health]),
+          badge: overview.state === "ready" ? String(overview.data.subscribers.active) : null,
+        },
+      ],
+    },
+    {
+      title: "Editorial",
+      items: [
+        { id: "banner", label: "Site banner", icon: <Megaphone {...ICON} /> },
+        { id: "transfers", label: "Transfers", icon: <ArrowLeftRight {...ICON} /> },
+      ],
+    },
+  ];
+
   return (
-    <Shell>
-      <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-[0.6rem] uppercase tracking-widest text-coral font-bold mb-1">Admin</p>
-          <h1 className="text-2xl font-semibold text-ink">Dashboard</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[0.7rem] text-ink-muted">
-            Live season{" "}
-            <strong className="text-ink">{LIVE_SEASON === null ? "none" : LIVE_SEASON}</strong>
-          </span>
+    <AdminShell
+      groups={groups}
+      view={view}
+      onNavigate={go}
+      bar={
+        <>
           {checkedAt && !loading && (
-            <span className="text-[0.7rem] text-ink-muted tabular-nums">
+            <span className="hidden sm:inline text-[0.68rem] text-ink-muted tabular-nums">
               checked {ago(new Date(checkedAt).toISOString())}
             </span>
           )}
@@ -157,52 +211,105 @@ function Dashboard() {
             type="button"
             onClick={refresh}
             disabled={loading}
-            className="h-8 px-3 rounded-md text-xs font-semibold border border-ink/15 text-ink hover:bg-paper-deep transition-colors disabled:opacity-50"
+            className="h-8 px-2.5 rounded-lg text-[0.72rem] font-semibold border border-hairline text-ink-soft hover:text-ink hover:bg-ink/[0.04] transition-colors disabled:opacity-50 inline-flex items-center gap-1.5"
           >
-            {loading ? "Checking…" : "Refresh"}
+            <RefreshCw size={13} className={cn(loading && "animate-spin")} />
+            <span className="hidden sm:inline">{loading ? "Checking…" : "Refresh"}</span>
           </button>
+          <button
+            type="button"
+            onClick={() => go("pipeline")}
+            className="h-8 px-3 rounded-lg text-[0.72rem] font-semibold bg-ink text-paper hover:opacity-90 transition-opacity inline-flex items-center gap-1.5"
+          >
+            <Play size={12} fill="currentColor" />
+            Run
+          </button>
+        </>
+      }
+      footer={
+        <div className="px-2 flex flex-col gap-2 text-[0.68rem] text-ink-muted">
+          <span className="inline-flex items-center gap-1.5">
+            <span className={cn("w-1.5 h-1.5 rounded-full", LIVE_SEASON === null ? "bg-ink/25" : "bg-good")} />
+            {LIVE_SEASON === null ? "Off-season" : `Live season ${LIVE_SEASON}`}
+          </span>
+          <a href={WORKFLOW_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:text-ink transition-colors">
+            Workflow on GitHub <ExternalLink size={11} />
+          </a>
         </div>
-      </header>
+      }
+    >
+      {view === "overview" && (
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            <Tile label="Pipeline" icon={<Activity {...ICON} />} model={pipeline} onClick={() => go("pipeline")} />
+            <Tile label="Data checks" icon={<ShieldCheck {...ICON} />} model={data} onClick={() => go("data")} />
+            <Tile label="Site checks" icon={<Globe {...ICON} />} model={site} onClick={() => go("checks")} />
+            <Tile label="Deploy" icon={<Rocket {...ICON} />} model={dep} onClick={() => go("pipeline")} />
+            <Tile label="Subscribers" icon={<Users {...ICON} />} model={subs} onClick={() => go("subscribers")} />
+            <Tile label="Stripe" icon={<CreditCard {...ICON} />} model={hook} onClick={() => go("subscribers")} />
+          </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-        <Tile label="Nightly pipeline" model={pipelineTile(history, status, workflow)} href="#pipeline" />
-        <Tile label="Data checks" model={dataChecksTile(checks)} href="#data" />
-        <Tile label="Site checks" model={probesTile(probes)} href="#checks" />
-        <Tile label="Deploy" model={deployTile(deploy)} href="#run" />
-        <Tile label="Subscribers" model={subscribersTile(overview)} href="#subscribers" />
-        <Tile label="Stripe webhook" model={webhookTile(overview)} href="#subscribers" />
-      </div>
+          {/* The run panel is tall and the status cards are short, so they
+              share a row rather than sit beside one tall column of air. */}
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem] items-start">
+            <div className="flex flex-col gap-4 min-w-0">
+              <PipelineSection status={status} history={history} onSeeSteps={() => go("pipeline")} compact />
+              <DataChecksSection checks={checks} />
+              <ChecksSection probes={probes} checkedAt={checkedAt} onRerun={refresh} />
+            </div>
+            <RunPanel workflow={workflow} deploy={deploy} onDispatched={expectRun} />
+          </div>
+        </div>
+      )}
 
-      <div className="grid gap-4">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] items-start">
+      {view === "pipeline" && (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_19rem] items-start">
           <PipelineSection status={status} history={history} />
-          <RunAside workflow={workflow} deploy={deploy} onDispatched={expectRun} />
+          <RunPanel workflow={workflow} deploy={deploy} onDispatched={expectRun} />
         </div>
+      )}
 
-        <DataChecksSection checks={checks} />
+      {view === "data" && <DataChecksSection checks={checks} />}
 
-        <ChecksSection probes={probes} checkedAt={checkedAt} onRerun={refresh} />
+      {view === "checks" && <ChecksSection probes={probes} checkedAt={checkedAt} onRerun={refresh} />}
 
+      {view === "subscribers" && (
         <SubscribersSection overview={overview} footer={<WebhookNote overview={overview} />} />
+      )}
 
-        <h2 className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium mt-2">Actions</h2>
-        <BannerPanel />
-        <TransfersPanel />
-      </div>
-    </Shell>
+      {view === "banner" && <BannerPanel />}
+
+      {view === "transfers" && <TransfersPanel />}
+    </AdminShell>
   );
 }
 
+/** The loudest of a set of healths — what a group's dot should say. */
+function worst(hs: Array<TileHealth>): TileHealth {
+  const rank: Record<TileHealth, number> = { bad: 5, warn: 4, live: 3, loading: 2, off: 1, good: 0 };
+  return hs.reduce((a, b) => (rank[b] > rank[a] ? b : a), "good" as TileHealth);
+}
+type TileHealth = ReturnType<typeof pipelineTile>["health"];
+
 // ── Pipeline ───────────────────────────────────────────────────────────────
 
-function PipelineSection({ status, history }: { status: Loaded<RefreshStatus>; history: Loaded<RefreshHistory> }) {
+function PipelineSection({
+  status, history, compact, onSeeSteps,
+}: {
+  status: Loaded<RefreshStatus>;
+  history: Loaded<RefreshHistory>;
+  /** Overview shows the shape of the run; the pipeline pane shows every step. */
+  compact?: boolean;
+  onSeeSteps?: () => void;
+}) {
   const s = status.state === "ready" ? status.data : null;
   return (
     <Section
-      id="pipeline"
+      id="panel-pipeline"
       title="Last run"
+      description={compact ? undefined : "Every step the nightly ran, in order, with what each one cost."}
       right={
-        <div className="flex items-center gap-2">
+        <>
           {/* A DRY RUN IS NOT A RUN, and the record could not say so.
               --dry-run writes the same status file with every step marked
               skipped, so a rehearsal showed here as "Succeeded" with the
@@ -211,7 +318,7 @@ function PipelineSection({ status, history }: { status: Loaded<RefreshStatus>; h
               to answer. */}
           {s?.dryRun && <Badge tone="muted">Dry run</Badge>}
           {s && <Badge tone={s.outcome === "ok" ? "good" : "bad"}>{s.outcome === "ok" ? "Succeeded" : "Failed"}</Badge>}
-        </div>
+        </>
       }
     >
       {history.state === "ready" && <HistoryStrip runs={history.data.runs} />}
@@ -236,7 +343,7 @@ function PipelineSection({ status, history }: { status: Loaded<RefreshStatus>; h
 
       {s && (
         <>
-          <dl className="px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 border-b border-hairline">
+          <dl className="px-4 py-4 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-4 border-b border-hairline">
             <Fact label="Season" value={String(s.season)} />
             <Fact label="Finished" value={ago(s.finishedAt)} />
             <Fact label="Took" value={dur(s.durationMs)} />
@@ -250,38 +357,51 @@ function PipelineSection({ status, history }: { status: Loaded<RefreshStatus>; h
             </p>
           )}
 
-          {/* Wide content scrolls inside its own box — a step is a full command line
-              and the page must not scroll sideways because of one. */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-[0.6rem] uppercase tracking-widest text-ink-muted">
-                  <th className="px-4 py-2 font-medium">Step</th>
-                  <th className="px-4 py-2 font-medium text-right tabular-nums">Time</th>
-                </tr>
-              </thead>
-              <tbody>
+          {compact ? (
+            <div className="px-4 py-3 flex items-center gap-3 text-[0.72rem] text-ink-muted">
+              <span className="flex items-center gap-1.5">
                 {s.steps.map((step, i) => (
-                  <tr key={i} className="border-t border-hairline align-top">
-                    <td className="px-4 py-2">
-                      <span className="flex items-start gap-2">
-                        <StepDot status={step.status} />
-                        <span className="min-w-0">
-                          <code className="font-mono text-xs text-ink break-all">{step.step}</code>
-                          {step.note && (
-                            <span className="block text-[0.7rem] text-ink-muted mt-0.5">{step.note}</span>
-                          )}
-                        </span>
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-ink-muted whitespace-nowrap">
-                      {step.status === "skipped" ? "—" : dur(step.ms)}
-                    </td>
-                  </tr>
+                  <span
+                    key={i}
+                    title={`${step.step} · ${step.status === "skipped" ? "skipped" : dur(step.ms)}`}
+                    className={cn(
+                      "w-1.5 h-1.5 rounded-full",
+                      step.status === "ok" ? "bg-good/70" : step.status === "failed" ? "bg-bad" : "bg-ink/20",
+                    )}
+                  />
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </span>
+              <span className="tabular-nums">
+                {s.steps.filter((x) => x.status === "ok").length} of {s.steps.length} steps ran
+              </span>
+              <button
+                type="button"
+                onClick={onSeeSteps}
+                className="ml-auto text-coral font-semibold hover:underline"
+              >
+                See every step
+              </button>
+            </div>
+          ) : (
+            /* Wide content scrolls inside its own box — a step is a full command
+               line and the page must not scroll sideways because of one. */
+            <div className="overflow-x-auto">
+              <div className="divide-y divide-hairline min-w-[26rem]">
+                {s.steps.map((step, i) => (
+                  <div key={i} className="px-4 py-2.5 flex items-start gap-3 hover:bg-ink/[0.02] transition-colors">
+                    <StepDot status={step.status} />
+                    <div className="min-w-0 flex-1">
+                      <code className="font-mono text-[0.72rem] text-ink break-all">{step.step}</code>
+                      {step.note && <span className="block text-[0.7rem] text-ink-muted mt-0.5">{step.note}</span>}
+                    </div>
+                    <span className="text-[0.72rem] tabular-nums text-ink-muted whitespace-nowrap shrink-0">
+                      {step.status === "skipped" ? "—" : dur(step.ms)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </Section>
@@ -294,7 +414,7 @@ type Dispatch =
   | { state: "sent"; phases: string }
   | { state: "error"; message: string };
 
-function RunAside({
+function RunPanel({
   workflow, deploy, onDispatched,
 }: { workflow: Loaded<Workflow>; deploy: Loaded<Deploy>; onDispatched: () => void }) {
   const [dispatch, setDispatch] = useState<Dispatch>({ state: "idle" });
@@ -332,98 +452,99 @@ function RunAside({
   }
 
   return (
-    <aside id="run" className="rounded-xl border border-ink/10 bg-card shadow-sm p-4 scroll-mt-24">
-      <h2 className="text-sm font-semibold text-ink mb-3">Run it</h2>
-
-      {/* THE PHASES ARE SEPARATE BECAUSE THEY FAIL SEPARATELY. Re-publishing
-          after a fixed builder should not re-pull a night of box scores,
-          and an upstream outage should not cost the derivations that
-          already succeeded. Same reasoning as the script's own phases. */}
-      <div className="flex flex-col gap-1.5">
-        {RUNS.map((r) => (
-          <button
-            key={r.phases}
-            type="button"
-            disabled={!canRun}
-            onClick={() => run(r.phases, r.label)}
-            title={r.why}
-            className={cn(
-              "w-full h-9 rounded-md text-sm font-semibold border transition-colors",
-              "disabled:opacity-40 disabled:cursor-not-allowed",
-              r.danger
-                ? "border-bad/40 bg-bad/10 text-bad hover:bg-bad/20"
-                : r.primary
-                  ? "border-coral/40 bg-coral/10 text-ink hover:bg-coral/20"
-                  : "border-ink/15 text-ink hover:bg-paper-deep",
-            )}
-          >
-            {dispatch.state === "sending" && dispatch.phases === r.phases ? "Asking GitHub…" : r.label}
-          </button>
-        ))}
+    <aside className="rounded-xl border border-hairline bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="px-4 py-3 border-b border-hairline flex items-center justify-between">
+        <h2 className="text-[0.85rem] font-semibold text-ink">Run it</h2>
+        {running && <Badge tone="accent"><span className="w-1.5 h-1.5 rounded-full bg-coral animate-pulse" />live</Badge>}
       </div>
 
-      <label className="mt-2 flex items-center gap-2 text-[0.7rem] text-ink-muted cursor-pointer select-none">
-        <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} className="accent-coral" />
-        Dry run — print the chain on GitHub without running it
-      </label>
+      <div className="p-4">
+        {/* THE PHASES ARE SEPARATE BECAUSE THEY FAIL SEPARATELY. Re-publishing
+            after a fixed builder should not re-pull a night of box scores,
+            and an upstream outage should not cost the derivations that
+            already succeeded. Same reasoning as the script's own phases. */}
+        <div className="flex flex-col gap-1.5">
+          {RUNS.map((r) => (
+            <button
+              key={r.phases}
+              type="button"
+              disabled={!canRun}
+              onClick={() => run(r.phases, r.label)}
+              title={r.why}
+              className={cn(
+                "w-full h-9 px-3 rounded-lg text-[0.78rem] font-semibold transition-all inline-flex items-center gap-2",
+                "disabled:opacity-40 disabled:cursor-not-allowed",
+                r.danger
+                  ? "text-bad border border-bad/30 hover:bg-bad/10"
+                  : r.primary
+                    ? "bg-coral text-accent-foreground border border-coral hover:opacity-90 shadow-[0_1px_2px_rgba(0,0,0,0.08)]"
+                    : "text-ink border border-hairline hover:bg-ink/[0.04]",
+              )}
+            >
+              {r.danger ? <Undo2 size={13} /> : <Play size={11} fill="currentColor" />}
+              {dispatch.state === "sending" && dispatch.phases === r.phases ? "Asking GitHub…" : r.label}
+            </button>
+          ))}
+        </div>
 
-      {/* What is happening, in one line. Order of precedence: a run going
-          beats a dispatch waiting to be listed beats the last result. */}
-      <div className="mt-3 text-[0.7rem] leading-relaxed">
-        {workflow.state === "loading" && <p className="text-ink-muted">Asking GitHub…</p>}
-        {workflow.state === "error" && <p className="text-bad">{workflow.message}</p>}
-        {running && (
-          <p className="text-ink">
-            <span className="inline-block w-2 h-2 rounded-full bg-coral animate-pulse mr-1.5 align-middle" />
-            <strong>{running.status === "in_progress" ? "Running" : "Queued"}</strong>
-            {" · "}{running.event === "schedule" ? "the nightly" : "a button"}, {ago(running.startedAt ?? running.createdAt)}
-            {" · "}<a href={running.url} target="_blank" rel="noreferrer" className="text-coral hover:underline">watch</a>
-          </p>
-        )}
-        {pending && dispatch.state === "sent" && (
-          <p className="text-ink-muted">
-            <strong className="text-ink">{dispatch.phases}</strong> sent. GitHub lists a run a few seconds after accepting it…
-          </p>
-        )}
-        {dispatch.state === "error" && <p className="text-bad">{dispatch.message}</p>}
-        {disabled && wf && (
-          <p className="text-bad">
-            The workflow is <strong>{wf.state.replace("_", " ")}</strong> on GitHub. Nothing will run until it is enabled there.
-          </p>
-        )}
-        {!running && !pending && last && (
-          <p className="text-ink-muted">
-            Last on GitHub:{" "}
-            <span className={cn("font-semibold", last.conclusion === "success" ? "text-good" : "text-bad")}>{last.conclusion ?? "unknown"}</span>
-            {" · "}{last.event === "schedule" ? "nightly" : "manual"} · {ago(last.updatedAt)}
-            {" · "}<a href={last.url} target="_blank" rel="noreferrer" className="text-coral hover:underline">log</a>
-          </p>
-        )}
-        {wf && wf.runs.length === 0 && <p className="text-ink-muted">No runs on GitHub yet.</p>}
+        <label className="mt-2.5 flex items-center gap-2 text-[0.7rem] text-ink-muted cursor-pointer select-none">
+          <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} className="accent-coral" />
+          Dry run — print the chain without running it
+        </label>
+
+        {/* What is happening, in one line. Order of precedence: a run going
+            beats a dispatch waiting to be listed beats the last result. */}
+        <div className="mt-3 rounded-lg bg-ink/[0.03] border border-hairline px-2.5 py-2 text-[0.7rem] leading-relaxed">
+          {workflow.state === "loading" && <p className="text-ink-muted">Asking GitHub…</p>}
+          {workflow.state === "error" && <p className="text-bad">{workflow.message}</p>}
+          {running && (
+            <p className="text-ink">
+              <strong>{running.status === "in_progress" ? "Running" : "Queued"}</strong>
+              {" · "}{running.event === "schedule" ? "the nightly" : "a button"}, {ago(running.startedAt ?? running.createdAt)}
+              {" · "}<a href={running.url} target="_blank" rel="noreferrer" className="text-coral hover:underline">watch</a>
+            </p>
+          )}
+          {pending && dispatch.state === "sent" && (
+            <p className="text-ink-muted">
+              <strong className="text-ink">{dispatch.phases}</strong> sent. GitHub lists a run a few seconds after accepting it…
+            </p>
+          )}
+          {dispatch.state === "error" && <p className="text-bad">{dispatch.message}</p>}
+          {disabled && wf && (
+            <p className="text-bad">
+              The workflow is <strong>{wf.state.replace("_", " ")}</strong> on GitHub. Nothing will run until it is enabled there.
+            </p>
+          )}
+          {!running && !pending && last && (
+            <p className="text-ink-muted">
+              Last on GitHub:{" "}
+              <span className={cn("font-semibold", last.conclusion === "success" ? "text-good" : "text-bad")}>{last.conclusion ?? "unknown"}</span>
+              {" · "}{last.event === "schedule" ? "nightly" : "manual"} · {ago(last.updatedAt)}
+              {" · "}<a href={last.url} target="_blank" rel="noreferrer" className="text-coral hover:underline">log</a>
+            </p>
+          )}
+          {wf && wf.runs.length === 0 && <p className="text-ink-muted">No runs on GitHub yet.</p>}
+        </div>
       </div>
 
-      <hr className="my-4 border-hairline" />
+      <div className="px-4 py-3 border-t border-hairline">
+        <h3 className="text-[0.6rem] uppercase tracking-[0.12em] text-ink-muted font-semibold mb-1.5 flex items-center gap-1.5">
+          <Rocket size={11} /> Deploy
+        </h3>
+        <DeployNote deploy={deploy} />
+      </div>
 
-      <h3 className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium mb-2">
-        Deploy
-      </h3>
-      <DeployNote deploy={deploy} />
-
-      <hr className="my-4 border-hairline" />
-
-      <ul className="text-[0.7rem] text-ink-muted space-y-2 leading-relaxed">
-        <li>
-          <a href={WORKFLOW_URL} target="_blank" rel="noreferrer" className="text-coral hover:underline">
-            The workflow on GitHub
-          </a>{" "}
-          — the same job, with the same inputs, and every log.
-        </li>
-        <li>
-          Live season:{" "}
-          <strong className="text-ink">{LIVE_SEASON === null ? "none" : LIVE_SEASON}</strong>
-          {LIVE_SEASON === null && " — nothing is being played, so a run has nothing to publish and will say so."}
-        </li>
-      </ul>
+      <div className="px-4 py-3 border-t border-hairline text-[0.7rem] text-ink-muted leading-relaxed">
+        <a href={WORKFLOW_URL} target="_blank" rel="noreferrer" className="text-coral hover:underline inline-flex items-center gap-1">
+          The workflow on GitHub <ExternalLink size={10} />
+        </a>{" "}
+        — the same job, with the same inputs, and every log.
+        {LIVE_SEASON === null && (
+          <span className="block mt-1.5">
+            Nothing is being played, so a run has nothing to publish and will say so.
+          </span>
+        )}
+      </div>
     </aside>
   );
 }
@@ -439,7 +560,7 @@ function DeployNote({ deploy }: { deploy: Loaded<Deploy> }) {
   if (deploy.state === "none") {
     return (
       <p className="text-[0.7rem] text-ink-muted leading-relaxed">
-        This build predates <code className="text-ink">build-info.json</code>. The next build writes one and this will say which commit is live.
+        This build predates <code className="font-mono text-ink">build-info.json</code>. The next build writes one and this will say which commit is live.
       </p>
     );
   }
@@ -462,28 +583,11 @@ function DeployNote({ deploy }: { deploy: Loaded<Deploy> }) {
   );
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
-  return <main className="mx-auto max-w-6xl px-6 lg:px-10 py-10">{children}</main>;
-}
-
 /**
  * Status as shape AND colour, not colour alone — the three states have to be
  * distinguishable without relying on red/green, which is the one pair a large
  * share of readers cannot separate.
  */
 function StepDot({ status }: { status: StepStatus }) {
-  const glyph = status === "ok" ? "✓" : status === "failed" ? "✕" : "·";
-  return (
-    <span
-      aria-label={status}
-      className={cn(
-        "shrink-0 mt-0.5 w-4 text-center text-xs font-bold",
-        status === "ok" && "text-good",
-        status === "failed" && "text-bad",
-        status === "skipped" && "text-ink-muted",
-      )}
-    >
-      {glyph}
-    </span>
-  );
+  return <span className="mt-px"><StateMark state={status === "ok" ? "ok" : status === "failed" ? "fail" : "skip"} /></span>;
 }

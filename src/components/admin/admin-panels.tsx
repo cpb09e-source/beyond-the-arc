@@ -11,13 +11,14 @@ import { BannerView } from "@/components/banner-view";
 import { dataUrl } from "@/lib/data-url";
 import { cn } from "@/lib/utils";
 
-/** Shared card chrome, so the two panels and the run record read as one page. */
+/** Shared card chrome — the same card the dashboard's Section builds, so the
+ *  editorial panes and the status panes read as one surface. */
 export function Panel({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border border-ink/10 bg-card shadow-sm overflow-hidden">
+    <section className="rounded-xl border border-hairline bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
       <div className="px-4 py-3 border-b border-hairline">
-        <h2 className="text-sm font-semibold text-ink">{title}</h2>
-        {hint && <p className="text-[0.7rem] text-ink-muted mt-0.5 leading-relaxed">{hint}</p>}
+        <h2 className="text-[0.85rem] font-semibold text-ink">{title}</h2>
+        {hint && <p className="text-[0.7rem] text-ink-muted mt-1 leading-relaxed max-w-[68ch]">{hint}</p>}
       </div>
       <div className="p-4">{children}</div>
     </section>
@@ -25,12 +26,17 @@ export function Panel({ title, hint, children }: { title: string; hint?: string;
 }
 
 const INPUT =
-  "w-full h-9 rounded-md border border-ink/15 bg-paper px-2.5 text-sm text-ink " +
+  "w-full h-9 rounded-lg border border-hairline bg-paper px-2.5 text-sm text-ink " +
   "focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40";
 
 const BTN =
-  "h-9 inline-flex items-center rounded-md px-3 text-sm font-semibold border border-ink/15 " +
-  "text-ink hover:bg-paper-deep transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
+  "h-9 inline-flex items-center rounded-lg px-3 text-[0.8rem] font-semibold border border-hairline " +
+  "text-ink hover:bg-ink/[0.04] transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
+
+/** The one button in a panel that commits something. */
+const BTN_PRIMARY =
+  "h-9 inline-flex items-center rounded-lg px-3 text-[0.8rem] font-semibold border border-coral bg-coral text-accent-foreground " +
+  "hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed";
 
 /** A saved/failed line that clears itself, so the page does not accumulate receipts. */
 function useFlash() {
@@ -168,7 +174,7 @@ export function BannerPanel() {
                 title={p.message}
                 // Fills the form. Publishing stays a separate, deliberate click.
                 onClick={() => setB({ ...b, message: p.message, tone: p.tone, href: p.href, label: p.label })}
-                className="h-7 px-2.5 rounded-full text-[0.7rem] font-medium border border-ink/15 text-ink-soft hover:border-coral/40 hover:text-ink transition-colors"
+                className="h-7 px-2.5 rounded-full text-[0.7rem] font-medium border border-hairline text-ink-soft hover:border-coral/40 hover:text-ink transition-colors"
               >
                 {p.short}
               </button>
@@ -217,7 +223,7 @@ export function BannerPanel() {
               onClick={() => setB({ ...b, tone: t })}
               className={cn(
                 "h-7 px-2.5 rounded text-[0.7rem] font-semibold border transition-colors",
-                b.tone === t ? "border-coral/50 bg-coral/10 text-ink" : "border-ink/15 text-ink-muted hover:text-ink",
+                b.tone === t ? "border-coral/50 bg-coral/10 text-ink" : "border-hairline text-ink-muted hover:text-ink",
               )}
             >
               {t === "info" ? "Info" : "Warning"}
@@ -265,7 +271,7 @@ export function BannerPanel() {
             type="button"
             disabled={busy || !canEnable}
             onClick={() => save({ ...b, enabled: true })}
-            className={cn(BTN, "border-coral/40 bg-coral/10")}
+            className={BTN_PRIMARY}
             title={canEnable ? undefined : "A banner needs something to say."}
           >
             {b.enabled ? "Update" : "Publish"}
@@ -591,7 +597,7 @@ export function TransfersPanel() {
           />
         </label>
         <DestinationField value={dest} onChange={setDest} teams={teams} />
-        <button type="button" className={cn(BTN, "border-coral/40 bg-coral/10")} disabled={busy || !name.trim() || !dest.trim()} onClick={add}>
+        <button type="button" className={BTN_PRIMARY} disabled={busy || !name.trim() || !dest.trim()} onClick={add}>
           Add
         </button>
       </div>

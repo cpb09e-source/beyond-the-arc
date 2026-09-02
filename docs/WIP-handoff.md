@@ -157,8 +157,27 @@ The page's own role check is PRESENTATION — a static export ships its JS to
 everyone. The real boundary is `requireAdmin` in `netlify/shared/billing.mts`,
 which every write goes through. Nothing on the page decides anything.
 
+Layout, since the 2026-09-01 redesign: a left rail, a sticky bar, and ONE
+PANE AT A TIME (`admin-shell.tsx`). The pane is the URL hash — `#overview`,
+`#pipeline`, `#data`, `#checks`, `#subscribers`, `#banner`, `#transfers`, with
+`#run`/`#history` aliased to `#pipeline` — read through `useSyncExternalStore`,
+not an effect, so there is no wrong-pane flash and no set-state-in-effect. Back
+works because navigation is `pushState`. Every rail item carries the health dot
+its tile carries, so a pane you are not looking at can still raise its hand;
+green and off draw NO dot on purpose.
+
+Files: `admin-shell.tsx` frame · `admin-dashboard.tsx` everything read (hook,
+tiles, sections) · `admin-client.tsx` gate, panes, run panel · `admin-panels.tsx`
+banner + transfers.
+
+EVERY TILE METER IS MEASURED. The strip under a tile's number is real data —
+last 40 nights, one cell per check, one cell per commit waiting to deploy, the
+monthly/yearly split, elapsed against the webhook's quiet window — and a tile
+with nothing to measure gets no strip. Do not add a decorative one; a bar that
+is not a measurement teaches the eye to skip the four that are.
+
 What it does today (a dashboard since 2026-09-01, committed, NOT deployed —
-Colin wants to test first): five tiles, each with its own source, each failing
+Colin wants to test first): six tiles, each with its own source, each failing
 on its own —
 
   - **Nightly pipeline** — `/data/live/refresh-status.json` + `refresh-history.json`
@@ -177,9 +196,17 @@ on its own —
   - **Subscribers** / **Stripe webhook** — `/api/admin-config?what=overview`;
     the webhook writes a heartbeat to `site_config.stripe_webhook`.
 
-Plus the **site banner** editor and **manual transfers**. The four Run buttons
-are STUBS — no dispatch endpoint yet; needs a GitHub PAT plus the workflow
-re-enabled (slice 3).
+  - **Deploy** — `/build-info.json` (written into `out/` by
+    `scripts/build-with-r2-stash.mjs`) plus GitHub's `compare` for how far main
+    has moved. "Behind" is normal between deploys, not an alarm.
+
+Plus the **site banner** editor and **manual transfers**, each its own pane.
+The four Run buttons POST to `/api/dispatch-run` (`netlify/functions/dispatch-run.mts`,
+`requireAdmin` + `GITHUB_DISPATCH_TOKEN`); the page reads run state straight
+from api.github.com with no token, because the repo is public — 60 req/hr, so
+it polls only while a run is going (`src/lib/github-runs.ts`). Still needed
+from Colin: the PAT, and `gh workflow enable "Nightly refresh"` — GitHub
+currently reports the workflow `disabled_manually`, which the panel says.
 
 Dev gotcha: `NEXT_PUBLIC_DATA_BASE` is set locally, so the dashboard reads
 `/data/live/*` from R2 even on :8899. To see a local report, route

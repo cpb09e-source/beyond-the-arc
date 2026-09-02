@@ -879,9 +879,17 @@ body {
 }
 .bta-modal-in { animation: bta-modal-in .2s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
+/* Admin pane switch. Short on purpose: the pane is a destination, not a
+   reveal, and anything long enough to notice is long enough to wait for. */
+@keyframes bta-pane-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+.bta-pane-in { animation: bta-pane-in .16s ease-out both; }
+
 @media (prefers-reduced-motion: reduce) {
   .bta-fade-up, .bta-bar-v, .bta-bar-h, .bta-fill-ring, .bta-pop-in,
-  .bta-drawer-in, .bta-backdrop-in, .bta-modal-in {
+  .bta-drawer-in, .bta-backdrop-in, .bta-modal-in, .bta-pane-in {
     animation: none !important;
   }
 }
