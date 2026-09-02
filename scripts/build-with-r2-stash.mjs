@@ -203,15 +203,17 @@ async function main() {
     sha: git(["rev-parse", "HEAD"]),
     branch: git(["rev-parse", "--abbrev-ref", "HEAD"]),
     builtAt: new Date().toISOString(),
-    dirty: git(["status", "--porcelain"]).length > 0,
+    // TRACKED changes only. Five files sit permanently untracked in this
+    // working tree (a stray deno.lock, two scratch .html, two source .ai/.svg)
+    // and none of them reach the build, so counting them would mark every
+    // deploy dirty and the flag would stop meaning anything.
+    dirty: git(["status", "--porcelain", "--untracked-files=no"]).length > 0,
   };
   if (buildInfo.sha) {
     await writeFile(path.join(OUT, "build-info.json"), JSON.stringify(buildInfo));
-    console.log(`
-→ build-info.json — ${buildInfo.sha.slice(0, 7)} on ${buildInfo.branch}${buildInfo.dirty ? " (dirty)" : ""}`);
+    console.log(`\n→ build-info.json — ${buildInfo.sha.slice(0, 7)} on ${buildInfo.branch}${buildInfo.dirty ? " (dirty)" : ""}`);
   } else {
-    console.log("
-→ No git metadata; skipping build-info.json.");
+    console.log("\n→ No git metadata; skipping build-info.json.");
   }
 
   // The paywall, last: it deletes the paid seasons from out/ and stages them
