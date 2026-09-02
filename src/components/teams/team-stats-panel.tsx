@@ -47,30 +47,36 @@ function fmtValue(v: number | null, fmt: TeamSplitStat["fmt"]): string {
  * filter over group keys rather than a second definition of the panels, and
  * adding a stat to an existing group needs no change here.
  *
- * GROUPED BY THE QUESTION, matching the player overview. Someone reading a
- * team wants to know how good they are, how they score, or how they defend —
+ * EVERYTHING IS THE DEFAULT, and there is no Overview. An Overview view is
+ * worth having when the full set is too much to land on; nine cards on a
+ * three-column grid is three tidy rows, so the shortened version was hiding
+ * two thirds of the panel to save a scroll nobody minded. The narrower views
+ * stay for when a reader has a side of the ball in mind.
+ *
+ * THE OTHER TWO ARE GROUPED BY THE QUESTION, matching the player overview.
+ * Someone reading a team wants to know how they score or how they defend —
  * "Adv Offense" and "Box Score" describe where a number came from, which is
  * this site's problem rather than the reader's.
  *
- * CORE RIDES IN EVERY VIEW, for the same reason Role does on the player page:
- * net rating, tempo and the four factors are the context every other number is
+ * CORE RIDES IN BOTH, for the same reason Role does on the player page: net
+ * rating, tempo and the four factors are the context every other number is
  * read against, and nobody should switch views to find out a team plays at 62
- * possessions. Box Score appears twice because rebounds, steals and blocks are
- * as much a defensive answer as an offensive one.
+ * possessions. Box Score appears in both because rebounds, steals and blocks
+ * are as much a defensive answer as an offensive one.
  *
- * A GROUP IN THE DATA AND IN NO VIEW would show only under Everything. That is
- * the safe direction — it stays reachable — but if a group is added upstream
- * it belongs in a view here too.
+ * A GROUP IN THE DATA AND IN NEITHER VIEW would show only under Everything.
+ * That is the safe direction — it stays reachable, and it is now what the
+ * reader sees first — but if a group is added upstream it belongs in a view
+ * here too.
  */
-type TeamStatsView = "overview" | "offense" | "defense" | "everything";
+type TeamStatsView = "everything" | "offense" | "defense";
 
 const TEAM_VIEWS: Array<{ key: TeamStatsView; label: string; groups: string[] | null }> = [
-  { key: "overview", label: "Overview", groups: ["Core", "Results", "Box"] },
-  { key: "offense", label: "Scoring & shooting", groups: ["Core", "Shooting", "Misc", "AdvOff"] },
-  { key: "defense", label: "Defense & rebounding", groups: ["Core", "OppShoot", "Allowed", "AdvDef", "Box"] },
   // null is not a group list — it is the absence of one. Filtering Everything
   // would mean a list that has to be updated every time a group is added.
   { key: "everything", label: "Everything", groups: null },
+  { key: "offense", label: "Scoring & shooting", groups: ["Core", "Shooting", "Misc", "AdvOff"] },
+  { key: "defense", label: "Defense & rebounding", groups: ["Core", "OppShoot", "Allowed", "AdvDef", "Box"] },
 ];
 
 export function TeamStatsPanel({
@@ -89,7 +95,7 @@ export function TeamStatsPanel({
     [splits],
   );
   const [split, setSplit] = useState(available[0]?.key ?? "full");
-  const [view, setView] = useState<TeamStatsView>("overview");
+  const [view, setView] = useState<TeamStatsView>("everything");
   const row = splits.rows[split] ?? splits.rows.full;
 
   const cards = useMemo(() => {
@@ -158,9 +164,11 @@ export function TeamStatsPanel({
         </div>
         <div className="flex flex-wrap items-center gap-3">
         {/* View sits BEFORE Split, so the row reads in the order the questions
-            are asked: which stats, then which games. Same order, same labels
-            as the player overview — the two panels are read the same way and
-            should not disagree about what the control is called. */}
+            are asked: which stats, then which games. Same control name and the
+            same labels as the player overview — the two panels are read the
+            same way and should not disagree about what the control is called.
+            The list itself is shorter here: this panel leads with Everything
+            and has no Overview, because nine cards fit without one. */}
         <label className="flex items-center gap-2">
           <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">View</span>
           <Select
