@@ -6,9 +6,9 @@ import { Select } from "@/components/select";
 import { PercentileChip } from "@/components/percentile-chip";
 import { DistributionPanel, type DistributionRank } from "@/components/teams/distribution-panel";
 import {
-  DIFF_CAP, POLL_MS, dayLabel, diffLabel, fetchTournament, groupIsComplete, involves, isFinal, isLive,
-  nextPollDelay, resolveSide, standings, timeLabel,
-  type Game, type Resolved, type Side, type Team, type TeamRow, type Tournament,
+  DIFF_CAP, MAX_MARGIN, POLL_MS, dayLabel, diffLabel, fetchTournament, groupIsComplete, involves, isFinal, isLive,
+  nextPollDelay, pickableGames, projectStandings, resolveSide, standings, timeLabel,
+  type Game, type Picks, type ProjRow, type Resolved, type Side, type Team, type TeamRow, type Tournament,
 } from "@/lib/tournament";
 
 /**
@@ -37,6 +37,7 @@ import {
 const TABS = [
   { key: "schedule", label: "Schedule" },
   { key: "standings", label: "Standings" },
+  { key: "whatif", label: "What if" },
   { key: "bracket", label: "Bracket" },
   { key: "teams", label: "Teams" },
 ] as const;
@@ -128,7 +129,7 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
   return (
     <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-6 pb-20">
       {/* ------------------------------------------------------------ hero */}
-      <header className="grid grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-x-10 gap-y-6 items-end">
+      <header>
         <div className="min-w-0">
           <Eyebrow>{data.event.name} · {data.event.division}</Eyebrow>
           <h1 className="font-display text-5xl md:text-7xl tracking-tight text-ink leading-none">
@@ -164,7 +165,6 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
                 </a>
               </>
             )}
-            {" · "}{data.event.group}, {data.teams.length} teams · {dateSpan(data.games)}
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
             <FeedStatus live={live?.at ?? null} failedAt={failedAt} now={now} liveCount={liveCount} finalCount={finalCount} total={data.games.length} />
@@ -177,7 +177,6 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
           </div>
         </div>
 
-        {me && <Situation me={me} games={myGames} ctx={ctx} />}
       </header>
 
       {/* ---------------------------------------------------- schedule strip
@@ -226,6 +225,7 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
       <div className="mt-6">
         {tab === "schedule" && <Schedule ctx={ctx} myGames={myGames} />}
         {tab === "standings" && <Standings ctx={ctx} />}
+        {tab === "whatif" && <WhatIf ctx={ctx} />}
         {tab === "bracket" && <Bracket ctx={ctx} />}
         {tab === "teams" && <Teams ctx={ctx} />}
       </div>
@@ -295,83 +295,6 @@ function FeedStatus({
       <span className={cn(failedAt && "text-bad")}>
         {failedAt && !live ? "feed unreachable" : failedAt ? `feed stalled · ${agoText}` : agoText ? `updated ${agoText}` : "connecting"}
       </span>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------ situation */
-
-/**
- * The hero's right half. Live game → the scoreline, large. Otherwise the next
- * game, or the last result once the weekend is over. Set like a game card
- * with the type turned up: this is the one thing a coach glances at between
- * possessions.
- */
-function Situation({ me, games, ctx }: { me: Team; games: Game[]; ctx: Ctx }) {
-  const liveGame = games.find(isLive);
-  // A FIXTURE BEATS A PROJECTION for "next". The organiser has Round 1 timed
-  // before the last group games, so by the clock a projected bracket slot can
-  // sit ahead of a game that is actually on the schedule — and a coach asking
-  // "who do we play next" means the one that is booked.
-  const isFixture = (g: Game) =>
-    [g.a, g.b].every((s) => resolveSide(s, ctx.data, ctx.table, ctx.complete).state === "settled");
-  const next = games.find((g) => g.status !== "final" && isFixture(g)) ?? games.find((g) => g.status !== "final");
-  const last = [...games].reverse().find((g) => g.status === "final");
-  const g = liveGame ?? next ?? last;
-  if (!g) return null;
-  const mode: "live" | "next" | "last" = liveGame ? "live" : next ? "next" : "last";
-  const mineIsA = g.a.teamId === me.id || resolveSide(g.a, ctx.data, ctx.table, ctx.complete).team?.id === me.id;
-  const my = mineIsA ? g.a : g.b;
-  const their = mineIsA ? g.b : g.a;
-  const myScore = mineIsA ? g.scoreA : g.scoreB;
-  const theirScore = mineIsA ? g.scoreB : g.scoreA;
-  const rt = resolveSide(their, ctx.data, ctx.table, ctx.complete);
-  const rm = resolveSide(my, ctx.data, ctx.table, ctx.complete);
-  const won = mode === "last" && g.winnerTeamId === me.id;
-  const lost = mode === "last" && g.winnerTeamId !== null && g.winnerTeamId !== me.id;
-
-  return (
-    <div className={cn(
-      "relative bg-card border rounded-xl shadow-sm overflow-hidden",
-      mode === "live" ? "border-coral/40 ring-1 ring-coral/15" : "border-ink/10",
-    )}>
-      <div className="flex items-center justify-between gap-2 px-5 pt-4">
-        <span className="flex items-center gap-2 text-[0.6rem] uppercase tracking-[0.16em] font-bold">
-          {mode === "live" && <span className="h-1.5 w-1.5 rounded-full bg-coral animate-pulse" />}
-          <span className={mode === "live" ? "text-coral" : "text-ink-muted"}>
-            {mode === "live" ? "On the floor now" : mode === "next" ? "Next up" : "Last result"}
-          </span>
-        </span>
-        <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted tabular">
-          {dayLabel(g.date).split(",")[0]} {timeLabel(g.time)}{g.court ? ` · ${g.court}` : ""}
-        </span>
-      </div>
-      <div className="px-5 pb-4 pt-3 flex items-center gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2.5">
-            <Crest team={me} name={me.name} size={28} mine />
-            <span className={cn("font-display text-2xl leading-none truncate", lost ? "text-ink-muted" : "text-coral")}>{rm.name}</span>
-          </div>
-          <div className="mt-3 flex items-center gap-2.5">
-            <Crest team={rt.team} name={rt.name} size={28} dashed={rt.state !== "settled"} />
-            <span className={cn("font-display text-2xl leading-none truncate", rt.state === "projected" && "italic", won ? "text-ink-muted" : "text-ink")}>
-              {rt.name}
-            </span>
-            {rt.state === "projected" && <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted">proj.</span>}
-          </div>
-        </div>
-        {mode !== "next" && (
-          <div className="flex flex-col items-end gap-3 tabular font-display leading-none">
-            <span className={cn("text-4xl", lost ? "text-ink-muted" : "text-ink")}>{myScore ?? "—"}</span>
-            <span className={cn("text-4xl", won ? "text-ink-muted" : "text-ink")}>{theirScore ?? "—"}</span>
-          </div>
-        )}
-      </div>
-      <div className="px-5 py-2 border-t border-hairline bg-paper-deep/30 flex items-center gap-1.5 text-[0.6rem] text-ink-muted">
-        <span className="uppercase tracking-widest font-semibold text-ink-muted/70">{g.stage === "playoff" ? g.round : ctx.data.event.group}</span>
-        {g.stage === "playoff" && <span>{g.name}</span>}
-        {mode === "last" && <span className="ml-auto font-semibold">{won ? "Won" : lost ? "Lost" : "Final"}</span>}
-      </div>
     </div>
   );
 }
@@ -863,14 +786,291 @@ function shortAddress(a: string): string {
   return `${num} ${street}, ${city}, TX${zip ? ` ${zip}` : ""}`;
 }
 
-/** "Sep 5–6" from the games' dates. */
-function dateSpan(games: Game[]): string {
-  const days = [...new Set(games.map((g) => g.date).filter(Boolean))].sort();
-  if (days.length === 0) return "";
-  const first = dayLabel(days[0]!).replace(/^\w+,\s*/, "");
-  if (days.length === 1) return first;
-  const last = dayLabel(days[days.length - 1]!).replace(/^\w+,\s*/, "");
-  const [m1, d1] = first.split(" ");
-  const [m2, d2] = last.split(" ");
-  return m1 === m2 ? `${m1} ${d1}–${d2}` : `${first} – ${last}`;
+
+/* --------------------------------------------------------------- what if */
+
+const PICKS_KEY = "cig-whatif";
+
+function readPicks(): Picks {
+  try {
+    const raw = localStorage.getItem(PICKS_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    const out: Picks = {};
+    for (const [id, v] of Object.entries(parsed as Record<string, unknown>)) {
+      const o = v as { winnerId?: unknown; margin?: unknown };
+      if (typeof o?.winnerId === "string" && typeof o?.margin === "number") {
+        out[id] = { winnerId: o.winnerId, margin: Math.max(0, Math.min(MAX_MARGIN, Math.round(o.margin))) };
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * The scenario tool: pick a winner and a margin for every game still to be
+ * played, and watch the seeding move.
+ *
+ * WHY IT IS ITS OWN TAB rather than an edit mode on Standings. The standings
+ * tab has to be trustworthy at a glance on a Saturday — a coach checking where
+ * they actually sit should never wonder whether they are looking at real
+ * results or something they typed. Two tabs, two questions, no overlap.
+ *
+ * REAL RESULTS ARE LOCKED. A game that has gone final shows its result and
+ * cannot be picked; projectStandings ignores any pick for it regardless. The
+ * tool plays the rest of the weekend forward from where the weekend actually
+ * is, which is the only version of the question worth answering.
+ *
+ * PICKS SURVIVE A RELOAD (localStorage) because working through fourteen games
+ * on a phone and losing it to a backgrounded tab would be maddening, and they
+ * are per-device scratch rather than anything shared.
+ */
+function WhatIf({ ctx }: { ctx: Ctx }) {
+  const { data, me } = ctx;
+  const [picks, setPicks] = useState<Picks>(() => (typeof window === "undefined" ? {} : readPicks()));
+
+  useEffect(() => {
+    try { localStorage.setItem(PICKS_KEY, JSON.stringify(picks)); } catch { /* ignore */ }
+  }, [picks]);
+
+  const open = pickableGames(data);
+  const played = data.games.filter((g) => g.stage === "group" && g.status === "final");
+  const table = projectStandings(data, picks);
+  const decided = open.filter((g) => picks[g.id]).length;
+
+  const setWinner = (g: Game, teamId: string) =>
+    setPicks((p) => {
+      const cur = p[g.id];
+      // Clicking the picked side again clears it — the fastest way to undo a
+      // guess is the same button that made it.
+      if (cur?.winnerId === teamId) {
+        const next = { ...p };
+        delete next[g.id];
+        return next;
+      }
+      return { ...p, [g.id]: { winnerId: teamId, margin: cur?.margin ?? 0 } };
+    });
+
+  const setMargin = (g: Game, margin: number) =>
+    setPicks((p) => {
+      const cur = p[g.id];
+      if (!cur) return p;
+      return { ...p, [g.id]: { ...cur, margin: Math.max(0, Math.min(MAX_MARGIN, margin)) } };
+    });
+
+  const days = [...new Set(open.map((g) => g.date))].sort();
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-8 items-start">
+      <div className="space-y-7">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <p className="text-sm text-ink-muted max-w-xl">
+            Click a team to make it the winner, then set the margin. The table beside this re-seeds as you go.
+            {played.length > 0 && <> Games already played are locked and always count for real.</>}
+          </p>
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted tabular">
+              {decided}/{open.length} picked
+            </span>
+            {decided > 0 && (
+              <button
+                type="button"
+                onClick={() => setPicks({})}
+                className="text-xs text-coral hover:underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+
+        {open.length === 0 && (
+          <p className="text-sm text-ink-muted">Every group game is final — the table beside this is the real one.</p>
+        )}
+
+        {days.map((day) => {
+          const games = open.filter((g) => g.date === day);
+          return (
+            <section key={day}>
+              <SectionRule label={dayLabel(day)} count={games.length} />
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                {games.map((g) => (
+                  <PickCard
+                    key={g.id}
+                    g={g}
+                    pick={picks[g.id]}
+                    me={me}
+                    onWinner={(id) => setWinner(g, id)}
+                    onMargin={(m) => setMargin(g, m)}
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
+
+        {played.length > 0 && (
+          <section>
+            <SectionRule label="Already played" count={played.length} />
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              {played.map((g) => <GameCard key={g.id} g={g} ctx={ctx} />)}
+            </div>
+          </section>
+        )}
+      </div>
+
+      <div className="lg:sticky lg:top-6">
+        <ProjectedTable table={table} me={me} decided={decided} open={open.length} group={data.event.group} />
+      </div>
+    </div>
+  );
+}
+
+/** One game, as two winner buttons and a margin. */
+function PickCard({
+  g, pick, me, onWinner, onMargin,
+}: {
+  g: Game;
+  pick: { winnerId: string; margin: number } | undefined;
+  me: Team | null;
+  onWinner: (teamId: string) => void;
+  onMargin: (margin: number) => void;
+}) {
+  const mine = me ? g.a.teamId === me.id || g.b.teamId === me.id : false;
+  return (
+    <div className={cn(
+      "bg-card border rounded-xl shadow-sm overflow-hidden transition-colors",
+      pick ? "border-coral/40" : mine ? "border-coral/20" : "border-ink/10",
+    )}>
+      <div className="flex items-center justify-between gap-2 px-4 pt-3 text-[0.58rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">
+        <span className="truncate">{g.court ?? ""}</span>
+        <span className="tabular shrink-0">{dayLabel(g.date).split(",")[0]} {timeLabel(g.time)}</span>
+      </div>
+      <div className="px-4 pt-2.5 pb-3 flex flex-col gap-2">
+        <div className="grid grid-cols-2 gap-2">
+          {[g.a, g.b].map((side) => {
+            const chosen = pick?.winnerId === side.teamId;
+            const isMe = me ? side.teamId === me.id : false;
+            return (
+              <button
+                key={side.teamId ?? side.name}
+                type="button"
+                aria-pressed={chosen}
+                onClick={() => side.teamId && onWinner(side.teamId)}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 h-9 px-2 rounded-md border text-sm transition-colors",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40",
+                  chosen
+                    ? "border-coral bg-coral text-accent-foreground font-semibold"
+                    : cn("border-hairline bg-paper-deep/40 hover:border-coral/50", isMe ? "text-coral font-medium" : "text-ink-soft"),
+                )}
+              >
+                <span className="truncate">{side.name}</span>
+              </button>
+            );
+          })}
+        </div>
+        {/* The margin only exists once there is a winner to attach it to. */}
+        <div className={cn("flex items-center gap-2 transition-opacity", !pick && "opacity-40 pointer-events-none")}>
+          <label className="flex items-center gap-2 flex-1">
+            <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted shrink-0">By</span>
+            <input
+              type="range"
+              min={0}
+              max={MAX_MARGIN}
+              step={1}
+              value={pick?.margin ?? 0}
+              onChange={(e) => onMargin(Number(e.target.value))}
+              disabled={!pick}
+              aria-label="Winning margin"
+              className="flex-1 accent-coral"
+            />
+          </label>
+          <input
+            type="number"
+            min={0}
+            max={MAX_MARGIN}
+            value={pick?.margin ?? 0}
+            onChange={(e) => onMargin(Number(e.target.value))}
+            disabled={!pick}
+            aria-label="Winning margin in points"
+            className="w-14 h-8 px-2 rounded-md border border-hairline bg-paper-deep/40 text-sm text-ink tabular text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
+          />
+          <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted shrink-0">
+            {pick?.margin === 0 ? "n/k" : "pts"}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The seeding as the picks would leave it. */
+function ProjectedTable({
+  table, me, decided, open, group,
+}: { table: ProjRow[]; me: Team | null; decided: number; open: number; group: string }) {
+  const complete = decided === open;
+  // Before a single game counts, every team is 0-0 with no differential: the
+  // order is alphabetical noise, so it is shown as a plain list rather than a
+  // ranking with coloured chips and seven "tied" flags saying what is obvious.
+  const ranked = table.some((r) => r.gp > 0);
+  return (
+    <div className="bg-paper-deep/25 -mx-6 lg:mx-0 rounded-none lg:rounded-xl border-y border-x-0 lg:border-x border-hairline shadow-sm p-6">
+      <div className="flex items-baseline justify-between mb-5">
+        <h3 className="font-display text-xl text-ink">Projected seeding</h3>
+        <span className="text-[0.65rem] uppercase tracking-widest text-ink-muted">
+          {group} · {complete ? "all picked" : `${open - decided} left`}
+        </span>
+      </div>
+      <table className="w-full border-collapse tabular text-sm">
+        <thead>
+          <tr className="text-[0.6rem] uppercase tracking-widest text-ink-muted">
+            <th className="py-2 pr-3 text-left font-medium w-10">Seed</th>
+            <th className="py-2 text-left font-medium">Team</th>
+            <th className="py-2 pl-3 text-right font-medium">W-L</th>
+            <th className="py-2 pl-3 text-right font-medium">PD</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-hairline/40">
+          {table.map((r, i) => {
+            const mine = me?.id === r.team.id;
+            return (
+              <tr key={r.team.id} className={cn(mine && "bg-coral/8")}>
+                <td className="py-2 pr-3">
+                  {ranked
+                    ? <SeedBadge rank={i + 1} total={table.length} />
+                    : <span className="text-ink-muted">{i + 1}</span>}
+                </td>
+                <td className={cn("py-2 font-medium", mine ? "text-coral" : "text-ink")}>
+                  <span className="inline-flex items-center gap-2">
+                    <Crest team={r.team} name={r.team.name} size={18} mine={mine} />
+                    {r.team.name}
+                    {i === 0 && ranked && <span className="text-[0.6rem] uppercase tracking-widest text-gold font-semibold">bye</span>}
+                    {r.tied && r.gp > 0 && (
+                      <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted" title="Same win % and differential as another team — the rulebook goes to a further tiebreak this cannot know">
+                        tied
+                      </span>
+                    )}
+                  </span>
+                </td>
+                <td className="py-2 pl-3 text-right">{r.w}-{r.l}</td>
+                <td className={cn("py-2 pl-3 text-right font-semibold", r.diff > 0 && "text-good", r.diff < 0 && "text-bad")}>
+                  {r.gp ? diffLabel(r.diff) : "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p className="mt-4 pt-4 border-t border-hairline/60 text-xs text-ink-muted">
+        Seed 1 byes to a semi-final; 2–7 play Round 1. Ranked by win %, then point differential, each game capped
+        at ±{DIFF_CAP}. A margin of 0 counts as a win worth nothing on differential — for &ldquo;we win, no idea
+        by how much&rdquo;. Where two teams match on both, both read <span className="uppercase tracking-widest">tied</span>:
+        the rulebook goes to a further tiebreak this cannot know.
+      </p>
+    </div>
+  );
 }

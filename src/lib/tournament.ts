@@ -283,3 +283,102 @@ export function timeLabel(time: string): string {
 export function diffLabel(n: number): string {
   return n > 0 ? `+${n}` : String(n);
 }
+
+
+/* ------------------------------------------------------------- what if? */
+
+/**
+ * One hypothetical result: who wins, and by how much.
+ *
+ * MARGIN 0 IS ALLOWED AND MEANS "I DON'T KNOW YET". Basketball has no draws,
+ * so a zero-point win is not a result — but "we win this one, no idea by how
+ * much" is a real thing a coach wants to say, and forcing a number would make
+ * them invent one that then moves the seeding. A 0 counts as a win in the
+ * record and contributes nothing to the differential.
+ */
+export type Pick = { winnerId: string; margin: number };
+
+/** Picks by game id. */
+export type Picks = Record<string, Pick>;
+
+/** The most a hypothetical margin may be, matching the blowout cap. */
+export const MAX_MARGIN = DIFF_CAP;
+
+export type ProjRow = {
+  team: Team;
+  gp: number;
+  w: number;
+  l: number;
+  /** Capped differential — real finals and picks together. */
+  diff: number;
+  /** How many of this team's counted games are hypothetical. */
+  projected: number;
+  /**
+   * True when another team has the same win % AND the same differential, so
+   * the order between them here is arbitrary. The rulebook goes to further
+   * tiebreaks that this cannot know; saying so beats implying a seed.
+   */
+  tied: boolean;
+};
+
+/**
+ * The group table as it would stand if the picked games finished that way.
+ *
+ * REAL RESULTS ARE NOT OVERRIDABLE. A game that has already gone final counts
+ * with its real margin whatever the picks say — the point of the tool is to
+ * play the rest of the weekend forward from where it actually is, and a
+ * calculator that lets you un-lose a game answers a question nobody has.
+ *
+ * Ranked the way the NAIG rulebook ranks: win %, then point differential with
+ * each game's margin capped at ±30. Where those both tie the row is flagged
+ * rather than ordered by something invented.
+ */
+export function projectStandings(t: Tournament, picks: Picks): ProjRow[] {
+  const rows = new Map<string, ProjRow>(
+    t.teams.map((team) => [team.id, { team, gp: 0, w: 0, l: 0, diff: 0, projected: 0, tied: false }]),
+  );
+  const clamp = (m: number) => Math.max(-DIFF_CAP, Math.min(DIFF_CAP, m));
+
+  for (const g of t.games) {
+    if (g.stage !== "group") continue;
+    const a = g.a.teamId ? rows.get(g.a.teamId) : undefined;
+    const b = g.b.teamId ? rows.get(g.b.teamId) : undefined;
+    if (!a || !b) continue;
+
+    // A real final always wins over a pick.
+    if (g.status === "final" && g.scoreA !== null && g.scoreB !== null) {
+      const m = clamp(g.scoreA - g.scoreB);
+      a.gp++; b.gp++;
+      a.diff += m; b.diff -= m;
+      if (m > 0) { a.w++; b.l++; } else if (m < 0) { b.w++; a.l++; }
+      continue;
+    }
+
+    const pick = picks[g.id];
+    if (!pick) continue;
+    const winner = pick.winnerId === a.team.id ? a : pick.winnerId === b.team.id ? b : null;
+    if (!winner) continue;
+    const loser = winner === a ? b : a;
+    const m = clamp(Math.abs(pick.margin));
+    winner.gp++; loser.gp++;
+    winner.w++; loser.l++;
+    winner.diff += m; loser.diff -= m;
+    winner.projected++; loser.projected++;
+  }
+
+  const winPct = (r: ProjRow) => (r.gp ? r.w / r.gp : 0);
+  const out = [...rows.values()].sort(
+    (x, y) => winPct(y) - winPct(x) || y.diff - x.diff || x.team.name.localeCompare(y.team.name),
+  );
+  for (let i = 0; i < out.length; i++) {
+    const prev = out[i - 1], next = out[i + 1], r = out[i]!;
+    const same = (o?: ProjRow) => o !== undefined && winPct(o) === winPct(r) && o.diff === r.diff;
+    r.tied = same(prev) || same(next);
+  }
+  return out;
+}
+
+/** Group games still open to a pick — anything not already final. */
+export function pickableGames(t: Tournament): Game[] {
+  return t.games.filter((g) => g.stage === "group" && g.status !== "final" && g.a.teamId !== null && g.b.teamId !== null);
+}
