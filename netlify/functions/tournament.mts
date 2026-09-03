@@ -48,11 +48,16 @@ const EVENTS: Record<string, {
   /** The team's name AS THE ORGANISER REGISTERED IT — the key we match on. */
   ourTeam: string;
   /**
-   * What the page calls it. The registration says "4-D"; the team says 4D.
-   * Applied to the team and to every game side that carries its id, so the
-   * organiser's spelling appears nowhere on the page.
+   * Registered name → what the page should call it.
+   *
+   * The organiser's registrations carry whatever each captain typed on the
+   * night: "4-D" for a team that writes itself 4D, "Liq" for one that is LIQ.
+   * Renaming here rather than in the page means the correction applies
+   * everywhere at once — the table, the cards, the bracket, the strip — and
+   * that `ourTeam` above can keep matching the registered spelling, which is
+   * still what the match documents contain.
    */
-  displayName?: string;
+  rename?: Record<string, string>;
   /** Fallback UTC offset in seconds when the venue does not carry one. */
   utcOffsetSeconds: number;
 }> = {
@@ -61,7 +66,7 @@ const EVENTS: Record<string, {
     division: "bnx49XKB5vfHPYedfLsa",
     group: "dndl2gnz",
     ourTeam: "4-D",
-    displayName: "4D",
+    rename: { "4-D": "4D", Liq: "LIQ" },
     // America/Chicago in September is CDT, UTC−5.
     utcOffsetSeconds: -5 * 3600,
   },
@@ -466,20 +471,28 @@ async function build(slug: string): Promise<Payload> {
     ...[...teamsById.values()].filter((t) => !order.includes(t.applicantId)),
   ];
 
-  // Our team, spelled the way we spell it — see displayName in EVENTS.
-  const ours = teams.find((t) => t.name === cfg.ourTeam);
-  const ourName = cfg.displayName ?? cfg.ourTeam;
-  if (ours && cfg.displayName) {
-    ours.name = cfg.displayName;
-    ours.short = cfg.displayName.slice(0, 3).toUpperCase();
+  // Teams, spelled the way they spell themselves — see `rename` in EVENTS.
+  const rename = cfg.rename ?? {};
+  for (const t of teams) {
+    const to = rename[t.name];
+    if (!to) continue;
+    t.name = to;
+    t.short = to.slice(0, 3).toUpperCase();
   }
+  const ourName = rename[cfg.ourTeam] ?? cfg.ourTeam;
+  const byId = new Map(teams.map((t) => [t.id, t]));
 
   const knownTeamIds = new Set(teams.map((t) => t.id));
   // Second net for seed slots — see side(). An id that is not one of the
   // division's applicants is a slot, whatever it looked like.
   const demote = (s: Side): Side =>
     s.teamId && !knownTeamIds.has(s.teamId) ? { ...s, teamId: null, applicantId: null, placeholder: true } : s;
-  const respell = (s: Side): Side => (ours && s.teamId === ours.id ? { ...s, name: ours.name } : s);
+  // A game side carries its own copy of the team name, so it needs the same
+  // correction — matched by id, which renaming cannot change.
+  const respell = (s: Side): Side => {
+    const t = s.teamId ? byId.get(s.teamId) : undefined;
+    return t && t.name !== s.name ? { ...s, name: t.name } : s;
+  };
 
   const games = matches
     .map((d) => normaliseGame(d, cfg.utcOffsetSeconds))
@@ -571,7 +584,7 @@ export default async (req: Request, _context: Context) => {
     const empty: Payload = {
       slug,
       event: { name: "", division: "", group: "", venue: { name: "", address: null, tz: null } },
-      ourTeam: EVENTS[slug]!.displayName ?? EVENTS[slug]!.ourTeam,
+      ourTeam: EVENTS[slug]!.rename?.[EVENTS[slug]!.ourTeam] ?? EVENTS[slug]!.ourTeam,
       teams: [], games: [],
       fetchedAt: new Date().toISOString(),
       error: String(err instanceof Error ? err.message : err).slice(0, 200),

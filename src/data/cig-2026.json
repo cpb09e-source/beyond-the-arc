@@ -129,7 +129,7 @@
   {
    "id": "HpL3PfHAmT2Czlfq3X9s",
    "applicantId": "Fpsa2TSZMgUuS7czTs8e",
-   "name": "Liq",
+   "name": "LIQ",
    "short": "LIQ",
    "color": "#00ba5d",
    "players": [
@@ -419,7 +419,7 @@
    "a": {
     "teamId": "HpL3PfHAmT2Czlfq3X9s",
     "applicantId": "Fpsa2TSZMgUuS7czTs8e",
-    "name": "Liq",
+    "name": "LIQ",
     "placeholder": false
    },
    "b": {
@@ -535,7 +535,7 @@
    "a": {
     "teamId": "HpL3PfHAmT2Czlfq3X9s",
     "applicantId": "Fpsa2TSZMgUuS7czTs8e",
-    "name": "Liq",
+    "name": "LIQ",
     "placeholder": false
    },
    "b": {
@@ -628,7 +628,7 @@
    "b": {
     "teamId": "HpL3PfHAmT2Czlfq3X9s",
     "applicantId": "Fpsa2TSZMgUuS7czTs8e",
-    "name": "Liq",
+    "name": "LIQ",
     "placeholder": false
    },
    "status": "scheduled",
@@ -715,7 +715,7 @@
    "b": {
     "teamId": "HpL3PfHAmT2Czlfq3X9s",
     "applicantId": "Fpsa2TSZMgUuS7czTs8e",
-    "name": "Liq",
+    "name": "LIQ",
     "placeholder": false
    },
    "status": "scheduled",

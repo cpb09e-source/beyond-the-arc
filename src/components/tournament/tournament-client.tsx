@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/utils";
 import { Select } from "@/components/select";
 import { PercentileChip } from "@/components/percentile-chip";
@@ -39,7 +39,6 @@ const TABS = [
   { key: "standings", label: "Standings" },
   { key: "whatif", label: "What if" },
   { key: "bracket", label: "Bracket" },
-  { key: "teams", label: "Teams" },
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
 
@@ -53,7 +52,14 @@ const subscribeHash = (cb: () => void) => {
 };
 
 /** Everything a tab needs to resolve a slot, computed once per render. */
-type Ctx = { data: Tournament; me: Team | null; table: TeamRow[]; complete: boolean };
+type Ctx = {
+  data: Tournament;
+  me: Team | null;
+  table: TeamRow[];
+  complete: boolean;
+  /** Open a team's roster. Every team name on the page calls this. */
+  openTeam: (t: Team) => void;
+};
 
 export function TournamentClient({ slug, seed = null }: { slug: string; seed?: Tournament | null }) {
   const tab = useSyncExternalStore(subscribeHash, readTab, () => "schedule" as Tab);
@@ -98,6 +104,10 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
   }, []);
 
   const [teamName, setTeamName] = useState<string | null>(null);
+  // The roster sheet. Replaced the Teams tab: a roster is something you want
+  // about ONE team, at the moment you are looking at that team's game, not a
+  // fifth screen you navigate to and navigate back from.
+  const [roster, setRoster] = useState<Team | null>(null);
   const me = useMemo(() => {
     if (!data) return null;
     const want = teamName ?? data.ourTeam;
@@ -118,7 +128,7 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
 
   const table = standings(data);
   const complete = groupIsComplete(data);
-  const ctx: Ctx = { data, me, table, complete };
+  const ctx: Ctx = { data, me, table, complete, openTeam: setRoster };
   const myRow = me ? table.find((r) => r.team.id === me.id) ?? null : null;
   const mySeed = myRow ? table.indexOf(myRow) + 1 : null;
   const played = table.some((r) => r.gp > 0);
@@ -131,12 +141,14 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
       {/* ------------------------------------------------------------ hero */}
       <header>
         <div className="min-w-0">
-          <Eyebrow>{data.event.name} · {data.event.division}</Eyebrow>
-          <h1 className="font-display text-5xl md:text-7xl tracking-tight text-ink leading-none">
-            {me?.name ?? data.ourTeam}
-          </h1>
-          <div className="mt-4 flex flex-wrap items-baseline gap-x-5 gap-y-2 text-ink-soft">
-            <span className="font-display tabular text-3xl text-ink leading-none">{myRow ? `${myRow.w}-${myRow.l}` : "0-0"}</span>
+          <Eyebrow>{data.event.name}</Eyebrow>
+          {/* NO TEAM NAME AND NO RECORD HERE. The team is named by the "Your
+              team" control a few lines down and the record is the first thing
+              on Standings; a 5xl "4D" over a "0-0" was two thirds of a phone
+              screen spent restating both. What survives is what only this row
+              can say: the seed and the differential, and only once a game has
+              been played. */}
+          <div className={cn("flex flex-wrap items-baseline gap-x-5 gap-y-2 text-ink-soft", played && "mt-4")}>
             {mySeed !== null && played && (
               <span className="inline-flex items-baseline gap-1.5 px-3 py-1.5 rounded-md bg-coral text-accent-foreground font-display text-xl tabular leading-none shadow-sm">
                 <span className="text-[0.6em] uppercase tracking-widest opacity-80">Seed</span>
@@ -188,7 +200,6 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
         <div className="mt-8">
           <div className="flex items-baseline gap-3 mb-3">
             <span className="text-[0.65rem] uppercase tracking-widest text-coral font-bold">The weekend</span>
-            <span className="text-[0.6rem] text-ink-muted">{me.name}&rsquo;s path, in order · dashed is projected</span>
           </div>
           <div className="flex items-start gap-1.5 overflow-x-auto p-1 -m-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {myGames.map((g) => <StripCell key={g.id} g={g} me={me} ctx={ctx} />)}
@@ -235,8 +246,9 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
         {tab === "standings" && <Standings ctx={ctx} />}
         {tab === "whatif" && <WhatIf ctx={ctx} />}
         {tab === "bracket" && <Bracket ctx={ctx} />}
-        {tab === "teams" && <Teams ctx={ctx} />}
       </div>
+
+      {roster && <RosterSheet team={roster} me={me} onClose={() => setRoster(null)} />}
     </div>
   );
 }
@@ -265,24 +277,6 @@ function SectionRule({ label, count, tone = "muted" }: { label: string; count?: 
       <span className={cn("h-px flex-1", coral ? "bg-coral/25" : "bg-hairline")} />
       {count !== undefined && <span className={cn("font-medium tabular", coral ? "text-coral/70" : "text-ink-muted/70")}>{count}</span>}
     </h2>
-  );
-}
-
-/** Initials in a rounded square, where a crest would go. */
-function Crest({ team, name, size = 20, mine = false, dashed = false }: { team: Team | null; name: string; size?: number; mine?: boolean; dashed?: boolean }) {
-  const text = team ? team.short.slice(0, 3) : initials(name);
-  return (
-    <span
-      className={cn(
-        "grid shrink-0 place-items-center rounded font-bold tabular leading-none",
-        mine ? "bg-coral/15 text-coral" : "bg-paper-deep text-ink-soft",
-        dashed && "border border-dashed border-ink/30 bg-transparent",
-      )}
-      style={{ width: size, height: size, fontSize: Math.max(8, Math.round(size * 0.36)) }}
-      aria-hidden
-    >
-      {text}
-    </span>
   );
 }
 
@@ -412,15 +406,15 @@ function GameCard({ g, ctx, className, style }: { g: Game; ctx: Ctx; className?:
       </div>
       <div className="px-4 pb-3">
         <div className="divide-y divide-hairline/60">
-          <SideRow r={ra} slot={g.a} score={g.scoreA} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.a.teamId} me={ctx.me} />
-          <SideRow r={rb} slot={g.b} score={g.scoreB} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.b.teamId} me={ctx.me} />
+          <SideRow r={ra} slot={g.a} score={g.scoreA} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.a.teamId} me={ctx.me} onOpen={ctx.openTeam} />
+          <SideRow r={rb} slot={g.b} score={g.scoreB} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.b.teamId} me={ctx.me} onOpen={ctx.openTeam} />
         </div>
       </div>
       {/* Match numbers are the organiser's bookkeeping and mean nothing in
           the group; in the bracket they are how the rounds refer to each
           other ("Winner of Match 1"), so they stay there. */}
       <div className="px-4 py-2 border-t border-hairline bg-paper-deep/30 flex items-center gap-1.5 text-[0.6rem] text-ink-muted">
-        <span className="uppercase tracking-widest font-semibold text-ink-muted/70">{g.stage === "playoff" ? g.round : ctx.data.event.group}</span>
+        {g.stage === "playoff" && <span className="uppercase tracking-widest font-semibold text-ink-muted/70">{g.round}</span>}
         <span className="tabular">{g.stage === "playoff" ? g.name : `${dayLabel(g.date).split(",")[0]} ${timeLabel(g.time)}`}</span>
         {projected && <span className="ml-auto italic">projected</span>}
       </div>
@@ -428,22 +422,31 @@ function GameCard({ g, ctx, className, style }: { g: Game; ctx: Ctx; className?:
   );
 }
 
-function SideRow({ r, slot, score, won, me }: { r: Resolved; slot: Side; score: number | null; won: boolean; me: Team | null }) {
+function SideRow({ r, slot, score, won, me, onOpen }: { r: Resolved; slot: Side; score: number | null; won: boolean; me: Team | null; onOpen: (t: Team) => void }) {
   const isMe = me ? r.team?.id === me.id : false;
   const seed = /winner\s+(\d+)\s+of/i.exec(slot.name)?.[1] ?? null;
   return (
     <div className="flex items-center gap-2 py-1.5">
-      <Crest team={r.team} name={r.name} size={20} mine={isMe} dashed={r.state !== "settled"} />
-      {seed && <span className="text-[0.6rem] text-ink-muted tabular w-2">{seed}</span>}
-      <span className={cn(
-        "min-w-0 truncate text-sm",
-        won ? "text-ink font-semibold" : "text-ink-soft",
-        isMe && "text-coral font-semibold",
-        r.state === "projected" && "italic",
-        r.state === "open" && "text-ink-muted",
-      )}>
+      {seed && <span className="text-[0.6rem] text-ink-muted tabular w-3">{seed}</span>}
+      <TeamName
+        team={r.team}
+        onOpen={onOpen}
+        className={cn(
+          "min-w-0 truncate text-sm text-left",
+          // ONE COLOUR CLASS, not two and a winner. `text-coral` and
+          // `text-ink-soft` are the same specificity, so which one applied was
+          // decided by their order in Tailwind's stylesheet rather than by the
+          // order they are listed here — and ink-soft won, so the followed
+          // team was bold but never blue. A single branch cannot tie.
+          isMe ? "text-coral font-semibold"
+            : r.state === "open" ? "text-ink-muted"
+            : won ? "text-ink font-semibold"
+            : "text-ink-soft",
+          r.state === "projected" && "italic",
+        )}
+      >
         {r.name}
-      </span>
+      </TeamName>
       <span className={cn("ml-auto text-right tabular text-lg font-bold leading-none pl-2", won ? "text-ink" : "text-ink-muted")}>
         {score ?? "—"}
       </span>
@@ -454,7 +457,7 @@ function SideRow({ r, slot, score, won, me }: { r: Resolved; slot: Side; score: 
 /* ------------------------------------------------------------ standings */
 
 function Standings({ ctx }: { ctx: Ctx }) {
-  const { data, table, me, complete } = ctx;
+  const { table, me, complete } = ctx;
   const played = table.some((r) => r.gp > 0);
   const myRanks = me ? whereTheyStand(table, me) : [];
   const maxAbs = Math.max(1, ...table.map((r) => Math.abs(r.diff)));
@@ -462,9 +465,9 @@ function Standings({ ctx }: { ctx: Ctx }) {
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-8">
       <div className="bg-paper-deep/25 -mx-6 lg:mx-0 rounded-none lg:rounded-xl border-y border-x-0 lg:border-x border-hairline shadow-sm p-6">
         <div className="flex items-baseline justify-between mb-5">
-          <h3 className="font-display text-xl text-ink">{data.event.group}</h3>
+          <h3 className="font-display text-xl text-ink">Standings</h3>
           <span className="text-[0.65rem] uppercase tracking-widest text-ink-muted">
-            {data.teams.length} teams · {complete ? "final" : played ? "in progress" : "not started"}
+            {table.length} teams · {complete ? "final" : played ? "in progress" : "not started"}
           </span>
         </div>
         <div className="overflow-x-auto">
@@ -490,8 +493,7 @@ function Standings({ ctx }: { ctx: Ctx }) {
                     </td>
                     <td className={cn("py-2 font-medium", mine ? "text-coral" : "text-ink")}>
                       <span className="inline-flex items-center gap-2">
-                        <Crest team={r.team} name={r.team.name} size={18} mine={mine} />
-                        {r.team.name}
+                        <TeamName team={r.team} onOpen={ctx.openTeam}>{r.team.name}</TeamName>
                         {i === 0 && played && <span className="text-[0.6rem] uppercase tracking-widest text-gold font-semibold">bye</span>}
                       </span>
                     </td>
@@ -522,7 +524,7 @@ function Standings({ ctx }: { ctx: Ctx }) {
       </div>
 
       {me && (
-        <DistributionPanel title={`Where ${me.name} stands`} eyebrow={`vs ${data.event.group}`} ranks={myRanks}>
+        <DistributionPanel title={`Where ${me.name} stands`} eyebrow="vs the field" ranks={myRanks}>
           {myRanks.every((r) => r.value === null) && (
             <p className="text-xs text-ink-muted">Fills in after the first final.</p>
           )}
@@ -697,7 +699,7 @@ function ByeCard({ slot, ctx, style }: { slot: Side; ctx: Ctx; style?: React.CSS
         <span className="tabular">straight to SF1</span>
       </div>
       <div className="px-4 pb-3">
-        <SideRow r={r} slot={slot} score={null} won={false} me={ctx.me} />
+        <SideRow r={r} slot={slot} score={null} won={false} me={ctx.me} onOpen={ctx.openTeam} />
       </div>
       <div className="px-4 py-2 border-t border-hairline bg-paper-deep/30 text-[0.6rem] text-ink-muted">
         <span className="uppercase tracking-widest font-semibold text-ink-muted/70">Seed 1</span>
@@ -707,39 +709,126 @@ function ByeCard({ slot, ctx, style }: { slot: Side; ctx: Ctx; style?: React.CSS
   );
 }
 
-/* ---------------------------------------------------------------- teams */
 
-function Teams({ ctx }: { ctx: Ctx }) {
-  const { data, me } = ctx;
-  const ordered = me ? [me, ...data.teams.filter((t) => t.id !== me.id)] : data.teams;
+/* ---------------------------------------------------------- team name --- */
+
+/**
+ * A team's name, clickable when there is a team behind it.
+ *
+ * A BRACKET SLOT IS NOT A TEAM. "Winner 4 of Group A" before the group has
+ * finished has no roster to show, so it renders as plain text rather than a
+ * button that opens nothing — a control that does nothing when pressed is
+ * worse than no control.
+ */
+function TeamName({
+  team, onOpen, className, children,
+}: { team: Team | null; onOpen: (t: Team) => void; className?: string; children: React.ReactNode }) {
+  if (!team) return <span className={className}>{children}</span>;
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-      {ordered.map((t) => {
-        const mine = me?.id === t.id;
-        return (
-          <div key={t.id} className={cn(
-            "bg-paper-deep/25 -mx-6 md:mx-0 rounded-none md:rounded-xl border-y border-x-0 md:border-x shadow-sm p-5 lg:p-6",
-            mine ? "border-coral/40" : "border-hairline",
-          )}>
-            <div className="flex items-baseline justify-between mb-4">
-              <span className="flex items-center gap-2.5">
-                <Crest team={t} name={t.name} size={28} mine={mine} />
-                <h3 className={cn("font-display text-xl", mine ? "text-coral" : "text-ink")}>{t.name}</h3>
-              </span>
-              <span className="text-[0.65rem] uppercase tracking-widest text-ink-muted tabular">{t.players.length} players</span>
-            </div>
-            <ul className="divide-y divide-hairline/40">
-              {t.players.map((p) => (
-                <li key={p.name} className="flex items-center gap-4 py-2 px-1 -mx-1 rounded transition-colors hover:bg-coral/5">
-                  <span className="flex-1 min-w-0 text-ink-soft text-sm">{p.name}</span>
-                  {p.captain && <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Captain</span>}
-                </li>
-              ))}
-              {t.players.length === 0 && <li className="py-2 text-sm text-ink-muted">No roster listed.</li>}
-            </ul>
+    <button
+      type="button"
+      onClick={() => onOpen(team)}
+      title={`${team.name} roster`}
+      className={cn(
+        "hover:text-coral hover:underline decoration-dotted underline-offset-4 transition-colors",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40 rounded-sm",
+        className,
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* -------------------------------------------------------- roster sheet --- */
+
+/**
+ * One team's roster, over the page.
+ *
+ * REPLACED THE TEAMS TAB. Seven roster cards on their own screen answered a
+ * question nobody arrives with; "who is on THAT team" is asked while looking
+ * at that team's game, so the answer belongs one tap from the name rather
+ * than a tab away and a tab back.
+ *
+ * Escape closes it, the backdrop closes it, and focus moves to the panel on
+ * open and back to where it was on close — the things a native <dialog> would
+ * give for free and that a div pretending to be one has to be told.
+ */
+function RosterSheet({ team, me, onClose }: { team: Team; me: Team | null; onClose: () => void }) {
+  const mine = me?.id === team.id;
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const returnTo = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    // The page behind must not scroll while a sheet is over it.
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+      returnTo?.focus?.();
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${team.name} roster`}
+    >
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        // NOT bg-ink/40. `--ink` is warm cream on the dark theme, so an
+        // ink scrim BRIGHTENED the page it was meant to dim — the sheet ended
+        // up floating over a washed-out grey. A scrim means "less light",
+        // which is black in both themes.
+        className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+      />
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        className={cn(
+          "relative w-full sm:max-w-md max-h-[85dvh] overflow-y-auto bg-card border shadow-xl focus:outline-none",
+          "rounded-t-xl sm:rounded-xl",
+          mine ? "border-coral/50" : "border-hairline",
+        )}
+      >
+        <div className="sticky top-0 flex items-baseline justify-between gap-3 px-5 py-4 bg-card border-b border-hairline">
+          <div className="min-w-0">
+            <h2 className={cn("font-display text-2xl leading-none truncate", mine ? "text-coral" : "text-ink")}>{team.name}</h2>
+            <p className="mt-1.5 text-[0.65rem] uppercase tracking-widest text-ink-muted tabular">
+              {team.players.length} player{team.players.length === 1 ? "" : "s"}
+            </p>
           </div>
-        );
-      })}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="shrink-0 grid h-8 w-8 place-items-center rounded-md border border-hairline text-ink-muted hover:text-ink transition-colors"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+              <path d="M3 3l8 8M11 3l-8 8" />
+            </svg>
+          </button>
+        </div>
+        <ul className="divide-y divide-hairline/40 px-5 py-1">
+          {team.players.map((p) => (
+            <li key={p.name} className="flex items-center gap-4 py-2.5 text-sm text-ink-soft">
+              <span className="flex-1 min-w-0">{p.name}</span>
+              {p.captain && (
+                <span className="shrink-0 text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Captain</span>
+              )}
+            </li>
+          ))}
+          {team.players.length === 0 && <li className="py-3 text-sm text-ink-muted">No roster listed.</li>}
+        </ul>
+      </div>
     </div>
   );
 }
@@ -761,6 +850,7 @@ function isPlayoffFor(g: Game, me: Team, ctx: Ctx): boolean {
   return [g.a, g.b].some((s) => resolveSide(s, ctx.data, ctx.table, ctx.complete).team?.id === me.id);
 }
 
+
 /** The side that is not mine — by id for a fixture, by projection for a slot. */
 function opponentSide(g: Game, me: Team, ctx: Ctx): Side {
   if (g.a.teamId === me.id) return g.b;
@@ -774,15 +864,6 @@ function shortRound(round: string): string {
   if (/semi/i.test(round)) return "SF";
   if (/quarter/i.test(round)) return "QF";
   return "R1";
-}
-
-function initials(name: string): string {
-  // A projected pair ("Liq / PowerPlai") is two teams in one slot; there is no
-  // honest monogram for that.
-  if (name.includes(" / ")) return "?";
-  const w = name.replace(/winner\s+(\d+)\s+of.*/i, "$1").replace(/winner of\s*/i, "").split(/\s+/).filter(Boolean);
-  if (w.length === 1) return w[0]!.slice(0, 3).toUpperCase();
-  return w.slice(0, 3).map((x) => x[0]!).join("").toUpperCase();
 }
 
 /** "7205, Eldorado Parkway, McKinney, Collin County, Texas, …" → "7205 Eldorado Parkway, McKinney, TX 75070". */
@@ -875,10 +956,13 @@ function WhatIf({ ctx }: { ctx: Ctx }) {
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-8 items-start">
       <div className="space-y-7">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <p className="text-sm text-ink-muted max-w-xl">
-            Click a team to make it the winner, then set the margin. The table beside this re-seeds as you go.
-            {played.length > 0 && <> Games already played are locked and always count for real.</>}
-          </p>
+          {/* No instructions. Two buttons and a slider per card explain
+              themselves, and a paragraph saying so was the first thing on the
+              tab. The one thing that is NOT self-evident — that a played game
+              cannot be picked — is said only once there is a played game. */}
+          {played.length > 0 ? (
+            <p className="text-sm text-ink-muted max-w-xl">Games already played are locked and count for real.</p>
+          ) : <span />}
           <div className="flex items-center gap-3 shrink-0">
             <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted tabular">
               {decided}/{open.length} picked
@@ -931,7 +1015,7 @@ function WhatIf({ ctx }: { ctx: Ctx }) {
       </div>
 
       <div className="lg:sticky lg:top-6">
-        <ProjectedTable table={table} me={me} decided={decided} open={open.length} group={data.event.group} />
+        <ProjectedTable table={table} me={me} decided={decided} open={open.length} onOpen={ctx.openTeam} />
       </div>
     </div>
   );
@@ -1027,8 +1111,8 @@ function PickCard({
 
 /** The seeding as the picks would leave it. */
 function ProjectedTable({
-  table, me, decided, open, group,
-}: { table: ProjRow[]; me: Team | null; decided: number; open: number; group: string }) {
+  table, me, decided, open, onOpen,
+}: { table: ProjRow[]; me: Team | null; decided: number; open: number; onOpen: (t: Team) => void }) {
   const complete = decided === open;
   // Before a single game counts, every team is 0-0 with no differential: the
   // order is alphabetical noise, so it is shown as a plain list rather than a
@@ -1039,7 +1123,7 @@ function ProjectedTable({
       <div className="flex items-baseline justify-between mb-5">
         <h3 className="font-display text-xl text-ink">Projected seeding</h3>
         <span className="text-[0.65rem] uppercase tracking-widest text-ink-muted">
-          {group} · {complete ? "all picked" : `${open - decided} left`}
+          {complete ? "all picked" : `${open - decided} left`}
         </span>
       </div>
       <table className="w-full border-collapse tabular text-sm">
@@ -1063,8 +1147,7 @@ function ProjectedTable({
                 </td>
                 <td className={cn("py-2 font-medium", mine ? "text-coral" : "text-ink")}>
                   <span className="inline-flex items-center gap-2">
-                    <Crest team={r.team} name={r.team.name} size={18} mine={mine} />
-                    {r.team.name}
+                    <TeamName team={r.team} onOpen={onOpen}>{r.team.name}</TeamName>
                     {i === 0 && ranked && <span className="text-[0.6rem] uppercase tracking-widest text-gold font-semibold">bye</span>}
                     {r.tied && r.gp > 0 && (
                       <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted" title="Same win % and differential as another team — the rulebook goes to a further tiebreak this cannot know">
@@ -1082,12 +1165,6 @@ function ProjectedTable({
           })}
         </tbody>
       </table>
-      <p className="mt-4 pt-4 border-t border-hairline/60 text-xs text-ink-muted">
-        Seed 1 byes to a semi-final; 2–7 play Round 1. Ranked by win %, then point differential, each game capped
-        at ±{DIFF_CAP}. A margin of 0 counts as a win worth nothing on differential — for &ldquo;we win, no idea
-        by how much&rdquo;. Where two teams match on both, both read <span className="uppercase tracking-widest">tied</span>:
-        the rulebook goes to a further tiebreak this cannot know.
-      </p>
     </div>
   );
 }
