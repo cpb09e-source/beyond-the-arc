@@ -7,7 +7,7 @@ import { PercentileChip } from "@/components/percentile-chip";
 import { DistributionPanel, type DistributionRank } from "@/components/teams/distribution-panel";
 import {
   DIFF_CAP, POLL_MS, dayLabel, diffLabel, fetchTournament, groupIsComplete, involves, isFinal, isLive,
-  resolveSide, standings, timeLabel, tournamentIsSettled,
+  nextPollDelay, resolveSide, standings, timeLabel,
   type Game, type Resolved, type Side, type Team, type TeamRow, type Tournament,
 } from "@/lib/tournament";
 
@@ -74,8 +74,10 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
         if (cancelled) return;
         setLive({ data: next, at: Date.now() });
         setFailedAt(null);
-        // Nothing left to change once every game is final.
-        if (!tournamentIsSettled(next)) timer = setTimeout(tick, POLL_MS);
+        // Every thirty seconds only while something can change — see
+        // nextPollDelay. Before the first tip the page sleeps.
+        const delay = nextPollDelay(next);
+        if (delay !== null) timer = setTimeout(tick, delay);
       } catch {
         if (cancelled) return;
         setFailedAt(Date.now());

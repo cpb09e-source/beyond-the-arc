@@ -96,6 +96,29 @@ export function tournamentIsSettled(t: Tournament): boolean {
   return t.games.length > 0 && t.games.every((g) => g.status === "final");
 }
 
+/** Longest the page will sleep before checking the feed again. */
+const IDLE_RECHECK_MS = 60 * 60 * 1000;
+
+/**
+ * How long to wait before the next fetch, or null to stop.
+ *
+ * NOTHING CHANGES BEFORE THE FIRST TIP, so there is no reason to ask every
+ * thirty seconds through the days before the tournament — the page sleeps
+ * until the earliest unplayed game is due, and re-checks hourly in the
+ * meantime in case the organiser moves one. Once a game is live, or is past
+ * its tip and not yet scored (scorers start late), it is back to POLL_MS.
+ */
+export function nextPollDelay(t: Tournament, now = Date.now()): number | null {
+  if (tournamentIsSettled(t)) return null;
+  if (t.games.some(isLive)) return POLL_MS;
+  const pending = t.games.filter((g) => g.status !== "final" && g.startMs !== null);
+  if (pending.length === 0) return POLL_MS;
+  const earliest = Math.min(...pending.map((g) => g.startMs!));
+  const untilTip = earliest - now;
+  if (untilTip <= POLL_MS) return POLL_MS;
+  return Math.min(untilTip, IDLE_RECHECK_MS);
+}
+
 export const isLive = (g: Game) => g.status === "live";
 export const isFinal = (g: Game) => g.status === "final";
 
