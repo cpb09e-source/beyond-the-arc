@@ -144,9 +144,6 @@ export function TournamentClient({
   const table = standings(data);
   const complete = groupIsComplete(data);
   const ctx: Ctx = { data, me, table, complete, openTeam: setRoster };
-  const myRow = me ? table.find((r) => r.team.id === me.id) ?? null : null;
-  const mySeed = myRow ? table.indexOf(myRow) + 1 : null;
-  const played = table.some((r) => r.gp > 0);
   const liveCount = data.games.filter(isLive).length;
   const finalCount = data.games.filter(isFinal).length;
   const myGames = me ? data.games.filter((g) => involves(g, me) || isPlayoffFor(g, me, ctx)) : [];
@@ -157,40 +154,28 @@ export function TournamentClient({
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <Eyebrow>{data.event.name}</Eyebrow>
-          {/* NO TEAM NAME AND NO RECORD HERE. The team is named by the "Your
-              team" control a few lines down and the record is the first thing
-              on Standings; a 5xl "4D" over a "0-0" was two thirds of a phone
-              screen spent restating both. What survives is what only this row
-              can say: the seed and the differential, and only once a game has
-              been played. */}
-          <div className={cn("flex flex-wrap items-baseline gap-x-5 gap-y-2 text-ink-soft", played && "mt-4")}>
-            {mySeed !== null && played && (
-              <span className="inline-flex items-baseline gap-1.5 px-3 py-1.5 rounded-md bg-coral text-accent-foreground font-display text-xl tabular leading-none shadow-sm">
-                <span className="text-[0.6em] uppercase tracking-widest opacity-80">Seed</span>
-                {mySeed}
-                {!complete && <span className="text-[0.55em] uppercase tracking-widest opacity-70">proj.</span>}
-              </span>
-            )}
-            {myRow && myRow.gp > 0 && (
-              <span className="text-sm text-ink-muted tabular">
-                <span className={cn("font-semibold", myRow.diff > 0 ? "text-good" : myRow.diff < 0 ? "text-bad" : "")}>{diffLabel(myRow.diff)}</span>
-                {" "}diff · {myRow.pf} for · {myRow.pa} against
-              </span>
-            )}
-          </div>
+          {/* NOTHING ABOUT MY TEAM UP HERE. The name is on the "Your team"
+              control below, the seed and the differential are the first two
+              columns of Standings, and the results are in the strip — a
+              headline that restates all three is a third of a phone screen
+              spent saying what the next scroll says better. */}
+          {/* THE ADDRESS GETS ITS OWN LINES. Run on from the venue name with a
+              middot, it broke wherever the column happened to end — the street
+              number stranded on the first line under "PSA McKinney ·" and the
+              rest below it. The name is one line, the address starts on the
+              next and wraps on its own terms. */}
           <p className="mt-2 text-sm text-ink-muted">
             {data.event.venue.name}
             {data.event.venue.address && (
-              <>
-                {" · "}
-                <a
-                  className="text-coral underline decoration-dotted underline-offset-4 hover:decoration-solid transition-colors"
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.event.venue.address)}`}
-                  target="_blank" rel="noreferrer"
-                >
-                  {shortAddress(data.event.venue.address)}
-                </a>
-              </>
+              <a
+                className="block w-fit mt-0.5 text-coral underline decoration-dotted underline-offset-4 hover:decoration-solid transition-colors"
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.event.venue.address)}`}
+                target="_blank" rel="noreferrer"
+              >
+                {addressLines(data.event.venue.address).map((line, i) => line && (
+                  <span key={i} className="block">{line}</span>
+                ))}
+              </a>
             )}
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
@@ -325,6 +310,13 @@ function StripCell({ g, me, ctx }: { g: Game; me: Team; ctx: Ctx }) {
   const lost = g.status === "final" && g.winnerTeamId !== null && g.winnerTeamId !== me.id;
   const projected = g.stage === "playoff" && g.status !== "final";
   const label = g.status === "final" ? (won ? "W" : lost ? "L" : "T") : isLive(g) ? "●" : g.stage === "playoff" ? shortRound(g.round) : "—";
+  // THE SCORE RIDES WITH THE RESULT, and always my team first — a strip that
+  // says W and makes you open the card to find out by how much is half a
+  // result. Live games carry it too, so the ticker is worth watching.
+  const aIsMe = g.a.teamId === me.id || (!g.a.teamId && resolveSide(g.a, ctx.data, ctx.table, ctx.complete).team?.id === me.id);
+  const score = g.scoreA !== null && g.scoreB !== null
+    ? (aIsMe ? `${g.scoreA}–${g.scoreB}` : `${g.scoreB}–${g.scoreA}`)
+    : null;
   return (
     <a
       href="#schedule"
@@ -335,12 +327,13 @@ function StripCell({ g, me, ctx }: { g: Game; me: Team; ctx: Ctx }) {
       )}
     >
       <span className={cn(
-        "inline-flex items-center justify-center text-[0.55rem] font-semibold tabular min-w-6 px-1 h-4 rounded-sm leading-none",
+        "inline-flex items-center justify-center gap-1 text-[0.58rem] tabular min-w-6 px-1.5 h-[18px] rounded-sm leading-none",
         won && "bg-good/22 text-good",
         lost && "bg-bad/22 text-bad",
         !won && !lost && (isLive(g) ? "bg-coral/15 text-coral" : "bg-paper-deep text-ink-muted"),
       )}>
-        {label}
+        <span className="font-bold">{label}</span>
+        {score && <span className="font-semibold opacity-90">{score}</span>}
       </span>
       {/* The name in full. Three-letter codes are the organiser's, and nobody
           on the bench knows that TTS is the Titans. */}
@@ -1016,12 +1009,18 @@ function shortRound(round: string): string {
 }
 
 /** "7205, Eldorado Parkway, McKinney, Collin County, Texas, …" → "7205 Eldorado Parkway, McKinney, TX 75070". */
-function shortAddress(a: string): string {
+/**
+ * The venue address as the two lines an envelope would use: street, then town.
+ * BROKEN ON PURPOSE rather than left to wrap — where the wrap falls depends on
+ * the phone, and on a narrow one it fell after the street number, stranding
+ * "7205" on its own. The break is now the one a reader expects.
+ */
+function addressLines(a: string): [string, string | null] {
   const parts = a.split(",").map((s) => s.trim()).filter(Boolean);
-  if (parts.length < 3) return a;
+  if (parts.length < 3) return [a, null];
   const [num, street, city] = parts;
   const zip = parts.find((p) => /^\d{5}$/.test(p));
-  return `${num} ${street}, ${city}, TX${zip ? ` ${zip}` : ""}`;
+  return [`${num} ${street},`, `${city}, TX${zip ? ` ${zip}` : ""}`];
 }
 
 
