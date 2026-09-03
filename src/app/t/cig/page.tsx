@@ -4,7 +4,7 @@ import type { Tournament } from "@/lib/tournament";
 import seed from "@/data/cig-2026.json";
 
 /**
- * /t/cig — 4-D at the Central Ismaili Games, September 2026.
+ * /t/cig — 4D at the Central Ismaili Games, September 2026.
  *
  * UNLISTED. This is a coach's page for one weekend: reachable by its link,
  * linked from nowhere on the site, absent from the sitemap, told to stay out
@@ -22,8 +22,8 @@ import seed from "@/data/cig-2026.json";
  * `node scripts/snapshot-tournament.mjs` when the organiser moves a game.
  */
 export const metadata: Metadata = {
-  title: "4-D · CIG 2026",
-  description: "Schedule, scores, standings and the playoff picture for 4-D at the Central Ismaili Games.",
+  title: "4D · CIG 2026",
+  description: "Schedule, scores, standings and the playoff picture for 4D at the Central Ismaili Games.",
   robots: { index: false, follow: false, nocache: true },
 };
 

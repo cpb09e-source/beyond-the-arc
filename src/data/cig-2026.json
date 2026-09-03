@@ -10,13 +10,13 @@
    "tz": "America/Chicago"
   }
  },
- "ourTeam": "4-D",
+ "ourTeam": "4D",
  "teams": [
   {
    "id": "ZeGJaPi7PjDltqtii5bH",
    "applicantId": "GF5RP0RhNONLwy98dT9d",
-   "name": "4-D",
-   "short": "4-D",
+   "name": "4D",
+   "short": "4D",
    "color": "#00ba5d",
    "players": [
     {
@@ -483,7 +483,7 @@
    "b": {
     "teamId": "ZeGJaPi7PjDltqtii5bH",
     "applicantId": "GF5RP0RhNONLwy98dT9d",
-    "name": "4-D",
+    "name": "4D",
     "placeholder": false
    },
    "status": "scheduled",
@@ -564,7 +564,7 @@
    "a": {
     "teamId": "ZeGJaPi7PjDltqtii5bH",
     "applicantId": "GF5RP0RhNONLwy98dT9d",
-    "name": "4-D",
+    "name": "4D",
     "placeholder": false
    },
    "b": {
@@ -657,7 +657,7 @@
    "b": {
     "teamId": "ZeGJaPi7PjDltqtii5bH",
     "applicantId": "GF5RP0RhNONLwy98dT9d",
-    "name": "4-D",
+    "name": "4D",
     "placeholder": false
    },
    "status": "scheduled",
@@ -825,7 +825,7 @@
    "a": {
     "teamId": "ZeGJaPi7PjDltqtii5bH",
     "applicantId": "GF5RP0RhNONLwy98dT9d",
-    "name": "4-D",
+    "name": "4D",
     "placeholder": false
    },
    "b": {

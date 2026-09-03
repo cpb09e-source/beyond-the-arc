@@ -367,7 +367,7 @@ function Situation({ me, games, ctx }: { me: Team; games: Game[]; ctx: Ctx }) {
       </div>
       <div className="px-5 py-2 border-t border-hairline bg-paper-deep/30 flex items-center gap-1.5 text-[0.6rem] text-ink-muted">
         <span className="uppercase tracking-widest font-semibold text-ink-muted/70">{g.stage === "playoff" ? g.round : ctx.data.event.group}</span>
-        <span>{g.name}</span>
+        {g.stage === "playoff" && <span>{g.name}</span>}
         {mode === "last" && <span className="ml-auto font-semibold">{won ? "Won" : lost ? "Lost" : "Final"}</span>}
       </div>
     </div>
@@ -386,9 +386,9 @@ function StripCell({ g, me, ctx }: { g: Game; me: Team; ctx: Ctx }) {
   return (
     <a
       href="#schedule"
-      title={`${dayLabel(g.date)} ${timeLabel(g.time)} vs ${r.name}${g.court ? ` · ${g.court}` : ""} · ${g.name}`}
+      title={`${dayLabel(g.date)} ${timeLabel(g.time)} vs ${r.name}${g.court ? ` · ${g.court}` : ""}${g.stage === "playoff" ? ` · ${g.name}` : ""}`}
       className={cn(
-        "flex flex-col items-center gap-1 shrink-0 w-12 rounded p-1 transition-colors hover:bg-coral/8",
+        "flex flex-col items-center gap-1.5 shrink-0 min-w-24 rounded px-2.5 py-1.5 transition-colors hover:bg-coral/8",
         projected && "border border-dashed border-ink/20",
       )}
     >
@@ -400,9 +400,17 @@ function StripCell({ g, me, ctx }: { g: Game; me: Team; ctx: Ctx }) {
       )}>
         {label}
       </span>
-      <Crest team={r.team} name={r.name} size={28} dashed={r.state !== "settled"} />
+      {/* The name in full. Three-letter codes are the organiser's, and nobody
+          on the bench knows that TTS is the Titans. */}
+      <span className={cn(
+        "text-sm font-semibold leading-none whitespace-nowrap",
+        r.state === "projected" ? "italic text-ink-soft" : r.state === "open" ? "text-ink-muted" : "text-ink",
+      )}>
+        {r.name}
+      </span>
       <span className="text-[0.5rem] uppercase tracking-wider text-ink-muted leading-none tabular">
         {dayLabel(g.date).split(",")[0]} {timeLabel(g.time).replace(/:00/, "").replace(/\s/, "")}
+        {g.court ? ` · ${g.court.replace(/^Court /, "C")}` : ""}
       </span>
     </a>
   );
@@ -475,9 +483,12 @@ function GameCard({ g, ctx, className, style }: { g: Game; ctx: Ctx; className?:
           <SideRow r={rb} slot={g.b} score={g.scoreB} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.b.teamId} me={ctx.me} />
         </div>
       </div>
+      {/* Match numbers are the organiser's bookkeeping and mean nothing in
+          the group; in the bracket they are how the rounds refer to each
+          other ("Winner of Match 1"), so they stay there. */}
       <div className="px-4 py-2 border-t border-hairline bg-paper-deep/30 flex items-center gap-1.5 text-[0.6rem] text-ink-muted">
         <span className="uppercase tracking-widest font-semibold text-ink-muted/70">{g.stage === "playoff" ? g.round : ctx.data.event.group}</span>
-        <span>{g.name}</span>
+        <span className="tabular">{g.stage === "playoff" ? g.name : `${dayLabel(g.date).split(",")[0]} ${timeLabel(g.time)}`}</span>
         {projected && <span className="ml-auto italic">projected</span>}
       </div>
     </div>

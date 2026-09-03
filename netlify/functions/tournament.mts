@@ -45,7 +45,14 @@ const EVENTS: Record<string, {
   event: string;
   division: string;
   group: string;
+  /** The team's name AS THE ORGANISER REGISTERED IT — the key we match on. */
   ourTeam: string;
+  /**
+   * What the page calls it. The registration says "4-D"; the team says 4D.
+   * Applied to the team and to every game side that carries its id, so the
+   * organiser's spelling appears nowhere on the page.
+   */
+  displayName?: string;
   /** Fallback UTC offset in seconds when the venue does not carry one. */
   utcOffsetSeconds: number;
 }> = {
@@ -54,6 +61,7 @@ const EVENTS: Record<string, {
     division: "bnx49XKB5vfHPYedfLsa",
     group: "dndl2gnz",
     ourTeam: "4-D",
+    displayName: "4D",
     // America/Chicago in September is CDT, UTC−5.
     utcOffsetSeconds: -5 * 3600,
   },
@@ -429,16 +437,25 @@ async function build(slug: string): Promise<Payload> {
     ...[...teamsById.values()].filter((t) => !order.includes(t.applicantId)),
   ];
 
+  // Our team, spelled the way we spell it — see displayName in EVENTS.
+  const ours = teams.find((t) => t.name === cfg.ourTeam);
+  const ourName = cfg.displayName ?? cfg.ourTeam;
+  if (ours && cfg.displayName) {
+    ours.name = cfg.displayName;
+    ours.short = cfg.displayName.slice(0, 3).toUpperCase();
+  }
+
   const knownTeamIds = new Set(teams.map((t) => t.id));
   // Second net for seed slots — see side(). An id that is not one of the
   // division's applicants is a slot, whatever it looked like.
   const demote = (s: Side): Side =>
     s.teamId && !knownTeamIds.has(s.teamId) ? { ...s, teamId: null, applicantId: null, placeholder: true } : s;
+  const respell = (s: Side): Side => (ours && s.teamId === ours.id ? { ...s, name: ours.name } : s);
 
   const games = matches
     .map((d) => normaliseGame(d, cfg.utcOffsetSeconds))
     .filter((g): g is Game => g !== null)
-    .map((g) => ({ ...g, a: demote(g.a), b: demote(g.b) }))
+    .map((g) => ({ ...g, a: respell(demote(g.a)), b: respell(demote(g.b)) }))
     .sort((x, y) => (x.startMs ?? 0) - (y.startMs ?? 0) || (x.matchNum ?? 0) - (y.matchNum ?? 0));
 
   const first = matches[0] ? obj(matches[0].matchInfo) : null;
@@ -459,7 +476,7 @@ async function build(slug: string): Promise<Payload> {
         tz: str(venue?.tmZoneId),
       },
     },
-    ourTeam: cfg.ourTeam,
+    ourTeam: ourName,
     teams,
     games,
     fetchedAt: new Date().toISOString(),
@@ -525,7 +542,7 @@ export default async (req: Request, _context: Context) => {
     const empty: Payload = {
       slug,
       event: { name: "", division: "", group: "", venue: { name: "", address: null, tz: null } },
-      ourTeam: EVENTS[slug]!.ourTeam,
+      ourTeam: EVENTS[slug]!.displayName ?? EVENTS[slug]!.ourTeam,
       teams: [], games: [],
       fetchedAt: new Date().toISOString(),
       error: String(err instanceof Error ? err.message : err).slice(0, 200),
