@@ -641,18 +641,32 @@ function SeedBadge({ rank, total }: { rank: number; total: number }) {
  * spans eight and sits at the centre of its span, so each card's midline
  * lands on a row boundary and the connectors can be drawn with borders:
  *
- *   col 1   bye (rows 1–8)  M1 (9–16)  M2 (17–24)  M3 (25–32)
- *   col 3   SF1 (5–12, fed by the bye at 4/5 and M1 at 12/13)
- *           SF2 (21–28, fed by M2 at 20/21 and M3 at 28/29)
- *   col 5   Final (13–20, fed by SF1 at 8/9 and SF2 at 24/25)
+ *   col 1   M1 (rows 1–8)  M2 (9–16)  M3 (17–24)
+ *   col 3   SF1 (1–8, level with M1 — its other side is the bye)
+ *           SF2 (13–20, fed by M2 at 12/13 and M3 at 20/21)
+ *   col 5   Final (7–14, fed by SF1 at 4/5 and SF2 at 16/17)
  *
  * A connector is a box spanning its two feeders' midlines with a top, bottom
  * and right border — two stubs and a bar — and a one-pixel line at the
- * target's midline from the bar to the next column. No SVG, nothing measured
- * at runtime, and the bye is a first-class part of the drawing rather than a
- * footnote, because it is the thing seed 1 is playing for.
+ * target's midline from the bar to the next column. No SVG and nothing
+ * measured at runtime.
+ *
+ * THE BYE IS NOT DRAWN. It had a dashed card of its own, which spent a slot
+ * the size of a real game on a team that is not playing one — and SF1 already
+ * names seed 1 on its top row, so the card restated what the next column
+ * said. What is left is a straight line into SF1: one feeder, one line.
  */
-const ROW_PX = 17;
+/**
+ * THE ROW HEIGHT IS A CONSTRAINT, NOT A TASTE. A card is centred in its
+ * eight-row span, so eight of these must be TALLER than the tallest card or
+ * neighbours overlap — which is exactly what happened when the cards grew a
+ * tip-off badge, a seed chip and a record: 8 × 17 = 136px of slot holding a
+ * 158px card, and Round 1 collapsed into itself.
+ *
+ * 8 × 22 = 176px, which clears a 158px card by 18. Anything added to a game
+ * card has to be checked against this number.
+ */
+const ROW_PX = 22;
 const BRACKET_COLUMNS = "minmax(0,1fr) 32px minmax(0,1fr) 32px minmax(0,1fr)";
 
 function Bracket({ ctx }: { ctx: Ctx }) {
@@ -664,7 +678,6 @@ function Bracket({ ctx }: { ctx: Ctx }) {
   const rounds = ["Round 1", "Semi-Finals", "Final"]
     .map((name) => ({ name, games: data.games.filter((g) => g.stage === "playoff" && g.round === name) }))
     .filter((r) => r.games.length > 0);
-  const byeSlot: Side = { teamId: null, applicantId: null, name: "Winner 1 of Group A", placeholder: true };
 
   return (
     <div className="space-y-6">
@@ -681,23 +694,25 @@ function Bracket({ ctx }: { ctx: Ctx }) {
           className="grid gap-x-0"
           style={{
             gridTemplateColumns: BRACKET_COLUMNS,
-            gridTemplateRows: `repeat(32, ${ROW_PX}px)`,
+            gridTemplateRows: `repeat(24, ${ROW_PX}px)`,
           }}
         >
-          <ByeCard slot={byeSlot} ctx={ctx} style={{ gridColumn: 1, gridRow: "1 / span 8" }} />
-          <GameCard g={m1!} ctx={ctx} className="self-center" style={{ gridColumn: 1, gridRow: "9 / span 8" }} />
-          <GameCard g={m2!} ctx={ctx} className="self-center" style={{ gridColumn: 1, gridRow: "17 / span 8" }} />
-          <GameCard g={m3!} ctx={ctx} className="self-center" style={{ gridColumn: 1, gridRow: "25 / span 8" }} />
+          <GameCard g={m1!} ctx={ctx} className="self-center" style={{ gridColumn: 1, gridRow: "1 / span 8" }} />
+          <GameCard g={m2!} ctx={ctx} className="self-center" style={{ gridColumn: 1, gridRow: "9 / span 8" }} />
+          <GameCard g={m3!} ctx={ctx} className="self-center" style={{ gridColumn: 1, gridRow: "17 / span 8" }} />
 
-          <Connector col={2} from={5} to={13} target={9} />
-          <Connector col={2} from={21} to={29} target={25} />
+          {/* SF1 has one drawn feeder, not two: its other side is seed 1, who
+              arrives without playing. A straight line, because a bracket fork
+              with nothing on one arm is a question the drawing cannot answer. */}
+          <Straight col={2} row={5} />
+          <Connector col={2} from={13} to={21} target={17} />
 
-          <GameCard g={sf1!} ctx={ctx} className="self-center" style={{ gridColumn: 3, gridRow: "5 / span 8" }} />
-          <GameCard g={sf2!} ctx={ctx} className="self-center" style={{ gridColumn: 3, gridRow: "21 / span 8" }} />
+          <GameCard g={sf1!} ctx={ctx} className="self-center" style={{ gridColumn: 3, gridRow: "1 / span 8" }} />
+          <GameCard g={sf2!} ctx={ctx} className="self-center" style={{ gridColumn: 3, gridRow: "13 / span 8" }} />
 
-          <Connector col={4} from={9} to={25} target={17} />
+          <Connector col={4} from={5} to={17} target={11} />
 
-          <GameCard g={fin!} ctx={ctx} className="self-center ring-1 ring-gold/40 border-gold/50" style={{ gridColumn: 5, gridRow: "13 / span 8" }} />
+          <GameCard g={fin!} ctx={ctx} className="self-center ring-1 ring-gold/40 border-gold/50" style={{ gridColumn: 5, gridRow: "7 / span 8" }} />
         </div>
         </div>
       )}
@@ -727,30 +742,12 @@ function Connector({ col, from, to, target }: { col: number; from: number; to: n
   );
 }
 
-/** Seed 1's free pass, drawn like a game so the bracket has nothing missing. */
-function ByeCard({ slot, ctx, style }: { slot: Side; ctx: Ctx; style?: React.CSSProperties }) {
-  const r = resolveSide(slot, ctx.data, ctx.table, ctx.complete);
-  const mine = ctx.me ? r.team?.id === ctx.me.id : false;
+/** One feeder, so one line: no stubs, no bar. */
+function Straight({ col, row }: { col: number; row: number }) {
   return (
-    <div className={cn("self-center bg-card border rounded-xl shadow-sm overflow-hidden border-dashed", mine ? "border-coral/40" : "border-ink/15")} style={style}>
-      <div className="flex items-center justify-between gap-2 px-4 pt-3 text-[0.58rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">
-        <span>Bye</span>
-        <span className="tabular">straight to SF1</span>
-      </div>
-      <div className="px-4 pb-3">
-        <SideRow r={r} slot={slot} score={null} margin={null} won={false} ctx={ctx} />
-      </div>
-      <div className="px-4 py-2 border-t border-hairline bg-paper-deep/30 text-[0.6rem] text-ink-muted">
-        <span className="inline-flex items-center gap-1.5 align-middle">
-          <SeedBadge rank={1} total={ctx.table.length} />
-          <span className="uppercase tracking-widest font-semibold text-ink-muted/70">Seed</span>
-        </span>
-        {r.state === "projected" && <span className="ml-auto float-right italic">projected</span>}
-      </div>
-    </div>
+    <div className="self-center w-full h-px bg-hairline" style={{ gridColumn: col, gridRow: `${row - 1} / ${row + 1}` }} aria-hidden />
   );
 }
-
 
 /* ---------------------------------------------------------- team name --- */
 
