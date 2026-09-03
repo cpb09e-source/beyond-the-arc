@@ -3,20 +3,29 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/utils";
 import { Select } from "@/components/select";
+import { PercentileChip } from "@/components/percentile-chip";
+import { DistributionPanel, type DistributionRank } from "@/components/teams/distribution-panel";
 import {
   DIFF_CAP, POLL_MS, dayLabel, diffLabel, fetchTournament, groupIsComplete, involves, isFinal, isLive,
-  resolveSide, standings, streak, timeLabel, tournamentIsSettled,
-  type Game, type Resolved, type Team, type TeamRow, type Tournament,
+  resolveSide, standings, timeLabel, tournamentIsSettled,
+  type Game, type Resolved, type Side, type Team, type TeamRow, type Tournament,
 } from "@/lib/tournament";
 
 /**
- * The tournament page. Four tabs — Schedule, Standings, Bracket, Teams — over
- * one feed, with the coach's own team picked out on every one of them.
+ * The tournament page, built from the parts the rest of the site is built
+ * from: the scoreboard's game cards and section rules, the team page's hero
+ * and schedule strip, the rank chips, and the DistributionPanel the Shooting
+ * tab uses. A coach who knows the site should feel they are on a team page
+ * for one weekend.
+ *
+ * THE HERO IS THE SITUATION, NOT A TITLE. Its right half is whichever of these
+ * is true right now, in that order: the game 4-D is playing, the next one, or
+ * the last result. It changes shape over the day without anyone touching it.
  *
  * THE TABS ARE THE HASH. #standings is a link someone can send from the bench
  * and it is what the back button understands, so the active tab is read from
  * window.location.hash through useSyncExternalStore rather than held in state.
- * The tab strip is plain <a href="#…"> for the reason team-tabs.tsx documents:
+ * The strip is plain <a href="#…"> for the reason team-tabs.tsx documents:
  * Next's Link routes through pushState, which does not fire hashchange.
  *
  * "YOUR TEAM" IS A CONTROL, NOT A CONSTANT. It defaults to the team the feed
@@ -41,6 +50,9 @@ const subscribeHash = (cb: () => void) => {
   window.addEventListener("hashchange", cb);
   return () => window.removeEventListener("hashchange", cb);
 };
+
+/** Everything a tab needs to resolve a slot, computed once per render. */
+type Ctx = { data: Tournament; me: Team | null; table: TeamRow[]; complete: boolean };
 
 export function TournamentClient({ slug, seed = null }: { slug: string; seed?: Tournament | null }) {
   const tab = useSyncExternalStore(subscribeHash, readTab, () => "schedule" as Tab);
@@ -74,7 +86,7 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
     return () => { cancelled = true; ctrl.abort(); if (timer) clearTimeout(timer); };
   }, [slug]);
 
-  // A clock for "updated 40s ago". Ticks on its own schedule so the label moves
+  // A clock for "updated 40s ago", ticking on its own so the label moves
   // between polls.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -91,36 +103,58 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
 
   if (!data) {
     return (
-      <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-6 pb-20">
-        <h1 className="font-display text-3xl lg:text-4xl text-ink">Tournament</h1>
+      <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-6 pb-20">
+        <Eyebrow>Tournament</Eyebrow>
+        <h1 className="font-display text-4xl md:text-6xl tracking-tight text-ink leading-none">Loading</h1>
         <p className="mt-3 text-sm text-ink-muted">
-          {failedAt ? "The schedule feed isn't answering. Retrying." : "Loading the schedule…"}
+          {failedAt ? "The schedule feed isn't answering. Retrying." : "Fetching the schedule…"}
         </p>
       </div>
     );
   }
 
   const table = standings(data);
+  const complete = groupIsComplete(data);
+  const ctx: Ctx = { data, me, table, complete };
+  const myRow = me ? table.find((r) => r.team.id === me.id) ?? null : null;
+  const mySeed = myRow ? table.indexOf(myRow) + 1 : null;
+  const played = table.some((r) => r.gp > 0);
   const liveCount = data.games.filter(isLive).length;
   const finalCount = data.games.filter(isFinal).length;
+  const myGames = me ? data.games.filter((g) => involves(g, me) || isPlayoffFor(g, me, ctx)) : [];
 
   return (
-    <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-6 pb-20">
-      {/* ---------------------------------------------------------- header */}
-      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+    <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-6 pb-20">
+      {/* ------------------------------------------------------------ hero */}
+      <header className="grid grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-x-10 gap-y-6 items-end">
         <div className="min-w-0">
-          <div className="text-xs uppercase tracking-widest text-coral font-medium">{data.event.name}</div>
-          <h1 className="mt-1 font-display text-3xl lg:text-4xl text-ink leading-none">
+          <Eyebrow>{data.event.name} · {data.event.division}</Eyebrow>
+          <h1 className="font-display text-5xl md:text-7xl tracking-tight text-ink leading-none">
             {me?.name ?? data.ourTeam}
-            <span className="text-ink-muted font-normal"> · {data.event.division}</span>
           </h1>
+          <div className="mt-4 flex flex-wrap items-baseline gap-x-5 gap-y-2 text-ink-soft">
+            <span className="font-display tabular text-3xl text-ink leading-none">{myRow ? `${myRow.w}-${myRow.l}` : "0-0"}</span>
+            {mySeed !== null && played && (
+              <span className="inline-flex items-baseline gap-1.5 px-3 py-1.5 rounded-md bg-coral text-accent-foreground font-display text-xl tabular leading-none shadow-sm">
+                <span className="text-[0.6em] uppercase tracking-widest opacity-80">Seed</span>
+                {mySeed}
+                {!complete && <span className="text-[0.55em] uppercase tracking-widest opacity-70">proj.</span>}
+              </span>
+            )}
+            {myRow && myRow.gp > 0 && (
+              <span className="text-sm text-ink-muted tabular">
+                <span className={cn("font-semibold", myRow.diff > 0 ? "text-good" : myRow.diff < 0 ? "text-bad" : "")}>{diffLabel(myRow.diff)}</span>
+                {" "}diff · {myRow.pf} for · {myRow.pa} against
+              </span>
+            )}
+          </div>
           <p className="mt-2 text-sm text-ink-muted">
             {data.event.venue.name}
             {data.event.venue.address && (
               <>
                 {" · "}
                 <a
-                  className="underline decoration-hairline underline-offset-2 hover:text-ink transition-colors"
+                  className="hover:text-coral transition-colors"
                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.event.venue.address)}`}
                   target="_blank" rel="noreferrer"
                 >
@@ -128,22 +162,41 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
                 </a>
               </>
             )}
-            {" · "}{data.teams.length} teams · {dateSpan(data.games)}
+            {" · "}{data.event.group}, {data.teams.length} teams · {dateSpan(data.games)}
           </p>
+          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
+            <FeedStatus live={live?.at ?? null} failedAt={failedAt} now={now} liveCount={liveCount} finalCount={finalCount} total={data.games.length} />
+            <div className="flex items-center gap-2">
+              <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">Your team</span>
+              <Select value={me?.name ?? data.ourTeam} onChange={setTeamName} ariaLabel="Which team to follow" compact className="w-36">
+                {data.teams.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
+              </Select>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <FeedStatus live={live?.at ?? null} failedAt={failedAt} now={now} liveCount={liveCount} finalCount={finalCount} total={data.games.length} />
-          <label className="flex items-center gap-2">
-            <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Your team</span>
-            <Select value={me?.name ?? data.ourTeam} onChange={setTeamName} ariaLabel="Which team to highlight" compact className="w-40">
-              {data.teams.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
-            </Select>
-          </label>
-        </div>
+
+        {me && <Situation me={me} games={myGames} ctx={ctx} />}
       </header>
 
+      {/* ---------------------------------------------------- schedule strip
+          The team page's ticker: result pill over the opponent, in date order,
+          flat on the page. Initials stand in for crests — these teams have
+          none. The bracket path continues past the group games, dashed while
+          it is only projected. */}
+      {me && myGames.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-baseline gap-3 mb-3">
+            <span className="text-[0.65rem] uppercase tracking-widest text-coral font-bold">The weekend</span>
+            <span className="text-[0.6rem] text-ink-muted">{me.name}&rsquo;s path, in order · dashed is projected</span>
+          </div>
+          <div className="flex items-start gap-1.5 overflow-x-auto p-1 -m-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {myGames.map((g) => <StripCell key={g.id} g={g} me={me} ctx={ctx} />)}
+          </div>
+        </div>
+      )}
+
       {/* ------------------------------------------------------------ tabs */}
-      <nav aria-label="Tournament sections" className="mt-6">
+      <nav aria-label="Tournament sections" className="mt-8">
         <ul className="inline-flex items-center gap-[2px] rounded-[10px] border border-hairline bg-paper-deep p-[3px]">
           {TABS.map((t) => {
             const active = t.key === tab;
@@ -169,16 +222,59 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
       </nav>
 
       <div className="mt-6">
-        {tab === "schedule" && <Schedule data={data} me={me} />}
-        {tab === "standings" && <Standings data={data} table={table} me={me} />}
-        {tab === "bracket" && <Bracket data={data} table={table} me={me} />}
-        {tab === "teams" && <Teams data={data} me={me} />}
+        {tab === "schedule" && <Schedule ctx={ctx} myGames={myGames} />}
+        {tab === "standings" && <Standings ctx={ctx} />}
+        {tab === "bracket" && <Bracket ctx={ctx} />}
+        {tab === "teams" && <Teams ctx={ctx} />}
       </div>
     </div>
   );
 }
 
-/* ------------------------------------------------------------ feed status */
+/* --------------------------------------------------------------- pieces */
+
+/** The scoreboard's eyebrow: small caps in coral behind a short rule. */
+function Eyebrow({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
+      <span className="h-px w-6 bg-coral" />
+      {children}
+    </div>
+  );
+}
+
+/** The scoreboard's section heading: label, a rule, a count. */
+function SectionRule({ label, count, tone = "muted" }: { label: string; count?: number; tone?: "muted" | "coral" }) {
+  const coral = tone === "coral";
+  return (
+    <h2 className={cn(
+      "text-[0.62rem] uppercase tracking-[0.16em] font-bold mb-2.5 flex items-center gap-2",
+      coral ? "text-coral" : "text-ink-muted",
+    )}>
+      {label}
+      <span className={cn("h-px flex-1", coral ? "bg-coral/25" : "bg-hairline")} />
+      {count !== undefined && <span className={cn("font-medium tabular", coral ? "text-coral/70" : "text-ink-muted/70")}>{count}</span>}
+    </h2>
+  );
+}
+
+/** Initials in a rounded square, where a crest would go. */
+function Crest({ team, name, size = 20, mine = false, dashed = false }: { team: Team | null; name: string; size?: number; mine?: boolean; dashed?: boolean }) {
+  const text = team ? team.short.slice(0, 3) : initials(name);
+  return (
+    <span
+      className={cn(
+        "grid shrink-0 place-items-center rounded font-bold tabular leading-none",
+        mine ? "bg-coral/15 text-coral" : "bg-paper-deep text-ink-soft",
+        dashed && "border border-dashed border-ink/30 bg-transparent",
+      )}
+      style={{ width: size, height: size, fontSize: Math.max(8, Math.round(size * 0.36)) }}
+      aria-hidden
+    >
+      {text}
+    </span>
+  );
+}
 
 function FeedStatus({
   live, failedAt, now, liveCount, finalCount, total,
@@ -186,394 +282,154 @@ function FeedStatus({
   const ago = live ? Math.max(0, Math.round((now - live) / 1000)) : null;
   const agoText = ago === null ? null : ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`;
   return (
-    <div className="flex items-center gap-2 text-xs text-ink-muted tabular">
+    <div className="flex items-center gap-3 text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted tabular">
       {liveCount > 0 && (
-        <span className="inline-flex items-center gap-1.5 rounded-md border border-bad/40 bg-bad/10 px-2 py-1 font-semibold text-bad">
-          <span className="h-1.5 w-1.5 rounded-full bg-bad animate-pulse" />
-          {liveCount} live
+        <span className="inline-flex items-center gap-1.5 text-coral">
+          <span className="h-1.5 w-1.5 rounded-full bg-coral animate-pulse" />
+          {liveCount} in progress
         </span>
       )}
-      <span className="rounded-md border border-hairline bg-paper-deep/60 px-2 py-1">
-        {finalCount}/{total} final
+      <span>{finalCount}/{total} final</span>
+      <span className={cn(failedAt && "text-bad")}>
+        {failedAt && !live ? "feed unreachable" : failedAt ? `feed stalled · ${agoText}` : agoText ? `updated ${agoText}` : "connecting"}
       </span>
-      {failedAt && !live ? (
-        <span className="text-bad">feed unreachable</span>
-      ) : failedAt ? (
-        <span className="text-bad">feed stalled · showing {agoText}</span>
-      ) : agoText ? (
-        <span>updated {agoText}</span>
-      ) : (
-        <span>connecting…</span>
-      )}
     </div>
   );
 }
 
-/* --------------------------------------------------------------- schedule */
-
-function Schedule({ data, me }: { data: Tournament; me: Team | null }) {
-  const [mineOnly, setMineOnly] = useState(true);
-  const shown = mineOnly && me ? data.games.filter((g) => involves(g, me) || isPlayoffFor(g, me, data)) : data.games;
-  const days = [...new Set(shown.map((g) => g.date))].sort();
-  const nextUp = me ? data.games.find((g) => involves(g, me) && g.status !== "final") : undefined;
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex items-center gap-[2px] rounded-[10px] border border-hairline bg-paper-deep p-[3px]">
-          <Toggle on={mineOnly} onClick={() => setMineOnly(true)}>{me?.name ?? "My"} games</Toggle>
-          <Toggle on={!mineOnly} onClick={() => setMineOnly(false)}>All games</Toggle>
-        </div>
-        <span className="text-xs text-ink-muted tabular">{shown.length} game{shown.length === 1 ? "" : "s"}</span>
-      </div>
-
-      {nextUp && me && (
-        <NextUp g={nextUp} me={me} />
-      )}
-
-      {days.map((day) => (
-        <section key={day}>
-          <h2 className="mb-2.5 text-xs uppercase tracking-widest text-coral font-medium">{dayLabel(day)}</h2>
-          <div className="rounded-xl border border-hairline bg-paper-deep/25 shadow-sm px-5 lg:px-6 divide-y divide-hairline/40">
-            {shown.filter((g) => g.date === day).map((g) => <GameRow key={g.id} g={g} me={me} data={data} />)}
-          </div>
-        </section>
-      ))}
-
-      {shown.length === 0 && (
-        <p className="text-sm text-ink-muted">No games to show.</p>
-      )}
-    </div>
-  );
-}
+/* ------------------------------------------------------------ situation */
 
 /**
- * A playoff game is "mine" when a projected or settled side is my team — so
- * the bracket path a coach is on course for shows up in "my games" before it
- * is official, marked as projected.
+ * The hero's right half. Live game → the scoreline, large. Otherwise the next
+ * game, or the last result once the weekend is over. Set like a game card
+ * with the type turned up: this is the one thing a coach glances at between
+ * possessions.
  */
-function isPlayoffFor(g: Game, me: Team, data: Tournament): boolean {
-  if (g.stage !== "playoff") return false;
-  const table = standings(data);
-  const done = groupIsComplete(data);
-  return [g.a, g.b].some((s) => resolveSide(s, data, table, done).team?.id === me.id);
-}
+function Situation({ me, games, ctx }: { me: Team; games: Game[]; ctx: Ctx }) {
+  const liveGame = games.find(isLive);
+  // A FIXTURE BEATS A PROJECTION for "next". The organiser has Round 1 timed
+  // before the last group games, so by the clock a projected bracket slot can
+  // sit ahead of a game that is actually on the schedule — and a coach asking
+  // "who do we play next" means the one that is booked.
+  const isFixture = (g: Game) =>
+    [g.a, g.b].every((s) => resolveSide(s, ctx.data, ctx.table, ctx.complete).state === "settled");
+  const next = games.find((g) => g.status !== "final" && isFixture(g)) ?? games.find((g) => g.status !== "final");
+  const last = [...games].reverse().find((g) => g.status === "final");
+  const g = liveGame ?? next ?? last;
+  if (!g) return null;
+  const mode: "live" | "next" | "last" = liveGame ? "live" : next ? "next" : "last";
+  const mineIsA = g.a.teamId === me.id || resolveSide(g.a, ctx.data, ctx.table, ctx.complete).team?.id === me.id;
+  const my = mineIsA ? g.a : g.b;
+  const their = mineIsA ? g.b : g.a;
+  const myScore = mineIsA ? g.scoreA : g.scoreB;
+  const theirScore = mineIsA ? g.scoreB : g.scoreA;
+  const rt = resolveSide(their, ctx.data, ctx.table, ctx.complete);
+  const rm = resolveSide(my, ctx.data, ctx.table, ctx.complete);
+  const won = mode === "last" && g.winnerTeamId === me.id;
+  const lost = mode === "last" && g.winnerTeamId !== null && g.winnerTeamId !== me.id;
 
-function NextUp({ g, me }: { g: Game; me: Team }) {
-  const opp = g.a.teamId === me.id ? g.b : g.a;
   return (
-    <div className="rounded-xl border border-coral/40 bg-coral/8 px-5 py-4 flex flex-wrap items-center gap-x-6 gap-y-2">
-      <div>
-        <div className="text-[0.6rem] uppercase tracking-widest text-coral font-medium">{isLive(g) ? "Now playing" : "Next up"}</div>
-        <div className="mt-0.5 font-display text-2xl text-ink leading-tight">
-          vs {opp.name}
+    <div className={cn(
+      "relative bg-card border rounded-xl shadow-sm overflow-hidden",
+      mode === "live" ? "border-coral/40 ring-1 ring-coral/15" : "border-ink/10",
+    )}>
+      <div className="flex items-center justify-between gap-2 px-5 pt-4">
+        <span className="flex items-center gap-2 text-[0.6rem] uppercase tracking-[0.16em] font-bold">
+          {mode === "live" && <span className="h-1.5 w-1.5 rounded-full bg-coral animate-pulse" />}
+          <span className={mode === "live" ? "text-coral" : "text-ink-muted"}>
+            {mode === "live" ? "On the floor now" : mode === "next" ? "Next up" : "Last result"}
+          </span>
+        </span>
+        <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted tabular">
+          {dayLabel(g.date).split(",")[0]} {timeLabel(g.time)}{g.court ? ` · ${g.court}` : ""}
+        </span>
+      </div>
+      <div className="px-5 pb-4 pt-3 flex items-center gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2.5">
+            <Crest team={me} name={me.name} size={28} mine />
+            <span className={cn("font-display text-2xl leading-none truncate", lost ? "text-ink-muted" : "text-coral")}>{rm.name}</span>
+          </div>
+          <div className="mt-3 flex items-center gap-2.5">
+            <Crest team={rt.team} name={rt.name} size={28} dashed={rt.state !== "settled"} />
+            <span className={cn("font-display text-2xl leading-none truncate", rt.state === "projected" && "italic", won ? "text-ink-muted" : "text-ink")}>
+              {rt.name}
+            </span>
+            {rt.state === "projected" && <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted">proj.</span>}
+          </div>
         </div>
-      </div>
-      <div className="text-sm text-ink-soft tabular">
-        {dayLabel(g.date)} · {timeLabel(g.time)}{g.court ? ` · ${g.court}` : ""}
-      </div>
-      <div className="text-xs text-ink-muted">{g.name}</div>
-    </div>
-  );
-}
-
-function GameRow({ g, me, data }: { g: Game; me: Team | null; data: Tournament }) {
-  const mine = me ? involves(g, me) : false;
-  const done = g.status === "final";
-  const aWon = done && g.winnerTeamId !== null && g.winnerTeamId === g.a.teamId;
-  const bWon = done && g.winnerTeamId !== null && g.winnerTeamId === g.b.teamId;
-  const table = g.stage === "playoff" ? standings(data) : null;
-  const complete = g.stage === "playoff" ? groupIsComplete(data) : false;
-  const ra = table ? resolveSide(g.a, data, table, complete) : null;
-  const rb = table ? resolveSide(g.b, data, table, complete) : null;
-
-  return (
-    <div
-      className={cn(
-        "grid grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-4 py-3",
-        mine && "-mx-5 lg:-mx-6 px-5 lg:px-6 bg-coral/8 border-l-2 border-coral",
-      )}
-    >
-      <div className="tabular">
-        <div className="text-sm font-medium text-ink">{timeLabel(g.time)}</div>
-        <StatusTag g={g} />
-      </div>
-      <div className="min-w-0 flex flex-col gap-1">
-        <ScoreLine side={g.a} resolved={ra} score={g.scoreA} won={aWon} lost={bWon} me={me} />
-        <ScoreLine side={g.b} resolved={rb} score={g.scoreB} won={bWon} lost={aWon} me={me} />
-      </div>
-      <div className="flex flex-col items-end gap-1 text-right">
-        {g.court && <span className="rounded-md border border-hairline bg-paper-deep/60 px-2 py-0.5 text-[0.65rem] text-ink-soft whitespace-nowrap">{g.court}</span>}
-        <span className="text-[0.65rem] text-ink-muted whitespace-nowrap">{g.name}</span>
-      </div>
-    </div>
-  );
-}
-
-function ScoreLine({
-  side, resolved, score, won, lost, me,
-}: { side: Game["a"]; resolved: Resolved | null; score: number | null; won: boolean; lost: boolean; me: Team | null }) {
-  const name = resolved ? resolved.name : side.name;
-  const projected = resolved?.state === "projected";
-  const isMe = me ? (side.teamId === me.id || resolved?.team?.id === me.id) : false;
-  return (
-    <div className={cn("flex items-center gap-2 text-sm", lost ? "text-ink-muted" : "text-ink", won && "font-semibold")}>
-      <span className={cn("truncate", projected && "italic text-ink-soft", isMe && "text-coral")}>{name}</span>
-      {isMe && <YouTag />}
-      {projected && <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted">proj.</span>}
-      <span className="ml-auto tabular font-medium w-8 text-right">{score === null ? "" : score}</span>
-    </div>
-  );
-}
-
-function StatusTag({ g }: { g: Game }) {
-  if (g.status === "live") {
-    return (
-      <div className="mt-0.5 inline-flex items-center gap-1 text-[0.6rem] uppercase tracking-widest font-semibold text-bad">
-        <span className="h-1.5 w-1.5 rounded-full bg-bad animate-pulse" />Live
-      </div>
-    );
-  }
-  if (g.status === "final") return <div className="mt-0.5 text-[0.6rem] uppercase tracking-widest font-medium text-ink-muted">Final</div>;
-  return null;
-}
-
-function YouTag() {
-  return (
-    <span className="rounded border border-coral/60 bg-coral/10 px-1.5 py-px text-[0.55rem] font-bold uppercase tracking-widest text-coral leading-tight">
-      You
-    </span>
-  );
-}
-
-function Toggle({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={on}
-      className={cn(
-        "h-7 px-3 rounded-md border text-xs whitespace-nowrap transition-colors",
-        on ? "border-hairline bg-card font-semibold text-ink shadow-[0_1px_2px_rgba(0,0,0,0.08)]" : "border-transparent font-medium text-ink-muted hover:text-ink",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-/* -------------------------------------------------------------- standings */
-
-function Standings({ data, table, me }: { data: Tournament; table: TeamRow[]; me: Team | null }) {
-  const played = table.some((r) => r.gp > 0);
-  const complete = groupIsComplete(data);
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="text-xs uppercase tracking-widest text-coral font-medium">
-          {data.event.group} · {data.teams.length} teams · {complete ? "final" : played ? "in progress" : "not started"}
-        </h2>
-        <span className="text-xs text-ink-muted">
-          ranked by win % → point diff (each game capped ±{DIFF_CAP})
-        </span>
-      </div>
-      <div className="rounded-xl border border-hairline bg-paper-deep/25 shadow-sm px-5 lg:px-6 overflow-x-auto">
-        <table className="w-full border-collapse tabular text-sm">
-          <thead>
-            <tr className="text-[0.6rem] uppercase tracking-widest text-ink-muted">
-              <th className="py-2.5 pr-2 text-left font-medium w-8">#</th>
-              <th className="py-2.5 text-left font-medium">Team</th>
-              {["GP", "W–L", "PF", "PA", "Diff", "Strk"].map((h) => (
-                <th key={h} className="py-2.5 pl-3 text-right font-medium">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-hairline/40">
-            {table.map((r, i) => {
-              const mine = me?.id === r.team.id;
-              const sk = streak(data, r.team);
-              const seedNote = i === 0 ? "bye" : null;
-              return (
-                <tr key={r.team.id} className={cn(mine && "bg-coral/8")}>
-                  <td className={cn("py-2.5 pr-2 text-xs", i === 0 ? "text-gold font-semibold" : "text-ink-muted")}>{i + 1}</td>
-                  <td className={cn("py-2.5 font-medium", mine ? "text-coral" : "text-ink")}>
-                    <span className="inline-flex items-center gap-2">
-                      {r.team.name}
-                      {mine && <YouTag />}
-                      {seedNote && played && (
-                        <span className="text-[0.6rem] uppercase tracking-widest text-gold font-medium">{seedNote}</span>
-                      )}
-                    </span>
-                  </td>
-                  <td className="py-2.5 pl-3 text-right">{r.gp}</td>
-                  <td className="py-2.5 pl-3 text-right">{r.w}–{r.l}</td>
-                  <td className="py-2.5 pl-3 text-right">{r.gp ? r.pf : "—"}</td>
-                  <td className="py-2.5 pl-3 text-right">{r.gp ? r.pa : "—"}</td>
-                  <td className={cn("py-2.5 pl-3 text-right", r.diff > 0 && "text-good", r.diff < 0 && "text-bad")}>
-                    {r.gp ? diffLabel(r.diff) : "—"}
-                    {r.gp > 0 && r.rawDiff !== r.diff && (
-                      <span className="ml-1 text-[0.65rem] text-ink-muted" title="uncapped">({diffLabel(r.rawDiff)})</span>
-                    )}
-                  </td>
-                  <td className={cn("py-2.5 pl-3 text-right font-semibold", sk.kind === "w" ? "text-good" : sk.kind === "l" ? "text-bad" : "text-ink-muted")}>{sk.text}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-xs text-ink-muted">
-        One group of {data.teams.length}; each team plays four. All seven advance — seed 1 goes straight to the semi-finals,
-        seeds 2–7 play Round 1 on Sunday morning. Tiebreaks per the NAIG rulebook: win %, then point differential with
-        each game&rsquo;s margin capped at ±{DIFF_CAP}; a forfeit is 30–0. Where the capped and raw differentials differ,
-        the raw figure is shown in brackets.
-      </p>
-    </div>
-  );
-}
-
-/* ---------------------------------------------------------------- bracket */
-
-function Bracket({ data, table, me }: { data: Tournament; table: TeamRow[]; me: Team | null }) {
-  const complete = groupIsComplete(data);
-  const played = table.some((r) => r.gp > 0);
-  const rounds = ["Round 1", "Semi-Finals", "Final"]
-    .map((name) => ({ name, games: data.games.filter((g) => g.stage === "playoff" && g.round === name) }))
-    .filter((r) => r.games.length > 0);
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="text-xs uppercase tracking-widest text-coral font-medium">
-          Playoffs · Sunday · {complete ? "seeded" : played ? "projected from the table" : "seeds open"}
-        </h2>
-        <span className="text-xs text-ink-muted">
-          italics are projections — they move as the group plays out
-        </span>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-6">
-        {rounds.map((r) => (
-          <section key={r.name}>
-            <h3 className="mb-2.5 text-xs uppercase tracking-widest text-ink-muted font-medium">{r.name}</h3>
-            <div className="flex flex-col gap-3">
-              {r.games.map((g) => (
-                <BracketCard key={g.id} g={g} data={data} table={table} complete={complete} me={me} isFinal={r.name === "Final"} />
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
-      <p className="text-xs text-ink-muted">
-        Format from the organiser: 7 teams, one group, four games each. Seed 1 byes to a semi-final; 4 v 5, 2 v 7 and
-        3 v 6 play Round 1. Times and courts are as published on Naismaili Games and will be corrected there first.
-      </p>
-    </div>
-  );
-}
-
-function BracketCard({
-  g, data, table, complete, me, isFinal: final,
-}: { g: Game; data: Tournament; table: TeamRow[]; complete: boolean; me: Team | null; isFinal: boolean }) {
-  const a = resolveSide(g.a, data, table, complete);
-  const b = resolveSide(g.b, data, table, complete);
-  const mine = me ? [a, b].some((s) => s.team?.id === me.id) : false;
-  const done = g.status === "final";
-  return (
-    <div
-      className={cn(
-        "rounded-xl border bg-paper-deep/25 shadow-sm px-4 py-3",
-        mine ? "border-coral/60" : "border-hairline",
-        final && "border-gold/60",
-      )}
-    >
-      <div className="flex items-baseline justify-between gap-2">
-        <span className={cn("text-[0.65rem] uppercase tracking-widest font-medium", final ? "text-gold" : "text-coral")}>
-          {final ? "🏆 Final" : g.name}
-        </span>
-        <span className="text-[0.65rem] text-ink-muted tabular whitespace-nowrap">
-          {dayLabel(g.date).split(",")[0]} · {timeLabel(g.time)}{g.court ? ` · ${g.court}` : ""}
-        </span>
-      </div>
-      <div className="mt-2 flex flex-col gap-1">
-        <BracketSide r={a} score={g.scoreA} won={done && g.winnerTeamId === g.a.teamId} lost={done && g.winnerTeamId === g.b.teamId} me={me} />
-        <BracketSide r={b} score={g.scoreB} won={done && g.winnerTeamId === g.b.teamId} lost={done && g.winnerTeamId === g.a.teamId} me={me} />
-      </div>
-      {g.status === "live" && (
-        <div className="mt-2 inline-flex items-center gap-1 text-[0.6rem] uppercase tracking-widest font-semibold text-bad">
-          <span className="h-1.5 w-1.5 rounded-full bg-bad animate-pulse" />Live
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BracketSide({ r, score, won, lost, me }: { r: Resolved; score: number | null; won: boolean; lost: boolean; me: Team | null }) {
-  const isMe = me ? r.team?.id === me.id : false;
-  return (
-    <div className={cn("flex items-center gap-2 text-sm", lost ? "text-ink-muted" : "text-ink", won && "font-semibold")}>
-      <span
-        className={cn(
-          "truncate",
-          r.state === "projected" && "italic text-ink-soft",
-          r.state === "open" && "text-ink-muted",
-          isMe && "text-coral",
+        {mode !== "next" && (
+          <div className="flex flex-col items-end gap-3 tabular font-display leading-none">
+            <span className={cn("text-4xl", lost ? "text-ink-muted" : "text-ink")}>{myScore ?? "—"}</span>
+            <span className={cn("text-4xl", won ? "text-ink-muted" : "text-ink")}>{theirScore ?? "—"}</span>
+          </div>
         )}
-        title={r.slot}
-      >
-        {r.name}
-      </span>
-      {isMe && <YouTag />}
-      {r.state !== "open" && r.name !== r.slot && (
-        <span className="text-[0.6rem] text-ink-muted truncate">{r.slot.replace(/ of Group A$/i, "")}</span>
-      )}
-      <span className="ml-auto tabular font-medium w-8 text-right">{score === null ? "" : score}</span>
+      </div>
+      <div className="px-5 py-2 border-t border-hairline bg-paper-deep/30 flex items-center gap-1.5 text-[0.6rem] text-ink-muted">
+        <span className="uppercase tracking-widest font-semibold text-ink-muted/70">{g.stage === "playoff" ? g.round : ctx.data.event.group}</span>
+        <span>{g.name}</span>
+        {mode === "last" && <span className="ml-auto font-semibold">{won ? "Won" : lost ? "Lost" : "Final"}</span>}
+      </div>
     </div>
   );
 }
 
-/* ------------------------------------------------------------------ teams */
+/* --------------------------------------------------------------- strip */
 
-function Teams({ data, me }: { data: Tournament; me: Team | null }) {
-  const ordered = me ? [me, ...data.teams.filter((t) => t.id !== me.id)] : data.teams;
+function StripCell({ g, me, ctx }: { g: Game; me: Team; ctx: Ctx }) {
+  const opp = opponentSide(g, me, ctx);
+  const r = resolveSide(opp, ctx.data, ctx.table, ctx.complete);
+  const won = g.status === "final" && g.winnerTeamId === me.id;
+  const lost = g.status === "final" && g.winnerTeamId !== null && g.winnerTeamId !== me.id;
+  const projected = g.stage === "playoff" && g.status !== "final";
+  const label = g.status === "final" ? (won ? "W" : lost ? "L" : "T") : isLive(g) ? "●" : g.stage === "playoff" ? shortRound(g.round) : "—";
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 lg:gap-6">
-      {ordered.map((t) => {
-        const mine = me?.id === t.id;
+    <a
+      href="#schedule"
+      title={`${dayLabel(g.date)} ${timeLabel(g.time)} vs ${r.name}${g.court ? ` · ${g.court}` : ""} · ${g.name}`}
+      className={cn(
+        "flex flex-col items-center gap-1 shrink-0 w-12 rounded p-1 transition-colors hover:bg-coral/8",
+        projected && "border border-dashed border-ink/20",
+      )}
+    >
+      <span className={cn(
+        "inline-flex items-center justify-center text-[0.55rem] font-semibold tabular min-w-6 px-1 h-4 rounded-sm leading-none",
+        won && "bg-good/22 text-good",
+        lost && "bg-bad/22 text-bad",
+        !won && !lost && (isLive(g) ? "bg-coral/15 text-coral" : "bg-paper-deep text-ink-muted"),
+      )}>
+        {label}
+      </span>
+      <Crest team={r.team} name={r.name} size={28} dashed={r.state !== "settled"} />
+      <span className="text-[0.5rem] uppercase tracking-wider text-ink-muted leading-none tabular">
+        {dayLabel(g.date).split(",")[0]} {timeLabel(g.time).replace(/:00/, "").replace(/\s/, "")}
+      </span>
+    </a>
+  );
+}
+
+/* ------------------------------------------------------------- schedule */
+
+function Schedule({ ctx, myGames }: { ctx: Ctx; myGames: Game[] }) {
+  const days = [...new Set(ctx.data.games.map((g) => g.date))].sort();
+  return (
+    <div className="space-y-7">
+      {ctx.me && myGames.length > 0 && (
+        <section>
+          <SectionRule label={ctx.me.name} count={myGames.length} tone="coral" />
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+            {myGames.map((g) => <GameCard key={`m-${g.id}`} g={g} ctx={ctx} />)}
+          </div>
+        </section>
+      )}
+      {days.map((day) => {
+        const games = ctx.data.games.filter((g) => g.date === day);
         return (
-          <section
-            key={t.id}
-            className={cn("rounded-xl border bg-paper-deep/25 shadow-sm px-5 py-4", mine ? "border-coral/60" : "border-hairline")}
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <span
-                className={cn(
-                  "grid h-9 w-9 flex-none place-items-center rounded-lg text-xs font-bold tracking-wide",
-                  mine ? "bg-coral/15 text-coral border border-coral/40" : "bg-paper-deep text-ink-soft border border-hairline",
-                )}
-              >
-                {t.short.slice(0, 3)}
-              </span>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className={cn("font-semibold", mine ? "text-coral" : "text-ink")}>{t.name}</span>
-                  {mine && <YouTag />}
-                </div>
-                <div className="text-[0.65rem] uppercase tracking-widest text-ink-muted">{t.players.length} players</div>
-              </div>
+          <section key={day}>
+            <SectionRule label={dayLabel(day)} count={games.length} />
+            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+              {games.map((g) => <GameCard key={g.id} g={g} ctx={ctx} />)}
             </div>
-            <ul className="divide-y divide-hairline/40">
-              {t.players.map((p) => (
-                <li key={p.name} className="flex items-center gap-2 py-1.5 text-sm text-ink-soft">
-                  <span>{p.name}</span>
-                  {p.captain && (
-                    <span className="ml-auto rounded border border-hairline bg-paper-deep/60 px-1.5 py-px text-[0.55rem] font-bold uppercase tracking-widest text-ink-muted">
-                      Cap
-                    </span>
-                  )}
-                </li>
-              ))}
-              {t.players.length === 0 && <li className="py-1.5 text-sm text-ink-muted">No roster listed.</li>}
-            </ul>
           </section>
         );
       })}
@@ -581,9 +437,411 @@ function Teams({ data, me }: { data: Tournament; me: Team | null }) {
   );
 }
 
-/* ---------------------------------------------------------------- helpers */
+/**
+ * The scoreboard's game card, with initials for crests and the match label
+ * where the betting line would sit. Projected sides are italic and say so in
+ * the meta band, so a bracket slot is never mistaken for a fixture.
+ */
+function GameCard({ g, ctx, className, style }: { g: Game; ctx: Ctx; className?: string; style?: React.CSSProperties }) {
+  const live = isLive(g);
+  const final = g.status === "final";
+  const ra = g.stage === "playoff" ? resolveSide(g.a, ctx.data, ctx.table, ctx.complete) : settled(g.a, ctx.data);
+  const rb = g.stage === "playoff" ? resolveSide(g.b, ctx.data, ctx.table, ctx.complete) : settled(g.b, ctx.data);
+  const projected = ra.state === "projected" || rb.state === "projected";
+  const mine = ctx.me ? ra.team?.id === ctx.me.id || rb.team?.id === ctx.me.id : false;
+  return (
+    <div
+      className={cn(
+        "relative bg-card border rounded-xl shadow-sm overflow-hidden transition-colors",
+        live ? "border-coral/40 ring-1 ring-coral/15" : mine ? "border-coral/30" : "border-ink/10",
+        className,
+      )}
+      style={style}
+    >
+      <div className="flex items-center justify-between gap-2 px-4 pt-3">
+        <span className="flex items-center gap-1.5 min-w-0 text-[0.58rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">
+          <span className="truncate">{g.court ?? ctx.data.event.venue.name}</span>
+        </span>
+        <span className={cn(
+          "shrink-0 text-[0.58rem] uppercase tracking-[0.12em] font-bold tabular",
+          live ? "text-coral" : "text-ink-muted",
+        )}>
+          {live ? "Live" : final ? "Final" : `${dayLabel(g.date).split(",")[0]} ${timeLabel(g.time)}`}
+        </span>
+      </div>
+      <div className="px-4 pb-3">
+        <div className="divide-y divide-hairline/60">
+          <SideRow r={ra} slot={g.a} score={g.scoreA} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.a.teamId} me={ctx.me} />
+          <SideRow r={rb} slot={g.b} score={g.scoreB} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.b.teamId} me={ctx.me} />
+        </div>
+      </div>
+      <div className="px-4 py-2 border-t border-hairline bg-paper-deep/30 flex items-center gap-1.5 text-[0.6rem] text-ink-muted">
+        <span className="uppercase tracking-widest font-semibold text-ink-muted/70">{g.stage === "playoff" ? g.round : ctx.data.event.group}</span>
+        <span>{g.name}</span>
+        {projected && <span className="ml-auto italic">projected</span>}
+      </div>
+    </div>
+  );
+}
 
-/** "7205, Eldorado Parkway, McKinney, Collin County, Texas, …" → "7205 Eldorado Parkway, McKinney, TX". */
+function SideRow({ r, slot, score, won, me }: { r: Resolved; slot: Side; score: number | null; won: boolean; me: Team | null }) {
+  const isMe = me ? r.team?.id === me.id : false;
+  const seed = /winner\s+(\d+)\s+of/i.exec(slot.name)?.[1] ?? null;
+  return (
+    <div className="flex items-center gap-2 py-1.5">
+      <Crest team={r.team} name={r.name} size={20} mine={isMe} dashed={r.state !== "settled"} />
+      {seed && <span className="text-[0.6rem] text-ink-muted tabular w-2">{seed}</span>}
+      <span className={cn(
+        "min-w-0 truncate text-sm",
+        won ? "text-ink font-semibold" : "text-ink-soft",
+        isMe && "text-coral font-semibold",
+        r.state === "projected" && "italic",
+        r.state === "open" && "text-ink-muted",
+      )}>
+        {r.name}
+      </span>
+      <span className={cn("ml-auto text-right tabular text-lg font-bold leading-none pl-2", won ? "text-ink" : "text-ink-muted")}>
+        {score ?? "—"}
+      </span>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ standings */
+
+function Standings({ ctx }: { ctx: Ctx }) {
+  const { data, table, me, complete } = ctx;
+  const played = table.some((r) => r.gp > 0);
+  const myRanks = me ? whereTheyStand(table, me) : [];
+  const maxAbs = Math.max(1, ...table.map((r) => Math.abs(r.diff)));
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-8">
+      <div className="bg-paper-deep/25 -mx-6 lg:mx-0 rounded-none lg:rounded-xl border-y border-x-0 lg:border-x border-hairline shadow-sm p-6">
+        <div className="flex items-baseline justify-between mb-5">
+          <h3 className="font-display text-xl text-ink">{data.event.group}</h3>
+          <span className="text-[0.65rem] uppercase tracking-widest text-ink-muted">
+            {data.teams.length} teams · {complete ? "final" : played ? "in progress" : "not started"}
+          </span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse tabular text-sm">
+            <thead>
+              <tr className="text-[0.6rem] uppercase tracking-widest text-ink-muted">
+                <th className="py-2 pr-3 text-left font-medium w-10">Seed</th>
+                <th className="py-2 text-left font-medium">Team</th>
+                {["GP", "W-L", "PF", "PA"].map((h) => (
+                  <th key={h} className="py-2 pl-3 text-right font-medium">{h}</th>
+                ))}
+                <th className="py-2 pl-3 text-right font-medium">Diff</th>
+                <th className="py-2 pl-3 font-medium w-28 hidden sm:table-cell" aria-label="Differential, drawn" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-hairline/40">
+              {table.map((r, i) => {
+                const mine = me?.id === r.team.id;
+                return (
+                  <tr key={r.team.id} className={cn("transition-colors", mine ? "bg-coral/8" : "hover:bg-coral/5")}>
+                    <td className="py-2 pr-3">
+                      {played ? <SeedBadge rank={i + 1} total={table.length} /> : <span className="text-ink-muted">{i + 1}</span>}
+                    </td>
+                    <td className={cn("py-2 font-medium", mine ? "text-coral" : "text-ink")}>
+                      <span className="inline-flex items-center gap-2">
+                        <Crest team={r.team} name={r.team.name} size={18} mine={mine} />
+                        {r.team.name}
+                        {i === 0 && played && <span className="text-[0.6rem] uppercase tracking-widest text-gold font-semibold">bye</span>}
+                      </span>
+                    </td>
+                    <td className="py-2 pl-3 text-right">{r.gp}</td>
+                    <td className="py-2 pl-3 text-right">{r.w}-{r.l}</td>
+                    <td className="py-2 pl-3 text-right">{r.gp ? r.pf : "—"}</td>
+                    <td className="py-2 pl-3 text-right">{r.gp ? r.pa : "—"}</td>
+                    <td className={cn("py-2 pl-3 text-right font-semibold", r.diff > 0 && "text-good", r.diff < 0 && "text-bad")}>
+                      {r.gp ? diffLabel(r.diff) : "—"}
+                      {r.gp > 0 && r.rawDiff !== r.diff && (
+                        <span className="ml-1 font-normal text-[0.65rem] text-ink-muted" title="uncapped">({diffLabel(r.rawDiff)})</span>
+                      )}
+                    </td>
+                    <td className="py-2 pl-3 hidden sm:table-cell">
+                      <DiffBar value={r.gp ? r.diff : 0} max={maxAbs} mine={mine} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-4 pt-4 border-t border-hairline/60 text-xs text-ink-muted">
+          One group; each team plays four. All seven advance — seed 1 to the semi-finals, seeds 2–7 to Round 1.
+          Ranked by win %, then point differential with each game&rsquo;s margin capped at ±{DIFF_CAP} (NAIG rulebook);
+          a forfeit is 30–0. Uncapped figures in brackets where they differ.
+        </p>
+      </div>
+
+      {me && (
+        <DistributionPanel title={`Where ${me.name} stands`} eyebrow={`vs ${data.event.group}`} ranks={myRanks}>
+          {myRanks.every((r) => r.value === null) && (
+            <p className="text-xs text-ink-muted">Fills in after the first final.</p>
+          )}
+        </DistributionPanel>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A diverging bar around zero — the differential drawn, so the table's shape
+ * reads before its numbers do. Coral for the followed team, the result
+ * colours for everyone else.
+ */
+function DiffBar({ value, max, mine }: { value: number; max: number; mine: boolean }) {
+  const pct = Math.min(50, (Math.abs(value) / max) * 50);
+  return (
+    <div className="relative h-1.5 w-full rounded-full bg-paper-deep" role="img" aria-label={`${diffLabel(value)} point differential`}>
+      <span className="absolute left-1/2 top-0 h-full w-px bg-hairline" />
+      <span
+        className={cn("absolute top-0 h-full rounded-full", mine ? "bg-coral" : value >= 0 ? "bg-good/70" : "bg-bad/70")}
+        style={value >= 0 ? { left: "50%", width: `${pct}%` } : { right: "50%", width: `${pct}%` }}
+      />
+    </div>
+  );
+}
+
+/** Rank #n of N as the rank chips on the team page. */
+function SeedBadge({ rank, total }: { rank: number; total: number }) {
+  const pct = total > 1 ? Math.round(((total - rank) / (total - 1)) * 100) : 100;
+  return (
+    <PercentileChip pct={pct} className="flex-none" ariaLabel={`Seed ${rank} of ${total}`}>
+      #{rank}
+    </PercentileChip>
+  );
+}
+
+/**
+ * The team's standing in the group, as DistributionPanel rows — the same
+ * rank-and-marker rows the Shooting tab uses, over a cohort of seven.
+ */
+function whereTheyStand(table: TeamRow[], me: Team): DistributionRank[] {
+  const mine = table.find((r) => r.team.id === me.id);
+  const played = table.filter((r) => r.gp > 0);
+  const total = played.length;
+  const row = (key: string, label: string, sub: string | undefined, pick: (r: TeamRow) => number, format: DistributionRank["format"], invert = false): DistributionRank => {
+    if (!mine || mine.gp === 0) return { key, label, sub, value: null, rank: null, total, percentile: 50, format };
+    const vals = played.map(pick).sort((a, b) => (invert ? a - b : b - a));
+    const value = pick(mine);
+    const rank = vals.indexOf(value) + 1;
+    const percentile = total > 1 ? Math.round(((total - rank) / (total - 1)) * 100) : 100;
+    return { key, label, sub, value, rank, total, percentile, format };
+  };
+  return [
+    row("winpct", "Win %", undefined, (r) => (r.gp ? r.w / r.gp : 0), "pct"),
+    row("diff", "Point diff", `capped ±${DIFF_CAP} per game`, (r) => r.diff, "intDiff"),
+    row("margin", "Margin per game", "uncapped", (r) => (r.gp ? Math.round((r.rawDiff / r.gp) * 10) / 10 : 0), "intDiff"),
+    row("pf", "Points for", "per game", (r) => (r.gp ? Math.round((r.pf / r.gp) * 10) / 10 : 0), "int"),
+    row("pa", "Points against", "per game, lower is better", (r) => (r.gp ? Math.round((r.pa / r.gp) * 10) / 10 : 0), "int", true),
+  ];
+}
+
+/* -------------------------------------------------------------- bracket */
+
+/**
+ * Drawn as a bracket from lg up, stacked as cards below.
+ *
+ * THE GRID IS THE GEOMETRY. Thirty-two rows of a fixed height; every card
+ * spans eight and sits at the centre of its span, so each card's midline
+ * lands on a row boundary and the connectors can be drawn with borders:
+ *
+ *   col 1   bye (rows 1–8)  M1 (9–16)  M2 (17–24)  M3 (25–32)
+ *   col 3   SF1 (5–12, fed by the bye at 4/5 and M1 at 12/13)
+ *           SF2 (21–28, fed by M2 at 20/21 and M3 at 28/29)
+ *   col 5   Final (13–20, fed by SF1 at 8/9 and SF2 at 24/25)
+ *
+ * A connector is a box spanning its two feeders' midlines with a top, bottom
+ * and right border — two stubs and a bar — and a one-pixel line at the
+ * target's midline from the bar to the next column. No SVG, nothing measured
+ * at runtime, and the bye is a first-class part of the drawing rather than a
+ * footnote, because it is the thing seed 1 is playing for.
+ */
+const ROW_PX = 17;
+const BRACKET_COLUMNS = "minmax(0,1fr) 32px minmax(0,1fr) 32px minmax(0,1fr)";
+
+function Bracket({ ctx }: { ctx: Ctx }) {
+  const { data, table, complete } = ctx;
+  const played = table.some((r) => r.gp > 0);
+  const find = (re: RegExp) => data.games.find((g) => g.stage === "playoff" && re.test(g.name));
+  const m1 = find(/^match\s*1$/i), m2 = find(/^match\s*2$/i), m3 = find(/^match\s*3$/i);
+  const sf1 = find(/^semi.*1$/i), sf2 = find(/^semi.*2$/i), fin = find(/^final/i);
+  const drawable = m1 && m2 && m3 && sf1 && sf2 && fin;
+  const rounds = ["Round 1", "Semi-Finals", "Final"]
+    .map((name) => ({ name, games: data.games.filter((g) => g.stage === "playoff" && g.round === name) }))
+    .filter((r) => r.games.length > 0);
+  const byeSlot: Side = { teamId: null, applicantId: null, name: "Winner 1 of Group A", placeholder: true };
+
+  return (
+    <div className="space-y-6">
+      {drawable && (
+        <div className="hidden lg:block">
+          {/* The round headings ride their own grid with the same columns, so
+              they sit above the drawing rather than inside its fixed rows. */}
+          <div className="grid" style={{ gridTemplateColumns: BRACKET_COLUMNS }}>
+            <div className="col-start-1"><SectionRule label="Round 1" count={3} /></div>
+            <div className="col-start-3"><SectionRule label="Semi-Finals" count={2} /></div>
+            <div className="col-start-5"><SectionRule label="Final" count={1} tone="coral" /></div>
+          </div>
+        <div
+          className="grid gap-x-0"
+          style={{
+            gridTemplateColumns: BRACKET_COLUMNS,
+            gridTemplateRows: `repeat(32, ${ROW_PX}px)`,
+          }}
+        >
+          <ByeCard slot={byeSlot} ctx={ctx} style={{ gridColumn: 1, gridRow: "1 / span 8" }} />
+          <GameCard g={m1!} ctx={ctx} className="self-center" style={{ gridColumn: 1, gridRow: "9 / span 8" }} />
+          <GameCard g={m2!} ctx={ctx} className="self-center" style={{ gridColumn: 1, gridRow: "17 / span 8" }} />
+          <GameCard g={m3!} ctx={ctx} className="self-center" style={{ gridColumn: 1, gridRow: "25 / span 8" }} />
+
+          <Connector col={2} from={5} to={13} target={9} />
+          <Connector col={2} from={21} to={29} target={25} />
+
+          <GameCard g={sf1!} ctx={ctx} className="self-center" style={{ gridColumn: 3, gridRow: "5 / span 8" }} />
+          <GameCard g={sf2!} ctx={ctx} className="self-center" style={{ gridColumn: 3, gridRow: "21 / span 8" }} />
+
+          <Connector col={4} from={9} to={25} target={17} />
+
+          <GameCard g={fin!} ctx={ctx} className="self-center ring-1 ring-gold/40 border-gold/50" style={{ gridColumn: 5, gridRow: "13 / span 8" }} />
+        </div>
+        </div>
+      )}
+
+      <div className={cn("grid grid-cols-1 gap-6", drawable && "lg:hidden")}>
+        {rounds.map((r) => (
+          <section key={r.name}>
+            <SectionRule label={r.name} count={r.games.length} tone={r.name === "Final" ? "coral" : "muted"} />
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              {r.games.map((g) => <GameCard key={g.id} g={g} ctx={ctx} />)}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <p className="text-xs text-ink-muted">
+        {complete ? "Seeded from the final table." : played ? "Seeds are projected from the table as it stands and move as the group plays out." : "Seeds fill from the group table once games are final."}
+        {" "}Format from the organiser: seed 1 byes to a semi-final; 4 v 5, 2 v 7 and 3 v 6 play Round 1 on Sunday morning.
+        Times and courts are as published on Naismaili Games.
+      </p>
+    </div>
+  );
+}
+
+/** Two stubs, a bar, and a line to the target — see the Bracket note. */
+function Connector({ col, from, to, target }: { col: number; from: number; to: number; target: number }) {
+  return (
+    <>
+      <div className="w-1/2 border-t border-b border-r border-hairline" style={{ gridColumn: col, gridRow: `${from} / ${to}` }} aria-hidden />
+      <div className="self-center ml-auto w-1/2 h-px bg-hairline" style={{ gridColumn: col, gridRow: `${target - 1} / ${target + 1}` }} aria-hidden />
+    </>
+  );
+}
+
+/** Seed 1's free pass, drawn like a game so the bracket has nothing missing. */
+function ByeCard({ slot, ctx, style }: { slot: Side; ctx: Ctx; style?: React.CSSProperties }) {
+  const r = resolveSide(slot, ctx.data, ctx.table, ctx.complete);
+  const mine = ctx.me ? r.team?.id === ctx.me.id : false;
+  return (
+    <div className={cn("self-center bg-card border rounded-xl shadow-sm overflow-hidden border-dashed", mine ? "border-coral/40" : "border-ink/15")} style={style}>
+      <div className="flex items-center justify-between gap-2 px-4 pt-3 text-[0.58rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">
+        <span>Bye</span>
+        <span className="tabular">straight to SF1</span>
+      </div>
+      <div className="px-4 pb-3">
+        <SideRow r={r} slot={slot} score={null} won={false} me={ctx.me} />
+      </div>
+      <div className="px-4 py-2 border-t border-hairline bg-paper-deep/30 text-[0.6rem] text-ink-muted">
+        <span className="uppercase tracking-widest font-semibold text-ink-muted/70">Seed 1</span>
+        {r.state === "projected" && <span className="ml-auto float-right italic">projected</span>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- teams */
+
+function Teams({ ctx }: { ctx: Ctx }) {
+  const { data, me } = ctx;
+  const ordered = me ? [me, ...data.teams.filter((t) => t.id !== me.id)] : data.teams;
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      {ordered.map((t) => {
+        const mine = me?.id === t.id;
+        return (
+          <div key={t.id} className={cn(
+            "bg-paper-deep/25 -mx-6 md:mx-0 rounded-none md:rounded-xl border-y border-x-0 md:border-x shadow-sm p-5 lg:p-6",
+            mine ? "border-coral/40" : "border-hairline",
+          )}>
+            <div className="flex items-baseline justify-between mb-4">
+              <span className="flex items-center gap-2.5">
+                <Crest team={t} name={t.name} size={28} mine={mine} />
+                <h3 className={cn("font-display text-xl", mine ? "text-coral" : "text-ink")}>{t.name}</h3>
+              </span>
+              <span className="text-[0.65rem] uppercase tracking-widest text-ink-muted tabular">{t.players.length} players</span>
+            </div>
+            <ul className="divide-y divide-hairline/40">
+              {t.players.map((p) => (
+                <li key={p.name} className="flex items-center gap-4 py-2 px-1 -mx-1 rounded transition-colors hover:bg-coral/5">
+                  <span className="flex-1 min-w-0 text-ink-soft text-sm">{p.name}</span>
+                  {p.captain && <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Captain</span>}
+                </li>
+              ))}
+              {t.players.length === 0 && <li className="py-2 text-sm text-ink-muted">No roster listed.</li>}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------- helpers */
+
+/** A group-stage side, already a team; wrapped in the bracket's Resolved shape. */
+function settled(s: Side, data: Tournament): Resolved {
+  const team = s.teamId ? data.teams.find((t) => t.id === s.teamId) ?? null : null;
+  return { name: s.name, team, state: s.placeholder ? "open" : "settled", slot: s.name };
+}
+
+/**
+ * A playoff game is "mine" when a projected or settled side is my team, so
+ * the path a coach is on course for shows up before it is official.
+ */
+function isPlayoffFor(g: Game, me: Team, ctx: Ctx): boolean {
+  if (g.stage !== "playoff") return false;
+  return [g.a, g.b].some((s) => resolveSide(s, ctx.data, ctx.table, ctx.complete).team?.id === me.id);
+}
+
+/** The side that is not mine — by id for a fixture, by projection for a slot. */
+function opponentSide(g: Game, me: Team, ctx: Ctx): Side {
+  if (g.a.teamId === me.id) return g.b;
+  if (g.b.teamId === me.id) return g.a;
+  const aIsMe = resolveSide(g.a, ctx.data, ctx.table, ctx.complete).team?.id === me.id;
+  return aIsMe ? g.b : g.a;
+}
+
+function shortRound(round: string): string {
+  if (/^final/i.test(round)) return "F";
+  if (/semi/i.test(round)) return "SF";
+  if (/quarter/i.test(round)) return "QF";
+  return "R1";
+}
+
+function initials(name: string): string {
+  // A projected pair ("Liq / PowerPlai") is two teams in one slot; there is no
+  // honest monogram for that.
+  if (name.includes(" / ")) return "?";
+  const w = name.replace(/winner\s+(\d+)\s+of.*/i, "$1").replace(/winner of\s*/i, "").split(/\s+/).filter(Boolean);
+  if (w.length === 1) return w[0]!.slice(0, 3).toUpperCase();
+  return w.slice(0, 3).map((x) => x[0]!).join("").toUpperCase();
+}
+
+/** "7205, Eldorado Parkway, McKinney, Collin County, Texas, …" → "7205 Eldorado Parkway, McKinney, TX 75070". */
 function shortAddress(a: string): string {
   const parts = a.split(",").map((s) => s.trim()).filter(Boolean);
   if (parts.length < 3) return a;

@@ -13,7 +13,8 @@ import { BlurOverlay } from "@/components/teams/preview-blur";
  * does one import.
  */
 
-export type DistributionFormat = "pct" | "intDiff";
+/** "int" — a plain count or per-game figure, one decimal where there is one. */
+export type DistributionFormat = "pct" | "intDiff" | "int";
 export type DistributionRank = {
   key: string;
   label: string;
@@ -263,6 +264,7 @@ function StatRow({ stat }: { stat: DistributionRank }) {
 
 function formatValue(v: number, format: DistributionFormat): string {
   if (format === "intDiff") return v > 0 ? `+${v}` : String(v);
+  if (format === "int") return Number.isInteger(v) ? String(v) : v.toFixed(1);
   return (v * 100).toFixed(1) + "%";
 }
 
