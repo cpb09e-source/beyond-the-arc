@@ -494,7 +494,8 @@ function simulate(p: Payload, mode: string): Payload {
     if (mode === "sun") return final();
     if (sat) return final();
     if (mode === "live" && (g.matchNum === 11 || g.matchNum === 12)) {
-      return { ...g, status: "live", scoreA: Math.round(scoreA / 2), scoreB: Math.round(scoreB / 2), winnerTeamId: null };
+      const inPlay: Game = { ...g, status: "live", scoreA: Math.round(scoreA / 2), scoreB: Math.round(scoreB / 2), winnerTeamId: null };
+      return inPlay;
     }
     return g;
   });
