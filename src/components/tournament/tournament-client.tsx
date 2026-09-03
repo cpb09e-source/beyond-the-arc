@@ -197,7 +197,15 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
       )}
 
       {/* ------------------------------------------------------------ tabs */}
-      <nav aria-label="Tournament sections" className="mt-8">
+      {/* THE STRIP SCROLLS, NOT THE PAGE. Five tabs set to 392px against a
+          380px phone viewport, and an inline-flex that does not fit pushes the
+          DOCUMENT wide — so the whole page dragged sideways off its own
+          background. Full-bleed on a phone so the track can run to both edges,
+          back in the column from lg where all five fit anyway. */}
+      <nav
+        aria-label="Tournament sections"
+        className="mt-8 -mx-6 px-6 lg:mx-0 lg:px-0 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         <ul className="inline-flex items-center gap-[2px] rounded-[10px] border border-hairline bg-paper-deep p-[3px]">
           {TABS.map((t) => {
             const active = t.key === tab;
@@ -975,31 +983,40 @@ function PickCard({
         </div>
         {/* The margin only exists once there is a winner to attach it to. */}
         <div className={cn("flex items-center gap-2 transition-opacity", !pick && "opacity-40 pointer-events-none")}>
-          <label className="flex items-center gap-2 flex-1">
-            <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted shrink-0">By</span>
-            <input
-              type="range"
-              min={0}
-              max={MAX_MARGIN}
-              step={1}
-              value={pick?.margin ?? 0}
-              onChange={(e) => onMargin(Number(e.target.value))}
-              disabled={!pick}
-              aria-label="Winning margin"
-              className="flex-1 accent-coral"
-            />
-          </label>
+          <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted shrink-0">By</span>
+          {/* TOUCH-ACTION NONE, or the slider does not work on a phone at all:
+              a drag starting on the thumb is claimed by the page as a scroll
+              gesture and the value never moves. `touch-action: none` tells the
+              browser this element handles its own pointer, which is the whole
+              fix. h-8 gives the thumb a real target rather than a hairline. */}
+          <input
+            type="range"
+            min={0}
+            max={MAX_MARGIN}
+            step={1}
+            value={pick?.margin ?? 0}
+            onChange={(e) => onMargin(Number(e.target.value))}
+            disabled={!pick}
+            aria-label="Winning margin"
+            className="flex-1 h-8 accent-coral touch-none"
+          />
+          {/* 16px TYPE IS LOAD-BEARING. iOS zooms the whole page in on focus
+              for any input under 16px and does not zoom back out, which is what
+              made tapping the number throw the layout around. text-base is the
+              fix; the alternative — maximum-scale=1 on the viewport — would
+              also stop a reader pinch-zooming anything on the site. */}
           <input
             type="number"
+            inputMode="numeric"
             min={0}
             max={MAX_MARGIN}
             value={pick?.margin ?? 0}
             onChange={(e) => onMargin(Number(e.target.value))}
             disabled={!pick}
             aria-label="Winning margin in points"
-            className="w-14 h-8 px-2 rounded-md border border-hairline bg-paper-deep/40 text-sm text-ink tabular text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
+            className="w-14 h-9 px-2 rounded-md border border-hairline bg-paper-deep/40 text-base text-ink tabular text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
           />
-          <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted shrink-0">
+          <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted shrink-0 w-6">
             {pick?.margin === 0 ? "n/k" : "pts"}
           </span>
         </div>
