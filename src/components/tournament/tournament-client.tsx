@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { cn } from "@/lib/utils";
 import { Select } from "@/components/select";
 import { PercentileChip } from "@/components/percentile-chip";
-import { DistributionPanel, type DistributionRank } from "@/components/teams/distribution-panel";
 import {
   DIFF_CAP, MAX_MARGIN, POLL_MS, dayLabel, diffLabel, fetchTournament, groupIsComplete, involves, isFinal, isLive,
   nextPollDelay, pickableGames, projectStandings, resolveSide, standings, timeLabel,
@@ -14,8 +13,8 @@ import {
 /**
  * The tournament page, built from the parts the rest of the site is built
  * from: the scoreboard's game cards and section rules, the team page's hero
- * and schedule strip, the rank chips, and the DistributionPanel the Shooting
- * tab uses. A coach who knows the site should feel they are on a team page
+ * and schedule strip, and the rank chips. A coach who knows the site should
+ * feel they are on a team page
  * for one weekend.
  *
  * THE HERO IS THE SITUATION, NOT A TITLE. Its right half is whichever of these
@@ -131,7 +130,7 @@ export function TournamentClient({
 
   if (!data) {
     return (
-      <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-6 pb-20">
+      <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-6 pb-10">
         <Eyebrow>Tournament</Eyebrow>
         <h1 className="font-display text-4xl md:text-6xl tracking-tight text-ink leading-none">Loading</h1>
         <p className="mt-3 text-sm text-ink-muted">
@@ -149,7 +148,7 @@ export function TournamentClient({
   const myGames = me ? data.games.filter((g) => involves(g, me) || isPlayoffFor(g, me, ctx)) : [];
 
   return (
-    <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-6 pb-20">
+    <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-6 pb-10">
       {/* ------------------------------------------------------------ hero */}
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
@@ -159,24 +158,23 @@ export function TournamentClient({
               columns of Standings, and the results are in the strip — a
               headline that restates all three is a third of a phone screen
               spent saying what the next scroll says better. */}
-          {/* THE ADDRESS GETS ITS OWN LINES. Run on from the venue name with a
-              middot, it broke wherever the column happened to end — the street
-              number stranded on the first line under "PSA McKinney ·" and the
-              rest below it. The name is one line, the address starts on the
-              next and wraps on its own terms. */}
+          {/* ONE LINE, AND THE NAME IS THE LINK. Spelling the street address
+              out cost three lines of a phone screen to say something nobody
+              reads off a page — they tap it and let the maps app have it. The
+              full address still travels, as the link's target and its title. */}
           <p className="mt-2 text-sm text-ink-muted">
-            {data.event.venue.name}
-            {data.event.venue.address && (
+            <span className="uppercase tracking-[0.12em] text-[0.65rem] font-semibold text-ink-muted/80">Location</span>
+            {" · "}
+            {data.event.venue.address ? (
               <a
-                className="block w-fit mt-0.5 text-coral underline decoration-dotted underline-offset-4 hover:decoration-solid transition-colors"
+                className="text-coral underline decoration-dotted underline-offset-4 hover:decoration-solid transition-colors"
                 href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.event.venue.address)}`}
+                title={shortAddress(data.event.venue.address)}
                 target="_blank" rel="noreferrer"
               >
-                {addressLines(data.event.venue.address).map((line, i) => line && (
-                  <span key={i} className="block">{line}</span>
-                ))}
+                {data.event.venue.name}
               </a>
-            )}
+            ) : data.event.venue.name}
           </p>
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
             <FeedStatus live={live?.at ?? null} failedAt={failedAt} now={now} liveCount={liveCount} finalCount={finalCount} total={data.games.length} />
@@ -475,7 +473,12 @@ function SideRow({ r, slot, score, margin, won, ctx }: { r: Resolved; slot: Side
   const tone = (n: number) => (n > 0 ? "text-good" : n < 0 ? "text-bad" : "text-ink-muted");
   return (
     <div className="flex items-center gap-2 py-1.5">
-      {seed && <span className="text-[0.6rem] text-ink-muted tabular w-3">{seed}</span>}
+      {/* THE SAME CHIP THE TABLE USES. A bracket slot that reads "Seed 4" and
+          a standings row that reads "#4" are the same fact, and the fact is
+          colour-coded on the table — so a grey 4 here made the reader
+          translate between two notations for one thing. It is the standings
+          chip, unchanged, wherever a seed is named. */}
+      {seed && <SeedBadge rank={Number(seed)} total={table.length} />}
       <TeamName
         team={r.team}
         onOpen={openTeam}
@@ -518,29 +521,30 @@ function SideRow({ r, slot, score, margin, won, ctx }: { r: Resolved; slot: Side
 /* ------------------------------------------------------------ standings */
 
 function Standings({ ctx }: { ctx: Ctx }) {
-  const { table, me, complete } = ctx;
+  const { table, me } = ctx;
   const played = table.some((r) => r.gp > 0);
-  const myRanks = me ? whereTheyStand(table, me) : [];
   const maxAbs = Math.max(1, ...table.map((r) => Math.abs(r.diff)));
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-8">
+    <div>
       <div className="bg-paper-deep/25 -mx-6 lg:mx-0 rounded-none lg:rounded-xl border-y border-x-0 lg:border-x border-hairline shadow-sm p-6">
-        <div className="flex items-baseline justify-between mb-5">
+        <div className="mb-5">
           <h3 className="font-display text-xl text-ink">Standings</h3>
-          <span className="text-[0.65rem] uppercase tracking-widest text-ink-muted">
-            {table.length} teams · {complete ? "final" : played ? "in progress" : "not started"}
-          </span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse tabular text-sm">
             <thead>
               <tr className="text-[0.6rem] uppercase tracking-widest text-ink-muted">
+                {/* GP IS A CONSTANT. Every team plays four, so a column of
+                    sevens told the reader nothing and cost the width that the
+                    differential — the actual tiebreak — needed. PD now sits
+                    against the record it breaks ties for, rather than three
+                    columns away past points for and against. */}
                 <th className="py-2 pr-3 text-left font-medium w-10">Seed</th>
                 <th className="py-2 text-left font-medium">Team</th>
-                {["GP", "W-L", "PF", "PA"].map((h) => (
-                  <th key={h} className="py-2 pl-3 text-right font-medium">{h}</th>
-                ))}
-                <th className="py-2 pl-3 text-right font-medium">Diff</th>
+                <th className="py-2 pl-3 text-right font-medium">W-L</th>
+                <th className="py-2 pl-3 text-right font-medium">PD</th>
+                <th className="py-2 pl-2.5 sm:pl-3 text-right font-medium">PF</th>
+                <th className="py-2 pl-2.5 sm:pl-3 text-right font-medium">PA</th>
                 <th className="py-2 pl-3 font-medium w-28 hidden sm:table-cell" aria-label="Differential, drawn" />
               </tr>
             </thead>
@@ -552,22 +556,28 @@ function Standings({ ctx }: { ctx: Ctx }) {
                     <td className="py-2 pr-3">
                       {played ? <SeedBadge rank={i + 1} total={table.length} /> : <span className="text-ink-muted">{i + 1}</span>}
                     </td>
-                    <td className={cn("py-2 font-medium", mine ? "text-coral" : "text-ink")}>
+                    {/* NO WRAPPING. "Team Supreme" broke over two lines and
+                        gave that row twice the height of the other six, which
+                        made the table look like it had a section in it. The
+                        table already scrolls sideways if it has to. */}
+                    <td className={cn("py-2 font-medium whitespace-nowrap", mine ? "text-coral" : "text-ink")}>
                       <span className="inline-flex items-center gap-2">
                         <TeamName team={r.team} onOpen={ctx.openTeam}>{r.team.name}</TeamName>
                         {i === 0 && played && <span className="text-[0.6rem] uppercase tracking-widest text-gold font-semibold">bye</span>}
                       </span>
                     </td>
-                    <td className="py-2 pl-3 text-right">{r.gp}</td>
                     <td className="py-2 pl-3 text-right">{r.w}-{r.l}</td>
-                    <td className="py-2 pl-3 text-right">{r.gp ? r.pf : "—"}</td>
-                    <td className="py-2 pl-3 text-right">{r.gp ? r.pa : "—"}</td>
                     <td className={cn("py-2 pl-3 text-right font-semibold", r.diff > 0 && "text-good", r.diff < 0 && "text-bad")}>
                       {r.gp ? diffLabel(r.diff) : "—"}
+                      {/* The uncapped figure is a footnote to the capped one,
+                          and on a phone it was the ~40px that tipped the table
+                          into sideways scroll. It returns from sm up. */}
                       {r.gp > 0 && r.rawDiff !== r.diff && (
-                        <span className="ml-1 font-normal text-[0.65rem] text-ink-muted" title="uncapped">({diffLabel(r.rawDiff)})</span>
+                        <span className="hidden sm:inline ml-1 font-normal text-[0.65rem] text-ink-muted" title="uncapped">({diffLabel(r.rawDiff)})</span>
                       )}
                     </td>
+                    <td className="py-2 pl-2.5 sm:pl-3 text-right">{r.gp ? r.pf : "—"}</td>
+                    <td className="py-2 pl-2.5 sm:pl-3 text-right">{r.gp ? r.pa : "—"}</td>
                     <td className="py-2 pl-3 hidden sm:table-cell">
                       <DiffBar value={r.gp ? r.diff : 0} max={maxAbs} mine={mine} />
                     </td>
@@ -583,13 +593,6 @@ function Standings({ ctx }: { ctx: Ctx }) {
         </p>
       </div>
 
-      {me && (
-        <DistributionPanel title={`Where ${me.name} stands`} eyebrow="vs the field" ranks={myRanks}>
-          {myRanks.every((r) => r.value === null) && (
-            <p className="text-xs text-ink-muted">Fills in after the first final.</p>
-          )}
-        </DistributionPanel>
-      )}
     </div>
   );
 }
@@ -622,31 +625,6 @@ function SeedBadge({ rank, total }: { rank: number; total: number }) {
   );
 }
 
-/**
- * The team's standing in the group, as DistributionPanel rows — the same
- * rank-and-marker rows the Shooting tab uses, over a cohort of seven.
- */
-function whereTheyStand(table: TeamRow[], me: Team): DistributionRank[] {
-  const mine = table.find((r) => r.team.id === me.id);
-  const played = table.filter((r) => r.gp > 0);
-  const total = played.length;
-  const row = (key: string, label: string, sub: string | undefined, pick: (r: TeamRow) => number, format: DistributionRank["format"], invert = false): DistributionRank => {
-    if (!mine || mine.gp === 0) return { key, label, sub, value: null, rank: null, total, percentile: 50, format };
-    const vals = played.map(pick).sort((a, b) => (invert ? a - b : b - a));
-    const value = pick(mine);
-    const rank = vals.indexOf(value) + 1;
-    const percentile = total > 1 ? Math.round(((total - rank) / (total - 1)) * 100) : 100;
-    return { key, label, sub, value, rank, total, percentile, format };
-  };
-  return [
-    row("winpct", "Win %", undefined, (r) => (r.gp ? r.w / r.gp : 0), "pct"),
-    row("diff", "Point diff", `capped ±${DIFF_CAP} per game`, (r) => r.diff, "intDiff"),
-    row("margin", "Margin per game", "uncapped", (r) => (r.gp ? Math.round((r.rawDiff / r.gp) * 10) / 10 : 0), "intDiff"),
-    row("pf", "Points for", "per game", (r) => (r.gp ? Math.round((r.pf / r.gp) * 10) / 10 : 0), "int"),
-    row("pa", "Points against", "per game, lower is better", (r) => (r.gp ? Math.round((r.pa / r.gp) * 10) / 10 : 0), "int", true),
-  ];
-}
-
 /* -------------------------------------------------------------- bracket */
 
 /**
@@ -671,8 +649,7 @@ const ROW_PX = 17;
 const BRACKET_COLUMNS = "minmax(0,1fr) 32px minmax(0,1fr) 32px minmax(0,1fr)";
 
 function Bracket({ ctx }: { ctx: Ctx }) {
-  const { data, table, complete } = ctx;
-  const played = table.some((r) => r.gp > 0);
+  const { data } = ctx;
   const find = (re: RegExp) => data.games.find((g) => g.stage === "playoff" && re.test(g.name));
   const m1 = find(/^match\s*1$/i), m2 = find(/^match\s*2$/i), m3 = find(/^match\s*3$/i);
   const sf1 = find(/^semi.*1$/i), sf2 = find(/^semi.*2$/i), fin = find(/^final/i);
@@ -729,11 +706,6 @@ function Bracket({ ctx }: { ctx: Ctx }) {
         ))}
       </div>
 
-      <p className="text-xs text-ink-muted">
-        {complete ? "Seeded from the final table." : played ? "Seeds are projected from the table as it stands and move as the group plays out." : "Seeds fill from the group table once games are final."}
-        {" "}Format from the organiser: seed 1 byes to a semi-final; 4 v 5, 2 v 7 and 3 v 6 play Round 1 on Sunday morning.
-        Times and courts are as published on Naismaili Games.
-      </p>
     </div>
   );
 }
@@ -762,7 +734,10 @@ function ByeCard({ slot, ctx, style }: { slot: Side; ctx: Ctx; style?: React.CSS
         <SideRow r={r} slot={slot} score={null} margin={null} won={false} ctx={ctx} />
       </div>
       <div className="px-4 py-2 border-t border-hairline bg-paper-deep/30 text-[0.6rem] text-ink-muted">
-        <span className="uppercase tracking-widest font-semibold text-ink-muted/70">Seed 1</span>
+        <span className="inline-flex items-center gap-1.5 align-middle">
+          <SeedBadge rank={1} total={ctx.table.length} />
+          <span className="uppercase tracking-widest font-semibold text-ink-muted/70">Seed</span>
+        </span>
         {r.state === "projected" && <span className="ml-auto float-right italic">projected</span>}
       </div>
     </div>
@@ -1040,19 +1015,18 @@ function shortRound(round: string): string {
   return "R1";
 }
 
-/** "7205, Eldorado Parkway, McKinney, Collin County, Texas, …" → "7205 Eldorado Parkway, McKinney, TX 75070". */
 /**
- * The venue address as the two lines an envelope would use: street, then town.
- * BROKEN ON PURPOSE rather than left to wrap — where the wrap falls depends on
- * the phone, and on a narrow one it fell after the street number, stranding
- * "7205" on its own. The break is now the one a reader expects.
+ * "7205, Eldorado Parkway, McKinney, Collin County, Texas, …" → "7205 Eldorado
+ * Parkway, McKinney, TX 75070". The geocoder's county and country are noise on
+ * a page about one gym. It is the link's tooltip now rather than body copy: the
+ * address is what the maps app needs, not what a reader wants three lines of.
  */
-function addressLines(a: string): [string, string | null] {
+function shortAddress(a: string): string {
   const parts = a.split(",").map((s) => s.trim()).filter(Boolean);
-  if (parts.length < 3) return [a, null];
+  if (parts.length < 3) return a;
   const [num, street, city] = parts;
   const zip = parts.find((p) => /^\d{5}$/.test(p));
-  return [`${num} ${street},`, `${city}, TX${zip ? ` ${zip}` : ""}`];
+  return `${num} ${street}, ${city}, TX${zip ? ` ${zip}` : ""}`;
 }
 
 
@@ -1131,8 +1105,19 @@ function WhatIf({ ctx }: { ctx: Ctx }) {
   // A stored name whose team is gone (a renamed entry, a different event)
   // would silently hide every card, so it falls back to showing everything.
   const team = only === ALL || !data.teams.some((t) => t.name === only) ? null : only;
-  const openShown = team ? open.filter((g) => involves(g, team)) : open;
-  const playedShown = team ? played.filter((g) => involves(g, team)) : played;
+  /**
+   * EVERY GROUP GAME, IN THE ORDER IT IS PLAYED. Played games used to be
+   * swept into an "Already played" section under the pickable ones, which
+   * re-ordered the day and put the 9:30 above the 2:00 only if both were
+   * still open. The tab is a schedule with controls on it, so it keeps the
+   * schedule's order and a final game simply renders as a result instead of
+   * a picker.
+   */
+  const all = data.games
+    .filter((g) => g.stage === "group" && g.a.teamId !== null && g.b.teamId !== null)
+    .filter((g) => !team || involves(g, team))
+    .slice()
+    .sort((x, y) => (x.startMs ?? 0) - (y.startMs ?? 0));
 
   const setWinner = (g: Game, teamId: string) =>
     setPicks((p) => {
@@ -1154,7 +1139,7 @@ function WhatIf({ ctx }: { ctx: Ctx }) {
       return { ...p, [g.id]: { ...cur, margin: Math.max(0, Math.min(MAX_MARGIN, margin)) } };
     });
 
-  const days = [...new Set(openShown.map((g) => g.date))].sort();
+  const days = [...new Set(all.map((g) => g.date))].sort();
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-8 items-start">
@@ -1198,41 +1183,38 @@ function WhatIf({ ctx }: { ctx: Ctx }) {
         {open.length === 0 && (
           <p className="text-sm text-ink-muted">Every group game is final — the table beside this is the real one.</p>
         )}
-        {open.length > 0 && openShown.length === 0 && (
+        {all.length === 0 && team && (
           <p className="text-sm text-ink-muted">
-            {team} has no group games left to pick. Choose another team, or All games.
+            {team} has no group games. Choose another team, or All games.
           </p>
         )}
 
         {days.map((day) => {
-          const games = openShown.filter((g) => g.date === day);
+          const games = all.filter((g) => g.date === day);
           return (
             <section key={day}>
               <SectionRule label={dayLabel(day)} count={games.length} />
               <div className="grid gap-2.5 sm:grid-cols-2">
                 {games.map((g) => (
-                  <PickCard
-                    key={g.id}
-                    g={g}
-                    pick={picks[g.id]}
-                    me={me}
-                    onWinner={(id) => setWinner(g, id)}
-                    onMargin={(m) => setMargin(g, m)}
-                  />
+                  // A final game keeps its place in the day and shows the
+                  // result; anything still to come gets the picker.
+                  g.status === "final" ? (
+                    <GameCard key={g.id} g={g} ctx={ctx} />
+                  ) : (
+                    <PickCard
+                      key={g.id}
+                      g={g}
+                      pick={picks[g.id]}
+                      me={me}
+                      onWinner={(id) => setWinner(g, id)}
+                      onMargin={(m) => setMargin(g, m)}
+                    />
+                  )
                 ))}
               </div>
             </section>
           );
         })}
-
-        {playedShown.length > 0 && (
-          <section>
-            <SectionRule label="Already played" count={playedShown.length} />
-            <div className="grid gap-2.5 sm:grid-cols-2">
-              {playedShown.map((g) => <GameCard key={g.id} g={g} ctx={ctx} />)}
-            </div>
-          </section>
-        )}
       </div>
 
       <div className="lg:sticky lg:top-6">
@@ -1382,7 +1364,7 @@ function ProjectedTable({
                     )}
                   </span>
                 </td>
-                <td className="py-2 pl-3 text-right">{r.w}-{r.l}</td>
+                <td className="py-2 pl-2.5 sm:pl-3 text-right">{r.w}-{r.l}</td>
                 <td className={cn("py-2 pl-3 text-right font-semibold", r.diff > 0 && "text-good", r.diff < 0 && "text-bad")}>
                   {r.gp ? diffLabel(r.diff) : "—"}
                 </td>
