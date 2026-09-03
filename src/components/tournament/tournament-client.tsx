@@ -501,13 +501,15 @@ function SideRow({ r, slot, score, margin, won, ctx }: { r: Resolved; slot: Side
           <span className={cn("font-semibold", tone(row.diff))}>{diffLabel(row.diff)}</span>
         </span>
       )}
-      <span className={cn("ml-auto text-right tabular text-lg font-bold leading-none pl-2", won ? "text-ink" : "text-ink-muted")}>
-        {score ?? "—"}
+      {/* THE MARGIN LEADS INTO THE SCORE, bracketed and small: it is a gloss
+          on the number beside it, not a second number competing with it.
+          Fixed width even when empty, so scores line up down a column of
+          cards whether or not the games have been played. */}
+      <span className={cn("ml-auto shrink-0 w-9 text-right text-[0.62rem] font-semibold tabular leading-none", margin === null ? "text-transparent" : tone(margin))}>
+        {margin === null ? "" : `(${diffLabel(margin)})`}
       </span>
-      {/* Fixed width even when empty, so the scores of a played game and an
-          unplayed one line up down a column of cards. */}
-      <span className={cn("shrink-0 w-9 text-right text-[0.7rem] font-semibold tabular leading-none", margin === null ? "text-transparent" : tone(margin))}>
-        {margin === null ? "" : diffLabel(margin)}
+      <span className={cn("text-right tabular text-lg font-bold leading-none pl-1.5", won ? "text-ink" : "text-ink-muted")}>
+        {score ?? "—"}
       </span>
     </div>
   );
