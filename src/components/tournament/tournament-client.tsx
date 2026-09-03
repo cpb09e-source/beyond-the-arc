@@ -58,7 +58,76 @@ type Ctx = {
   complete: boolean;
   /** Open a team's roster. Every team name on the page calls this. */
   openTeam: (t: Team) => void;
+  /** Notes are the coach's, and only reachable once the admin gate is passed. */
+  admin: boolean;
+  setAdmin: (on: boolean) => void;
+  notes: Record<string, string>;
+  openNotes: (g: Game) => void;
+  matchups: Matchups;
 };
+
+/**
+ * THE COACH'S NOTES.
+ *
+ * Kept in this browser, not on a server. The page is one component shared by
+ * two sites and neither has anywhere to put per-person writing, so notes live
+ * where the what-if picks live. That carries a real edge: they are on THIS
+ * device. Typed on a laptop, they are not on the phone at the scorer's table.
+ *
+ * The admin code is obscurity, not security — it ships in the bundle and can
+ * be read out of it. That is enough, because there is nothing behind it worth
+ * taking: the notes it reveals were written on the reader's own machine and
+ * are already theirs.
+ */
+/**
+ * WHO GUARDS WHO, per game: one of their players to the several of ours who
+ * can take them. Many-to-many on purpose — two of ours can share a man, and
+ * one of ours can be the answer to two of theirs, which is the whole reason a
+ * coach writes this down rather than remembering it.
+ *
+ * Keyed by NAME rather than by id: the organiser's roster ids are not stable
+ * across a re-publish, and a matchup that silently forgets itself the morning
+ * of a game is worse than one that has to be retyped after a rename.
+ */
+type Matchups = Record<string, Record<string, string[]>>;
+
+/**
+ * THE NAMES A BENCH ACTUALLY USES, and only the players who are turning up.
+ *
+ * The organiser's roster is the entry form: full legal names, and everyone who
+ * was ever listed. Neither is what a coach wants to tap between games — the
+ * Titans sheet lists eleven where eight are playing, and nobody on the bench
+ * says "Sahil Panjwani" when they mean SP. A team without an entry here falls
+ * back to the published roster, which is right for the teams whose games are
+ * not being planned man-to-man.
+ */
+const MATCHUP_ROSTERS: Record<string, string[]> = {
+  "4D": ["Rayan", "Ahad", "Faiz R", "Haris", "Ilu", "BJ", "Rahil", "Rahman", "Kurji", "Shanil", "Zavar", "Zo"],
+  Titans: ["Sehan", "Zain", "Aly", "Asad", "Salman", "SP", "Kabani", "Adil"],
+  PowerPlai: ["Arish", "Stafa", "Rahim", "Sajid", "Wajid", "Waqas", "Ziyan"],
+};
+
+/** The roster to plan against: the short list where there is one. */
+function matchupRoster(team: Team | null | undefined): { name: string }[] {
+  if (!team) return [];
+  const override = MATCHUP_ROSTERS[team.name];
+  return override ? override.map((name) => ({ name })) : team.players;
+}
+
+const MATCHUPS_KEY = "cig-matchups";
+const NOTES_KEY = "cig-notes";
+const ADMIN_KEY = "cig-admin";
+const ADMIN_CODE = "0808";
+
+function readNotes(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(NOTES_KEY) ?? "{}") as Record<string, string>; } catch { return {}; }
+}
+function readMatchups(): Matchups {
+  try { return JSON.parse(localStorage.getItem(MATCHUPS_KEY) ?? "{}") as Matchups; } catch { return {}; }
+}
+function readAdmin(): boolean {
+  try { return localStorage.getItem(ADMIN_KEY) === "1"; } catch { return false; }
+}
 
 export function TournamentClient({
   slug,
@@ -109,19 +178,50 @@ export function TournamentClient({
     return () => { cancelled = true; ctrl.abort(); if (timer) clearTimeout(timer); };
   }, [slug]);
 
-  // A clock for "updated 40s ago", ticking on its own so the label moves
-  // between polls.
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 10_000);
-    return () => clearInterval(id);
-  }, []);
-
   const [teamName, setTeamName] = useState<string | null>(null);
   // The roster sheet. Replaced the Teams tab: a roster is something you want
   // about ONE team, at the moment you are looking at that team's game, not a
   // fifth screen you navigate to and navigate back from.
   const [roster, setRoster] = useState<Team | null>(null);
+  const [noteFor, setNoteFor] = useState<Game | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>(() => (typeof window === "undefined" ? {} : readNotes()));
+  const [matchups, setMatchups] = useState<Matchups>(() => (typeof window === "undefined" ? {} : readMatchups()));
+  const [admin, setAdminState] = useState(() => (typeof window !== "undefined" && readAdmin()));
+
+  const setAdmin = useCallback((on: boolean) => {
+    setAdminState(on);
+    try {
+      if (on) localStorage.setItem(ADMIN_KEY, "1");
+      else localStorage.removeItem(ADMIN_KEY);
+    } catch { /* ignore */ }
+  }, []);
+
+  /** Toggle one of ours onto one of theirs, for one game. */
+  const toggleGuard = useCallback((gameId: string, theirName: string, ourName: string) => {
+    setMatchups((prev) => {
+      const game = { ...(prev[gameId] ?? {}) };
+      const on = game[theirName] ?? [];
+      const next = on.includes(ourName) ? on.filter((n) => n !== ourName) : [...on, ourName];
+      // Empty lists and empty games are removed rather than stored, so "has a
+      // plan" stays a question about content and not about leftovers.
+      if (next.length) game[theirName] = next; else delete game[theirName];
+      const all = { ...prev };
+      if (Object.keys(game).length) all[gameId] = game; else delete all[gameId];
+      try { localStorage.setItem(MATCHUPS_KEY, JSON.stringify(all)); } catch { /* ignore */ }
+      return all;
+    });
+  }, []);
+
+  const writeNote = useCallback((id: string, text: string) => {
+    setNotes((prev) => {
+      const next = { ...prev };
+      // An emptied note is a deleted note, so the store does not fill with
+      // blanks that would count as "has a note" everywhere that is checked.
+      if (text.trim()) next[id] = text; else delete next[id];
+      try { localStorage.setItem(NOTES_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
   const me = useMemo(() => {
     if (!data) return null;
     const want = teamName ?? data.ourTeam;
@@ -142,7 +242,7 @@ export function TournamentClient({
 
   const table = standings(data);
   const complete = groupIsComplete(data);
-  const ctx: Ctx = { data, me, table, complete, openTeam: setRoster };
+  const ctx: Ctx = { data, me, table, complete, openTeam: setRoster, admin, setAdmin, notes, openNotes: setNoteFor, matchups };
   const liveCount = data.games.filter(isLive).length;
   const finalCount = data.games.filter(isFinal).length;
   const myGames = me ? data.games.filter((g) => involves(g, me) || isPlayoffFor(g, me, ctx)) : [];
@@ -177,7 +277,7 @@ export function TournamentClient({
             ) : data.event.venue.name}
           </Eyebrow>
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
-            <FeedStatus live={live?.at ?? null} failedAt={failedAt} now={now} liveCount={liveCount} finalCount={finalCount} total={data.games.length} />
+            <FeedStatus live={live?.at ?? null} failedAt={failedAt} liveCount={liveCount} finalCount={finalCount} total={data.games.length} />
             <div className="flex items-center gap-2">
               <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">Your team</span>
               <Select value={me?.name ?? data.ourTeam} onChange={setTeamName} ariaLabel="Which team to follow" compact className="w-36">
@@ -247,6 +347,16 @@ export function TournamentClient({
       </div>
 
       {roster && <RosterSheet team={roster} me={me} onClose={() => setRoster(null)} />}
+      {noteFor && (
+        <NotesSheet
+          g={noteFor}
+          ctx={ctx}
+          value={notes[noteFor.id] ?? ""}
+          onWrite={(t) => writeNote(noteFor.id, t)}
+          onGuard={(their, ours) => toggleGuard(noteFor.id, their, ours)}
+          onClose={() => setNoteFor(null)}
+        />
+      )}
     </div>
   );
 }
@@ -290,8 +400,20 @@ function SectionRule({ label, count, tone = "muted" }: { label: string; count?: 
 }
 
 function FeedStatus({
-  live, failedAt, now, liveCount, finalCount, total,
-}: { live: number | null; failedAt: number | null; now: number; liveCount: number; finalCount: number; total: number }) {
+  live, failedAt, liveCount, finalCount, total,
+}: { live: number | null; failedAt: number | null; liveCount: number; finalCount: number; total: number }) {
+  /**
+   * THE CLOCK LIVES HERE, not on the page. It ticks every ten seconds so
+   * "updated 40s ago" keeps moving between polls — and when it sat on the
+   * page component, that tick re-rendered every card, the standings table and
+   * the bracket along with it, six times a minute, for one line of small
+   * print. Nothing else reads it, so nothing else needs to hear about it.
+   */
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 10_000);
+    return () => clearInterval(id);
+  }, []);
   const ago = live ? Math.max(0, Math.round((now - live) / 1000)) : null;
   const agoText = ago === null ? null : ago < 60 ? `${ago}s ago` : `${Math.round(ago / 60)}m ago`;
   return (
@@ -326,15 +448,16 @@ function StripCell({ g, me, ctx }: { g: Game; me: Team; ctx: Ctx }) {
   const score = g.scoreA !== null && g.scoreB !== null
     ? (aIsMe ? `${g.scoreA}–${g.scoreB}` : `${g.scoreB}–${g.scoreA}`)
     : null;
-  return (
-    <a
-      href="#schedule"
-      title={`${dayLabel(g.date)} ${timeLabel(g.time)} vs ${r.name}${g.court ? ` · ${g.court}` : ""}${g.stage === "playoff" ? ` · ${g.name}` : ""}`}
-      className={cn(
-        "flex flex-col items-center gap-1.5 shrink-0 min-w-24 rounded px-2.5 py-1.5 transition-colors hover:bg-coral/8",
-        projected && "border border-dashed border-ink/20",
-      )}
-    >
+  const noted = (ctx.notes[g.id] ?? "").trim().length > 0;
+  const title = `${dayLabel(g.date)} ${timeLabel(g.time)} vs ${r.name}${g.court ? ` · ${g.court}` : ""}${g.stage === "playoff" ? ` · ${g.name}` : ""}`;
+  const shell = cn(
+    "flex flex-col items-center gap-1.5 shrink-0 min-w-24 rounded px-2.5 py-1.5 transition-colors hover:bg-coral/8",
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40",
+    projected && "border border-dashed border-ink/20",
+  );
+
+  const face = (
+    <>
       <span className={cn(
         "inline-flex items-center justify-center gap-1 text-[0.58rem] tabular min-w-6 px-1.5 h-[18px] rounded-sm leading-none",
         won && "bg-good/22 text-good",
@@ -352,9 +475,31 @@ function StripCell({ g, me, ctx }: { g: Game; me: Team; ctx: Ctx }) {
       )}>
         {r.name}
       </span>
-      <span className="text-[0.5rem] uppercase tracking-wider text-ink-muted leading-none tabular">
+      <span className="flex items-center gap-1 text-[0.5rem] uppercase tracking-wider text-ink-muted leading-none tabular">
         {dayLabel(g.date).split(",")[0]} {timeLabel(g.time).replace(/:00/, "").replace(/\s/, "")}
+        {/* A written note is worth knowing about without opening it. */}
+        {noted && <span className="h-1 w-1 rounded-full bg-coral" aria-label="has notes" />}
       </span>
+    </>
+  );
+
+  /**
+   * IN ADMIN, THE CELL IS THE NOTE. The strip is the handful of games the
+   * weekend turns on, so it is where a coach reaches for what they wrote about
+   * one — and jumping to a schedule the reader is already looking at was the
+   * least useful thing a tap could do.
+   */
+  if (ctx.admin) {
+    return (
+      <button type="button" onClick={() => ctx.openNotes(g)} title={`Notes · ${r.name}`} className={shell}>
+        {face}
+      </button>
+    );
+  }
+
+  return (
+    <a href="#schedule" title={title} className={shell}>
+      {face}
     </a>
   );
 }
@@ -728,6 +873,7 @@ function Bracket({ ctx }: { ctx: Ctx }) {
         ))}
       </div>
 
+      <AdminGate ctx={ctx} />
     </div>
   );
 }
@@ -742,11 +888,293 @@ function Connector({ col, from, to, target }: { col: number; from: number; to: n
   );
 }
 
+/**
+ * The way into the coach's notes, at the very bottom of the bracket.
+ *
+ * DELIBERATELY QUIET. It is the last thing on the last tab, set in the muted
+ * type the small print uses, because it is not for the players and parents
+ * this link is shared with — it is one word for the one person looking for
+ * it. Once the code is in, the page is unchanged except that the weekend
+ * strip opens notes instead of jumping to the schedule.
+ */
+function AdminGate({ ctx }: { ctx: Ctx }) {
+  const [asking, setAsking] = useState(false);
+  const [code, setCode] = useState("");
+  const [wrong, setWrong] = useState(false);
+
+  const tryCode = (raw: string) => {
+    const next = raw.replace(/\D/g, "").slice(0, ADMIN_CODE.length);
+    setCode(next);
+    if (wrong) setWrong(false);
+    if (next.length < ADMIN_CODE.length) return;
+    if (next === ADMIN_CODE) { ctx.setAdmin(true); setAsking(false); setCode(""); }
+    else { setWrong(true); setCode(""); }
+  };
+
+  if (ctx.admin) {
+    return (
+      <div className="pt-6 flex items-center gap-3 text-[0.6rem] uppercase tracking-[0.14em] text-ink-muted">
+        <span className="text-coral font-semibold">Notes on</span>
+        <button type="button" onClick={() => ctx.setAdmin(false)} className="hover:text-ink transition-colors underline decoration-dotted underline-offset-4">
+          Turn off
+        </button>
+      </div>
+    );
+  }
+
+  if (!asking) {
+    return (
+      <div className="pt-6">
+        <button
+          type="button"
+          onClick={() => setAsking(true)}
+          className="text-[0.6rem] uppercase tracking-[0.14em] text-ink-muted/50 hover:text-ink-muted transition-colors"
+        >
+          Admin
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-6 flex items-center gap-2">
+      <input
+        autoFocus
+        type="tel"
+        inputMode="numeric"
+        pattern="[0-9]*"
+        value={code}
+        onChange={(e) => tryCode(e.target.value)}
+        onBlur={() => { if (!code) setAsking(false); }}
+        aria-label="Admin passcode"
+        placeholder="••••"
+        className={cn(
+          "w-24 h-8 rounded-md border bg-card px-2 text-center text-base tabular tracking-[0.3em] text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40",
+          wrong ? "border-bad" : "border-hairline",
+        )}
+      />
+      {wrong && <span className="text-[0.6rem] uppercase tracking-[0.14em] text-bad">No</span>}
+    </div>
+  );
+}
+
 /** One feeder, so one line: no stubs, no bar. */
 function Straight({ col, row }: { col: number; row: number }) {
   return (
     <div className="self-center w-full h-px bg-hairline" style={{ gridColumn: col, gridRow: `${row - 1} / ${row + 1}` }} aria-hidden />
   );
+}
+
+/**
+ * One game's notes, in the same sheet the roster uses.
+ *
+ * IT SAVES AS YOU TYPE. There is no Save button because there is no version of
+ * this where a coach wants one: the sheet is opened between games, written in
+ * with a thumb, and dismissed by dragging it away — a gesture that would lose
+ * the writing if it needed a button first. Every keystroke goes to storage,
+ * and closing is just closing.
+ */
+function NotesSheet({ g, ctx, value, onWrite, onGuard, onClose }: {
+  g: Game;
+  ctx: Ctx;
+  value: string;
+  onWrite: (text: string) => void;
+  onGuard: (theirName: string, ourName: string) => void;
+  onClose: () => void;
+}) {
+  const [pane, setPane] = useState<"notes" | "matchups">("notes");
+
+  /**
+   * THE DRAFT IS LOCAL, AND THE PAGE HEARS ABOUT IT LATE.
+   *
+   * Notes live on the page component, because the strip needs to know which
+   * games have one — but routing every keystroke up there re-rendered the
+   * whole tournament, cards, tables and bracket, once per letter. The textarea
+   * now runs off its own state, and the page is told once the typing pauses.
+   * The flush on unmount is what makes that safe: the sheet can be dragged
+   * away mid-word and the last letters still land.
+   */
+  const [draft, setDraft] = useState(value);
+  const latest = useRef(value);
+  const writeRef = useRef(onWrite);
+  writeRef.current = onWrite;
+  const timer = useRef<number | null>(null);
+
+  const onType = (text: string) => {
+    setDraft(text);
+    latest.current = text;
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => writeRef.current(latest.current), 400);
+  };
+
+  useEffect(() => () => {
+    if (timer.current) window.clearTimeout(timer.current);
+    writeRef.current(latest.current);
+  }, []);
+
+  const me = ctx.me;
+  const opp = me ? resolveSide(opponentSide(g, me, ctx), ctx.data, ctx.table, ctx.complete) : null;
+  const title = opp ? `vs ${opp.name}` : g.name;
+  const theirs = matchupRoster(opp?.team);
+  const ours = matchupRoster(me);
+  const map = ctx.matchups[g.id] ?? {};
+  const assigned = Object.values(map).reduce((n, list) => n + list.length, 0);
+
+  return (
+    <Sheet
+      label={`Notes for ${title}`}
+      title={title}
+      subtitle={`${dayLabel(g.date)} · ${timeLabel(g.time)}${g.court ? ` · ${g.court}` : ""}`}
+      accent
+      onClose={onClose}
+    >
+      {/* TWO PANES, ONE SHEET. Both answer "what are we doing about this
+          game", and a coach moves between them mid-thought — a second sheet
+          would have meant closing one to open the other. */}
+      <div className="px-5 pt-4">
+        <div className="inline-flex items-center gap-[2px] rounded-[10px] border border-hairline bg-paper-deep p-[3px]">
+          {([["notes", "Notes"], ["matchups", "Matchups"]] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setPane(key)}
+              aria-current={pane === key ? "page" : undefined}
+              className={cn(
+                "flex items-center h-7 px-3 rounded-md border text-[0.8rem] whitespace-nowrap transition-colors",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40",
+                pane === key
+                  ? "border-hairline bg-card font-semibold text-coral shadow-[0_1px_2px_rgba(0,0,0,0.08)]"
+                  : "border-transparent font-medium text-ink-muted hover:text-ink",
+              )}
+            >
+              {label}
+              {key === "matchups" && assigned > 0 && (
+                <span className="ml-1.5 text-[0.6rem] tabular text-ink-muted">{assigned}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {pane === "notes" ? (
+        <div className="px-5 pt-3 pb-5">
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={(e) => onType(e.target.value)}
+            placeholder="What to run out of a timeout, who is hot, what they did to us last time…"
+            aria-label={`Notes for ${title}`}
+            // 16px or larger, or iOS zooms the page in on focus and does not
+            // zoom back out — the same trap the what-if margin field hit.
+            className="w-full min-h-[42dvh] resize-y rounded-lg border border-hairline bg-paper-deep/40 px-3.5 py-3 text-base leading-relaxed text-ink placeholder:text-ink-muted/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
+          />
+        </div>
+      ) : (
+        <MatchupsPane theirs={theirs} ours={ours} map={map} onGuard={onGuard} oppName={opp?.name ?? "them"} />
+      )}
+    </Sheet>
+  );
+}
+
+/**
+ * Who guards who: their roster down the page, ours as chips under whichever
+ * of them is open.
+ *
+ * TAP THEIRS, THEN TAP OURS. The alternative — pick one of ours and assign
+ * them a man — reads the wrong way round for the question a coach is actually
+ * asking, which starts with the player they are worried about. Assignments
+ * stay visible on every row whether or not it is open, so the plan can be read
+ * without touching it.
+ */
+function MatchupsPane({ theirs, ours, map, onGuard, oppName }: {
+  theirs: { name: string; captain?: boolean }[];
+  ours: { name: string; captain?: boolean }[];
+  map: Record<string, string[]>;
+  onGuard: (theirName: string, ourName: string) => void;
+  oppName: string;
+}) {
+  const [openFor, setOpenFor] = useState<string | null>(null);
+  const covered = theirs.filter((t) => (map[t.name] ?? []).length > 0).length;
+
+  /** How many of theirs each of ours is already down for, in this game. */
+  const load: Record<string, number> = {};
+  for (const list of Object.values(map)) for (const n of list) load[n] = (load[n] ?? 0) + 1;
+
+  if (theirs.length === 0) {
+    return (
+      <div className="px-5 pt-3 pb-6">
+        <p className="text-sm text-ink-muted">
+          No roster published for {oppName} yet — matchups can be set once the organiser lists their players.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-5 pt-3 pb-6">
+      <p className="text-[0.65rem] uppercase tracking-widest text-ink-muted tabular">
+        {covered} of {theirs.length} covered
+      </p>
+      <ul className="mt-2.5 divide-y divide-hairline/40">
+        {theirs.map((t) => {
+          const on = map[t.name] ?? [];
+          const open = openFor === t.name;
+          return (
+            <li key={t.name}>
+              <button
+                type="button"
+                onClick={() => setOpenFor(open ? null : t.name)}
+                aria-expanded={open}
+                className="w-full flex items-baseline gap-3 py-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40 rounded-sm"
+              >
+                <span className={cn("text-sm shrink-0", on.length ? "text-ink font-semibold" : "text-ink-soft")}>
+                  {t.name}
+                </span>
+                <span className="ml-auto text-right text-[0.7rem] leading-snug text-coral">
+                  {on.length ? on.map(firstName).join(", ") : <span className="text-ink-muted/70">—</span>}
+                </span>
+              </button>
+              {open && (
+                <div className="pb-3 flex flex-wrap gap-1.5">
+                  {ours.map((o) => {
+                    const picked = on.includes(o.name);
+                    const also = (load[o.name] ?? 0) - (picked ? 1 : 0);
+                    return (
+                      <button
+                        key={o.name}
+                        type="button"
+                        onClick={() => onGuard(t.name, o.name)}
+                        aria-pressed={picked}
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-[0.8rem] transition-colors",
+                          "focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40",
+                          picked
+                            ? "border-coral bg-coral text-accent-foreground font-semibold"
+                            : "border-hairline text-ink-soft hover:border-ink-muted hover:text-ink",
+                        )}
+                      >
+                        {firstName(o.name)}
+                        {/* Already down for someone else this game — worth
+                            knowing before handing them a second man. */}
+                        {also > 0 && (
+                          <span className={cn("text-[0.6rem] tabular", picked ? "opacity-80" : "text-ink-muted")}>+{also}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/** "Sehan Gilani" → "Sehan". A bench calls people by their first name. */
+function firstName(n: string): string {
+  return n.trim().split(/\s+/)[0] ?? n;
 }
 
 /* ---------------------------------------------------------- team name --- */
@@ -790,19 +1218,27 @@ const SHEET_EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 const EXIT_MS = 320;
 
 /**
- * One team's roster, over the page.
+ * The page's bottom sheet: a panel over the page, whatever is in it.
  *
- * REPLACED THE TEAMS TAB. Seven roster cards on their own screen answered a
- * question nobody arrives with; "who is on THAT team" is asked while looking
- * at that team's game, so the answer belongs one tap from the name rather
- * than a tab away and a tab back.
+ * IT EXISTS BECAUSE THERE ARE TWO OF THEM. The roster sheet came first and
+ * carried all of this — the slide, the drag-to-dismiss, the focus handling,
+ * the scroll lock — and a second sheet would have meant a second copy of the
+ * hardest part of the file. The chrome is here; what goes in it is a child.
  *
  * Escape closes it, the backdrop closes it, and focus moves to the panel on
  * open and back to where it was on close — the things a native <dialog> would
  * give for free and that a div pretending to be one has to be told.
  */
-function RosterSheet({ team, me, onClose }: { team: Team; me: Team | null; onClose: () => void }) {
-  const mine = me?.id === team.id;
+function Sheet({ label, title, subtitle, accent = false, onClose, children }: {
+  /** What a screen reader announces the dialog as. */
+  label: string;
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  /** Coral edge and title — the followed team's roster, or a note on its game. */
+  accent?: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -905,7 +1341,7 @@ function RosterSheet({ team, me, onClose }: { team: Team; me: Team | null; onClo
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6"
       role="dialog"
       aria-modal="true"
-      aria-label={`${team.name} roster`}
+      aria-label={label}
     >
       <button
         type="button"
@@ -915,7 +1351,11 @@ function RosterSheet({ team, me, onClose }: { team: Team; me: Team | null; onClo
         // ink scrim BRIGHTENED the page it was meant to dim — the sheet ended
         // up floating over a washed-out grey. A scrim means "less light",
         // which is black in both themes.
-        className="absolute inset-0 bg-black/50 backdrop-blur-[2px] transition-opacity duration-300 ease-out"
+        // NO BACKDROP BLUR. It reads as a nice touch and costs a full-screen
+        // filter pass every frame the sheet moves, on the one surface that has
+        // to stay at sixty — the slide up, and a thumb dragging it back down.
+        // A darker scrim separates the sheet from the page just as well.
+        className="absolute inset-0 bg-black/60 transition-opacity duration-300 ease-out"
         style={{ opacity: shown ? 1 : 0, transition: still.current ? "none" : undefined }}
       />
       <div
@@ -925,7 +1365,7 @@ function RosterSheet({ team, me, onClose }: { team: Team; me: Team | null; onClo
         className={cn(
           "relative w-full sm:max-w-md max-h-[85dvh] overflow-y-auto bg-card border shadow-xl focus:outline-none will-change-transform",
           "rounded-t-2xl sm:rounded-xl",
-          mine ? "border-coral/50" : "border-hairline",
+          accent ? "border-coral/50" : "border-hairline",
         )}
       >
         <div
@@ -942,10 +1382,10 @@ function RosterSheet({ team, me, onClose }: { team: Team; me: Team | null; onClo
           </div>
           <div className="flex items-baseline justify-between gap-3 px-5 pt-3.5 pb-4 sm:pt-4 touch-none sm:touch-auto">
             <div className="min-w-0">
-              <h2 className={cn("font-display text-2xl leading-none truncate", mine ? "text-coral" : "text-ink")}>{team.name}</h2>
-              <p className="mt-1.5 text-[0.65rem] uppercase tracking-widest text-ink-muted tabular">
-                {team.players.length} player{team.players.length === 1 ? "" : "s"}
-              </p>
+              <h2 className={cn("font-display text-2xl leading-none truncate", accent ? "text-coral" : "text-ink")}>{title}</h2>
+              {subtitle && (
+                <p className="mt-1.5 text-[0.65rem] uppercase tracking-widest text-ink-muted tabular">{subtitle}</p>
+              )}
             </div>
             <button
               type="button"
@@ -959,19 +1399,42 @@ function RosterSheet({ team, me, onClose }: { team: Team; me: Team | null; onClo
             </button>
           </div>
         </div>
-        <ul className="divide-y divide-hairline/40 px-5 py-1">
-          {team.players.map((p) => (
-            <li key={p.name} className="flex items-center gap-4 py-2.5 text-sm text-ink-soft">
-              <span className="flex-1 min-w-0">{p.name}</span>
-              {p.captain && (
-                <span className="shrink-0 text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Captain</span>
-              )}
-            </li>
-          ))}
-          {team.players.length === 0 && <li className="py-3 text-sm text-ink-muted">No roster listed.</li>}
-        </ul>
+        {children}
       </div>
     </div>
+  );
+}
+
+/**
+ * One team's roster, over the page.
+ *
+ * REPLACED THE TEAMS TAB. Seven roster cards on their own screen answered a
+ * question nobody arrives with; "who is on THAT team" is asked while looking
+ * at that team's game, so the answer belongs one tap from the name rather
+ * than a tab away and a tab back.
+ */
+function RosterSheet({ team, me, onClose }: { team: Team; me: Team | null; onClose: () => void }) {
+  const mine = me?.id === team.id;
+  return (
+    <Sheet
+      label={`${team.name} roster`}
+      title={team.name}
+      subtitle={`${team.players.length} player${team.players.length === 1 ? "" : "s"}`}
+      accent={mine}
+      onClose={onClose}
+    >
+      <ul className="divide-y divide-hairline/40 px-5 py-1">
+        {team.players.map((p) => (
+          <li key={p.name} className="flex items-center gap-4 py-2.5 text-sm text-ink-soft">
+            <span className="flex-1 min-w-0">{p.name}</span>
+            {p.captain && (
+              <span className="shrink-0 text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Captain</span>
+            )}
+          </li>
+        ))}
+        {team.players.length === 0 && <li className="py-3 text-sm text-ink-muted">No roster listed.</li>}
+      </ul>
+    </Sheet>
   );
 }
 
