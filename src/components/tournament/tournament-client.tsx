@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { Select } from "@/components/select";
 import { PercentileChip } from "@/components/percentile-chip";
 import {
-  DIFF_CAP, MAX_MARGIN, POLL_MS, dayLabel, diffLabel, fetchTournament, groupIsComplete, involves, isFinal, isLive,
+  MAX_MARGIN, POLL_MS, dayLabel, diffLabel, fetchTournament, groupIsComplete, involves, isFinal, isLive,
   nextPollDelay, pickableGames, projectStandings, resolveSide, standings, timeLabel,
   type Game, type Picks, type ProjRow, type Resolved, type Side, type Team, type TeamRow, type Tournament,
 } from "@/lib/tournament";
@@ -152,22 +152,22 @@ export function TournamentClient({
       {/* ------------------------------------------------------------ hero */}
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <Eyebrow>{data.event.name}</Eyebrow>
-          {/* NOTHING ABOUT MY TEAM UP HERE. The name is on the "Your team"
-              control below, the seed and the differential are the first two
-              columns of Standings, and the results are in the strip — a
-              headline that restates all three is a third of a phone screen
-              spent saying what the next scroll says better. */}
-          {/* ONE LINE, AND THE NAME IS THE LINK. Spelling the street address
-              out cost three lines of a phone screen to say something nobody
-              reads off a page — they tap it and let the maps app have it. The
-              full address still travels, as the link's target and its title. */}
-          <p className="mt-2 text-sm text-ink-muted">
-            <span className="uppercase tracking-[0.12em] text-[0.65rem] font-semibold text-ink-muted/80">Location</span>
+          {/* THE EVENT AND THE GYM ARE ONE LINE. They were two — a heading
+              and a "Location · PSA McKinney" beneath it — which spent two
+              lines and a redundant label on four words. The gym keeps the
+              link; the street address is still the link's target and title,
+              because that is what a maps app wants and what a reader does
+              not want three lines of.
+
+              NOTHING ABOUT MY TEAM UP HERE either: the name is on the "Your
+              team" control below, the seed and the differential are the first
+              two columns of Standings, and the results are in the strip. */}
+          <Eyebrow>
+            {eventTitle(data.event.name)}
             {" · "}
             {data.event.venue.address ? (
               <a
-                className="text-coral underline decoration-dotted underline-offset-4 hover:decoration-solid transition-colors"
+                className="underline decoration-dotted underline-offset-4 hover:decoration-solid transition-colors"
                 href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.event.venue.address)}`}
                 title={shortAddress(data.event.venue.address)}
                 target="_blank" rel="noreferrer"
@@ -175,7 +175,7 @@ export function TournamentClient({
                 {data.event.venue.name}
               </a>
             ) : data.event.venue.name}
-          </p>
+          </Eyebrow>
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
             <FeedStatus live={live?.at ?? null} failedAt={failedAt} now={now} liveCount={liveCount} finalCount={finalCount} total={data.games.length} />
             <div className="flex items-center gap-2">
@@ -254,10 +254,21 @@ export function TournamentClient({
 /* --------------------------------------------------------------- pieces */
 
 /** The scoreboard's eyebrow: small caps in coral behind a short rule. */
+/**
+ * The page's own name, in the site's gold small caps.
+ *
+ * THE SAME HEADING THE TABLE PAGES USE. This was a coral kicker with a short
+ * rule stuck to its left — a device that appears nowhere else on the site —
+ * where every other data page names itself in gold small caps and nothing
+ * more. The gold is `--court-ink`, the hardwood tone, which is the one colour
+ * on the site that means "you are here".
+ */
 function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
-      <span className="h-px w-6 bg-coral" />
+    <div
+      className="text-[0.7rem] uppercase tracking-[0.15em] font-bold leading-none mb-2"
+      style={{ color: "var(--court-ink)" }}
+    >
       {children}
     </div>
   );
@@ -587,10 +598,6 @@ function Standings({ ctx }: { ctx: Ctx }) {
             </tbody>
           </table>
         </div>
-        <p className="mt-4 pt-4 border-t border-hairline/60 text-xs text-ink-muted">
-          One group; each team plays four. All seven advance — seed 1 to the semi-finals, seeds 2–7 to Round 1.
-          Ranked by win %, then point differential with each game&rsquo;s margin capped at ±{DIFF_CAP}.
-        </p>
       </div>
 
     </div>
@@ -1021,6 +1028,15 @@ function shortRound(round: string): string {
  * a page about one gym. It is the link's tooltip now rather than body copy: the
  * address is what the maps app needs, not what a reader wants three lines of.
  */
+/**
+ * "CIG - Central Ismaili Games" → "Central Ismaili Games". The organiser
+ * prefixes the event with its own short code, which is the least useful half
+ * of the name and was taking the most prominent line on the page.
+ */
+function eventTitle(n: string): string {
+  return n.replace(/^[A-Za-z0-9]{2,6}\s*[-–·]\s*/, "").trim() || n;
+}
+
 function shortAddress(a: string): string {
   const parts = a.split(",").map((s) => s.trim()).filter(Boolean);
   if (parts.length < 3) return a;
