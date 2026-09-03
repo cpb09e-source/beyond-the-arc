@@ -668,72 +668,14 @@
    "raw": {}
   },
   {
-   "id": "ZfqvpRGvktWVhl7f0uUB",
-   "name": "Match 1",
-   "stage": "playoff",
-   "round": "Round 1",
-   "matchNum": 1,
-   "date": "2026-09-06",
-   "time": "08:00 AM",
-   "startMs": 1788699600000,
-   "court": "Court 4",
-   "a": {
-    "teamId": null,
-    "applicantId": null,
-    "name": "Winner 4 of Group A",
-    "placeholder": true
-   },
-   "b": {
-    "teamId": null,
-    "applicantId": null,
-    "name": "Winner 5 of Group A",
-    "placeholder": true
-   },
-   "status": "scheduled",
-   "scoreA": null,
-   "scoreB": null,
-   "winnerTeamId": null,
-   "nextMatchId": "AvNyt4hbgv1TPh8cGDau",
-   "raw": {}
-  },
-  {
-   "id": "r5gBIoEbs3Zx9KoGKCBL",
-   "name": "Match 2",
-   "stage": "playoff",
-   "round": "Round 1",
-   "matchNum": 2,
-   "date": "2026-09-06",
-   "time": "08:00 AM",
-   "startMs": 1788699600000,
-   "court": "Court 3",
-   "a": {
-    "teamId": null,
-    "applicantId": null,
-    "name": "Winner 2 of Group A",
-    "placeholder": true
-   },
-   "b": {
-    "teamId": null,
-    "applicantId": null,
-    "name": "Winner 7 of Group A",
-    "placeholder": true
-   },
-   "status": "scheduled",
-   "scoreA": null,
-   "scoreB": null,
-   "winnerTeamId": null,
-   "nextMatchId": "d3FgWaZigqzxNvSCiZ45",
-   "raw": {}
-  },
-  {
    "id": "IRvqnI1sE0Jj7Zsqc5CK",
    "name": "GA Match 11",
    "stage": "group",
    "round": "Group A",
    "matchNum": 11,
-   "date": "2026-09-06",
-   "time": "08:00 AM",
-   "startMs": 1788699600000,
+   "date": "2026-09-05",
+   "time": "12:30 PM",
+   "startMs": 1788629400000,
    "court": "Court 2",
    "a": {
     "teamId": "5dm88proRIFw8sW8LHBE",
@@ -760,9 +702,9 @@
    "stage": "group",
    "round": "Group A",
    "matchNum": 12,
-   "date": "2026-09-06",
-   "time": "08:00 AM",
-   "startMs": 1788699600000,
+   "date": "2026-09-05",
+   "time": "12:30 PM",
+   "startMs": 1788629400000,
    "court": "Court 1",
    "a": {
     "teamId": "1Xn6W6dZVSqhYjLg3r02",
@@ -784,43 +726,14 @@
    "raw": {}
   },
   {
-   "id": "AvNyt4hbgv1TPh8cGDau",
-   "name": "Semi-Final 1",
-   "stage": "playoff",
-   "round": "Semi-Finals",
-   "matchNum": 4,
-   "date": "2026-09-06",
-   "time": "09:30 AM",
-   "startMs": 1788705000000,
-   "court": "Court 3",
-   "a": {
-    "teamId": null,
-    "applicantId": null,
-    "name": "Winner 1 of Group A",
-    "placeholder": true
-   },
-   "b": {
-    "teamId": null,
-    "applicantId": null,
-    "name": "Winner of Match 1",
-    "placeholder": true
-   },
-   "status": "scheduled",
-   "scoreA": null,
-   "scoreB": null,
-   "winnerTeamId": null,
-   "nextMatchId": "ZhPYzfG4QfFDn3IQwb1f",
-   "raw": {}
-  },
-  {
    "id": "5HQpS07CrkDbwSCEGswo",
    "name": "GA Match 13",
    "stage": "group",
    "round": "Group A",
    "matchNum": 13,
-   "date": "2026-09-06",
-   "time": "09:30 AM",
-   "startMs": 1788705000000,
+   "date": "2026-09-05",
+   "time": "02:00 PM",
+   "startMs": 1788634800000,
    "court": "Court 2",
    "a": {
     "teamId": "ZeGJaPi7PjDltqtii5bH",
@@ -847,9 +760,9 @@
    "stage": "group",
    "round": "Group A",
    "matchNum": 14,
-   "date": "2026-09-06",
-   "time": "09:30 AM",
-   "startMs": 1788705000000,
+   "date": "2026-09-05",
+   "time": "02:00 PM",
+   "startMs": 1788634800000,
    "court": "Court 1",
    "a": {
     "teamId": "5dm88proRIFw8sW8LHBE",
@@ -871,15 +784,73 @@
    "raw": {}
   },
   {
+   "id": "ZfqvpRGvktWVhl7f0uUB",
+   "name": "Match 1",
+   "stage": "playoff",
+   "round": "Round 1",
+   "matchNum": 1,
+   "date": "2026-09-06",
+   "time": "09:00 AM",
+   "startMs": 1788703200000,
+   "court": "Court 1",
+   "a": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner 4 of Group A",
+    "placeholder": true
+   },
+   "b": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner 5 of Group A",
+    "placeholder": true
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": "AvNyt4hbgv1TPh8cGDau",
+   "raw": {}
+  },
+  {
+   "id": "r5gBIoEbs3Zx9KoGKCBL",
+   "name": "Match 2",
+   "stage": "playoff",
+   "round": "Round 1",
+   "matchNum": 2,
+   "date": "2026-09-06",
+   "time": "09:00 AM",
+   "startMs": 1788703200000,
+   "court": "Court 2",
+   "a": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner 2 of Group A",
+    "placeholder": true
+   },
+   "b": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner 7 of Group A",
+    "placeholder": true
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": "d3FgWaZigqzxNvSCiZ45",
+   "raw": {}
+  },
+  {
    "id": "nQ9qTkpUIUd5PK9Oa0go",
    "name": "Match 3",
    "stage": "playoff",
    "round": "Round 1",
    "matchNum": 3,
    "date": "2026-09-06",
-   "time": "11:00 AM",
-   "startMs": 1788710400000,
-   "court": "Court 2",
+   "time": "09:00 AM",
+   "startMs": 1788703200000,
+   "court": "Court 3",
    "a": {
     "teamId": null,
     "applicantId": null,
@@ -900,32 +871,32 @@
    "raw": {}
   },
   {
-   "id": "ZhPYzfG4QfFDn3IQwb1f",
-   "name": "Final",
+   "id": "AvNyt4hbgv1TPh8cGDau",
+   "name": "Semi-Final 1",
    "stage": "playoff",
-   "round": "Final",
-   "matchNum": 6,
+   "round": "Semi-Finals",
+   "matchNum": 4,
    "date": "2026-09-06",
-   "time": "11:00 AM",
-   "startMs": 1788710400000,
-   "court": "Court 4",
+   "time": "10:30 AM",
+   "startMs": 1788708600000,
+   "court": "Court 1",
    "a": {
     "teamId": null,
     "applicantId": null,
-    "name": "Winner of Semi-Final 1",
+    "name": "Winner 1 of Group A",
     "placeholder": true
    },
    "b": {
     "teamId": null,
     "applicantId": null,
-    "name": "Winner of Semi-Final 2",
+    "name": "Winner of Match 1",
     "placeholder": true
    },
    "status": "scheduled",
    "scoreA": null,
    "scoreB": null,
    "winnerTeamId": null,
-   "nextMatchId": null,
+   "nextMatchId": "ZhPYzfG4QfFDn3IQwb1f",
    "raw": {}
   },
   {
@@ -935,9 +906,9 @@
    "round": "Semi-Finals",
    "matchNum": 5,
    "date": "2026-09-06",
-   "time": "12:30 PM",
-   "startMs": 1788715800000,
-   "court": "Court 1",
+   "time": "10:30 AM",
+   "startMs": 1788708600000,
+   "court": "Court 2",
    "a": {
     "teamId": null,
     "applicantId": null,
@@ -955,6 +926,35 @@
    "scoreB": null,
    "winnerTeamId": null,
    "nextMatchId": "ZhPYzfG4QfFDn3IQwb1f",
+   "raw": {}
+  },
+  {
+   "id": "ZhPYzfG4QfFDn3IQwb1f",
+   "name": "Final",
+   "stage": "playoff",
+   "round": "Final",
+   "matchNum": 6,
+   "date": "2026-09-06",
+   "time": "01:00 PM",
+   "startMs": 1788717600000,
+   "court": "Court 1",
+   "a": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner of Semi-Final 1",
+    "placeholder": true
+   },
+   "b": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner of Semi-Final 2",
+    "placeholder": true
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": null,
    "raw": {}
   }
  ],

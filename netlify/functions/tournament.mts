@@ -313,7 +313,32 @@ function readResult(mi: Record<string, unknown>): { a: number | null; b: number 
   return { a: null, b: null, winner: null, status: "scheduled" };
 }
 
-/** "08:00 AM" + {year, month, day} + a UTC offset → epoch ms. */
+/**
+ * mDate IS THE SOURCE OF TRUTH FOR WHEN A GAME IS PLAYED, not `time`.
+ *
+ * FOUND THE HARD WAY, 2026-09-03. The organiser rewrote the whole schedule —
+ * every group game onto the Saturday, the bracket onto the Sunday — and their
+ * tool updated `matchInfo.mDate` (epoch ms) on all twenty matches but left
+ * `matchInfo.time`, a display string, at its old value on ten of them. Six of
+ * those ten read "12:00 AM", which is not midnight: it is the string the tool
+ * writes when it has nothing to say. The page showed a bracket starting at
+ * midnight and four group games on the wrong day.
+ *
+ * So the time and the calendar date are both DERIVED from mDate against the
+ * venue's own offset, and `date`/`time` are consulted only when mDate is
+ * missing. Anything the organiser reschedules is then correct here the moment
+ * the feed is re-read, whether or not their display string caught up.
+ */
+function localParts(ms: number, offsetSeconds: number): { date: string; time: string } {
+  const d = new Date(ms + offsetSeconds * 1000);
+  const date = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+  const h24 = d.getUTCHours();
+  const suffix = h24 < 12 ? "AM" : "PM";
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return { date, time: `${String(h12).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")} ${suffix}` };
+}
+
+/** "08:00 AM" + {year, month, day} + a UTC offset → epoch ms. The fallback. */
 function tipMs(date: Record<string, unknown> | null, time: string | null, offsetSeconds: number): number | null {
   if (!date || !time) return null;
   const y = num(date.year), m = num(date.month), d = num(date.day);
@@ -358,6 +383,10 @@ function normaliseGame(d: Doc, offsetSeconds: number): Game | null {
   const venue = obj(mi.venue);
   const offset = (num(venue?.UTCOffset) ?? offsetSeconds - (num(venue?.dstOffset) ?? 0)) + (num(venue?.dstOffset) ?? 0);
   const time = str(mi.time);
+  // See localParts: mDate wins, the strings are the fallback.
+  const mDate = num(mi.mDate);
+  const off = Number.isFinite(offset) ? offset : offsetSeconds;
+  const local = mDate !== null ? localParts(mDate, off) : null;
   const { a: scoreA, b: scoreB, winner, status } = readResult(mi);
   const hasScore = scoreA !== null && scoreB !== null;
   // A final with scores but no explicit winner id: the higher score won.
@@ -374,9 +403,9 @@ function normaliseGame(d: Doc, offsetSeconds: number): Game | null {
     stage,
     round,
     matchNum: num(mi.matchNumId),
-    date: isoDate(date),
-    time: time ?? "",
-    startMs: tipMs(date, time, Number.isFinite(offset) ? offset : offsetSeconds),
+    date: local?.date ?? isoDate(date),
+    time: local?.time ?? time ?? "",
+    startMs: mDate ?? tipMs(date, time, off),
     court: courtLabel(str(obj(venue?.court)?.name)),
     a, b,
     status,
