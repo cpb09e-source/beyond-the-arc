@@ -388,6 +388,9 @@ function GameCard({ g, ctx, className, style }: { g: Game; ctx: Ctx; className?:
   const live = isLive(g);
   const final = g.status === "final";
   const [clock, meridiem] = splitTime(g.time);
+  // This game's margin, from the home side's point of view; the away row is
+  // handed its negation so each team reads its own.
+  const margin = g.scoreA !== null && g.scoreB !== null ? g.scoreA - g.scoreB : null;
   const ra = g.stage === "playoff" ? resolveSide(g.a, ctx.data, ctx.table, ctx.complete) : settled(g.a, ctx.data);
   const rb = g.stage === "playoff" ? resolveSide(g.b, ctx.data, ctx.table, ctx.complete) : settled(g.b, ctx.data);
   const projected = ra.state === "projected" || rb.state === "projected";
@@ -431,8 +434,8 @@ function GameCard({ g, ctx, className, style }: { g: Game; ctx: Ctx; className?:
       </div>
       <div className="px-4 pt-1 pb-3">
         <div className="divide-y divide-hairline/60">
-          <SideRow r={ra} slot={g.a} score={g.scoreA} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.a.teamId} me={ctx.me} onOpen={ctx.openTeam} />
-          <SideRow r={rb} slot={g.b} score={g.scoreB} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.b.teamId} me={ctx.me} onOpen={ctx.openTeam} />
+          <SideRow r={ra} slot={g.a} score={g.scoreA} margin={margin} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.a.teamId} ctx={ctx} />
+          <SideRow r={rb} slot={g.b} score={g.scoreB} margin={margin === null ? null : -margin} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.b.teamId} ctx={ctx} />
         </div>
       </div>
       {/* ONLY PLAYOFF GAMES KEEP A FOOT. It used to repeat the day and time
@@ -451,15 +454,31 @@ function GameCard({ g, ctx, className, style }: { g: Game; ctx: Ctx; className?:
   );
 }
 
-function SideRow({ r, slot, score, won, me, onOpen }: { r: Resolved; slot: Side; score: number | null; won: boolean; me: Team | null; onOpen: (t: Team) => void }) {
+/**
+ * One side of a game card: who they are, where they stand, what they scored.
+ *
+ * THE ROW ANSWERS "SO WHAT" WITHOUT A SECOND TAB. A name and a number tell you
+ * the score and nothing about whether it was an upset — so the record and the
+ * differential the team is carrying INTO the weekend's table sit next to the
+ * name, and this game's own margin sits beside the score. The two are
+ * deliberately different things: the coloured figure on the left is where the
+ * team stands overall, the one on the right is what happened here.
+ *
+ * Both appear only once there is something to say — a team with no games
+ * played gets a bare name, and a game with no score gets no margin.
+ */
+function SideRow({ r, slot, score, margin, won, ctx }: { r: Resolved; slot: Side; score: number | null; margin: number | null; won: boolean; ctx: Ctx }) {
+  const { me, table, openTeam } = ctx;
   const isMe = me ? r.team?.id === me.id : false;
   const seed = /winner\s+(\d+)\s+of/i.exec(slot.name)?.[1] ?? null;
+  const row = r.team ? table.find((x) => x.team.id === r.team!.id) ?? null : null;
+  const tone = (n: number) => (n > 0 ? "text-good" : n < 0 ? "text-bad" : "text-ink-muted");
   return (
     <div className="flex items-center gap-2 py-1.5">
       {seed && <span className="text-[0.6rem] text-ink-muted tabular w-3">{seed}</span>}
       <TeamName
         team={r.team}
-        onOpen={onOpen}
+        onOpen={openTeam}
         className={cn(
           "min-w-0 truncate text-sm text-left",
           // ONE COLOUR CLASS, not two and a winner. `text-coral` and
@@ -476,8 +495,19 @@ function SideRow({ r, slot, score, won, me, onOpen }: { r: Resolved; slot: Side;
       >
         {r.name}
       </TeamName>
+      {row && row.gp > 0 && (
+        <span className="shrink-0 flex items-baseline gap-1.5 text-[0.7rem] tabular leading-none">
+          <span className="text-ink-muted">({row.w}-{row.l})</span>
+          <span className={cn("font-semibold", tone(row.diff))}>{diffLabel(row.diff)}</span>
+        </span>
+      )}
       <span className={cn("ml-auto text-right tabular text-lg font-bold leading-none pl-2", won ? "text-ink" : "text-ink-muted")}>
         {score ?? "—"}
+      </span>
+      {/* Fixed width even when empty, so the scores of a played game and an
+          unplayed one line up down a column of cards. */}
+      <span className={cn("shrink-0 w-9 text-right text-[0.7rem] font-semibold tabular leading-none", margin === null ? "text-transparent" : tone(margin))}>
+        {margin === null ? "" : diffLabel(margin)}
       </span>
     </div>
   );
@@ -727,7 +757,7 @@ function ByeCard({ slot, ctx, style }: { slot: Side; ctx: Ctx; style?: React.CSS
         <span className="tabular">straight to SF1</span>
       </div>
       <div className="px-4 pb-3">
-        <SideRow r={r} slot={slot} score={null} won={false} me={ctx.me} onOpen={ctx.openTeam} />
+        <SideRow r={r} slot={slot} score={null} margin={null} won={false} ctx={ctx} />
       </div>
       <div className="px-4 py-2 border-t border-hairline bg-paper-deep/30 text-[0.6rem] text-ink-muted">
         <span className="uppercase tracking-widest font-semibold text-ink-muted/70">Seed 1</span>
