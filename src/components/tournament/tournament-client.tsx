@@ -37,7 +37,7 @@ import {
 const TABS = [
   { key: "schedule", label: "Schedule" },
   { key: "standings", label: "Standings" },
-  { key: "whatif", label: "What if" },
+  { key: "whatif", label: "What If" },
   { key: "bracket", label: "Bracket" },
 ] as const;
 type Tab = (typeof TABS)[number]["key"];
@@ -1059,6 +1059,13 @@ function addressLines(a: string): [string, string | null] {
 /* --------------------------------------------------------------- what if */
 
 const PICKS_KEY = "cig-whatif";
+const FILTER_KEY = "cig-whatif-team";
+/** The "show everything" value. Not a team name, so it cannot collide with one. */
+const ALL = "__all";
+
+function readFilter(): string {
+  try { return localStorage.getItem(FILTER_KEY) ?? ALL; } catch { return ALL; }
+}
 
 function readPicks(): Picks {
   try {
@@ -1100,15 +1107,32 @@ function readPicks(): Picks {
 function WhatIf({ ctx }: { ctx: Ctx }) {
   const { data, me } = ctx;
   const [picks, setPicks] = useState<Picks>(() => (typeof window === "undefined" ? {} : readPicks()));
+  /**
+   * ONE TEAM AT A TIME, OPTIONALLY. Fourteen cards is the whole group and the
+   * honest default, but the question a coach actually brings here is "what do
+   * WE need", and answering it meant scrolling past ten games that are not
+   * theirs. The filter narrows the cards; it does not narrow the maths — the
+   * table beside them always projects the full group, because a seed depends
+   * on games this team is not in.
+   */
+  const [only, setOnly] = useState<string>(() => (typeof window === "undefined" ? ALL : readFilter()));
 
   useEffect(() => {
     try { localStorage.setItem(PICKS_KEY, JSON.stringify(picks)); } catch { /* ignore */ }
   }, [picks]);
+  useEffect(() => {
+    try { localStorage.setItem(FILTER_KEY, only); } catch { /* ignore */ }
+  }, [only]);
 
   const open = pickableGames(data);
   const played = data.games.filter((g) => g.stage === "group" && g.status === "final");
   const table = projectStandings(data, picks);
   const decided = open.filter((g) => picks[g.id]).length;
+  // A stored name whose team is gone (a renamed entry, a different event)
+  // would silently hide every card, so it falls back to showing everything.
+  const team = only === ALL || !data.teams.some((t) => t.name === only) ? null : only;
+  const openShown = team ? open.filter((g) => involves(g, team)) : open;
+  const playedShown = team ? played.filter((g) => involves(g, team)) : played;
 
   const setWinner = (g: Game, teamId: string) =>
     setPicks((p) => {
@@ -1130,41 +1154,58 @@ function WhatIf({ ctx }: { ctx: Ctx }) {
       return { ...p, [g.id]: { ...cur, margin: Math.max(0, Math.min(MAX_MARGIN, margin)) } };
     });
 
-  const days = [...new Set(open.map((g) => g.date))].sort();
+  const days = [...new Set(openShown.map((g) => g.date))].sort();
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-8 items-start">
       <div className="space-y-7">
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div className="space-y-3">
+          {/* THE FILTER LEADS. It decides what the rest of the column contains,
+              so it sits where reading starts rather than tucked in beside the
+              progress count it has nothing to do with. */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+            <Select value={team ?? ALL} onChange={setOnly} ariaLabel="Show one team's games" compact className="w-36">
+              <option value={ALL}>All games</option>
+              {data.teams.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
+            </Select>
+            <div className="flex items-center gap-3 shrink-0 mr-auto">
+              {/* The count stays the WHOLE group even when the cards are one
+                  team's, because it is the progress bar for the table beside
+                  them, and that table needs all fourteen. */}
+              <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted tabular">
+                {decided}/{open.length} picked
+              </span>
+              {decided > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setPicks({})}
+                  className="text-xs text-coral hover:underline"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
           {/* No instructions. Two buttons and a slider per card explain
               themselves, and a paragraph saying so was the first thing on the
               tab. The one thing that is NOT self-evident — that a played game
               cannot be picked — is said only once there is a played game. */}
-          {played.length > 0 ? (
+          {played.length > 0 && (
             <p className="text-sm text-ink-muted max-w-xl">Games already played are locked and count for real.</p>
-          ) : <span />}
-          <div className="flex items-center gap-3 shrink-0">
-            <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted tabular">
-              {decided}/{open.length} picked
-            </span>
-            {decided > 0 && (
-              <button
-                type="button"
-                onClick={() => setPicks({})}
-                className="text-xs text-coral hover:underline"
-              >
-                Clear
-              </button>
-            )}
-          </div>
+          )}
         </div>
 
         {open.length === 0 && (
           <p className="text-sm text-ink-muted">Every group game is final — the table beside this is the real one.</p>
         )}
+        {open.length > 0 && openShown.length === 0 && (
+          <p className="text-sm text-ink-muted">
+            {team} has no group games left to pick. Choose another team, or All games.
+          </p>
+        )}
 
         {days.map((day) => {
-          const games = open.filter((g) => g.date === day);
+          const games = openShown.filter((g) => g.date === day);
           return (
             <section key={day}>
               <SectionRule label={dayLabel(day)} count={games.length} />
@@ -1184,11 +1225,11 @@ function WhatIf({ ctx }: { ctx: Ctx }) {
           );
         })}
 
-        {played.length > 0 && (
+        {playedShown.length > 0 && (
           <section>
-            <SectionRule label="Already played" count={played.length} />
+            <SectionRule label="Already played" count={playedShown.length} />
             <div className="grid gap-2.5 sm:grid-cols-2">
-              {played.map((g) => <GameCard key={g.id} g={g} ctx={ctx} />)}
+              {playedShown.map((g) => <GameCard key={g.id} g={g} ctx={ctx} />)}
             </div>
           </section>
         )}
@@ -1280,8 +1321,13 @@ function PickCard({
             aria-label="Winning margin in points"
             className="w-14 h-9 px-2 rounded-md border border-hairline bg-paper-deep/40 text-base text-ink tabular text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
           />
-          <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted shrink-0 w-6">
-            {pick?.margin === 0 ? "n/k" : "pts"}
+          {/* Fixed width across both words, so the card does not twitch when a
+              margin is set. */}
+          <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted shrink-0 w-12 whitespace-nowrap">
+            {/* "n/k" was the honest abbreviation and read like a form field.
+                A zero margin here means the margin has not been set, not that
+                the game was a tie, so it says so. */}
+            {pick?.margin === 0 ? "not set" : "pts"}
           </span>
         </div>
       </div>
