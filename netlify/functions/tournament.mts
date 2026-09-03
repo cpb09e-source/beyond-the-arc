@@ -531,18 +531,27 @@ async function build(slug: string): Promise<Payload> {
  * the CLI for local runs and never in a deployed function, so a production
  * request carrying ?sim= gets the real feed.
  *
- *   sat   — every Saturday game final
- *   live  — Saturday final, the first two Sunday group games in progress
- *   sun   — every group game final; the bracket then fills from the table
+ *   live  — everything before the third slot final, that slot in progress
+ *   sat   — every group game final
+ *   sun   — same, and the bracket then fills from the table
+ *
+ * WRITTEN AGAINST START TIMES, NOT DATES. It used to split on "is it the
+ * Saturday date", which stopped meaning anything when the organiser moved all
+ * fourteen group games onto the Saturday — every game matched, everything went
+ * final, and `live` could not produce a live game at all. Slots are now taken
+ * in start order, so the modes survive the next reshuffle too.
  *
  * Margins are a deterministic hash of the game id, so a reload does not
  * reshuffle the standings.
  */
 function simulate(p: Payload, mode: string): Payload {
   const hash = (s: string) => { let h = 7; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; };
+  // The distinct group tip-off times, earliest first — "slots" in the sense the
+  // schedule uses: three or four courts running the same time on the hour.
+  const slots = [...new Set(p.games.filter((x) => x.stage === "group" && x.startMs !== null).map((x) => x.startMs!))].sort((x, y) => x - y);
+  const liveSlot = slots[2] ?? slots[slots.length - 1] ?? null;
   const games = p.games.map((g) => {
     if (g.stage !== "group" || !g.a.teamId || !g.b.teamId) return g;
-    const sat = g.date === "2026-09-05";
     const h = hash(g.id);
     const base = 48 + (h % 21);
     const margin = 1 + ((h >>> 5) % 34);
@@ -550,9 +559,10 @@ function simulate(p: Payload, mode: string): Payload {
     const scoreA = aWins ? base + margin : base;
     const scoreB = aWins ? base : base + margin;
     const final = (): Game => ({ ...g, status: "final", scoreA, scoreB, winnerTeamId: aWins ? g.a.teamId : g.b.teamId });
-    if (mode === "sun") return final();
-    if (sat) return final();
-    if (mode === "live" && (g.matchNum === 11 || g.matchNum === 12)) {
+    if (mode !== "live") return final();
+    if (liveSlot === null || g.startMs === null) return g;
+    if (g.startMs < liveSlot) return final();
+    if (g.startMs === liveSlot) {
       const inPlay: Game = { ...g, status: "live", scoreA: Math.round(scoreA / 2), scoreB: Math.round(scoreB / 2), winnerTeamId: null };
       return inPlay;
     }
