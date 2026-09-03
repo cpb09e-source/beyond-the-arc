@@ -559,6 +559,61 @@ todo. All of it is local only until the deploy runs.
   about, including that opponent-relative rates were dividing our counts over
   every game by the opponent's over only the 95.6% that have a sibling box row.
 
+### 2b. THE COACH PAGE — /t/cig/, built 2026-09-02, NOT DEPLOYED
+
+Colin coaches 4-D at the Central Ismaili Games, 5–6 September 2026 at PSA
+McKinney. `/t/cig/` is an unlisted page in the site's own style with four
+tabs — Schedule, Standings, Bracket, Teams — and 4-D picked out everywhere.
+
+**WHERE THE LIVE DATA COMES FROM, because it took an evening to find.** The
+organiser's site (app.naismailigames.com) is Playinga: an Angular app over
+Firestore, project `ismaili-hq`, with NO API of its own. The public page signs
+in anonymously with Firebase's identity toolkit and reads Firestore directly.
+Three facts make that reproducible from a Netlify function:
+
+  - the web API key is restricted by HTTP REFERER, so every call carries
+    `Referer: https://app.naismailigames.com/` — without it, 403
+  - Firestore rules allow reads to any signed-in user of documents queried
+    BY DIVISION (`matchInfo.divisionId == …`); an unfiltered query or a
+    `listCollectionIds` is denied
+  - `matches` is a ROOT collection, not a subcollection of the event. The
+    other two reads are `events/<id>/applicants` (rosters) and
+    `events/<id>/divisions/<div>/groups/<grp>` (member order)
+
+All of it is in `netlify/functions/tournament.mts`, keyed by slug — only
+events listed in its `EVENTS` map are reachable, so it is not a general proxy.
+
+**THE SCORE SHAPE WAS OBSERVED ON THE ORGANISER'S JULY EVENT, not on this
+one.** `matchInfo.scoreCard.scoreResult.{creatorTeamScore, opponentTeamScore,
+winningTeamId}` is final; `scoreCard.score[]` holds per-period points and is
+the in-progress state. **`matchInfo.status` stays 2 after a game is scored** —
+it means nothing about finality and the function ignores it. If Saturday's
+first result renders wrong, every scalar on the match is in each game's
+`raw` bag in the feed; look there first.
+
+**Seed slots look like teams.** "Winner 4 of Group A" arrives with a
+`teamInfo` and an id of its own, so the function demotes any side whose id is
+not one of the division's applicants. Found because the bracket rendered them
+as settled.
+
+Standings and the playoff picture are computed CLIENT-SIDE in
+`src/lib/tournament.ts` from finals, by the NAIG rulebook Colin's own 4D app
+already encodes: win % → point differential, each game's margin capped at ±30.
+The bracket projects seeds from the live table and marks them in italics
+until the group is complete; feeder slots collapse one level only.
+
+**Dev-only simulation**: `/t/cig/?sim=sat|live|sun` invents results (gated on
+NETLIFY_DEV, ignored in production). `src/data/cig-2026.json` is the baked
+fallback the page renders first; `node scripts/snapshot-tournament.mjs`
+refreshes it (`--prod` to read production instead of localhost).
+
+Unlisted means: not in the nav or footer, absent from the sitemap, `/t/`
+disallowed in robots.ts, `X-Robots-Tag: noindex` for `/t/*` in netlify.toml,
+and `robots: { index: false }` in the page metadata. Anyone with the link can
+open it, which is the right level for a schedule that is already public.
+
+**Needs a deploy before Saturday** — a full one, ~75 minutes.
+
 ### 3. Smaller, carried over
 
 - **Lint is at 0 errors, 30 warnings** (2026-09-01). Three things got it

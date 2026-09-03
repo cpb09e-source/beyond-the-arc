@@ -1,0 +1,962 @@
+{
+ "slug": "cig",
+ "event": {
+  "name": "CIG - Central Ismaili Games",
+  "division": "Adult Men's",
+  "group": "Group A",
+  "venue": {
+   "name": "PSA McKinney",
+   "address": "7205, Eldorado Parkway, McKinney, Collin County, Texas, United States, 75070, 5611",
+   "tz": "America/Chicago"
+  }
+ },
+ "ourTeam": "4-D",
+ "teams": [
+  {
+   "id": "ZeGJaPi7PjDltqtii5bH",
+   "applicantId": "GF5RP0RhNONLwy98dT9d",
+   "name": "4-D",
+   "short": "4-D",
+   "color": "#00ba5d",
+   "players": [
+    {
+     "name": "Rayan Gilani",
+     "captain": true
+    },
+    {
+     "name": "Ahad Virani",
+     "captain": false
+    },
+    {
+     "name": "Faiz Rajwani",
+     "captain": false
+    },
+    {
+     "name": "Haris Dosani",
+     "captain": false
+    },
+    {
+     "name": "Iliyaan Ali",
+     "captain": false
+    },
+    {
+     "name": "Iyaan Bj Bhai",
+     "captain": false
+    },
+    {
+     "name": "Rahil Jiwani",
+     "captain": false
+    },
+    {
+     "name": "Rahman Hemani",
+     "captain": false
+    },
+    {
+     "name": "Sahil Kurji",
+     "captain": false
+    },
+    {
+     "name": "Shanil Bana",
+     "captain": false
+    },
+    {
+     "name": "Zavar Shallwani",
+     "captain": false
+    },
+    {
+     "name": "Zohayr Khoja",
+     "captain": false
+    }
+   ]
+  },
+  {
+   "id": "OxtnItb0gTMZDabPJhOO",
+   "applicantId": "4qv1zdkPPMlKnPgyROA2",
+   "name": "OGS",
+   "short": "OGS",
+   "color": "#00ba5d",
+   "players": [
+    {
+     "name": "Dan Poonja",
+     "captain": true
+    },
+    {
+     "name": "Aashish Panjwani",
+     "captain": false
+    },
+    {
+     "name": "Ak Pirvany",
+     "captain": false
+    },
+    {
+     "name": "Aseem Arab",
+     "captain": false
+    },
+    {
+     "name": "Daniel Ali",
+     "captain": false
+    },
+    {
+     "name": "Imshan Ali",
+     "captain": false
+    },
+    {
+     "name": "Raheel Moolji",
+     "captain": false
+    },
+    {
+     "name": "Rahil Gilani",
+     "captain": false
+    },
+    {
+     "name": "Riaz Jiwani",
+     "captain": false
+    },
+    {
+     "name": "Salman Dossani",
+     "captain": false
+    },
+    {
+     "name": "Shahrukh Lalani",
+     "captain": false
+    },
+    {
+     "name": "Zamir Bhimji",
+     "captain": false
+    }
+   ]
+  },
+  {
+   "id": "HpL3PfHAmT2Czlfq3X9s",
+   "applicantId": "Fpsa2TSZMgUuS7czTs8e",
+   "name": "Liq",
+   "short": "LIQ",
+   "color": "#00ba5d",
+   "players": [
+    {
+     "name": "Ali Bharwani",
+     "captain": true
+    },
+    {
+     "name": "Ali Sachwani",
+     "captain": false
+    },
+    {
+     "name": "Alishan Rehman",
+     "captain": false
+    },
+    {
+     "name": "Alyaan Lalani",
+     "captain": false
+    },
+    {
+     "name": "Amil Lakhani",
+     "captain": false
+    },
+    {
+     "name": "Faiz Charanyia",
+     "captain": false
+    },
+    {
+     "name": "Faiz Shallwani",
+     "captain": false
+    },
+    {
+     "name": "Iliyan Tharani",
+     "captain": false
+    },
+    {
+     "name": "Shamez Arab",
+     "captain": false
+    },
+    {
+     "name": "Sharick Chagani",
+     "captain": false
+    },
+    {
+     "name": "Tabbish Ali",
+     "captain": false
+    }
+   ]
+  },
+  {
+   "id": "dss7qOTFkAKpqEkpxDZB",
+   "applicantId": "rgxqUsJTIFJ2t4qt9ma9",
+   "name": "Villians",
+   "short": "VIL",
+   "color": "#00ba5d",
+   "players": [
+    {
+     "name": "Daniel Ali",
+     "captain": true
+    },
+    {
+     "name": "Aadil Khetani",
+     "captain": false
+    },
+    {
+     "name": "Aryan Rajani",
+     "captain": false
+    },
+    {
+     "name": "Naushad Lalani",
+     "captain": false
+    },
+    {
+     "name": "Sameer Badruddin",
+     "captain": false
+    },
+    {
+     "name": "Saud Khakwani",
+     "captain": false
+    },
+    {
+     "name": "Shahzad Ladiwala",
+     "captain": false
+    },
+    {
+     "name": "Sheryar Ali",
+     "captain": false
+    },
+    {
+     "name": "Sofian Ali",
+     "captain": false
+    },
+    {
+     "name": "Tanweer Gangani",
+     "captain": false
+    },
+    {
+     "name": "Zohaib Hadi",
+     "captain": false
+    }
+   ]
+  },
+  {
+   "id": "5lwActvM1YYLFVrlnVGF",
+   "applicantId": "wL6wN5Ry9EoPWEjGMRDQ",
+   "name": "PowerPlai",
+   "short": "POP",
+   "color": "#00ba5d",
+   "players": [
+    {
+     "name": "Irfaan Eswani",
+     "captain": true
+    },
+    {
+     "name": "Arish Lalani",
+     "captain": false
+    },
+    {
+     "name": "Awaiz Mohammad",
+     "captain": false
+    },
+    {
+     "name": "Mustafa Ali",
+     "captain": false
+    },
+    {
+     "name": "Rahim Hemani",
+     "captain": false
+    },
+    {
+     "name": "Sajid Jooma",
+     "captain": false
+    },
+    {
+     "name": "Wajid Dawood",
+     "captain": false
+    },
+    {
+     "name": "Waqas Hyderaly",
+     "captain": false
+    },
+    {
+     "name": "Ziyan Ali",
+     "captain": false
+    }
+   ]
+  },
+  {
+   "id": "5dm88proRIFw8sW8LHBE",
+   "applicantId": "0eQ5lhXBaM9z6JQj33PH",
+   "name": "Titans",
+   "short": "TTS",
+   "color": "#00ba5d",
+   "players": [
+    {
+     "name": "Adil Ali",
+     "captain": false
+    },
+    {
+     "name": "Ali Kabani",
+     "captain": false
+    },
+    {
+     "name": "Aly Khoja",
+     "captain": false
+    },
+    {
+     "name": "Amar Khoja",
+     "captain": false
+    },
+    {
+     "name": "Asad Meghani",
+     "captain": false
+    },
+    {
+     "name": "Sahil Jiwani",
+     "captain": false
+    },
+    {
+     "name": "Sahil Panjwani",
+     "captain": false
+    },
+    {
+     "name": "Salman Lalani",
+     "captain": false
+    },
+    {
+     "name": "Sehan Gilani",
+     "captain": false
+    },
+    {
+     "name": "Shahzil Amin",
+     "captain": false
+    },
+    {
+     "name": "Zain Motani",
+     "captain": false
+    }
+   ]
+  },
+  {
+   "id": "1Xn6W6dZVSqhYjLg3r02",
+   "applicantId": "MQ6pYZa5uxtRFdgU7t58",
+   "name": "Team Supreme",
+   "short": "SUP",
+   "color": "#00ba5d",
+   "players": [
+    {
+     "name": "Saarim Khakwani",
+     "captain": true
+    },
+    {
+     "name": "Aahil Vidhani",
+     "captain": false
+    },
+    {
+     "name": "Aariz Mithani",
+     "captain": false
+    },
+    {
+     "name": "Aayan Sayani",
+     "captain": false
+    },
+    {
+     "name": "Afzal Mitha",
+     "captain": false
+    },
+    {
+     "name": "Aiman Lakhani",
+     "captain": false
+    },
+    {
+     "name": "Arsh Karowadia",
+     "captain": false
+    },
+    {
+     "name": "Kaamil Thobani",
+     "captain": false
+    },
+    {
+     "name": "Omar Bharwani",
+     "captain": false
+    }
+   ]
+  }
+ ],
+ "games": [
+  {
+   "id": "fWxYIn8vwsROGwEOSFoE",
+   "name": "GA Match 1",
+   "stage": "group",
+   "round": "Group A",
+   "matchNum": 1,
+   "date": "2026-09-05",
+   "time": "08:00 AM",
+   "startMs": 1788613200000,
+   "court": "Court 3",
+   "a": {
+    "teamId": "OxtnItb0gTMZDabPJhOO",
+    "applicantId": "4qv1zdkPPMlKnPgyROA2",
+    "name": "OGS",
+    "placeholder": false
+   },
+   "b": {
+    "teamId": "1Xn6W6dZVSqhYjLg3r02",
+    "applicantId": "MQ6pYZa5uxtRFdgU7t58",
+    "name": "Team Supreme",
+    "placeholder": false
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": null,
+   "raw": {}
+  },
+  {
+   "id": "fhKbEddwRXjPzo7iBBmq",
+   "name": "GA Match 2",
+   "stage": "group",
+   "round": "Group A",
+   "matchNum": 2,
+   "date": "2026-09-05",
+   "time": "08:00 AM",
+   "startMs": 1788613200000,
+   "court": "Court 1",
+   "a": {
+    "teamId": "HpL3PfHAmT2Czlfq3X9s",
+    "applicantId": "Fpsa2TSZMgUuS7czTs8e",
+    "name": "Liq",
+    "placeholder": false
+   },
+   "b": {
+    "teamId": "5dm88proRIFw8sW8LHBE",
+    "applicantId": "0eQ5lhXBaM9z6JQj33PH",
+    "name": "Titans",
+    "placeholder": false
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": null,
+   "raw": {}
+  },
+  {
+   "id": "JqtVx0gR5IxuvU0C1fzA",
+   "name": "GA Match 3",
+   "stage": "group",
+   "round": "Group A",
+   "matchNum": 3,
+   "date": "2026-09-05",
+   "time": "08:00 AM",
+   "startMs": 1788613200000,
+   "court": "Court 4",
+   "a": {
+    "teamId": "dss7qOTFkAKpqEkpxDZB",
+    "applicantId": "rgxqUsJTIFJ2t4qt9ma9",
+    "name": "Villians",
+    "placeholder": false
+   },
+   "b": {
+    "teamId": "5lwActvM1YYLFVrlnVGF",
+    "applicantId": "wL6wN5Ry9EoPWEjGMRDQ",
+    "name": "PowerPlai",
+    "placeholder": false
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": null,
+   "raw": {}
+  },
+  {
+   "id": "kStDUinwzyCwvQSpwFhA",
+   "name": "GA Match 4",
+   "stage": "group",
+   "round": "Group A",
+   "matchNum": 4,
+   "date": "2026-09-05",
+   "time": "09:30 AM",
+   "startMs": 1788618600000,
+   "court": "Court 2",
+   "a": {
+    "teamId": "1Xn6W6dZVSqhYjLg3r02",
+    "applicantId": "MQ6pYZa5uxtRFdgU7t58",
+    "name": "Team Supreme",
+    "placeholder": false
+   },
+   "b": {
+    "teamId": "ZeGJaPi7PjDltqtii5bH",
+    "applicantId": "GF5RP0RhNONLwy98dT9d",
+    "name": "4-D",
+    "placeholder": false
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": null,
+   "raw": {}
+  },
+  {
+   "id": "9Vd0oGzX6VMa33apsToC",
+   "name": "GA Match 5",
+   "stage": "group",
+   "round": "Group A",
+   "matchNum": 5,
+   "date": "2026-09-05",
+   "time": "09:30 AM",
+   "startMs": 1788618600000,
+   "court": "Court 3",
+   "a": {
+    "teamId": "OxtnItb0gTMZDabPJhOO",
+    "applicantId": "4qv1zdkPPMlKnPgyROA2",
+    "name": "OGS",
+    "placeholder": false
+   },
+   "b": {
+    "teamId": "5lwActvM1YYLFVrlnVGF",
+    "applicantId": "wL6wN5Ry9EoPWEjGMRDQ",
+    "name": "PowerPlai",
+    "placeholder": false
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": null,
+   "raw": {}
+  },
+  {
+   "id": "HKu1rbN9iXVx9hopGWpO",
+   "name": "GA Match 6",
+   "stage": "group",
+   "round": "Group A",
+   "matchNum": 6,
+   "date": "2026-09-05",
+   "time": "09:30 AM",
+   "startMs": 1788618600000,
+   "court": "Court 1",
+   "a": {
+    "teamId": "HpL3PfHAmT2Czlfq3X9s",
+    "applicantId": "Fpsa2TSZMgUuS7czTs8e",
+    "name": "Liq",
+    "placeholder": false
+   },
+   "b": {
+    "teamId": "dss7qOTFkAKpqEkpxDZB",
+    "applicantId": "rgxqUsJTIFJ2t4qt9ma9",
+    "name": "Villians",
+    "placeholder": false
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": null,
+   "raw": {}
+  },
+  {
+   "id": "Cl7Bfber9HrG9y64y2Bw",
+   "name": "GA Match 7",
+   "stage": "group",
+   "round": "Group A",
+   "matchNum": 7,
+   "date": "2026-09-05",
+   "time": "11:00 AM",
+   "startMs": 1788624000000,
+   "court": "Court 2",
+   "a": {
+    "teamId": "ZeGJaPi7PjDltqtii5bH",
+    "applicantId": "GF5RP0RhNONLwy98dT9d",
+    "name": "4-D",
+    "placeholder": false
+   },
+   "b": {
+    "teamId": "5dm88proRIFw8sW8LHBE",
+    "applicantId": "0eQ5lhXBaM9z6JQj33PH",
+    "name": "Titans",
+    "placeholder": false
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": null,
+   "raw": {}
+  },
+  {
+   "id": "mn6ZOtHchcNGckMeLv4e",
+   "name": "GA Match 8",
+   "stage": "group",
+   "round": "Group A",
+   "matchNum": 8,
+   "date": "2026-09-05",
+   "time": "11:00 AM",
+   "startMs": 1788624000000,
+   "court": "Court 4",
+   "a": {
+    "teamId": "1Xn6W6dZVSqhYjLg3r02",
+    "applicantId": "MQ6pYZa5uxtRFdgU7t58",
+    "name": "Team Supreme",
+    "placeholder": false
+   },
+   "b": {
+    "teamId": "5lwActvM1YYLFVrlnVGF",
+    "applicantId": "wL6wN5Ry9EoPWEjGMRDQ",
+    "name": "PowerPlai",
+    "placeholder": false
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": null,
+   "raw": {}
+  },
+  {
+   "id": "04VWT9twYQ7EhgOPyUvC",
+   "name": "GA Match 9",
+   "stage": "group",
+   "round": "Group A",
+   "matchNum": 9,
+   "date": "2026-09-05",
+   "time": "11:00 AM",
+   "startMs": 1788624000000,
+   "court": "Court 3",
+   "a": {
+    "teamId": "OxtnItb0gTMZDabPJhOO",
+    "applicantId": "4qv1zdkPPMlKnPgyROA2",
+    "name": "OGS",
+    "placeholder": false
+   },
+   "b": {
+    "teamId": "HpL3PfHAmT2Czlfq3X9s",
+    "applicantId": "Fpsa2TSZMgUuS7czTs8e",
+    "name": "Liq",
+    "placeholder": false
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": null,
+   "raw": {}
+  },
+  {
+   "id": "H6Y2r9xwZ4R6fX460ocx",
+   "name": "GA Match 10",
+   "stage": "group",
+   "round": "Group A",
+   "matchNum": 10,
+   "date": "2026-09-05",
+   "time": "12:30 PM",
+   "startMs": 1788629400000,
+   "court": "Court 4",
+   "a": {
+    "teamId": "5lwActvM1YYLFVrlnVGF",
+    "applicantId": "wL6wN5Ry9EoPWEjGMRDQ",
+    "name": "PowerPlai",
+    "placeholder": false
+   },
+   "b": {
+    "teamId": "ZeGJaPi7PjDltqtii5bH",
+    "applicantId": "GF5RP0RhNONLwy98dT9d",
+    "name": "4-D",
+    "placeholder": false
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": null,
+   "raw": {}
+  },
+  {
+   "id": "ZfqvpRGvktWVhl7f0uUB",
+   "name": "Match 1",
+   "stage": "playoff",
+   "round": "Round 1",
+   "matchNum": 1,
+   "date": "2026-09-06",
+   "time": "08:00 AM",
+   "startMs": 1788699600000,
+   "court": "Court 4",
+   "a": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner 4 of Group A",
+    "placeholder": true
+   },
+   "b": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner 5 of Group A",
+    "placeholder": true
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": "AvNyt4hbgv1TPh8cGDau",
+   "raw": {}
+  },
+  {
+   "id": "r5gBIoEbs3Zx9KoGKCBL",
+   "name": "Match 2",
+   "stage": "playoff",
+   "round": "Round 1",
+   "matchNum": 2,
+   "date": "2026-09-06",
+   "time": "08:00 AM",
+   "startMs": 1788699600000,
+   "court": "Court 3",
+   "a": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner 2 of Group A",
+    "placeholder": true
+   },
+   "b": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner 7 of Group A",
+    "placeholder": true
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": "d3FgWaZigqzxNvSCiZ45",
+   "raw": {}
+  },
+  {
+   "id": "IRvqnI1sE0Jj7Zsqc5CK",
+   "name": "GA Match 11",
+   "stage": "group",
+   "round": "Group A",
+   "matchNum": 11,
+   "date": "2026-09-06",
+   "time": "08:00 AM",
+   "startMs": 1788699600000,
+   "court": "Court 2",
+   "a": {
+    "teamId": "5dm88proRIFw8sW8LHBE",
+    "applicantId": "0eQ5lhXBaM9z6JQj33PH",
+    "name": "Titans",
+    "placeholder": false
+   },
+   "b": {
+    "teamId": "dss7qOTFkAKpqEkpxDZB",
+    "applicantId": "rgxqUsJTIFJ2t4qt9ma9",
+    "name": "Villians",
+    "placeholder": false
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": null,
+   "raw": {}
+  },
+  {
+   "id": "0CJQdvKAUsGI0OaJ1BQB",
+   "name": "GA Match 12",
+   "stage": "group",
+   "round": "Group A",
+   "matchNum": 12,
+   "date": "2026-09-06",
+   "time": "08:00 AM",
+   "startMs": 1788699600000,
+   "court": "Court 1",
+   "a": {
+    "teamId": "1Xn6W6dZVSqhYjLg3r02",
+    "applicantId": "MQ6pYZa5uxtRFdgU7t58",
+    "name": "Team Supreme",
+    "placeholder": false
+   },
+   "b": {
+    "teamId": "HpL3PfHAmT2Czlfq3X9s",
+    "applicantId": "Fpsa2TSZMgUuS7czTs8e",
+    "name": "Liq",
+    "placeholder": false
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": null,
+   "raw": {}
+  },
+  {
+   "id": "AvNyt4hbgv1TPh8cGDau",
+   "name": "Semi-Final 1",
+   "stage": "playoff",
+   "round": "Semi-Finals",
+   "matchNum": 4,
+   "date": "2026-09-06",
+   "time": "09:30 AM",
+   "startMs": 1788705000000,
+   "court": "Court 3",
+   "a": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner 1 of Group A",
+    "placeholder": true
+   },
+   "b": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner of Match 1",
+    "placeholder": true
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": "ZhPYzfG4QfFDn3IQwb1f",
+   "raw": {}
+  },
+  {
+   "id": "5HQpS07CrkDbwSCEGswo",
+   "name": "GA Match 13",
+   "stage": "group",
+   "round": "Group A",
+   "matchNum": 13,
+   "date": "2026-09-06",
+   "time": "09:30 AM",
+   "startMs": 1788705000000,
+   "court": "Court 2",
+   "a": {
+    "teamId": "ZeGJaPi7PjDltqtii5bH",
+    "applicantId": "GF5RP0RhNONLwy98dT9d",
+    "name": "4-D",
+    "placeholder": false
+   },
+   "b": {
+    "teamId": "dss7qOTFkAKpqEkpxDZB",
+    "applicantId": "rgxqUsJTIFJ2t4qt9ma9",
+    "name": "Villians",
+    "placeholder": false
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": null,
+   "raw": {}
+  },
+  {
+   "id": "34FgpOwgzqP9dJSpazEn",
+   "name": "GA Match 14",
+   "stage": "group",
+   "round": "Group A",
+   "matchNum": 14,
+   "date": "2026-09-06",
+   "time": "09:30 AM",
+   "startMs": 1788705000000,
+   "court": "Court 1",
+   "a": {
+    "teamId": "5dm88proRIFw8sW8LHBE",
+    "applicantId": "0eQ5lhXBaM9z6JQj33PH",
+    "name": "Titans",
+    "placeholder": false
+   },
+   "b": {
+    "teamId": "OxtnItb0gTMZDabPJhOO",
+    "applicantId": "4qv1zdkPPMlKnPgyROA2",
+    "name": "OGS",
+    "placeholder": false
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": null,
+   "raw": {}
+  },
+  {
+   "id": "nQ9qTkpUIUd5PK9Oa0go",
+   "name": "Match 3",
+   "stage": "playoff",
+   "round": "Round 1",
+   "matchNum": 3,
+   "date": "2026-09-06",
+   "time": "11:00 AM",
+   "startMs": 1788710400000,
+   "court": "Court 2",
+   "a": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner 3 of Group A",
+    "placeholder": true
+   },
+   "b": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner 6 of Group A",
+    "placeholder": true
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": "d3FgWaZigqzxNvSCiZ45",
+   "raw": {}
+  },
+  {
+   "id": "ZhPYzfG4QfFDn3IQwb1f",
+   "name": "Final",
+   "stage": "playoff",
+   "round": "Final",
+   "matchNum": 6,
+   "date": "2026-09-06",
+   "time": "11:00 AM",
+   "startMs": 1788710400000,
+   "court": "Court 4",
+   "a": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner of Semi-Final 1",
+    "placeholder": true
+   },
+   "b": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner of Semi-Final 2",
+    "placeholder": true
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": null,
+   "raw": {}
+  },
+  {
+   "id": "d3FgWaZigqzxNvSCiZ45",
+   "name": "Semi-Final 2",
+   "stage": "playoff",
+   "round": "Semi-Finals",
+   "matchNum": 5,
+   "date": "2026-09-06",
+   "time": "12:30 PM",
+   "startMs": 1788715800000,
+   "court": "Court 1",
+   "a": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner of Match 2",
+    "placeholder": true
+   },
+   "b": {
+    "teamId": null,
+    "applicantId": null,
+    "name": "Winner of Match 3",
+    "placeholder": true
+   },
+   "status": "scheduled",
+   "scoreA": null,
+   "scoreB": null,
+   "winnerTeamId": null,
+   "nextMatchId": "ZhPYzfG4QfFDn3IQwb1f",
+   "raw": {}
+  }
+ ],
+ "fetchedAt": ""
+}

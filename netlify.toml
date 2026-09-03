@@ -165,6 +165,16 @@
   [headers.values]
     X-Robots-Tag = "noindex"
 
+# ---------------------------------------------------------------------------
+# UNLISTED COACH PAGES — /t/<slug>/. Reachable by link, absent from the sitemap,
+# disallowed in robots.ts, and told here to stay out of search even if a link
+# gets crawled. The pages are static like everything else; only their feed is
+# live (netlify/functions/tournament.mts).
+[[headers]]
+  for = "/t/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
 # There is no coaches rule any more. public/images/coaches/ was deleted
 # 2026-09-02 — 34 ESPN-sourced photos that nothing rendered (coach-photo.tsx
 # had held SHOW_PHOTOS = false since the coverage was judged too sparse at 17

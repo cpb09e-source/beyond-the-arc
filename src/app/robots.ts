@@ -12,7 +12,11 @@ export default function robots(): MetadataRoute.Robots {
     // only Disallow lines are the login page and the API. Keeping the data
     // pages indexable matters more here than usual: the closest competitor has
     // a two-year SEO head start (see docs/monetization-strategy.md 5.2b).
-    rules: { userAgent: "*", allow: "/", disallow: "/account/" },
+    //
+    // /t/ holds unlisted coach pages — one tournament weekend each, reachable
+    // by link and nowhere else. Disallowed here, noindexed in netlify.toml and
+    // in each page's metadata, and absent from the sitemap.
+    rules: { userAgent: "*", allow: "/", disallow: ["/account/", "/t/"] },
     sitemap: `${BASE_URL}/sitemap.xml`,
     host: BASE_URL,
   };
