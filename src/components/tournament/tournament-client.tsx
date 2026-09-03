@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/utils";
 import { Select } from "@/components/select";
 import { PercentileChip } from "@/components/percentile-chip";
@@ -61,7 +61,22 @@ type Ctx = {
   openTeam: (t: Team) => void;
 };
 
-export function TournamentClient({ slug, seed = null }: { slug: string; seed?: Tournament | null }) {
+export function TournamentClient({
+  slug,
+  seed = null,
+  action = null,
+}: {
+  slug: string;
+  seed?: Tournament | null;
+  /**
+   * A control the host page wants in the header — 4dbball puts its theme
+   * toggle here. IT IS A SLOT, NOT AN OVERLAY: floated over the page with
+   * position:absolute it sat on top of the venue line as soon as the address
+   * wrapped to two lines, which it does on any phone. In the flex row it
+   * cannot overlap at any width.
+   */
+  action?: React.ReactNode;
+}) {
   const tab = useSyncExternalStore(subscribeHash, readTab, () => "schedule" as Tab);
 
   // The last good payload and when it arrived. Loading and failure are derived
@@ -139,7 +154,7 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
   return (
     <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-6 pb-20">
       {/* ------------------------------------------------------------ hero */}
-      <header>
+      <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <Eyebrow>{data.event.name}</Eyebrow>
           {/* NO TEAM NAME AND NO RECORD HERE. The team is named by the "Your
@@ -169,7 +184,7 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
               <>
                 {" · "}
                 <a
-                  className="hover:text-coral transition-colors"
+                  className="text-coral underline decoration-dotted underline-offset-4 hover:decoration-solid transition-colors"
                   href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(data.event.venue.address)}`}
                   target="_blank" rel="noreferrer"
                 >
@@ -188,7 +203,7 @@ export function TournamentClient({ slug, seed = null }: { slug: string; seed?: T
             </div>
           </div>
         </div>
-
+        {action && <div className="shrink-0">{action}</div>}
       </header>
 
       {/* ---------------------------------------------------- schedule strip
@@ -337,7 +352,6 @@ function StripCell({ g, me, ctx }: { g: Game; me: Team; ctx: Ctx }) {
       </span>
       <span className="text-[0.5rem] uppercase tracking-wider text-ink-muted leading-none tabular">
         {dayLabel(g.date).split(",")[0]} {timeLabel(g.time).replace(/:00/, "").replace(/\s/, "")}
-        {g.court ? ` · ${g.court.replace(/^Court /, "C")}` : ""}
       </span>
     </a>
   );
@@ -380,6 +394,7 @@ function Schedule({ ctx, myGames }: { ctx: Ctx; myGames: Game[] }) {
 function GameCard({ g, ctx, className, style }: { g: Game; ctx: Ctx; className?: string; style?: React.CSSProperties }) {
   const live = isLive(g);
   const final = g.status === "final";
+  const [clock, meridiem] = splitTime(g.time);
   const ra = g.stage === "playoff" ? resolveSide(g.a, ctx.data, ctx.table, ctx.complete) : settled(g.a, ctx.data);
   const rb = g.stage === "playoff" ? resolveSide(g.b, ctx.data, ctx.table, ctx.complete) : settled(g.b, ctx.data);
   const projected = ra.state === "projected" || rb.state === "projected";
@@ -393,31 +408,52 @@ function GameCard({ g, ctx, className, style }: { g: Game; ctx: Ctx; className?:
       )}
       style={style}
     >
-      <div className="flex items-center justify-between gap-2 px-4 pt-3">
-        <span className="flex items-center gap-1.5 min-w-0 text-[0.58rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">
-          <span className="truncate">{g.court ?? ctx.data.event.venue.name}</span>
+      {/* THE TIP-OFF LEADS THE CARD. It used to be a 9px grey label in the
+          corner, and the same time was printed again in the meta band below —
+          twice, small, in the two least-read places on the card. The time is
+          the thing a reader came for, so it is set at the card's own headline
+          size, and the court keeps its place as a quiet chip: four courts run
+          at once at this venue, so it is the one other fact worth carrying. */}
+      <div className="flex items-center gap-2.5 px-4 pt-3 pb-2.5 border-b border-hairline/70">
+        <span className="font-display tabular text-[1.02rem] leading-none text-ink">
+          {clock}
+          {meridiem && <span className="ml-0.5 text-[0.66rem] font-medium text-ink-muted">{meridiem}</span>}
         </span>
-        <span className={cn(
-          "shrink-0 text-[0.58rem] uppercase tracking-[0.12em] font-bold tabular",
-          live ? "text-coral" : "text-ink-muted",
-        )}>
-          {live ? "Live" : final ? "Final" : `${dayLabel(g.date).split(",")[0]} ${timeLabel(g.time)}`}
+        <span className="text-[0.62rem] uppercase tracking-[0.14em] font-semibold text-ink-muted">
+          {dayLabel(g.date).split(",")[0]}
         </span>
+        {(live || final) && (
+          <span className={cn(
+            "text-[0.6rem] uppercase tracking-[0.12em] font-bold",
+            live ? "text-coral" : "text-ink-muted",
+          )}>
+            {live ? "Live" : "Final"}
+          </span>
+        )}
+        {g.court && (
+          <span className="ml-auto shrink-0 rounded-md border border-hairline px-2 py-0.5 text-[0.62rem] uppercase tracking-[0.08em] font-semibold text-ink-soft whitespace-nowrap">
+            {g.court}
+          </span>
+        )}
       </div>
-      <div className="px-4 pb-3">
+      <div className="px-4 pt-1 pb-3">
         <div className="divide-y divide-hairline/60">
           <SideRow r={ra} slot={g.a} score={g.scoreA} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.a.teamId} me={ctx.me} onOpen={ctx.openTeam} />
           <SideRow r={rb} slot={g.b} score={g.scoreB} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.b.teamId} me={ctx.me} onOpen={ctx.openTeam} />
         </div>
       </div>
-      {/* Match numbers are the organiser's bookkeeping and mean nothing in
-          the group; in the bracket they are how the rounds refer to each
-          other ("Winner of Match 1"), so they stay there. */}
-      <div className="px-4 py-2 border-t border-hairline bg-paper-deep/30 flex items-center gap-1.5 text-[0.6rem] text-ink-muted">
-        {g.stage === "playoff" && <span className="uppercase tracking-widest font-semibold text-ink-muted/70">{g.round}</span>}
-        <span className="tabular">{g.stage === "playoff" ? g.name : `${dayLabel(g.date).split(",")[0]} ${timeLabel(g.time)}`}</span>
-        {projected && <span className="ml-auto italic">projected</span>}
-      </div>
+      {/* ONLY PLAYOFF GAMES KEEP A FOOT. It used to repeat the day and time
+          the badge above now carries; what is left is the round and the match
+          number, and those exist only in the bracket, where the rounds refer
+          to each other by them ("Winner of Match 1"). A group game has nothing
+          to put here, so it gets no band rather than an empty one. */}
+      {g.stage === "playoff" && (
+        <div className="px-4 py-2 border-t border-hairline bg-paper-deep/30 flex items-center gap-1.5 text-[0.6rem] text-ink-muted">
+          <span className="uppercase tracking-widest font-semibold text-ink-muted/70">{g.round}</span>
+          <span className="tabular">{g.name}</span>
+          {projected && <span className="ml-auto italic">projected</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -518,8 +554,7 @@ function Standings({ ctx }: { ctx: Ctx }) {
         </div>
         <p className="mt-4 pt-4 border-t border-hairline/60 text-xs text-ink-muted">
           One group; each team plays four. All seven advance — seed 1 to the semi-finals, seeds 2–7 to Round 1.
-          Ranked by win %, then point differential with each game&rsquo;s margin capped at ±{DIFF_CAP} (NAIG rulebook);
-          a forfeit is 30–0. Uncapped figures in brackets where they differ.
+          Ranked by win %, then point differential with each game&rsquo;s margin capped at ±{DIFF_CAP}.
         </p>
       </div>
 
@@ -743,6 +778,14 @@ function TeamName({
 /* -------------------------------------------------------- roster sheet --- */
 
 /**
+ * The iOS sheet curve: it leaves fast and lands slowly, which is what makes a
+ * panel feel thrown rather than driven. EXIT_MS is the travel time and also
+ * how long the parent is made to wait before it unmounts us.
+ */
+const SHEET_EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
+const EXIT_MS = 320;
+
+/**
  * One team's roster, over the page.
  *
  * REPLACED THE TEAMS TAB. Seven roster cards on their own screen answered a
@@ -758,20 +801,100 @@ function RosterSheet({ team, me, onClose }: { team: Team; me: Team | null; onClo
   const mine = me?.id === team.id;
   const panelRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * IT SLIDES. A sheet that appears in one frame reads as a page swap; a
+   * sheet that rises from the edge it is anchored to reads as the same page
+   * with something pulled up over it, which is what this is.
+   *
+   * `shown` drives both directions: false on the first paint so the panel is
+   * parked off-screen, true one frame later, and false again on the way out —
+   * so the exit is the entrance played backwards rather than a second set of
+   * rules. The panel outlives the closing gesture by one transition, which is
+   * why `close` defers `onClose` (the parent unmounts us) until it ends.
+   *
+   * Phone and desktop are different objects: on a phone the panel is docked to
+   * the bottom edge and travels its own height, on a desktop it is a centred
+   * dialog, where sliding a full height would be theatre — it lifts a few
+   * pixels and fades instead. `compact` is read once at mount because a sheet
+   * lives for a few seconds and nobody rotates a phone mid-roster.
+   */
+  const compact = useRef(typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches);
+  const still = useRef(typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  const [shown, setShown] = useState(false);
+  const [drag, setDrag] = useState(0);
+  const grab = useRef<{ id: number; startY: number; lastY: number; lastT: number; v: number } | null>(null);
+  const closing = useRef(false);
+
+  const close = useCallback(() => {
+    if (closing.current) return;
+    closing.current = true;
+    if (still.current) { onClose(); return; }
+    setShown(false);
+    window.setTimeout(onClose, EXIT_MS);
+  }, [onClose]);
+
+  const raf = useRef<number | null>(null);
   useEffect(() => {
     const returnTo = document.activeElement as HTMLElement | null;
-    panelRef.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    panelRef.current?.focus({ preventScroll: true });
+    // Two frames: the first paints the panel parked, the second starts the
+    // transition. One frame is not enough — the browser can coalesce a mount
+    // and a same-frame style change into a single paint, and the sheet simply
+    // appears in place with no travel.
+    const r1 = requestAnimationFrame(() => { const r2 = requestAnimationFrame(() => setShown(true)); raf.current = r2; });
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
     document.addEventListener("keydown", onKey);
     // The page behind must not scroll while a sheet is over it.
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
+      cancelAnimationFrame(r1);
+      if (raf.current) cancelAnimationFrame(raf.current);
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
       returnTo?.focus?.();
     };
-  }, [onClose]);
+  }, [close]);
+
+  /**
+   * DRAG IT DOWN TO DISMISS, from the handle or the title — the two places a
+   * thumb lands. Dragging up meets resistance rather than a wall, so the sheet
+   * feels attached to the finger either way, and the release decides on the
+   * distance OR the throw: a short fast flick dismisses, a long slow drag that
+   * stops short springs back.
+   */
+  const onGrab = (e: React.PointerEvent) => {
+    if (!compact.current || still.current) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    grab.current = { id: e.pointerId, startY: e.clientY, lastY: e.clientY, lastT: performance.now(), v: 0 };
+  };
+  const onGrabMove = (e: React.PointerEvent) => {
+    const g = grab.current;
+    if (!g || g.id !== e.pointerId) return;
+    const now = performance.now();
+    const dt = Math.max(1, now - g.lastT);
+    g.v = (e.clientY - g.lastY) / dt;
+    g.lastY = e.clientY;
+    g.lastT = now;
+    const dy = e.clientY - g.startY;
+    setDrag(dy > 0 ? dy : dy / 3);
+  };
+  const onGrabEnd = (e: React.PointerEvent) => {
+    const g = grab.current;
+    if (!g || g.id !== e.pointerId) return;
+    const dy = e.clientY - g.startY;
+    grab.current = null;
+    if (dy > 96 || (g.v > 0.5 && dy > 24)) { close(); return; }
+    setDrag(0);
+  };
+
+  const held = grab.current !== null;
+  const parked = compact.current ? "translateY(100%)" : "translateY(14px) scale(0.985)";
+  const panelStyle: React.CSSProperties = {
+    transform: shown ? `translateY(${drag}px)` : parked,
+    opacity: compact.current || shown ? 1 : 0,
+    transition: still.current || held ? "none" : `transform ${EXIT_MS}ms ${SHEET_EASE}, opacity 200ms ease-out`,
+  };
 
   return (
     <div
@@ -783,39 +906,54 @@ function RosterSheet({ team, me, onClose }: { team: Team; me: Team | null; onClo
       <button
         type="button"
         aria-label="Close"
-        onClick={onClose}
+        onClick={close}
         // NOT bg-ink/40. `--ink` is warm cream on the dark theme, so an
         // ink scrim BRIGHTENED the page it was meant to dim — the sheet ended
         // up floating over a washed-out grey. A scrim means "less light",
         // which is black in both themes.
-        className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-black/50 backdrop-blur-[2px] transition-opacity duration-300 ease-out"
+        style={{ opacity: shown ? 1 : 0, transition: still.current ? "none" : undefined }}
       />
       <div
         ref={panelRef}
         tabIndex={-1}
+        style={panelStyle}
         className={cn(
-          "relative w-full sm:max-w-md max-h-[85dvh] overflow-y-auto bg-card border shadow-xl focus:outline-none",
-          "rounded-t-xl sm:rounded-xl",
+          "relative w-full sm:max-w-md max-h-[85dvh] overflow-y-auto bg-card border shadow-xl focus:outline-none will-change-transform",
+          "rounded-t-2xl sm:rounded-xl",
           mine ? "border-coral/50" : "border-hairline",
         )}
       >
-        <div className="sticky top-0 flex items-baseline justify-between gap-3 px-5 py-4 bg-card border-b border-hairline">
-          <div className="min-w-0">
-            <h2 className={cn("font-display text-2xl leading-none truncate", mine ? "text-coral" : "text-ink")}>{team.name}</h2>
-            <p className="mt-1.5 text-[0.65rem] uppercase tracking-widest text-ink-muted tabular">
-              {team.players.length} player{team.players.length === 1 ? "" : "s"}
-            </p>
+        <div
+          className="sticky top-0 z-10 bg-card border-b border-hairline"
+          onPointerDown={onGrab}
+          onPointerMove={onGrabMove}
+          onPointerUp={onGrabEnd}
+          onPointerCancel={onGrabEnd}
+        >
+          {/* The grab bar is the affordance for the drag above, so it exists
+              only where the drag does — a mouse has the backdrop and the X. */}
+          <div className="sm:hidden flex justify-center pt-2.5 pb-0.5 touch-none cursor-grab active:cursor-grabbing" aria-hidden>
+            <span className="h-1 w-9 rounded-full bg-ink-muted/40" />
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="shrink-0 grid h-8 w-8 place-items-center rounded-md border border-hairline text-ink-muted hover:text-ink transition-colors"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
-              <path d="M3 3l8 8M11 3l-8 8" />
-            </svg>
-          </button>
+          <div className="flex items-baseline justify-between gap-3 px-5 pt-3.5 pb-4 sm:pt-4 touch-none sm:touch-auto">
+            <div className="min-w-0">
+              <h2 className={cn("font-display text-2xl leading-none truncate", mine ? "text-coral" : "text-ink")}>{team.name}</h2>
+              <p className="mt-1.5 text-[0.65rem] uppercase tracking-widest text-ink-muted tabular">
+                {team.players.length} player{team.players.length === 1 ? "" : "s"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={close}
+              aria-label="Close"
+              className="shrink-0 grid h-8 w-8 place-items-center rounded-md border border-hairline text-ink-muted hover:text-ink transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+                <path d="M3 3l8 8M11 3l-8 8" />
+              </svg>
+            </button>
+          </div>
         </div>
         <ul className="divide-y divide-hairline/40 px-5 py-1">
           {team.players.map((p) => (
@@ -857,6 +995,17 @@ function opponentSide(g: Game, me: Team, ctx: Ctx): Side {
   if (g.b.teamId === me.id) return g.a;
   const aIsMe = resolveSide(g.a, ctx.data, ctx.table, ctx.complete).team?.id === me.id;
   return aIsMe ? g.b : g.a;
+}
+
+/**
+ * "09:30 AM" → ["9:30", "AM"], so the badge can set the numerals at headline
+ * size and leave the meridiem small beside them. Anything that does not parse
+ * falls through whole rather than being mangled.
+ */
+function splitTime(t: string): [string, string] {
+  const m = /^(\d{1,2}:\d{2})\s*(AM|PM)$/i.exec(t.trim());
+  if (!m) return [timeLabel(t), ""];
+  return [m[1]!.replace(/^0/, ""), m[2]!.toUpperCase()];
 }
 
 function shortRound(round: string): string {
