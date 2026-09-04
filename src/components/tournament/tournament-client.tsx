@@ -64,6 +64,9 @@ type Ctx = {
   notes: Record<string, string>;
   openNotes: (g: Game) => void;
   matchups: Matchups;
+  /** Scores typed at the gym, still waiting on the organiser to confirm them. */
+  scores: ManualScores;
+  writeScore: (gameId: string, entry: ManualScore | null) => void;
 };
 
 /**
@@ -114,6 +117,56 @@ function matchupRoster(team: Team | null | undefined): { name: string }[] {
   return override ? override.map((name) => ({ name })) : team.players;
 }
 
+/**
+ * A SCORE TYPED FROM THE GYM, standing in until the organiser posts theirs.
+ *
+ * Stored in the feed's own a/b order rather than "us first", because that is
+ * the order every consumer downstream already speaks, and a stored score that
+ * has to be flipped by whoever reads it is a bug waiting for its second
+ * reader.
+ *
+ * THE FEED IS THE TRUTH. These are a stand-in and nothing more: the moment the
+ * organiser marks that game final, the manual entry is dropped — silently when
+ * the two agree, and with a notice naming the correction when they do not.
+ * Nothing here can outlive the real result.
+ */
+type ManualScore = { a: number; b: number };
+type ManualScores = Record<string, ManualScore>;
+
+const SCORES_KEY = "cig-scores";
+
+function readScores(): ManualScores {
+  try { return JSON.parse(localStorage.getItem(SCORES_KEY) ?? "{}") as ManualScores; } catch { return {}; }
+}
+
+/**
+ * The tournament as it stands if the typed scores are believed.
+ *
+ * Applied ONLY for the admin — a visitor's page is the organiser's data and
+ * nothing else. A manual score is never allowed to overwrite a game the feed
+ * has already called: that direction is the whole point of the reconciliation
+ * below, and letting it happen here would hide the disagreement it is meant
+ * to surface.
+ */
+function withManual(t: Tournament, scores: ManualScores): Tournament {
+  const ids = Object.keys(scores);
+  if (ids.length === 0) return t;
+  let touched = false;
+  const games = t.games.map((g) => {
+    const m = scores[g.id];
+    if (!m || g.status === "final") return g;
+    touched = true;
+    return {
+      ...g,
+      status: "final" as const,
+      scoreA: m.a,
+      scoreB: m.b,
+      winnerTeamId: m.a === m.b ? null : m.a > m.b ? g.a.teamId : g.b.teamId,
+    };
+  });
+  return touched ? { ...t, games } : t;
+}
+
 const MATCHUPS_KEY = "cig-matchups";
 const NOTES_KEY = "cig-notes";
 const ADMIN_KEY = "cig-admin";
@@ -152,7 +205,7 @@ export function TournamentClient({
   // and avoids a second render per tick.
   const [live, setLive] = useState<{ data: Tournament; at: number } | null>(null);
   const [failedAt, setFailedAt] = useState<number | null>(null);
-  const data = live?.data ?? seed;
+  const feed = live?.data ?? seed;
 
   useEffect(() => {
     let cancelled = false;
@@ -187,6 +240,9 @@ export function TournamentClient({
   const [notes, setNotes] = useState<Record<string, string>>(() => (typeof window === "undefined" ? {} : readNotes()));
   const [matchups, setMatchups] = useState<Matchups>(() => (typeof window === "undefined" ? {} : readMatchups()));
   const [admin, setAdminState] = useState(() => (typeof window !== "undefined" && readAdmin()));
+  const [scores, setScores] = useState<ManualScores>(() => (typeof window === "undefined" ? {} : readScores()));
+  /** Games where the organiser's final disagreed with what was typed. */
+  const [corrections, setCorrections] = useState<{ id: string; label: string; was: string; now: string }[]>([]);
 
   const setAdmin = useCallback((on: boolean) => {
     setAdminState(on);
@@ -195,6 +251,60 @@ export function TournamentClient({
       else localStorage.removeItem(ADMIN_KEY);
     } catch { /* ignore */ }
   }, []);
+
+  const writeScore = useCallback((id: string, entry: ManualScore | null) => {
+    setScores((prev) => {
+      const next = { ...prev };
+      if (entry) next[id] = entry; else delete next[id];
+      try { localStorage.setItem(SCORES_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  /**
+   * WHAT THE PAGE READS. The organiser's feed for everyone; the feed with the
+   * typed scores laid over it for the admin. Because it is applied here rather
+   * than at each place a score is shown, a manual result behaves like a real
+   * one all the way down: What If stops offering it as a pick, the table
+   * counts it, and the bracket seeds from the table.
+   */
+  const data = useMemo(() => (feed && admin ? withManual(feed, scores) : feed), [feed, scores, admin]);
+
+  /**
+   * THE FEED SETTLES IT. Whenever a game with a typed score comes back final
+   * from the organiser, the typed one is retired — quietly when they agree,
+   * and with a line naming the difference when they do not, because a coach
+   * who has been running the seeding off a wrong number should be told rather
+   * than watch the table change under them.
+   */
+  useEffect(() => {
+    if (!feed) return;
+    const settled = Object.keys(scores).filter((id) => {
+      const g = feed.games.find((x) => x.id === id);
+      return g?.status === "final" && g.scoreA !== null && g.scoreB !== null;
+    });
+    if (settled.length === 0) return;
+    const found: { id: string; label: string; was: string; now: string }[] = [];
+    for (const id of settled) {
+      const g = feed.games.find((x) => x.id === id)!;
+      const m = scores[id]!;
+      if (m.a !== g.scoreA || m.b !== g.scoreB) {
+        found.push({
+          id,
+          label: `${g.a.name} v ${g.b.name}`,
+          was: `${m.a}–${m.b}`,
+          now: `${g.scoreA}–${g.scoreB}`,
+        });
+      }
+    }
+    setScores((prev) => {
+      const next = { ...prev };
+      for (const id of settled) delete next[id];
+      try { localStorage.setItem(SCORES_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+    if (found.length) setCorrections((prev) => [...prev, ...found]);
+  }, [feed, scores]);
 
   /** Toggle one of ours onto one of theirs, for one game. */
   const toggleGuard = useCallback((gameId: string, theirName: string, ourName: string) => {
@@ -242,7 +352,10 @@ export function TournamentClient({
 
   const table = standings(data);
   const complete = groupIsComplete(data);
-  const ctx: Ctx = { data, me, table, complete, openTeam: setRoster, admin, setAdmin, notes, openNotes: setNoteFor, matchups };
+  const ctx: Ctx = {
+    data, me, table, complete, openTeam: setRoster,
+    admin, setAdmin, notes, openNotes: setNoteFor, matchups, scores, writeScore,
+  };
   const liveCount = data.games.filter(isLive).length;
   const finalCount = data.games.filter(isFinal).length;
   const myGames = me ? data.games.filter((g) => involves(g, me) || isPlayoffFor(g, me, ctx)) : [];
@@ -345,6 +458,35 @@ export function TournamentClient({
         {tab === "whatif" && <WhatIf ctx={ctx} />}
         {tab === "bracket" && <Bracket ctx={ctx} />}
       </div>
+
+      {/* THE OVERRIDE IS ANNOUNCED. A typed score that turns out to be wrong
+          has been moving the table and the bracket, so replacing it silently
+          would leave a coach with a seeding that changed for no visible
+          reason. It says what was typed, what the organiser posted, and then
+          gets out of the way. */}
+      {corrections.length > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-40 px-4 pb-4 pointer-events-none">
+          <div className="mx-auto max-w-md rounded-xl border border-coral/50 bg-card shadow-xl px-4 py-3 pointer-events-auto">
+            <p className="text-[0.6rem] uppercase tracking-[0.14em] font-semibold text-coral">Score corrected</p>
+            <ul className="mt-1.5 space-y-1">
+              {corrections.map((c) => (
+                <li key={c.id} className="text-[0.8rem] text-ink-soft">
+                  <span className="text-ink">{c.label}</span>
+                  {" — you had "}<span className="tabular">{c.was}</span>
+                  {", the organiser posted "}<span className="tabular font-semibold text-ink">{c.now}</span>.
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={() => setCorrections([])}
+              className="mt-2 text-[0.7rem] text-ink-muted hover:text-ink transition-colors underline decoration-dotted underline-offset-4"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {roster && <RosterSheet team={roster} me={me} onClose={() => setRoster(null)} />}
       {noteFor && (
@@ -549,14 +691,31 @@ function GameCard({ g, ctx, className, style }: { g: Game; ctx: Ctx; className?:
   const rb = g.stage === "playoff" ? resolveSide(g.b, ctx.data, ctx.table, ctx.complete) : settled(g.b, ctx.data);
   const projected = ra.state === "projected" || rb.state === "projected";
   const mine = ctx.me ? ra.team?.id === ctx.me.id || rb.team?.id === ctx.me.id : false;
+  /**
+   * EVERY GAME BOX TAKES A SCORE, in admin. Double-click opens the sheet on
+   * its Score pane — a deliberate gesture, so a card cannot be scored by
+   * brushing it while scrolling.
+   *
+   * `select-none` because the browser's own answer to a double-click is to
+   * select the word under it, and a card that highlights its own text every
+   * time it is opened looks broken.
+   *
+   * A team name keeps its single click for the roster: the name stops the
+   * double-click from reaching the card, so double-clicking a name opens the
+   * roster rather than the score.
+   */
+  const scoreable = ctx.admin && g.a.teamId !== null && g.b.teamId !== null;
   return (
     <div
       className={cn(
         "relative bg-card border rounded-xl shadow-sm overflow-hidden transition-colors",
         live ? "border-coral/40 ring-1 ring-coral/15" : mine ? "border-coral/30" : "border-ink/10",
+        scoreable && "select-none",
         className,
       )}
       style={style}
+      onDoubleClick={scoreable ? () => ctx.openNotes(g) : undefined}
+      title={scoreable ? "Double-click to enter a score" : undefined}
     >
       {/* THE TIP-OFF LEADS THE CARD. It used to be a 9px grey label in the
           corner, and the same time was printed again in the meta band below —
@@ -588,8 +747,8 @@ function GameCard({ g, ctx, className, style }: { g: Game; ctx: Ctx; className?:
       </div>
       <div className="px-4 pt-1 pb-3">
         <div className="divide-y divide-hairline/60">
-          <SideRow r={ra} slot={g.a} score={g.scoreA} margin={margin} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.a.teamId} ctx={ctx} />
-          <SideRow r={rb} slot={g.b} score={g.scoreB} margin={margin === null ? null : -margin} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.b.teamId} ctx={ctx} />
+          <SideRow r={ra} slot={g.a} score={g.scoreA} margin={margin} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.a.teamId} ctx={ctx} onScore={scoreable ? () => ctx.openNotes(g) : undefined} />
+          <SideRow r={rb} slot={g.b} score={g.scoreB} margin={margin === null ? null : -margin} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.b.teamId} ctx={ctx} onScore={scoreable ? () => ctx.openNotes(g) : undefined} />
         </div>
       </div>
       {/* ONLY PLAYOFF GAMES KEEP A FOOT. It used to repeat the day and time
@@ -621,7 +780,11 @@ function GameCard({ g, ctx, className, style }: { g: Game; ctx: Ctx; className?:
  * Both appear only once there is something to say — a team with no games
  * played gets a bare name, and a game with no score gets no margin.
  */
-function SideRow({ r, slot, score, margin, won, ctx }: { r: Resolved; slot: Side; score: number | null; margin: number | null; won: boolean; ctx: Ctx }) {
+function SideRow({ r, slot, score, margin, won, ctx, onScore }: {
+  r: Resolved; slot: Side; score: number | null; margin: number | null; won: boolean; ctx: Ctx;
+  /** Present only where a score can be entered — see the note on the button. */
+  onScore?: () => void;
+}) {
   const { me, table, openTeam } = ctx;
   const isMe = me ? r.team?.id === me.id : false;
   const seed = /winner\s+(\d+)\s+of/i.exec(slot.name)?.[1] ?? null;
@@ -667,9 +830,28 @@ function SideRow({ r, slot, score, margin, won, ctx }: { r: Resolved; slot: Side
       <span className={cn("ml-auto shrink-0 w-9 text-right text-[0.62rem] font-semibold tabular leading-none", margin === null ? "text-transparent" : tone(margin))}>
         {margin === null ? "" : `(${diffLabel(margin)})`}
       </span>
-      <span className={cn("text-right tabular text-lg font-bold leading-none pl-1.5", won ? "text-ink" : "text-ink-muted")}>
-        {score ?? "—"}
-      </span>
+      {/* ON A PHONE THERE IS NO DOUBLE-CLICK, so the score is the way in:
+          tapping the number — or the dash standing in for one — opens the
+          same sheet. It is the control whose meaning needs no explaining,
+          because it is the thing being changed. */}
+      {onScore ? (
+        <button
+          type="button"
+          onClick={onScore}
+          aria-label="Enter score"
+          className={cn(
+            "text-right tabular text-lg font-bold leading-none pl-1.5 rounded-sm transition-colors",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40 hover:text-coral",
+            won ? "text-ink" : "text-ink-muted",
+          )}
+        >
+          {score ?? "—"}
+        </button>
+      ) : (
+        <span className={cn("text-right tabular text-lg font-bold leading-none pl-1.5", won ? "text-ink" : "text-ink-muted")}>
+          {score ?? "—"}
+        </span>
+      )}
     </div>
   );
 }
@@ -982,7 +1164,7 @@ function NotesSheet({ g, ctx, value, onWrite, onGuard, onClose }: {
   onGuard: (theirName: string, ourName: string) => void;
   onClose: () => void;
 }) {
-  const [pane, setPane] = useState<"notes" | "matchups">("notes");
+  const [pane, setPane] = useState<"score" | "notes" | "matchups">("score");
 
   /**
    * THE DRAFT IS LOCAL, AND THE PAGE HEARS ABOUT IT LATE.
@@ -1013,12 +1195,21 @@ function NotesSheet({ g, ctx, value, onWrite, onGuard, onClose }: {
   }, []);
 
   const me = ctx.me;
-  const opp = me ? resolveSide(opponentSide(g, me, ctx), ctx.data, ctx.table, ctx.complete) : null;
-  const title = opp ? `vs ${opp.name}` : g.name;
+  /**
+   * "vs Titans" only when it IS a game of ours. Every box on the page can be
+   * scored now, and calling a game between two other teams "vs OGS" named the
+   * wrong side of a match the followed team is not in.
+   */
+  const mine = me ? involves(g, me) : false;
+  const opp = mine && me ? resolveSide(opponentSide(g, me, ctx), ctx.data, ctx.table, ctx.complete) : null;
+  const sideA = g.stage === "playoff" ? resolveSide(g.a, ctx.data, ctx.table, ctx.complete).name : g.a.name;
+  const sideB = g.stage === "playoff" ? resolveSide(g.b, ctx.data, ctx.table, ctx.complete).name : g.b.name;
+  const title = opp ? `vs ${opp.name}` : `${sideA} v ${sideB}`;
   const theirs = matchupRoster(opp?.team);
   const ours = matchupRoster(me);
   const map = ctx.matchups[g.id] ?? {};
   const assigned = Object.values(map).reduce((n, list) => n + list.length, 0);
+  const typed = ctx.scores[g.id] !== undefined;
 
   return (
     <Sheet
@@ -1028,12 +1219,15 @@ function NotesSheet({ g, ctx, value, onWrite, onGuard, onClose }: {
       accent
       onClose={onClose}
     >
-      {/* TWO PANES, ONE SHEET. Both answer "what are we doing about this
-          game", and a coach moves between them mid-thought — a second sheet
-          would have meant closing one to open the other. */}
+      {/* THE PANES ARE FOR OUR GAMES. Notes and matchups are the two halves
+          of "what are we doing about this one", and there is no answer to
+          that for a game between two other teams — those are opened to type a
+          score off the scoreboard and close again, so they get the score and
+          nothing to scroll past. */}
+      {mine && (
       <div className="px-5 pt-4">
         <div className="inline-flex items-center gap-[2px] rounded-[10px] border border-hairline bg-paper-deep p-[3px]">
-          {([["notes", "Notes"], ["matchups", "Matchups"]] as const).map(([key, label]) => (
+          {([["score", "Score"], ["notes", "Notes"], ["matchups", "Matchups"]] as const).map(([key, label]) => (
             <button
               key={key}
               type="button"
@@ -1051,12 +1245,18 @@ function NotesSheet({ g, ctx, value, onWrite, onGuard, onClose }: {
               {key === "matchups" && assigned > 0 && (
                 <span className="ml-1.5 text-[0.6rem] tabular text-ink-muted">{assigned}</span>
               )}
+              {key === "score" && typed && (
+                <span className="ml-1.5 h-1 w-1 rounded-full bg-coral" aria-label="score entered" />
+              )}
             </button>
           ))}
         </div>
       </div>
+      )}
 
-      {pane === "notes" ? (
+      {!mine || pane === "score" ? (
+        <ScorePane g={g} ctx={ctx} />
+      ) : pane === "notes" ? (
         <div className="px-5 pt-3 pb-5">
           <textarea
             autoFocus
@@ -1073,6 +1273,98 @@ function NotesSheet({ g, ctx, value, onWrite, onGuard, onClose }: {
         <MatchupsPane theirs={theirs} ours={ours} map={map} onGuard={onGuard} oppName={opp?.name ?? "them"} />
       )}
     </Sheet>
+  );
+}
+
+/**
+ * A score typed from the gym, before the organiser posts theirs.
+ *
+ * IT BEHAVES LIKE A REAL RESULT until it is replaced by one. Saving locks the
+ * game out of What If, moves the table, and re-seeds the bracket — which is
+ * the entire point of typing it courtside rather than waiting. It can be
+ * edited or cleared as often as needed, and the organiser's number silently
+ * replaces it the moment their result lands.
+ *
+ * A GAME THE FEED HAS ALREADY CALLED IS NOT EDITABLE. There would be nothing
+ * to do with the entry: the reconciliation would drop it on the next poll, so
+ * offering the field would be offering a change that undoes itself.
+ */
+function ScorePane({ g, ctx }: { g: Game; ctx: Ctx }) {
+  const live = ctx.data.games.find((x) => x.id === g.id) ?? g;
+  const typed = ctx.scores[g.id];
+  const confirmed = typed === undefined && live.status === "final";
+  const [a, setA] = useState(typed ? String(typed.a) : "");
+  const [b, setB] = useState(typed ? String(typed.b) : "");
+
+  const nameA = live.a.name, nameB = live.b.name;
+  const na = Number(a), nb = Number(b);
+  const valid = a.trim() !== "" && b.trim() !== "" && Number.isFinite(na) && Number.isFinite(nb) && na >= 0 && nb >= 0;
+  const digits = (raw: string) => raw.replace(/\D/g, "").slice(0, 3);
+
+  if (confirmed) {
+    return (
+      <div className="px-5 pt-4 pb-6">
+        <p className="text-sm text-ink-soft">
+          Final, from the organiser: <span className="font-semibold text-ink tabular">{nameA} {live.scoreA} – {live.scoreB} {nameB}</span>
+        </p>
+        <p className="mt-2 text-[0.7rem] text-ink-muted">Their result stands; there is nothing to enter.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-5 pt-4 pb-6">
+      <div className="space-y-2.5">
+        {([[nameA, a, setA], [nameB, b, setB]] as const).map(([name, val, set]) => (
+          <label key={name} className="flex items-center gap-3">
+            <span className="flex-1 min-w-0 truncate text-sm text-ink-soft">{name}</span>
+            <input
+              type="tel"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={val}
+              onChange={(e) => set(digits(e.target.value))}
+              aria-label={`${name} score`}
+              placeholder="—"
+              // 16px, or iOS zooms in on focus and stays there.
+              className="w-20 h-11 rounded-lg border border-hairline bg-paper-deep/40 px-3 text-base tabular text-right text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
+            />
+          </label>
+        ))}
+      </div>
+
+      <div className="mt-4 flex items-center gap-2">
+        <button
+          type="button"
+          disabled={!valid}
+          onClick={() => ctx.writeScore(g.id, { a: na, b: nb })}
+          className={cn(
+            "h-9 px-4 rounded-md text-sm font-semibold transition-colors",
+            "focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40",
+            valid ? "bg-coral text-accent-foreground" : "bg-paper-deep text-ink-muted cursor-not-allowed",
+          )}
+        >
+          {typed ? "Update score" : "Save score"}
+        </button>
+        {typed && (
+          <button
+            type="button"
+            onClick={() => { ctx.writeScore(g.id, null); setA(""); setB(""); }}
+            className="h-9 px-3 rounded-md border border-hairline text-sm text-ink-muted hover:text-ink transition-colors"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {/* Only once there is something to explain. Before a score is saved the
+          two fields and a button say all there is to say. */}
+      {typed && (
+        <p className="mt-3 text-[0.7rem] leading-relaxed text-ink-muted">
+          Counting in the table and the bracket, and locked out of What If. The organiser&rsquo;s result replaces it when it lands.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -1185,6 +1477,9 @@ function TeamName({
     <button
       type="button"
       onClick={() => onOpen(team)}
+      // The card above opens a score on a double-click; a name is not that
+      // card. Two quick clicks here mean the roster, twice, which is once.
+      onDoubleClick={(e) => e.stopPropagation()}
       title={`${team.name} roster`}
       className={cn(
         "hover:text-coral hover:underline decoration-dotted underline-offset-4 transition-colors",
@@ -1274,14 +1569,24 @@ function Sheet({ label, title, subtitle, accent = false, onClose, children }: {
     const r1 = requestAnimationFrame(() => { const r2 = requestAnimationFrame(() => setShown(true)); raf.current = r2; });
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
     document.addEventListener("keydown", onKey);
-    // The page behind must not scroll while a sheet is over it.
+    /**
+     * The page behind must not scroll while a sheet is over it — and must not
+     * MOVE either. Hiding the overflow takes the scrollbar away with it, and
+     * on a desktop that hands the page back fifteen pixels it did not have:
+     * everything behind the sheet slid right and the margins jumped. The lock
+     * pays that width back as padding, so the page underneath holds still.
+     */
+    const gap = window.innerWidth - document.documentElement.clientWidth;
     const prevOverflow = document.body.style.overflow;
+    const prevPad = document.body.style.paddingRight;
     document.body.style.overflow = "hidden";
+    if (gap > 0) document.body.style.paddingRight = `${gap}px`;
     return () => {
       cancelAnimationFrame(r1);
       if (raf.current) cancelAnimationFrame(raf.current);
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
+      document.body.style.paddingRight = prevPad;
       returnTo?.focus?.();
     };
   }, [close]);
