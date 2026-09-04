@@ -692,30 +692,44 @@ function GameCard({ g, ctx, className, style }: { g: Game; ctx: Ctx; className?:
   const projected = ra.state === "projected" || rb.state === "projected";
   const mine = ctx.me ? ra.team?.id === ctx.me.id || rb.team?.id === ctx.me.id : false;
   /**
-   * EVERY GAME BOX TAKES A SCORE, in admin. Double-click opens the sheet on
-   * its Score pane — a deliberate gesture, so a card cannot be scored by
-   * brushing it while scrolling.
+   * THE SCORE IS EDITED IN THE CARD.
    *
-   * `select-none` because the browser's own answer to a double-click is to
-   * select the word under it, and a card that highlights its own text every
-   * time it is opened looks broken.
-   *
-   * A team name keeps its single click for the roster: the name stops the
-   * double-click from reaching the card, so double-clicking a name opens the
-   * roster rather than the score.
+   * It used to open a dialog over the page, which is a lot of ceremony for two
+   * numbers — and on a phone the keyboard then had to be fought for room. The
+   * card already shows the two scores in the two places they belong, so
+   * editing happens there: a pencil beside the court turns them into fields,
+   * and a row opens underneath to save them. Nothing moves, nothing covers the
+   * page, and the numbers stay where they were being read.
    */
   const scoreable = ctx.admin && g.a.teamId !== null && g.b.teamId !== null;
+  const typed = ctx.scores[g.id];
+  const [editing, setEditing] = useState(false);
+  const [ea, setEa] = useState("");
+  const [eb, setEb] = useState("");
+
+  const openEditor = () => {
+    setEa(g.scoreA === null ? "" : String(g.scoreA));
+    setEb(g.scoreB === null ? "" : String(g.scoreB));
+    setEditing(true);
+  };
+  const digits = (raw: string) => raw.replace(/\D/g, "").slice(0, 3);
+  const na = Number(ea), nb = Number(eb);
+  const canSave = ea.trim() !== "" && eb.trim() !== "" && Number.isFinite(na) && Number.isFinite(nb);
+  const save = () => { if (!canSave) return; ctx.writeScore(g.id, { a: na, b: nb }); setEditing(false); };
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") { e.preventDefault(); save(); }
+    if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
+  };
+
   return (
     <div
       className={cn(
         "relative bg-card border rounded-xl shadow-sm overflow-hidden transition-colors",
         live ? "border-coral/40 ring-1 ring-coral/15" : mine ? "border-coral/30" : "border-ink/10",
-        scoreable && "select-none",
+        editing && "border-coral/60",
         className,
       )}
       style={style}
-      onDoubleClick={scoreable ? () => ctx.openNotes(g) : undefined}
-      title={scoreable ? "Double-click to enter a score" : undefined}
     >
       {/* THE TIP-OFF LEADS THE CARD. It used to be a 9px grey label in the
           corner, and the same time was printed again in the meta band below —
@@ -739,18 +753,81 @@ function GameCard({ g, ctx, className, style }: { g: Game; ctx: Ctx; className?:
             {live ? "Live" : "Final"}
           </span>
         )}
+        {/* THE PENCIL SITS WITH THE COURT, at the quiet end of the head —
+            the two facts nobody reads first. Only in admin, and only where
+            there are two real teams to give a score to. */}
+        {scoreable && (
+          <button
+            type="button"
+            onClick={() => (editing ? setEditing(false) : openEditor())}
+            aria-label={editing ? "Stop editing the score" : "Edit the score"}
+            aria-pressed={editing}
+            className={cn(
+              "ml-auto shrink-0 grid h-6 w-6 place-items-center rounded-md border transition-colors",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40",
+              editing ? "border-coral text-coral" : "border-hairline text-ink-muted hover:text-ink hover:border-ink-muted",
+            )}
+          >
+            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M9.5 2.5l2 2M2 12l.6-2.4 6.6-6.6 2 2-6.6 6.6L2 12z" />
+            </svg>
+          </button>
+        )}
         {g.court && (
-          <span className="ml-auto shrink-0 rounded-md border border-hairline px-2 py-0.5 text-[0.62rem] uppercase tracking-[0.08em] font-semibold text-ink-soft whitespace-nowrap">
+          <span className={cn(
+            "shrink-0 rounded-md border border-hairline px-2 py-0.5 text-[0.62rem] uppercase tracking-[0.08em] font-semibold text-ink-soft whitespace-nowrap",
+            !scoreable && "ml-auto",
+          )}>
             {g.court}
           </span>
         )}
       </div>
       <div className="px-4 pt-1 pb-3">
         <div className="divide-y divide-hairline/60">
-          <SideRow r={ra} slot={g.a} score={g.scoreA} margin={margin} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.a.teamId} ctx={ctx} onScore={scoreable ? () => ctx.openNotes(g) : undefined} />
-          <SideRow r={rb} slot={g.b} score={g.scoreB} margin={margin === null ? null : -margin} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.b.teamId} ctx={ctx} onScore={scoreable ? () => ctx.openNotes(g) : undefined} />
+          <SideRow r={ra} slot={g.a} score={g.scoreA} margin={margin} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.a.teamId} ctx={ctx}
+            edit={editing ? { value: ea, onChange: (v) => setEa(digits(v)), onKeyDown: onKey, autoFocus: true } : undefined} />
+          <SideRow r={rb} slot={g.b} score={g.scoreB} margin={margin === null ? null : -margin} won={final && g.winnerTeamId !== null && g.winnerTeamId === g.b.teamId} ctx={ctx}
+            edit={editing ? { value: eb, onChange: (v) => setEb(digits(v)), onKeyDown: onKey } : undefined} />
         </div>
       </div>
+      {/* THE SAVE ROW GROWS OUT OF THE CARD rather than appearing on top of
+          it: a grid row from nothing to its own height, so the card gets
+          taller by exactly the height of a button and nothing else shifts.
+          It is only there while editing, which is the only time it means
+          anything. */}
+      {scoreable && (
+        <div
+          className="grid transition-[grid-template-rows] duration-200 ease-out"
+          style={{ gridTemplateRows: editing ? "1fr" : "0fr" }}
+        >
+          <div className="overflow-hidden">
+            <div className="flex items-center gap-2 px-4 pb-3 pt-1">
+              <button
+                type="button"
+                onClick={save}
+                disabled={!canSave}
+                className={cn(
+                  "h-8 px-3.5 rounded-md text-[0.8rem] font-semibold transition-colors",
+                  "focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40",
+                  canSave ? "bg-coral text-accent-foreground" : "bg-paper-deep text-ink-muted cursor-not-allowed",
+                )}
+              >
+                Save score
+              </button>
+              {typed && (
+                <button
+                  type="button"
+                  onClick={() => { ctx.writeScore(g.id, null); setEditing(false); }}
+                  className="h-8 px-3 rounded-md border border-hairline text-[0.8rem] text-ink-muted hover:text-ink transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ONLY PLAYOFF GAMES KEEP A FOOT. It used to repeat the day and time
           the badge above now carries; what is left is the round and the match
           number, and those exist only in the bracket, where the rounds refer
@@ -780,10 +857,10 @@ function GameCard({ g, ctx, className, style }: { g: Game; ctx: Ctx; className?:
  * Both appear only once there is something to say — a team with no games
  * played gets a bare name, and a game with no score gets no margin.
  */
-function SideRow({ r, slot, score, margin, won, ctx, onScore }: {
+function SideRow({ r, slot, score, margin, won, ctx, edit }: {
   r: Resolved; slot: Side; score: number | null; margin: number | null; won: boolean; ctx: Ctx;
-  /** Present only where a score can be entered — see the note on the button. */
-  onScore?: () => void;
+  /** Present while the card is being edited: the score becomes this field. */
+  edit?: { value: string; onChange: (v: string) => void; onKeyDown: (e: React.KeyboardEvent) => void; autoFocus?: boolean };
 }) {
   const { me, table, openTeam } = ctx;
   const isMe = me ? r.team?.id === me.id : false;
@@ -830,23 +907,22 @@ function SideRow({ r, slot, score, margin, won, ctx, onScore }: {
       <span className={cn("ml-auto shrink-0 w-9 text-right text-[0.62rem] font-semibold tabular leading-none", margin === null ? "text-transparent" : tone(margin))}>
         {margin === null ? "" : `(${diffLabel(margin)})`}
       </span>
-      {/* ON A PHONE THERE IS NO DOUBLE-CLICK, so the score is the way in:
-          tapping the number — or the dash standing in for one — opens the
-          same sheet. It is the control whose meaning needs no explaining,
-          because it is the thing being changed. */}
-      {onScore ? (
-        <button
-          type="button"
-          onClick={onScore}
-          aria-label="Enter score"
-          className={cn(
-            "text-right tabular text-lg font-bold leading-none pl-1.5 rounded-sm transition-colors",
-            "focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40 hover:text-coral",
-            won ? "text-ink" : "text-ink-muted",
-          )}
-        >
-          {score ?? "—"}
-        </button>
+      {/* THE FIELD STANDS WHERE THE NUMBER STOOD, so editing does not move
+          the row it is editing. 16px or larger, or iOS zooms the page in on
+          focus and does not zoom back out. */}
+      {edit ? (
+        <input
+          type="tel"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={edit.value}
+          onChange={(e) => edit.onChange(e.target.value)}
+          onKeyDown={edit.onKeyDown}
+          autoFocus={edit.autoFocus}
+          aria-label={`${r.name} score`}
+          placeholder="—"
+          className="w-14 h-8 ml-1.5 rounded-md border border-coral/50 bg-paper-deep/40 px-1.5 text-base tabular text-right text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
+        />
       ) : (
         <span className={cn("text-right tabular text-lg font-bold leading-none pl-1.5", won ? "text-ink" : "text-ink-muted")}>
           {score ?? "—"}
@@ -1164,7 +1240,7 @@ function NotesSheet({ g, ctx, value, onWrite, onGuard, onClose }: {
   onGuard: (theirName: string, ourName: string) => void;
   onClose: () => void;
 }) {
-  const [pane, setPane] = useState<"score" | "notes" | "matchups">("score");
+  const [pane, setPane] = useState<"notes" | "matchups">("notes");
 
   /**
    * THE DRAFT IS LOCAL, AND THE PAGE HEARS ABOUT IT LATE.
@@ -1209,7 +1285,6 @@ function NotesSheet({ g, ctx, value, onWrite, onGuard, onClose }: {
   const ours = matchupRoster(me);
   const map = ctx.matchups[g.id] ?? {};
   const assigned = Object.values(map).reduce((n, list) => n + list.length, 0);
-  const typed = ctx.scores[g.id] !== undefined;
 
   return (
     <Sheet
@@ -1221,14 +1296,12 @@ function NotesSheet({ g, ctx, value, onWrite, onGuard, onClose }: {
       onClose={onClose}
     >
       {/* THE PANES ARE FOR OUR GAMES. Notes and matchups are the two halves
-          of "what are we doing about this one", and there is no answer to
-          that for a game between two other teams — those are opened to type a
-          score off the scoreboard and close again, so they get the score and
-          nothing to scroll past. */}
-      {mine && (
+          of "what are we doing about this one". The sheet is reachable only
+          from the weekend strip, which is our games, so both always apply —
+          scores moved into the cards themselves and are not here any more. */}
       <div className="px-5 pt-4">
         <div className="inline-flex items-center gap-[2px] rounded-[10px] border border-hairline bg-paper-deep p-[3px]">
-          {([["score", "Score"], ["notes", "Notes"], ["matchups", "Matchups"]] as const).map(([key, label]) => (
+          {([["notes", "Notes"], ["matchups", "Matchups"]] as const).map(([key, label]) => (
             <button
               key={key}
               type="button"
@@ -1246,18 +1319,12 @@ function NotesSheet({ g, ctx, value, onWrite, onGuard, onClose }: {
               {key === "matchups" && assigned > 0 && (
                 <span className="ml-1.5 text-[0.6rem] tabular text-ink-muted">{assigned}</span>
               )}
-              {key === "score" && typed && (
-                <span className="ml-1.5 h-1 w-1 rounded-full bg-coral" aria-label="score entered" />
-              )}
             </button>
           ))}
         </div>
       </div>
-      )}
 
-      {!mine || pane === "score" ? (
-        <ScorePane g={g} ctx={ctx} />
-      ) : pane === "notes" ? (
+      {pane === "notes" ? (
         <div className="px-5 pt-3 pb-5">
           <textarea
             autoFocus
@@ -1274,101 +1341,6 @@ function NotesSheet({ g, ctx, value, onWrite, onGuard, onClose }: {
         <MatchupsPane theirs={theirs} ours={ours} map={map} onGuard={onGuard} oppName={opp?.name ?? "them"} />
       )}
     </Sheet>
-  );
-}
-
-/**
- * A score typed from the gym, before the organiser posts theirs.
- *
- * IT BEHAVES LIKE A REAL RESULT until it is replaced by one. Saving locks the
- * game out of What If, moves the table, and re-seeds the bracket — which is
- * the entire point of typing it courtside rather than waiting. It can be
- * edited or cleared as often as needed, and the organiser's number silently
- * replaces it the moment their result lands.
- *
- * A GAME THE FEED HAS ALREADY CALLED IS NOT EDITABLE. There would be nothing
- * to do with the entry: the reconciliation would drop it on the next poll, so
- * offering the field would be offering a change that undoes itself.
- */
-function ScorePane({ g, ctx }: { g: Game; ctx: Ctx }) {
-  const live = ctx.data.games.find((x) => x.id === g.id) ?? g;
-  const typed = ctx.scores[g.id];
-  const confirmed = typed === undefined && live.status === "final";
-  const [a, setA] = useState(typed ? String(typed.a) : "");
-  const [b, setB] = useState(typed ? String(typed.b) : "");
-
-  const nameA = live.a.name, nameB = live.b.name;
-  const na = Number(a), nb = Number(b);
-  const valid = a.trim() !== "" && b.trim() !== "" && Number.isFinite(na) && Number.isFinite(nb) && na >= 0 && nb >= 0;
-  const digits = (raw: string) => raw.replace(/\D/g, "").slice(0, 3);
-
-  if (confirmed) {
-    return (
-      <div className="px-5 pt-4 pb-6">
-        <p className="text-sm text-ink-soft">
-          Final, from the organiser: <span className="font-semibold text-ink tabular">{nameA} {live.scoreA} – {live.scoreB} {nameB}</span>
-        </p>
-        <p className="mt-2 text-[0.7rem] text-ink-muted">Their result stands; there is nothing to enter.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="px-5 pt-4 pb-6">
-      <div className="space-y-2.5">
-        {([[nameA, a, setA], [nameB, b, setB]] as const).map(([name, val, set]) => (
-          <label key={name} className="flex items-center gap-3">
-            <span className="flex-1 min-w-0 truncate text-sm text-ink-soft">{name}</span>
-            <input
-              type="tel"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={val}
-              onChange={(e) => set(digits(e.target.value))}
-              aria-label={`${name} score`}
-              placeholder="—"
-              // 16px, or iOS zooms in on focus and stays there.
-              // The dialog already sits inside the visible strip, so there is
-          // nothing for the browser to scroll: saying so stops it trying.
-          style={{ scrollMargin: 0 }}
-          className="w-20 h-11 rounded-lg border border-hairline bg-paper-deep/40 px-3 text-base tabular text-right text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
-            />
-          </label>
-        ))}
-      </div>
-
-      <div className="mt-4 flex items-center gap-2">
-        <button
-          type="button"
-          disabled={!valid}
-          onClick={() => ctx.writeScore(g.id, { a: na, b: nb })}
-          className={cn(
-            "h-9 px-4 rounded-md text-sm font-semibold transition-colors",
-            "focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40",
-            valid ? "bg-coral text-accent-foreground" : "bg-paper-deep text-ink-muted cursor-not-allowed",
-          )}
-        >
-          {typed ? "Update score" : "Save score"}
-        </button>
-        {typed && (
-          <button
-            type="button"
-            onClick={() => { ctx.writeScore(g.id, null); setA(""); setB(""); }}
-            className="h-9 px-3 rounded-md border border-hairline text-sm text-ink-muted hover:text-ink transition-colors"
-          >
-            Clear
-          </button>
-        )}
-      </div>
-
-      {/* Only once there is something to explain. Before a score is saved the
-          two fields and a button say all there is to say. */}
-      {typed && (
-        <p className="mt-3 text-[0.7rem] leading-relaxed text-ink-muted">
-          Counting in the table and the bracket, and locked out of What If. The organiser&rsquo;s result replaces it when it lands.
-        </p>
-      )}
-    </div>
   );
 }
 
