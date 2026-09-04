@@ -1096,10 +1096,6 @@ function MatchupsPane({ theirs, ours, map, onGuard, oppName }: {
   const [openFor, setOpenFor] = useState<string | null>(null);
   const covered = theirs.filter((t) => (map[t.name] ?? []).length > 0).length;
 
-  /** How many of theirs each of ours is already down for, in this game. */
-  const load: Record<string, number> = {};
-  for (const list of Object.values(map)) for (const n of list) load[n] = (load[n] ?? 0) + 1;
-
   if (theirs.length === 0) {
     return (
       <div className="px-5 pt-3 pb-6">
@@ -1138,7 +1134,6 @@ function MatchupsPane({ theirs, ours, map, onGuard, oppName }: {
                 <div className="pb-3 flex flex-wrap gap-1.5">
                   {ours.map((o) => {
                     const picked = on.includes(o.name);
-                    const also = (load[o.name] ?? 0) - (picked ? 1 : 0);
                     return (
                       <button
                         key={o.name}
@@ -1154,11 +1149,6 @@ function MatchupsPane({ theirs, ours, map, onGuard, oppName }: {
                         )}
                       >
                         {firstName(o.name)}
-                        {/* Already down for someone else this game — worth
-                            knowing before handing them a second man. */}
-                        {also > 0 && (
-                          <span className={cn("text-[0.6rem] tabular", picked ? "opacity-80" : "text-ink-muted")}>+{also}</span>
-                        )}
                       </button>
                     );
                   })}
