@@ -1328,7 +1328,10 @@ function ScorePane({ g, ctx }: { g: Game; ctx: Ctx }) {
               aria-label={`${name} score`}
               placeholder="—"
               // 16px, or iOS zooms in on focus and stays there.
-              className="w-20 h-11 rounded-lg border border-hairline bg-paper-deep/40 px-3 text-base tabular text-right text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
+              // The dialog already sits inside the visible strip, so there is
+          // nothing for the browser to scroll: saying so stops it trying.
+          style={{ scrollMargin: 0 }}
+          className="w-20 h-11 rounded-lg border border-hairline bg-paper-deep/40 px-3 text-base tabular text-right text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
             />
           </label>
         ))}
@@ -1550,17 +1553,44 @@ function Sheet({ label, title, subtitle, accent = false, centred = false, onClos
     if (!centred || typeof window === "undefined") return;
     const vv = window.visualViewport;
     if (!vv) return;
+
+    /**
+     * HEIGHT ONLY, AND ONLY ON RESIZE.
+     *
+     * The first version followed `scroll` as well and moved the wrapper to
+     * `offsetTop`. Focusing a field made iOS scroll the input into view, that
+     * fired a visual-viewport scroll, the dialog jumped down to chase it, and
+     * the browser then scrolled back — the flash. A fixed element is already
+     * anchored to the layout viewport, so following the scroll offset was
+     * moving it twice.
+     *
+     * What is left is the part that was actually needed: while the keyboard is
+     * up, the wrapper is only as tall as the strip still visible, so centring
+     * happens inside that strip rather than behind the keyboard. One write per
+     * frame, and only when the number has really changed, because iOS fires
+     * resize repeatedly through the keyboard's own animation.
+     */
+    let raf = 0;
+    let applied = -1;
     const fit = () => {
-      const el = wrapRef.current;
-      if (!el) return;
-      el.style.height = `${vv.height}px`;
-      el.style.top = `${vv.offsetTop}px`;
-      el.style.bottom = "auto";
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const el = wrapRef.current;
+        if (!el) return;
+        const h = Math.round(vv.height);
+        if (h === applied) return;
+        applied = h;
+        // `inset-0` pins top AND bottom, which fixes the height and makes
+        // setting it do nothing at all. Releasing the bottom edge is what lets
+        // the wrapper be as tall as the strip above the keyboard; the top edge
+        // stays where the layout put it.
+        el.style.bottom = "auto";
+        el.style.height = `${h}px`;
+      });
     };
     fit();
     vv.addEventListener("resize", fit);
-    vv.addEventListener("scroll", fit);
-    return () => { vv.removeEventListener("resize", fit); vv.removeEventListener("scroll", fit); };
+    return () => { cancelAnimationFrame(raf); vv.removeEventListener("resize", fit); };
   }, [centred]);
 
   /**
