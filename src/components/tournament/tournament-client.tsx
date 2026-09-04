@@ -1214,6 +1214,7 @@ function NotesSheet({ g, ctx, value, onWrite, onGuard, onClose }: {
   return (
     <Sheet
       label={`Notes for ${title}`}
+      centred
       title={title}
       subtitle={`${dayLabel(g.date)} · ${timeLabel(g.time)}${g.court ? ` · ${g.court}` : ""}`}
       accent
@@ -1266,7 +1267,7 @@ function NotesSheet({ g, ctx, value, onWrite, onGuard, onClose }: {
             aria-label={`Notes for ${title}`}
             // 16px or larger, or iOS zooms the page in on focus and does not
             // zoom back out — the same trap the what-if margin field hit.
-            className="w-full min-h-[42dvh] resize-y rounded-lg border border-hairline bg-paper-deep/40 px-3.5 py-3 text-base leading-relaxed text-ink placeholder:text-ink-muted/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
+            className="w-full min-h-[9rem] resize-y rounded-lg border border-hairline bg-paper-deep/40 px-3.5 py-3 text-base leading-relaxed text-ink placeholder:text-ink-muted/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
           />
         </div>
       ) : (
@@ -1514,17 +1515,53 @@ const EXIT_MS = 320;
  * open and back to where it was on close — the things a native <dialog> would
  * give for free and that a div pretending to be one has to be told.
  */
-function Sheet({ label, title, subtitle, accent = false, onClose, children }: {
+function Sheet({ label, title, subtitle, accent = false, centred = false, onClose, children }: {
   /** What a screen reader announces the dialog as. */
   label: string;
   title: React.ReactNode;
   subtitle?: React.ReactNode;
   /** Coral edge and title — the followed team's roster, or a note on its game. */
   accent?: boolean;
+  /**
+   * CENTRED, FOR THE ONES YOU TYPE IN. A sheet docked to the bottom edge is
+   * the right shape for a list you flick through, and the wrong shape for a
+   * form: the keyboard comes up from that same edge and shoves the panel
+   * around. A dialog in the middle has somewhere to be that the keyboard is
+   * not, so it holds still while a score is typed.
+   */
+  centred?: boolean;
   onClose: () => void;
   children: React.ReactNode;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * CENTRED IN WHAT CAN BE SEEN, not in the layout.
+   *
+   * A phone keyboard does not resize the page — it covers it. `100dvh` still
+   * measures the whole screen, so "centred" would put the dialog behind the
+   * keyboard and leave the browser to scroll it back into view, which is the
+   * shoving this variant exists to avoid. visualViewport reports the strip
+   * that is actually visible; the wrapper is sized and offset to match it, so
+   * the middle of the dialog is the middle of what is left.
+   */
+  useEffect(() => {
+    if (!centred || typeof window === "undefined") return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const fit = () => {
+      const el = wrapRef.current;
+      if (!el) return;
+      el.style.height = `${vv.height}px`;
+      el.style.top = `${vv.offsetTop}px`;
+      el.style.bottom = "auto";
+    };
+    fit();
+    vv.addEventListener("resize", fit);
+    vv.addEventListener("scroll", fit);
+    return () => { vv.removeEventListener("resize", fit); vv.removeEventListener("scroll", fit); };
+  }, [centred]);
 
   /**
    * IT SLIDES. A sheet that appears in one frame reads as a page swap; a
@@ -1599,7 +1636,7 @@ function Sheet({ label, title, subtitle, accent = false, onClose, children }: {
    * stops short springs back.
    */
   const onGrab = (e: React.PointerEvent) => {
-    if (!compact.current || still.current) return;
+    if (!compact.current || centred || still.current) return;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     grab.current = { id: e.pointerId, startY: e.clientY, lastY: e.clientY, lastT: performance.now(), v: 0 };
   };
@@ -1624,16 +1661,23 @@ function Sheet({ label, title, subtitle, accent = false, onClose, children }: {
   };
 
   const held = grab.current !== null;
-  const parked = compact.current ? "translateY(100%)" : "translateY(14px) scale(0.985)";
+  // A centred dialog does not travel a screen height; it lifts and fades, the
+  // way the desktop one always has.
+  const slides = compact.current && !centred;
+  const parked = slides ? "translateY(100%)" : "translateY(14px) scale(0.985)";
   const panelStyle: React.CSSProperties = {
     transform: shown ? `translateY(${drag}px)` : parked,
-    opacity: compact.current || shown ? 1 : 0,
+    opacity: slides || shown ? 1 : 0,
     transition: still.current || held ? "none" : `transform ${EXIT_MS}ms ${SHEET_EASE}, opacity 200ms ease-out`,
   };
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6"
+      ref={wrapRef}
+      className={cn(
+        "fixed inset-0 z-50 flex justify-center",
+        centred ? "items-center p-4" : "items-end sm:items-center p-0 sm:p-6",
+      )}
       role="dialog"
       aria-modal="true"
       aria-label={label}
@@ -1658,8 +1702,8 @@ function Sheet({ label, title, subtitle, accent = false, onClose, children }: {
         tabIndex={-1}
         style={panelStyle}
         className={cn(
-          "relative w-full sm:max-w-md max-h-[85dvh] overflow-y-auto bg-card border shadow-xl focus:outline-none will-change-transform",
-          "rounded-t-2xl sm:rounded-xl",
+          "relative w-full sm:max-w-md overflow-y-auto bg-card border shadow-xl focus:outline-none will-change-transform",
+          centred ? "max-h-full rounded-2xl" : "max-h-[85dvh] rounded-t-2xl sm:rounded-xl",
           accent ? "border-coral/50" : "border-hairline",
         )}
       >
@@ -1672,10 +1716,15 @@ function Sheet({ label, title, subtitle, accent = false, onClose, children }: {
         >
           {/* The grab bar is the affordance for the drag above, so it exists
               only where the drag does — a mouse has the backdrop and the X. */}
-          <div className="sm:hidden flex justify-center pt-2.5 pb-0.5 touch-none cursor-grab active:cursor-grabbing" aria-hidden>
-            <span className="h-1 w-9 rounded-full bg-ink-muted/40" />
-          </div>
-          <div className="flex items-baseline justify-between gap-3 px-5 pt-3.5 pb-4 sm:pt-4 touch-none sm:touch-auto">
+          {/* The grab bar is the affordance for a drag that only a docked
+              sheet has; a centred dialog closes on the X, the backdrop and
+              Escape, and would be lying if it offered a handle. */}
+          {!centred && (
+            <div className="sm:hidden flex justify-center pt-2.5 pb-0.5 touch-none cursor-grab active:cursor-grabbing" aria-hidden>
+              <span className="h-1 w-9 rounded-full bg-ink-muted/40" />
+            </div>
+          )}
+          <div className={cn("flex items-baseline justify-between gap-3 px-5 pb-4", centred ? "pt-4" : "pt-3.5 sm:pt-4 touch-none sm:touch-auto")}>
             <div className="min-w-0">
               <h2 className={cn("font-display text-2xl leading-none truncate", accent ? "text-coral" : "text-ink")}>{title}</h2>
               {subtitle && (
