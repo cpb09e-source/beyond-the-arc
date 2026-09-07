@@ -95,6 +95,93 @@ them. Ask for a resize rather than guessing at what an image shows.
 
 ---
 
+## 2026-09-07 — page width, and why the dev server was eating the machine
+
+**Both changes are uncommitted and undeployed as of writing.**
+
+### One page width, everywhere
+
+The shells were hardcoded and inconsistent: `88rem` on most pages, `92rem` on
+the game detail, `108rem` on the header and footer, `max-w-7xl` on a handful
+more. On a 2560 monitor that stranded 576px of dead paper down each side; on a
+3840 it stranded 1216px.
+
+`--page-max: min(97vw, 200rem)` now lives in `globals.css` and 32 files
+reference it as `max-w-[var(--page-max)]`. At 1440 it computes to 1397px, which
+is what the site already did, so laptops are unchanged. At 2560 content runs
+~2483px; at 3840 it caps at 3200px.
+
+**The header and footer had to move with it.** They were the widest shells at
+`108rem`. Leave them behind and the nav ends up visibly narrower than the table
+under it, which reads as broken rather than as a wide table.
+
+**Prose was safe to leave alone.** Body text is capped separately and further
+in — 46rem on legal, 44rem/38rem on pricing, 78ch in the glossary, 58ch in page
+headings — so widening the shell moved tables and grids without stretching a
+paragraph. Verified at 2560 on the ratings table, the players table and the
+pricing page.
+
+Deliberately NOT swapped: modal cards (`max-w-6xl`), the ch-based prose caps,
+and the one-off `76rem` on preview/continuity.
+
+### The dev server was leaving its whole stack running
+
+Measured 2026-09-07. Kill the supervisor without a signal — close the terminal,
+stop it from a task manager, anything that is not Ctrl+C — and **six processes
+survive holding about four gigabytes**:
+
+    scripts/dev.mjs                     the supervisor itself
+    next dev (the launcher)             --max-old-space-size=8192
+    next/dist/server (the real server)  ~4 GB on its own
+    scripts/dev-proxy.mjs               :8899
+    netlify-cli functions:serve         :9999
+    .next/dev/build/postcss.js          a worker Next 16 runs out of process
+
+`clearStale()` matched only the first two patterns, so the rest were never
+reaped and accumulated across sessions. That is the slow-machine complaint.
+
+Three fixes, all in `scripts/dev.mjs`:
+
+1. **A watchdog.** Counts `node.exe` every 3s via `tasklist`; past 45 it prints
+   the top command lines grouped by count, kills the stack and exits. On
+   2026-09-07 a single `npm run dev` produced *hundreds* of node processes in
+   two waves and Windows became unusable — bash could not fork, the desktop
+   needed a restart. That run is not reproduced yet; the watchdog exists so the
+   next one names itself instead of taking the machine down.
+2. **Tree kill.** `spawn(..., { shell: true })` makes the direct child a
+   `cmd.exe`, so `child.kill()` killed the shell and orphaned node underneath.
+   Now `taskkill /T /F`.
+3. **A wider `clearStale` pattern**, adding `functions.serve|esbuild|
+   zip-it-and-ship-it|dev-proxy|dev.build.postcss|scripts.dev.mjs`. Verified: it
+   reaps all six.
+
+### THE TRAP THAT COST AN HOUR — clearStale can kill its own caller
+
+Adding `scripts.dev.mjs` to that pattern made `npm run dev` die instantly and
+**completely silently**: no output at all, a bare exit 127, nothing in the log
+but the npm banner.
+
+`clearStale()` runs from inside dev.mjs at startup, and the exclusion in its
+PowerShell was `$_ -ne $PID`. **Inside a `.ps1`, `$PID` is PowerShell's own
+process id, not the node process that launched it.** So dev.mjs matched its own
+pattern and killed itself before printing a line. The flaw was latent for as
+long as the pattern could not match dev.mjs.
+
+The exclusion now interpolates our real pid: `-ne $PID -and -ne ${process.pid}`.
+A stale supervisor from a previous run still dies; this one does not.
+
+If you ever widen that pattern again, check it against `node scripts/dev.mjs`
+itself first.
+
+### Still open
+
+`next dev` sat at **4 GB while idle**, and total node RAM drifted up ~600 MB
+over two minutes with no requests being served. Separate from the process-count
+problem, and the reason `--max-old-space-size=8192` is on the `[dev]` command.
+Not investigated.
+
+---
+
 ## Open work
 
 ### THE LIVE SEASON IS DATA, NOT A REBUILD — the 2026-09-01 change
