@@ -233,7 +233,7 @@ export function DownloadMenu<R>({
         aria-haspopup="menu"
         aria-expanded={open}
         className={cn(
-          "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-xs uppercase tracking-widest font-bold transition-colors whitespace-nowrap",
+          "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-xs uppercase tracking-widest font-medium transition-colors whitespace-nowrap",
           "border-ink/20 bg-card text-ink-soft hover:border-ink/35 hover:text-ink",
           (disabled || empty) && "opacity-40 pointer-events-none",
         )}
