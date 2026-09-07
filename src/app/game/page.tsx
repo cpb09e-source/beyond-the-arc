@@ -25,7 +25,7 @@ export const metadata: Metadata = {
  */
 export default function GamePage() {
   return (
-    <Suspense fallback={<div className="mx-auto max-w-7xl px-6 lg:px-10 pt-10 pb-20 text-ink-muted">Loading the game…</div>}>
+    <Suspense fallback={<div className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-10 pb-20 text-ink-muted">Loading the game…</div>}>
       <GameClient />
     </Suspense>
   );

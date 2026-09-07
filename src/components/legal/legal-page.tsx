@@ -24,7 +24,7 @@ export function LegalPage({
   });
 
   return (
-    <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-4 lg:pt-5 pb-20">
+    <section className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-4 lg:pt-5 pb-20">
       <div className="max-w-[46rem]">
         {/* NO STANDFIRST. Each of these pages used to carry a one-line summary
             under the heading, and all three said a version of "this page is

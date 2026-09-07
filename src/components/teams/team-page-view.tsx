@@ -547,7 +547,7 @@ export function TeamPageView({
             to the row's px-4 to reach the same 24px. The tables stay at 16px
             on purpose. BOTH ROWS MOVE TOGETHER: whatever the max-width is,
             it is the same here and below, or the hero steps in from the page. */}
-        <div className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-10 pb-8">
+        <div className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-10 pb-8">
           {/* The hero used to indent itself by the width of the rail so its
               left edge landed on the content column rather than on the menu.
               With the menu lying down there is one left edge again and the
@@ -709,7 +709,7 @@ export function TeamPageView({
           `min-w-0` stays on the content wrapper. The tables inside it scroll
           horizontally, and without it a grid or flex ancestor added later
           would let the widest table push the page sideways again. */}
-      <div className="mx-auto max-w-[88rem] px-6 lg:px-10">
+      <div className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10">
         {showTabs && (
           <div className="mb-1">
             {/* In anchor mode the strip follows the hash instead of being

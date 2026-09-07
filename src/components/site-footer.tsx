@@ -75,7 +75,7 @@ export function SiteFooter() {
     <footer className="border-t border-hairline mt-6 sm:mt-12 pt-10 pb-8">
       {/* Matches site-header exactly — same max-width AND same padding scale, so
           the two chrome elements line up at every breakpoint. */}
-      <div className="mx-auto max-w-[108rem] px-6 lg:px-10 xl:px-16">
+      <div className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 xl:px-16">
         <div className="flex flex-col lg:flex-row lg:items-start gap-10 lg:gap-16">
           {/* The mark, and what the site is for. Fixed width on desktop so the
               four link columns divide the remaining space evenly. */}

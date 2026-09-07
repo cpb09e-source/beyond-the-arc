@@ -105,7 +105,7 @@ export function SeasonPreview({ teamName }: { teamName: string }) {
   const shortLabel = data!.label.split("-").map((y) => y.slice(-2)).join("-");
 
   return (
-    <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-5">
+    <section className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 mt-5">
       {/* No inset of its own. The section's px-6 is the page's one gutter —
           24px on a phone, the same as the hero and the same as every other
           page on the site — and SortableRosterTable bleeds out of exactly that

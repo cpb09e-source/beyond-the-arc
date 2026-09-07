@@ -54,7 +54,7 @@ export default async function PreviewIndexPage() {
   // names ("Texas A&M Corpus Chris…") overflowed its two-column cell, and by
   // 2px. The 8px this returns clears it with room to spare.
   return (
-    <div className="mx-auto max-w-[88rem] px-5 sm:px-6 lg:px-10 py-10 lg:py-14">
+    <div className="mx-auto max-w-[var(--page-max)] px-5 sm:px-6 lg:px-10 py-10 lg:py-14">
       <header className="mb-8">
         <span className="text-xs uppercase tracking-widest text-coral font-medium">
           {PREVIEW_SEASON_LABEL} · Season preview

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function GlossaryPage() {
   return (
-    <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-4 lg:pt-5 pb-16">
+    <section className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-4 lg:pt-5 pb-16">
       <header className="max-w-[46rem]">
         <h1 className="text-2xl lg:text-3xl font-semibold tracking-tight">Glossary</h1>
         <p className="mt-2 text-sm text-ink-muted leading-relaxed">

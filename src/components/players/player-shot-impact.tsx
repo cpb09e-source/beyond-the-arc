@@ -136,7 +136,7 @@ export function ShotProfileFallbackCard({ bartPlayerId, years }: { bartPlayerId:
   const { year, s } = state;
 
   return (
-    <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8">
+    <section className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 mt-8">
       <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
         <div className="px-5 lg:px-7 py-5 border-b border-hairline bg-paper-deep/30">
           <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">

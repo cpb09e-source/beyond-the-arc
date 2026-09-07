@@ -158,7 +158,7 @@ export function ScoreboardClient() {
   const liveCount = slate.games.filter(isLive).length;
 
   return (
-    <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-6 pb-20">
+    <div className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-6 pb-20">
       <div className="flex flex-wrap items-end justify-between gap-4 mb-5">
         <div>
           <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">

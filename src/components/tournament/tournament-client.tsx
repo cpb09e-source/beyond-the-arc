@@ -340,7 +340,7 @@ export function TournamentClient({
 
   if (!data) {
     return (
-      <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-6 pb-10">
+      <div className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-6 pb-10">
         <Eyebrow>Tournament</Eyebrow>
         <h1 className="font-display text-4xl md:text-6xl tracking-tight text-ink leading-none">Loading</h1>
         <p className="mt-3 text-sm text-ink-muted">
@@ -361,7 +361,7 @@ export function TournamentClient({
   const myGames = me ? data.games.filter((g) => involves(g, me) || isPlayoffFor(g, me, ctx)) : [];
 
   return (
-    <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-6 pb-10">
+    <div className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-6 pb-10">
       {/* ------------------------------------------------------------ hero */}
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">

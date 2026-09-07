@@ -277,7 +277,7 @@ export function SiteHeader() {
       {/* The generous lg:px-16 gutter only starts at xl now: at exactly 1024 the
           seven nav labels needed 13px more than the row had, and the gutter was
           the cheapest 48px on the page to give back. */}
-      <div className="relative mx-auto max-w-[108rem] px-6 lg:px-10 xl:px-16 h-16 flex items-center justify-between">
+      <div className="relative mx-auto max-w-[var(--page-max)] px-6 lg:px-10 xl:px-16 h-16 flex items-center justify-between">
         <Link
           href="/"
           className="flex items-center group shrink-0"

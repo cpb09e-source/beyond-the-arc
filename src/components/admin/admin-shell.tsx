@@ -107,7 +107,7 @@ export function AdminShell({
   const active = groups.flatMap((g) => g.items).find((i) => i.id === view);
 
   return (
-    <div className="mx-auto max-w-[108rem] px-4 sm:px-6 lg:px-10 xl:px-16 pb-16">
+    <div className="mx-auto max-w-[var(--page-max)] px-4 sm:px-6 lg:px-10 xl:px-16 pb-16">
       <div className="flex gap-8">
         {/* THE RAIL sticks to the top of the viewport, not the page: the site
             header scrolls away above it, so `top-0` only engages once it has

@@ -99,7 +99,7 @@ export function PlayerPageView({
           bottom padding and nothing else, which keeps it tighter (24px) than
           the 32px between the cards below. The hero and the career ledger read
           as one block: vitals, then the record those vitals belong to. */}
-      <section className="mx-auto max-w-[88rem] px-6 lg:px-10">
+      <section className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10">
         {/* Career ledger — heavier chrome than other cards on the page so this
             anchors the profile as the canonical record. CareerTable owns its
             own header (season count + View toggle) so the dropdown sits
@@ -114,7 +114,7 @@ export function PlayerPageView({
       </section>
 
       {overviewOptions.length > 0 && (
-        <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-8">
+        <section className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 mt-8">
           {/* Player Overview — ledger card matching /coaches season-by-season.
               Inner component supplies the team/year picker band + grid.
               Full-bleed edge-to-edge on mobile; framed card on lg+. */}
@@ -129,7 +129,7 @@ export function PlayerPageView({
         </>
         }
         log={
-          <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-6">
+          <section className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 mt-6">
             <div className="bg-card border-y border-x-0 lg:border-x border-ink/10 rounded-none lg:rounded-xl shadow-md overflow-hidden ring-1 ring-ink/5 -mx-6 lg:mx-0">
               <PlayerGameLog
                 rows={logRows}

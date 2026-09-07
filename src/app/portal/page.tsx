@@ -37,7 +37,7 @@ export default async function PortalPage() {
           explorer. It was 108, which put the transfers table closer to the
           window edge than the header above it on a laptop. The width all
           lands on the centre table either way; the sidebars are fixed. */}
-      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-4 lg:pt-5 pb-4">
+      <section className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-4 lg:pt-5 pb-4">
         <PageHeading
           label="Transfer portal"
         />

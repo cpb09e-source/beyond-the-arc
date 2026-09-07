@@ -45,7 +45,7 @@ export function LivePlayerPage({ fallback }: { fallback: PlayerPageData }) {
   return (
     <>
       {stale && (
-        <p className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-3 text-[0.7rem] text-ink-muted">
+        <p className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-3 text-[0.7rem] text-ink-muted">
           This season&rsquo;s line may be a day behind — live numbers are unavailable right now.
         </p>
       )}

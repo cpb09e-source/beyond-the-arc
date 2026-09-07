@@ -113,7 +113,7 @@ function TabStrip({
   return (
     <nav
       aria-label="Player sections"
-      className="hidden lg:block mx-auto max-w-[88rem] px-10 pb-1"
+      className="hidden lg:block mx-auto max-w-[var(--page-max)] px-10 pb-1"
     >
       <ul className="flex items-stretch gap-1 border-b border-hairline">
         {TABS.map((t) => {

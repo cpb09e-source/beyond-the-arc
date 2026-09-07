@@ -26,7 +26,7 @@ export default async function CoachesPage() {
 
   return (
     <>
-      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-4 lg:pt-5 pb-4">
+      <section className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-4 lg:pt-5 pb-4">
         <PageHeading
           label="Head coaches"
         />

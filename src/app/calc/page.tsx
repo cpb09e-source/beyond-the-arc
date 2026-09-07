@@ -50,11 +50,11 @@ export default async function CalcPage() {
           coral label, which was the site's older masthead treatment and the
           only one of its kind left — the four table pages all moved to the
           gold kicker, so this read as a page from a different site. */}
-      <section className="mx-auto max-w-7xl px-6 lg:px-10 pt-4 lg:pt-5">
+      <section className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-4 lg:pt-5">
         <PageHeading label="Win calculator" />
       </section>
 
-      <section className="mx-auto max-w-7xl px-0 sm:px-6 lg:px-10 pt-3 pb-8 lg:pt-4 lg:pb-10">
+      <section className="mx-auto max-w-[var(--page-max)] px-0 sm:px-6 lg:px-10 pt-3 pb-8 lg:pt-4 lg:pb-10">
         <CalcClient coachByTeamYear={coachByTeamYear} allCoaches={allCoaches} />
       </section>
 

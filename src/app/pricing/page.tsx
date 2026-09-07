@@ -32,7 +32,7 @@ export const metadata: Metadata = {
 export default function PricingPage() {
   return (
     <div className="pb-20">
-      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 pt-6 lg:pt-10">
+      <section className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-6 lg:pt-10">
         <header className="max-w-[44rem]">
           <span className="label" style={{ color: "var(--coral)" }}>
             Pricing
@@ -68,7 +68,7 @@ export default function PricingPage() {
       </section>
 
       {/* Comparison */}
-      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-16">
+      <section className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 mt-16">
         <h2 className="font-display text-xl sm:text-2xl tracking-tight text-ink">
           Compare features
         </h2>
@@ -96,7 +96,7 @@ export default function PricingPage() {
       </section>
 
       {/* FAQ */}
-      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-16">
+      <section className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 mt-16">
         <h2 className="font-display text-xl sm:text-2xl tracking-tight text-ink">
           Questions
         </h2>
@@ -111,7 +111,7 @@ export default function PricingPage() {
       </section>
 
       {/* Closing CTA */}
-      <section className="mx-auto max-w-[88rem] px-6 lg:px-10 mt-16">
+      <section className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 mt-16">
         <div className="rounded-xl border border-ink/10 bg-paper-deep/50 px-6 sm:px-10 py-9 flex flex-col sm:flex-row sm:items-center gap-5 justify-between">
           <div className="max-w-[34rem]">
             <h2 className="font-display text-xl sm:text-2xl tracking-tight text-ink text-balance">

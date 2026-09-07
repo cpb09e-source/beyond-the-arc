@@ -22,7 +22,7 @@ export const metadata: Metadata = {
  */
 export default function ScoreboardPage() {
   return (
-    <Suspense fallback={<div className="mx-auto max-w-7xl px-6 lg:px-10 pt-6 pb-20 text-ink-muted">Loading scoreboard…</div>}>
+    <Suspense fallback={<div className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-6 pb-20 text-ink-muted">Loading scoreboard…</div>}>
       <ScoreboardClient />
     </Suspense>
   );

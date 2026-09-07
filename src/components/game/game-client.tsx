@@ -147,5 +147,5 @@ export function GameClient() {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto max-w-7xl px-6 lg:px-10 pt-10 pb-20">{children}</div>;
+  return <div className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-10 pb-20">{children}</div>;
 }
