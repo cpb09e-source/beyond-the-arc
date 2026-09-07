@@ -65,6 +65,15 @@ const PORTS = [8899, 3000, 9999];
  * PORT OWNERS FIRST, name matching second: the thing blocking startup is
  * whoever holds the port, whatever it happens to be called.
  *
+ * THE PATTERN IS DELIBERATELY WIDER THAN "NEXT AND NETLIFY". Measured
+ * 2026-09-07: after the supervisor is killed without a signal (closing the
+ * terminal, a task manager stop) SIX processes survive, and only two of them
+ * were matched by the original pattern. The other four are `scripts/dev.mjs`
+ * itself, the netlify `functions:serve` runtime, our own dev-proxy, and
+ * `.next/dev/build/postcss.js` — a worker Next 16 runs out of process for
+ * PostCSS. Between them they held four gigabytes. None hold a port we check
+ * except by luck, so name matching is what actually reaps them.
+ *
  * THE PATTERN USES `.` WHERE A PATH HAS `\`, deliberately, and it is wrong two
  * different ways if you write the backslashes out. A JS template literal eats
  * `\d` down to `d` (unknown escapes drop the backslash), so `next\dist` reached
@@ -72,6 +81,15 @@ const PORTS = [8899, 3000, 9999];
  * operator where `\d` means "a digit". Both branches silently matched nothing.
  * A dot matches the separator on either OS and cannot be mangled by either
  * layer.
+ *
+ * AND IT MUST NOT KILL US. The exclusion below is `-ne $PID -and -ne <our
+ * pid>`: inside a .ps1, `$PID` is PowerShell's own process, not the node
+ * process that spawned it. That was harmless while the pattern could not match
+ * `scripts/dev.mjs` itself — and instantly fatal on 2026-09-07 when it could:
+ * dev.mjs matched, killed itself before printing a single line, and npm
+ * reported a bare exit 127 with no output at all. Our own pid is interpolated
+ * in so a stale supervisor from a previous run still dies and this one does
+ * not.
  */
 function clearStale() {
   try {
@@ -83,9 +101,9 @@ foreach ($p in ${PORTS.join(",")}) {
   $ids += (Get-NetTCPConnection -LocalPort $p -State Listen).OwningProcess
 }
 $ids += (Get-CimInstance Win32_Process | Where-Object {
-  $_.Name -eq 'node.exe' -and $_.CommandLine -match 'netlify-cli|next.dist.bin.next|next.dist.server'
+  $_.Name -eq 'node.exe' -and $_.CommandLine -match 'netlify-cli|next.dist.bin.next|next.dist.server|functions.serve|esbuild|zip-it-and-ship-it|dev-proxy|dev.build.postcss|scripts.dev.mjs'
 }).ProcessId
-$ids = $ids | Where-Object { $_ -and $_ -ne $PID } | Select-Object -Unique
+$ids = $ids | Where-Object { $_ -and $_ -ne $PID -and $_ -ne ${process.pid} } | Select-Object -Unique
 if ($ids) { $ids -join ',' ; Stop-Process -Id $ids -Force }
 `;
       const file = path.join(os.tmpdir(), `bta-dev-clean-${process.pid}.ps1`);
@@ -124,7 +142,9 @@ function waitForPorts() {
     } catch {
       return; // nothing listening
     }
-    execSync(isWindows ? "powershell -NoProfile -Command \"Start-Sleep -Milliseconds 400\"" : "sleep 0.4", { stdio: "ignore" });
+    // Sleep in-process. The old line shelled out to PowerShell for the sleep
+    // itself, so a single startup burned ~40 processes before Next even began.
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 400);
   }
 }
 
@@ -137,6 +157,90 @@ waitForPorts();
  * signature of a process aborting on its own heap rather than being killed.
  */
 const FASTFAIL = 3221226505;
+
+/**
+ * THE MACHINE COMES FIRST.
+ *
+ * On 2026-09-07 one `npm run dev` left several hundred node processes alive —
+ * two distinct waves, ~5-9 MB each at first and ~70 MB each a minute later —
+ * and Windows became unusable: bash could no longer fork ("Resource
+ * temporarily unavailable") and the desktop had to be restarted. The restart
+ * loop below was not the cause; it fired exactly once in that run.
+ *
+ * Whatever spawns them, this is the backstop. A healthy stack is Next plus
+ * functions:serve plus the proxy plus their immediate helpers — comfortably
+ * under twenty node processes. If the count runs away, we stop the stack
+ * ourselves and print what was multiplying, rather than letting the box swap
+ * itself to death while nobody can open Task Manager.
+ *
+ * Counting uses `tasklist` rather than PowerShell: one short-lived process
+ * every ten seconds instead of a PowerShell startup.
+ */
+const NODE_LIMIT = 45;
+const WATCH_MS = 3_000;   // the runaway filled ten seconds; sample faster than it grows
+
+function countNodes() {
+  if (!isWindows) return 0;
+  try {
+    const out = execSync('tasklist /FI "IMAGENAME eq node.exe" /NH /FO CSV', {
+      encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+    });
+    return out.split("\n").filter((l) => l.includes("node.exe")).length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * What is actually multiplying — printed once, when we trip the limit.
+ *
+ * Via a temp .ps1 for the same reason clearStale uses one: the query needs
+ * nested quotes (`-Filter "Name='node.exe'"`) and passing that through
+ * -Command loses them silently, which would make the diagnostic print nothing
+ * at exactly the moment it matters.
+ */
+function reportNodes() {
+  if (!isWindows) return "";
+  const ps = [
+    "$ErrorActionPreference = 'SilentlyContinue'",
+    "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | ForEach-Object {",
+    "  $c = $_.CommandLine",
+    "  if (-not $c) { $c = '(no command line)' }",
+    "  if ($c.Length -gt 110) { $c = $c.Substring(0,110) }",
+    "  $c",
+    "} | Group-Object | Sort-Object Count -Descending | Select-Object -First 6 | ForEach-Object {",
+    "  '{0,5}  {1}' -f $_.Count, $_.Name",
+    "}",
+  ].join("\n");
+  const file = path.join(os.tmpdir(), `bta-dev-report-${process.pid}.ps1`);
+  try {
+    fs.writeFileSync(file, ps, "utf8");
+    return execSync(`powershell -NoProfile -ExecutionPolicy Bypass -File "${file}"`, {
+      encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 20000,
+    });
+  } catch {
+    return "  (could not enumerate)";
+  } finally {
+    fs.rmSync(file, { force: true });
+  }
+}
+
+/**
+ * Kill a child AND everything it started.
+ *
+ * `spawn(..., { shell: true })` on Windows makes the direct child a cmd.exe;
+ * `child.kill()` kills that shell and orphans the node process underneath it,
+ * which then survives every subsequent run. taskkill /T walks the tree.
+ */
+function killTree(child) {
+  if (!child || !child.pid) return;
+  try {
+    if (isWindows) execSync(`taskkill /PID ${child.pid} /T /F`, { stdio: "ignore" });
+    else child.kill("SIGKILL");
+  } catch {
+    try { child.kill(); } catch { /* already gone */ }
+  }
+}
 
 let shuttingDown = false;
 /** Enough to survive an afternoon; a cap so a genuinely broken config still stops. */
@@ -208,7 +312,7 @@ function start(svc) {
 const bye = (sig) => {
   shuttingDown = true;
   console.log(`\n· dev.mjs received ${sig}, cleaning up`);
-  for (const child of children.values()) child.kill();
+  for (const child of children.values()) killTree(child);
   clearStale();
   process.exit(0);
 };
@@ -217,3 +321,17 @@ process.on("SIGTERM", () => bye("SIGTERM"));
 process.on("SIGHUP", () => bye("SIGHUP"));
 
 for (const svc of SERVICES) start(svc);
+
+// The watchdog runs for the life of the session. unref() so it never keeps the
+// process alive on its own.
+if (isWindows) {
+  const timer = setInterval(() => {
+    const n = countNodes();
+    if (n <= NODE_LIMIT) return;
+    console.log(`\n· RUNAWAY: ${n} node processes (limit ${NODE_LIMIT}). Stopping the dev stack.`);
+    console.log("· what is multiplying:\n" + reportNodes());
+    clearInterval(timer);
+    bye("watchdog");
+  }, WATCH_MS);
+  timer.unref();
+}
