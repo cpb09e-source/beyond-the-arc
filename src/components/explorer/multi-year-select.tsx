@@ -149,7 +149,7 @@ export function MultiYearSelect({
         // three controls line up at the same height across the site.
         // w-full lets the parent control sizing (grid cell, flex item, etc.)
         // so this button shrinks/stretches like its siblings.
-        className="h-10 w-full px-3 pr-8 rounded-md border border-ink/15 bg-card text-ink text-[11px] text-left shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors relative"
+        className="h-10 w-full px-3 pr-8 rounded-md border border-ink/15 bg-card text-ink text-xs text-left shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors relative"
       >
         <span className="truncate block">{buttonLabel}</span>
         <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted text-[0.7rem]">▾</span>
@@ -164,7 +164,7 @@ export function MultiYearSelect({
           // do not always fit in it.
           className="z-60 bg-card border border-hairline rounded-lg shadow-lg overflow-y-auto overflow-x-hidden"
         >
-          <div className="px-3 pt-2 pb-1 text-[11px] uppercase tracking-widest text-coral font-medium">
+          <div className="px-3 pt-2 pb-1 text-xs uppercase tracking-widest text-coral font-medium">
             Seasons
           </div>
           <div className="py-1">
@@ -175,7 +175,7 @@ export function MultiYearSelect({
                 <label
                   key={y}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-1.5 text-[11px]",
+                    "flex items-center gap-3 px-3 py-1.5 text-xs",
                     isDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:bg-paper-deep",
                   )}
                 >
@@ -200,7 +200,7 @@ export function MultiYearSelect({
               {lockedNotice}
             </div>
           )}
-          <div className="border-t border-hairline p-2 flex flex-wrap gap-1.5 text-[11px]">
+          <div className="border-t border-hairline p-2 flex flex-wrap gap-1.5 text-xs">
             <Chip onClick={selectAll}>All</Chip>
             <Chip onClick={clearAll}>Clear</Chip>
           </div>

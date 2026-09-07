@@ -212,7 +212,7 @@ export function SearchableMultiSelect({
   const soleOption = value.length === 1 ? options.find((o) => o.value === value[0]) : undefined;
 
   const FIELD =
-    "h-10 w-full px-3 pr-8 rounded-md border text-ink text-[11px] text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors relative";
+    "h-10 w-full px-3 pr-8 rounded-md border text-ink text-xs text-left shadow-sm focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors relative";
 
   return (
     <div ref={containerRef} className={cn("relative", inlineSearch ? "block w-full" : "inline-block", className)}>
@@ -284,13 +284,13 @@ export function SearchableMultiSelect({
                 aria-controls={listboxId}
                 aria-activedescendant={filtered.length ? `${listboxId}-opt-${activeSafe}` : undefined}
                 aria-autocomplete="list"
-                className="w-full h-8 px-2 text-[11px] rounded border border-hairline bg-paper text-ink focus:outline-none focus:ring-2 focus:ring-coral/40"
+                className="w-full h-8 px-2 text-xs rounded border border-hairline bg-paper text-ink focus:outline-none focus:ring-2 focus:ring-coral/40"
               />
             </div>
           )}
           <div ref={listRef} className="flex-1 min-h-0 max-h-72 overflow-y-auto py-1">
             {filtered.length === 0 ? (
-              <div className="px-3 py-4 text-[11px] text-ink-muted text-center">No matches</div>
+              <div className="px-3 py-4 text-xs text-ink-muted text-center">No matches</div>
             ) : (
               (() => {
                 // Bucket filtered options into adjacency-run groups so each
@@ -305,7 +305,7 @@ export function SearchableMultiSelect({
                 return groups.map((g, gi) => (
                   <div key={`${g.group ?? ""}-${gi}`}>
                     {g.group && groupLabels?.[g.group] && (
-                      <div className="px-3 pt-2 pb-1 text-[11px] uppercase tracking-widest text-coral font-medium">
+                      <div className="px-3 pt-2 pb-1 text-xs uppercase tracking-widest text-coral font-medium">
                         {groupLabels[g.group]}
                       </div>
                     )}
@@ -321,7 +321,7 @@ export function SearchableMultiSelect({
                           data-opt-idx={idx}
                           onMouseEnter={() => { if (!isDisabled) setActiveIdx(idx); }}
                           className={cn(
-                            "flex items-center gap-2.5 px-3 py-1.5 text-[11px]",
+                            "flex items-center gap-2.5 px-3 py-1.5 text-xs",
                             isDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer",
                             // THE HIGHLIGHT HAS TO SURVIVE DARK MODE. It was
                             // bg-paper-deep, which is a hair off the card on a
@@ -350,7 +350,7 @@ export function SearchableMultiSelect({
               })()
             )}
           </div>
-          <div className="border-t border-hairline p-2 flex flex-wrap gap-1.5 text-[11px]">
+          <div className="border-t border-hairline p-2 flex flex-wrap gap-1.5 text-xs">
             <button
               type="button"
               onClick={() => onChange(options.map((o) => o.value))}

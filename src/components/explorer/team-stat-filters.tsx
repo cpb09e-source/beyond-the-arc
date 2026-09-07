@@ -647,7 +647,7 @@ export function TeamStatFilters({
           <button
             type="button"
             onClick={submit}
-            className="h-8 text-[11px] font-semibold bg-coral text-white px-5 rounded-md hover:bg-coral-soft transition-colors"
+            className="h-8 text-xs font-semibold bg-coral text-white px-5 rounded-md hover:bg-coral-soft transition-colors"
           >
             Submit
           </button>

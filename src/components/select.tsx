@@ -168,7 +168,7 @@ export function Select({
             // control. The caret moves in to match.
             // 11px on the compact control, so it reads level with the
             // toolbar buttons beside it rather than a pixel larger.
-            compact ? "h-8 text-[11px] pl-2 pr-6" : "h-10 text-[11px] pl-3 pr-8",
+            compact ? "h-8 text-xs pl-2 pr-6" : "h-10 text-xs pl-3 pr-8",
             // text-left because a button centres by default and a select does not.
             align === "center" ? "text-center" : "text-left",
             disabled && "opacity-50 cursor-not-allowed",
@@ -225,7 +225,7 @@ export function Select({
                     it. */}
                 {!section.group && <div className="h-1" aria-hidden />}
                 {section.group && (
-                  <div className="sticky top-0 z-10 bg-popover px-3 pt-2 pb-1 text-[11px] uppercase tracking-widest text-ink-muted font-medium">
+                  <div className="sticky top-0 z-10 bg-popover px-3 pt-2 pb-1 text-xs uppercase tracking-widest text-ink-muted font-medium">
                     {section.group}
                   </div>
                 )}
@@ -265,7 +265,7 @@ export function Select({
                      * a narrow box. How wide the box is has nothing to do with
                      * how a list of words should read once it is open.
                      */
-                    "block min-w-full whitespace-nowrap text-left px-3 py-1.5 text-[11px] capitalize transition-colors",
+                    "block min-w-full whitespace-nowrap text-left px-3 py-1.5 text-xs capitalize transition-colors",
                     r.value === value ? "text-ink font-semibold" : "text-ink",
                     i === active ? "bg-ink/[0.06]" : "hover:bg-ink/[0.04]",
                   )}

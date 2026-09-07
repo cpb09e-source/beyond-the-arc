@@ -236,7 +236,7 @@ export function SavedFiltersMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         className={cn(
-          "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[11px] uppercase tracking-widest font-bold transition-colors whitespace-nowrap",
+          "inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-xs uppercase tracking-widest font-bold transition-colors whitespace-nowrap",
           active
             ? "border-coral/40 bg-coral/6 text-coral hover:bg-coral/10"
             : "border-ink/20 bg-card text-ink-soft hover:border-ink/35 hover:text-ink",
