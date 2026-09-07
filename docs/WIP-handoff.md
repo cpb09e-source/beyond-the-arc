@@ -106,10 +106,18 @@ the game detail, `108rem` on the header and footer, `max-w-7xl` on a handful
 more. On a 2560 monitor that stranded 576px of dead paper down each side; on a
 3840 it stranded 1216px.
 
-`--page-max: min(97vw, 200rem)` now lives in `globals.css` and 32 files
+`--page-max: max(88rem, min(80vw, 180rem))` now lives in `globals.css` and 32 files
 reference it as `max-w-[var(--page-max)]`. At 1440 it computes to 1397px, which
 is what the site already did, so laptops are unchanged. At 2560 content runs
-~2483px; at 3840 it caps at 3200px.
+2048px with 256px of paper down each side; at 3840 it reaches the 180rem
+ceiling at 2880px.
+
+**Tuned twice — the vw figure is the dial.** 97vw was the first attempt and
+left only 38px per side at 2560, which ran the table into the edge of the
+screen. 80vw sits between that and the old hardcoded 88rem, which left 576px.
+The `max(88rem, ...)` floor matters: proportional width alone makes a 1440
+laptop *narrower* than it was, since 80vw of 1440 is 1152px against the 1408px
+it already had.
 
 **The header and footer had to move with it.** They were the widest shells at
 `108rem`. Leave them behind and the nav ends up visibly narrower than the table

@@ -7,26 +7,41 @@
 :root {
   /* PAGE WIDTH — one number, every shell.
    *
-   * The shells were hardcoded: 88rem on most pages, 92rem on the game detail,
-   * 108rem on the header and footer, 7xl on a handful more. On a 1440 laptop
-   * that reads fine, because 88rem is 1408px and the viewport is 1440. On a
-   * 2560 monitor it leaves 576px of dead paper down each side, and on a 3840
-   * it leaves 1216px. The page looked like a phone screenshot pasted into the
-   * middle of a desk.
+   * The shells used to be hardcoded and disagreed with each other: 88rem on
+   * most pages, 92rem on the game detail, 108rem on the header and footer,
+   * 7xl on a handful more. 88rem is 1408px, which reads fine on the 1440
+   * laptop it was picked on and strands 576px of dead paper down each side of
+   * a 2560 monitor, 1216px on a 3840.
    *
-   * So the width is proportional rather than fixed: fill the viewport less a
-   * small breathing margin, up to a cap. The 97% keeps a hairline of paper at
-   * the edges and stays clear of the scrollbar; the cap stops a 5K display
-   * from running a table 4,000px wide.
+   * THREE PARTS, AND EACH ONE IS DOING A JOB:
    *
-   * At 1440 this computes to 1397px, which is the 1408px the site already
-   * used — so nothing about a laptop changes. Everything wider gains.
+   *   max(88rem, ...)   a floor. Proportional width alone made the laptop
+   *                     NARROWER than before — 80vw of 1440 is 1152px against
+   *                     the 1408px it already had. Nothing below ~1760 moves.
+   *   min(80vw, ...)    the proportional part. Margins scale with the screen
+   *                     instead of growing without limit.
+   *   180rem            a ceiling, so a 5K display does not run a table 4,000
+   *                     pixels wide.
+   *
+   * WHAT IT COMES OUT AS, in margin per side:
+   *
+   *   1440   1408px content,   16px   (unchanged from before)
+   *   1920   1536px content,  192px
+   *   2560   2048px content,  256px
+   *   3440   2752px content,  344px
+   *   3840   2880px content,  480px   (at the ceiling)
+   *
+   * TUNED TWICE, DELIBERATELY IN THE MIDDLE. The hardcoded 88rem left 576px
+   * per side at 2560, which read as a phone screenshot pasted into the middle
+   * of a desk. The first fix went to 97vw and left 38px, which ran the table
+   * into the edge of the screen. 80vw sits between the two. This is the dial:
+   * raise it for less paper down the sides, lower it for more.
    *
    * SAFE FOR PROSE. Text is capped separately and further in, at 46rem and
-   * 78ch and 58ch, so widening the shell moves tables and grids without
-   * stretching a paragraph into an unreadable line.
+   * 78ch and 58ch, so this moves tables and grids without stretching a
+   * paragraph into an unreadable line.
    */
-  --page-max: min(97vw, 200rem);
+  --page-max: max(88rem, min(80vw, 180rem));
 
   /* Brand palette */
   --paper: #faf7f2;          /* warm off-white background */
