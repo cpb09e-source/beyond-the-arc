@@ -796,3 +796,285 @@ January meeting, the same two teams, ran at **58**.
 5. **Route count.** `/teams/[slug]/[year]/matchup` is ~1,812 prerendered pages
    via `tabbedSeasonParams`. A matchup *pair* page is 365² and cannot be
    prerendered — opponent selection has to be client-side.
+
+---
+---
+
+# Part 3 — the player data
+
+Written 2026-09-07, after part 2 concluded that team-level matchup nuance was
+worth about 4% of the achievable work. Part 3 opens the data part 2 did not
+touch: per-player box scores, roster continuity, shot zones and clock splits.
+
+Same discipline throughout. Constants fitted on 2023 + 2024, scored once on
+2025, then once on 2026.
+
+## 14. A data trap that silently reads zero
+
+`athleteId` in `box-players-full.json.gz` is **a per-row surrogate key, not a
+player identifier.** Cooper Flagg carries **37 different `athleteId` values
+across his 37 games** of 2025. Duke's 15-man roster produces 419 distinct
+`athleteId`s over a season and exactly 15 distinct `athleteSourceId`s.
+
+Keyed on `athleteId`, every player is a stranger every night. The first run of
+the availability engine reported that **not one rotation player missed a game
+in three seasons** — a result that is obviously wrong, which is the only reason
+it was caught. A subtler analysis would have silently returned a null finding.
+
+**Use `athleteSourceId` for any player join against this archive.**
+
+Audited afterwards: production already knows this. `scripts/build-bta-porpag.mjs`
+documents it at line 31 ("CBBD's athleteId is unique per player-GAME") and keys
+on `athleteSourceId`; `build-cbbd-player-season.mjs` does the same. So this is a
+trap I walked into rather than a bug in the repo — recorded here so the next
+person reads it before losing an hour, not after.
+
+## 15. Availability — the largest single addition to the model
+
+The team-efficiency model is structurally blind to who is dressed. It can only
+learn that a team got worse *after* it has played several games short-handed —
+by which point the rating is dragged down by games the missing player will
+return from.
+
+The engine reconstructs, for every team-game, who was expected to play and who
+did not, using only prior games to set expectations. A player counts as
+rotation if he has appeared at least 3 times and averaged at least 8 minutes
+over his last 5 appearances.
+
+It is common:
+
+| | |
+|---|---|
+| team-games missing at least one rotation player | **64.7%** |
+| mean expected minutes missing per team-game | 19.3 |
+| team-games missing their best player | **4.9%** |
+
+And it matters:
+
+| case | n | margin residual |
+|---|---|---|
+| home missing its best player | 705 | **−1.70 ± 0.42** |
+| away missing its best player | 749 | **+3.00 ± 0.44** |
+| neither | 14,467 | +0.70 ± 0.10 |
+
+Against the +0.70 baseline, **losing your best player costs about 2.3 points of
+margin beyond what the ratings already know.**
+
+Fitted and scored on the 2025 holdout:
+
+| spec | MAE | RMSE | accuracy | log loss |
+|---|---|---|---|---|
+| part 2 model | 9.024 | 11.635 | 72.14% | 0.5325 |
+| + missing minutes | 9.015 | 11.620 | 72.27% | 0.5317 |
+| + missing value | 9.005 | 11.612 | 72.37% | 0.5308 |
+| + best player out | 9.000 | 11.615 | 72.31% | 0.5308 |
+| **+ both** | **8.994** | **11.607** | **72.48%** | **0.5302** |
+
+That is a bigger gain than the entire style block of part 2.
+
+**One nuance:** `missTop` is worth 0.75 points in November–December (t = 0.85,
+noise) and **2.28 points in January–April** (t = 4.7). Early in a season "best
+player" cannot be identified from three games, so the term should be suppressed
+until a team has a real sample.
+
+**What this means for the page.** In production you do not know who will play
+in a future game — but the user does, and the injury news does. This coefficient
+is exactly what a *"remove this player"* control needs in order to move the
+line by the right amount. It is the one feature where the competition's
+player-level structure has a genuine advantage, and it is available to us
+without RAPM.
+
+## 16. Roster continuity
+
+Computed from the archive itself rather than the shipped
+`preseason-continuity.json`, which only covers the upcoming season: for each
+team, what share of last season's minutes are played by players who appear
+again this season.
+
+Continuity explains error in the carried preseason prior, strongly early and
+decaying:
+
+| phase | correlation with residual | swing across the continuity range |
+|---|---|---|
+| first 5 games | **0.093** | 0.15 → 3.08 (**2.9 points**) |
+| games 5–11 | 0.069 | 0.31 → 2.24 |
+| games 12–19 | 0.042 | −0.24 → 1.05 |
+| games 20+ | 0.035 | −0.31 → 0.90 |
+
+**The obvious fix does not work.** Regressing the carried prior toward the mean
+as a function of continuity was tested across a grid and every setting made
+things worse than a flat carry. The reason is that continuity is not a
+regression-to-mean effect: a team that loses its roster gets *worse in absolute
+terms*, it does not become *average*. Shifting the prior additively instead
+helped on the training seasons (MAE 9.074 → 9.053) but **failed to replicate on
+2025** (9.125 → 9.124, log loss slightly worse).
+
+What does work is the direct form — continuity as a margin correction, where it
+does not have to fight through the shrinkage machinery or perturb every
+opponent's adjustment:
+
+| spec | MAE | RMSE | log loss |
+|---|---|---|---|
+| model + availability | 9.001 | 11.620 | 0.5305 |
+| **+ continuity** | **8.991** | **11.609** | **0.5304** |
+
+Coefficient **+2.467 points** per unit of continuity differential, t = 5.75.
+Small, real, and worth keeping.
+
+## 17. Aggregating players does not beat reading the team
+
+The direct test of the competition's structure. A player-derived team rating,
+built exactly the way their Matchup Calculator builds one: each player's
+box-derived offensive and defensive rating, weighted by expected minutes,
+scaled to 200 minutes, summed to a team offence and defence.
+
+Head to head, fitted on 2023+2024 and scored on 2025:
+
+| model | MAE | RMSE | accuracy | correlation with margin |
+|---|---|---|---|---|
+| player-derived rating alone | 10.507 | 13.579 | 63.68% | 0.327 |
+| **team adjusted efficiency alone** | **9.091** | **11.704** | **71.75%** | 0.588 |
+| blend of the two | 9.093 | 11.706 | 71.77% | — |
+
+**The blend puts a weight of −0.004 on the player model.** Not small — zero.
+The team model already contains everything the player aggregation knows, and
+the two correlate at 0.555.
+
+The natural objection is that the player model should shine early, before the
+team has results. It does not:
+
+| team games played | weight on player model | t | MAE gain |
+|---|---|---|---|
+| 0–5 | +0.006 | 0.39 | −0.001 |
+| 6–11 | −0.006 | −0.78 | −0.008 |
+| 12–19 | +0.004 | 0.40 | +0.002 |
+| 20+ | −0.017 | −1.31 | −0.002 |
+
+Zero at every phase. Even in a team's first five games the team model
+correlates 0.582 with the margin against the player model's 0.360 — because the
+carried preseason prior already encodes last season's players, through last
+season's results.
+
+**The honest caveat.** This is a box-derived player rating, not RAPM. CBB
+Analytics report that their player-weighted RAPM model calibrated *better* than
+the team formulas they tried, and proper RAPM is a genuinely better input than
+individual box ratings. This test does not prove player models are useless; it
+proves that **aggregating box-score player ratings adds nothing to a
+well-built team model**, and that the bar a player model has to clear is
+higher than it looks.
+
+The practical conclusion stands either way: **player data's value is in the
+delta, not the level.** Knowing a rotation player is out is worth 0.03 of MAE.
+Knowing how good the roster is on paper is worth 0.004.
+
+## 18. Shot zones and clock splits: nothing, with hindsight
+
+`shot-distribution.json` (rim / mid-range / three rates, offence and defence)
+and `clock-splits.json` (early / mid / late shot-clock rates and efficiencies)
+are season aggregates, so using them inside their own season **leaks**. They
+were tested that way deliberately: a feature that cannot help *with* hindsight
+cannot help without it.
+
+| spec | MAE | RMSE | accuracy | log loss | max t |
+|---|---|---|---|---|---|
+| model as it stands | 8.931 | 11.455 | 72.42% | 0.5325 | — |
+| + shot zones (rim/mid/three) | 8.933 | 11.438 | 72.25% | 0.5323 | 0.55 |
+| + clock splits | 8.962 | 11.482 | 72.42% | 0.5331 | **4.97** |
+| + both | 8.965 | 11.472 | 72.32% | 0.5332 | 4.73 |
+
+Shot zones: nothing at all (max t = 0.55). Clock splits are the more
+instructive failure — **t = 4.97 in training and a worse holdout in every
+metric.** That is overfitting with a leaky feature, caught by the holdout, and
+it is the reason the discipline is worth the trouble.
+
+Both dropped. The one shot-selection axis that survives is the 3PA-share edge
+already in the model from part 2, which is as-of-date and unleaky.
+
+## 19. The final model
+
+```
+ratings          iterated fixed point, 24 iterations
+                 home-court 2.0 per side per 100
+                 shrinkage k = 3 games toward last season's final rating,
+                   carried unregressed
+                 single-game efficiency clamped to ±25 of the league mean
+
+pace             L − 0.75 + 0.83 × (tempo_A + tempo_B − 2L)
+
+score            eff_A = adjO_A + (adjD_B − M) + loc × 2.0     -> × pace / 100
+                 eff_B = adjO_B + (adjD_A − M) − loc × 2.0     -> × pace / 100
+
+margin           −0.5168
+correction       + loc × (1.849 non-conference | 0.781 conference)
+                 + 3.017  power-conference team hosting a non-power team
+                 + 0.088 × ORB edge
+                 − 0.071 × turnover edge
+                 + 0.068 × 3PA-share edge
+                 − 0.247 × 3P% edge
+                 + 0.033 × (net_A + net_B)
+                 + 0.058 × missing-value differential
+                 + 1.851 × best-player-out differential
+                 + 2.467 × roster-continuity differential
+
+win probability  Φ(margin / 11.0)
+```
+
+Every constant fitted on 2023 + 2024 alone:
+
+| | 2025 holdout | 2026 never opened |
+|---|---|---|
+| MAE — base | 9.138 | 9.167 |
+| MAE — part 2 | 9.010 | 9.076 |
+| **MAE — final** | **8.965** | **9.042** |
+| RMSE — base → final | 11.798 → **11.570** | 11.640 → **11.470** |
+| accuracy — base → final | 71.62% → **72.41%** | 71.06% → **71.36%** |
+| log loss — base → final | 0.5366 → **0.5299** | 0.5398 → **0.5342** |
+
+**Variance explained on 2025: 36.5% base → 38.9% final.**
+
+The part 2 conclusion survives part 3 essentially intact. The base model is
+still doing the overwhelming majority of the work; the player data roughly
+doubled the size of the correction block, which took it from 4% of the
+achievable work to about 6%.
+
+## 20. The mockup, final version
+
+Belmont vs Northern Iowa, as of 2026-02-12, with the player terms in:
+
+```
+base projection                     69.12 − 65.13    margin +3.99
+
+  intercept                         −0.52
+  conference home floor             +0.78
+  availability                      −0.44   Belmont without Nic McClain (25 mpg)
+                                            Northern Iowa without RJ Taylor (11 mpg)
+  continuity                        −0.50   Belmont 46.1% returning, UNI 66.5%
+  rebounding / turnovers            −0.49 / −0.21
+  shot selection / three-point      −0.23 / −0.14
+  matchup quality                   +0.69
+                                    ─────
+                                    −1.06
+
+PROJECTED    Belmont 68.6   Northern Iowa 65.7    margin +2.9    Belmont 60.5%
+ACTUAL       Belmont 91     Northern Iowa 86      margin +5
+```
+
+The player terms moved this projection about a point *away* from the eventual
+result, which is what a one-game sample is worth. Across 10,676 out-of-sample
+games they moved it toward the result.
+
+## 21. What is left
+
+Untouched, in rough order of expected value:
+
+1. **Real RAPM.** The one input that could overturn §17. A serious build —
+   possession-level stints from `plays-*.json.gz` — and their own documentation
+   says it does not produce ratings until late December, which is precisely the
+   window where our carried prior already wins.
+2. **As-of-date shot zones from play-by-play.** §18 says do not bother: the
+   leaky version could not help.
+3. **Lineup data** (`lineups-*.json`). Untested. Likely to behave like §17 —
+   the team's own results already contain it.
+4. **Referee assignments.** Not in the archive. The free-throw-rate road effect
+   in §8a is the largest unexplained context effect and this is the obvious
+   candidate mechanism.
