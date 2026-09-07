@@ -89,23 +89,41 @@ Michigan = (110.8 + 15.0 − 16.0) / 100 × 67.6 = 109.8/100 × 67.6 = 74.2
 Both ratings are per 100 possessions, so the division by 100 and the
 multiplication by pace convert a rate into points. Standard.
 
-**How they get Game Pace is undetermined — and it turns out not to matter.**
-67.6 is consistent with *both* the simple average of the two paces
+**How they get Game Pace is undetermined, and it matters more than I first
+thought.** 67.6 is consistent with *both* the simple average of the two paces
 ((65.5+69.6)/2 = 67.55) and the KenPom-style formula
-(65.5 × 69.6 / 67.42 = 67.62). Duke and Michigan sit either side of league
+(65.5 x 69.6 / 67.42 = 67.62). Duke and Michigan sit either side of league
 average, which is the case where the two agree, so one observation cannot
 separate them.
 
-I went looking for the case that would. Taking the most extreme pair in D-I
-this season — **Northern Iowa at 62.2 against Cal Poly at 74.1**, the slowest
-and fastest teams in the country — the two formulas give 68.18 and 68.41
-possessions. **A difference of 0.23 possessions**, or about a quarter of a
-point of projected score, at the theoretical maximum. Every real matchup is
-closer than that.
+**CORRECTION.** The first draft of this section claimed the choice was
+immaterial, on the grounds that the most extreme pace pair in the country --
+Northern Iowa at 62.2 against Cal Poly at 74.1 -- separates the two formulas by
+only 0.23 possessions. That test was wrong. It picked the extreme *gap*, and a
+big gap is precisely the case where a fast team and a slow team cancel and the
+two formulas agree. The case that separates them is the extreme *sum*:
 
-So this is not a fork in the road. Use the KenPom form because it is the
-better-motivated one (a fast team drags a slow one up more than a midpoint
-implies), and stop thinking about it.
+| pair | simple average | KenPom product | difference |
+|---|---|---|---|
+| Northern Iowa 62.2 / Cal Poly 74.1 | 68.15 | 68.36 | 0.21 |
+| two slow: 62.2 / 63.0 | 62.60 | 58.12 | **-4.48** |
+| two fast: 74.1 / 73.0 | 73.55 | 80.23 | **+6.68** |
+
+Two fast teams put the formulas 6.7 possessions apart, which at roughly 1.08
+points per possession is about **15 points of combined scoring**. It is not a
+rounding difference; it is the difference between a plausible total and an
+absurd one.
+
+Backtested against 15,969 games (see part 2), neither is right. The simple
+average is badly biased -- +2.55 possessions for slow pairs, -1.11 for fast
+ones -- and the KenPom product overshoots in the other direction, +1.70 for
+fast pairs. The unbiased fit is the additive form shrunk to 0.83:
+
+```
+Game pace = L - 0.75 + 0.83 x (tempo_A + tempo_B - 2L)
+```
+
+flat to within 0.09 possessions across every tempo band.
 
 **Win probability, two ways, both from the projected score:**
 
@@ -219,9 +237,10 @@ we would have a *page about a matchup*, which is the thing people search for.
 
 ## 7. Open questions before we build
 
-1. ~~Game pace formula~~ — **settled, see §3.** The two candidates differ by
-   0.23 possessions at the most extreme pace matchup in the country. Use the
-   KenPom form and move on.
+1. ~~Game pace formula~~ — **settled, see §3, but not the way the first draft
+   said.** The two candidates differ by nearly 7 possessions when both teams are
+   fast; the first draft's "0.23 possessions" test measured the wrong extreme.
+   Neither standard formula is unbiased. Use the fitted form.
 2. **Which win-probability method?** Their backtest picked Pythagorean and
    Normal CDF over Log5. We can adopt both cheaply and show the disagreement,
    which is honest and is a differentiator.
@@ -247,3 +266,533 @@ team-season that a search engine can index and a person can send to a friend.
 
 If we build this, the thing to copy is the **transparency** — showing the
 arithmetic on the page — and the thing to beat is the **calendar**.
+
+---
+---
+
+# Part 2 — what actually predicts a college basketball game
+
+Written 2026-09-07. Measured against our own archive:
+`data/cbbd/<season>/box-teams-full.json.gz` — every team-game of 2023, 2024 and
+2025, with 2026 held back and opened once, at the end, after the model was
+frozen.
+
+## 1. Method, and the trap it exists to avoid
+
+`public/data/team-ratings-<season>.json` holds **end-of-season** adjusted
+ratings. Predicting a January game with them scores the model on information it
+could not have had, and every model looks brilliant that way. Nothing in this
+study touched those files.
+
+Instead, a **walk-forward backtest**: for every date a season played games, fit
+ratings on everything strictly before that date, project that date's games,
+record the residual. The ratings are the iterated fixed point that
+`scripts/build-team-ratings.mjs` already ships, re-implemented with every
+modelling choice exposed as a parameter.
+
+Hyperparameters were fitted on **2023 + 2024**. **2025** was the holdout.
+**2026** was never opened until the constants were frozen.
+
+15,969 predicted games in the study seasons; 5,398 more in 2026.
+
+## 2. A data bug to fix in production
+
+17 games across 2023-2026 carry impossible possession counts — Duke–Purdue on
+2022-11-27 logged at **2 possessions**, Robert Morris on 2025-11-11 at 10, and
+two whole slates (2025-01-03, 2025-02-16) at around 40.
+
+They are not harmless. One is enough to detonate the fixed point: Northwestern's
+implied 8,700-points-per-100 propagated through opponents-of-opponents until
+December 2023 projections read 460-point margins and the season's RMSE was
+**30.1 against a true 11.7**.
+
+`scripts/build-team-ratings.mjs` has the same hole. The gate:
+
+```js
+poss >= 45 && poss <= 110 && Math.abs(hPoss - aPoss) <= 4
+```
+
+**Action item, independent of this feature: add that gate to the production
+ratings builder.**
+
+## 3. What the rating engine should do
+
+Swept one parameter at a time on 2023+2024, MAE of predicted margin:
+
+| choice | result |
+|---|---|
+| Home-court advantage | best 2.0–2.4 per side per 100 (9.244 → 9.216) |
+| Shrinkage `k` toward a prior | **k = 2–3 (9.244 → 9.072)** |
+| Single-game efficiency cap | **±20–25 around league mean (→ 9.130)** |
+| Recency weighting | **nothing** |
+| Preseason prior = last season | **large, see §4** |
+
+Two deserve stating plainly.
+
+**Recency weighting does not work.** Half-lives from 200 days down to 25 were
+tested. The best was 140 days, which over a 150-day season is indistinguishable
+from no decay at all; 25 days is materially *worse* (9.341 vs 9.239). A team in
+February is not better described by its February games than by its season.
+
+**Last season should not be regressed before use.** Carry factors of 0.3, 0.5,
+0.65, 0.8 and 1.0 were tested and 1.0 — last season's final rating, untouched —
+was best. The shrinkage weight `k` already controls how fast the prior fades;
+regressing it as well shrinks twice.
+
+## 4. The finding that matters most commercially
+
+CBB Analytics' own documentation: *"We do not have RAPM ratings for the season
+until late-December. Early-season projections are not available."*
+
+Accuracy by how many games the less-experienced team had played:
+
+| games played | MAE, no prior | MAE, last season carried | log loss, no prior | with prior |
+|---|---|---|---|---|
+| **0–1** | 11.56 | **10.09** | 0.512 | **0.476** |
+| 2–3 | 10.42 | 9.73 | 0.576 | 0.548 |
+| 4–5 | 9.84 | 9.41 | 0.542 | 0.520 |
+| 6–8 | 9.41 | 9.05 | 0.515 | 0.507 |
+| 13–17 | 8.79 | 8.71 | 0.579 | 0.575 |
+| 25+ | 9.15 | 9.06 | 0.569 | 0.566 |
+
+A team's *first game of the season* is predictable to 10.1 points MAE — barely
+worse than the 8.7 available in February — provided last season is carried
+forward. **A matchup tool that works in November is a product they cannot
+ship**, and it costs us one line of code.
+
+## 5. Home court
+
+Measured from conference games only, where schedules are balanced home-and-home
+and the buy-game confound disappears:
+
+| season | home margin, conference games |
+|---|---|
+| 2022-23 | 3.28 |
+| 2023-24 | 2.91 |
+| 2024-25 | 2.98 |
+| 2025-26 | **2.60** |
+
+Home advantage is **declining**, and smaller than folklore: under 3 points, not
+3.5–4.
+
+### 5a. Conference is not non-conference
+
+Residual bias of a model carrying a single flat HCA:
+
+| context | n | bias (points) |
+|---|---|---|
+| conference, home floor | 9,883 | **+0.28** |
+| non-conference, home floor | 3,974 | **+2.20** |
+| neutral site | 2,112 | −0.12 |
+
+**The home edge is roughly two points larger in non-conference games.**
+
+The obvious objection is ratings compression — that the model under-rates the
+gap between a high-major and a low-major, and those games are all
+non-conference. It is not. Sliced by predicted margin, **neutral-court games
+show no bias at any level**:
+
+| predicted margin | neutral-court bias | non-conference home bias |
+|---|---|---|
+| −9.0 | −0.71 ± 0.57 | +2.92 ± 0.52 |
+| −3.2 | +0.25 ± 0.55 | +2.54 ± 0.54 |
+| 0.1 | −0.09 ± 0.55 | +1.05 ± 0.50 |
+| +3.6 | −0.22 ± 0.55 | +1.42 ± 0.53 |
+| +9.4 | +0.19 ± 0.58 | +2.67 ± 0.53 |
+
+Same teams, same period, same ratings — the bias appears only where there is a
+home floor and no return fixture. It fades from November (+2.65) to December
+(+1.94), consistent with visitors acclimatising. An interaction term
+(non-conference × |predicted margin|) is **zero** (0.0006 ± 0.031), so the flat
+split is the right specification.
+
+### 5b. Per-team home advantage is almost all noise
+
+The famous claim, tested three ways:
+
+- Split-half within a season (odd vs even home games): r = **−0.03, 0.15, 0.05**
+- Season to season: r = **0.163, 0.094**
+- Observed spread of the per-team home edge: sd 2.13–2.47 points per season —
+  *exactly* the sampling noise expected from ~15 home games at a residual sd of
+  11.5.
+
+Pooled across three seasons the spread is 1.49 against an expected noise of
+1.21, leaving **true team-to-team variation of about 0.9 points**. Real, small,
+and needing heavy shrinkage. CBB Analytics' flat number is defensible.
+
+**Altitude is the exception**, and the only per-team effect with a mechanism
+that survives testing:
+
+| home arena elevation | teams | mean edge over a flat model |
+|---|---|---|
+| above 6,000 ft | 3 | +0.84 |
+| **4,500–6,000 ft** | 12 | **+2.10** |
+| 3,000–4,500 ft | 6 | +0.76 |
+| below 3,000 ft | 336 | +0.71 |
+
+Pooled, ≥3,000 ft is worth **+0.83 ± 0.36 points (2.3σ)**. Utah (+5.5), BYU
+(+4.8) and Colorado (+3.6) top the whole list. Worth about a point, not five.
+
+### 5c. Travel, crowd and rest
+
+`data/cbbd/<season>/games-*.json.gz` carries venue, city, state and attendance —
+for 2025 and 2026 only.
+
+- **Travel**: within conference games, visitor distance does nothing (bias +0.39
+  under 50 miles, +0.66 over 1,000). The apparent effect in non-conference games
+  is the buy game, not the flight.
+- **Crowd**: monotone, ~1.6 points from the smallest conference crowds to the
+  largest — but inseparable from program size with this data.
+- **Rest**: a home team on a back-to-back loses about **1.0 point** (−1.006 ±
+  0.340, 3.0σ). The rest *differential* does nothing. College basketball is not
+  the NBA; back-to-backs are rare and mostly November tournaments.
+
+## 6. Pace
+
+The simple average of two adjusted tempos is **wrong**, and not slightly:
+
+| pair | simple avg | KenPom product | fitted |
+|---|---|---|---|
+| slow + fast (62.2 / 74.1) | 68.15 | 68.36 | 67.88 |
+| two slow (62.2 / 63.0) | 62.60 | 58.12 | 58.67 |
+| two fast (74.1 / 73.0) | 73.55 | 80.23 | 76.85 |
+
+Two fast teams put the two standard formulas **6.7 possessions apart**. Measured
+bias by tempo band: the simple average runs +2.55 high for slow pairs and −1.11
+low for fast ones; the KenPom product runs +1.70 high for fast pairs. The fitted
+form is flat to within 0.09 possessions across every band:
+
+```
+pace = L − 0.75 + 0.83 × (tempo_A + tempo_B − 2L)
+```
+
+Accuracy: **MAE 3.31, RMSE 4.19 possessions** (2026).
+
+### 6a. Fast games are more volatile — in points, not in outcomes
+
+| | both slow (adjT < 66) | both fast (adjT > 70) |
+|---|---|---|
+| n | 858 | 692 |
+| sd of margin | 13.07 | **15.85** |
+| decided by ≤5 | 32.4% | **23.7%** |
+| decided by 20+ | 13.6% | **24.1%** |
+| favourite won | 70.5% | **75.6%** |
+| mean total | 132.2 | 158.0 |
+
+Residual sd scales as **pace^0.59** — indistinguishable from the √pace a
+possession-level random walk predicts, and nowhere near linear.
+
+**But this does not produce upsets.** Favourites win *more* often in fast games,
+because the same pace multiplier that widens the distribution also widens the
+projected margin. Scaling σ by pace gains nothing (log loss 0.5474 vs 0.5473) —
+the two effects cancel almost exactly. The most counter-intuitive result in the
+study: **fast games produce more blowouts and no more upsets.**
+
+## 7. Style matchups
+
+The style engine adjusts each four-factor dimension for opponent, exactly as
+efficiency is adjusted. It works — it predicts the *style* of the game well:
+
+| dimension | correlation with what actually happened |
+|---|---|
+| 3PA share | **0.567** |
+| turnover rate | 0.406 |
+| eFG% | 0.371 |
+| free-throw rate | 0.298 |
+| offensive rebound % | 0.241 |
+| **3P%** | **0.101** |
+
+And yet almost none of it moves the scoreboard, because opponent-adjusted
+efficiency has already priced it in. Every candidate, fitted on 2023+2024:
+
+| feature | coefficient (pts of margin) | t | verdict |
+|---|---|---|---|
+| power conference hosting a non-power team | **+2.772** | 5.5 | **keep** |
+| non-conference home floor | +1.900 | 4.7 | **keep** |
+| expected 3P% edge | **−0.232** | **−8.9** | **keep — negative** |
+| expected 3PA-share edge | +0.080 | 5.3 | keep |
+| both teams strong (`qualSum`) | +0.032 | 5.3 | keep |
+| expected turnover edge | −0.112 | −3.3 | keep |
+| expected ORB edge | +0.083 | 3.2 | keep |
+| conference home floor | +0.795 | 2.4 | keep |
+| home back-to-back | −0.388 | −1.1 | drop |
+| eFG% edge | −0.022 | −1.0 | drop |
+| free-throw-rate edge | +0.005 | 0.4 | drop |
+| rest differential | −0.033 | −0.5 | drop |
+| **pace gap (fast vs slow clash)** | −0.024 | −0.5 | **drop** |
+| **combined pace (two fast teams)** | −0.001 | −0.03 | **drop** |
+
+### 7a. The three-point result
+
+The **strongest style term in the model is negative**: a team projected to
+out-shoot its opponent from three **under-performs** by 0.23 points per
+percentage point of edge.
+
+3P% is the least persistent thing a team does — r = 0.101 with the actual
+outcome, against 0.567 for shot selection. A team whose efficiency rating is
+inflated by hot shooting will regress, and the rating has already banked the
+luck. **Fade the hot shooters.** Same insight as KenPom's and Torvik's luck
+adjustments, arrived at independently here.
+
+### 7b. Does a rebounding advantage cancel out?
+
+**No, it does not cancel — but it is worth far less than it looks.**
+
+| expected ORB edge | n | actual ORB% differential | margin residual |
+|---|---|---|---|
+| −6.6 pp | 3,193 | −4.56 | −0.59 ± 0.20 |
+| −2.5 pp | 3,194 | −2.27 | +0.56 ± 0.20 |
+| −0.1 pp | 3,194 | −0.71 | +0.61 ± 0.20 |
+| +2.3 pp | 3,194 | +1.00 | +1.19 ± 0.20 |
+| +6.4 pp | 3,194 | +3.82 | +1.77 ± 0.21 |
+
+The collision *is* predictable — a great offensive rebounding team really does
+out-rebound a great defensive rebounding team, at 0.375 percentage points per
+point of edge. It just barely reaches the scoreboard: across the full observed
+range, the swing is **3.6 points of margin**, and most matchups sit nowhere near
+those extremes.
+
+### 7c. Offence and defence are worth exactly the same
+
+Regressing actual margin on all four rating components at once:
+
+| component | coefficient | t |
+|---|---|---|
+| home offence | 1.080 | 50.9 |
+| home defence | 1.058 | 45.4 |
+| away offence | 1.014 | 46.9 |
+| away defence | 1.044 | 44.7 |
+
+Offence mean 1.047, defence mean 1.051, **ratio 0.996**. No asymmetry to
+exploit. (All four exceed 1.00 slightly — the model is ~4.6% under-spread.
+Correcting it improves MAE and worsens log loss; left alone.)
+
+## 8. Which parts of an identity survive a mismatch
+
+The question behind a matchup page: when a mid-major walks into a power
+conference gym, what does it keep and what does it lose?
+
+Conference tiers here are **derived, not asserted** — leagues ranked by the mean
+adjusted net rating of their members, top six = power. In 2025 that is SEC, Big
+Ten, Big 12, Big East, ACC and Mountain West, which is where the data puts them.
+
+The measure is a **carryover slope**: regress what a team actually did on what
+the style model expected it to do. 1.00 means the profile fully survives; below
+1 means the matchup suppresses it; above 1 means it is amplified.
+
+**Baseline, all 31,938 team-sides:**
+
+| dimension | slope | reading |
+|---|---|---|
+| 3PA share | **1.036** | shot selection is fully portable |
+| turnover rate | 0.883 | mostly portable |
+| eFG% | 0.784 | | 
+| ORB% | 0.748 | |
+| FT rate | 0.745 | |
+| **3P%** | **0.285** | barely portable at all |
+
+**Conference vs non-conference** — the identity that degrades most in unfamiliar
+buildings is rebounding:
+
+| dimension | conference | non-conference |
+|---|---|---|
+| ORB% | 0.784 | **0.648** |
+| eFG% | 0.747 | 0.850 |
+| 3PA share | 1.005 | **1.131** |
+| turnover rate | 0.863 | 0.915 |
+
+### 8a. A mid/low-major facing a power team, split by venue
+
+The control column is the same teams playing *away* in non-conference games
+against non-power opponents, which separates "playing a power team" from
+"playing on the road".
+
+| dimension | at the power team | neutral court | CONTROL: away, non-power |
+|---|---|---|---|
+| **FT rate** — bias | **−5.82** | −1.70 | −3.15 |
+| FT rate — slope | 0.599 | 0.898 | 0.599 |
+| **3PA share** — slope | **1.346** | 1.121 | 1.083 |
+| **eFG%** — bias | **−2.34** | −0.93 | −0.84 |
+| eFG% — slope | 0.606 | 0.617 | 0.689 |
+| **turnover rate** — slope | **1.033** | 0.984 | 0.813 |
+| turnover rate — bias | +0.84 | −0.90 | +0.20 |
+| ORB% — slope | 0.592 | 0.594 | 0.616 |
+| 3P% — slope | 0.198 | 0.104 | 0.290 |
+
+And the mirror, a power team facing a mid/low-major:
+
+| dimension | hosting | neutral court |
+|---|---|---|
+| **eFG%** — bias | **+3.30** | +0.35 |
+| 3P% — bias | +1.99 | +0.23 |
+| ORB% — slope | 0.612 | 0.760 |
+| turnover rate — bias | −1.37 | −0.20 |
+
+Four things fall out of that, and only one of them is about talent.
+
+**1. The shooting gap between a power team and a mid-major is a home-floor
+effect, not a talent effect.** In the power team's gym the eFG% swing is
++3.30 / −2.34, about 5.6 points. On a neutral court it is +0.35 / −0.93, about
+1.3. **Roughly three quarters of "power conference teams shoot better against
+mid-majors" disappears when you move the game to a neutral floor.**
+
+**2. Free-throw rate is where the road actually shows up.** A mid-major loses
+3.15 points of FT rate simply by playing away; against a power team on its own
+floor it loses **5.82**. On a neutral court against the same calibre of
+opponent, only 1.70. The slope collapses from 0.90 on neutral to 0.60 away —
+the identity is suppressed as well as the level. This is the single largest
+context effect in any dimension, and it is the one people argue about most.
+
+**3. Underdogs go variance-hunting, and it is specific to the opponent, not the
+venue.** A mid-major at a power school shoots proportionally more threes than
+its own profile predicts — slope **1.346**, against 1.083 in the road control.
+That is a deliberate strategic response to being outmatched, visible in the
+data, and it is not simply road behaviour.
+
+**4. Turnovers get amplified by the matchup, rebounding does not.** A
+turnover-prone mid-major is punished *more* at a power school (slope 1.033 vs a
+0.813 control). Offensive rebounding, by contrast, degrades at about the same
+rate against anybody away from home (0.592 vs a 0.616 control) — it is a
+road effect, not a tier effect.
+
+### 8b. Does any of that move the number?
+
+One term does, and it is large. Adding a **power conference team hosting a
+non-power team** dummy on top of the non-conference home floor:
+
+| term | coefficient | t |
+|---|---|---|
+| non-conference home floor | +1.900 | 4.7 |
+| **power hosts non-power (additional)** | **+2.772** | **5.5** |
+| conference home floor | +0.795 | 2.4 |
+
+So the effective home floor is **+4.67 points** when a power-conference team
+hosts a non-power team, against **+0.79** for an ordinary conference home game —
+a factor of six. It improves both untouched seasons (2025 RMSE 11.635 → 11.599;
+2026 11.545 → 11.512).
+
+The style shifts in §8a, by contrast, mostly cancel in the margin: they change
+*how* the game is played without changing *who wins by how much*, because the
+efficiency ratings already contain the result. The exception is the
+three-point-rate term, which survives at 5.3σ.
+
+## 9. Win probability
+
+The functional form does not matter. Pooled over 15,969 games:
+
+| model | best parameter | log loss | Brier |
+|---|---|---|---|
+| Normal CDF | σ = 10.55 | **0.5473** | 0.1857 |
+| Logistic | s = 6.25 | 0.5474 | 0.1858 |
+| Student t, df = 10 | 9.95 | 0.5474 | 0.1858 |
+| Student t, df = 5 | 9.40 | 0.5475 | 0.1858 |
+| Pythagorean on scores | e = 11.3 | 0.5481 | 0.1860 |
+
+All within 0.001. **Use the normal CDF because it is simplest, and spend the
+effort on σ.** Pythagorean is marginally the worst — worth knowing, since it is
+what the competition leads with. Their e = 11 default is confirmed correct: our
+independent fit lands on 11.3.
+
+## 10. The model, frozen
+
+```
+ratings          iterated fixed point, 24 iterations
+                 HCA 2.0 per side per 100
+                 shrinkage k = 3 games toward last season's final rating,
+                   carried unregressed
+                 single-game efficiency clamped to ±25 of the league mean
+
+pace             L − 0.75 + 0.83 × (tempo_A + tempo_B − 2L)
+
+efficiency       eff_A = adjO_A + (adjD_B − M) + loc × 2.0
+                 eff_B = adjO_B + (adjD_A − M) − loc × 2.0
+score            eff × pace / 100
+
+margin           −0.4965
+correction       + loc × (1.900 non-conference | 0.795 conference)
+                 + 2.772 if a power team is hosting a non-power team
+                 + 0.083 × ORB edge
+                 − 0.112 × turnover edge
+                 + 0.080 × 3PA-share edge
+                 − 0.232 × 3P% edge
+                 + 0.032 × (net_A + net_B)
+
+win probability  Φ(margin / 10.9)
+```
+
+Out-of-sample, constants fitted on 2023+2024 only:
+
+| | 2025 (holdout) | 2026 (never opened) |
+|---|---|---|
+| MAE, base → final | 9.127 → **8.999** | 9.166 → **9.076** |
+| RMSE, base → final | 11.782 → **11.599** | 11.634 → **11.512** |
+| accuracy, base → final | 71.68% → **72.14%** | 71.06% → **71.32%** |
+| log loss, base → final | 0.5359 → **0.5319** | 0.5400 → **0.5370** |
+| bias, base → final | −0.80 → **−0.11** | −0.35 → +0.38 |
+
+**Variance accounting on 2025**: actual margin variance 218.7 (sd 14.79). The
+base model leaves 138.8 — it explains **36.5%**. Every correction together takes
+that to **38.1%**.
+
+That ratio is the headline of the whole study. **Opponent-adjusted efficiency,
+home court and pace do about 96% of the achievable work. Every matchup nuance
+anyone has ever argued about, combined and fitted generously, is the other 4%.**
+
+## 11. What the model cannot do
+
+Totals. On 2026:
+
+| target | MAE | RMSE |
+|---|---|---|
+| margin | 9.08 | 11.51 |
+| pace | 3.31 | 4.19 |
+| **total points** | **13.74** | **17.36** |
+
+Predicting the total is roughly 50% harder than predicting the margin: pace error
+and shooting variance both feed it and neither cancels. **Lead the page with
+margin and win probability. Show the total, but do not sell it.**
+
+## 12. Worked example — the mockup
+
+Belmont vs Northern Iowa, projected as of **2026-02-12**, using only the 4,680
+games played before that date.
+
+```
+                     adjO     adjD   adjNet  adjTempo   rank
+Belmont            117.36   105.74   +11.62     69.77     59
+Northern Iowa      105.87    96.42    +9.45     63.30     79
+league             108.88        -        -     68.23
+
+pace    simple average 66.53    KenPom 64.72    THIS MODEL 64.66
+
+Belmont       = 117.36 + (96.42 − 108.88) + 2.0  = 106.90  →  69.1
+Northern Iowa = 105.87 + (105.74 − 108.88) − 2.0 = 100.72  →  65.1
+
+corrections   intercept −0.50   conference home floor +0.79
+              ORB −0.47  TOV −0.34  3PA −0.26  3P% −0.13  quality +0.66
+              total −0.23
+
+PROJECTED     Belmont 69.0   Northern Iowa 65.2      Belmont 63.5%
+```
+
+They played the next day, **2026-02-13: Belmont 91, Northern Iowa 86.**
+
+Margin +3.8 projected against +5 actual. The total was 134 projected against
+177 — the game ran at 71 possessions, not 64.7, and both teams shot far above
+their season profile. Exactly the asymmetry §11 describes, in one game. Their
+January meeting, the same two teams, ran at **58**.
+
+## 13. Open questions for the page
+
+1. **Free vs paid.** Consistent with the rest of the site: current season free,
+   historical matchups behind the Pass.
+2. **Show the arithmetic**, as they do. It is the best thing about their product
+   and it costs nothing.
+3. **Show the style panel, label it honestly.** §8 is genuinely interesting to
+   read and mostly does not change the number. The page should not imply it
+   does.
+4. **Refit the home-court constants each season.** They are drifting (§5), and
+   the 2023-24 constants already leave 2026 with a +0.38 bias.
+5. **Route count.** `/teams/[slug]/[year]/matchup` is ~1,812 prerendered pages
+   via `tabbedSeasonParams`. A matchup *pair* page is 365² and cannot be
+   prerendered — opponent selection has to be client-side.
