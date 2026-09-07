@@ -5,7 +5,7 @@ import { SiteLogo } from "@/components/site-logo";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
-  Search, ChevronDown, Table2, ListOrdered, Trophy,
+  Search, ChevronDown, Table2, ListOrdered, Trophy, Swords,
   type LucideIcon,
 } from "lucide-react";
 import { SearchDialog } from "@/components/search/search-dialog";
@@ -68,6 +68,12 @@ const SUBNAV: Record<string, ReadonlyArray<SubnavItem>> = {
       desc: "The best single-game team performances" },
     { href: "/conferences", label: "Conference Power Rankings", icon: Trophy,
       desc: "How the leagues stack up against each other" },
+    // A third page type in this menu: not a table of the season and not a
+    // ranked list of nights, but a projection of a game that has not been
+    // played. The blurb says the one thing the title does not — that the
+    // pair, the floor and the absences are all yours to set.
+    { href: "/matchup", label: "Matchup Predictor", icon: Swords,
+      desc: "Any two teams, any floor, anyone ruled out" },
   ],
   // Players is two tables for the same reason Teams is: the explorer rates a
   // season, the game log rates a night, and neither is a view of the other.

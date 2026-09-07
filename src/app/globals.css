@@ -1259,3 +1259,17 @@ body {
 [data-team-tab="onoff"] [data-pane]:not([data-pane="onoff"]) {
   display: none !important;
 }
+
+/* ── Matchup Predictor: a team colour as text, in both themes ──────────────
+   The page sets --ma-light/--ma-dark (and --mb-*) inline per team; the value
+   everything actually reads, --ma / --mb, is declared ONLY here, so the dark
+   rule below reaches it without the !important the team pages needed for
+   --accent (that one is set inline, which outranks any stylesheet rule). */
+.matchup-root {
+  --ma: var(--ma-light, var(--coral));
+  --mb: var(--mb-light, var(--coral));
+}
+[data-theme="dark"] .matchup-root {
+  --ma: var(--ma-dark, var(--coral));
+  --mb: var(--mb-dark, var(--coral));
+}

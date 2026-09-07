@@ -95,6 +95,53 @@ them. Ask for a resize rather than guessing at what an image shows.
 
 ---
 
+## 2026-09-07 — the Matchup Predictor, built and NOT deployed
+
+`/matchup/` — one page, free, 2025-26 only. Pick any two teams, choose the
+floor, rule players out, get a projected score with the arithmetic printed.
+Lives in the Teams menu (a seventh top-level nav label does not fit at 1024,
+per the note in site-header.tsx).
+
+**Where the numbers come from.** `docs/matchup-predictor.md`, parts 1–3 — a
+walk-forward backtest of 15,969 games, constants fitted on 2022-24 and verified
+once each on 2024-25 and 2025-26. The model is `src/lib/matchup.ts`; the data
+is `scripts/build-matchup.mjs --season 2026` → `public/data/matchup/2026.json`
+(188 KB raw, 70 KB gzipped, tracked in git). The page reads two teams of it at
+build time for the prerendered default and the browser fetches the rest.
+
+**Why it has its own ratings build instead of reading team-ratings-2026.json.**
+That file applies `CAL = 0.84`; the model's constants were fitted against the
+UNSCALED engine. Dropping them onto the calibrated numbers would mis-scale
+every projection by ~19% with no error. Separate output, nothing shared.
+
+### TO DO — the season cut-over
+
+When 2026-27 has games in the archive:
+
+1. `node scripts/build-matchup.mjs --season 2027` (needs `data/cbbd/2027/`
+   box-teams-full and box-players-full; carries 2026 forward as the prior —
+   that is what makes it work in November, and it is the one thing the
+   competition cannot do).
+2. Change `SEASON` in `src/app/matchup/page.tsx` to 2027.
+3. Rebuild, deploy. Until then the page says 2025-26 and means it.
+
+Colin's call on 2026-09-07: current season only, free, player toggles in v1.
+Historical seasons and gating are not on the list.
+
+### Things this page taught
+
+- `athleteId` in `box-players-full.json.gz` is a per-row surrogate; the stable
+  key is `athleteSourceId`. Production scripts already know (see
+  `build-bta-porpag.mjs:31`); the research harness did not, and reported zero
+  absences across three seasons before the bug was found.
+- A team colour as TEXT needs a light AND a dark variant. `readableOnPaper`
+  serves the cream page; `readableInk(hex, {min: 0.6, max: 0.78})` serves
+  #1C1C1C. The page sets both as variables and `.matchup-root` in globals.css
+  picks under `[data-theme="dark"]` — no `!important`, because `--ma` itself
+  is never set inline.
+- `var()` in an SVG presentation attribute is not guaranteed to resolve. Use
+  `style={{ fill: … }}`.
+
 ## 2026-09-07 — page width, and why the dev server was eating the machine
 
 **Both changes are uncommitted and undeployed as of writing.**
