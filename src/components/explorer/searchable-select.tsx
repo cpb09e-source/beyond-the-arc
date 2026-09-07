@@ -137,7 +137,7 @@ export function SearchableSelect({
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="h-9 w-full min-w-40 px-2 rounded border border-hairline bg-card text-ink text-sm text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-coral/40"
+        className="h-9 w-full min-w-40 px-2 rounded border border-hairline bg-card text-ink text-[11px] text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-coral/40"
       >
         <span className="truncate">{currentLabel}</span>
         <span aria-hidden className="text-ink-muted text-xs">▾</span>
@@ -158,17 +158,17 @@ export function SearchableSelect({
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onKeyDown}
               placeholder={placeholder}
-              className="w-full h-8 px-2 text-sm rounded border border-hairline bg-paper text-ink focus:outline-none focus:ring-2 focus:ring-coral/40"
+              className="w-full h-8 px-2 text-[11px] rounded border border-hairline bg-paper text-ink focus:outline-none focus:ring-2 focus:ring-coral/40"
             />
           </div>
           <div ref={listRef} className="flex-1 min-h-0 max-h-72 overflow-y-auto py-1">
             {filtered.length === 0 ? (
-              <div className="px-3 py-4 text-sm text-ink-muted text-center">No matches</div>
+              <div className="px-3 py-4 text-[11px] text-ink-muted text-center">No matches</div>
             ) : (
               grouped.map((g, gi) => (
                 <div key={`${g.group ?? ""}-${gi}`}>
                   {g.group && groupLabels?.[g.group] && (
-                    <div className="px-3 pt-2 pb-1 text-[0.65rem] uppercase tracking-widest text-coral font-medium">
+                    <div className="px-3 pt-2 pb-1 text-[11px] uppercase tracking-widest text-coral font-medium">
                       {groupLabels[g.group]}
                     </div>
                   )}
@@ -186,7 +186,7 @@ export function SearchableSelect({
                           setOpen(false);
                         }}
                         className={cn(
-                          "w-full text-left px-3 py-1.5 text-sm flex items-center justify-between gap-2",
+                          "w-full text-left px-3 py-1.5 text-[11px] flex items-center justify-between gap-2",
                           isActive && "bg-paper-deep",
                           isSelected && "text-coral font-medium"
                         )}

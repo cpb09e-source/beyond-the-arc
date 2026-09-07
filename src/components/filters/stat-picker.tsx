@@ -485,7 +485,7 @@ export function StatPicker({
                      * z-10 for the same reason: the buttons below are later in
                      * the DOM and would otherwise paint over it.
                      */
-                    className="sticky top-0 z-10 bg-popover px-3 pt-2.5 pb-1 text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted"
+                    className="sticky top-0 z-10 bg-popover px-3 pt-2.5 pb-1 text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-muted"
                   >
                     {groupLabel[section.group] ?? section.group}
                   </div>

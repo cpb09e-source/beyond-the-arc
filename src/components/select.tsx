@@ -225,7 +225,7 @@ export function Select({
                     it. */}
                 {!section.group && <div className="h-1" aria-hidden />}
                 {section.group && (
-                  <div className="sticky top-0 z-10 bg-popover px-3 pt-2 pb-1 text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">
+                  <div className="sticky top-0 z-10 bg-popover px-3 pt-2 pb-1 text-[11px] uppercase tracking-widest text-ink-muted font-medium">
                     {section.group}
                   </div>
                 )}
