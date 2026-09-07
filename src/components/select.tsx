@@ -64,6 +64,7 @@ export function Select({
   className,
   ariaLabel,
   compact = false,
+  menuText,
   disabled = false,
   align = "left",
 }: {
@@ -73,6 +74,19 @@ export function Select({
   className?: string;
   ariaLabel?: string;
   compact?: boolean;
+  /**
+   * The size of the text in the OPEN PANEL, independent of the trigger.
+   *
+   * `compact` sizes both, because a short value in a narrow box wants a small
+   * control and a small list. The view picker is the exception: its trigger
+   * has to stay 8 units tall to sit level with the buttons beside it, but its
+   * list is fourteen named arrangements read side by side with the stat
+   * picker's list — and that one is 14px. At 12px the two panels did not look
+   * like the same product.
+   *
+   * Defaults to following `compact`, so nothing else on the site moves.
+   */
+  menuText?: "xs" | "sm";
   /** Greys the control and refuses to open it. Mirrors a native select's own. */
   disabled?: boolean;
   /**
@@ -83,6 +97,7 @@ export function Select({
   align?: "left" | "center";
 }) {
   const rows = useMemo(() => readOptions(children), [children]);
+  const menuSize = menuText ?? (compact ? "xs" : "sm");
   const [open, setOpen] = useState(false);
   const selectedIndex = Math.max(0, rows.findIndex((r) => r.value === value));
   const [active, setActive] = useState(selectedIndex);
@@ -223,7 +238,10 @@ export function Select({
                     it. */}
                 {!section.group && <div className="h-1" aria-hidden />}
                 {section.group && (
-                  <div className="sticky top-0 z-10 bg-popover px-2.5 pt-2 pb-1 text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">
+                  <div className={cn(
+                    "sticky top-0 z-10 bg-popover pt-2 pb-1 text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium",
+                    menuSize === "sm" ? "px-3" : "px-2.5",
+                  )}>
                     {section.group}
                   </div>
                 )}
@@ -253,8 +271,11 @@ export function Select({
                      * that width is settled, so the hover highlight still
                      * spans the whole row.
                      */
-                    "block min-w-full whitespace-nowrap text-left px-2.5 py-1.5 capitalize transition-colors",
-                    compact ? "text-xs" : "text-sm",
+                    "block min-w-full whitespace-nowrap text-left py-1.5 capitalize transition-colors",
+                    // Padding tracks the type: 14px rows beside the stat
+                    // picker's 14px rows want its px-3 too, or the panels
+                    // line up at different insets.
+                    menuSize === "sm" ? "text-sm px-3" : "text-xs px-2.5",
                     r.value === value ? "text-ink font-semibold" : "text-ink",
                     i === active ? "bg-ink/[0.06]" : "hover:bg-ink/[0.04]",
                   )}

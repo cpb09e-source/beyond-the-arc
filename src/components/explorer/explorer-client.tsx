@@ -978,6 +978,10 @@ export function ExplorerClient({
                 }}
                 ariaLabel="Table view"
                 compact
+                // The trigger stays compact to sit level with the buttons
+                // beside it; the list matches the stat picker's 14px, which is
+                // the panel a reader compares it against.
+                menuText="sm"
                 className="max-w-44"
               >
                 {/* MARKED ONLY WHERE THE MARK IS TRUE.
