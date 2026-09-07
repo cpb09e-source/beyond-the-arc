@@ -89,13 +89,23 @@ Michigan = (110.8 + 15.0 − 16.0) / 100 × 67.6 = 109.8/100 × 67.6 = 74.2
 Both ratings are per 100 possessions, so the division by 100 and the
 multiplication by pace convert a rate into points. Standard.
 
-**Unresolved: how they get Game Pace.** 67.6 is consistent with *both* the
-simple average of the two paces ((65.5+69.6)/2 = 67.55) and the KenPom-style
-formula (65.5 × 69.6 / 67.42 = 67.62). Duke and Michigan sit either side of
-league average, which is exactly the case where the two methods agree. One
-observation cannot separate them, and I am not going to guess — pick a
-lopsided pair (a very slow team against a very fast one) and the two formulas
-diverge by a possession or more.
+**How they get Game Pace is undetermined — and it turns out not to matter.**
+67.6 is consistent with *both* the simple average of the two paces
+((65.5+69.6)/2 = 67.55) and the KenPom-style formula
+(65.5 × 69.6 / 67.42 = 67.62). Duke and Michigan sit either side of league
+average, which is the case where the two agree, so one observation cannot
+separate them.
+
+I went looking for the case that would. Taking the most extreme pair in D-I
+this season — **Northern Iowa at 62.2 against Cal Poly at 74.1**, the slowest
+and fastest teams in the country — the two formulas give 68.18 and 68.41
+possessions. **A difference of 0.23 possessions**, or about a quarter of a
+point of projected score, at the theoretical maximum. Every real matchup is
+closer than that.
+
+So this is not a fork in the road. Use the KenPom form because it is the
+better-motivated one (a fast team drags a slow one up more than a midpoint
+implies), and stop thinking about it.
 
 **Win probability, two ways, both from the projected score:**
 
@@ -209,9 +219,9 @@ we would have a *page about a matchup*, which is the thing people search for.
 
 ## 7. Open questions before we build
 
-1. **Game pace formula** — simple average or KenPom's product-over-league?
-   Resolve by testing a lopsided pace pair, or just pick the KenPom form and
-   document the choice.
+1. ~~Game pace formula~~ — **settled, see §3.** The two candidates differ by
+   0.23 possessions at the most extreme pace matchup in the country. Use the
+   KenPom form and move on.
 2. **Which win-probability method?** Their backtest picked Pythagorean and
    Normal CDF over Log5. We can adopt both cheaply and show the disagreement,
    which is honest and is a differentiator.
