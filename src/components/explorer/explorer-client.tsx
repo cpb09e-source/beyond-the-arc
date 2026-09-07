@@ -957,7 +957,7 @@ export function ExplorerClient({
                 for, it matches the Seasons / Team / Conference controls a row
                 up, and it costs no JavaScript to open. */}
             <label className="inline-flex items-center gap-1.5 min-w-0">
-              <span className="hidden sm:inline text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">
+              <span className="hidden sm:inline text-[11px] uppercase tracking-widest text-ink-muted font-medium whitespace-nowrap">
                 View
               </span>
               <Select
@@ -978,10 +978,6 @@ export function ExplorerClient({
                 }}
                 ariaLabel="Table view"
                 compact
-                // The trigger stays compact to sit level with the buttons
-                // beside it; the list matches the stat picker's 14px, which is
-                // the panel a reader compares it against.
-                menuText="sm"
                 className="max-w-44"
               >
                 {/* MARKED ONLY WHERE THE MARK IS TRUE.
@@ -1065,7 +1061,7 @@ export function ExplorerClient({
                 and on its own line there. Trying to do both with flex-basis
                 made this group full-width, which pushed the select and the
                 search button onto a third row. */}
-            <span className="hidden sm:inline text-xs text-ink-muted whitespace-nowrap tabular">
+            <span className="hidden sm:inline text-[11px] text-ink-muted whitespace-nowrap tabular">
               <span className="text-ink font-medium">{visibleRows.length.toLocaleString()}</span>
               {count > visibleRows.length && <> of {count.toLocaleString()}</>} teams
               {/* A season the reader just added is a fetch away, not on the
@@ -1187,7 +1183,7 @@ export function ExplorerClient({
               <SearchGlass className="w-4 h-4" />
             </button>
 
-            <span className="hidden sm:inline text-[0.6rem] uppercase tracking-widest text-ink-muted font-medium">Show</span>
+            <span className="hidden sm:inline text-[11px] uppercase tracking-widest text-ink-muted font-medium">Show</span>
             <Select
               value={String(spec.limit)}
               onChange={(v) => {
@@ -1241,7 +1237,7 @@ export function ExplorerClient({
             </button>
           </div>
           {/* PHONE ONLY: the count, on its own line under the controls. */}
-          <span className="sm:hidden basis-full text-xs text-ink-muted whitespace-nowrap tabular">
+          <span className="sm:hidden basis-full text-[11px] text-ink-muted whitespace-nowrap tabular">
             <span className="text-ink font-medium">{visibleRows.length.toLocaleString()}</span>
             {count > visibleRows.length && <> of {count.toLocaleString()}</>} teams
             {loadingSeasons && <span className="ml-1.5 text-coral">· loading season…</span>}
