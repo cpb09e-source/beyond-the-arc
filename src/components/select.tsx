@@ -161,14 +161,14 @@ export function Select({
             // Unchanged from the native control it replaces, so nothing on the
             // page moves by a pixel. text-left because a button centres by
             // default and a select does not.
-            "w-full rounded-md border border-ink/15 bg-card text-ink appearance-none capitalize shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors",
+            "w-full rounded-md border border-ink/15 bg-card text-ink appearance-none capitalize font-medium shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors",
             // Compact selects carry short values in narrow boxes, so they get
             // their own padding. The shared pl-3/pr-8 spent 44px of a 64px
             // w-16 box on padding and clipped "100" to "10C" on the row-count
             // control. The caret moves in to match.
             // 11px on the compact control, so it reads level with the
             // toolbar buttons beside it rather than a pixel larger.
-            compact ? "h-8 text-[11px] pl-2 pr-6" : "h-10 text-sm pl-3 pr-8",
+            compact ? "h-8 text-[11px] pl-2 pr-6" : "h-10 text-[11px] pl-3 pr-8",
             // text-left because a button centres by default and a select does not.
             align === "center" ? "text-center" : "text-left",
             disabled && "opacity-50 cursor-not-allowed",
@@ -265,7 +265,7 @@ export function Select({
                      * a narrow box. How wide the box is has nothing to do with
                      * how a list of words should read once it is open.
                      */
-                    "block min-w-full whitespace-nowrap text-left px-3 py-1.5 text-sm capitalize transition-colors",
+                    "block min-w-full whitespace-nowrap text-left px-3 py-1.5 text-[11px] capitalize transition-colors",
                     r.value === value ? "text-ink font-semibold" : "text-ink",
                     i === active ? "bg-ink/[0.06]" : "hover:bg-ink/[0.04]",
                   )}

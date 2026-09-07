@@ -221,11 +221,11 @@ export function FilterBar({
           type="button"
           onClick={submit}
           disabled={!dirty}
-          className="h-9 text-sm font-medium bg-coral text-white px-5 rounded-md hover:bg-coral-soft disabled:opacity-40 transition-colors"
+          className="h-9 text-[11px] font-medium bg-coral text-white px-5 rounded-md hover:bg-coral-soft disabled:opacity-40 transition-colors"
         >
           Submit
         </button>
-        <button type="button" onClick={reset} className="h-9 px-3 text-sm text-ink-muted hover:text-ink">Reset</button>
+        <button type="button" onClick={reset} className="h-9 px-3 text-[11px] text-ink-muted hover:text-ink">Reset</button>
       </div>
     </ScopeCollapse>
   );
@@ -260,7 +260,7 @@ function sameStringArr(a: string[], b: string[]): boolean {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">
+      <span className="text-[11px] uppercase tracking-widest text-ink-muted font-medium">
         {label}
       </span>
       {children}

@@ -419,7 +419,7 @@ export function StatPicker({
         aria-expanded={open}
         aria-controls={listId}
         className={cn(
-          "inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-dashed text-sm font-medium transition-colors whitespace-nowrap",
+          "inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-dashed text-[11px] font-medium transition-colors whitespace-nowrap",
           disabled
             ? "border-ink/10 text-ink-muted/60 cursor-not-allowed"
             : "border-coral/40 text-coral hover:bg-coral/6 hover:border-coral/60",
@@ -448,7 +448,7 @@ export function StatPicker({
               aria-expanded
               aria-controls={listId}
               aria-autocomplete="list"
-              className="h-10 w-full pl-9 pr-3 bg-transparent text-ink text-sm placeholder:text-ink-muted focus:outline-none"
+              className="h-10 w-full pl-9 pr-3 bg-transparent text-ink text-[11px] placeholder:text-ink-muted focus:outline-none"
             />
           </div>
 
@@ -516,7 +516,7 @@ export function StatPicker({
                           : `${remaining} columns on the free plan — untick one, or get a Season Pass`
                     }
                     className={cn(
-                      "w-full text-left px-3 py-1.5 text-sm transition-colors flex items-center gap-2.5",
+                      "w-full text-left px-3 py-1.5 text-[11px] transition-colors flex items-center gap-2.5",
                       i === hiSafe ? "bg-coral/10 text-ink" : "text-ink-soft hover:bg-paper-deep",
                       !marked.includes(o.key) && atCapNow && "opacity-40",
                     )}

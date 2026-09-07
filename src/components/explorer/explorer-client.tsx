@@ -928,7 +928,7 @@ export function ExplorerClient({
                 onChange={(e) => setTableSearch(e.target.value)}
                 placeholder="Search team"
                 aria-label="Search teams in table"
-                className="h-8 w-56 pl-8 pr-8 rounded-md border border-ink/15 bg-card text-ink text-sm placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
+                className="h-8 w-56 pl-8 pr-8 rounded-md border border-ink/15 bg-card text-ink text-[11px] placeholder:text-ink-muted shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
               />
               {tableSearch && (
                 <button

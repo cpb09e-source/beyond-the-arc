@@ -107,7 +107,7 @@ export function SortableTh({
   // Moving it inside makes the whole cell tappable, and the extra vertical
   // padding below `sm` takes a phone tap from 16px to 40px.
   const baseClasses =
-    "p-0 text-xs uppercase tracking-wide sm:tracking-widest font-medium select-none cursor-pointer transition-colors";
+    "p-0 text-[11px] uppercase tracking-wide sm:tracking-widest font-medium select-none cursor-pointer transition-colors";
   const variantClasses =
     variant === "cbb"
       ? "text-right border-l border-coral/30 hover:bg-coral/5"
