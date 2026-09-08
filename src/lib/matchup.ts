@@ -279,6 +279,30 @@ export function youngScale(a: MatchupTeam, b: MatchupTeam): number {
 
 export type Site = "home" | "away" | "neutral";
 
+/**
+ * A matchup to open the page with, drawn fresh on each visit.
+ *
+ * WITHIN A TIER, NEVER ACROSS ONE. A random pair from all 365 teams is
+ * overwhelmingly a power-conference team against someone it would never
+ * schedule, and the page opens on a 96% blowout — which is both dull and the
+ * worst possible advertisement for a model whose interesting output is a
+ * close game. Two teams from the same tier at least have a reason to be on
+ * the same floor.
+ *
+ * `pool` is expected to be ordered by the model's own rank, which is how the
+ * pack ships, so the candidates handed in are the strongest of each tier.
+ */
+export function pickOpeningPair(pool: readonly MatchupTeam[]): [string, string] | null {
+  const tiers = [pool.filter((t) => t.p === 1), pool.filter((t) => t.p === 0)];
+  const usable = tiers.filter((t) => t.length >= 2);
+  if (!usable.length) return null;
+  const tier = usable[Math.floor(Math.random() * usable.length)]!;
+  const i = Math.floor(Math.random() * tier.length);
+  let j = Math.floor(Math.random() * (tier.length - 1));
+  if (j >= i) j += 1;                       // any team but the same one
+  return [tier[i]!.s, tier[j]!.s];
+}
+
 // ── The projection ─────────────────────────────────────────────────────────
 
 const erfApprox = (x: number): number => {

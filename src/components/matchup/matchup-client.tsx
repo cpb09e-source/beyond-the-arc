@@ -6,7 +6,7 @@ import type { SearchableOption } from "@/components/explorer/searchable-select";
 import { dataUrl } from "@/lib/data-url";
 import { CONF_DISPLAY } from "@/lib/conf-display";
 import { isLiveSeason } from "@/lib/seasons";
-import { outIndexes, project, type MatchupPack, type MatchupTeam, type Site } from "@/lib/matchup";
+import { outIndexes, pickOpeningPair, project, type MatchupPack, type MatchupTeam, type Site } from "@/lib/matchup";
 import { MatchupView, type MatchupHandlers } from "@/components/matchup/matchup-view";
 
 /**
@@ -82,8 +82,9 @@ export function MatchupClient({
   };
   const idsOf = (team: MatchupTeam, idx: readonly number[]) =>
     idx.map((i) => team.r[i]?.[4]).filter((x): x is string => !!x);
-  let a = bySlug.get(sp.get("a") ?? "") ?? bySlug.get(defaultA)!;
-  let b = bySlug.get(sp.get("b") ?? "") ?? bySlug.get(defaultB)!;
+  const urlA = sp.get("a"), urlB = sp.get("b");
+  let a = bySlug.get(urlA ?? "") ?? bySlug.get(defaultA)!;
+  let b = bySlug.get(urlB ?? "") ?? bySlug.get(defaultB)!;
   if (a === b) b = bySlug.get(defaultB === a.s ? defaultA : defaultB)!;
   const siteRaw = sp.get("site");
   const site: Site = siteRaw === "home" || siteRaw === "away" ? siteRaw : "neutral";
@@ -111,6 +112,34 @@ export function MatchupClient({
     const qs = q.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [router, pathname, sp]);
+
+  /**
+   * A DIFFERENT MATCHUP EVERY VISIT, drawn into the URL.
+   *
+   * IN AN EFFECT, NOT DURING RENDER. Randomising in a lazy `useState` was the
+   * obvious way and it is wrong: this component IS server-rendered — by the
+   * dev server always, and by the export whenever Next can answer its hooks —
+   * so a draw during render disagrees with the HTML and React throws a
+   * hydration mismatch, then rebuilds the whole tree client-side. An effect
+   * runs only on the client and only after the markup has matched.
+   *
+   * The pair goes into the URL rather than into state, so everything else
+   * keeps reading the one source of truth it already reads. That also fixes
+   * what would otherwise be a nasty little bug: with the address bar still
+   * saying `/matchup/`, Share would copy a link that draws a DIFFERENT
+   * matchup for whoever opened it. `replace`, not `push`, so Back still
+   * leaves the page instead of stepping through the draw.
+   *
+   * A URL naming either team wins outright — a shared link has to survive,
+   * and half a link should pair against the default, not against a stranger.
+   */
+  useEffect(() => {
+    if (urlA || urlB) return;
+    const pick = pickOpeningPair(initialPack.teams);
+    if (pick) router.replace(`${pathname}?a=${pick[0]}&b=${pick[1]}`, { scroll: false });
+    // Mount only. Re-running on a URL change would redraw mid-visit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggle = (team: MatchupTeam, list: number[], i: number) =>
     idsOf(team, list.includes(i) ? list.filter((x) => x !== i) : [...list, i].sort((x, y) => x - y));

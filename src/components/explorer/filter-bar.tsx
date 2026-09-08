@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useUrlSearchParams } from "@/lib/use-url-search-params";
 import Link from "next/link";
 import { Lock } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
@@ -41,7 +42,7 @@ export function FilterBar({
   teams: string[];
 }) {
   const router = useRouter();
-  const search = useSearchParams();
+  const search = useUrlSearchParams();
   const [pending, startTransition] = useTransition();
   const { paid } = useEntitlement();
 

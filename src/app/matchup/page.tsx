@@ -46,7 +46,26 @@ export default async function MatchupPage() {
    * its own. The fallback carries only these two teams.
    */
   const a = pack?.teams[0], b = pack?.teams[1];
-  const slim: MatchupPack | null = pack && a && b ? { ...pack, teams: [a, b] } : null;
+  /**
+   * The pool the client draws its opening matchup from.
+   *
+   * The page used to open on the same two teams forever. It now picks a pair
+   * at random per visit, which it can only do from teams it already has —
+   * the full pack is 227 KB and arrives later. So the slim pack carries the
+   * strongest 24 of each tier, WITH their rosters: 48 teams at 681 bytes is
+   * about 33 KB raw and a third of that over the wire, and it buys a complete
+   * card on the first render instead of one with an empty availability panel
+   * for the couple of hundred milliseconds before the real pack lands.
+   *
+   * `pack.teams` is ordered by the model's rank, so slicing takes the top of
+   * each tier rather than a random 24.
+   */
+  const CANDIDATES_PER_TIER = 24;
+  const tier = (p: 0 | 1) => (pack?.teams ?? []).filter((t) => t.p === p).slice(0, CANDIDATES_PER_TIER);
+  const candidates = pack && a && b
+    ? [a, b, ...tier(1), ...tier(0)].filter((t, i, all) => all.findIndex((x) => x.s === t.s) === i)
+    : [];
+  const slim: MatchupPack | null = pack && a && b ? { ...pack, teams: candidates } : null;
   const fallback = slim && a && b
     ? <MatchupView pack={slim} projection={project({ pack: slim, a, b, site: "neutral" })} />
     : <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-10 text-center text-ink-muted">Loading matchup…</div>;

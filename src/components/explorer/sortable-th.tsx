@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useUrlSearchParams } from "@/lib/use-url-search-params";
+
 import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -83,7 +84,7 @@ export function SortableTh({
    */
   locked?: boolean;
 }) {
-  const params = useSearchParams();
+  const params = useUrlSearchParams();
   const sortInUrl = params.get("sort");
   const orderInUrl = params.get("order") as "asc" | "desc" | null;
   const currentSort = sortInUrl ?? defaultSort;

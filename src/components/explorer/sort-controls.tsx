@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useUrlSearchParams } from "@/lib/use-url-search-params";
 import { useMemo, useTransition } from "react";
 import {
   FILTER_COLUMNS,
@@ -29,7 +30,7 @@ const STAT_OPTIONS: SearchableOption[] = FILTER_COLUMNS.map((c) => ({
  */
 export function SortControls() {
   const router = useRouter();
-  const search = useSearchParams();
+  const search = useUrlSearchParams();
   const [pending, startTransition] = useTransition();
 
   const params = useMemo(() => {

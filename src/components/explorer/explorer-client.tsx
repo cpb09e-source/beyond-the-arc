@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef, useCallback, useTransition } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useUrlSearchParams } from "@/lib/use-url-search-params";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Lock } from "lucide-react";
@@ -241,7 +242,7 @@ export function ExplorerClient({
   const { paid, signedIn } = useEntitlement();
   const router = useRouter();
   const [, startTransition] = useTransition();
-  const search = useSearchParams();
+  const search = useUrlSearchParams();
   const params = useMemo(() => {
     const obj: Record<string, string> = {};
     for (const [k, v] of search.entries()) obj[k] = v;

@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useUrlSearchParams } from "@/lib/use-url-search-params";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { Lock } from "lucide-react";
@@ -278,7 +279,7 @@ export function TeamStatFilters({
   previewCount?: (filters: StatFilter[]) => number;
 }) {
   const router = useRouter();
-  const search = useSearchParams();
+  const search = useUrlSearchParams();
   const [, startTransition] = useTransition();
   const { paid, signedIn } = useEntitlement();
 
