@@ -195,6 +195,42 @@ export const SCORE_PACE_EXP = 0.452;
 /** Coefficients of the fitted pace form: L − 0.75 + 0.83 × (tA + tB − 2L). */
 const PACE_INTERCEPT = -0.75, PACE_SLOPE = 0.83;
 
+/**
+ * Points added to the projected TOTAL, and to nothing else.
+ *
+ * WHY IT EXISTS. Efficiency times pace is a projection of REGULATION scoring
+ * by two average-luck teams, and the number a reader wants is the expected
+ * points in the game that gets played. Backtested against every game of four
+ * seasons, the uncorrected total came in low every single year:
+ *
+ *     2022-23  −3.11      2024-25  −2.91
+ *     2023-24  −3.84      2025-26  −3.88        mean −3.44
+ *
+ * Two known pieces, roughly equal. About 1.0 point is OVERTIME: 5.2% of
+ * games go past regulation and average 168 points against the field's 149,
+ * and a projection of expected points has to carry that. About 1.7 points is
+ * the pace form, whose −0.75 intercept puts projected possessions 0.8 below
+ * the league's actual mean. The remainder is the ±25 efficiency clamp
+ * pulling both offenses toward the mean.
+ *
+ * WHY IT IS APPLIED HERE AND NOT UPSTREAM. `margin` is a DIFFERENCE, so a
+ * shortfall common to both teams cancels out of it — measured bias +0.08
+ * points, which is as close to zero as a fitted model gets. `total` is a SUM,
+ * so the same shortfall accumulates. Raising PACE_INTERCEPT would fix half of
+ * this but would rescale every margin by about 1.1% and de-calibrate CORR,
+ * which was fitted against the current pace. Adding it to the total alone
+ * leaves the margin, the win probability and every fitted constant untouched:
+ * `total` moves, `scoreA` and `scoreB` each move by half of it, and
+ * `margin` — their difference — does not move at all.
+ *
+ * WHAT IT DOES NOT DO. It does not make the total a good bet. Backtested
+ * walk-forward against 5,400 closing lines, the model's disagreements with
+ * the total line were wrong more often than right, and MORE wrong the larger
+ * they got, even after this correction. It makes the printed number honest;
+ * it does not make it sharp. See the method page.
+ */
+export const TOTAL_ADJ = 3.44;
+
 export type Site = "home" | "away" | "neutral";
 
 // ── The projection ─────────────────────────────────────────────────────────
@@ -327,7 +363,9 @@ export function project({ pack, a, b, site, outA = [], outB = [] }: ProjectInput
   };
   const correction = Object.values(parts).reduce((s, x) => s + x, 0);
   const margin = baseMargin + correction;
-  const total = baseA + baseB;
+  // See TOTAL_ADJ: overtime and a low pace intercept, both of which cancel
+  // out of the margin and accumulate in the total.
+  const total = baseA + baseB + TOTAL_ADJ;
 
   return {
     a, b, site, sameConf, pace,

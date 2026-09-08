@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import Link from "next/link";
 import { PageHeading } from "@/components/page-heading";
-import { ABSENCE_EXP, CORR, HCA, SCORE_SIGMA, SIGMA, TOTAL_SIGMA, type MatchupPack } from "@/lib/matchup";
+import { ABSENCE_EXP, CORR, HCA, SCORE_SIGMA, SIGMA, TOTAL_ADJ, TOTAL_SIGMA, type MatchupPack } from "@/lib/matchup";
 
 /**
  * How the Matchup Predictor works — the page the projection links to.
@@ -182,17 +182,43 @@ export default async function MethodPage() {
         </p>
         <p className="mb-4">
           One team&rsquo;s score is harder to call than the margin, because it carries the total&rsquo;s error too —
-          σ of <strong className="text-ink">{SCORE_SIGMA}</strong>{" "}against the total&rsquo;s {TOTAL_SIGMA}. That
-          is why the page shows a range rather than a single number, and why the range widens with pace
-          while the win probability does not: a fast game is a wider distribution <em>and</em>{" "}a wider
-          projected margin, and the two cancel. Fast games produce more blowouts and no more upsets.
+          σ of <strong className="text-ink">{SCORE_SIGMA}</strong>{" "}against the total&rsquo;s {TOTAL_SIGMA}. The
+          range widens with pace while the win probability does not: a fast game is a wider distribution{" "}
+          <em>and</em>{" "}a wider projected margin, and the two cancel. Fast games produce more blowouts and
+          no more upsets.
         </p>
+
+        <H>7 · The total, and why it is marked</H>
+        <p className="mb-4">
+          Efficiency times pace projects <em>regulation</em>{" "}scoring between two average-luck teams, and
+          what a reader wants is the points in the game that actually gets played. Backtested against every
+          game of four seasons the uncorrected total came in low every year, so{" "}
+          <strong className="text-ink">{TOTAL_ADJ}</strong>{" "}points are added to it — and to nothing else.
+        </p>
+        <Table
+          head={["Season", "Total, before the correction"]}
+          rows={[["2022-23", "−3.11"], ["2023-24", "−3.84"], ["2024-25", "−2.91"], ["2025-26", "−3.88"]]}
+          note={`About 1.0 point of that is overtime — 5.2% of games go past regulation and average 168 points against the field's 149 — and about 1.7 is the pace form, whose intercept puts projected possessions 0.8 below the league's own mean. The margin is a difference, so a shortfall common to both teams cancels out of it: its measured bias is +0.08. The total is a sum, so the same shortfall accumulates.`}
+        />
 
         <H>What it cannot do</H>
         <p className="mb-4">
-          Totals. On 2025-26 the margin came in at 9.04 points of mean error and the total at 13.74 — about
-          50% harder, because pace error and shooting variance both feed it and neither cancels. The total
-          is on the page; it is not what the page is for.
+          Beat a betting line. The projection was run walk-forward against{" "}
+          <strong className="text-ink">5,400</strong>{" "}closing spreads and totals from 2025-26 — refitting
+          the ratings before every game so nothing was known that had not happened yet. On margin it was
+          close: 9.25 points of mean error against the closing line&rsquo;s 8.97. Close is the problem. A
+          line is a price, not a forecast, and being a third of a point <em>worse</em>{" "}than it means the
+          games where this model disagrees are mostly the games where it is wrong. Filtering to
+          disagreements of 2.5 points or more went 52.9%, which is half a standard error from breakeven and
+          swung from 53.8% to 50.7% between the halves of the season.
+        </p>
+        <p className="mb-4">
+          The total is worse than that, and the correction above does not rescue it. Its disagreements with
+          a total line were wrong more often than right, and{" "}
+          <strong className="text-ink">more wrong the larger they got</strong> — 47.2% at a gap of five
+          points, 46.0% at seven and a half, both several standard errors the wrong side of breakeven. That
+          is why the number is printed a step back from the other two. The correction makes it honest. It
+          does not make it sharp.
         </p>
         <p className="mb-4">
           It also has no idea about anything off the box score: a coaching change mid-season, a player

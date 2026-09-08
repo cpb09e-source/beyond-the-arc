@@ -12,6 +12,7 @@ import { getTeamColors, readableInk, readableOnPaper } from "@/lib/team-colors";
 import {
   HCA,
   SIGMA,
+  TOTAL_ADJ,
   fmt1,
   fmtPct,
   displayScores,
@@ -190,7 +191,22 @@ export function MatchupView({
           <dl className="grid grid-cols-3 gap-2 sm:flex sm:gap-8">
             <Stat label="Margin" value={`${favorite.b} by ${fmt1(Math.abs(p.margin))}`} />
             <Stat label="Pace" value={fmt1(p.pace)} />
-            <Stat label="Total" value={`${Math.round(p.total)}`} />
+            {/* THE TOTAL IS THE WEAKEST NUMBER ON THIS PAGE and is drawn to
+                say so. Backtested against 5,400 closing lines it was beaten
+                by the market at every threshold, and its errors grew with its
+                confidence — the opposite of the margin, which lands within
+                three tenths of a point of the closing line. Same size, muted,
+                and the reason is one hover away. */}
+            {/* The SUM OF THE TWO PRINTED SCORES, not the rounded total: a
+                reader who adds 77 and 65 must not be told 143. Same rule as
+                displayScores — where rounding and arithmetic disagree, the
+                page agrees with itself. */}
+            <Stat
+              label="Total"
+              value={`${showA + showB}`}
+              muted
+              title="The least reliable number here. The margin is within a third of a point of a closing betting line on average; the total is not, and the model's disagreements with a total line were wrong more often than right."
+            />
           </dl>
 
           {/* The receipt. The split above is not a number someone typed: it
@@ -609,11 +625,19 @@ function FitText({ dep, children }: { dep: string; children: React.ReactNode }) 
   return <span ref={ref} className="inline-block whitespace-nowrap align-bottom">{children}</span>;
 }
 
-function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
+function Stat({ label, value, note, muted, title }: {
+  label: string; value: string; note?: string;
+  /** Drawn a step back, for a number the model does not stand behind. */
+  muted?: boolean;
+  title?: string;
+}) {
   return (
-    <div>
-      <dt className="text-[0.6rem] uppercase tracking-[0.15em] font-semibold text-ink-muted">{label}</dt>
-      <dd className="mt-0.5 font-display tabular text-base sm:text-lg font-bold text-ink leading-tight">{value}</dd>
+    <div title={title} className={cn(title && "cursor-help")}>
+      <dt className="text-[0.6rem] uppercase tracking-[0.15em] font-semibold text-ink-muted">
+        {label}
+        {muted && <span aria-hidden className="ml-1 font-normal">*</span>}
+      </dt>
+      <dd className={cn("mt-0.5 font-display tabular text-base sm:text-lg leading-tight", muted ? "font-semibold text-ink-muted" : "font-bold text-ink")}>{value}</dd>
       {note && <dd className="text-[0.65rem] text-ink-muted">{note}</dd>}
     </div>
   );
@@ -664,6 +688,11 @@ function Ledger({ p, pack }: { p: Projection; pack: MatchupPack }) {
         <Line k={a.b} v={`${fmt1(p.effA)} × ${fmt1(p.pace)} / 100 = ${fmt1(p.baseA)}`} />
         <Line k={b.b} v={`${fmt1(p.effB)} × ${fmt1(p.pace)} / 100 = ${fmt1(p.baseB)}`} />
         <Line k="Margin" v={fmtSigned(p.baseMargin)} strong />
+        {/* Without this line the two numbers above do not add up to the total
+            on the card, and the whole point of printing the arithmetic is
+            that it can be checked. The adjustment is overtime plus a low pace
+            intercept — see TOTAL_ADJ. */}
+        <Line k="Total" v={`${fmt1(p.baseA)} + ${fmt1(p.baseB)} + ${fmt1(TOTAL_ADJ)} = ${fmt1(p.total)}`} />
       </Step>
       <Step n="4" label="Matchup corrections" last>
         {rows.map(([k, v]) => (
