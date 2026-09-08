@@ -129,7 +129,7 @@ for (const slug of targets) {
 
   // The codec is checked against THIS team's data, through the same JSON the
   // browser will parse — not against the in-memory object, which would skip
-  // the serialisation that actually loses things.
+  // the serialization that actually loses things.
   const roundTrip = decodeLiveTeamPage(JSON.parse(json));
   const trimmed = { ...data, rankedPlayerIds: decodeLiveTeamPage(JSON.parse(json)).rankedPlayerIds };
   const err = same(trimmed, roundTrip, slug);

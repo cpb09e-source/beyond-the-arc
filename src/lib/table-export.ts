@@ -12,7 +12,7 @@
  *
  * WHAT GETS EXPORTED IS THE WHOLE RESULT SET, not the visible page. The page
  * size is a reading convenience; nobody wants rows 101-365 silently missing
- * from a file they are about to analyse. The menu says the row count out loud
+ * from a file they are about to analyze. The menu says the row count out loud
  * so this is never a surprise.
  *
  * PERCENTILES ARE THEIR OWN COLUMNS. On screen the chip sits under the value
@@ -505,7 +505,7 @@ function aboutSheet(
 
   rows.push([]);
   rows.push([{ v: "Percentiles", s: label }, {
-    v: "Each Pctl column ranks that stat within its own season, against every Division I team — the same figure the coloured chip shows on the site. 100 is best; on stats where lower is better (defensive rating, turnovers) the rank is already flipped, so 100 always means good.",
+    v: "Each Pctl column ranks that stat within its own season, against every Division I team — the same figure the colored chip shows on the site. 100 is best; on stats where lower is better (defensive rating, turnovers) the rank is already flipped, so 100 always means good.",
     s: note,
   }]);
   rows.push([{ v: "Source", s: label }, { v: meta.url, s: note }]);
@@ -576,10 +576,10 @@ function entitySheet<R>(
     rows.push(fields.map((f) => {
       const v = f.get(r);
       if (f.kind === "pctl") {
-        // A percentile cell keeps its OWN colour on every row. The stripe is
+        // A percentile cell keeps its OWN color on every row. The stripe is
         // there to help the eye track across; the ramp is carrying meaning,
         // and tinting it by row parity would corrupt the one thing on the
-        // sheet whose colour is data.
+        // sheet whose color is data.
         return typeof v === "number"
           ? { v, s: pctStyle(v) }
           : { v: null, s: { align: "center", fill: striped ? ZEBRA : undefined } as XlsxStyle };
@@ -592,8 +592,8 @@ function entitySheet<R>(
         // still looks like it came from this site.
         // PALETTE.accent, and no `underline`: that flag draws a bottom
         // BORDER in this writer, not an underlined font, so it would rule a
-        // line across the cell rather than mark the text. Colour alone is
-        // what a spreadsheet reader recognises as a link.
+        // line across the cell rather than mark the text. Color alone is
+        // what a spreadsheet reader recognizes as a link.
         return { v, s: { ...bodyStyle(f.kind, striped), color: PALETTE.accent }, link } as XlsxCell;
       }
       return { v, s: bodyStyle(f.kind, striped) } as XlsxCell;

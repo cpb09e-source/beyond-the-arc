@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
  * WHY COLLAPSIBLE AT ALL. The team panel is seven groups of stat rows and the
  * player panel is more; open on a phone that is several screens of scrolling
  * to reach the group you wanted, and no way to see what the groups even are
- * without travelling through them. A header row per group that folds shut
+ * without traveling through them. A header row per group that folds shut
  * turns the panel into a table of contents you can operate.
  *
  * OPEN BY DEFAULT, and the count badge stays visible when shut, so folding a

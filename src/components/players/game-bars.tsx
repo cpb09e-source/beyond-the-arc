@@ -54,7 +54,7 @@ export function GameBars({
   unit: string;
   decimals?: number;
   /** The player's own season average for this stat. It is both the dashed
-   *  reference line and the threshold the colours encode, so the chart answers
+   *  reference line and the threshold the colors encode, so the chart answers
    *  "which nights was he better than himself" without a legend. */
   avg: number | null;
 }) {

@@ -105,13 +105,13 @@ export const LINEUP_STATS: LineupStat[] = [
   { key: "drtg", label: "DRtg", group: "efficiency", title: "Points allowed per 100 possessions (lower is better)", format: "num1", lowerBetter: true, ranked: true, value: (t) => per100(t.oppPts, t.oppPoss) },
   { key: "pace", label: "Pace", group: "efficiency", title: "Possessions per 40 minutes", format: "num1", ranked: false, value: (t) => (t.secs > 0 ? ((t.poss + t.oppPoss) / 2) / (t.secs / 2400) : null) },
 
-  // ---- four factors, offence
+  // ---- four factors, offense
   { key: "efg", label: "eFG%", group: "four", title: "Effective field-goal % — (FGM + 0.5 × 3PM) / FGA", format: "pct1", ranked: true, value: (t) => div(t.fgm + 0.5 * t.fg3m, t.fga) },
   { key: "oreb", label: "OREB%", group: "four", title: "Share of available offensive rebounds collected", format: "pct1", ranked: true, value: (t) => div(t.oreb, t.oreb + t.oppDreb) },
   { key: "tov", label: "TOV%", group: "four", title: "Turnovers per possession (lower is better)", format: "pct1", lowerBetter: true, ranked: true, value: (t) => div(t.tov, t.poss) },
   { key: "ftar", label: "FTAR", group: "four", title: "Free-throw attempt rate — FTA / FGA", format: "pct1", ranked: true, value: (t) => div(t.fta, t.fga) },
 
-  // ---- four factors, defence
+  // ---- four factors, defense
   { key: "oppEfg", label: "Opp eFG%", group: "opp", title: "Opponent effective field-goal % (lower is better)", format: "pct1", lowerBetter: true, ranked: true, value: (t) => div(t.oppFgm + 0.5 * t.oppFg3m, t.oppFga) },
   { key: "dreb", label: "DRB%", group: "opp", title: "Share of available defensive rebounds collected", format: "pct1", ranked: true, value: (t) => div(t.dreb, t.dreb + t.oppOreb) },
   { key: "oppTov", label: "Opp TOV%", group: "opp", title: "Opponent turnovers per possession — turnovers forced", format: "pct1", ranked: true, value: (t) => div(t.oppTov, t.oppPoss) },
@@ -128,7 +128,7 @@ export const LINEUP_STATS: LineupStat[] = [
   { key: "astr", label: "AST%", group: "playmaking", title: "Share of made field goals that were assisted", format: "pct1", ranked: true, value: (t) => div(t.ast, t.fgm) },
   { key: "astto", label: "AST/TO", group: "playmaking", title: "Assists per turnover", format: "num1", ranked: true, value: (t) => div(t.ast, t.tov) },
 
-  // ---- defence detail
+  // ---- defense detail
   { key: "stlr", label: "STL%", group: "defense", title: "Steals per opponent possession", format: "pct1", ranked: true, value: (t) => div(t.stl, t.oppPoss) },
   { key: "blkr", label: "BLK%", group: "defense", title: "Blocks per opponent field-goal attempt", format: "pct1", ranked: true, value: (t) => div(t.blk, t.oppFga) },
   {
@@ -213,7 +213,7 @@ export function percentileOf(
   }
   const pct = Math.round((lo / (arr.length - 1)) * 100);
   // Low is good for these, so flip the scale rather than the comparison — the
-  // chip's colour reads "better" at high numbers everywhere on the page.
+  // chip's color reads "better" at high numbers everywhere on the page.
   return stat.lowerBetter ? 100 - pct : pct;
 }
 

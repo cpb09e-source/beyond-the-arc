@@ -423,7 +423,7 @@ export function subscribersTile(overview: Loaded<Overview>): TileModel {
   const s = overview.data.subscribers;
   const sub = [
     s.paidNew30d ? `+${s.paidNew30d} paid this month` : `${s.accounts} accounts`,
-    s.cancelling ? `${s.cancelling} cancelling` : null,
+    s.cancelling ? `${s.cancelling} canceling` : null,
   ].filter(Boolean).join(" · ");
   // The split is the plan mix, not a target: monthly and yearly are the whole
   // of `active`, so the bar is full whenever anyone is paying at all.
@@ -477,9 +477,9 @@ export function webhookTile(overview: Loaded<Overview>): TileModel {
  * What is left of the month's CBBD calls.
  *
  * The one tile that is about NEXT week rather than last night: run out and
- * the ingest starts answering 429 at 3am with no warning. It is grey, not
+ * the ingest starts answering 429 at 3am with no warning. It is gray, not
  * green, when no limit is configured — a count with nothing to measure it
- * against is not a state of health, and colouring it green would say the
+ * against is not a state of health, and coloring it green would say the
  * quota had been checked when nothing was checked.
  *
  * The number is a FLOOR. The live functions (scoreboard, game) spend from the
@@ -639,7 +639,7 @@ export function Section({
   );
 }
 
-/** A labelled figure. Used in fours and eights, so it sets its own baseline. */
+/** A labeled figure. Used in fours and eights, so it sets its own baseline. */
 export function Fact({ label, value, hint }: { label: string; value: React.ReactNode; hint?: string }) {
   return (
     <div title={hint} className="min-w-0">
@@ -667,7 +667,7 @@ export function Badge({ tone, children }: { tone: "good" | "bad" | "muted" | "wa
 }
 
 /**
- * The state of one row, as shape AND colour. Red and green are the one pair a
+ * The state of one row, as shape AND color. Red and green are the one pair a
  * large share of readers cannot separate, so the glyph carries it too, and the
  * label is on the element for a screen reader.
  */
@@ -694,7 +694,7 @@ export function StateMark({ state }: { state: CheckState }) {
 // ── Pipeline history ───────────────────────────────────────────────────────
 
 /**
- * Sixty nights as bars. Height is duration, colour is outcome, a dry run is
+ * Sixty nights as bars. Height is duration, color is outcome, a dry run is
  * a faint stub. No axis: the question is "did it run, did it fail, is it
  * getting slower", and a run of green bars at the same height answers all
  * three. Hover for the night.
@@ -747,7 +747,7 @@ function median(xs: number[]): number {
 
 // ── Site checks ────────────────────────────────────────────────────────────
 
-/** Shape and screen-reader word per state; StateMark owns the colour. */
+/** Shape and screen-reader word per state; StateMark owns the color. */
 const PROBE_GLYPH: Record<ProbeState, { glyph: string; word: string }> = {
   ok: { glyph: "✓", word: "ok" },
   warn: { glyph: "!", word: "warning" },
@@ -878,7 +878,7 @@ export function SubscribersSection({ overview, footer }: { overview: Loaded<Over
             <dl className="px-4 py-4 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-4 border-b border-hairline">
               <Fact label="Paying now" value={<><span className="text-ink">{s.active}</span> <span className="text-ink-muted font-normal text-[0.78rem] ml-1">{s.monthly} monthly · {s.yearly} yearly</span></>} />
               <Fact label="New paid, 30d" value={s.paidNew30d} />
-              <Fact label="Cancelling" value={s.cancelling} hint="Still paid today, already told Stripe to stop." />
+              <Fact label="Canceling" value={s.cancelling} hint="Still paid today, already told Stripe to stop." />
               <Fact label="Past due" value={s.pastDue} hint="A card failed and Stripe is retrying. Access continues." />
               <Fact label="Accounts" value={s.accounts} />
               <Fact label="New, 7 days" value={s.new7d} />

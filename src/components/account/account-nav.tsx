@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth/auth-provider";
  * load-bearing — seven labels plus the wordmark and the search box already
  * need about 990px, and the row pushed the page sideways at md when it held
  * six. This sits with search and the hamburger instead, at the same 36px as
- * its neighbours, so the nav's width budget is untouched.
+ * its neighbors, so the nav's width budget is untouched.
  *
  * Renders nothing at all while the session is resolving. A control that says
  * "Sign in" for one frame and then flips to an avatar is worse than a control

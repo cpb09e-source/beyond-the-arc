@@ -205,7 +205,7 @@ export function ScoreboardClient() {
         )}
       </div>
 
-      {/* Week strip: the shown day centred, three either side, arrows stepping a
+      {/* Week strip: the shown day centered, three either side, arrows stepping a
           week at a time. Gives the whole week at a glance and makes "the night
           before" one tap instead of a round trip through the picker. */}
       {!IS_DEMO && <WeekStrip shown={shown} onPick={setPinned} />}
@@ -290,7 +290,7 @@ export function ScoreboardClient() {
 /**
  * Seven days with `shown` in the middle, arrows stepping a whole week.
  *
- * Centred rather than trailing so both directions are always one tap: during
+ * Centered rather than trailing so both directions are always one tap: during
  * the season you move backwards to last night and forwards to check a
  * scheduled slate, and a strip that only looked back would make half of that a
  * trip through the date picker.

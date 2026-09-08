@@ -34,7 +34,7 @@ export const metadata: Metadata = {
  *     and carried the reason this site runs no consent banner: there are no
  *     advertising or analytics cookies to consent to.
  *
- * The behaviour is unchanged and still true — this is a question of what the
+ * The behavior is unchanged and still true — this is a question of what the
  * page says, not what the app does. Raised with Colin; restoring either is a
  * sentence rather than a rewrite.
  */

@@ -68,7 +68,7 @@ The field order is written twice — `FIELDS` in the build script and `F` in
 ## The page
 
 `src/app/players/games/page.tsx` prerenders a shell. Nothing is passed from the
-server — a season is 7 MB and serialising one into the RSC payload would put it
+server — a season is 7 MB and serializing one into the RSC payload would put it
 in the HTML of a page most people open to look at one season.
 `src/components/games/games-client.tsx` fetches
 `/data/game-index/<year>.json` on demand and keeps what it has fetched.

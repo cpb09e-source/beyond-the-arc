@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * build-player-stat-pack.mjs — the Players Explorer's full stat catalogue.
+ * build-player-stat-pack.mjs — the Players Explorer's full stat catalog.
  *
  * Spec: docs/players-stat-spec.md. Read it before changing anything here; the
  * accuracy numbers quoted in the comments below were measured, not assumed, and
@@ -21,7 +21,7 @@
  *   { season, group, cols: [...], dir: [...], ids: [...], vals: [[...]], pcts: [[...]] }
  *
  * Column-major drops the keys entirely, puts every value of one stat next to
- * its neighbours (which gzip likes), and lets a column be added or removed
+ * its neighbors (which gzip likes), and lets a column be added or removed
  * without rewriting a row. Splitting by group means the browser fetches the
  * ~15 stats of the view on screen instead of all 137.
  *
@@ -139,7 +139,7 @@ const r3 = (v) => (Number.isFinite(v) ? Math.round(v * 1000) / 1000 : null);
 const div = (a, b) => (b > 0 ? a / b : null);
 const readGz = (fp) => JSON.parse(zlib.gunzipSync(fs.readFileSync(fp)).toString());
 
-// ── Stat catalogue ─────────────────────────────────────────────────────────
+// ── Stat catalog ─────────────────────────────────────────────────────────
 //
 // dir: 1 = higher is better, -1 = lower is better, 0 = no percentile.
 //
@@ -154,11 +154,11 @@ const GROUPS = {
     // AGE RANKS DOWNWARD. A nineteen-year-old and a twenty-three-year-old
     // putting up the same line are not the same player, and the younger one is
     // the better of the two — he did it against older opposition and has more
-    // in front of him. Ranking age upward said the opposite in colour.
+    // in front of him. Ranking age upward said the opposite in color.
     ["age", -1],
     ["ht_in", 1], ["draft_pick", -1],
     // ROUND AND SLOT GET NO PERCENTILE. There are two rounds, so a "round"
-    // percentile is a two-valued colour ramp saying nothing the number does
+    // percentile is a two-valued color ramp saying nothing the number does
     // not; and a 30th pick in the first round outranks a 1st pick in the
     // second, which a within-round rank inverts. The overall pick already
     // carries the ordering that means something.
@@ -244,7 +244,7 @@ function ageAt(rawRow, season) {
 /**
  * bart id → draft record, resolved BY COLLEGE as well as by name.
  *
- * nba-draftees.json is keyed by normalised name alone, and names collide. The
+ * nba-draftees.json is keyed by normalized name alone, and names collide. The
  * case that caught it: Jalen Smith of Maryland went 10th in 2020, and Jalen
  * Smith of SMU and Rice — a different person, never drafted — was being handed
  * his pick. A name-keyed lookup has no way to tell them apart.
@@ -260,8 +260,8 @@ function draftByBartId() {
   const draft = JSON.parse(fs.readFileSync(fp, "utf8"));
 
   // Every school each bart id ever appears under, across every season we hold.
-  const schools = new Map();   // bartId -> Set<normalised school>
-  const byName = new Map();    // normalised name -> Set<bartId>
+  const schools = new Map();   // bartId -> Set<normalized school>
+  const byName = new Map();    // normalized name -> Set<bartId>
   /**
    * EVERY ROSTER FILE, not just the seasons this pack builds. 2021 has no
    * player box and no play-by-play, so it is excluded everywhere else — but it
@@ -328,7 +328,7 @@ function draftByBartId() {
 /**
  * The draft source writes schools the way a broadcast does — UNC, UConn — and
  * our roster writes them out. Neither spelling is wrong and no amount of
- * normalising turns one into the other, so the handful that differ are listed.
+ * normalizing turns one into the other, so the handful that differ are listed.
  */
 const SCHOOL_ALIASES = {
   unc: "northcarolina",
@@ -578,7 +578,7 @@ function buildSeason(season) {
 
     for (const [gameId, g] of games) {
       pbpGamesPresent.add(gameId);
-      // CBBD team name → bart-normalised name, for resolving PBP participants.
+      // CBBD team name → bart-normalized name, for resolving PBP participants.
       const teamName = new Map();
       for (const p of g) {
         if (TEAM_MAP[p.teamId]) teamName.set(p.team, norm(TEAM_MAP[p.teamId].name));

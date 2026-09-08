@@ -98,7 +98,7 @@ export function PlayerTabs({
  * A strip rather than the rail the team pages carry, and that is a scope
  * decision: a rail has to sit beside the
  * content, which means every section on the page has to agree on one container
- * width first. The team page paid that cost — ten sections normalised from
+ * width first. The team page paid that cost — ten sections normalized from
  * three different max-widths — because a rail that moves when you change tabs
  * is worse than no rail. This page's sections have not been through that yet,
  * so the strip goes above them where container width does not matter.
@@ -185,7 +185,7 @@ function PlayerBottomBar({
               >
                 {/* Inset from the cell edges: a rule spanning the full cell
                     meets its neighbour's and the three read as one line with a
-                    coloured segment rather than as one marked tab. */}
+                    colored segment rather than as one marked tab. */}
                 <span
                   aria-hidden
                   className={cn(

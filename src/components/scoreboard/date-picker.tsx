@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  *
  * Replaces `<input type="date">`. The native control was the right first move —
  * free calendar, keyboard entry, OS picker on mobile — but it renders the
- * browser's chrome, which lands as a grey system panel in the middle of a page
+ * browser's chrome, which lands as a gray system panel in the middle of a page
  * that is otherwise entirely ours. This keeps the useful parts (click a day,
  * jump a month, "today") and drops the borrowed styling.
  *

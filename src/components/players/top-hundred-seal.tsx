@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
  * number inside it had not already said. The dial makes the ring carry the
  * standing.
  *
- * COLOUR IS THE TIER, NOT THE BOARD. Five hues for five tiers — overall 1-10,
+ * COLOR IS THE TIER, NOT THE BOARD. Five hues for five tiers — overall 1-10,
  * 11-25, 26-100, mid-major 1-10, 11-100 — which means the word under the rank
  * is the only thing separating the two boards. That is a deliberate trade: the
  * tier is what a reader wants at a glance and the board is what they want on a
@@ -56,11 +56,11 @@ function tierOf(rank: number, mid: boolean): Tier {
  *
  * The cost is real and known: the entire top ten now sits in the last 9% of the
  * arc, so #1 and #5 are four ticks apart at 96px and two at 58px, where each
- * tick stands for two places. Telling those apart is the TIER COLOUR's job —
+ * tick stands for two places. Telling those apart is the TIER COLOR's job —
  * 1-10 has its own hue on both boards — not the ring's.
  *
  * It still fills down from #1 rather than up from #100. One tick per place
- * counted the other way would run backwards against every other coloured thing
+ * counted the other way would run backwards against every other colored thing
  * on this site, where a fuller bar means a better number.
  */
 function litFraction(rank: number) {
@@ -78,8 +78,8 @@ export function TopHundredSeal({
   /**
    * The small variant, for a phone. Same words as the desktop mark, set far
    * larger in proportion — at the desktop ratio "MID-MAJOR" lands at about 4px
-   * here, which is not type any more. The board is the one thing colour cannot
-   * say on this mark, because colour is spent on the tier, so the word has to
+   * here, which is not type any more. The board is the one thing color cannot
+   * say on this mark, because color is spent on the tier, so the word has to
    * be readable rather than merely present.
    */
   compact?: boolean;

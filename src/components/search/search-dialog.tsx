@@ -117,7 +117,7 @@ export function SearchDialog() {
    *
    * Callable from hover/focus as well as open: the index is the only thing
    * between a keystroke and a result, and starting it while the pointer is
-   * still travelling to the trigger hides most of that.
+   * still traveling to the trigger hides most of that.
    */
   function loadIndex() {
     if (started.current) return;
@@ -603,7 +603,7 @@ function Row({
       {e.t === "t" && <TeamLogo name={e.n} size={24} />}
       {/* A coach's mark is his SCHOOL's, not his initials. The two-letter
           monogram identified nothing — every coach row looked the same — while
-          the crest is the thing a reader actually recognises, and it is the
+          the crest is the thing a reader actually recognizes, and it is the
           same mark the team row above uses for the same school. */}
       {e.t === "c" && <TeamLogo name={e.tm} size={24} />}
       {/* eager: a lazy image loses the race against typing — see PlayerPhoto. */}

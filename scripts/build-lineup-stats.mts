@@ -69,7 +69,7 @@ const ONLY_TEAM = opt("team");
 const OUT_DIR = path.resolve("public/data/lineup-stats");
 
 /**
- * Serialisation order for the per-lineup `s` array, taken from the totals type
+ * Serialization order for the per-lineup `s` array, taken from the totals type
  * itself so the two can never fall out of step. The page reads `cols` out of
  * the file rather than assuming this order.
  */
@@ -106,7 +106,7 @@ function main() {
      * player page (those routes are keyed on bart ids, not CBBD's).
      *
      * Uses the shared resolver rather than matching names by hand. `norm` here
-     * is the TEAM normaliser from cbbd-join and rewrites "St." to "state"; a
+     * is the TEAM normalizer from cbbd-join and rewrites "St." to "state"; a
      * hand-rolled one left 18.8% of teams unresolved when the assist builder
      * tried it.
      */
@@ -246,7 +246,7 @@ function main() {
       // These get embedded in EVERY lineups page, so one season's array is
       // duplicated across ~365 team pages: resolution here is paid for 365
       // times over. The chip renders an integer 0-100 and the reader compares
-      // colours, so interpolating between 2-percentile steps is worth about
+      // colors, so interpolating between 2-percentile steps is worth about
       // two thirds of the bytes and costs at most a point of precision on a
       // number nobody reads to the unit.
       q[stat.key] = Array.from({ length: 51 }, (_, i) => {

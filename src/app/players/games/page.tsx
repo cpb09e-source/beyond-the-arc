@@ -18,7 +18,7 @@ import {
  * Game Log Explorer.
  *
  * NOTHING IS PASSED FROM THE SERVER, deliberately. A season of player-games is
- * 7 MB — serialising one into the RSC payload the way the team explorer does
+ * 7 MB — serializing one into the RSC payload the way the team explorer does
  * would put it in the HTML of a page most readers open to look at one season.
  * The client fetches public/data/game-index/<year>.json on demand instead, one
  * season at a time, and keeps what it has fetched.

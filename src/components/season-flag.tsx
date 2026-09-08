@@ -5,7 +5,7 @@ import { seasonFlagNote } from "@/lib/seasons";
  *
  * AN ASTERISK, NOT A WARNING. The season is real and the page showing it is
  * correct; what the marker says is "do not put this one in an average with the
- * others". A banner would overstate that, and colouring it like an error would
+ * others". A banner would overstate that, and coloring it like an error would
  * tell a reader the data is wrong when the data is fine.
  *
  * Renders NOTHING for an unflagged season, so callers can drop it beside any

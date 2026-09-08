@@ -184,8 +184,8 @@ export function shortDate(iso: string): string {
 
 /**
  * "Duke -6.5" — the pre-tip line written the way it is quoted, with the
- * FAVOURITE named beside its own number. The wire format is home-perspective
- * (negative = home favoured), so an away favourite has to be flipped.
+ * FAVORITE named beside its own number. The wire format is home-perspective
+ * (negative = home favored), so an away favorite has to be flipped.
  */
 export function lineLabel(b: GameBundle): string | null {
   const l = b.line.find((x) => x.provider === "Draft Kings") ?? b.line[0];

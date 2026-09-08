@@ -249,7 +249,7 @@ type RatingsRow = {
  * Every one of these is a rate, so averaging them across a career is
  * meaningful in a way that a counting stat would not be. Percentages arrive
  * from the export as either 0-1 or 0-100 depending on the field, so they are
- * normalised to 0-100 once, here, rather than at each of the call sites.
+ * normalized to 0-100 once, here, rather than at each of the call sites.
  */
 export type CoachStyle = {
   pace: number | null;        // possessions per game
@@ -294,7 +294,7 @@ export const STYLE_DIMENSIONS: ReadonlyArray<{
   { key: "orb_def",   label: "Opp OREB",      noun: "second chances allowed",    unit: "%", group: "Defense", high: "gives up second chances", low: "ends possessions", lowerIsBetter: true },
 ];
 
-/** Export writes some rates 0-1 and others 0-100. Normalise once. */
+/** Export writes some rates 0-1 and others 0-100. Normalize once. */
 const styleAsPct = (v: unknown): number | null =>
   typeof v === "number" ? (v <= 1.5 ? v * 100 : v) : null;
 
@@ -1573,7 +1573,7 @@ export function gamesForTeamYear(
  * Wins a round label implies (R64=0, R32=1, S16=2, E8=3, F4=4, NF=5, C=6).
  *
  * ONLY a fallback. `round` is not trustworthy on its own: in 2013, 2014 and
- * 2015 every single R64 loser — 32 per year, 96 in all — is labelled "R32",
+ * 2015 every single R64 loser — 32 per year, 96 in all — is labeled "R32",
  * so this table would credit each of them with a win they never played. The
  * bracket in `tournament-games.json` is complete for those years (63 games,
  * correct shape) and disagrees with the label in exactly those 96 rows, which

@@ -84,7 +84,7 @@ export const FACTOR_WIN_RATE = {
   /**
    * Taking ALL FOUR. Far stronger and far rarer (654 team-games in a season
    * against 4,737), and the number the Win Calculator returns for four
-   * positive filters. The two must be labelled apart or a reader comparing
+   * positive filters. The two must be labeled apart or a reader comparing
    * them will think one of them is broken.
    */
   sweep: 86.5,

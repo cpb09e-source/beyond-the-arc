@@ -80,7 +80,7 @@ const EMPTY: Banner = { enabled: false, message: "", tone: "info" };
  *
  * Tone travels with the text because it is part of the message: "delayed" is a
  * warning and "previews are live" is not, and a canned line that arrives in
- * the wrong colour has to be corrected every time it is used.
+ * the wrong color has to be corrected every time it is used.
  */
 const PRESETS: Array<{ short: string; message: string; tone: "info" | "warn"; href?: string; label?: string }> = [
   {

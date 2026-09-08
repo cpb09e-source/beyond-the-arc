@@ -5,7 +5,7 @@
  * a score rather than a measurement. Prime marks are how a height is written.
  *
  * Anything that is not exactly feet-hyphen-inches is passed through untouched —
- * the source is a scraped string and a value we do not recognise is more useful
+ * the source is a scraped string and a value we do not recognize is more useful
  * verbatim than mangled.
  */
 export function formatHeight(h: string | null | undefined): string | null {

@@ -73,10 +73,10 @@ export function Select({
   className?: string;
   ariaLabel?: string;
   compact?: boolean;
-  /** Greys the control and refuses to open it. Mirrors a native select's own. */
+  /** Grays the control and refuses to open it. Mirrors a native select's own. */
   disabled?: boolean;
   /**
-   * Centre the value. For the comparator picker, whose whole label is one
+   * Center the value. For the comparator picker, whose whole label is one
    * glyph in a 56px box — left-aligned it reads as a stray character rather
    * than a chosen value.
    */
@@ -159,7 +159,7 @@ export function Select({
           }}
           className={cn(
             // Unchanged from the native control it replaces, so nothing on the
-            // page moves by a pixel. text-left because a button centres by
+            // page moves by a pixel. text-left because a button centers by
             // default and a select does not.
             "w-full rounded-md border border-ink/15 bg-card text-ink appearance-none capitalize font-medium shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors",
             // Compact selects carry short values in narrow boxes, so they get
@@ -169,7 +169,7 @@ export function Select({
             // 11px on the compact control, so it reads level with the
             // toolbar buttons beside it rather than a pixel larger.
             compact ? "h-8 text-xs pl-2 pr-6" : "h-10 text-xs pl-3 pr-8",
-            // text-left because a button centres by default and a select does not.
+            // text-left because a button centers by default and a select does not.
             align === "center" ? "text-center" : "text-left",
             disabled && "opacity-50 cursor-not-allowed",
             // A select clips its value; a button would wrap it and grow the row.

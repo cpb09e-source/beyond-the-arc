@@ -111,7 +111,7 @@ export function PlayerStatRows({
    * RESYNC FROM THE URL, but only when the URL says something these rows did
    * not. Every commit below writes the URL, which comes straight back here; a
    * naive resync would rebuild the rows mid-keystroke and take the caret with
-   * them. The echo is recognised by comparing what the URL now holds against
+   * them. The echo is recognized by comparing what the URL now holds against
    * what these rows would produce.
    */
   const lastCommitted = useRef<string>("");

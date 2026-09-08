@@ -255,7 +255,7 @@ export function ConferencesClient() {
    *
    * Same rule the team explorer uses for teams: a conference is compared to the
    * conferences it actually played that year. Pooling twelve seasons would let
-   * scoring inflation decide the colours — every 2026 league would outrank
+   * scoring inflation decide the colors — every 2026 league would outrank
    * every 2015 one on points per game, which is a fact about the era.
    */
   const pcts = useMemo(() => {
@@ -306,7 +306,7 @@ export function ConferencesClient() {
    *
    * The tier split is POWER_CONFS, the same set /portal and the /coaches Tier
    * filter use, so "power" means one thing on this site. It is a fixed set
-   * rather than a per-season judgement: the Big East is in it on the strength
+   * rather than a per-season judgment: the Big East is in it on the strength
    * of the whole 2014-26 window, and re-deciding that year by year would make
    * the header move under the reader for no gain.
    *

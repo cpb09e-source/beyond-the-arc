@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 /**
  * DRAFTED, NOT LAWYERED. This is a working set of terms written to describe
- * what the site actually does — the paywall boundary, the billing behaviour
+ * what the site actually does — the paywall boundary, the billing behavior
  * Stripe is configured for, the refund position, the accuracy disclaimer. It
  * is honest and specific, which is most of the value, and it is not a
  * substitute for a solicitor reading it before the subscriber count gets
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
  * EVERY FACTUAL CLAIM HERE IS CHECKED AGAINST THE CODE. Cancellation running
  * to period end, cards never touching this site, two free seasons for signed-
  * out readers — each is how the app behaves today, not how a template says a
- * SaaS usually behaves. If the behaviour changes, this page is wrong and has
+ * SaaS usually behaves. If the behavior changes, this page is wrong and has
  * to change with it.
  */
 export default function TermsPage() {

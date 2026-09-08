@@ -303,7 +303,7 @@ const OWN_ADJ = (() => {
 /**
  * Shot-location mix (build-shot-distribution.mjs), merged in for the same
  * reason the adjusted ratings are: the explorer reads one file per team-season,
- * and a second fetch to colour one column is not worth the request.
+ * and a second fetch to color one column is not worth the request.
  *
  * These are the glossary's "Shot Frequency" — the share of a team's field-goal
  * attempts from each zone, plus the same for what it allowed. Reconstructed
@@ -521,7 +521,7 @@ for (const [key, a] of totals) {
     // definition — an assist IS an assisted made field goal — so it is already
     // ast_pg above and is not duplicated under a second name. The unassisted
     // half is the one that carries information the box does not otherwise
-    // state: how much of the offence created its own shot.
+    // state: how much of the offense created its own shot.
     unast_pg: r1(rate(a.fgm - a.ast, a.games)),
     unast_share: r3(rate(a.fgm - a.ast, a.fgm)),
     ast_to: r2(rate(a.ast, a.tov)),
@@ -582,7 +582,7 @@ for (const [key, a] of totals) {
     // `shot_games` is deliberately not re-exported: shot-distribution.json
     // carries its own game count and it is not the box game count these stats
     // are computed over. Mixing the two under one `games` key is how a column
-    // quietly starts describing a different denominator than its neighbours.
+    // quietly starts describing a different denominator than its neighbors.
     rim_rate: SHOT_MIX[key]?.rim_rate ?? null,
     mid_rate: SHOT_MIX[key]?.mid_rate ?? null,
     three_rate: SHOT_MIX[key]?.three_rate ?? null,

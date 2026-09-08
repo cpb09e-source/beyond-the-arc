@@ -23,7 +23,7 @@
  * a page that wants none of them.
  *
  * `total` is the hero value and `perGame` the small figure beneath it. Only the
- * differential columns carry both — a rating or a rate is already normalised,
+ * differential columns carry both — a rating or a rate is already normalized,
  * but a differential reads naturally either way, and seeing "+202" with "5.9/g"
  * under it answers both "how big was the edge" and "how big per night" at once.
  *

@@ -364,7 +364,7 @@ const PIR_WEIGHT = 0.0201;
  * is the case — 16.1 ppg, EPM +2.12, a 25.7 PIR, ranked 12th of 556, and
  * Hofstra were 6.6 points per 100 worse with him on the floor.
  *
- * So it is deliberately a judgement, not a fitted term, and it is sized to
+ * So it is deliberately a judgment, not a fitted term, and it is sized to
  * matter without deciding anything on its own: a typical negative (-5) costs 3
  * rating points, and the floor caps the damage at 15. If it should come out,
  * ONOFF_PENALTY is the only line to change.
@@ -684,7 +684,7 @@ for (const e of entries) {
   e.ewins_proj = e.ewins === null ? null
     : Math.round((e.ewins + (bump / 100) * (possUsed ?? 0) / PTS_PER_WIN) * 1000) / 1000;
 
-  // Tiered PIR, converted to wins and centred so an average player adds 0.
+  // Tiered PIR, converted to wins and centered so an average player adds 0.
   // Graded against the conference he actually PLAYED in — that is where the
   // box-score line was earned — not the one he is moving to.
   const conf = e.conf_from ?? e.last_conf ?? null;
@@ -840,7 +840,7 @@ const returnerNotes = [];
      * It is wrong for a player who entered the portal and withdrew, because for
      * him the destination and the origin are the same school: the "prior
      * season at the destination" it finds is simply his own season before last,
-     * and preferring it discards the most recent evidence in favour of older,
+     * and preferring it discards the most recent evidence in favor of older,
      * better-looking evidence from the very same place.
      *
      * Mark Mitchell is the case that exposed it — Missouri to Missouri, re-rated

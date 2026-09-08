@@ -31,7 +31,7 @@ const f1 = (v: number | null | undefined) => (v == null ? "—" : v.toLocaleStri
 // Same ramp as ZoneTile in the Shot Diet panel, which is the primary surface
 // this card stands in for: identical zones, identical percentiles, so a reader
 // who sees one on a 2019 player and the other on a 2025 player should be
-// reading the same colours. It used to run on a separate three-band
+// reading the same colors. It used to run on a separate three-band
 // olive/amber/tomato ramp with cuts at 67/34, which put an 80th-percentile
 // finisher two full bands away from where every chip on the site puts him.
 //

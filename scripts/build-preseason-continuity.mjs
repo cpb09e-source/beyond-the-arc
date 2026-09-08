@@ -42,7 +42,7 @@
  * percentage threshold — Oklahoma at 96% is indistinguishable from a genuinely
  * veteran roster until you look at who the players are.
  *
- * The fourth is teams with NO INCOMING PLAYERS at all. Every programme signs
+ * The fourth is teams with NO INCOMING PLAYERS at all. Every program signs
  * somebody; a roster with zero transfers and zero freshmen has not had its
  * additions entered.
  *

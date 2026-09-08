@@ -649,7 +649,7 @@ export function CalcClient({
           itself — the user reviews and presses Calculate. */}
       <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm p-4 lg:p-5">
         {/* Named, because the pricing page sells it by name. A reader who buys
-            "Ask the Calculator" and lands on a box labelled something else has
+            "Ask the Calculator" and lands on a box labeled something else has
             to work out for themselves that they are the same feature. */}
         <label htmlFor="calc-ask" className="block mb-2">
           <span className="text-xs uppercase tracking-widest text-ink font-semibold">

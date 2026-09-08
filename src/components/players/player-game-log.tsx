@@ -630,7 +630,7 @@ export function PlayerGameLog({
                 <Td className="font-semibold text-ink">Totals</Td>
                 <Td align="center" className="text-ink-muted">—</Td>
                 {/* Blank. A count here read as though it were an opponent,
-                    and the row is already labelled Totals. */}
+                    and the row is already labeled Totals. */}
                 <Td />
                 <Td align="right" className="tabular">{fmtInt(t.mins)}</Td>
                 {/* No chip on the totals row. The ladder ranks a NIGHT, and a

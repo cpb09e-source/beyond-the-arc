@@ -36,7 +36,7 @@ export const POWER_CONFS = new Set(["ACC", "B10", "B12", "P12", "P10", "SEC", "B
  * Arizona and Oklahoma State, which is the kind of wrong that looks like a
  * data problem rather than a naming one. Found on the scoreboard, 2026-09-02.
  *
- * So this matches on a normalised form and accepts every spelling of each. Add
+ * So this matches on a normalized form and accepts every spelling of each. Add
  * aliases here rather than at a call site; a second copy of this list is how
  * the next filter disagrees with this one.
  *

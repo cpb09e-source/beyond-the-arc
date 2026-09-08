@@ -19,7 +19,7 @@
  *
  * The engine is the walk-forward research harness (docs/matchup-predictor.md,
  * part 2 §3 and part 3) collapsed to its end-of-season case — every
- * modelling choice the backtests settled is a constant here, not an option:
+ * modeling choice the backtests settled is a constant here, not an option:
  *
  *   possession gate        45..110 and |hPoss − aPoss| ≤ 4      (part 2 §2)
  *   home court             2.0 per side per 100                 (part 2 §3)
@@ -32,7 +32,7 @@
  *
  * Names. The archive uses CBBD names ("Ohio State", "UConn"); the site's team
  * pages and logos use Bart names ("Ohio St.", "Connecticut"). Each team is
- * resolved to its Bart name through the same normalisation and alias table
+ * resolved to its Bart name through the same normalization and alias table
  * src/lib/quad.ts uses for the win calculator, inverted; the build prints any
  * team it could not resolve so the miss is a line in the log, not a broken
  * link on the page.

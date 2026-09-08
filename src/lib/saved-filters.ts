@@ -45,7 +45,7 @@ export type SavedFilter = {
  *
  * A saved filter is a query string, and a team query means nothing to the
  * players page — applying one would land on a table with no columns it
- * recognises. Two keys keep the lists apart, and the original key is kept
+ * recognizes. Two keys keep the lists apart, and the original key is kept
  * verbatim for teams so nobody loses what they already saved.
  */
 export type SavedScope = "teams" | "players" | "team-games" | "player-games";
@@ -105,7 +105,7 @@ function parseList(raw: string): SavedFilter[] {
 }
 
 /**
- * Cached per scope, and that is not an optimisation — getSnapshot MUST return
+ * Cached per scope, and that is not an optimization — getSnapshot MUST return
  * the same reference for the same stored string or React re-renders without
  * end. One shared cache would thrash the moment both explorers were mounted.
  */
@@ -324,7 +324,7 @@ export function suggestPlayerName(spec: PlayerListSpec): string {
   const OP: Record<string, string> = { gt: ">", gte: "≥", lt: "<", lte: "≤" };
   const first = spec.filters[0];
   if (first) {
-    // Either catalogue can be filtered on, so both are consulted — and the
+    // Either catalog can be filtered on, so both are consulted — and the
     // summary column's label wins where a key exists in both.
     const summary = playerStatColumn(first.stat);
     const pack = PACK_STAT_BY_KEY.get(first.stat);

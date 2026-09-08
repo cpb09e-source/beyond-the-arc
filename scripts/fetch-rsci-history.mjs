@@ -108,7 +108,7 @@ function extractPlayers(csv) {
     // top 100 where the tiers need the most support.
     const cells = r.map((c) => (c ?? "").trim());
     // Height is 6-11 in the older sheets and 6'11" with curly quotes in the
-    // newer ones. Accept either, and normalise to the 6-11 form our roster
+    // newer ones. Accept either, and normalize to the 6-11 form our roster
     // data already uses.
     const rawHt = cells.find((c) => /^[5-7]\s*[-'’]\s*\d{1,2}\s*["”]?$/.test(c)) ?? null;
     const ht = rawHt ? rawHt.replace(/\s|["”]/g, "").replace(/['’]/, "-") : null;

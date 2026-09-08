@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
  * down from 1 MB at the source resolution, and nothing here renders above 24.
  *
  * Falls back to NOTHING rather than to a monogram. A missing mark leaves the
- * name it sits beside, which already says which league this is; a grey circle
+ * name it sits beside, which already says which league this is; a gray circle
  * with two letters in it says only that something failed.
  */
 export function ConferenceLogo({

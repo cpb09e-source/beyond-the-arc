@@ -56,7 +56,7 @@ export function SavedFiltersMenu({
    * Which explorer's list this is.
    *
    * The two are stored separately — a team query applied to the players table
-   * would land on a table with no columns it recognises — and each is read back
+   * would land on a table with no columns it recognizes — and each is read back
    * by its own describer.
    */
   scope?: SavedScope;
@@ -246,7 +246,7 @@ export function SavedFiltersMenu({
         {/* NAMES THE ACTION, not the shelf. "Saved" only means anything to
             somebody who already knows there is somewhere to save things;
             the first-time reader has nothing saved and no reason to open a
-            menu labelled with the past tense. */}
+            menu labeled with the past tense. */}
         <span className="hidden sm:inline">Save Filter View</span>
         {saved.length > 0 && <span className="tabular font-medium">{saved.length}</span>}
       </button>

@@ -6,7 +6,7 @@
  *   public/data/team-roster-splits.json  →  { "<team>|<year>": {...} }
  *
  * WEIGHTED BY MINUTES, WHICH IS THE WHOLE POINT. A straight average over the
- * listed roster describes who is on the programme, not who plays: a 7-footer
+ * listed roster describes who is on the program, not who plays: a 7-footer
  * redshirting and a 7-footer starting move a mean height identically, and only
  * one of them is on the floor. Every figure here weights by minutes actually
  * played, so it describes the rotation.
@@ -76,7 +76,7 @@ function heightInches(h) {
   if (!m) return null;
   const inches = Number(m[1]) * 12 + Number(m[2]);
   // A guard against a mis-parsed or joke listing rather than against real
-  // players: D-I has had a 5-2 guard and a 7-7 centre.
+  // players: D-I has had a 5-2 guard and a 7-7 center.
   return inches >= 60 && inches <= 95 ? inches : null;
 }
 

@@ -428,7 +428,7 @@ function HeadCell({
   label: string;
   /**
    * Shown below sm in place of `label`. For a header that is only unambiguous
-   * because of its neighbours: "NET Rk" sits against NET on a wide screen, but
+   * because of its neighbors: "NET Rk" sits against NET on a wide screen, but
    * on a phone the identity columns it belongs to have already dropped away and
    * the pairing that made "NET" worth repeating has gone with them.
    */

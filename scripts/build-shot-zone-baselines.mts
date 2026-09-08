@@ -3,7 +3,7 @@
  * of the thirteen shot zones, by season and position bucket.
  *
  * The hex baselines (build-shot-baselines.mjs) answer "what does an average
- * guard shoot from here", which is enough to colour a chart hot or cold. It is
+ * guard shoot from here", which is enough to color a chart hot or cold. It is
  * not enough to say WHERE IN THE FIELD a player sits, because an aggregate has
  * no spread: 39% from the top of the key could be the 60th percentile or the
  * 95th depending on how tightly guards cluster there, and the aggregate cannot

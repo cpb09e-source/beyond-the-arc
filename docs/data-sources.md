@@ -119,7 +119,7 @@ Both are documented at the code that would otherwise mislead:
    the floor. CBBD's play-by-play has **no `onFloor` and no substitution events
    before 2024** — measured: 2026 carries `onFloor` on 56,193/56,193 plays, 2015
    on 0/337,258. Not recoverable from anything we have. Replaced by `net_rtg`,
-   a *different* statistic (individual ORtg − DRtg), labelled as one rather than
+   a *different* statistic (individual ORtg − DRtg), labeled as one rather than
    relabelled "+/-".
 
 2. **Fast-break / paint / points-off-turnover splits, 2014-2022.** CBBD reports

@@ -18,7 +18,7 @@
  * type.
  *
  * What differs from PlayerStatRows is only what it is over — the two game
- * catalogues have their own keys, labels and percentage rules — so those come
+ * catalogs have their own keys, labels and percentage rules — so those come
  * in as props and everything about how a row behaves lives here.
  */
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -97,7 +97,7 @@ export function GameStatRows({
 }: {
   cols: readonly string[];
   filters: readonly GameRowFilter[];
-  /** The catalogue, already in section order. */
+  /** The catalog, already in section order. */
   options: PickOption[];
   groupLabel: Record<string, string>;
   /** Unique per page — two pickers on one page cannot share a listbox id. */
@@ -119,7 +119,7 @@ export function GameStatRows({
    * RESYNC FROM THE URL, but only when the URL says something these rows did
    * not. Every commit writes the URL, which comes straight back here; a naive
    * resync would rebuild the rows mid-keystroke and take the caret with them.
-   * The echo is recognised by comparing what the URL now holds against what
+   * The echo is recognized by comparing what the URL now holds against what
    * these rows last produced.
    *
    * This is also what makes the shortcut buttons work: they write filters the

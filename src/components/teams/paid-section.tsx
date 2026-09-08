@@ -52,7 +52,7 @@ export function PaidSection({
     <div className="relative">
       <div
         // grayscale, not saturate-50: these tables carry percentile chips, and a
-        // colour block survives a blur intact — a green smudge still ranks the
+        // color block survives a blur intact — a green smudge still ranks the
         // lineup. Same reasoning as the explorer’s locked bands.
         className="pointer-events-none select-none blur-[5px] opacity-40 grayscale max-h-[32rem] overflow-hidden"
         aria-hidden
@@ -60,8 +60,8 @@ export function PaidSection({
         {children}
       </div>
 
-      {/* Anchored near the top rather than centred. These sections are tall —
-          a lineup grid runs well past a screen — and a card centred in 900px
+      {/* Anchored near the top rather than centered. These sections are tall —
+          a lineup grid runs well past a screen — and a card centered in 900px
           of blur sits below the fold, so the reader scrolls through a smear
           with no explanation before reaching the one element that explains
           it. */}
@@ -111,7 +111,7 @@ export function PaidSection({
 /**
  * The counterpart, on the two teams that are open.
  *
- * A sample that is not LABELLED a sample is just a paywall that failed. This
+ * A sample that is not LABELED a sample is just a paywall that failed. This
  * says why the page is readable, so a reader who arrived here from the card
  * above understands they are looking at the thing being sold rather than
  * assuming lineups are free everywhere and hitting the wall on their own team.

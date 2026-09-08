@@ -93,7 +93,7 @@ export function loadGameIndex(season: number): Promise<GamePack | null> {
  * came back 10,564 team-game rows, complete against the team box with nothing
  * missing, and built 81,312 player-game rows across 4,867 players.
  *
- * 2021 IS SMALLER THAN ITS NEIGHBOURS AND THAT IS CORRECT — 81,312 rows and
+ * 2021 IS SMALLER THAN ITS NEIGHBORS AND THAT IS CORRECT — 81,312 rows and
  * 493 distinct opponents against 2022's 111,582 and 680. Cancelled games and
  * gutted non-conference schedules, not a short pull. Verified same-shaped as
  * 2022: same 7 keys, same 22 fields, same 6 classes.
@@ -240,7 +240,7 @@ if (process.env.NODE_ENV !== "production") {
  * The date, as a sortable column rather than a suffix on the opponent.
  *
  * Not in any view — an identity column the table always renders. In the
- * catalogue so SortableTh can name it; unfilterable because a day offset is
+ * catalog so SortableTh can name it; unfilterable because a day offset is
  * not something anyone types into a filter box. `get` returns the offset
  * within a season, and selectRows adds the season, which a stat function
  * cannot see.

@@ -3,7 +3,7 @@
  * into src/lib/player-stat-bounds.ts.
  *
  * WHY. The players filter drawer shipped with thirty stats and hand-written
- * min/max — "rebounds per game, 0 to 20" — picked by eye. The catalogue is now
+ * min/max — "rebounds per game, 0 to 20" — picked by eye. The catalog is now
  * 137 stats across two sources, and hand-writing bounds for those would be a
  * hundred more guesses. Worse, a guessed bound is not neutral: it is the
  * placeholder the reader is told a normal value looks like, and the extent of

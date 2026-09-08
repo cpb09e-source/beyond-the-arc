@@ -53,7 +53,7 @@ export function MultiYearSelect({
    * only lives here. Whether the reader is limited at all is a fact about the
    * reader, which this component has no business knowing. Splitting it that
    * way also keeps the message reusable: the coach picker will want the same
-   * behaviour with different words.
+   * behavior with different words.
    *
    * ONCE, NOT EVERY CLICK. A reader working through a list of thirteen
    * seasons does not need telling thirteen times, and a notice that reappears

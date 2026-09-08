@@ -162,7 +162,7 @@ for (const [tab, desc] of TEAM_TABS) {
 // ── §5 Everything else that could carry a price ────────────────────────────
 const FEATURES: Array<[string, string, string, string, string]> = [
   ["Download", "CSV of the current view", "paid", "paid", "Raw values, nothing rounded."],
-  ["Download", "Excel Workbook of the current view", "paid", "paid", "Formatted, percentile colours, a sheet describing the export."],
+  ["Download", "Excel Workbook of the current view", "paid", "paid", "Formatted, percentile colors, a sheet describing the export."],
   ["Download", "Excel - Select Views (multi-tab)", "paid", "paid", "One tab per view. The most obviously paid-shaped thing in the menu."],
   ["Download", "Sample workbook", "free", "free", "Runs the same code as the paid export on a fixed slice. The pitch, not a limit."],
   ["Explorer", "Compare (teams)", "free", "free", "Hidden on players for now by decision."],

@@ -54,7 +54,7 @@ Basic gets EPM + E-Skills, team ratings for every date, stats, comparison tool. 
 **Three patterns worth stealing:**
 
 1. **The gate is a lock glyph in the cell, not a wall.** Full table structure always renders; only the numbers are withheld (901 lock glyphs on the playoff page, 1,105 on game pages). No blur, no interstitial, no modal. Maximum "see exactly what you're missing" pressure at near-zero UX cost — **and every page stays fully indexable.** `robots.txt` disallows only `/auth/login` and `/api/`. Note: custom-date gating is a *soft nag* — values still render.
-2. **Dual-encoded cells.** Every cell shows the value on top and a small 0–100 **percentile** beneath it, tinted on a green→grey→red diverging scale. Each cell carries raw value *and* league context with no tooltip. This one pattern does most of the analytical work on the site. (We already do percentile chips — theirs is denser and more systematic.)
+2. **Dual-encoded cells.** Every cell shows the value on top and a small 0–100 **percentile** beneath it, tinted on a green→gray→red diverging scale. Each cell carries raw value *and* league context with no tooltip. This one pattern does most of the analytical work on the site. (We already do percentile chips — theirs is denser and more systematic.)
 3. **Free is broad, paid is deep.** Logged out you get the *entire* 652-row EPM leaderboard with every column, all 30 team ratings, full team stats, game index with win prob. What's gated: custom dates/seasons, playoff probabilities, live dashboards, CSV, API.
 
 **Design vocabulary (the actual look-and-feel spec):**
@@ -382,7 +382,7 @@ here the outer two are a funnel and a mailto.
 
 ### Ask the Calculator
 
-The plain-English query box on `/calc` — previously unnamed, labelled only
+The plain-English query box on `/calc` — previously unnamed, labeled only
 "Ask in plain English" — is now **Ask the Calculator**, named in both the
 pricing page and the calculator itself.
 

@@ -10,7 +10,7 @@
  *
  * 2. Slim. The baked file carries every stat column and all 34 percentiles —
  *    ~21 KB for a team — because re-baking to add a column should never be
- *    necessary. But everything handed to a client component is serialised into
+ *    necessary. But everything handed to a client component is serialized into
  *    the page's RSC payload, and this page is one of 5,009. So only the fields
  *    the grid actually renders cross that boundary: the totals and per-game
  *    figures named by the column model, and only the percentiles those columns

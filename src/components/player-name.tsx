@@ -7,7 +7,7 @@ import { abbrevName } from "@/lib/player-name";
  * name pushes the numbers off the screen, and "J. Morton" keeps the part a
  * reader searches on. None of that is true on a desktop, where the frozen
  * Player column has room for the given name and the initial was just throwing
- * away the most recognisable half of it.
+ * away the most recognizable half of it.
  *
  * Both forms are rendered and one is hidden in CSS, rather than measuring the
  * viewport in JS. A width read would have to happen after mount, so the first

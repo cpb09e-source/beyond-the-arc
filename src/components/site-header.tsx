@@ -213,7 +213,7 @@ function NavMenu({
                       "mt-px flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1 transition-colors",
                       here
                         ? "bg-coral/12 ring-coral/25 text-coral"
-                        // bg-ink, NOT bg-paper-deep. `ink` is the text colour,
+                        // bg-ink, NOT bg-paper-deep. `ink` is the text color,
                         // so a low-alpha wash of it self-inverts: a dark tint
                         // on the light card, a light one on the dark card.
                         // paper-deep sat a hair off the dark card and the

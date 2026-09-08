@@ -315,7 +315,7 @@ export function DownloadMenu<R>({
             <div className="py-1">
               <MenuItem
                 title="Excel Workbook"
-                sub="This view, formatted, with percentile colours and a sheet describing the export"
+                sub="This view, formatted, with percentile colors and a sheet describing the export"
                 ext=".xlsx"
                 busy={busy === "xlsx"}
                 onClick={() => run("xlsx")}

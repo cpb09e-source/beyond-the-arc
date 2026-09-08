@@ -26,7 +26,7 @@ export type TCPlayer = {
   dev_bump?: number;
   /** PIR after the conference-tier multiplier. */
   pir_adj?: number | null;
-  /** The tiered-PIR term converted to wins, centred so average = 0. */
+  /** The tiered-PIR term converted to wins, centered so average = 0. */
   pir_wins?: number;
   /** Team net rating on-floor minus off-floor, and the charge for a negative one. */
   on_off?: number | null;

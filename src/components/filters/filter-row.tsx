@@ -4,8 +4,8 @@
  * One filter row — stat name, comparator, value box, remove.
  *
  * EXTRACTED FROM THE TEAM EXPLORER when the players table needed the same
- * thing. The behaviour is unchanged; what moved out is the three facts the row
- * used to look up for itself from the team catalogue — the label, the measured
+ * thing. The behavior is unchanged; what moved out is the three facts the row
+ * used to look up for itself from the team catalog — the label, the measured
  * bounds, and whether the stat is typed as a percentage. Those come in as props
  * now, so a row over player stats is the same row.
  */
@@ -17,7 +17,7 @@ import { Select } from "@/components/select";
 /** The comparators a row can express. */
 export type RowComparator = "gt" | "gte" | "lt" | "lte";
 
-/** A row being edited. `stat` is a key in whichever catalogue the page uses. */
+/** A row being edited. `stat` is a key in whichever catalog the page uses. */
 export type DraftRow = { id: number; stat: string; op: RowComparator; value: string };
 
 /** The comparators offered, in the order they read. */
@@ -218,7 +218,7 @@ export function FilterRow({
         aria-label={`Delete ${label} filter`}
         title="Delete this filter"
         // MUTED RED AT REST, full on hover. The bin is the only destructive
-        // control in the row, and leaving it the same grey as the "%" suffix
+        // control in the row, and leaving it the same gray as the "%" suffix
         // made it read as decoration; --bad rather than the coral accent
         // because coral means "this is yours / this is active" everywhere else
         // on the page, and it cannot also mean "this deletes something".

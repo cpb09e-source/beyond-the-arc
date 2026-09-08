@@ -140,7 +140,7 @@ for (const [key, acc] of totals) {
     atb3_fg_pct: pct(acc.atb3!),
     // Share of a team's THREES taken from the corner — the shape of the
     // three-point diet rather than its accuracy, and the one number that says
-    // whether an offence is generating catch-and-shoot corner looks or settling
+    // whether an offense is generating catch-and-shoot corner looks or settling
     // for wing pull-ups.
     corner3_share: threes >= MIN_ATT ? r3(acc.corner3!.att / threes) : null,
   };

@@ -24,7 +24,7 @@
  * thing devtools would have given them anyway.
  *
  * It also fails open PERMANENTLY if the profile fetch errors, and that is the
- * intended behaviour rather than an oversight: a Supabase outage should
+ * intended behavior rather than an oversight: a Supabase outage should
  * degrade to a generous site, not one that locks out the people paying for it.
  */
 import { useMemo } from "react";

@@ -254,7 +254,7 @@ function Td({ children, align = "left", className = "" }: { children: React.Reac
  * Stat cell — value on top, percentile chip beneath it.
  *
  * Side by side (the old shape) the chip and the number fought for the same
- * line: the number is right-aligned, the chip is 28px of colour to its right,
+ * line: the number is right-aligned, the chip is 28px of color to its right,
  * so the digits landed at a different x in every row depending on whether that
  * row had a percentile. On a preview roster, where whole columns are chipless,
  * that read as a broken column rather than as missing data.
@@ -263,7 +263,7 @@ function Td({ children, align = "left", className = "" }: { children: React.Reac
  * under it, which is what the /players grid, the team explorer and the coaches
  * table all already do. Rows with no chip get a chip-height spacer for the same
  * reason those tables do: without it the values in a chipless row sit at a
- * different height from their neighbours.
+ * different height from their neighbors.
  */
 function StatCell({ value, pct, emphasized = false }: { value: string; pct: number | null; emphasized?: boolean }) {
   return (

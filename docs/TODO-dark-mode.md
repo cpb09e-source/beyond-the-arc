@@ -100,7 +100,7 @@ expressed preference — for phone users it is a bug's fingerprint.
 6. Audit the palette before trusting it. It was written against an earlier
    version of the site; everything added since — the transfer-portal sheets, the
    compare modals, the filter sheets, the mobile header bar — has only ever been
-   looked at in light. Expect hard-coded colours that were fine when there was
+   looked at in light. Expect hard-coded colors that were fine when there was
    one theme.
 
 ## Related

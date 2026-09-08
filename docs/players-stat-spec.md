@@ -6,7 +6,7 @@ Companion to `docs/players-grid-rebuild-spec.md`, which covered the grid's
 *layout*. This one covers what goes in it.
 
 Source glossary: `docs/reference/cbb-analytics-glossary.csv` (1,291 stats). That
-is **CBB Analytics' catalogue, not our feed** — they were removed as a data
+is **CBB Analytics' catalog, not our feed** — they were removed as a data
 source (see `docs/data-sources.md`). Everything below is judged against what is
 actually archived under `data/cbbd/`.
 
@@ -63,8 +63,8 @@ PIR, PORPAG, BTA PORP, PPP, Net Rtg.** Nothing new in this group.
 **BLKD** and **BLKD/FGA**, removed 2026-08-28 by decision. The derivation
 held up — a missed FG immediately followed by a `Block Shot` names the
 shooter the block play omits — but the stat reads as a defender's number and
-is the shooter's, and no amount of labelling fixes that at a glance in a
-column header. Dropped from the builder, both catalogues, the bounds table
+is the shooter's, and no amount of labeling fixes that at a glance in a
+column header. Dropped from the builder, both catalogs, the bounds table
 and the Defensive Stats view, and stripped out of the built packs (1.0 MB).
 
 ---
@@ -131,7 +131,7 @@ number and should not sit in the same table pretending to be.
 Worth noting the possession-elapsed distribution *is* clean — it peaks at 4s,
 troughs at 9s, then climbs back as halfcourt offense sets up, which is exactly
 the transition/halfcourt seam you would expect. The clock is not the problem.
-The problem is that the official stat encodes a scorer's judgement that no time
+The problem is that the official stat encodes a scorer's judgment that no time
 threshold reproduces.
 
 **Recommended instead: allocate the official team total.** Take CBBD's
@@ -352,7 +352,7 @@ it rewards doing it for 34 minutes a night.
 **3. Milestone, leader and technical-foul columns get no chips.** They are small
 integers dominated by zero — technical fouls run about 0.026 per player-game.
 After the midrank fix these correctly collapse to one shared percentile for the
-whole zero block, which is the honest answer and also a useless colour. Show the
+whole zero block, which is the honest answer and also a useless color. Show the
 raw count.
 
 **4. `hkm_pct` currently comes from Bart raw columns 22+23.** Once `blk_pct` and
@@ -448,10 +448,10 @@ reading the page.)
 
 ### Per-100 possessions instead of per-40
 
-databallr normalises by possessions, not minutes. We have `teamStats.possessions`
+databallr normalizes by possessions, not minutes. We have `teamStats.possessions`
 on every team-game, so player possessions = `TmPoss × (MP / TmMP)`.
 
-Per-100 is the better normaliser — per-40 rewards a player on a fast team, since
+Per-100 is the better normalizer — per-40 rewards a player on a fast team, since
 more minutes at a higher pace means more chances. **Open question:** replace the
 per-40 family with per-100, or ship both? Shipping both doubles about twenty
 columns for a distinction most readers will not use. Recommend per-100 replacing

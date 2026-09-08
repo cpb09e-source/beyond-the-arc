@@ -57,7 +57,7 @@ const FIELDS = [
   "oreb", "reb", "ast", "stl", "blk", "tov", "pf",
   "ortg", "drtg",           // x10
   "efg", "ftr", "tov_r", "orb_r",         // four factors, per mille
-  "efg_d", "ftr_d", "tov_d", "orb_d",     // what the defence allowed
+  "efg_d", "ftr_d", "tov_d", "orb_d",     // what the defense allowed
   "lead",   // largest lead
   "h1", "h2", "ot",         // points by half, and overtime points
   "reb_dif", "tov_dif", "ast_dif", "stl_dif", "blk_dif", "fg3m_dif",

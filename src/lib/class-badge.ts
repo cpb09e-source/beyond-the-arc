@@ -14,7 +14,7 @@
  *
  * NO ENTRY FOR "Gr". A graduate season is styled as plain text by every caller,
  * which is deliberate: the four undergraduate years are a progression a reader
- * can rank at a glance, and a fifth colour outside that sequence would imply a
+ * can rank at a glance, and a fifth color outside that sequence would imply a
  * fifth step rather than a different kind of thing.
  */
 export const CLASS_BADGE: Record<string, { bg: string; fg: string }> = {
@@ -24,7 +24,7 @@ export const CLASS_BADGE: Record<string, { bg: string; fg: string }> = {
   Sr: { bg: "var(--cls-sr-bg)", fg: "var(--cls-sr-fg)" },   // magenta
 };
 
-/** The inline style for a class badge, or undefined for a class with no colour. */
+/** The inline style for a class badge, or undefined for a class with no color. */
 export function classBadgeStyle(cls: string | null | undefined) {
   const c = cls ? CLASS_BADGE[cls] : undefined;
   return c ? { background: c.bg, color: c.fg } : undefined;

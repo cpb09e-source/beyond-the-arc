@@ -38,7 +38,7 @@
  *
  * NOTHING IS PATCHED HERE. This reports; a human decides. Name matching across
  * two sources is good but not perfect — "Joaquim ArauzMoore" against "Joaquim
- * Arauz Moore" is a normalisation problem, not a departure — and silently
+ * Arauz Moore" is a normalization problem, not a departure — and silently
  * deleting players from a roster on a fuzzy match is exactly the kind of edit
  * that is invisible until someone notices a team is missing its best player.
  *
@@ -99,7 +99,7 @@ function loose(s) {
 }
 
 /**
- * Last season's players, by normalised name, with the team they played for.
+ * Last season's players, by normalized name, with the team they played for.
  *
  * Used to tell a missing veteran from a missing freshman, and to say where a
  * player we have misfiled actually came from.

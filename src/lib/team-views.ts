@@ -285,7 +285,7 @@ export const TABLE_VIEWS: TableView[] = [
    *
    * The columns come from Add a Filter, which already pins whatever it filters
    * on and renders it under "Your columns". So this view needs no machinery of
-   * its own — it is the absence of a column set, and the pinning behaviour that
+   * its own — it is the absence of a column set, and the pinning behavior that
    * already exists does the rest.
    *
    * DECLARED LAST on purpose. TABLE_VIEWS[0] is the default view the toolbar

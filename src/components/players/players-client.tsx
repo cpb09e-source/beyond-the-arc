@@ -105,7 +105,7 @@ type GridCol = {
 /**
  * A view's stat keys, flattened into export columns.
  *
- * Mirrors viewGrid below — same walk, same two catalogues, same precedence —
+ * Mirrors viewGrid below — same walk, same two catalogs, same precedence —
  * but produces the spreadsheet's column model rather than the table's. Kept as
  * a separate function rather than a second use of viewGrid because the file
  * wants a percentile column beside every value, which the table does not.
@@ -162,7 +162,7 @@ function exportColsFor(v: PlayerView): ExportCol[] {
 /**
  * A view's stat keys, turned into grid columns and band spans.
  *
- * Keys may name EITHER catalogue, and which one decides where the value comes
+ * Keys may name EITHER catalog, and which one decides where the value comes
  * from: PLAYER_STAT_COLUMNS resolves to a PlayerSummary field, PACK_STAT_COLUMNS
  * to a key in a fetched group file. The reader is not shown the difference.
  *
@@ -247,7 +247,7 @@ function seasonLabel(y: number): string {
  * kicker, where it is read as prose rather than scanned in a dense cell.
  */
 /**
- * Class badge colours — one per eligibility year.
+ * Class badge colors — one per eligibility year.
  *
  * Deliberately OFF the red-to-green axis the percentile ramp owns. A freshman
  * badge in ramp-red would read as "bad at being a freshman", which is not a
@@ -391,7 +391,7 @@ function filterSpec(
     // Stat filters, AND-combined.
     //
     // A stat lives on PlayerSummary or in a pack, and a filter must work on
-    // either. passesPlayerFilter returns TRUE for a key it does not recognise —
+    // either. passesPlayerFilter returns TRUE for a key it does not recognize —
     // a deliberate "unknown filter does not narrow" — which for a pack stat
     // meant the filter silently did nothing at all. So pack keys are resolved
     // here, against the same values the table shows.
@@ -469,7 +469,7 @@ function applySpec(
    * most likely to belong to one: the legacy sort names, then a stat's own key
    * on PlayerSummary, then the stat pack.
    *
-   * Falling through to the pack LAST matters — `gp` exists in both catalogues,
+   * Falling through to the pack LAST matters — `gp` exists in both catalogs,
    * and the summary's is the one the rest of the table shows.
    */
   const field: keyof PlayerSummary | undefined =
@@ -1213,7 +1213,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
    * This used to be inferred from `spec.filters` — narrowing a stat implicitly
    * added its column. That inference is now explicit state (`spec.cols`), which
    * the drawer also sets automatically whenever a range is applied, so the old
-   * behaviour survives while a stat can additionally be shown WITHOUT being
+   * behavior survives while a stat can additionally be shown WITHOUT being
    * filtered on. `spec.filters` is still read as a fallback so bookmarked URLs
    * from before the change keep their columns.
    */
@@ -1766,7 +1766,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                     </td>
                     {[...dynamicCols, ...viewCols].map((c, ci) => {
                       // Summary column or pack column — resolved here so the
-                      // cell below does not care which catalogue it came from.
+                      // cell below does not care which catalog it came from.
                       const v = c.packKey
                         ? packValue(p, c.packKey)
                         : (p[c.field!] as number | null);
@@ -1929,7 +1929,7 @@ function VScrollRail({ target }: { target: React.RefObject<HTMLDivElement | null
     const railH = rail.clientHeight;
     const maxTop = railH - thumb.h;
     const next = Math.min(maxTop, Math.max(0, drag.current.startTop + (e.clientY - drag.current.startY)));
-    // scrollTo, not `el.scrollTop = …`. Identical behaviour (the default
+    // scrollTo, not `el.scrollTop = …`. Identical behavior (the default
     // `behavior` is instant), but assigning through a ref that arrived as a
     // prop reads to the compiler as writing to the prop itself. The arrows
     // above already drive the same element with scrollBy.

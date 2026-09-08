@@ -350,40 +350,40 @@ export function TeamPageView({
   // states without prop-drilling. --accent is the full color (for text +
   // border), --accent-tint is a low-alpha background suitable for row
   // hovers. Always set; fall back to coral for unthemed teams.
-  // The dark theme cannot use the raw brand colour. Measured across all 366
+  // The dark theme cannot use the raw brand color. Measured across all 366
   // teams, 225 primaries fall under 3.0 contrast on the dark ground — the
   // navies and anthracites simply vanish (Vanderbilt's #261e25 is 1.05). So a
-  // second, lightness-clamped variant ships alongside the true colour and
+  // second, lightness-clamped variant ships alongside the true color and
   // globals.css swaps to it under [data-theme="dark"] .team-accent.
   //
   // 0.66-0.88 rather than readableInk's default 0.34-0.56: that default is
   // theme-agnostic and lands mid-range, which fails BOTH grounds — only 86 of
   // 366 teams pass either way with it. Clamped upward, all 366 clear AA on
-  // dark. The light theme keeps the true colour, where it already works.
+  // dark. The light theme keeps the true color, where it already works.
   const accentDark = accentColor ? readableInk(accentColor, { min: 0.66, max: 0.88 }) : null;
   /**
    * A SECOND, DARKER VARIANT FOR SURFACES — text and fill are different jobs.
    *
    * 0.66-0.88 is tuned for something that has to be READ against the page. A
    * badge or a pressed pill only has to be SEEN as a surface, and pushing a
-   * fill that light washes the team out of its own colour: San Diego's navy
+   * fill that light washes the team out of its own color: San Diego's navy
    * would arrive as a pale sky blue. So fills clamp lower and keep more of the
    * real hue, exactly as the box-score modal already does for its two sides.
    *
    * Anything in that 0.46-0.72 band is too light to carry white text, so the
    * fill ships with its own foreground and the dark theme swaps that to the
-   * page colour — see globals.css.
+   * page color — see globals.css.
    */
   const accentFillDark = accentColor ? readableInk(accentColor, { min: 0.46, max: 0.72 }) : null;
   /**
    * And the same guarantee on the light page, which had the mirror problem.
    *
-   * The dark clamp lifts a colour that is too dark to read on #1C1C1C; this
-   * lowers one that is too light to read on the cream. Only the colours that
+   * The dark clamp lifts a color that is too dark to read on #1C1C1C; this
+   * lowers one that is too light to read on the cream. Only the colors that
    * fail move at all — see readableOnPaper — so the navies and maroons that
    * make up most of the file arrive here untouched.
    *
-   * TEXT ONLY. --accent-tint below keeps the true brand colour deliberately:
+   * TEXT ONLY. --accent-tint below keeps the true brand color deliberately:
    * it is a 10% hover wash, nothing is read off it, and it is the one of these
    * variables the schedule ticker uses.
    */
@@ -398,15 +398,15 @@ export function TeamPageView({
     // The tint is a hover wash. At 10% alpha a near-black is invisible on the
     // dark ground for the same reason the accent is, so it follows the accent.
     ["--accent-tint-dark" as string]: accentDark ? `${accentDark}26` : "rgba(77, 155, 255, 0.14)",
-    // The fill pair. On paper the brand colour is its own best surface and the
+    // The fill pair. On paper the brand color is its own best surface and the
     // team's own on-primary rides with it; the dark theme swaps both.
     ["--accent-fill" as string]: accentColor ?? "#ed5a4f",
     ["--accent-fill-dark" as string]: accentFillDark ?? "#4d9bff",
     ["--accent-on-fill" as string]: teamColors?.onPrimary ?? "#fff",
     // PICKED, not fixed. The dark fill sits anywhere in a 0.46-0.72 lightness
-    // band, and no single ink spans it: the page colour on San Diego's derived
+    // band, and no single ink spans it: the page color on San Diego's derived
     // #205cca measures 2.82, which is under the bar even for the badge's large
-    // type. contrastOn chooses per colour, the same way the team's own
+    // type. contrastOn chooses per color, the same way the team's own
     // onPrimary was chosen for the light theme.
     ["--accent-on-fill-dark" as string]: accentFillDark ? contrastOn(accentFillDark) : "#1a2238",
   };
@@ -470,7 +470,7 @@ export function TeamPageView({
       <div className="grid grid-cols-2 md:grid-cols-3 gap-px bg-hairline border border-hairline rounded-lg overflow-hidden">
         {/* All three are OURS now (scripts/build-adjusted-ratings.mjs), not
             Bart's. The ratings validate against his T-Rank at r = 0.986 and the
-            tempo at r = 0.979, so the numbers a reader recognises have not
+            tempo at r = 0.979, so the numbers a reader recognizes have not
             moved — only where they come from. */}
         <StatTile label="Adj ORtg" value={fmtNum(currentCbb?.a_ortg ?? null, 1)} sub="points per 100" />
         <StatTile label="Adj DRtg" value={fmtNum(currentCbb?.a_drtg ?? null, 1)} sub="points per 100 (allowed)" />
@@ -526,7 +526,7 @@ export function TeamPageView({
    * tab is showing and the server renders only that one. A season without them
    * gets the client shell, which sets data-team-tab so CSS can hide the panes
    * the reader is not looking at. See anchor-tab-shell.tsx for the cost
-   * argument; the short version is that this buys the same behaviour for zero
+   * argument; the short version is that this buys the same behavior for zero
    * pages and zero deploy time.
    *
    * The preview season is excluded with the strip itself: its sections are
@@ -558,20 +558,20 @@ export function TeamPageView({
                 96px mark. */}
             <TeamLogo name={current.name} size={96} className="hidden lg:block rounded-md" />
             <div className="flex-1 min-w-0">
-              {/* var(--accent), NOT the raw brand colour.
+              {/* var(--accent), NOT the raw brand color.
  
                   THIS LINE SETS currentColor FOR THE SEASON SWITCHER, which
                   draws its border, its surface and its label from it. With the
-                  brand colour inline here, San Diego's navy reached the dark
+                  brand color inline here, San Diego's navy reached the dark
                   theme untouched and the whole control measured 1.18 against
                   #1C1C1C — present, and unreadable. The variable is the same
-                  colour on paper and the lightness-clamped one on dark, which
+                  color on paper and the lightness-clamped one on dark, which
                   is why the coach's name two lines down was legible while this
                   was not: it was already reading the variable.
  
                   No conditional: --accent is defined for every team, falling
                   back to coral on the wrapper for the ones with no brand
-                  colour, so the old accentColor ternaries had nothing left to
+                  color, so the old accentColor ternaries had nothing left to
                   choose between. */}
               <div
                 className="flex items-center gap-3 text-xs uppercase tracking-[0.18em] font-medium mb-3"
@@ -594,10 +594,10 @@ export function TeamPageView({
                 </span>
               </div>
               {/* Below lg the crest moves INTO the name's row.
-                  items-center on the outer row centres a 96px mark against the
+                  items-center on the outer row centers a 96px mark against the
                   full column — eyebrow, name, record, coach and the button —
                   so on a phone it floated down beside the record: measured at
-                  390px, the crest's centre sat 78px below the name's. Pairing
+                  390px, the crest's center sat 78px below the name's. Pairing
                   them in one row makes the alignment structural instead of a
                   number that has to be re-tuned whenever a line is added.
 

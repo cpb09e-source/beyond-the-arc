@@ -14,7 +14,7 @@
  * therefore declare their keys and the client works out which files to pull;
  * see groupsFor() in player-stat-pack.ts.
  *
- * Keys may name a stat from EITHER catalogue — PLAYER_STAT_COLUMNS (on the
+ * Keys may name a stat from EITHER catalog — PLAYER_STAT_COLUMNS (on the
  * summary) or PACK_STAT_COLUMNS (in a pack). The dev-time check at the bottom
  * validates against both, because a typo would otherwise render a column of
  * dashes, which reads as missing data rather than as the mistake it is.
@@ -254,7 +254,7 @@ export function playerViewPackGroups(v: PlayerView): PackGroup[] {
 }
 
 /**
- * VALIDATED AT MODULE LOAD in development, against BOTH catalogues.
+ * VALIDATED AT MODULE LOAD in development, against BOTH catalogs.
  *
  * A key in neither renders as a column of dashes — present, headed and empty,
  * which reads as missing data rather than as the typo it is. Throwing is right

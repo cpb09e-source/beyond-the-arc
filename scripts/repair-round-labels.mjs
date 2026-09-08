@@ -4,7 +4,7 @@
  *
  * THE BUG. `round` records the round a team was eliminated in. For 2013, 2014
  * and 2015 the scrape is off by one for every R64 loser: exactly 32 per year,
- * 96 rows, each labelled "R32" when the team lost its opening game. The
+ * 96 rows, each labeled "R32" when the team lost its opening game. The
  * bracket in tournament-games.json is complete for those years (63 games,
  * correct shape) and disagrees in precisely those rows, which is how this was
  * found — see scripts/analyze-round-repair.mts for the impact measurement.

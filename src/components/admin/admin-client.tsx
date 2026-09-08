@@ -590,7 +590,7 @@ function DeployNote({ deploy }: { deploy: Loaded<Deploy> }) {
 }
 
 /**
- * Status as shape AND colour, not colour alone — the three states have to be
+ * Status as shape AND color, not color alone — the three states have to be
  * distinguishable without relying on red/green, which is the one pair a large
  * share of readers cannot separate.
  */

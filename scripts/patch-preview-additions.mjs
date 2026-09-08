@@ -156,7 +156,7 @@ function parseListItem(html) {
   return out;
 }
 
-/** Newer card component: labelled runs inside .s-person-card__content. */
+/** Newer card component: labeled runs inside .s-person-card__content. */
 function parseSPerson(html) {
   const out = [];
   for (const b of html.split(/s-person-card__content/).slice(1)) {
@@ -229,7 +229,7 @@ const portalByName = new Map(portalArr.map((e) => [key(e.name), e]));
 
 /**
  * Where every carried player currently sits, so a listed player already on
- * another roster is recognised as a move rather than minted a second time.
+ * another roster is recognized as a move rather than minted a second time.
  *
  * Keyed on the FULL name only. The first-initial/last key that disambiguates
  * spelling drift within one roster is far too loose across all 365: it maps

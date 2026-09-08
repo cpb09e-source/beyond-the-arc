@@ -147,11 +147,11 @@ rated.
 Two things to know about the numbers: **bids means the round of 64**, since the
 source carries the 63-game bracket and a First Four loser never appears; and
 **NCAA losses is not ranked** — a league loses more tournament games by sending
-more teams, so colouring it would say the opposite of what happened. 2020 is
+more teams, so coloring it would say the opposite of what happened. 2020 is
 blank across the band; there was no tournament.
 
 The join is Sports Reference's school names against Bart's conferences, so it
-is normalised on both sides with an alias list, and the builder prints anything
+is normalized on both sides with an alias list, and the builder prints anything
 it could not match rather than dropping it silently. It currently matches
 everything.
 
@@ -166,7 +166,7 @@ column set is the view, and a table of ~31 rows does not need narrowing.
 Computed in the browser across the loaded cohort — every conference-season
 currently selected — the same way the team explorer computes team percentiles
 across a season's teams. Not baked, because the cohort changes with the season
-selection: a conference's colour should say where it sits among what the reader
+selection: a conference's color should say where it sits among what the reader
 is actually looking at.
 
 ## 7. Data
@@ -178,7 +178,7 @@ reads, so the two pages can never disagree about a season.
 
 Rows are emitted under the team explorer's own stat keys (`a_net`, `cbb_efg`,
 …) so labels, number formats and percentile direction all come from
-`TEAM_STAT_COLUMNS` rather than a second catalogue that would drift.
+`TEAM_STAT_COLUMNS` rather than a second catalog that would drift.
 
 ## 8. Open — decide before this ships
 

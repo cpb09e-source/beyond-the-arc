@@ -185,7 +185,7 @@ export function TeammatePicker({
                 {/* The players explorer's class badge, from the shared palette
                     — a junior is the same amber here as in the table the
                     reader may have arrived from. A graduate season has no
-                    colour by design and falls back to plain muted text. */}
+                    color by design and falls back to plain muted text. */}
                 {t.cls && (
                   <span
                     className={cn(

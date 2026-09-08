@@ -36,7 +36,7 @@
  *
  * Geometry matches the player pipeline exactly (600x436 / 240x174, a 1.376:1
  * landscape) because both feed the same circular CSS crop, and `position: top`
- * on the thumb keeps the head in frame — a centre crop takes the top off it.
+ * on the thumb keeps the head in frame — a center crop takes the top off it.
  */
 import fs from "node:fs";
 import path from "node:path";

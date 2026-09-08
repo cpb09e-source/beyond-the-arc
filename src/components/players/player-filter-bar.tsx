@@ -284,7 +284,7 @@ function titleCase(label: string): string {
  *
  * This drawer used to offer thirty stats with hand-written min/max — "rebounds
  * per game, 0 to 20" — chosen by eye. Two things made that untenable: the
- * catalogue is now 137 stats across two sources, and a guessed bound is not
+ * catalog is now 137 stats across two sources, and a guessed bound is not
  * neutral. It is the range the slider spans and the hint the reader is told a
  * normal value looks like, so a wrong one quietly misinforms.
  *
@@ -318,7 +318,7 @@ function stepFor(min: number, max: number): number {
 /**
  * Section headings, in the order the drawer shows them.
  *
- * The two catalogues group their stats on different principles — PlayerSummary
+ * The two catalogs group their stats on different principles — PlayerSummary
  * by concept, the pack by which file it ships in — so both are mapped onto one
  * set of headings a reader can scan. Anything unmapped lands in Other rather
  * than being dropped, so a stat can never go missing by being forgotten here.
@@ -339,7 +339,7 @@ const PACK_SECTION: Record<string, string> = {
   advdef: "Defense", fouls: "Fouls", doubles: "Milestones", leaders: "Game Leaders",
 };
 
-/** Stats that belong under a heading their catalogue group would not give them. */
+/** Stats that belong under a heading their catalog group would not give them. */
 const SECTION_OVERRIDE: Record<string, string> = {
   rim_pct: "Shot Profile", mid_pct: "Shot Profile", asst_pct: "Shot Profile",
   rim_rate: "Shot Profile", tp_rate: "Shot Profile",
@@ -362,7 +362,7 @@ function buildRangeGroups(): RangeGroup[] {
   const bySection = new Map<string, RangeStat[]>();
   const seen = new Set<string>();
   const add = (key: string, label: string, group: string, fromPack: boolean) => {
-    // The summary catalogue wins on a shared key (`gp` is in both), so a filter
+    // The summary catalog wins on a shared key (`gp` is in both), so a filter
     // always matches the column the table is already showing.
     if (seen.has(key)) return;
     seen.add(key);
@@ -394,7 +394,7 @@ const RANGE_GROUPS: RangeGroup[] = buildRangeGroups();
 /**
  * The same stats again, shaped for the shared stat picker.
  *
- * Built from RANGE_GROUPS rather than from the catalogues a second time, so the
+ * Built from RANGE_GROUPS rather than from the catalogs a second time, so the
  * picker and the drawer can never disagree about which stats exist or which
  * section a stat lives in — the failure that would show up as a stat you can
  * add from one door and cannot find in the other.

@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import Link from "next/link";
 import { PageHeading } from "@/components/page-heading";
-import { CORR, HCA, SCORE_SIGMA, SIGMA, TOTAL_SIGMA, type MatchupPack } from "@/lib/matchup";
+import { ABSENCE_EXP, CORR, HCA, SCORE_SIGMA, SIGMA, TOTAL_SIGMA, type MatchupPack } from "@/lib/matchup";
 
 /**
  * How the Matchup Predictor works — the page the projection links to.
@@ -134,6 +134,7 @@ export default async function MethodPage() {
             ["Three-point attempt share edge", `+${CORR.t3rEdge.toFixed(3)}`],
             ["Turnover edge", CORR.tovEdge.toFixed(3)],
             ["Offensive rebounding edge", `+${CORR.orbEdge.toFixed(3)}`],
+            ["Both teams strong (home only)", `+${CORR.qualHome.toFixed(3)}`],
           ]}
         />
         <p className="mb-4">
@@ -154,6 +155,23 @@ export default async function MethodPage() {
           survived. Roster continuity — the share of last season&rsquo;s minutes that came back — carries a
           smaller term worth {CORR.cont.toFixed(2)} points per unit.
         </p>
+        <p className="mb-3">
+          The cost of absences is <strong className="text-ink">steeply convex</strong>, and that matters
+          more than it sounds. What a team loses is not the missing player, it is the man who replaces
+          him: lose one and the sixth man covers it, lose five and walk-ons play. Measured across three
+          seasons, per team-side:
+        </p>
+        <Table
+          head={["Rotation minutes missing", "Mean points below projection"]}
+          rows={[
+            ["none", "−0.1"],
+            ["under 20", "−0.5"],
+            ["60 – 80", "1.3"],
+            ["100 – 120", "2.6"],
+            ["over 120", "6.3"],
+          ]}
+          note={`The model raises the missing share of the rotation to the power ${ABSENCE_EXP} and tilts it by whether the absent players are worth more or less per minute than their teammates. Beyond about two absences it is extrapolating: fewer than 1% of games in the sample were missing that much.`}
+        />
 
         <H>6 · Win probability, and what the ranges mean</H>
         <p className="mb-4">

@@ -125,7 +125,7 @@ type Game = {
   /** Live only: current period and game clock, when CBBD supplies them. */
   period: number | null;
   clock: string | null;
-  /** Closing betting line, HOME perspective (negative = home favoured). */
+  /** Closing betting line, HOME perspective (negative = home favored). */
   line: { spread: number | null; overUnder: number | null; provider: string } | null;
 };
 
@@ -239,10 +239,10 @@ function easternDate(isoTimestamp: string): string | null {
 
 /**
  * CBBD returns two slightly different row shapes (the live scoreboard carries
- * period/clock; /games carries winners and seeds). Both are normalised here so
+ * period/clock; /games carries winners and seeds). Both are normalized here so
  * the client renders one type and never branches on which feed it came from.
  */
-function normalise(r: Record<string, unknown>): Game | null {
+function normalize(r: Record<string, unknown>): Game | null {
   const id = Number(r.id ?? r.gameId);
   if (!Number.isFinite(id)) return null;
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -354,7 +354,7 @@ let seasonCache: { season: number; through: string; at: number; rows: SeasonRow[
 /** Month starts from the season opener up to and including `throughDate`. */
 function monthWindows(season: number, throughDate: string): Array<[string, string]> {
   const out: Array<[string, string]> = [];
-  // A CBBD season labelled 2026 opens in November 2025.
+  // A CBBD season labeled 2026 opens in November 2025.
   let y = season - 1, m = 10; // October, 0-indexed — a few exhibitions land there
   const end = Date.parse(`${throughDate}T12:00:00Z`);
   for (let i = 0; i < 14; i++) {
@@ -417,7 +417,7 @@ async function recordsBefore(key: string, season: number, beforeDate: string): P
  *
  * SIGN CONVENTION: `spread` is from the HOME team's perspective, so −8.5 means
  * the home side is laying 8.5. Verified against 136 settled games from 7 Feb
- * 2026 — reading it as home-favoured makes the favourite win 72% of the time,
+ * 2026 — reading it as home-favoured makes the favorite win 72% of the time,
  * which is the expected rate for college basketball; the opposite reading would
  * have put it at 28% and inverted every game on the page.
  *
@@ -495,7 +495,7 @@ async function resolveSlate(key: string, season: number, anchor?: Date): Promise
   // ever describes right now and would override the day being asked for.
   const live = anchor ? [] : await cbbd("/scoreboard", key);
   if (live.length > 0) {
-    const games = live.map((r) => normalise(r as Record<string, unknown>)).filter((g): g is Game => g !== null);
+    const games = live.map((r) => normalize(r as Record<string, unknown>)).filter((g): g is Game => g !== null);
     if (games.length > 0) {
       const date = easternDate(games[0]!.startDate) ?? iso(now);
       const [ranks, recs, lines] = await Promise.all([
@@ -529,7 +529,7 @@ async function resolveSlate(key: string, season: number, anchor?: Date): Promise
   );
   const byDate = new Map<string, Game[]>();
   for (const row of wide) {
-    const g = normalise(row as Record<string, unknown>);
+    const g = normalize(row as Record<string, unknown>);
     if (!g) continue;
     if (g.home.points === null && g.away.points === null) continue; // not played
     const d = easternDate(g.startDate);
@@ -605,7 +605,7 @@ export async function nextSlate(
   key: string, season: number, now: Date,
 ): Promise<{ date: string; games: Game[] } | null> {
   const today = easternDate(now.toISOString()) ?? iso(now);
-  // A CBBD season labelled N is played across N-1 and N, and opens in early
+  // A CBBD season labeled N is played across N-1 and N, and opens in early
   // November of N-1. Late-October exhibitions exist, so the cursor starts there.
   const opens = `${season - 1}-10-25`;
   let cursor = today > opens ? today : opens;
@@ -618,7 +618,7 @@ export async function nextSlate(
 
     const byDate = new Map<string, Game[]>();
     for (const row of rows) {
-      const g = normalise(row as Record<string, unknown>);
+      const g = normalize(row as Record<string, unknown>);
       if (!g) continue;
       const d = easternDate(g.startDate);
       // Strictly forward. The window's first day is today, whose already-played

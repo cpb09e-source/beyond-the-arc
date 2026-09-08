@@ -194,7 +194,7 @@ export const CompareShareCard = forwardRef<HTMLDivElement, {
                     gap: 7,
                     padding: "10px 8px",
                     // The winner is marked by its GROUND, not by its type
-                    // colour — at thumbnail size a tinted band is legible when
+                    // color — at thumbnail size a tinted band is legible when
                     // a shade of green on one number is not.
                     background: c.best
                       ? "rgba(74,124,89,0.13)"

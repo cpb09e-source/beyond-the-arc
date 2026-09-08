@@ -121,9 +121,9 @@ function pickPrimary(c1: string, c2: string): string {
  *
  * DELIBERATELY NOT the `luminance()` above. That one is the 0.299/0.587/0.114
  * perceived-brightness average, which is the right tool for ranking two brand
- * colours against each other and the wrong one for asking whether text can be
+ * colors against each other and the wrong one for asking whether text can be
  * read: the sRGB gamma step below is what makes a saturated yellow measure as
- * the very bright colour it looks like. Iowa's #FFCD00 is 0.79 by the average
+ * the very bright color it looks like. Iowa's #FFCD00 is 0.79 by the average
  * and 0.66 by this — and against the cream page that is the difference between
  * "probably fine" and a measured 1.41.
  */
@@ -143,11 +143,11 @@ export function contrastRatio(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-/** The light theme's page colour. Mirrors --paper in globals.css. */
+/** The light theme's page color. Mirrors --paper in globals.css. */
 const LIGHT_PAPER = "#faf7f2";
 
 /**
- * A brand colour dark enough to READ on the cream page, and otherwise itself.
+ * A brand color dark enough to READ on the cream page, and otherwise itself.
  *
  * The mirror of the dark theme's clamp, and it has to exist for the same
  * reason: a brand primary is chosen to look like the school, not to sit on our
@@ -156,14 +156,14 @@ const LIGHT_PAPER = "#faf7f2";
  * is the same complaint as San Diego's navy on the dark ground, one theme over.
  *
  * A CONTRAST TARGET, NOT A LIGHTNESS CAP, and that is the whole design. A cap
- * moves every colour above it, including the hundreds that were already
- * legible, and repaints the site for no reason. This returns the colour
+ * moves every color above it, including the hundreds that were already
+ * legible, and repaints the site for no reason. This returns the color
  * untouched the moment it clears the bar and otherwise walks lightness down
  * only as far as it must, so a team changes exactly if it was failing and by
  * exactly as much as it was failing by. Hue and saturation are preserved
  * throughout — a dark Iowa gold is still gold.
  *
- * ONLY FOR TEXT. --accent-tint and --accent-fill keep the true colour: a 10%
+ * ONLY FOR TEXT. --accent-tint and --accent-fill keep the true color: a 10%
  * hover wash and a badge with its own chosen foreground are surfaces, and
  * nothing has to be read off them. That is also what keeps the schedule ticker
  * out of this — it reads --accent-tint and never --accent.
@@ -174,16 +174,16 @@ export function readableOnPaper(hex: string, target = 4.5): string {
     const c = readableInk(hex, { min: 0, max: cap });
     if (contrastRatio(c, LIGHT_PAPER) >= target) return c;
   }
-  // Unreachable for any hue: lightness 0.04 is near-black. A GREYSCALE input
+  // Unreachable for any hue: lightness 0.04 is near-black. A GRAYSCALE input
   // is the one that can arrive here, because readableInk returns those
   // untouched (it has no hue to rebuild from), so it gets a neutral ink.
   return "#2b2b2b";
 }
 
 /**
- * Black or white, whichever can be read on this colour.
+ * Black or white, whichever can be read on this color.
  *
- * Exported because the team pages need it for a colour this module never sees:
+ * Exported because the team pages need it for a color this module never sees:
  * the dark theme's accent FILL is derived at render time, and it lands
  * anywhere in a lightness band wide enough that neither ink works across all
  * of it. Fixing the foreground instead of picking it put near-black on San
@@ -215,17 +215,17 @@ export function getTeamColors(teamName: string | null | undefined): TeamColors |
 }
 
 /**
- * A team colour clamped into a band that stays readable as TEXT on either
+ * A team color clamped into a band that stays readable as TEXT on either
  * theme's ground.
  *
- * Brand colours span the whole lightness range — Carolina sky blue sits at
+ * Brand colors span the whole lightness range — Carolina sky blue sits at
  * L 0.66, Michigan navy at L 0.15 — and both extremes fail as small type: the
  * pale one washes out on warm paper, the dark one disappears on the dark
  * theme's near-black. Clamping lightness while holding hue and saturation
- * keeps the colour unmistakably the team's while guaranteeing it can be read.
+ * keeps the color unmistakably the team's while guaranteeing it can be read.
  *
  * Use for text and numerals. Bars, swatches and fills should use the raw
- * colour — a large block of it has no legibility problem and the true shade is
+ * color — a large block of it has no legibility problem and the true shade is
  * what makes the chart look like the team.
  */
 export function readableInk(hex: string, opts?: { min?: number; max?: number }): string {
@@ -236,7 +236,7 @@ export function readableInk(hex: string, opts?: { min?: number; max?: number }):
   const [r, g, b] = [0, 2, 4].map((i) => parseInt(s.slice(i, i + 2), 16) / 255) as [number, number, number];
   const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
   const l = (mx + mn) / 2, d = mx - mn;
-  if (d === 0) return hex; // greyscale: no hue to preserve
+  if (d === 0) return hex; // grayscale: no hue to preserve
   const sat = d / (1 - Math.abs(2 * l - 1));
   let hue: number;
   if (mx === r) hue = ((g - b) / d) % 6;

@@ -179,7 +179,7 @@ const fromStart = (row, idx) => (!row || row.length <= idx ? null : row[idx]);
  * together, because all four come off that one row: 59 of 2,090 players at 20+
  * mpg in 2026, every one of them missing the identical four fields.
  *
- * The CBBD join in build-cbbd-player-season.mjs normalises suffixes, so it
+ * The CBBD join in build-cbbd-player-season.mjs normalizes suffixes, so it
  * already has these players. It recovers 49 of the 59.
  *
  * SAFE TO SUBSTITUTE because the two agree where both exist: r = 0.980 on

@@ -281,7 +281,7 @@ export function CompareTeamsModal({
   // done its job the moment the comparison exists. It folds itself away the
   // first time the table appears and reopens on demand. Phone only: on a wide
   // modal the same row costs one line and losing it would be a regression.
-  // DERIVED, not synchronised. This began as an effect watching showCompare
+  // DERIVED, not synchronized. This began as an effect watching showCompare
   // and calling setPicksOpen — which is a cascading render, and needed
   // matchMedia to avoid collapsing the desktop panel too. Neither is
   // necessary: the collapsed state is a pure function of "is there a
@@ -553,7 +553,7 @@ export function CompareTeamsModal({
     >
       <div
         className={cn(
-          // PHONE: the whole screen. A centred max-w-6xl card holding a table
+          // PHONE: the whole screen. A centered max-w-6xl card holding a table
           // whose Category column alone is 224px leaves the entity columns
           // nothing on a 390px screen — they ran off the right edge.
           "bg-card flex flex-col overflow-hidden w-full",
@@ -570,7 +570,7 @@ export function CompareTeamsModal({
             </div>
             <h2 className="font-display text-xl md:text-3xl text-ink leading-none tracking-tight">Compare teams</h2>
             {/* Three lines of instruction is a fair trade on a wide screen and
-                a third of the fold on a phone, where the colour legend is
+                a third of the fold on a phone, where the color legend is
                 right there in the numbers anyway. */}
             <p className="hidden md:block text-sm text-ink-muted mt-2 max-w-2xl">
               Pick up to four team-seasons. Best mark per row in{" "}
@@ -672,7 +672,7 @@ export function CompareTeamsModal({
               team columns running off the right edge. So the label comes out
               of the row and sits above it, full width, and the width goes to
               the numbers. The teams are named once in a strip that sticks to
-              the top of the scroll. Same colouring and the same percentile
+              the top of the scroll. Same coloring and the same percentile
               chips as the table. */}
           <div className="md:hidden">
             <div

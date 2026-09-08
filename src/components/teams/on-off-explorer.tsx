@@ -357,7 +357,7 @@ export function OnOffExplorer({
 
                           This was px-8 while the section carried its own
                           padding on top of the page's. Once the sections were
-                          normalised onto one container that doubled up, and the
+                          normalized onto one container that doubled up, and the
                           heading, blurb and names all sat 16px right of the
                           section's own controls. */}
                       <td className="sticky left-0 z-20 px-6 sm:px-3 py-1.5 border-r border-hairline whitespace-nowrap transition-colors bg-paper group-odd:bg-card">

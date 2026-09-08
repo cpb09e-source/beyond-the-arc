@@ -134,7 +134,7 @@ Historical seasons and gating are not on the list.
   key is `athleteSourceId`. Production scripts already know (see
   `build-bta-porpag.mjs:31`); the research harness did not, and reported zero
   absences across three seasons before the bug was found.
-- A team colour as TEXT needs a light AND a dark variant. `readableOnPaper`
+- A team color as TEXT needs a light AND a dark variant. `readableOnPaper`
   serves the cream page; `readableInk(hex, {min: 0.6, max: 0.78})` serves
   #1C1C1C. The page sets both as variables and `.matchup-root` in globals.css
   picks under `[data-theme="dark"]` — no `!important`, because `--ma` itself
@@ -299,7 +299,7 @@ guard and stopped there:
 
 Everything before that passed: checkout, setup-node, setup-python, `npm ci`,
 the Python deps, the archive cache restore, and the cold-start R2 seed. All ten
-secrets inject. That exit 1 is the correct off-season behaviour, not a fault.
+secrets inject. That exit 1 is the correct off-season behavior, not a fault.
 
 **The workflow is `disabled_manually` on purpose.** Re-enabling arms the 11:00
 UTC cron, and with `LIVE_SEASON` null that is a failed run and a failure email
@@ -431,7 +431,7 @@ on its own —
     and `game.mts` call CBBD live from the same quota and cannot write to it,
     and a lost cache resets the month. Set the repo VARIABLE
     `CBBD_MONTHLY_LIMIT` (a number, not a secret) to turn the count into a
-    gauge that warns at 80% and fails at 100%; unset, the tile is grey and
+    gauge that warns at 80% and fails at 100%; unset, the tile is gray and
     says so rather than inventing a ceiling the API never reports.
   - **Deploy** — `/build-info.json` (written into `out/` by
     `scripts/build-with-r2-stash.mjs`) plus GitHub's `compare` for how far main
@@ -708,7 +708,7 @@ McKinney. `/t/cig/` is an unlisted page in the site's own style with four
 tabs — Schedule, Standings, Bracket, Teams — and 4-D picked out everywhere.
 
 **WHERE THE LIVE DATA COMES FROM, because it took an evening to find.** The
-organiser's site (app.naismailigames.com) is Playinga: an Angular app over
+organizer's site (app.naismailigames.com) is Playinga: an Angular app over
 Firestore, project `ismaili-hq`, with NO API of its own. The public page signs
 in anonymously with Firebase's identity toolkit and reads Firestore directly.
 Three facts make that reproducible from a Netlify function:
@@ -725,7 +725,7 @@ Three facts make that reproducible from a Netlify function:
 All of it is in `netlify/functions/tournament.mts`, keyed by slug — only
 events listed in its `EVENTS` map are reachable, so it is not a general proxy.
 
-**THE SCORE SHAPE WAS OBSERVED ON THE ORGANISER'S JULY EVENT, not on this
+**THE SCORE SHAPE WAS OBSERVED ON THE ORGANIZER'S JULY EVENT, not on this
 one.** `matchInfo.scoreCard.scoreResult.{creatorTeamScore, opponentTeamScore,
 winningTeamId}` is final; `scoreCard.score[]` holds per-period points and is
 the in-progress state. **`matchInfo.status` stays 2 after a game is scored** —
@@ -781,7 +781,7 @@ open it, which is the right level for a schedule that is already public.
   assist-players" was wrong twice over. Three commits have ever touched it, in
   a 1.5 GB repo, so the git weight is not a problem either.
 - **The fixed-Tailwind-palette item is DONE.** An earlier note claimed nine
-  files still used palette colours that cannot follow dark mode; zero remain.
+  files still used palette colors that cannot follow dark mode; zero remain.
 - **Every dropdown on the site is now the portalled listbox** — the native
   `<select>` is gone, including both game log explorers' View pickers. Three
   bugs came out of that work and are fixed: a 4px bleed above sticky section
@@ -903,7 +903,7 @@ was never a data problem — the archive pull worked first time on a valid key.
   - `2021` added to `GAME_SEASONS`, which now matches `TEAM_GAME_SEASONS`
   - 46 API calls against a 75,000 monthly quota
 
-**2021 is smaller than its neighbours and that is correct** — 81,312 rows and
+**2021 is smaller than its neighbors and that is correct** — 81,312 rows and
 493 distinct opponents against 2022's 111,582 and 680. Cancelled games and
 gutted non-conference schedules. Do not read the gap as a short pull.
 

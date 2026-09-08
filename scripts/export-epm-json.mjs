@@ -154,7 +154,7 @@ function main() {
   // earned.
   //
   // WHY IT DRIFTS. Each observation carries five offensive and five defensive
-  // coefficients plus a home indicator, against an efficiency already centred
+  // coefficients plus a home indicator, against an efficiency already centered
   // on the league mean. That identifies offense MINUS defense — one team's
   // offense is the other's defense, so the difference is pinned by the data.
   // Nothing pins offense PLUS defense, and EPM is the sum. Its zero point is
@@ -163,7 +163,7 @@ function main() {
   // defensive half (+0.96 of the 2026 +1.31).
   //
   // WHY POSSESSION-WEIGHTED AND NOT THE PLAIN MEAN. The plain mean is already
-  // near zero (+0.23) because ridge centres the unweighted coefficient vector.
+  // near zero (+0.23) because ridge centers the unweighted coefficient vector.
   // But good players play more, so the average POSSESSION is played by someone
   // at +1.31, and a possession is the unit the metric is denominated in. The
   // identity that has to hold is per-possession: five men's offensive impact is

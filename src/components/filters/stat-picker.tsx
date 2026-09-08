@@ -3,8 +3,8 @@
 /**
  * The stat picker — "Add a Filter" and "Add Columns", one component.
  *
- * EXTRACTED FROM THE TEAM EXPLORER, unchanged in behaviour. It was written
- * there and knew the team catalogue: the option list, the section headings and
+ * EXTRACTED FROM THE TEAM EXPLORER, unchanged in behavior. It was written
+ * there and knew the team catalog: the option list, the section headings and
  * the key type were all imported from team-filters. The players table wants the
  * same two doors over a different set of stats, and the alternative to this
  * extraction was a second popover with the same keyboard handling, the same

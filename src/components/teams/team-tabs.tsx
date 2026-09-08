@@ -34,7 +34,7 @@ import { cn } from "@/lib/utils";
  *
  * THE CONTROL'S POSITION NEVER MOVES. That is why the sections all share one
  * max-width now. They used to differ — 88rem for most, 96rem for School
- * History, 100rem for Lineups — and each centred itself, so navigation pinned
+ * History, 100rem for Lineups — and each centered itself, so navigation pinned
  * to the content's edge landed somewhere different on every tab. Switching
  * sections slid the navigation, which is the one element that has to hold
  * still. One container width for all ten sections fixes it at the source; see
@@ -153,7 +153,7 @@ function hrefFor(t: (typeof TABS)[number], p: NavProps): string {
 /**
  * The desktop control.
  *
- * THE ACTIVE PILL TAKES --accent, the team's colour, guaranteed readable on
+ * THE ACTIVE PILL TAKES --accent, the team's color, guaranteed readable on
  * both grounds by the clamps in team-page-view. Every item carries a border in
  * both states — transparent when inactive — so the pill appearing cannot shift
  * the row by a pixel.
@@ -202,7 +202,7 @@ export function TeamTabBar(props: NavProps) {
  * Dropping the glyphs buys the labels their size back and lets the bar be what
  * this page actually needs: an index. A team page is tables, not an app, and
  * seven section names in small caps under an accent rule is how a printed
- * programme would list them. The icons were the weaker half anyway — a circle
+ * program would list them. The icons were the weaker half anyway — a circle
  * inside a circle for Shooting and two overlapping discs for On/Off are marks
  * you learn from the label beneath them, not marks that save you reading it.
  *
@@ -243,7 +243,7 @@ export function TeamBottomBar(props: NavProps) {
         // 0.75rem always. The trade is deliberate and worth stating: on a
         // gesture phone with the toolbar hidden, the lower few pixels of the
         // tap target now sit inside the home-indicator strip. The LABELS are
-        // clear of it either way — they are centred in the 46px row above this
+        // clear of it either way — they are centered in the 46px row above this
         // padding — so what is at risk is the last sliver of a tap, not
         // readability, and a bar that changes height while you read is the
         // worse fault.
@@ -289,7 +289,7 @@ export function TeamBottomBar(props: NavProps) {
               >
                 {/* Inset from the cell edges rather than spanning it: a rule
                     that runs the full width of its cell meets its neighbour's
-                    and the six read as one continuous line with a coloured
+                    and the six read as one continuous line with a colored
                     segment, instead of as one tab that is marked. */}
                 <span
                   aria-hidden

@@ -14,7 +14,7 @@
  * READS THE SAME FILES THE TEAM EXPLORER READS — public/data/teams-by-year —
  * and emits rows under the explorer's own stat keys. That is deliberate: the
  * page then takes its labels, number formats and percentile directions from
- * TEAM_STAT_COLUMNS, so there is one catalogue rather than two that drift.
+ * TEAM_STAT_COLUMNS, so there is one catalog rather than two that drift.
  *
  *   node scripts/build-conference-rankings.mjs
  *
@@ -235,7 +235,7 @@ const SPLIT_KEYS = ["conf", "nonconf"];
 // game, and hiding it would make the column wrong rather than consistent.
 //
 // Names come from Sports Reference and the conferences from Bart, so the join
-// is normalised on both sides and anything left over is reported rather than
+// is normalized on both sides and anything left over is reported rather than
 // silently dropped.
 const tourneyByYear = fs.existsSync(TOURNEY_FILE)
   ? JSON.parse(fs.readFileSync(TOURNEY_FILE, "utf8"))
@@ -251,7 +251,7 @@ function normSchool(s) {
     .replace(/[^a-z0-9]+/g, "");
 }
 
-/** SR spellings that normalise to something Bart does not use. */
+/** SR spellings that normalize to something Bart does not use. */
 const TOURNEY_ALIASES = {
   connecticut: "connecticut",
   uconn: "connecticut",

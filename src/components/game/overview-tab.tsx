@@ -126,14 +126,14 @@ const LEADER_CATS: {
  * heading. The shape of every box score ever printed.
  *
  * This replaced a MIRRORED layout — the two teams facing each other across a
- * centre label — and the mirror turned out to cost more than it bought. Two
+ * center label — and the mirror turned out to cost more than it bought. Two
  * photos, two names and two stat lines had to fit either side of a 96px label
  * column inside a 27rem panel, so both names ran as "C. Boozer" and both detail
  * lines sat at 0.65rem. Stacked, each player gets the panel's full width, the
  * names are spelled out, and the three numbers land in one column the eye can
  * run straight down.
  *
- * The category winner carries a wash of its own team's colour rather than a
+ * The category winner carries a wash of its own team's color rather than a
  * badge or a bold weight, so which side won each of the three is a glance at
  * the left edge instead of a comparison across a gap.
  */
@@ -268,7 +268,7 @@ function GameInfo({ b }: { b: GameBundle }) {
  * Team stats, two-sided.
  *
  * Each row is a value, the label, a value — and a pair of bars that grow
- * OUTWARD from the centre. Growing from a shared middle means the two lengths
+ * OUTWARD from the center. Growing from a shared middle means the two lengths
  * start at the same place, so "who was bigger" is a single comparison rather
  * than two measurements against different baselines. Bars are scaled to the
  * pair, so a row where the teams are close reads as close.
@@ -379,10 +379,10 @@ type StatRow = {
 /**
  * Marks the side that took a category.
  *
- * A wash of green behind the figure rather than a colour change to the figure
+ * A wash of green behind the figure rather than a color change to the figure
  * itself: the numbers are already carrying team identity, and overloading them
  * to also carry won/lost left neither reading cleanly. Green is the only
- * semantic colour on the panel, so it cannot be mistaken for a team.
+ * semantic color on the panel, so it cannot be mistaken for a team.
  *
  * Renders a plain wrapper when it did not win, so the number does not shift.
  */
@@ -408,7 +408,7 @@ function rate(part: number, whole: number): number {
  * directions, which is a measurement rather than a glance, and each row left
  * two stretches of empty track that read as missing data. One continuous bar
  * has a single thing to look at — where the seam sits — and the tick at dead
- * centre gives it a fixed reference, so the margin is a distance rather than a
+ * center gives it a fixed reference, so the margin is a distance rather than a
  * subtraction. The explicit +N states it outright for anyone who wants the
  * number.
  *
@@ -417,12 +417,12 @@ function rate(part: number, whole: number): number {
  * the SMALLER figure, and a plain share-of-total split put the longer segment
  * under the side that turned it over more while the +N underneath credited the
  * other — the bar and the verdict pointing opposite ways in the same row. Those
- * rows invert, so one rule holds down the whole column: further from centre
+ * rows invert, so one rule holds down the whole column: further from center
  * toward a team means that team did better. The figures themselves are printed
  * either side, so nothing is hidden by the flip.
  *
- * The green winner chip is gone with the mirrored bars. It was a third colour
- * system laid over two team colours to say what the seam now says by shape.
+ * The green winner chip is gone with the mirrored bars. It was a third color
+ * system laid over two team colors to say what the seam now says by shape.
  */
 function StatRowView({ r, hc, ac }: { r: StatRow; hc: string; ac: string }) {
   const better = r.lowerIsBetter ? (x: number, y: number) => x < y : (x: number, y: number) => x > y;
@@ -430,7 +430,7 @@ function StatRowView({ r, hc, ac }: { r: StatRow; hc: string; ac: string }) {
 
   // Share of the pair, inverted for the lower-is-better rows so the seam and
   // the verdict never disagree. A 0-0 row (a game with no free throws) has no
-  // ratio at all and sits dead centre rather than dividing by zero.
+  // ratio at all and sits dead center rather than dividing by zero.
   const tot = Math.abs(r.a) + Math.abs(r.h);
   const raw = tot > 0 ? (Math.abs(r.a) / tot) * 100 : 50;
   const aw = r.lowerIsBetter ? 100 - raw : raw;
@@ -455,7 +455,7 @@ function StatRowView({ r, hc, ac }: { r: StatRow; hc: string; ac: string }) {
         <span style={{ width: `${aw}%`, background: ac }} />
         <span className="flex-1" style={{ background: hc }} />
         {/* A paper hairline at the seam. This sport pits blue against blue
-            constantly, and two close colours meeting with no break read as one
+            constantly, and two close colors meeting with no break read as one
             continuous block that says nothing. */}
         <span className="absolute inset-y-0 w-0.5 bg-card" style={{ left: `${aw}%` }} aria-hidden />
         {/* Even. How far the seam sits from this is the margin. */}
@@ -826,7 +826,7 @@ function StandingsTable({
         </thead>
         <tbody>
           {rows.map((r, i) => {
-            // The two teams in this game are tinted in their OWN colours
+            // The two teams in this game are tinted in their OWN colors
             // rather than a shared accent, so which row is which reads without
             // going back to the name.
             const c = colorOf(r.team);

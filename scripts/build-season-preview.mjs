@@ -287,7 +287,7 @@ async function main() {
    * all 365 teams that was 657 rows: Jaden Bradley, Brayden Burries and Koa Peat
    * all showed on Arizona as statless newcomers having just played there.
    *
-   * Only UNIQUE names resolve. Two players sharing a normalised name is exactly
+   * Only UNIQUE names resolve. Two players sharing a normalized name is exactly
    * the case where a guess attaches one man's season to another, and the cost of
    * leaving those blank is a row that looks like it already did.
    */

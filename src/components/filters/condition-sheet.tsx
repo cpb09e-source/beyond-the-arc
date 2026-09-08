@@ -32,8 +32,8 @@ export function isPctKey(key: string): boolean {
  * These were nine different hues, one per group: gold for Differentials, olive
  * for Box, teal for Pace, muted red for Defense. Nothing read them as a key,
  * because the group is already named in the heading directly above the rows;
- * the colour was decoration that made a sheet of otherwise identical rows look
- * like it was signalling something it wasn't, and a gold slider beside a blue
+ * the color was decoration that made a sheet of otherwise identical rows look
+ * like it was signaling something it wasn't, and a gold slider beside a blue
  * one just looked unfinished.
  *
  * Kept as a map rather than collapsed to a constant so per-group hues can come

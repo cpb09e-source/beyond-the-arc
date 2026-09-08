@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!supabase) {
       // Deferred rather than set inline: resolving the status synchronously in
       // the effect body cascades a second render before the first has painted.
-      // Behaviour is identical, one tick later.
+      // Behavior is identical, one tick later.
       const t = setTimeout(() => setStatus("signedOut"), 0);
       return () => clearTimeout(t);
     }

@@ -47,7 +47,7 @@ import {
  *   4. Availability toggles — the largest single addition to the model, and
  *      the one input a team rating is structurally blind to. In or out; there
  *      is no minutes editor because the roster's LEVEL adds nothing.
- *   5. Style, labelled honestly: it says how the game gets played, and the
+ *   5. Style, labeled honestly: it says how the game gets played, and the
  *      page does not pretend it decides who wins.
  */
 
@@ -85,9 +85,9 @@ export function MatchupView({
 }) {
   const { a, b } = p;
   /**
-   * Each team's colour as TEXT, in both themes. Michigan's navy is a 1.4:1
+   * Each team's color as TEXT, in both themes. Michigan's navy is a 1.4:1
    * against the dark ground and Iowa's gold is 1.4:1 against the cream one,
-   * so one colour cannot serve both. The pair is set here as variables and
+   * so one color cannot serve both. The pair is set here as variables and
    * the stylesheet picks — see .matchup-root in globals.css — which keeps the
    * chosen value out of inline styles, where a theme rule could not reach it.
    */
@@ -97,7 +97,7 @@ export function MatchupView({
   const inert = !handlers;
   const outCount = p.outA.length + p.outB.length;
   const scoreA = useTween(p.scoreA), scoreB = useTween(p.scoreB), winA = useTween(p.winA);
-  const favourite = p.margin >= 0 ? a : b;
+  const favorite = p.margin >= 0 ? a : b;
 
   return (
     <div
@@ -154,7 +154,7 @@ export function MatchupView({
       {/* ── The answer ──────────────────────────────────────────────────── */}
       <section
         className="mt-5 border border-hairline rounded-xl shadow-sm bg-paper-deep/25 overflow-hidden"
-        // A wash of each team's colour behind its own side — the tale of the
+        // A wash of each team's color behind its own side — the tale of the
         // tape, at an opacity that tints the paper without fighting the ink.
         style={{ backgroundImage: `linear-gradient(90deg, color-mix(in srgb, ${colorA} 9%, transparent), transparent 38%, transparent 62%, color-mix(in srgb, ${colorB} 9%, transparent))` }}
       >
@@ -180,8 +180,8 @@ export function MatchupView({
 
         {/* The probability is not a number someone typed. It is the area under
             this curve on each side of zero, and the curve is drawn to scale:
-            σ is 11 points of margin, so even a clear favourite leaves a lot of
-            the other colour showing. */}
+            σ is 11 points of margin, so even a clear favorite leaves a lot of
+            the other color showing. */}
         <div className="px-4 sm:px-8 pb-5">
           <div className="flex items-baseline justify-between text-sm font-semibold tabular">
             <span style={{ color: colorA }}>{fmtPct(winA)}</span>
@@ -191,7 +191,7 @@ export function MatchupView({
           <MarginCurve margin={p.margin} colorA={colorA} colorB={colorB} a={a.b} b={b.b} />
 
           <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
-            <Stat label="Margin" value={`${favourite.b} by ${fmt1(Math.abs(p.margin))}`} note={`give or take ${Math.round(SIGMA)}`} />
+            <Stat label="Margin" value={`${favorite.b} by ${fmt1(Math.abs(p.margin))}`} note={`give or take ${Math.round(SIGMA)}`} />
             <Stat label="Pace" value={fmt1(p.pace)} note="possessions" />
             <Stat label="Total" value={`${Math.round(p.total)}`} note={`${Math.round(band.total[0])}–${Math.round(band.total[1])}`} />
           </dl>
@@ -215,14 +215,25 @@ export function MatchupView({
 
       <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
         {/* ── The arithmetic ──────────────────────────────────────────── */}
-        <Card title="How the number is made" note="Every step, so the projection can be argued with.">
+        <Card
+          title="How the number is made"
+          note="Every step, so the projection can be argued with."
+          aside={
+            <Link
+              href="/matchup/method/"
+              className="shrink-0 whitespace-nowrap text-[0.6rem] uppercase tracking-[0.15em] font-semibold text-coral hover:underline"
+            >
+              How this works
+            </Link>
+          }
+        >
           <Ledger p={p} pack={pack} />
         </Card>
 
         {/* ── Availability ────────────────────────────────────────────── */}
         <Card
           title="Who's playing"
-          note="Click a name to rule a player out. The rotation is who has actually been playing; there is no minutes editor because the roster's strength on paper adds nothing once the team's results are known — only absences do."
+          note="Click a name to rule a player out."
           aside={
             outCount > 0 ? (
               <button type="button" onClick={handlers?.onClearOut} disabled={inert}
@@ -248,18 +259,12 @@ export function MatchupView({
       <div className="mt-5">
         <Card
           title="How the game gets played"
-          note="Each team's adjusted tendency against what the other concedes. These describe the game far better than they decide it — the four that carry weight in the model are marked, and together they are worth about a point. The one in blue is negative: the team expected to shoot better from three tends to fall short of it."
+          note="Each team's adjusted tendency against what the other concedes. These describe the game far better than they decide it — the four that carry weight in the model are marked, and together they are worth about a point."
         >
           <StylePanel p={p} pack={pack} colorA={colorA} colorB={colorB} />
         </Card>
       </div>
 
-      <p className="mt-6 text-[0.7rem] leading-relaxed text-ink-muted max-w-[72ch]">
-        Ratings are opponent-adjusted from all {pack.games.toLocaleString()} Division I games of {pack.season - 1}–{String(pack.season).slice(-2)}, with the prior season carried forward as a prior.
-        Home court is a flat {HCA} per side per 100 possessions plus a floor that depends on the fixture: a conference game, a non-conference game, or a power-conference team hosting one from outside the six strongest leagues.
-        Constants were fitted on 2022–24 and verified out of sample on 2024–26; the win probability is a normal curve with σ = {SIGMA} points of margin.{" "}
-        <Link href="/matchup/method/" className="text-coral hover:underline font-medium">How this works</Link>.
-      </p>
     </div>
   );
 }
@@ -312,7 +317,7 @@ function MarginCurve({ margin, colorA, colorB, a, b }: { margin: number; colorA:
   const px = (W - 2 * PAD) / (2 * RANGE);              // pixels per point
   const zero = PAD + RANGE * px;
   const sig = SIGMA * px;
-  // The bell, centred at x = zero, sampled every 4px.
+  // The bell, centered at x = zero, sampled every 4px.
   const pts: string[] = [];
   for (let x = PAD; x <= W - PAD; x += 4) {
     const z = (x - zero) / sig;
@@ -331,7 +336,7 @@ function MarginCurve({ margin, colorA, colorB, a, b }: { margin: number; colorA:
         <clipPath id={`${id}-l`}><rect x="0" y="0" width={zero} height={H} /></clipPath>
         <clipPath id={`${id}-r`}><rect x={zero} y="0" width={W - zero} height={H} /></clipPath>
       </defs>
-      {/* Colours go through `style`, not presentation attributes: a var() in
+      {/* Colors go through `style`, not presentation attributes: a var() in
           an attribute is not guaranteed to resolve, and these are variables. */}
       <g style={{ transform: `translateX(${dx}px)`, transition: "transform 320ms cubic-bezier(.2,.7,.2,1)" }}>
         <path d={path} style={{ fill: colorB, fillOpacity: 0.3 }} clipPath={`url(#${id}-l)`} />
@@ -569,7 +574,6 @@ function Ledger({ p, pack }: { p: Projection; pack: MatchupPack }) {
   const a = p.a, b = p.b;
   const hcaA = loc * HCA, hcaB = -loc * HCA;
   const rows: Array<[string, number, string?]> = [
-    ["Intercept", p.parts.intercept],
     [p.site === "neutral" ? "Home floor (neutral)" : p.sameConf ? "Home floor — conference game" : "Home floor — non-conference", p.parts.homeFloor],
     ...(p.parts.powerHost !== 0 ? [["Power conference hosting a non-power team", p.parts.powerHost] as [string, number]] : []),
     ["Offensive rebounding edge", p.parts.orb],
@@ -589,7 +593,6 @@ function Ledger({ p, pack }: { p: Projection; pack: MatchupPack }) {
       </Step>
       <Step n="2" label="Pace">
         <Line k="Projected" v={`${fmt1(L)} − 0.75 + 0.83 × (${fmt1(a.t)} + ${fmt1(b.t)} − 2 × ${fmt1(L)}) = ${fmt1(p.pace)}`} />
-        <Hint>A simple average would say {fmt1(p.paceSimpleAvg)}; the KenPom product {fmt1(p.paceKenpom)}. Both are biased when two fast or two slow teams meet; this form is flat across every tempo band.</Hint>
       </Step>
       <Step n="3" label="Base projection">
         <Line k={a.b} v={`${fmt1(p.effA)} × ${fmt1(p.pace)} / 100 = ${fmt1(p.baseA)}`} />
@@ -659,7 +662,7 @@ function Roster({ team, out, color, onToggle, disabled }: {
                   aria-pressed={isOut}
                   onClick={() => onToggle?.(i)}
                   disabled={disabled}
-                  title={isOut ? "Ruled out — click to restore" : `Rule out — worth about ${fmt1(playerCost(team, i))} pts`}
+                  title={isOut ? "Ruled out — click to restore" : `Rule out — worth about ${fmt1(playerCost(team, i, out))} pts`}
                   className={cn(
                     "w-full flex items-center gap-2.5 py-1.5 text-left text-xs transition-colors group",
                     isOut ? "text-ink-muted" : "text-ink hover:text-coral",
@@ -695,7 +698,7 @@ function StylePanel({ p, pack, colorA, colorB }: { p: Projection; pack: MatchupP
       {pack.dims.map((k: StyleKey, i) => {
         const ea = p.expA[k], eb = p.expB[k], L = pack.league.style[i]!;
         const higherBetter = STYLE_HIGHER_BETTER[k];
-        // Who the collision favours, in that dimension's own terms.
+        // Who the collision favors, in that dimension's own terms.
         const diff = (ea - eb) * (higherBetter ? 1 : -1);
         const inModel = STYLE_IN_MODEL.has(k);
         const scale = Math.max(6, Math.abs(ea - L), Math.abs(eb - L)) * 1.4;
@@ -711,7 +714,7 @@ function StylePanel({ p, pack, colorA, colorB }: { p: Projection; pack: MatchupP
                 {Math.abs(diff) < 0.5 ? "even" : `${diff > 0 ? p.a.b : p.b.b} ${fmtSigned(Math.abs(diff)).replace("+", "+")}`}
               </span>
             </div>
-            {/* League average at the centre; each team's expected value as a
+            {/* League average at the center; each team's expected value as a
                 marker; the two are joined so the gap reads as a length. */}
             <div className="relative mt-1.5 h-4">
               <div className="absolute inset-y-0 left-0 right-0 top-1/2 h-px bg-hairline" />

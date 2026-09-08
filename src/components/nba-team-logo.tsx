@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  *
  * Mirrors TeamLogo's contract — remote image, monogram on failure — rather than
  * introducing a second pattern. Falls back to a neutral monogram instead of
- * franchise colours: thirty hand-entered hex values would be thirty chances to
+ * franchise colors: thirty hand-entered hex values would be thirty chances to
  * put the wrong blue next to a team's name, and the name is right there.
  */
 export function NbaTeamLogo({

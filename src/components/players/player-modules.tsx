@@ -176,7 +176,7 @@ function BigStat({
  * 85% FT reads as a long bar) while the COLOR comes from the percentile, which
  * is the part that says whether the number is any good. Rows with no percentile
  * — a stat the cohort file doesn't rank — keep the bar in hairline and show a
- * dash, rather than borrowing a colour they haven't earned.
+ * dash, rather than borrowing a color they haven't earned.
  */
 function RateRow({
   label,
@@ -200,7 +200,7 @@ function RateRow({
           style={{
             width: `${width}%`,
             // An unranked row still draws its bar — FG% has no cohort file of
-            // its own — but in neutral ink rather than a ramp colour it hasn't
+            // its own — but in neutral ink rather than a ramp color it hasn't
             // earned. Hairline was invisible against the module ground and read
             // as a missing value rather than a missing rank.
             background: pct === null ? "color-mix(in oklab, var(--ink-muted) 30%, transparent)" : pctBg(pct),
@@ -208,7 +208,7 @@ function RateRow({
             // background with dark text on top, "average" is supposed to recede.
             // With nothing written on it, a 70th-percentile bar was a pale
             // yellow-green shape on a pale ground and a 50th was invisible. A
-            // hairline in the band's own text colour gives every band an edge
+            // hairline in the band's own text color gives every band an edge
             // without touching the fill the chips use.
             boxShadow:
               pct === null
@@ -217,7 +217,7 @@ function RateRow({
           }}
         />
       </span>
-      {/* The figure takes the band's text colour too — it is the one part of
+      {/* The figure takes the band's text color too — it is the one part of
           the row that reads at any band, so it carries the ranking when the
           fill is too pale to. */}
       <span
@@ -395,7 +395,7 @@ export async function PlayerModules({
   /**
    * The second module follows the position bucket. A guard's signature counting
    * stat is assists and a big's is rebounds, and drawing the same one for both
-   * wasted the slot on whoever it didn't fit — a centre's 0.9 assists per game
+   * wasted the slot on whoever it didn't fit — a center's 0.9 assists per game
    * is 36 one-unit stubs. The stat this module takes is swapped OUT of the
    * defensive module below, so nothing is shown twice and nothing is dropped.
    */
@@ -433,7 +433,7 @@ export async function PlayerModules({
   const secondNote = second.series.length ? highNote(second.series) : null;
   // The efficiency chart's high is a rate, so it wants the decimal the counting
   // charts don't. Stated as a count of nights instead — "how often was he better
-  // than himself" is the reading the colours give.
+  // than himself" is the reading the colors give.
   const tsAbove = current.ts === null ? null : ts.filter((v) => v !== null && v >= current.ts! * 100).length;
   const tsNote =
     tsAbove === null ? "true shooting" : `${tsAbove} of ${ts.filter((v) => v !== null).length} above`;

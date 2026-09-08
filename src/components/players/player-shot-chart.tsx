@@ -23,13 +23,13 @@ import {
  *
  *   LEFT  — volume. Where the shots come from, hex darkness = attempts.
  *   RIGHT — accuracy vs the player's OWN position group. Hex size = attempts,
- *           hex colour = FG% above/below what D-I guards (or forwards, or
- *           centres) shoot from that same spot. Comparing a centre's rim rate
+ *           hex color = FG% above/below what D-I guards (or forwards, or
+ *           centers) shoot from that same spot. Comparing a center's rim rate
  *           to "D-I average" flatters him by ~10 points; comparing him to other
- *           centres is the only version of this chart that says anything.
+ *           centers is the only version of this chart that says anything.
  *
  * The court is a light, grainy canvas in both themes — it's a data surface,
- * not a page surface. Colour means exactly one thing per chart: attempts on
+ * not a page surface. Color means exactly one thing per chart: attempts on
  * the left, accuracy on the right, so the two never compete.
  *
  * Players with no shot file (careers ending before 2024) fall back to the
@@ -272,7 +272,7 @@ export function PlayerShotChart({
                 title="Accuracy vs Position"
                 sub={bucket ? `Against D-I ${BUCKET_LABEL[bucket]}` : "Against the same position group"}
                 info={
-                  `Thirteen zones — three close, five mid-range, five from three. The number in each is FG% there, the size is how often he shoots it, and the colour is that FG% above or below what D-I ${
+                  `Thirteen zones — three close, five mid-range, five from three. The number in each is FG% there, the size is how often he shoots it, and the color is that FG% above or below what D-I ${
                     bucket ? BUCKET_LABEL[bucket] : "players at this position"
                   } shoot from the same zone. Rates are pulled toward the baseline in proportion to how few attempts back them, so a lone make doesn't read as a hot zone. Left and right are the viewer's, as drawn.` +
                   (outcomeFiltered ? " The make/miss filter is ignored here — a percentage needs both." : "")
@@ -398,7 +398,7 @@ const COLD_HEX = "#1f5e9e";
 const HOT_HEX = "#bd2f24";
 
 /**
- * Half-width of the colour scale, in percentage points of FG%.
+ * Half-width of the color scale, in percentage points of FG%.
  *
  * Measured, not guessed, and re-measured whenever the bin radius moves — a
  * coarser grid puts more attempts behind each cell, which survives shrinkage
@@ -437,7 +437,7 @@ function Court({ children, label }: { children: React.ReactNode; label: string }
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto rounded-lg" role="img" aria-label={label}>
       <defs>
-        {/* TV-static floor. fractalNoise + full desaturation gives grey grain;
+        {/* TV-static floor. fractalNoise + full desaturation gives gray grain;
             the rect's low opacity keeps it a texture rather than a pattern. */}
         <filter id={`grain-${uid}`} x="0" y="0" width="100%" height="100%">
           <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch" />
@@ -508,7 +508,7 @@ function VolumeChart({ shots }: { shots: ShotRow[] }) {
 }
 
 /**
- * Shrinkage constant, in attempts — the strength of a Beta prior centred on
+ * Shrinkage constant, in attempts — the strength of a Beta prior centered on
  * the league baseline. Without it the chart's loudest cells are its emptiest
  * ones: 2-for-2 from the corner would paint bright green.
  *
@@ -685,7 +685,7 @@ function ZoneAccuracyChart({
               to "not the two-point region" handed them the corners — and since
               the wings paint after the corners, they covered them. At x=15,
               y=95, inside the left corner and above the junction, the floor was
-              being coloured Wing Left. Punching the two corner rectangles out
+              being colored Wing Left. Punching the two corner rectangles out
               with the same even-odd rule keeps each side of the junction to its
               own zone. */}
           <clipPath id="z-out" clipRule="evenodd">

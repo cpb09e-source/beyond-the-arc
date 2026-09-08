@@ -41,7 +41,7 @@ import { FilterRow } from "@/components/filters/filter-row";
  * under the search box, and the rows appear in place as they are added.
  *
  * ── WHAT THE SLIDERS TAUGHT, AND HOW IT SURVIVES ───────────────────────────
- * A slider labelled −30 to 30 tells you what a plausible aNET is; a bare value
+ * A slider labeled −30 to 30 tells you what a plausible aNET is; a bare value
  * box does not, and that was the real loss. STAT_BOUNDS below is the measured
  * table the sliders used — 1st/99th percentile of each stat across all 6,689
  * team-seasons — and it now drives the value input's placeholder. Same lesson,
@@ -257,7 +257,7 @@ const PICK_OPTIONS: PickOption[] = GROUP_ORDER.flatMap((g) =>
  */
 // StatPicker moved to src/components/filters/stat-picker.tsx when the players
 // table needed the same two doors. It is the same component, unchanged in
-// behaviour; only the option list and its section headings are now passed in.
+// behavior; only the option list and its section headings are now passed in.
 
 // ---------------------------------------------------------------------------
 // One filter row
@@ -265,7 +265,7 @@ const PICK_OPTIONS: PickOption[] = GROUP_ORDER.flatMap((g) =>
 
 // FilterRow moved to src/components/filters/filter-row.tsx alongside the
 // picker. Same row; the label, the measured bounds and the is-a-percentage
-// flag are passed in rather than looked up from the team catalogue.
+// flag are passed in rather than looked up from the team catalog.
 
 // ---------------------------------------------------------------------------
 // The builder row

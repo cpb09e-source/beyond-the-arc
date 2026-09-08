@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
  * overshoots, and its corners can be uneven. Those three details are most of
  * what separates a marker from a rectangle.
  *
- * One deliberate difference from the Basecamp annotation this is modelled on:
+ * One deliberate difference from the Basecamp annotation this is modeled on:
  * theirs marks a social-proof count ("2,700 organizations signed up last
  * week"). Ours has no subscribers to count yet, so this only ever goes over
  * something already true and checkable. The device draws the eye to whatever it

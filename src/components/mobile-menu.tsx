@@ -293,7 +293,7 @@ export function MobileMenu({
           so Theme read as an eighth nav row. The tint says "not a destination"
           without adding a label.
           Mixing --ink rather than a surface token: on the dark theme
-          --paper-deep resolves to a colour the sheet is nearly painted in
+          --paper-deep resolves to a color the sheet is nearly painted in
           already, so it would not read.
           Back on the bottom edge, so the safe-area padding is back with it:
           without it the sign-in buttons sit under the home indicator on a

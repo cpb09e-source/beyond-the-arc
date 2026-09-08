@@ -87,7 +87,7 @@ export function FilterBar({
    * The naive cap — take the first N of whatever comes back — is the version
    * that feels broken: the picker sorts newest-first, so a reader on 2025-26
    * who clicks 2018-19 would get their click silently thrown away and no idea
-   * why. Swapping to the season they just asked for is the behaviour a control
+   * why. Swapping to the season they just asked for is the behavior a control
    * with a limit of one should have, and it means every season stays reachable
    * with one click.
    *

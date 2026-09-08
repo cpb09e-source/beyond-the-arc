@@ -416,7 +416,7 @@ export function ExplorerClient({
    * The canonical query for what is on screen, and what a saved filter stores.
    *
    * Rebuilt from the spec rather than read off `window.location`, so it is
-   * normalised: two URLs that mean the same table produce the same string, and
+   * normalized: two URLs that mean the same table produce the same string, and
    * the menu can tell whether the reader is already looking at something they
    * saved by comparing them directly.
    */
@@ -1446,7 +1446,7 @@ export function ExplorerClient({
                   // On phones the rank cell carries the tournament honour: the
                   // chip cost ~23px of a ~71px team column, and this gutter is
                   // already mostly padding around one or two digits. Hardwood
-                  // rather than a new hue — it is the colour the chip has always
+                  // rather than a new hue — it is the color the chip has always
                   // used, so nothing is introduced, and it cannot be mistaken
                   // for a percentile, which is only ever green/amber/red.
                   // max-sm: so the desktop chip and the zebra stripe are
@@ -1534,7 +1534,7 @@ export function ExplorerClient({
                             className={cn(
                               "inline-flex flex-col items-end gap-0.5 leading-tight",
                               // GRAYSCALE AS WELL AS BLUR. The percentile chip
-                              // is a solid colour block, and colour survives a
+                              // is a solid color block, and color survives a
                               // blur perfectly — a green smudge still says
                               // "90th percentile", which is most of what the
                               // column was worth. Draining it leaves the shape

@@ -48,7 +48,7 @@
   --paper-deep: #f1ece2;     /* one shade deeper for cards/dividers */
   --ink: #1a2238;            /* deep navy display ink */
   --ink-soft: #3a425c;       /* navy at 70% — body copy */
-  --ink-muted: #6b7280;      /* neutral grey — secondary text */
+  --ink-muted: #6b7280;      /* neutral gray — secondary text */
   --hairline: #e7e2d5;       /* paper-toned divider */
   /* Accent. Named --coral from the original leather-orange identity; the
    * name stayed when the accent went azure so the ~390 call sites didn't all
@@ -61,13 +61,13 @@
   --court: #d4a574;          /* hardwood accent (subtle dividers) */
   --court-ink: #8a6224;      /* hardwood dark enough to set text on a court tint */
   /* BRIGHT ON PURPOSE. The old #4a7c59 / #b94c4c were sage and brick, and at
-     the low-alpha fills they get used at they came out grey and pink rather
+     the low-alpha fills they get used at they came out gray and pink rather
      than green and red.
      The trade is stated rather than hidden: against --paper the green measures
      3.08 where the old one was 4.55, so it is below the 4.5 body-text bar. It
      is used on bold tabular figures, chips and short labels rather than on
      running prose, which is the case that bar is written for — and a signal
-     colour nobody reads as a colour is failing at its actual job. The red is
+     color nobody reads as a color is failing at its actual job. The red is
      4.22, close to the 4.68 it replaces. */
   --good: #16a34a;           /* chart positive — green */
   --bad: #e03131;            /* chart negative — red */
@@ -288,14 +288,14 @@
   --radius-lg: var(--radius);
 }
 
-/* Default border colour for bare `border` utilities.
+/* Default border color for bare `border` utilities.
  *
  * MUST stay inside @layer base. Tailwind v4 emits its utilities into
  * @layer utilities, and unlayered CSS outranks every layered rule regardless of
  * specificity — so while this block sat outside a layer it silently overrode
- * EVERY border colour utility on the site. border-coral/40, border-ink/15 and
+ * EVERY border color utility on the site. border-coral/40, border-ink/15 and
  * the focus:border-coral/40 rings all computed to this hairline; the bug was
- * invisible only because the fallback is a plausible colour. Found it when a
+ * invisible only because the fallback is a plausible color. Found it when a
  * hardwood-bordered chip kept rendering with a beige edge. */
 @layer base {
   * {
@@ -460,9 +460,9 @@ body {
 
 /* Mobile nav burger → X.
  *
- * The bars hinge from their LEFT ends rather than pivoting about their centres,
+ * The bars hinge from their LEFT ends rather than pivoting about their centers,
  * so opening swings the top and bottom bars out into a big corner-to-corner X
- * instead of collapsing them into a small centred one, while the middle bar
+ * instead of collapsing them into a small centered one, while the middle bar
  * wipes away to zero width. (Ported from uiverse.io/Cevorob/good-wolverine-51,
  * scaled from its 40x30 box to 20x16 so it sits at the same visual weight as
  * the 20px search glass beside it, and recoloured to currentColor so it follows
@@ -1041,7 +1041,7 @@ body {
  * so their numbers appeared to bleed through the rank gutter while every
  * un-honoured row stayed clean.
  *
- * Mixed against the two zebra bases rather than one flat colour, so the stripe
+ * Mixed against the two zebra bases rather than one flat color, so the stripe
  * still reads underneath the tint. Written here rather than as a Tailwind
  * arbitrary value because the mix has to resolve against the live token — and
  * the token flips in dark mode, where --court is a darker brown and the paper
@@ -1051,7 +1051,7 @@ body {
  * back when the honour was a CHAMP/F4 chip on desktop and only phones got the
  * tinted cell. The chip is gone and the cell is now the single treatment, so a
  * media query here meant the rule simply did not exist above 639px: the class
- * landed on the element, `text-court-ink` coloured the number gold, and the
+ * landed on the element, `text-court-ink` colored the number gold, and the
  * background silently fell through to the zebra stripe. Gold digits in a plain
  * gutter, which is not a marked row.
  *
@@ -1102,14 +1102,14 @@ body {
 
 /* The champion fill is the darkest thing --court-ink ever sits on. On the dark
    theme that pairing measures 3.19, under AA. Only the champion cell needs the
-   lighter ink, and only here — --court-ink is a kicker colour in six other places where it already
+   lighter ink, and only here — --court-ink is a kicker color in six other places where it already
    clears AAA on the page ground, so it is not moved globally. */
 [data-theme="dark"] .honour-champ-paper,
 [data-theme="dark"] .honour-champ-card { color: #f0d5a8; }
 
 /* Per-team accent, swapped for a legible variant on the dark theme.
-   team-page-view sets --accent to the raw brand colour and --accent-dark to a
-   lightness-clamped version of it. The raw colour is right on paper but 225 of
+   team-page-view sets --accent to the raw brand color and --accent-dark to a
+   lightness-clamped version of it. The raw color is right on paper but 225 of
    366 brand primaries measure under 3.0 against #1C1C1C — Vanderbilt's
    anthracite lands at 1.05 — so on dark the accent becomes the clamped one.
    Scoped to the wrapper rather than :root because the two custom properties are
@@ -1134,7 +1134,7 @@ body {
 }
 
 /* Box-score modal, same problem and same shape as .team-accent below: the two
-   side colours are inline styles computed per matchup, so the dark swap needs
+   side colors are inline styles computed per matchup, so the dark swap needs
    !important to outrank them. Text and fill are separate pairs because a
    number has to be read and a bar only has to be seen. */
 [data-theme="dark"] .game-sides {
@@ -1150,7 +1150,7 @@ body {
      per team on the server), and an inline declaration outranks every
      stylesheet rule regardless of specificity. Without !important this swap is
      simply unreachable: --accent-dark resolves correctly and --accent stays the
-     raw brand colour, which is exactly how the first attempt failed.
+     raw brand color, which is exactly how the first attempt failed.
 
      The alternative — moving the light value to --accent-light and deriving
      both here — needs a bare `.team-accent` rule, and that one did not survive
@@ -1161,9 +1161,9 @@ body {
 
   /* The fill pair, for the same reason the box-score modal keeps one: a badge
      or a pressed pill is a SURFACE, and the text variant above is clamped too
-     light to still look like the team's colour when it is the whole chip.
+     light to still look like the team's color when it is the whole chip.
      --accent-fill keeps more of the real hue, and the foreground flips to the
-     page colour because nothing in that lightness band can carry white. */
+     page color because nothing in that lightness band can carry white. */
   --accent-fill: var(--accent-fill-dark, rgba(77, 155, 255, 1)) !important;
   --accent-on-fill: var(--accent-on-fill-dark, #1a2238) !important;
 }
@@ -1234,7 +1234,7 @@ body {
  * Only the most recent TABBED_SEASONS seasons get real routes — a tabbed
  * team-season costs 76 files in the export against an untabbed one's 10, so
  * routing all 3,166 older ones would add ~209,000 files and roughly 43 minutes
- * to a full deploy. These rules give those seasons the same behaviour for
+ * to a full deploy. These rules give those seasons the same behavior for
  * nothing: every pane is still in the HTML, and all but the active one is
  * hidden.
  *
@@ -1260,7 +1260,7 @@ body {
   display: none !important;
 }
 
-/* ── Matchup Predictor: a team colour as text, in both themes ──────────────
+/* ── Matchup Predictor: a team color as text, in both themes ──────────────
    The page sets --ma-light/--ma-dark (and --mb-*) inline per team; the value
    everything actually reads, --ma / --mb, is declared ONLY here, so the dark
    rule below reaches it without the !important the team pages needed for

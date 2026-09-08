@@ -213,7 +213,7 @@ function selectRows(packs: TeamGamePack[], spec: Spec, filters: TeamGameFilter[]
 /**
  * KEYED BY THE PACK OBJECT, not by season and stat.
  *
- * There are two kinds of pack now and both are labelled with the same season —
+ * There are two kinds of pack now and both are labeled with the same season —
  * the full corpus the explorer loads, and the ~30-row per-team file a team
  * page loads. A "2026|net" key cannot tell them apart, and the entry cached
  * from one would be handed to the other with row indices that mean something
@@ -231,7 +231,7 @@ function seasonPercentiles(pack: TeamGamePack, stat: { key: string; get: (r: num
   /**
    * A per-team file ships the ranking already done, over the whole season,
    * which is a cohort this pack no longer contains — so this branch is not an
-   * optimisation, it is the only correct source. Ranking thirty games against
+   * optimization, it is the only correct source. Ranking thirty games against
    * each other would answer "best of Duke's own nights" while the header still
    * says the chip means "among every game played".
    */
@@ -905,13 +905,13 @@ export function TeamGamesClient({ scope }: { scope?: TeamGamesScope } = {}) {
                       </td>
                     )}
                     <td className={cn("px-2 py-1.5 text-center text-xs transition-colors", ROW_HOVER)}>
-                      {/* A RED L, not a grey one. The muted L was the odd
+                      {/* A RED L, not a gray one. The muted L was the odd
                           member of a set: the schedule ticker, the game
                           overview's result tiles and the coach page all pair a
                           green W with a red L, and only this column dropped the
                           loss to neutral — so a page could show the same game
                           two ways. It also made the column half-scannable,
-                          since a colour that only marks wins means the eye has
+                          since a color that only marks wins means the eye has
                           to read every other row rather than see it. */}
                       <span className={cn("font-semibold", won ? "text-good" : "text-bad")}>
                         {won ? "W" : "L"}
@@ -924,7 +924,7 @@ export function TeamGamesClient({ scope }: { scope?: TeamGamesScope } = {}) {
                       {site}
                     </td>
                     <td className={cn("px-2 py-1.5 whitespace-nowrap transition-colors", ROW_HOVER)}>
-                      {/* Same weight and colour as the Team column: the two
+                      {/* Same weight and color as the Team column: the two
                           names in a row are the same kind of thing, and every
                           opponent in this corpus is a D1 team with a page. */}
                       <span className="inline-flex items-center gap-2 min-w-0">

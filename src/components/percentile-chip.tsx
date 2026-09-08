@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
  *
  * Banding fixes both. A percentile is already a rank, so a continuous fill was
  * claiming a precision it never had; the gauge carries the exact number. Each
- * band is far enough from its neighbours to read instantly, the middle band is
+ * band is far enough from its neighbors to read instantly, the middle band is
  * near-neutral paper so "average" recedes, and the ends stay light enough to
  * keep dark text — no switching to white type partway across the grid.
  *
@@ -38,7 +38,7 @@ import { cn } from "@/lib/utils";
 // their type never flips to white, and on the #1C1C1C ground every one of them
 // reads as a small headlight — on pages that are mostly chips. A CSS variable
 // is the only way one component can hold both ramps, because the theme is an
-// attribute on <html> and this colour is applied as an inline style.
+// attribute on <html> and this color is applied as an inline style.
 //
 // The light values are unchanged. The dark set is the same seven bands
 // inverted — deep fills, light type — and is documented where it is defined.
@@ -86,9 +86,9 @@ export function PercentileChip({
    * The stat has no good direction — tempo, shot diet, the shares of a scoring
    * pie. The rank still reads (it says how unusual the team is) but it is
    * painted in the ramp's own middle band rather than at one of its ends, so
-   * the colour stops making a claim the stat cannot support.
+   * the color stops making a claim the stat cannot support.
    *
-   * Band 4 rather than a bespoke grey on purpose: it is the near-neutral paper
+   * Band 4 rather than a bespoke gray on purpose: it is the near-neutral paper
    * the ramp already uses for average, so a neutral chip sits in the same
    * family as every other chip instead of looking like a broken one.
    */

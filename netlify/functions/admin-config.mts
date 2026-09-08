@@ -41,7 +41,7 @@ function bad(message: string, status = 400) {
 type Banner = {
   enabled: boolean;
   message: string;
-  /** Drives the colour. Not free text — an unknown tone would render untyped. */
+  /** Drives the color. Not free text — an unknown tone would render untyped. */
   tone: "info" | "warn";
   href?: string;
   label?: string;
@@ -51,7 +51,7 @@ function parseBanner(v: unknown): Banner | null {
   if (!v || typeof v !== "object") return null;
   const o = v as Record<string, unknown>;
   const message = typeof o.message === "string" ? o.message.trim() : "";
-  // A banner turned on with nothing to say is a strip of colour with no
+  // A banner turned on with nothing to say is a strip of color with no
   // meaning, so it is refused rather than stored and rendered empty.
   if (o.enabled === true && !message) return null;
   if (message.length > 280) return null;
@@ -171,7 +171,7 @@ export default async function handler(req: Request, _ctx: Context) {
  *
  * ONE READ OF THE WHOLE PROFILES TABLE, counted here. Six count queries would
  * be six round trips for a table that fits in memory many times over, and the
- * definitions below (what "cancelling" means, that past_due is still paid)
+ * definitions below (what "canceling" means, that past_due is still paid)
  * are easier to keep straight in one place than spread across six filters.
  * If the table ever outgrows this, the cap keeps the response bounded and the
  * `truncated` flag says so rather than quietly undercounting.

@@ -201,7 +201,7 @@ export const TEAM_GAME_STATS: TeamGameStat[] = [
   S("tov", "TOV", "int", "Turnovers.", (r) => r[T.tov]!, { lowerBetter: true }),
   S("pf", "PF", "int", "Personal fouls.", (r) => r[T.pf]!, { lowerBetter: true }),
 
-  // ── The four factors, and what the defence allowed ──────────────────────
+  // ── The four factors, and what the defense allowed ──────────────────────
   S("efg", "eFG%", "pct1", "Effective field goal percentage — a three counted for what it is worth.",
     (r) => per(r[T.efg]!)),
   S("ftr", "FTR", "pct1", "Free throw rate — free throws attempted per field goal attempt.",
@@ -256,7 +256,7 @@ export const TEAM_GAME_STATS: TeamGameStat[] = [
  * Section headings for the "Add Columns" picker.
  *
  * The views decide what a reader sees BY DEFAULT; this decides how they browse
- * the whole catalogue when the default is not what they wanted. It is a second
+ * the whole catalog when the default is not what they wanted. It is a second
  * arrangement of the same stats, not a second set — every key here is a key in
  * TEAM_GAME_STATS, and the assertion below is what keeps that true.
  *
@@ -292,7 +292,7 @@ const TEAM_GROUP_OF = new Map<string, string>(
 /**
  * The picker's option list, derived rather than hand-kept.
  *
- * Built FROM TEAM_GAME_STATS in group order, so a stat added to the catalogue
+ * Built FROM TEAM_GAME_STATS in group order, so a stat added to the catalog
  * shows up here the moment it is given a group — and one that is not given a
  * group is dropped loudly in dev rather than silently going missing from the
  * picker.
@@ -314,7 +314,7 @@ if (process.env.NODE_ENV !== "production") {
  * The date, as a sortable column rather than a suffix on the opponent.
  *
  * NOT IN ANY VIEW — it is an identity column the table always renders, like
- * the team and the opponent. It lives in the catalogue so SortableTh can name
+ * the team and the opponent. It lives in the catalog so SortableTh can name
  * it and the sort machinery can find it, and it is unfilterable because a
  * day-offset is not a number anyone would type into a filter box.
  *

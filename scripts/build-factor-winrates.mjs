@@ -13,7 +13,7 @@
  * COUNTED PER TEAM-GAME, NOT PER GAME. Each game appears twice, once from each
  * side, so a differential factor is credited to exactly one of the two rows.
  * Non-D1 opponents are dropped — a 40-point win over a non-scholarship
- * programme tells you nothing about whether the factor mattered.
+ * program tells you nothing about whether the factor mattered.
  *
  * OREB% IS SCORED AGAINST THE LEAGUE AVERAGE, not the opponent, matching how
  * the game page judges it: both teams can clear the bar in the same game, or
@@ -57,7 +57,7 @@ const tally = {
   overall: [0, 0],
   // "sweep" = took all four. A much stronger and much rarer condition — this is
   // the number the Win Calculator returns for four positive filters, and the
-  // two must be labelled apart or they read as contradicting each other.
+  // two must be labeled apart or they read as contradicting each other.
   sweep: [0, 0],
 };
 const bump = (key, won) => { tally[key][1]++; if (won) tally[key][0]++; };

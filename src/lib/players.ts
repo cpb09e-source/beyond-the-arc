@@ -353,13 +353,13 @@ export type PlayerListSpec = {
    * The union listed every sortable stat by name, which worked while there
    * were thirty-odd of them. The pack adds a hundred more that live in
    * public/data/player-stats rather than on PlayerSummary, and enumerating
-   * those here would mean this file knowing about a catalogue it does not
+   * those here would mean this file knowing about a catalog it does not
    * import.
    *
    * The allow-list did real work, though — an unrecognised ?sort= used to fall
    * back to the default rather than order the table by nothing — so it did not
    * go away, it moved. See isSortableKey() below, which checks VALID_SORTS and
-   * the two stat catalogues.
+   * the two stat catalogs.
    */
   sortBy: string;
   sortDir: "asc" | "desc";
@@ -388,7 +388,7 @@ export const EWINS_FIRST_YEAR = 2024;
  *   VALID_SORTS          the legacy names ("pts", "min", "usage"), which are in
  *                        saved URLs and must keep working
  *   PLAYER_STAT_COLUMNS  a stat's own key ("ppg", "mpg", "usg_pct")
- *   PACK_STAT_COLUMNS    the extended catalogue, loaded per view
+ *   PACK_STAT_COLUMNS    the extended catalog, loaded per view
  *
  * Checked rather than trusted because this comes off the query string, and an
  * unrecognised key would order the table by undefined — every row tying, and
@@ -424,7 +424,7 @@ export const DEFAULT_PLAYER_SPEC: PlayerListSpec = {
   // its top 20 averaged 30.3 mpg with four players under 28. eWins multiplies
   // the rate by the possessions actually played: top 20 at 32.3 mpg and nobody
   // under 28. Minutes are also the one input here that does NOT come from the
-  // floor — they are a coach's judgement, which is independent evidence the box
+  // floor — they are a coach's judgment, which is independent evidence the box
   // score and the stints do not contain, and the only tiebreaker available for
   // five starters who share every possession.
   sortBy: "ewins",
@@ -522,7 +522,7 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
    * the whole page tied at null and fell through to whatever came next.
    *
    * So the default is eWins when every selected season can supply it, and EPM
-   * otherwise, EPM being the same judgement one rung down (see the note on
+   * otherwise, EPM being the same judgment one rung down (see the note on
    * DEFAULT_PLAYER_SPEC.sortBy). An EXPLICIT ?sort= is always honoured — this
    * only changes what happens when the reader has not chosen.
    */
@@ -542,7 +542,7 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
           const c = PLAYER_STAT_COLUMN_BY_KEY.get(k);
           if (c) return !c.filterOnly;
           // A stat from the pack is just as pinnable. Checking only the
-          // summary catalogue silently dropped ?cols=pitp_share on parse, so
+          // summary catalog silently dropped ?cols=pitp_share on parse, so
           // the picker could write a column the page then refused to read.
           return PACK_STAT_BY_KEY.has(k);
         })
@@ -559,7 +559,7 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
     cols,
     // Not validated against PLAYER_VIEWS here: this module is imported by
     // player-views.ts, and checking would close the loop. playerViewByKey()
-    // falls back to Overview for anything it does not recognise, so an unknown
+    // falls back to Overview for anything it does not recognize, so an unknown
     // ?view= is inert rather than broken.
     view: get("view") ?? "",
     sortBy,

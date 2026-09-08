@@ -34,7 +34,7 @@ export function ScopeCollapse({
 }: {
   /** Short human read of the active scope, e.g. "2025-26 · All teams". */
   summary: string;
-  /** Dims the row while a submit is in flight, matching the old behaviour. */
+  /** Dims the row while a submit is in flight, matching the old behavior. */
   pending?: boolean;
   children: React.ReactNode;
 }) {

@@ -90,8 +90,8 @@ for (const [key, arr] of points) {
   (seasons[yStr] ??= {});
   const cells = {};
   for (const b of gen(arr)) {
-    // Rounded centre as the cell key. Lattice spacing at r=22 is 38.1 in x and
-    // 33.0 in y, so rounding to whole units can't collide two centres.
+    // Rounded center as the cell key. Lattice spacing at r=22 is 38.1 in x and
+    // 33.0 in y, so rounding to whole units can't collide two centers.
     cells[`${Math.round(b.x)},${Math.round(b.y)}`] = [b.reduce((n, s) => n + s[MADE], 0), b.length];
   }
   seasons[yStr][bucket] = cells;

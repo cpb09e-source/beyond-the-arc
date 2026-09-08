@@ -8,7 +8,7 @@
  *
  * TWO VIEWS OF ONE PASS. The team file answers "how does this offense fit
  * together"; the per-year player file answers "who feeds ME, and who do I
- * feed", which is the cut a reader actually recognises themselves in. They come
+ * feed", which is the cut a reader actually recognizes themselves in. They come
  * from the same tally because computing them separately would mean walking
  * three million plays a season twice, and would let the two drift.
  *

@@ -28,7 +28,7 @@ const SEASON = args[args.indexOf("--season") + 1];
  * here; a season absent from this map is one nobody has had to repair, not one
  * that cannot be. Add its window when it does.
  *
- * 2021 is the COVID season and opens a month later than its neighbours — first
+ * 2021 is the COVID season and opens a month later than its neighbors — first
  * game 2020-11-25, against 2023-11-01 for 2024 — so the usual November 1 start
  * would spend three weeks of requests on empty days. Bounds are padded a few
  * days either side of the measured range (2020-11-25 to 2021-04-06, from

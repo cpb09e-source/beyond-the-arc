@@ -27,7 +27,7 @@ flat at 75 → 88 → 87 MB across 240 requests, against 131 → 4,988 MB across
 - **http://localhost:8899** — the whole site, functions included. Use this.
 - **http://localhost:3000** — plain `next dev`, no functions. `/api/*` 404s
   there, so the ticker renders nothing, the scoreboard is empty and a game page
-  shows its error state. That is correct behaviour, not a bug.
+  shows its error state. That is correct behavior, not a bug.
 
 ## Look at a specific day or game
 
@@ -147,7 +147,7 @@ Restart the dev server. The 8 GB heap in `scripts/dev.mjs` makes it rare.
 ### The Netlify CLI proxy — why it is no longer in the stack
 
 **Fixed on 29 July 2026 by removing it.** Kept here because the symptoms are
-distinctive and you will recognise them if `dev:netlify` is ever used again.
+distinctive and you will recognize them if `dev:netlify` is ever used again.
 
 Measured on this project (CLI 26.0.1): the proxy process climbed about **16 MB
 per request**, near enough regardless of response size — a 15 KB favicon cost

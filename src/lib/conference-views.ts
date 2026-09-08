@@ -12,7 +12,7 @@
  *      season total only, so this page derives the margin per game.
  *
  * Labels, number formats, tooltips and percentile direction all come from
- * TEAM_STAT_COLUMNS and isLowerBetter. There is no second catalogue to drift.
+ * TEAM_STAT_COLUMNS and isLowerBetter. There is no second catalog to drift.
  */
 import { TEAM_STAT_COLUMNS, isLowerBetter } from "@/lib/team-filters";
 
@@ -163,7 +163,7 @@ export type ConfCol = {
 };
 
 /**
- * The one key the team catalogue does not have.
+ * The one key the team catalog does not have.
  *
  * The team explorer shows `pts_diff` — a season total — because a team plays a
  * fixed number of games and the total is the more familiar figure. A

@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
  *
  * THE SECOND HALF IS THE INTERESTING HALF. Assisted rate is taken over a
  * player's MAKES, split by range, and that split is what separates roles: a
- * centre finishing lobs runs ~65% assisted at the rim, a guard who gets there
+ * center finishing lobs runs ~65% assisted at the rim, a guard who gets there
  * himself runs under 20%. Threes sit at 75–95% for nearly everyone, so the rim
  * column is where the information is — which is why it is the one shown.
  *

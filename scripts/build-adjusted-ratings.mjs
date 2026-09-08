@@ -456,7 +456,7 @@ function run(season) {
        * That bubble team's expected win PERCENTAGE against this schedule — the
        * win-probability framing of schedule strength, on our own numbers.
        * Reads high for a soft schedule, which is the opposite direction to
-       * `sos` above; both are labelled accordingly in the UI.
+       * `sos` above; both are labeled accordingly in the UI.
        */
       sos_wp: bubble && opps.length ? r2(bubbleWins / opps.length) : null,
     };

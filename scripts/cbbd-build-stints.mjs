@@ -143,7 +143,7 @@ function main() {
             }
           }
           // Steals and blocks are credited to the team that MADE them — the
-          // defence — not to the team that lost the ball. Checked against the
+          // defense — not to the team that lost the ball. Checked against the
           // box: both match exactly, so p.team is the right side with no flip.
           const t = p.playType;
           if (t === "Offensive Rebound") { isHome ? cur.xOrebH++ : cur.xOrebA++; }

@@ -7,7 +7,7 @@ import { PageHeading } from "@/components/page-heading";
  *
  * NOTHING IS PASSED FROM THE SERVER. The whole table is one 105 KB file that
  * covers every season, so the page prerenders as a shell and the client fetches
- * it once — rather than serialising a season into the RSC payload the way the
+ * it once — rather than serializing a season into the RSC payload the way the
  * team explorer has to, where a season is 1.3 MB and there are twelve of them.
  */
 export const metadata = {

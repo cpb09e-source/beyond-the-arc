@@ -27,7 +27,7 @@
  * distinction the data does not contain — and the second one paints the best
  * available value red, which is how this was noticed.
  *
- * Midrank puts them at 53, in the neutral band of the colour ramp, which reads
+ * Midrank puts them at 53, in the neutral band of the color ramp, which reads
  * correctly as "this stat does not separate you from the field".
  *
  * It is also the standard definition of percentile rank — (values below, plus

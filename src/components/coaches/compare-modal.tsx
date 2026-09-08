@@ -156,7 +156,7 @@ export function CompareModal({
   // done its job the moment the comparison exists. It folds itself away the
   // first time the table appears and reopens on demand. Phone only: on a wide
   // modal the same row costs one line and losing it would be a regression.
-  // DERIVED, not synchronised. This began as an effect watching showCompare
+  // DERIVED, not synchronized. This began as an effect watching showCompare
   // and calling setPicksOpen — which is a cascading render, and needed
   // matchMedia to avoid collapsing the desktop panel too. Neither is
   // necessary: the collapsed state is a pure function of "is there a
@@ -356,7 +356,7 @@ export function CompareModal({
     >
       <div
         className={cn(
-          // PHONE: the whole screen. The card was a centred max-w-6xl sheet
+          // PHONE: the whole screen. The card was a centered max-w-6xl sheet
           // with 16px of scrim around it, holding a table whose first column
           // alone is 224px — at 390 the coach columns had nowhere to go and
           // ran off the right edge with the names clipped mid-word.
@@ -375,7 +375,7 @@ export function CompareModal({
             </div>
             <h2 className="font-display text-xl md:text-3xl text-ink leading-none tracking-tight">Compare coaches</h2>
             {/* Three lines of instruction is a fair trade on a wide screen and
-                a third of the fold on a phone, where the colour legend is
+                a third of the fold on a phone, where the color legend is
                 right there in the numbers anyway. */}
             <p className="hidden md:block text-sm text-ink-muted mt-2 max-w-2xl">
               Pick up to four coaches. Best mark per row in <span className="text-good font-medium">green</span>, worst in <span className="text-coral font-medium">coral</span>.
@@ -490,7 +490,7 @@ export function CompareModal({
               So the label comes OUT of the row and sits above it, full width,
               and the whole width goes to the numbers. The coaches are named
               once, in a strip that sticks to the top of the scroll, and every
-              block below lines up with it. Same colouring: best green, worst
+              block below lines up with it. Same coloring: best green, worst
               coral, ties neither. */}
           <div className="md:hidden">
             <div

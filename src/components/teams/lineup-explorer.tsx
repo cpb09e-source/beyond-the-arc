@@ -248,7 +248,7 @@ export function LineupExplorer({
   const totals = useMemo(() => sumTotals(matching.map((r) => r.totals)), [matching]);
 
   /**
-   * Rows are hidden below the possession floor rather than shown greyed.
+   * Rows are hidden below the possession floor rather than shown grayed.
    *
    * Vermont has 226 five-man units and 13 that clear 30 possessions; the other
    * 213 are a handful of possessions each and mostly noise. They still count —
@@ -339,7 +339,7 @@ export function LineupExplorer({
                     )}
                     // A pressed pill is a surface, so it takes the fill pair
                     // and its own foreground. text-white was safe only while
-                    // the fill was the raw brand colour; the dark theme's fill
+                    // the fill was the raw brand color; the dark theme's fill
                     // is light enough that white on it is unreadable.
                     style={active ? { backgroundColor: "var(--accent-fill)", color: "var(--accent-on-fill)" } : undefined}
                   >
@@ -532,7 +532,7 @@ function LineupNames({
                 href={`/players/${bart}/`}
                 prefetch={false}
                 title={full}
-                // Colour shift only, no underline — the same treatment the
+                // Color shift only, no underline — the same treatment the
                 // roster table one tab over gives a player link. Five links to
                 // a cell and thirteen cells to a screen, an underline on each
                 // turns the column into a ruled block on hover.

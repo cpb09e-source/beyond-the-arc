@@ -53,10 +53,7 @@ export default async function MatchupPage() {
 
   return (
     <section className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-4 lg:pt-5 pb-10">
-      <PageHeading
-        label="Matchup predictor"
-        sub={`Any two teams from ${SEASON - 1}–${String(SEASON).slice(-2)}. Home court, pace, style and who is actually playing — with the arithmetic on the page, so the number can be argued with.`}
-      />
+      <PageHeading label="Matchup predictor" />
       {/* THE FALLBACK IS THE PRERENDERED PAGE. MatchupClient reads
           useSearchParams, which a static export requires to sit inside a
           Suspense boundary — so this fallback is the only HTML the route has

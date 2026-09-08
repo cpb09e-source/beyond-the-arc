@@ -49,34 +49,34 @@ export type BoxTeam = { team: string; logName: string; players: BoxPlayer[] };
 export type GamePlayersFile = { teams: BoxTeam[] };
 
 /**
- * Fallback side colours, used when a team has no palette entry. Real team
- * colours come from getTeamColors() — the same source the team pages use — so
+ * Fallback side colors, used when a team has no palette entry. Real team
+ * colors come from getTeamColors() — the same source the team pages use — so
  * a Michigan/UCLA box reads maize vs blue rather than generic coral vs steel.
  */
 const SIDE_A = "var(--coral)";
 const SIDE_B = "#3e7cb1";
 
 /**
- * Neutral second-side colours, spread around the hue wheel. Reached only when
+ * Neutral second-side colors, spread around the hue wheel. Reached only when
  * NO combination of the two teams' own palettes is distinguishable, which is
  * now rare — see sideColors().
  */
 const FALLBACK_HUES: string[] = ["#c8553d", "#2d8a8a", "#c98a2d", "#6b5ca5", "#4a7c59", SIDE_B];
 
 /**
- * Two visually distinguishable colours for one matchup, keeping BOTH teams in
+ * Two visually distinguishable colors for one matchup, keeping BOTH teams in
  * their own palette wherever that is possible.
  *
  * Blue-on-blue is the norm in this sport, not the exception: Duke/North
  * Carolina, Kansas/Kentucky, Michigan/UCLA and Gonzaga/Saint Mary's all
  * resolve to two blues. The old rule handed the second team a neutral fallback
  * hue as soon as the primaries clashed, which is why a Duke bar came out
- * brick-red — a colour Duke has never worn.
+ * brick-red — a color Duke has never worn.
  *
  * Most of those clashes have a better answer inside the two palettes. Carolina
  * pairs a very dark navy primary with sky blue; against Duke's royal blue the
  * navy is unreadable but the sky blue is unmistakable, and both teams stay in
- * their own colours. So the pairs are tried in preference order — both
+ * their own colors. So the pairs are tried in preference order — both
  * primaries, then one side's secondary, then the other's — and only a matchup
  * with no workable combination falls through to a neutral hue.
  */
@@ -102,11 +102,11 @@ export function sideColors(teamA: string, teamB: string): [string, string] {
 }
 
 /**
- * Can this colour carry meaning on the page at all?
+ * Can this color carry meaning on the page at all?
  *
  * Rejects the near-whites that half the palettes list as a secondary — white
- * on warm paper is not a colour, it is an absence — and anything with no hue
- * to speak of, which would read as a grey bar rather than as a team.
+ * on warm paper is not a color, it is an absence — and anything with no hue
+ * to speak of, which would read as a gray bar rather than as a team.
  */
 function usable(hex: string | undefined): boolean {
   if (typeof hex !== "string" || hex.length === 0) return false;
@@ -116,12 +116,12 @@ function usable(hex: string | undefined): boolean {
 }
 
 /**
- * Are two colours too similar to tell apart across a chart?
+ * Are two colors too similar to tell apart across a chart?
  *
  * Compares HUE, not RGB distance. RGB distance passes pairs like Michigan navy
  * (#00274C) against a mid-blue: numerically far apart because one is much
  * darker, but both unmistakably "blue" once they're two bars in the same row.
- * Hue catches that; a low-saturation colour (near-black, near-white, grey) has
+ * Hue catches that; a low-saturation color (near-black, near-white, gray) has
  * no meaningful hue, so those are compared on lightness instead.
  */
 function hsl(h: string): { h: number; s: number; l: number } | null {
@@ -144,13 +144,13 @@ function tooClose(x: string, y: string): boolean {
   const p = hsl(x), q = hsl(y);
   if (!p || !q) return false;
   const dl = Math.abs(p.l - q.l);
-  // Either colour effectively greyscale → judge on lightness only.
+  // Either color effectively grayscale → judge on lightness only.
   if (p.s < 0.15 || q.s < 0.15) return dl < 0.25;
   const dh = Math.min(Math.abs(p.h - q.h), 360 - Math.abs(p.h - q.h));
-  // A big lightness gap separates two colours even at the same hue —
+  // A big lightness gap separates two colors even at the same hue —
   // Carolina sky blue against Duke royal is four degrees apart and nobody has
   // ever confused them. Judging on hue alone was what pushed same-family
-  // matchups onto fallback colours neither team wears.
+  // matchups onto fallback colors neither team wears.
   if (dl >= 0.24) return false;
   return dh < 45;
 }
@@ -219,19 +219,19 @@ export function GameBoxModal({
   const tourneyName = str(game, "tourney_name");
   const oppName = game.opp_team_market ?? "Non-D1 opponent";
   const [colorA, colorB] = sideColors(game.team_name, oppName);
-  // The raw brand colour is right on paper and wrong on the dark theme: 225 of
+  // The raw brand color is right on paper and wrong on the dark theme: 225 of
   // 366 primaries fall under 3.0 contrast against the dark ground, so a team
   // like Vanderbilt (#261e25) renders its numbers and its bar in something all
   // but indistinguishable from the card behind them.
   //
   // Both variants ship as custom properties and globals.css picks per theme, so
   // nothing here has to know which theme is live — the alternative, reading the
-  // theme in JS, would flash the wrong colour on first paint.
+  // theme in JS, would flash the wrong color on first paint.
   //
   // Two ranges because the two uses differ. Text has to be READ, so it clamps
   // to the same 0.66-0.88 the team pages use. A bar only has to be SEEN against
   // the card, and pushing a fill that light washes the team out of it, so the
-  // fill clamps lower and keeps more of the real colour.
+  // fill clamps lower and keeps more of the real color.
   const sideVars = {
     ["--side-a" as string]: colorA,
     ["--side-b" as string]: colorB,
@@ -321,7 +321,7 @@ export function GameBoxModal({
 
   // Full-bleed on phones, matching coaches/boxscore-modal.tsx. A 16px inset
   // plus rounded corners spends screen on a strip of dimmed backdrop the reader
-  // cannot use, and this is a dense table — it wants every pixel. The centred,
+  // cannot use, and this is a dense table — it wants every pixel. The centered,
   // rounded card comes back at sm.
   return (
     <div className="game-sides fixed inset-0 z-50 flex items-stretch justify-center p-0 sm:items-center sm:p-4" style={sideVars}>
@@ -333,7 +333,7 @@ export function GameBoxModal({
         className="bta-modal-in relative w-full max-w-5xl h-dvh overflow-y-auto rounded-none border-0 bg-card shadow-xl sm:h-auto sm:max-h-[88vh] sm:rounded-xl sm:border sm:border-hairline"
       >
         {/* Header band — the score is the hero. Date/venue/round sit small in
-            the top-left gutter rather than centred beneath it, where they
+            the top-left gutter rather than centered beneath it, where they
             competed with the scoreline for attention. */}
         <div className="relative bg-paper-deep/50 border-b border-hairline px-4 sm:px-6 pt-4 pb-4">
           <button
@@ -601,7 +601,7 @@ export function PctRing({ made, att, color }: { made: number | null; att: number
 
 /**
  * One counting stat as a single proportional bar: each side's share of the
- * combined total. The winning side is called out in its own colour — for
+ * combined total. The winning side is called out in its own color — for
  * `lower` stats (turnovers, fouls) that is the SMALLER number.
  */
 export function SplitBar({

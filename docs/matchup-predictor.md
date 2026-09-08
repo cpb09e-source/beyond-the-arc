@@ -288,7 +288,7 @@ Instead, a **walk-forward backtest**: for every date a season played games, fit
 ratings on everything strictly before that date, project that date's games,
 record the residual. The ratings are the iterated fixed point that
 `scripts/build-team-ratings.mjs` already ships, re-implemented with every
-modelling choice exposed as a parameter.
+modeling choice exposed as a parameter.
 
 Hyperparameters were fitted on **2023 + 2024**. **2025** was the holdout.
 **2026** was never opened until the constants were frozen.
@@ -476,13 +476,13 @@ Accuracy: **MAE 3.31, RMSE 4.19 possessions** (2026).
 | sd of margin | 13.07 | **15.85** |
 | decided by ≤5 | 32.4% | **23.7%** |
 | decided by 20+ | 13.6% | **24.1%** |
-| favourite won | 70.5% | **75.6%** |
+| favorite won | 70.5% | **75.6%** |
 | mean total | 132.2 | 158.0 |
 
 Residual sd scales as **pace^0.59** — indistinguishable from the √pace a
 possession-level random walk predicts, and nowhere near linear.
 
-**But this does not produce upsets.** Favourites win *more* often in fast games,
+**But this does not produce upsets.** Favorites win *more* often in fast games,
 because the same pace multiplier that widens the distribution also widens the
 projected margin. Scaling σ by pace gains nothing (log loss 0.5474 vs 0.5473) —
 the two effects cancel almost exactly. The most counter-intuitive result in the
@@ -552,18 +552,18 @@ point of edge. It just barely reaches the scoreboard: across the full observed
 range, the swing is **3.6 points of margin**, and most matchups sit nowhere near
 those extremes.
 
-### 7c. Offence and defence are worth exactly the same
+### 7c. Offense and defense are worth exactly the same
 
 Regressing actual margin on all four rating components at once:
 
 | component | coefficient | t |
 |---|---|---|
-| home offence | 1.080 | 50.9 |
-| home defence | 1.058 | 45.4 |
-| away offence | 1.014 | 46.9 |
-| away defence | 1.044 | 44.7 |
+| home offense | 1.080 | 50.9 |
+| home defense | 1.058 | 45.4 |
+| away offense | 1.014 | 46.9 |
+| away defense | 1.044 | 44.7 |
 
-Offence mean 1.047, defence mean 1.051, **ratio 0.996**. No asymmetry to
+Offense mean 1.047, defense mean 1.051, **ratio 0.996**. No asymmetry to
 exploit. (All four exceed 1.00 slightly — the model is ~4.6% under-spread.
 Correcting it improves MAE and worsens log loss; left alone.)
 
@@ -638,7 +638,7 @@ mid-majors" disappears when you move the game to a neutral floor.**
 
 **2. Free-throw rate is where the road actually shows up.** A mid-major loses
 3.15 points of FT rate simply by playing away; against a power team on its own
-floor it loses **5.82**. On a neutral court against the same calibre of
+floor it loses **5.82**. On a neutral court against the same caliber of
 opponent, only 1.70. The slope collapses from 0.90 on neutral to 0.60 away —
 the identity is suppressed as well as the level. This is the single largest
 context effect in any dimension, and it is the one people argue about most.
@@ -647,7 +647,7 @@ context effect in any dimension, and it is the one people argue about most.
 venue.** A mid-major at a power school shoots proportionally more threes than
 its own profile predicts — slope **1.346**, against 1.083 in the road control.
 That is a deliberate strategic response to being outmatched, visible in the
-data, and it is not simply road behaviour.
+data, and it is not simply road behavior.
 
 **4. Turnovers get amplified by the matchup, rebounding does not.** A
 turnover-prone mid-major is punished *more* at a power school (slope 1.033 vs a
@@ -926,7 +926,7 @@ Small, real, and worth keeping.
 The direct test of the competition's structure. A player-derived team rating,
 built exactly the way their Matchup Calculator builds one: each player's
 box-derived offensive and defensive rating, weighted by expected minutes,
-scaled to 200 minutes, summed to a team offence and defence.
+scaled to 200 minutes, summed to a team offense and defense.
 
 Head to head, fitted on 2023+2024 and scored on 2025:
 
@@ -969,7 +969,7 @@ Knowing how good the roster is on paper is worth 0.004.
 
 ## 18. Shot zones and clock splits: nothing, with hindsight
 
-`shot-distribution.json` (rim / mid-range / three rates, offence and defence)
+`shot-distribution.json` (rim / mid-range / three rates, offense and defense)
 and `clock-splits.json` (early / mid / late shot-clock rates and efficiencies)
 are season aggregates, so using them inside their own season **leaks**. They
 were tested that way deliberately: a feature that cannot help *with* hindsight

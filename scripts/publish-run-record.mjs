@@ -58,7 +58,7 @@ if (!fs.existsSync(STATUS_PATH)) {
 const status = JSON.parse(fs.readFileSync(STATUS_PATH, "utf8"));
 
 /**
- * One line per run. Steps are summarised to counts — the full list lives in
+ * One line per run. Steps are summarized to counts — the full list lives in
  * the status file for the latest run, and sixty copies of a 30-row table is
  * not what a trend needs.
  */

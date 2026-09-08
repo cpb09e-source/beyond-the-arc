@@ -437,7 +437,7 @@ export async function buildXlsx(sheets: XlsxSheet[]): Promise<Blob> {
   const enc = new TextEncoder();
   const styles = new StyleTable();
   // Sheet XML is rendered first so every style it uses is interned before
-  // styles.xml is serialised.
+  // styles.xml is serialized.
   const sheetLinks: Array<Array<{ ref: string; target: string }>> = sheets.map(() => []);
   const sheetXmls = sheets.map((s, i) => sheetXml(s, styles, sheetLinks[i]!));
 

@@ -281,7 +281,7 @@ export type StatFilter = { stat: TeamStatKey; op: Comparator; value: number };
 /**
  * How many stat filters a URL can carry.
  *
- * THE NUMBER IS ARBITRARY; only the agreement matters. Filters serialise as
+ * THE NUMBER IS ARBITRARY; only the agreement matters. Filters serialize as
  * `f0`..`fN` and parseSpec loops this same constant, so both sides move
  * together and raising it costs nothing — one past the ceiling would be
  * written to the URL and silently dropped on the way back in, which is the
@@ -312,7 +312,7 @@ export type TeamFilterSpec = {
    *
    * Deliberately NOT validated here: parseSpec keeps whatever string the URL
    * carried and viewByKey falls back to the default for anything it does not
-   * recognise. Validating it in the spec would mean importing the view registry
+   * recognize. Validating it in the spec would mean importing the view registry
    * into this module, which the server-side query builder also loads.
    */
   view: string;
@@ -1115,7 +1115,7 @@ const PERCENTILE_STATS: Array<{ key: keyof TeamRow; higherBetter: boolean }> = [
   { key: "cbb_pf_eff", higherBetter: true },
   // Shot mix direction follows the orthodoxy the league itself has been
   // moving toward for a decade — rim and three good, mid-range bad, and the
-  // mirror image on defence. It is a judgement, not a fact, but a percentile
+  // mirror image on defense. It is a judgment, not a fact, but a percentile
   // chip has to point somewhere and "neutral" is not an option the UI has.
   { key: "cbb_rim_rate", higherBetter: true },
   { key: "cbb_mid_rate", higherBetter: false },
@@ -1153,7 +1153,7 @@ const PERCENTILE_STATS: Array<{ key: keyof TeamRow; higherBetter: boolean }> = [
   // NO PERCENTILE ON THE RAW MINUTE COUNTS — ret_prior_min, prior_team_min,
   // ret_curr_min, curr_team_min, pbp_games.
   //
-  // A chip is a judgement: green means good. Ranking teams by how many minutes
+  // A chip is a judgment: green means good. Ranking teams by how many minutes
   // they played is ranking them by how many games they played, so Harvard drew
   // a red 1 on Prior Team Min for the crime of being in the Ivy League. The
   // shares built ON those denominators — Returning Min %, Returner Rotation % —
@@ -1186,7 +1186,7 @@ function attachPercentiles(rows: TeamRow[]) {
     if (!byYear.has(r.team_year)) byYear.set(r.team_year, []);
     byYear.get(r.team_year)!.push(r);
   }
-  // WITHIN A SEASON, never across. A 2014 offence and a 2026 offence are not
+  // WITHIN A SEASON, never across. A 2014 offense and a 2026 offense are not
   // the same population, and pooling them would rank teams against an era
   // rather than against the field they actually played.
   for (const cohort of byYear.values()) {

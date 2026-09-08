@@ -193,7 +193,7 @@ function Td({ v, strong, muted, round }: { v: number | null; strong?: boolean; m
   );
 }
 
-/** Zero is neither good nor bad; colouring it green would read as a positive. */
+/** Zero is neither good nor bad; coloring it green would read as a positive. */
 function PlusMinus({ v }: { v: number | null }) {
   return (
     <td className="text-right px-2 font-semibold"

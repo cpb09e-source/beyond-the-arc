@@ -18,12 +18,12 @@ import {
  * question the page answers is "by how much", and that is a comparison the eye
  * should not have to carry across a header's full width the way a ledger row
  * makes it. Teams open outward from the numbers; the status column is the
- * hinge. The line score sits centred underneath, where it is detail rather than
+ * hinge. The line score sits centered underneath, where it is detail rather than
  * headline.
  *
  * Venue, attendance, television and the betting line are deliberately NOT here.
  * They live in Game Info on the Overview tab, and printing them twice made the
- * header carry a paragraph of small grey text under a poster-scale score.
+ * header carry a paragraph of small gray text under a poster-scale score.
  *
  * THREE STATES. Scheduled drops the numbers entirely and puts the tip time in
  * the middle, because a pair of 7xl em-dashes reads as a game nobody scored in.
@@ -35,7 +35,7 @@ export function ScoreHeader({
 }: {
   b: GameBundle;
   records?: { home: string; away: string };
-  /** Home and away display colours, already de-conflicted by `sideColors`. */
+  /** Home and away display colors, already de-conflicted by `sideColors`. */
   hc: string; ac: string;
 }) {
   const g = b.game;
@@ -170,7 +170,7 @@ function TeamBlock({
 }
 
 /**
- * 1H / 2H / T, centred under the score. Absent until periods exist — an empty
+ * 1H / 2H / T, centered under the score. Absent until periods exist — an empty
  * column set under a scheduled game is a table of dashes.
  */
 function LineScore({ b }: { b: GameBundle }) {

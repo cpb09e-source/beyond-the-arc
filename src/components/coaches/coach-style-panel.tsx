@@ -12,7 +12,7 @@ import { PercentileChip, pctColor, pctBg } from "@/components/percentile-chip";
  * THE ENCODING IS THE DESIGN DECISION. Raw values cannot carry this: the middle
  * 90% of coaches sit inside about seven possessions of pace, so 68.4 means
  * nothing to a reader. Only the rank against the field does. Bars therefore run
- * from the centre — left of the median or right of it, by percentile — which
+ * from the center — left of the median or right of it, by percentile — which
  * makes "extreme in both directions" (Bennett: slowest tempo, best defense)
  * read instantly, and makes the majority look boringly central, which is true.
  *
@@ -27,7 +27,7 @@ import { PercentileChip, pctColor, pctBg } from "@/components/percentile-chip";
  * page, which is the entire point of a fingerprint: Bennett and Huggins should
  * be different SHAPES, not different bar lengths.
  *
- * COLOURED BY THE SITE PERCENTILE RAMP, also a reversal. The caution behind the
+ * COLORED BY THE SITE PERCENTILE RAMP, also a reversal. The caution behind the
  * old choice was real and has not gone away: playing fast is not an
  * achievement, and a red chip on Tempo does not mean a coach is bad at tempo.
  * What the ramp buys is that a reader already knows what it means everywhere
@@ -114,7 +114,7 @@ export function CoachStyleDimensionList({
  * to come from where the vertices sit against the dashed median ring, not from
  * how much ink is inside them.
  *
- * A vertex is drawn at its percentile from the centre, with a floor so that a
+ * A vertex is drawn at its percentile from the center, with a floor so that a
  * 0th-percentile dimension is still a visible point rather than collapsing
  * into the middle and taking two neighbouring edges with it. Bennett's tempo
  * is exactly that case.

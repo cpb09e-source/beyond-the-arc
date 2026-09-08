@@ -274,7 +274,7 @@ def main():
     # is first, which is also what the voters said. The cost is 5% of held-out
     # R2.
     #
-    # Held-out prediction keeps favouring a looser fit because five teammates
+    # Held-out prediction keeps favoring a looser fit because five teammates
     # share every possession: a loose fit scores well by getting the LINEUP
     # right while the split of credit inside it stays arbitrary. A leaderboard
     # needs the split, so reliability gets a vote. (Reliability alone would run
@@ -307,7 +307,7 @@ def main():
                          "comparable.")
     ap.add_argument("--no-luck", dest="luck", action="store_false",
                     help="fit on raw points instead of luck-adjusted points")
-    # A JUDGEMENT CALL, AND LABELLED AS ONE. Two instruments were run and they
+    # A JUDGMENT CALL, AND LABELED AS ONE. Two instruments were run and they
     # disagree in the third decimal place, so nothing here is "measured better":
     #
     #   damp             1.0      2.0      3.0      5.0
@@ -322,7 +322,7 @@ def main():
     # 1.0. Folding a season by GAME leaves a player's teammates on both sides of
     # the fold, so a rating that is really a lineup effect predicts held-out
     # games just as well as a rating that is really the player — the same reason
-    # the lambda note above says held-out prediction "keeps favouring a looser
+    # the lambda note above says held-out prediction "keeps favoring a looser
     # fit". Transfers break that: a player who moves keeps his ability and gets
     # a new supporting cast. The instrument that can tell player from lineup
     # prefers 2.0; the one that cannot prefers 1.0.

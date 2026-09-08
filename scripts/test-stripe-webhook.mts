@@ -167,8 +167,8 @@ const check = (name: string, ok: boolean, detail = "") => {
   const body = JSON.stringify(subscriptionEvent(uid, { status: "active", cancelAtPeriodEnd: true }));
   await call(body, signed(body));
   const p = await profileOf(uid);
-  check("cancelling shows an end date", (p?.subscription_cancel_at ?? "").startsWith("2027-03-01"), `cancel_at=${p?.subscription_cancel_at}`);
-  check("cancelling clears the renewal", p?.subscription_renews_at === null, `renews=${p?.subscription_renews_at}`);
+  check("canceling shows an end date", (p?.subscription_cancel_at ?? "").startsWith("2027-03-01"), `cancel_at=${p?.subscription_cancel_at}`);
+  check("canceling clears the renewal", p?.subscription_renews_at === null, `renews=${p?.subscription_renews_at}`);
 }
 
 // 7. Cancelled outright: access ends.

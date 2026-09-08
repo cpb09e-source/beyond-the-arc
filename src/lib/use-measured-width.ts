@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
  * is a preference, and once the table overflows its container the browser
  * shrinks columns toward min-content — a `w-12` (48px) rank column was
  * measuring 38.5px on the teams table once the reader pinned a few extra
- * columns. A hardcoded `left-12` on the neighbour then left 9.5px of unpainted
+ * columns. A hardcoded `left-12` on the neighbor then left 9.5px of unpainted
  * gap between the two frozen columns. Measuring makes the pinned position equal
  * the natural flow position, whatever the browser settles on.
  */

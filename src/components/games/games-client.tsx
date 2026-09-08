@@ -806,13 +806,13 @@ export function GamesClient() {
                       </span>
                     </td>
                     <td className={cn("px-2 py-1.5 text-center text-xs transition-colors", ROW_HOVER)}>
-                      {/* A RED L, not a grey one. The muted L was the odd
+                      {/* A RED L, not a gray one. The muted L was the odd
                           member of a set: the schedule ticker, the game
                           overview's result tiles and the coach page all pair a
                           green W with a red L, and only this column dropped the
                           loss to neutral — so a page could show the same game
                           two ways. It also made the column half-scannable,
-                          since a colour that only marks wins means the eye has
+                          since a color that only marks wins means the eye has
                           to read every other row rather than see it. */}
                       <span className={cn("font-semibold", won ? "text-good" : "text-bad")}>
                         {won ? "W" : "L"}
@@ -822,7 +822,7 @@ export function GamesClient() {
                       {site}
                     </td>
                     <td className={cn("px-2 py-1.5 whitespace-nowrap transition-colors", ROW_HOVER)}>
-                      {/* Same weight and colour as the Player column, but NOT
+                      {/* Same weight and color as the Player column, but NOT
                           a link: this corpus keeps non-D1 opponents, and half
                           the names here have no page to send anyone to. */}
                       <span className="inline-flex items-center gap-2 min-w-0">

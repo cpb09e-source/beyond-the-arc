@@ -14,7 +14,7 @@
  * So it is precomputed here, once, into a file small enough to ship: a sorted
  * ladder of 101 breakpoints per stat, per position bucket, per season.
  *
- * BUCKETED BY POSITION, like the Player Overview chips. A centre shooting 55%
+ * BUCKETED BY POSITION, like the Player Overview chips. A center shooting 55%
  * from the floor is ordinary and a guard shooting 55% is not, and a single
  * national ladder would call both the same thing. The bucket comes from the box
  * line's own `pos`, folded to G/F/C.

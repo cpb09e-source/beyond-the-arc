@@ -19,7 +19,7 @@
  * bart id, the correct returning / transfer tag, height, the profile link and
  * last season's numbers.
  *
- * ONLY UNIQUE NAMES RESOLVE. Two players sharing a normalised name is precisely
+ * ONLY UNIQUE NAMES RESOLVE. Two players sharing a normalized name is precisely
  * the case where a guess staples one man's season onto another, and a blank row
  * is better than a confidently wrong one. Suffixes are stripped for matching
  * because the feeds disagree about them ("MJ Collins Jr." vs "MJ Collins").

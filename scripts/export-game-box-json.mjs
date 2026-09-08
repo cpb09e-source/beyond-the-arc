@@ -199,7 +199,7 @@ function parseRound(notes) {
  *
  * The one exception is a corrupt upstream row (2026 week 3 carrying an April
  * poll date), which is why a supplied date more than 10 days from its derived
- * position is rejected in favour of the derived one: trusting it would rank a
+ * position is rejected in favor of the derived one: trusting it would rank a
  * November game off the final poll of the season.
  */
 function buildRankIndex(season, boxRows) {

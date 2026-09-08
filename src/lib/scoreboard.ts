@@ -35,7 +35,7 @@ export type ScoreGame = {
   venue: string | null;
   period: number | null;
   clock: string | null;
-  /** Closing betting line, HOME perspective (negative = home favoured). */
+  /** Closing betting line, HOME perspective (negative = home favored). */
   line: { spread: number | null; overUnder: number | null; provider: string } | null;
 };
 
@@ -187,8 +187,8 @@ export function shortDateLabel(d: string | null): string {
 
 /**
  * "Duke -2.5 · O/U 148.5" — the pre-tip line, written the way it is quoted:
- * the FAVOURITE named with its own number. The wire format is home-perspective
- * (see the function), so an away favourite has to be flipped, and a pick'em
+ * the FAVORITE named with its own number. The wire format is home-perspective
+ * (see the function), so an away favorite has to be flipped, and a pick'em
  * (spread 0) is named rather than shown as "-0".
  */
 export function lineLabel(g: ScoreGame): string {

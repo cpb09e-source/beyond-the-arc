@@ -1,5 +1,5 @@
 /**
- * The Players Explorer's extended stat catalogue — the client half.
+ * The Players Explorer's extended stat catalog — the client half.
  *
  * Built by scripts/build-player-stat-pack.mjs; spec in
  * docs/players-stat-spec.md. Everything here describes data that lives in
@@ -100,7 +100,7 @@ export function loadStatPack(season: number, group: PackGroup): Promise<IndexedP
   return p;
 }
 
-// ── The catalogue ──────────────────────────────────────────────────────────
+// ── The catalog ──────────────────────────────────────────────────────────
 
 export type PackStatFormat = "int" | "num1" | "num2" | "pct1" | "pct100";
 
@@ -116,7 +116,7 @@ export type PackStatColumn = {
    * Milestone counts, single-game leads and technical fouls are small integers
    * dominated by zero — technicals run about 0.026 per player-game. A midrank
    * over that is arithmetically correct and visually useless: one shared
-   * percentile across most of the table, rendered as a wall of identical colour
+   * percentile across most of the table, rendered as a wall of identical color
    * that reads as a finding. The number alone says more.
    */
   noPct?: boolean;
@@ -177,7 +177,7 @@ export const PACK_STAT_COLUMNS: PackStatColumn[] = [
     "Team point differential while he was on the floor. Needs to know who was playing, so 2024 onward only — earlier play-by-play carries no substitutions and no on-floor list, which is unrecoverable rather than merely missing.",
     { pbp: true }),
   C("tech", "TECH", "box", "int",
-    "Technical fouls. Shown as a raw count with no percentile: nearly everyone has zero, and colouring that says nothing.",
+    "Technical fouls. Shown as a raw count with no percentile: nearly everyone has zero, and coloring that says nothing.",
     { noPct: true, pbp: true }),
 
   // ── Traditional shooting ──────────────────────────────────────────────────
@@ -246,7 +246,7 @@ export const PACK_STAT_COLUMNS: PackStatColumn[] = [
     "Points his teammates scored off his passes, valued at what the shot was actually worth — three for a three. An assist to a shooter is not the same as an assist to a dunker, and this is the column that says so.",
     { pbp: true }),
   C("pts_created", "PTS CR", "advoff", "int",
-    "Points created — his own points plus the points his assists produced. The fullest single measure of what his offence put on the scoreboard.",
+    "Points created — his own points plus the points his assists produced. The fullest single measure of what his offense put on the scoreboard.",
     { pbp: true }),
   C("self_orb_pct", "Self ORB%", "advoff", "num1",
     "Share of his own missed shots that he rebounded himself. Blank under 20 missed attempts.",

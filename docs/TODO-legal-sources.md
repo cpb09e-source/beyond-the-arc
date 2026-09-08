@@ -71,7 +71,7 @@ own likeness. Our stats are inside the shield. Our headshots are outside it.
 Sports-Reference's college basketball section — the largest, best-resourced
 site in this space, with actual lawyers — shows **no player photograph at all**.
 Checked directly: their Cooper Flagg page carries 42 images and not one is him.
-Their NBA pages do have headshots, which they licence. KenPom and Bart Torvik
+Their NBA pages do have headshots, which they license. KenPom and Bart Torvik
 show none either.
 
 The entire competitive set has independently landed on the same answer.
@@ -80,9 +80,9 @@ The entire competitive set has independently landed on the same answer.
 
 | Option | Verdict |
 |---|---|
-| **College Pressbox** — 8,000+ D-I headshots, $9.99/mo | **No.** Licence is "personal, noncommercial use only ... with no right to reproduce, distribute, communicate to the public, make available to the public". Scrapers "strictly prohibited". $9.99 buys media *access*, not redistribution |
+| **College Pressbox** — 8,000+ D-I headshots, $9.99/mo | **No.** License is "personal, noncommercial use only ... with no right to reproduce, distribute, communicate to the public, make available to the public". Scrapers "strictly prohibited". $9.99 buys media *access*, not redistribution |
 | **Sportradar Images API** (bundles College Pressbox + Getty for NCAA MBB) | **The real licensed path.** Enterprise pricing, custom quote, sales contact required. Correct if faces matter enough to pay for |
-| **Direct from the schools** | Plausible in principle — they produce headshots *for* publicity and want media using them — but it is ~360 separate permissions. The top 50 programmes would cover most traffic |
+| **Direct from the schools** | Plausible in principle — they produce headshots *for* publicity and want media using them — but it is ~360 separate permissions. The top 50 programs would cover most traffic |
 | **Wikimedia Commons** | Coverage for 20,000 college players is far too thin to be a system |
 
 ### 2.4 Decision — KEEP AND MITIGATE, settled 2026-09-02
@@ -135,7 +135,7 @@ make it permanent.
 
 **What this does not do.** None of it makes the images licensed. It makes the
 exposure low-consequence and fast to unwind, which is the right trade for a
-business at this stage — not a legal defence. Two things would change the
+business at this stage — not a legal defense. Two things would change the
 calculus and are worth revisiting at the time: meaningful growth (press, a
 viral chart, real subscriber numbers), and any raise, sale or partnership,
 where diligence will find 20,164 unlicensed files. If faces are worth real

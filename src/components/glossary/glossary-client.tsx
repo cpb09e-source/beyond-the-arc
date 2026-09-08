@@ -20,7 +20,7 @@ const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
  * terms line up as a single vertical index you can run a finger down, and a
  * long definition costs its own row rather than three.
  *
- * NO CATEGORY CHIPS. There were twenty-eight of them once every catalogue was
+ * NO CATEGORY CHIPS. There were twenty-eight of them once every catalog was
  * wired in — three wrapped rows of buttons above the first definition, which
  * is a filing system sitting on top of a dictionary. A dictionary is searched
  * and scanned, not filtered: the search box, the A-Z rail and one toggle for
@@ -226,7 +226,7 @@ export function GlossaryClient() {
 /**
  * Two marks, because there are two different claims and flattening them into
  * one would overstate the weaker of them. Neither is decoration: both are read
- * from provenance the catalogues already carry — see the header of glossary.ts.
+ * from provenance the catalogs already carry — see the header of glossary.ts.
  */
 function OriginMark({ origin }: { origin: "original" | "computed" }) {
   const original = origin === "original";

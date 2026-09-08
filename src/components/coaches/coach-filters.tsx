@@ -209,7 +209,7 @@ export function CoachStatFilters({
   // Draft is seeded once and re-seeded when the drawer OPENS, in the trigger's
   // own handler. No effect: the committed state only ever changes from this
   // drawer or from a toolbar chip removed while it is shut, so there is nothing
-  // to synchronise mid-render and no reason to pay for a cascading setState.
+  // to synchronize mid-render and no reason to pay for a cascading setState.
   const [draft, setDraft] = useState<RangeState>(state);
 
   const mounted = useMounted();

@@ -3,11 +3,11 @@
  *
  * ── IT IS SOURCED, NOT TYPED ──────────────────────────────────────────────
  *
- * Every stat the site can put in a column comes from a live catalogue, and
+ * Every stat the site can put in a column comes from a live catalog, and
  * this file reads all of them:
  *
  *   PLAYER_STAT_COLUMNS   the players explorer's summary row        (36)
- *   PACK_STAT_COLUMNS     its extended per-view catalogue          (104)
+ *   PACK_STAT_COLUMNS     its extended per-view catalog          (104)
  *   TEAM_STAT_COLUMNS     the team explorer and conference views   (132)
  *   LINEUP_STATS          lineups and on/off                        (24)
  *   TEAM_GAME_STATS       the team game log explorer
@@ -35,7 +35,7 @@
  *               are counted out of play-by-play we archive ourselves.
  *
  * NEITHER FLAG IS HAND-MAINTAINED WHERE THE SOURCE ALREADY KNOWS. The pack
- * marks its play-by-play columns `pbp: true` and the team catalogue marks its
+ * marks its play-by-play columns `pbp: true` and the team catalog marks its
  * calculated ones `source: "derived"`; both are read directly. Only the
  * metrics with no such flag — the EPM family, the adjusted ratings, the
  * schedule-strength model, the lead-state counts, the roster-continuity set —
@@ -88,7 +88,7 @@ export type GlossaryEntry = {
 };
 
 /**
- * Ours, by key, where the catalogue carries no flag of its own. Each group
+ * Ours, by key, where the catalog carries no flag of its own. Each group
  * cites the file that establishes it rather than asking to be trusted.
  */
 const ORIGINAL_KEYS = new Set([
@@ -179,7 +179,7 @@ const OVERRIDES: Record<string, Omit<GlossaryEntry, "category">> = {
       + "number of wins he added over what an average player would have produced in the same "
       + "playing time. This is the default sort on the player board, because a rate alone treats a "
       + "24-minute role player and the man who closes games as equals. Minutes are also the one "
-      + "input we have that does not come off the floor — they are a coach's judgement about a "
+      + "input we have that does not come off the floor — they are a coach's judgment about a "
       + "player, formed from practices nobody outside the program sees."
       + " Estimates for the lowest-usage players are eased toward average before the total is "
       + "taken: someone who ends very few possessions leaves less evidence behind him, and a "
@@ -202,18 +202,18 @@ const OVERRIDES: Record<string, Omit<GlossaryEntry, "category">> = {
 };
 
 /**
- * One catalogue row, flattened to what a glossary entry needs. Every source
+ * One catalog row, flattened to what a glossary entry needs. Every source
  * below produces these; nothing downstream knows which explorer it came from.
  */
 type Sourced = { key: string; label: string; desc: string; category: string; origin?: Origin };
 
 /**
- * The dedupe key. Catalogues disagree about punctuation — the lineup table
+ * The dedupe key. Catalogs disagree about punctuation — the lineup table
  * writes "+/-" with a hyphen and the box-score pack writes "+/−" with a
  * true minus sign — and two spellings of one stat is exactly the kind of
  * duplicate a reader reads as a mistake in the data.
  */
-function normalise(label: string): string {
+function normalize(label: string): string {
   return label
     .trim()
     .toLowerCase()
@@ -243,7 +243,7 @@ const PACK_CATEGORY: Record<string, string> = {
   advdef: "Defensive rates", fouls: "Fouls", doubles: "Milestones", leaders: "Game leaders",
 };
 
-/** The extended per-view catalogue. `pbp` means we built it from the play feed. */
+/** The extended per-view catalog. `pbp` means we built it from the play feed. */
 function packRows(): Sourced[] {
   return PACK_STAT_COLUMNS.map((c) => ({
     key: c.key,
@@ -272,7 +272,7 @@ function teamRows(): Sourced[] {
   }));
 }
 
-/** Lineups and on/off share one catalogue, and it uses `title` for its gloss. */
+/** Lineups and on/off share one catalog, and it uses `title` for its gloss. */
 function lineupRows(): Sourced[] {
   return LINEUP_STATS.map((c) => ({
     key: `lineup_${c.key}`, label: c.label, desc: c.title, category: "Lineups & on/off",
@@ -292,7 +292,7 @@ function gameLogRows(): Sourced[] {
 }
 
 /**
- * ORDER IS PRECEDENCE. A term defined in more than one catalogue keeps the
+ * ORDER IS PRECEDENCE. A term defined in more than one catalog keeps the
  * first description, which is why the player and team explorers — the two with
  * the most carefully written tooltips — come before the game logs.
  */
@@ -303,7 +303,7 @@ function sourcedEntries(): GlossaryEntry[] {
   const out: GlossaryEntry[] = [];
   for (const source of SOURCES) {
     for (const r of source()) {
-      const dedupe = normalise(r.label);
+      const dedupe = normalize(r.label);
       if (seen.has(dedupe)) continue;
       seen.add(dedupe);
       const o = OVERRIDES[r.label];
@@ -529,14 +529,14 @@ export const GLOSSARY_ENTRIES: GlossaryEntry[] = [...sourcedEntries(), ...MANUAL
  * ANY CATEGORY PRESENT GETS A CHIP. The list below is the order, not the
  * membership — a category that appears in the entries but not here is appended
  * rather than dropped, because the alternative is what happened when the
- * catalogues were first wired in: 236 entries reachable only by search,
+ * catalogs were first wired in: 236 entries reachable only by search,
  * because their chip did not exist and nothing said so.
  */
 export const GLOSSARY_CATEGORIES: string[] = (() => {
   const preferred = [
     // The player, as the explorer presents him
     "Impact", "Advanced", "Shooting", "Offense", "Defense", "Volume",
-    // The extended catalogue behind the views
+    // The extended catalog behind the views
     "Player info", "Playing time", "Box score", "Scoring context",
     "Playmaking & rebounding", "Defensive rates", "Fouls",
     "Milestones", "Game leaders",

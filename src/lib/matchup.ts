@@ -43,11 +43,11 @@ export type MatchupTeam = {
   rk: number;
   w: number;
   l: number;
-  /** Adjusted offence, defence (per 100) and tempo. */
+  /** Adjusted offense, defense (per 100) and tempo. */
   o: number;
   d: number;
   t: number;
-  /** Adjusted style, offence and what the defence concedes, by dims order. */
+  /** Adjusted style, offense and what the defense concedes, by dims order. */
   so: number[];
   sd: number[];
   /** Share of last season's minutes that returned. */
@@ -85,26 +85,82 @@ export const HCA = 2.0;
 
 /** Margin corrections, in points. Fitted on 2023+2024 residuals. */
 export const CORR = {
-  intercept: -0.5168,
   /** Non-conference home floor. */
-  ncHome: 1.8491,
+  ncHome: 1.3857,
   /** Conference home floor. */
-  confHome: 0.7805,
+  confHome: 0.2496,
   /** A power-conference team hosting a non-power team — stacks on ncHome. */
-  powerHost: 3.0172,
-  orbEdge: 0.0878,
-  tovEdge: -0.0711,
-  t3rEdge: 0.0678,
+  powerHost: 2.8255,
+  orbEdge: 0.0889,
+  tovEdge: -0.0636,
+  t3rEdge: 0.0687,
   /** Negative on purpose. Fade the hot shooters. */
-  t3pEdge: -0.2465,
-  qualSum: 0.0325,
-  /** Per unit of (away missing value − home missing value). */
-  missVal: 0.0578,
-  /** Best player out, away minus home. */
-  missTop: 1.8509,
+  t3pEdge: -0.2464,
+  /** Both teams strong — a HOME effect, so it is multiplied by location. */
+  qualHome: 0.0419,
+  /**
+   * Per unit of the absence term below. Large because the term is a share
+   * raised to a power, so it is a small number for any ordinary absence.
+   */
+  absence: 20.2209,
+  /** Best player out, away minus home — on top of the absence term. */
+  missTop: 1.9235,
   /** Roster continuity, home minus away. */
-  cont: 2.4674,
+  cont: 2.4689,
 } as const;
+
+/**
+ * How the cost of absences grows with how much of the rotation is gone.
+ *
+ * THE FIRST VERSION OF THIS WAS LINEAR IN THE MISSING PLAYERS' VALUE, AND IT
+ * WAS WRONG WHERE IT MATTERED. Fitted on three seasons whose mean absence is
+ * 19 minutes, it was then asked about a team missing its entire starting five
+ * — far outside anything it had seen — and answered with about four points.
+ * The measured curve is steeply convex, because the cost is not the missing
+ * player, it is the man who replaces him: lose one and the sixth man covers
+ * it; lose five and walk-ons play.
+ *
+ *   rotation minutes out     mean residual for that side
+ *      0                        +0.12
+ *      0.1-20                   +0.45
+ *      60-80                    −1.28
+ *      100-120                  −2.63
+ *      120+                     −6.25
+ *
+ * A REDISTRIBUTION MODEL WAS TRIED FIRST AND REJECTED. Handing the missing
+ * minutes to whoever was left, valued by Game Score per 40, made removing
+ * Iowa's second and third men *improve* them — Game Score is counting-based
+ * and rates a low-usage defensive starter below a high-usage reserve. A page
+ * cannot say that. This form is monotone in minutes by construction.
+ *
+ * Fitted exponent 2.5. Every exponent from 1 to 3 scores the same on the
+ * holdout — large absences are 0.9% of the data — so it was chosen by which
+ * one reproduces the measured curve at the deep end, where the choice shows.
+ */
+export const ABSENCE_EXP = 2.5;
+/** Clip on the quality tilt, so a noisy per-40 rate cannot flip the sign. */
+const TILT_MIN = 0.6, TILT_MAX = 1.6;
+
+/**
+ * What a team loses by being without these players, in the model's own units.
+ *
+ * The share of the rotation's minutes that is missing, raised to ABSENCE_EXP,
+ * tilted by whether the missing players are worth more or less per minute than
+ * the rotation's average. Always ≥ 0, and never smaller for a larger set.
+ */
+export function absenceLoss(team: MatchupTeam, out: readonly number[]): number {
+  if (!out.length || !team.r.length) return 0;
+  let totMin = 0, totVal = 0, outMin = 0, outVal = 0;
+  team.r.forEach((p, i) => {
+    totMin += p[1]; totVal += p[2];
+    if (out.includes(i)) { outMin += p[1]; outVal += p[2]; }
+  });
+  if (totMin <= 0) return 0;
+  const share = Math.min(1, outMin / totMin);
+  const vShare = totVal > 0 ? outVal / totVal : share;
+  const tilt = Math.max(TILT_MIN, Math.min(TILT_MAX, share > 0 ? vShare / share : 1));
+  return Math.pow(share, ABSENCE_EXP) * tilt;
+}
 
 /** Spread of the margin around its projection. Normal; the form is irrelevant. */
 export const SIGMA = 11.0;
@@ -167,7 +223,6 @@ export type Projection = {
   baseMargin: number;
   /** Every correction term in points, home-positive. */
   parts: {
-    intercept: number;
     homeFloor: number;
     powerHost: number;
     orb: number;
@@ -226,7 +281,7 @@ export function project({ pack, a, b, site, outA = [], outB = [] }: ProjectInput
   const baseMargin = baseA - baseB;
 
   // Style. Expectation ADDS the two deviations: what A does against an
-  // average defence, plus what B concedes to an average offence.
+  // average defense, plus what B concedes to an average offense.
   const edges = {} as Record<StyleKey, number>;
   const expA = {} as Record<StyleKey, number>, expB = {} as Record<StyleKey, number>;
   pack.dims.forEach((k, i) => {
@@ -242,21 +297,32 @@ export function project({ pack, a, b, site, outA = [], outB = [] }: ProjectInput
   // Availability. Missing value is the sum of value-per-game of everyone
   // ruled out; "best player out" is a flag. Both differentials are B minus A
   // so that A losing someone pushes the margin down.
-  const missVal = (team: MatchupTeam, out: number[]) => out.reduce((s, i) => s + (team.r[i]?.[2] ?? 0), 0);
   const missTop = (team: MatchupTeam, out: number[]) => (team.best >= 0 && out.includes(team.best) ? 1 : 0);
-  const missValDiff = missVal(b, outB) - missVal(a, outA);
+  const lossDiff = absenceLoss(b, outB) - absenceLoss(a, outA);
   const missTopDiff = missTop(b, outB) - missTop(a, outA);
 
+  /**
+   * EVERY TERM HAS TO FLIP WHEN THE TEAMS SWAP, or the page gives two
+   * different answers to one question. The style, continuity and availability
+   * terms are already A-minus-B differentials, so they flip on their own. The
+   * two that did not were a free intercept and the quality term: both were
+   * added regardless of location, which handed them to whichever team happened
+   * to be listed first. Michigan-Duke on a neutral floor read +1.09 Michigan,
+   * and Duke-Michigan read +2.50 Duke.
+   *
+   * The intercept is gone (the fit is now through the origin) and quality is
+   * multiplied by location, so on a neutral court both vanish and swapping the
+   * teams mirrors the projection exactly.
+   */
   const parts = {
-    intercept: CORR.intercept,
     homeFloor: loc * (sameConf ? CORR.confHome : CORR.ncHome),
     powerHost: powerHost ? loc * CORR.powerHost : 0,
     orb: CORR.orbEdge * edges.orb,
     tov: CORR.tovEdge * edges.tov,
     t3r: CORR.t3rEdge * edges.t3r,
     t3p: CORR.t3pEdge * edges.t3p,
-    qual: CORR.qualSum * ((a.o - a.d) + (b.o - b.d)),
-    availability: CORR.missVal * missValDiff + CORR.missTop * missTopDiff,
+    qual: loc * CORR.qualHome * ((a.o - a.d) + (b.o - b.d)),
+    availability: CORR.absence * lossDiff + CORR.missTop * missTopDiff,
     continuity: CORR.cont * (a.k - b.k),
   };
   const correction = Object.values(parts).reduce((s, x) => s + x, 0);
@@ -302,15 +368,17 @@ export function scoreBand(p: Projection, leagueTempo: number, z = 1): {
 }
 
 /**
- * What ruling this player out is worth, in points of margin.
+ * What ruling this player out is worth RIGHT NOW, in points of margin.
  *
- * Reads CORR rather than restating it: the roster tooltip quoted "+2.1 pts"
- * as a literal once, which is a second copy of two coefficients waiting to
- * drift from the first.
+ * Marginal, not absolute: because the cost curve is convex, the fourth man
+ * ruled out costs more than the first did. So it depends on who is already
+ * out, which is why `out` is a parameter rather than assumed empty.
  */
-export function playerCost(team: MatchupTeam, i: number): number {
-  const val = team.r[i]?.[2] ?? 0;
-  return CORR.missVal * val + (i === team.best ? CORR.missTop : 0);
+export function playerCost(team: MatchupTeam, i: number, out: readonly number[] = []): number {
+  if (out.includes(i)) return 0;
+  const before = absenceLoss(team, out);
+  const after = absenceLoss(team, [...out, i]);
+  return CORR.absence * (after - before) + (i === team.best ? CORR.missTop : 0);
 }
 
 // ── Presentation helpers ───────────────────────────────────────────────────
@@ -324,7 +392,7 @@ export const STYLE_LABEL: Record<StyleKey, string> = {
   t3p: "3P%",
 };
 
-/** Whether a higher value of the dimension is good for the offence. */
+/** Whether a higher value of the dimension is good for the offense. */
 export const STYLE_HIGHER_BETTER: Record<StyleKey, boolean> = {
   efg: true, orb: true, tov: false, ftr: true, t3r: true, t3p: true,
 };

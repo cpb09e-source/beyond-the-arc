@@ -60,14 +60,14 @@ const SPLITS = [
  * Every stat the panel renders, grouped as the six cards.
  *
  * `higherBetter: false` marks the stats where a low number is the good one, so
- * the percentile is inverted before it becomes a colour. Getting this wrong is
+ * the percentile is inverted before it becomes a color. Getting this wrong is
  * invisible in testing and wrong on every page: a defensive rating of 88 would
  * paint red.
  *
  * `neutral: true` marks the stats where NEITHER DIRECTION IS GOOD — tempo,
  * shot diet, and the shares of the scoring pie. The percentile still means
  * something there ("more three-reliant than 82% of the country") so it is
- * still published, but the colour ramp is not, because a ramp is a claim about
+ * still published, but the color ramp is not, because a ramp is a claim about
  * quality. The three scoring shares make the point unarguable: they sum to
  * 100, so painting a low % of points from twos red is painting the same team
  * green one row above for the same fact.
@@ -124,7 +124,7 @@ const STATS = [
   // ---- Scoring breakdown: where the points come from ----
   //
   // The three shares sum to 100 by construction, which is the point: a team at
-  // 28% from three and 16% from the line is a different offence from one at
+  // 28% from three and 16% from the line is a different offense from one at
   // 18/26 even when both score 76.
   { key: "pts2_sh",   group: "Misc",    label: "% Pts from 2s",     fmt: "pct1", neutral: true },
   { key: "pts3_sh",   group: "Misc",    label: "% Pts from 3s",     fmt: "pct1", neutral: true },
@@ -162,7 +162,7 @@ const STATS = [
   { key: "opp_ftr",     group: "OppShoot", label: "Opp FT Att Rate",   fmt: "pct1", higherBetter: false },
   { key: "opp_pts_shot", group: "OppShoot", label: "Opp Points / Shot", fmt: "num2", higherBetter: false },
 
-  // ---- What the defence gives up ----
+  // ---- What the defense gives up ----
   { key: "opp_pts_pg",   group: "Allowed", label: "Points Allowed / Game", fmt: "num1", higherBetter: false },
   { key: "opp_pitp_pg",  group: "Allowed", label: "Paint Pts Allowed",    fmt: "num1", higherBetter: false },
   { key: "opp_fbpts_pg", group: "Allowed", label: "Fast Break Pts Allowed", fmt: "num1", higherBetter: false },
@@ -359,7 +359,7 @@ function aggregate(games) {
  * Percentile of every team's value within one (split, stat) cohort.
  *
  * Ranked ascending then inverted for the lower-is-better stats, so 100 always
- * means "best in the country at this" and the colour ramp needs no per-stat
+ * means "best in the country at this" and the color ramp needs no per-stat
  * knowledge. Cohorts under 20 teams are left unranked — a percentile out of
  * eight teams is noise wearing a number.
  */

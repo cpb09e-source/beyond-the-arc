@@ -543,7 +543,7 @@ function ShotDietPanel({ s }: { s: Shooting }) {
       ))}
       {s.asst != null && (
         // No percentile on purpose. Assisted rate is a role descriptor, not a
-        // graded stat — a centre at 80% assisted is ordinary and a point guard
+        // graded stat — a center at 80% assisted is ordinary and a point guard
         // at 80% is not, so ranking it inside one cohort would assert a verdict
         // the number does not carry. The sub-line says which way is which.
         <Row label="Assisted" value={`${f1(s.asst)}%`} pct={null} sub="lower = self-created" />
@@ -593,7 +593,7 @@ function LegacyGrid({ season, shooting }: { season: PlayerRanksSeason; shooting?
 }
 
 /**
- * Mini circular percentile gauge — track ring + coloured arc filling clockwise.
+ * Mini circular percentile gauge — track ring + colored arc filling clockwise.
  *
  * The chip replaced it on this page, but player-shot-impact.tsx still renders
  * it, so it stays exported here rather than moving and breaking that import.

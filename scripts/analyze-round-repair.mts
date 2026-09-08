@@ -6,7 +6,7 @@
  *
  * THE BUG. `round` in coach-history.json is the round a team was eliminated
  * in. For 2013, 2014 and 2015 it is off by one for every R64 loser — exactly
- * 32 per year, 96 rows, all labelled "R32". The bracket in
+ * 32 per year, 96 rows, all labeled "R32". The bracket in
  * tournament-games.json is complete for those years (63 games, correct shape)
  * and disagrees in precisely those rows.
  *

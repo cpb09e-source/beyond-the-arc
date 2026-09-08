@@ -223,7 +223,7 @@ for (const season of seasons) {
    * Both endpoints return exactly one row per (gameId, teamId), so the team
    * box is a ready-made expected set. This matters because a "still at cap"
    * warning does NOT imply data was lost: the ±OVERLAP_DAYS padding means a
-   * capped day is usually also covered by its neighbours' windows, and the
+   * capped day is usually also covered by its neighbors' windows, and the
    * dedupe merges them. 2016 and 2017 both warned and both came out complete.
    * Only a non-empty `missing` set is real loss.
    */

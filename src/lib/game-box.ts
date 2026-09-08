@@ -50,7 +50,7 @@ export function loadGameBox(season: number): Promise<GameBoxFile | null> {
   return p;
 }
 
-/** Every box-derived key, and how it should be labelled/grouped in the UI. */
+/** Every box-derived key, and how it should be labeled/grouped in the UI. */
 export const BOX_FIELDS = [
   // Rate stats — offense
   { key: "ff_efg",       label: "eFG% (box)",     group: "Rates" },

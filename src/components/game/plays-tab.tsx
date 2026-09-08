@@ -106,8 +106,8 @@ export function PlaysTab({ b }: { b: GameBundle }) {
 }
 
 /**
- * The acting team is carried by its logo rather than a coloured dot: a dot
- * needs a legend, and two navy programmes make it useless. Rows belonging to
+ * The acting team is carried by its logo rather than a colored dot: a dot
+ * needs a legend, and two navy programs make it useless. Rows belonging to
  * no team — end of period, official timeouts — keep the empty slot so the text
  * column still lines up.
  */

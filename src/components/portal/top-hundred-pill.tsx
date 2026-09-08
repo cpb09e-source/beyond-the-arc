@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  * NOT THE SEAL. The player page's mark is a dial of a hundred ticks around the
  * rank — a good object at 72px and mush at 20, which is all a table row has.
  * This says the same thing in the space available: the board position, in the
- * tier colour the seal would have used, so the two read as the same fact
+ * tier color the seal would have used, so the two read as the same fact
  * without one pretending to be the other.
  *
  * The tiers are the seal's own, and the tokens are shared with it (globals.css)

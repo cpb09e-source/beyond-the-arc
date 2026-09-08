@@ -62,7 +62,7 @@ const POSITION_LABEL: Record<"G" | "F" | "C", string> = {
  * the transfer chip, the draft chip beside these very vitals.
  *
  * POSITION IS HUED BY BUCKET, not by the accent. Three positions want three
- * colours, and there are exactly three tokens on the site that carry meaning
+ * colors, and there are exactly three tokens on the site that carry meaning
  * without being the accent: the hardwood, the chart green and the chart red.
  * Guard takes the accent because guards are the largest bucket and the accent
  * is the most neutral of the four in this palette.
@@ -74,11 +74,11 @@ const POSITION_LABEL: Record<"G" | "F" | "C", string> = {
 const POSITION_BADGE: Record<"G" | "F" | "C", { bg: string; border: string; fg: string }> = {
   // The text mixes its hue 66% toward --ink, which is navy on the light theme
   // and cream on the dark one — so one expression darkens or lightens as the
-  // theme needs. The raw tokens are chart and accent colours and do not clear
+  // theme needs. The raw tokens are chart and accent colors and do not clear
   // AA as small text on their own tints: --coral measured 3.95 and --good 3.73
   // on paper. Mixed, they clear 5.6-6.7 on both grounds.
   //
-  // Centre is the exception: --court is a light tan and mixing it toward navy
+  // Center is the exception: --court is a light tan and mixing it toward navy
   // still does not darken enough (3.4). --court-ink exists for exactly this —
   // hardwood dark enough to set text on a hardwood tint — and clears 4.6.
   G: {

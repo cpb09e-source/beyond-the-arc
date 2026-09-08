@@ -92,7 +92,7 @@ export function isLiveSeason(year: number): boolean {
  *
  * EMPTY, and kept rather than deleted. It is the right tool for a season we
  * genuinely cannot stand behind — one whose data is wrong rather than merely
- * unusual — and the machinery below (clampSeason's neighbour walk, the
+ * unusual — and the machinery below (clampSeason's neighbor walk, the
  * ALL_SEASONS filter) is what makes such a season safe to remove. 2021 moved
  * to FLAGGED_SEASONS because its data is not wrong, only incomparable.
  */

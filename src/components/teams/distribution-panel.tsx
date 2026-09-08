@@ -39,7 +39,7 @@ type StatDef = {
    * Needed the moment shot rates arrived. Every stat in the two original sets
    * is better high, so buildRanks sorted descending and called it a percentile
    * — but a mid-range rate is the worst shot in basketball taken more often,
-   * and a rim rate ALLOWED is a defence being carved up. Ranking those the
+   * and a rim rate ALLOWED is a defense being carved up. Ranking those the
    * same way would have painted the two teams who do them least in coral and
    * called it a top-5 finish.
    */
@@ -80,7 +80,7 @@ function buildRanks(
       })
       .filter((v): v is number => typeof v === "number");
     // Sorted BEST-FIRST, whichever direction that is, so rank 1 always means
-    // best and the percentile the chip colours by always means the same thing.
+    // best and the percentile the chip colors by always means the same thing.
     allVals.sort((a, b) => (stat.invert ? a - b : b - a));
 
     const total = allVals.length;
@@ -119,7 +119,7 @@ export function buildFourFactorRanks(
  * THE DIRECTIONS ARE OPINIONS AND ARE STATED AS SUCH:
  *
  *   Rim rate, higher better. The rim is the most efficient shot in the game,
- *   and getting there more is the single clearest sign of an offence creating
+ *   and getting there more is the single clearest sign of an offense creating
  *   advantages rather than settling.
  *
  *   Mid-range rate, LOWER better. The long two is the least efficient shot in
@@ -149,10 +149,10 @@ const SHOT_PROFILE_STATS: StatDef[] = [
 ];
 
 /**
- * WHAT THE DEFENCE FORCES — the same three rates, from the other side.
+ * WHAT THE DEFENSE FORCES — the same three rates, from the other side.
  *
  * Read as a defensive philosophy rather than a scoreline. Allowing few rim
- * attempts and many mid-range ones is the shape of a defence doing its job:
+ * attempts and many mid-range ones is the shape of a defense doing its job:
  * protect the paint, run shooters off the line, live with the long two. So rim
  * and three rates allowed are better LOW, and the mid-range rate allowed is
  * better HIGH — the one row on the team page where a bigger number being green

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { popoverStyle, usePopoverAnchor } from "@/components/explorer/use-popover-anchor";
@@ -42,6 +42,10 @@ export function SearchableSelect({
   const listRef = useRef<HTMLDivElement>(null);
   /** Fixed and portalled, for the reason in use-popover-anchor. */
   const { anchorRef: containerRef, popRef, at } = usePopoverAnchor({ open, width: 288 });
+  // Ids for aria-activedescendant: the input keeps focus while the arrow
+  // keys move a highlight down the list, so the highlighted row has to be
+  // announced by id rather than by focus.
+  const optId = useId();
 
   /**
    * Open, cleared, focused — in the handler, not in an effect.
@@ -158,10 +162,14 @@ export function SearchableSelect({
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={onKeyDown}
               placeholder={placeholder}
+              role="combobox"
+              aria-expanded
+              aria-controls={`${optId}-list`}
+              aria-activedescendant={filtered.length ? `${optId}-${activeSafe}` : undefined}
               className="w-full h-8 px-2 text-xs rounded border border-hairline bg-paper text-ink focus:outline-none focus:ring-2 focus:ring-coral/40"
             />
           </div>
-          <div ref={listRef} className="flex-1 min-h-0 max-h-72 overflow-y-auto py-1">
+          <div ref={listRef} id={`${optId}-list`} className="flex-1 min-h-0 max-h-72 overflow-y-auto py-1">
             {filtered.length === 0 ? (
               <div className="px-3 py-4 text-xs text-ink-muted text-center">No matches</div>
             ) : (
@@ -179,15 +187,30 @@ export function SearchableSelect({
                     return (
                       <button
                         key={o.value}
+                        id={`${optId}-${idx}`}
                         type="button"
+                        role="option"
+                        aria-selected={isActive}
                         onMouseEnter={() => setActiveIdx(idx)}
                         onClick={() => {
                           onChange(o.value);
                           setOpen(false);
                         }}
+                        /**
+                         * THE KEYBOARD HIGHLIGHT HAS TO SURVIVE BOTH THEMES.
+                         * This was `bg-paper-deep`, which on the dark theme is
+                         * #242424 against a #1C1C1C page — eight points apart,
+                         * invisible. Arrowing down the list looked like nothing
+                         * was happening. A tint of the INK works on either
+                         * ground, and the coral rail makes the row that Enter
+                         * will pick unmistakable rather than merely different.
+                         */
                         className={cn(
                           "w-full text-left px-3 py-1.5 text-xs flex items-center justify-between gap-2",
-                          isActive && "bg-paper-deep",
+                          "border-l-2 transition-colors",
+                          isActive
+                            ? "bg-ink/[0.10] border-coral"
+                            : "border-transparent hover:bg-ink/[0.05]",
                           isSelected && "text-coral font-medium"
                         )}
                       >

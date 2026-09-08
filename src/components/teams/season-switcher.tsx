@@ -12,7 +12,7 @@ function seasonLabel(y: number): string {
 
 /**
  * The season picker in the team hero — and the way into thirteen years of a
- * programme's history, which is most of what the site knows.
+ * program's history, which is most of what the site knows.
  *
  * IT USED TO READ AS PART OF THE EYEBROW, and that was the problem. Set at
  * 12px uppercase on 0.18em tracking, tinted at six per cent of the accent and
