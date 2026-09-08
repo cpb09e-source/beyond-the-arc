@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeftRight, Check, Link2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -555,11 +555,12 @@ function Half({ team, color, fill, season, side, score, win, hosting, seam }: {
             and in a square box the wordmark draws a third smaller. */}
         <TeamLogo name={team.b} size={40} width={56} className="shrink-0" />
         <div className="min-w-0">
-          {/* Wraps rather than truncates: a name longer than the underdog's
-              floor allows ("Northern Iowa" at 2xl) goes to two lines, and
-              "Northern…" is a worse answer than that. */}
-          <Link href={`/teams/${team.s}/${season}/`} className="block font-display font-bold text-lg sm:text-2xl leading-tight text-ink hover:underline text-balance">
-            <TeamName name={team.b} />
+          {/* ONE LINE, ALWAYS. A name longer than the column shrinks its
+              type to fit rather than wrapping or truncating: "New
+              Hampshire" at the underdog's floor loses a point or two,
+              "Texas A&M-Corpus Christi" loses more, and neither breaks. */}
+          <Link href={`/teams/${team.s}/${season}/`} className="block font-display font-bold text-lg sm:text-2xl leading-tight text-ink hover:underline">
+            <FitText dep={team.b}><TeamName name={team.b} /></FitText>
           </Link>
           <div className="text-[0.7rem] text-ink-muted tabular">
             {team.c ?? "Ind."} · {team.w}–{team.l}
@@ -580,6 +581,32 @@ function Half({ team, color, fill, season, side, score, win, hosting, seam }: {
       </div>
     </div>
   );
+}
+
+/**
+ * Text that fits its parent on one line by scaling its font down, never by
+ * wrapping. Measured at the natural size first, then scaled by the ratio
+ * that would make it fit, and re-measured whenever the parent's width
+ * changes — which it does every frame while the seam is sliding. The
+ * prerendered HTML carries the natural size; the fit is applied before the
+ * first paint after hydration.
+ */
+function FitText({ dep, children }: { dep: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current, parent = el?.parentElement;
+    if (!el || !parent) return;
+    const fit = () => {
+      el.style.fontSize = "";
+      const need = el.offsetWidth, avail = parent.clientWidth;
+      if (need > avail && need > 0) el.style.fontSize = `${Math.max(0.4, avail / need) * 100}%`;
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(parent);
+    return () => ro.disconnect();
+  }, [dep]);
+  return <span ref={ref} className="inline-block whitespace-nowrap align-bottom">{children}</span>;
 }
 
 function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
