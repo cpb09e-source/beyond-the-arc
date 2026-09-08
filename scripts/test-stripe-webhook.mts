@@ -171,13 +171,13 @@ const check = (name: string, ok: boolean, detail = "") => {
   check("canceling clears the renewal", p?.subscription_renews_at === null, `renews=${p?.subscription_renews_at}`);
 }
 
-// 7. Cancelled outright: access ends.
+// 7. Canceled outright: access ends.
 {
   const body = JSON.stringify(subscriptionEvent(uid, { status: "canceled" }));
   await call(body, signed(body));
   const p = await profileOf(uid);
-  check("cancelled clears the tier", p?.subscription_tier === null, `tier=${p?.subscription_tier}`);
-  check("cancelled status recorded", p?.subscription_status === "canceled", `status=${p?.subscription_status}`);
+  check("canceled clears the tier", p?.subscription_tier === null, `tier=${p?.subscription_tier}`);
+  check("canceled status recorded", p?.subscription_status === "canceled", `status=${p?.subscription_status}`);
 }
 
 await admin.auth.admin.deleteUser(uid);

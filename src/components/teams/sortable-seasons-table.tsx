@@ -139,7 +139,7 @@ export function SortableSeasonsTable({
                   )}
 
                 >
-                  {/* The honour is the CELL, not a chip beside the season —
+                  {/* The honor is the CELL, not a chip beside the season —
                       the same treatment the explorer and the By season grid
                       use, at every width. */}
                   <Td className={honourClass(s.name, s.year, i)} title={honourTitle(s.name, s.year)}>
@@ -198,30 +198,30 @@ function Td({ children, align = "left", className = "", title }: { children: Rea
 }
 
 /**
- * Honour fill for a season cell — gold for a title, silver for a Final Four —
+ * Honor fill for a season cell — gold for a title, silver for a Final Four —
  * keyed to the zebra stripe it lands on.
  *
  * Rows here stripe `bg-paper/70` on even and transparent (the card beneath) on
- * odd, so the mix has to follow — see the .honour-* classes in globals.css. The
+ * odd, so the mix has to follow — see the .honor-* classes in globals.css. The
  * fill is opaque for the same reason it is in the other two grids: this column
  * is the one the rest of the table scrolls behind.
  */
 function honourClass(name: string, year: number, i: number): string {
-  const honour = tourneyBadge(name, year);
-  if (honour === "champion") {
-    return `text-court-ink font-bold ${i % 2 === 0 ? "honour-champ-paper" : "honour-champ-card"}`;
+  const honor = tourneyBadge(name, year);
+  if (honor === "champion") {
+    return `text-court-ink font-bold ${i % 2 === 0 ? "honor-champ-paper" : "honor-champ-card"}`;
   }
-  if (honour === "final-four") {
-    return `text-court-ink font-bold ${i % 2 === 0 ? "honour-f4-paper" : "honour-f4-card"}`;
+  if (honor === "final-four") {
+    return `text-court-ink font-bold ${i % 2 === 0 ? "honor-f4-paper" : "honor-f4-card"}`;
   }
   return "";
 }
 
 function honourTitle(name: string, year: number): string | undefined {
-  const honour = tourneyBadge(name, year);
+  const honor = tourneyBadge(name, year);
   const season = `${year - 1}-${String(year).slice(-2)}`;
-  if (honour === "champion") return `${season} national champion`;
-  if (honour === "final-four") return `${season} Final Four`;
+  if (honor === "champion") return `${season} national champion`;
+  if (honor === "final-four") return `${season} Final Four`;
   return undefined;
 }
 function ThSort({

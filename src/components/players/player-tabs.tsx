@@ -184,7 +184,7 @@ function PlayerBottomBar({
                 )}
               >
                 {/* Inset from the cell edges: a rule spanning the full cell
-                    meets its neighbour's and the three read as one line with a
+                    meets its neighbor's and the three read as one line with a
                     colored segment rather than as one marked tab. */}
                 <span
                   aria-hidden

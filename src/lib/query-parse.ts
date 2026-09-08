@@ -30,7 +30,7 @@ export type ParsedQuery = {
   /**
    * The model's restatement of the question, shown to the user as "Understood:".
    * Named `analysis` to match the wire field — see parse-query.mts, where the
-   * name is load-bearing: structured-output keys are alphabetised, so this has
+   * name is load-bearing: structured-output keys are alphabetized, so this has
    * to sort before `conditions` for the model to reason before it filters.
    */
   analysis: string;

@@ -717,7 +717,7 @@ function buildSeason(season) {
   //               that HAVE coordinates, and 12.3% of made field goals in 2026
   //               do not. Left raw, the season total came to 85% of official,
   //               and the missing sixth is concentrated in whichever games went
-  //               unlogged — so a player was penalised for his venue.
+  //               unlogged — so a player was penalized for his venue.
   const allocate = (rawByPlayer, rawByTeam, officialKey, field, stats, alt) => {
     // Every team-game with an official total is walked, not just the ones the
     // primary basis found — otherwise a game the primary cannot see is silently

@@ -29,7 +29,7 @@
  * game data" must not read the same way.
  *
  * THE GAME LOG IS STILL THE AUTHORITY ON WHICH GAMES COUNT. A play whose game
- * is not in game-logs-by-year was filtered upstream (cancelled, exhibition,
+ * is not in game-logs-by-year was filtered upstream (canceled, exhibition,
  * non-D1 perspective) and is skipped, so these records reconcile with the Wins
  * and Losses columns computed in build-adjusted-ratings.mjs.
  *
@@ -166,7 +166,7 @@ function run(season) {
 
   let scored = 0, unresolved = 0;
   for (const g of games.values()) {
-    // A game with no scoring at all is a parse artefact, not a game.
+    // A game with no scoring at all is a parse artifact, not a game.
     if (g.finalH === 0 && g.finalA === 0) continue;
     // No play in the whole game named both sides. Skipped rather than credited
     // to whichever half did resolve, which would give one team a phantom game.

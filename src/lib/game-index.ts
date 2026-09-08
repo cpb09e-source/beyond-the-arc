@@ -94,7 +94,7 @@ export function loadGameIndex(season: number): Promise<GamePack | null> {
  * missing, and built 81,312 player-game rows across 4,867 players.
  *
  * 2021 IS SMALLER THAN ITS NEIGHBORS AND THAT IS CORRECT — 81,312 rows and
- * 493 distinct opponents against 2022's 111,582 and 680. Cancelled games and
+ * 493 distinct opponents against 2022's 111,582 and 680. Canceled games and
  * gutted non-conference schedules, not a short pull. Verified same-shaped as
  * 2022: same 7 keys, same 22 fields, same 6 classes.
  */
@@ -319,7 +319,7 @@ export type GameFilter = { stat: string; op: GameOp; value: number };
 
 export const OP_LABEL: Record<GameOp, string> = { gte: "≥", gt: ">", lte: "≤", lt: "<" };
 
-/** Pre-rename ops, still honoured on the way in. */
+/** Pre-rename ops, still honored on the way in. */
 const OP_ALIAS: Record<string, GameOp> = { ge: "gte", le: "lte", gte: "gte", gt: "gt", lte: "lte", lt: "lt" };
 
 export function passesFilters(r: number[], filters: GameFilter[]): boolean {

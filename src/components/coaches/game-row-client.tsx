@@ -62,13 +62,13 @@ export function GameRowTr({
   // rows and none of them need the map until someone actually clicks one.
   useEffect(() => {
     if (!open || resolved || !gameSlug) return;
-    let cancelled = false;
+    let canceled = false;
     loadTournamentIds().then((map) => {
-      if (cancelled) return;
+      if (canceled) return;
       setGameId(map[`${year}/${gameSlug}`] ?? null);
       setResolved(true);
     });
-    return () => { cancelled = true; };
+    return () => { canceled = true; };
   }, [open, resolved, year, gameSlug]);
 
   if (!gameSlug) {

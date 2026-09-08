@@ -61,12 +61,12 @@ export function usePlayerSplits(bartPlayerId: number): PlayerSplits | null | und
   // of the previous player's numbers under the new player's name.
   const [got, setGot] = useState<{ id: number; data: PlayerSplits | null } | null>(null);
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     fetch(dataUrl(`/data/player-splits/${bartPlayerId}.json`))
       .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (!cancelled) setGot({ id: bartPlayerId, data: j ?? null }); })
-      .catch(() => { if (!cancelled) setGot({ id: bartPlayerId, data: null }); });
-    return () => { cancelled = true; };
+      .then((j) => { if (!canceled) setGot({ id: bartPlayerId, data: j ?? null }); })
+      .catch(() => { if (!canceled) setGot({ id: bartPlayerId, data: null }); });
+    return () => { canceled = true; };
   }, [bartPlayerId]);
   return got && got.id === bartPlayerId ? got.data : undefined;
 }

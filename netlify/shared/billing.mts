@@ -208,7 +208,7 @@ export async function ensureCustomer(
  * made for the dashboard's benefit to quietly widen who gets the data.
  *
  * `past_due` counts as paid on purpose, matching the dashboard: the
- * subscription has not been cancelled, a payment failed and Stripe is
+ * subscription has not been canceled, a payment failed and Stripe is
  * retrying. Cutting access at the first failed charge locks out anyone whose
  * card simply expired.
  */

@@ -34,7 +34,7 @@ export default async function HomePage() {
   // No request-time DB hits; Netlify serves the pre-rendered HTML from edge.
   //
   // ONE SEASON, NOT ALL OF THEM. This used to pass the whole of teams-all.json,
-  // which Next serialises into the page's RSC payload: index.html measured
+  // which Next serializes into the page's RSC payload: index.html measured
   // 10.73 MB raw / 1.51 MB gzipped, 99.9% of it a single <script> holding 4,273
   // team-season objects, on the page every visitor lands on first. The explorer
   // only ever renders the seasons its picker has selected — one by default — so

@@ -149,7 +149,7 @@ export function ShareScreenshotSheet({
       >
         {url && (
           // Not next/image: this is a blob made moments ago, with no width
-          // known ahead of time and nothing for an optimiser to do.
+          // known ahead of time and nothing for an optimizer to do.
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={url}

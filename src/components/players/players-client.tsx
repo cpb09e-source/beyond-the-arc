@@ -728,7 +728,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   //
   // WHAT GETS SAVED IS THE QUERY STRING, not a record of every control, so
   // anything playerSpecToParams learns to carry a saved filter carries for
-  // free. Canonicalised through the serialiser rather than taken from the
+  // free. Canonicalized through the serializer rather than taken from the
   // address bar, so two ways of reaching the same table save as one entry.
   const currentQuery = useMemo(() => playerSpecToParams(spec).toString(), [spec]);
   const savedNameSuggestion = useMemo(() => suggestPlayerName(spec), [spec]);
@@ -784,7 +784,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       setLoading(false);
       return;
     }
-    let cancelled = false;
+    let canceled = false;
     setLoading(true);
     // THROUGH THE GATE, not a bare fetch. A gated season is not a static file
     // — it comes from a function that wants to know who is asking — and this
@@ -796,7 +796,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       ),
     )
       .then((entries) => {
-        if (cancelled) return;
+        if (canceled) return;
         setRawByYear((s) => {
           const next = { ...s };
           for (const [y, res] of entries) {
@@ -819,7 +819,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         setLoading(false);
       })
       .catch(() => setLoading(false));
-    return () => { cancelled = true; };
+    return () => { canceled = true; };
   }, [spec.years, rawByYear]);
 
   // Lazy-load impact per season: prefer the real play-by-play EPM fit; fall back
@@ -833,7 +833,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   useEffect(() => {
     const toFetch = spec.years.filter((y) => !epmByYear[y]);
     if (!toFetch.length) return;
-    let cancelled = false;
+    let canceled = false;
     const loadYear = async (y: number): Promise<readonly [number, { players: Record<string, { epm: number; off: number; def: number }>; estimated: boolean }]> => {
       try {
         const r = await fetch(`/data/epm-${y}.json`);
@@ -853,14 +853,14 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
       return [y, { players: {}, estimated: false }] as const;
     };
     Promise.all(toFetch.map(loadYear)).then((entries) => {
-      if (cancelled) return;
+      if (canceled) return;
       setEpmByYear((s) => {
         const next = { ...s };
         for (const [y, m] of entries) next[y] = m;
         return next;
       });
     });
-    return () => { cancelled = true; };
+    return () => { canceled = true; };
   }, [spec.years, epmByYear]);
 
   // Box-EPM per season, for the Box column. Separate from the impact fetch
@@ -869,7 +869,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   useEffect(() => {
     const toFetch = spec.years.filter((y) => !boxByYear[y]);
     if (!toFetch.length) return;
-    let cancelled = false;
+    let canceled = false;
     Promise.all(
       toFetch.map((y) =>
         fetch(`/data/box-epm-${y}.json`)
@@ -878,21 +878,21 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           .then((j) => [y, j.players ?? {}] as const),
       ),
     ).then((entries) => {
-      if (cancelled) return;
+      if (canceled) return;
       setBoxByYear((s) => {
         const next = { ...s };
         for (const [y, m] of entries) next[y] = m;
         return next;
       });
     });
-    return () => { cancelled = true; };
+    return () => { canceled = true; };
   }, [spec.years, boxByYear]);
 
   // Lazy-load the shooting profile per season (filter-only; 404 → empty map).
   useEffect(() => {
     const toFetch = spec.years.filter((y) => !shootingByYear[y]);
     if (!toFetch.length) return;
-    let cancelled = false;
+    let canceled = false;
     Promise.all(
       toFetch.map((y) =>
         fetch(`/data/shooting-${y}.json`)
@@ -901,14 +901,14 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           .then((j) => [y, j.players ?? {}] as const),
       ),
     ).then((entries) => {
-      if (cancelled) return;
+      if (canceled) return;
       setShootingByYear((s) => {
         const next = { ...s };
         for (const [y, m] of entries) next[y] = m;
         return next;
       });
     });
-    return () => { cancelled = true; };
+    return () => { canceled = true; };
   }, [spec.years, shootingByYear]);
 
   // Per-year cohort processing: each season's BTA composite + percentile
@@ -1191,7 +1191,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
    * the reset landed. Setting state during render makes React throw that
    * render away and re-run with page 1, so the empty frame never exists.
    *
-   * The comparison is against the memoised result set itself, not its inputs,
+   * The comparison is against the memoized result set itself, not its inputs,
    * which is the same trigger the dependency array had.
    */
   const resetKey = `${spec.limit}|${spec.sortBy}|${spec.sortDir}|${deferredQuery}`;

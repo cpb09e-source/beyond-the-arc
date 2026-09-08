@@ -341,7 +341,7 @@ export function buildCsv<R>(input: ExportInput<R>): string {
  * HARDCODED TO THE CANONICAL HOST rather than read from window.location. A
  * file downloaded from a preview deploy or from localhost would otherwise
  * carry links that work on nobody's machine but the author's — and this is
- * the one artefact of the site designed to be sent to someone else.
+ * the one artifact of the site designed to be sent to someone else.
  */
 export const EXPORT_ORIGIN = "https://btacbb.xyz";
 const SITE_ORIGIN = EXPORT_ORIGIN;
@@ -629,7 +629,7 @@ export async function buildWorkbook<R>(input: ExportInput<R>): Promise<Blob> {
  * thirteen files that all describe the same teams and cannot be compared
  * without a join. One workbook makes the comparison a click on a tab.
  *
- * Sheet names are sanitised and de-duplicated because Excel refuses the file
+ * Sheet names are sanitized and de-duplicated because Excel refuses the file
  * outright — not gracefully — for a name over 31 characters, one containing
  * \ / ? * [ ] :, or two sheets sharing a name.
  */

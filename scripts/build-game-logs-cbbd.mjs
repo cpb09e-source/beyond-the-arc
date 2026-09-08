@@ -103,7 +103,7 @@ function run(season) {
       skippedNoStats++; continue;
     }
 
-    // Cancelled / postponed games are carried by CBBD as a real row with an
+    // Canceled / postponed games are carried by CBBD as a real row with an
     // all-zero stat line. A 0-0 basketball game does not exist, so this is the
     // reliable tell — and it has to be an explicit check, because `0` passes
     // the typeof-number guard above. Left in, they became 34 phantom losses
@@ -198,7 +198,7 @@ function run(season) {
   console.log(
     `${season}: ${String(out.length).padStart(6)} rows` +
     `  (skipped: ${skippedNonD1Side} non-D1 side, ${skippedNoStats} no stats, ` +
-    `${skippedCancelled} cancelled, ${skippedExhib} pre-season)` +
+    `${skippedCancelled} canceled, ${skippedExhib} pre-season)` +
     `  scp=${withScp}  ${(json.length / 1024 / 1024).toFixed(1)} MB`,
   );
 }

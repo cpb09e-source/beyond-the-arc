@@ -207,7 +207,7 @@ async function overview(db: SupabaseClient) {
     yearly: active.filter((r) => r.subscription_tier === "bta_pro_yearly").length,
     pastDue: active.filter((r) => r.subscription_status === "past_due").length,
     // Still paid today, already told Stripe to stop. The churn you can see coming.
-    cancelling: active.filter((r) => r.subscription_cancel_at !== null).length,
+    canceling: active.filter((r) => r.subscription_cancel_at !== null).length,
     admins: rows.filter((r) => r.role === "admin").length,
     new7d: rows.filter(since(7)).length,
     new30d: rows.filter(since(30)).length,

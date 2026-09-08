@@ -424,7 +424,7 @@ export function displayScores(scoreA: number, scoreB: number): [number, number] 
  * Used to tell the reader when the projection has left the evidence behind.
  * The absence coefficient is fitted at 20.2 with a standard error near 6 — and
  * near 10 once the fit is restricted to players who genuinely returned rather
- * than left the programme. Anywhere from half to double the printed effect is
+ * than left the program. Anywhere from half to double the printed effect is
  * consistent with the data once a rotation is gutted, and fewer than 1% of the
  * games in the sample were missing that much. The number is still the best
  * estimate available; it is not a confident one, and the page says so.

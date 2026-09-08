@@ -76,7 +76,7 @@ export default async function MethodPage() {
         <H>1 · Ratings</H>
         <p className="mb-4">
           Each team gets an offensive and defensive rating in points per 100 possessions, and a tempo,
-          solved as an iterated fixed point so that beating a good defence counts for more than beating a
+          solved as an iterated fixed point so that beating a good defense counts for more than beating a
           bad one. Last season is carried forward as a prior — <em>unregressed</em>, because carry factors
           from 0.3 to 1.0 were tested and leaving it alone won. That is the reason the page works in
           November, when nobody has played anyone yet.

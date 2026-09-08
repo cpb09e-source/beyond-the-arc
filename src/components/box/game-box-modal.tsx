@@ -197,13 +197,13 @@ export function GameBoxModal({
   useEffect(() => {
     if (tab !== "players" || fetchStarted.current) return;
     fetchStarted.current = true;
-    let cancelled = false;
+    let canceled = false;
     const key = gameKey(game.game_id);
     fetch(dataUrl(`/data/game-players/${game.year}/${key}.json`))
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((j: GamePlayersFile) => { if (!cancelled) setPlayers(j); })
-      .catch(() => { if (!cancelled) setPlayersErr(true); });
-    return () => { cancelled = true; };
+      .then((j: GamePlayersFile) => { if (!canceled) setPlayers(j); })
+      .catch(() => { if (!canceled) setPlayersErr(true); });
+    return () => { canceled = true; };
   }, [tab, game.game_id, game.year]);
 
   const num = (r: GameLog | null, k: string): number | null => {
@@ -898,13 +898,13 @@ export function GameBoxModalById({
   const [rows, setRows] = useState<{ own: GameLog; opp: GameLog | null } | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     const key = gameKey(gameId);
     if (!key) return;
 
     Promise.all([loadGamesForYear(season), loadGameBox(season)])
       .then(([logs, box]) => {
-        if (cancelled) return;
+        if (canceled) return;
         const pair = logs.filter((r) => gameKey(r.game_id) === key);
         // Prefer the exact perspective asked for; fall back to either side,
         // since a caller may only know the numeric game prefix.
@@ -916,7 +916,7 @@ export function GameBoxModalById({
       })
       .catch(() => { /* leave unresolved — the modal just doesn't open */ });
 
-    return () => { cancelled = true; };
+    return () => { canceled = true; };
   }, [gameId, season]);
 
   if (!rows) return null;

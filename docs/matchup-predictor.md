@@ -62,7 +62,7 @@ Editing any Model MPG cell re-runs the projection live.
 
 ---
 
-## 3. The maths, worked
+## 3. The math, worked
 
 They print the formula and the arithmetic on the page. This is the single best
 thing about the product and the thing most worth stealing *in spirit*: they
@@ -193,7 +193,7 @@ betting."*
 
 Free Tier is a **10-team demo** — the picker offered Duke, Gonzaga, Indiana,
 Michigan, North Carolina, Ohio St., South Carolina, Stanford, Texas, UCLA and
-UConn. All teams require the paid User Tier. So the tool is a funnel: the maths
+UConn. All teams require the paid User Tier. So the tool is a funnel: the math
 is fully public, the *coverage* is what you buy.
 
 Worth noting for our own paywall thinking. They gate breadth, not method.
@@ -258,7 +258,7 @@ we would have a *page about a matchup*, which is the thing people search for.
 
 ## 8. The honest summary
 
-Their maths is standard and they publish it. The moat is not the formula — it
+Their math is standard and they publish it. The moat is not the formula — it
 is RAPM, which is genuinely hard and which they cannot compute until late
 December. Everything else on the page is presentation, and the presentation is
 good but beatable: a scope picker and a wall of controls, versus a page per
@@ -402,7 +402,7 @@ show no bias at any level**:
 
 Same teams, same period, same ratings — the bias appears only where there is a
 home floor and no return fixture. It fades from November (+2.65) to December
-(+1.94), consistent with visitors acclimatising. An interaction term
+(+1.94), consistent with visitors acclimatizing. An interaction term
 (non-conference × |predicted margin|) is **zero** (0.0006 ± 0.031), so the flat
 split is the right specification.
 

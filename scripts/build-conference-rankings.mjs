@@ -405,7 +405,7 @@ for (const year of SEASONS) {
    * conference -> { bids, w, l, s16 } for this season's NCAA tournament.
    *
    * Built over EVERY team in the league, not the kept ones — see the note on
-   * tourneyByYear. Seasons with no tournament (2020, cancelled) simply have
+   * tourneyByYear. Seasons with no tournament (2020, canceled) simply have
    * no entry and the columns come out blank.
    */
   const marchByConf = new Map();

@@ -45,7 +45,7 @@ const PREVIEW_SORT = "net";
  * "Loading team games…" in a div — two `<tr>` on the whole page, which is what
  * a crawler indexed and what a reader stared at while 11,500 rows arrived.
  *
- * IT USES THE LIBRARY'S OWN GETTERS rather than reimplementing the maths.
+ * IT USES THE LIBRARY'S OWN GETTERS rather than reimplementing the math.
  * `teamGameStat("net").get` is the same function the client sorts on, so the
  * order here cannot drift from the order that replaces it. Values go through
  * `fmtTeamGameValue` for the same reason.

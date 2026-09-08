@@ -99,7 +99,7 @@ export function SearchableMultiSelect({
   /**
    * Open, cleared, focused — in the handler rather than in an effect on
    * `open`. Clearing the query is part of what opening means, not a
-   * synchronisation with anything outside React, and as an effect it cost a
+   * synchronization with anything outside React, and as an effect it cost a
    * second render after the popover had already painted the old query.
    */
   const openMenu = useCallback(() => {

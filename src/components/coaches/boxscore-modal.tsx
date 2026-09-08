@@ -144,18 +144,18 @@ export function BoxscoreModal({
        numbers under the new game's title until the network answers. */
     setData(null);
     setErr(null);
-    let cancelled = false;
+    let canceled = false;
     fetch(dataUrl(`/data/tournament-box/${year}/${gameSlug}.json`))
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json();
       })
-      .then((j: BoxScore) => { if (!cancelled) setData(j); })
-      .catch((e) => { if (!cancelled) setErr(e.message); });
-    loadDraftees().then((d) => { if (!cancelled) setDraftees(d); });
-    loadBartIndex().then((idx) => { if (!cancelled) setBartIndex(idx); });
-    loadProfileableIds().then((s) => { if (!cancelled) setProfileableIds(s); });
-    return () => { cancelled = true; };
+      .then((j: BoxScore) => { if (!canceled) setData(j); })
+      .catch((e) => { if (!canceled) setErr(e.message); });
+    loadDraftees().then((d) => { if (!canceled) setDraftees(d); });
+    loadBartIndex().then((idx) => { if (!canceled) setBartIndex(idx); });
+    loadProfileableIds().then((s) => { if (!canceled) setProfileableIds(s); });
+    return () => { canceled = true; };
   }, [open, year, gameSlug]);
 
   // Esc closes; scroll lock while open.

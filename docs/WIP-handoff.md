@@ -26,8 +26,8 @@ repeating it. Sections here are dated; the repo is not.
 ## Standing constraints — these override any instinct to be helpful
 
 **PUSHING IS ALLOWED; BUILDING AND DEPLOYING ARE STILL HIS CALL.** Colin
-lifted the push half on 2026-09-01 ("you can push"), then authorised one build
-and deploy that same day ("build and deploy go ahead"). That authorisation was
+lifted the push half on 2026-09-01 ("you can push"), then authorized one build
+and deploy that same day ("build and deploy go ahead"). That authorization was
 for THAT deploy. Ask again before the next one.
 
 **PRODUCTION IS 42 COMMITS BEHIND as of 2026-09-02** (41 at the time of
@@ -886,7 +886,7 @@ game log in production.
 `src/lib/seasons.ts`. Team pages, the team explorer and the Team Game Log
 Explorer carry it in full. Gonzaga's 31-1 has a page; so does Jalen Suggs.
 
-What is missing: `data/cbbd/2021/` holds 3 files where every neighbouring
+What is missing: `data/cbbd/2021/` holds 3 files where every neighboring
 season holds 163. Absent are `box-players-full.json.gz` and ~157
 `plays-*.json.gz`. So there are no per-player game logs for that season and no
 `game-index/2021`, which is why `GAME_SEASONS` in `src/lib/game-index.ts` stops
@@ -904,7 +904,7 @@ was never a data problem — the archive pull worked first time on a valid key.
   - 46 API calls against a 75,000 monthly quota
 
 **2021 is smaller than its neighbors and that is correct** — 81,312 rows and
-493 distinct opponents against 2022's 111,582 and 680. Cancelled games and
+493 distinct opponents against 2022's 111,582 and 680. Canceled games and
 gutted non-conference schedules. Do not read the gap as a short pull.
 
 **THE DERIVED LAYER IS DONE TOO** — `36ac5b6d51`, same day. Both files that
@@ -1027,7 +1027,7 @@ valid stints; there is nothing to salvage without a different source.
 **A translucent background on a sticky cell lets the scrolled columns show
 through it.** Highlight rows must MIX the accent against the opaque surface
 (`color-mix(in oklab, accent 10%, var(--card))`), never lay it over at 8%
-alpha. Hit twice now: the explorer's honour cells first, then the Totals row in
+alpha. Hit twice now: the explorer's honor cells first, then the Totals row in
 the lineup grid and the current-season row in School History.
 
 **Tailwind Preflight resets `text-transform: none` on `button`.** A `<th>` with

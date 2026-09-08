@@ -3,7 +3,7 @@
  * the table.
  *
  * WHAT GETS SAVED IS THE URL, not a bespoke record of every control. The
- * explorer already serialises its entire state through `specToParams` —
+ * explorer already serializes its entire state through `specToParams` —
  * seasons, conference, teams, stat filters, pinned columns, view, sort, page
  * size — because that is what makes a table shareable. A saved filter is that
  * same string with a name on it, which means this feature cannot drift out of

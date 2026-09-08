@@ -503,7 +503,7 @@ const MANUAL: GlossaryEntry[] = [
     category: "Coverage",
     aka: ["covid", "missing season"],
     body:
-      "Shown, but flagged. COVID-shortened schedules, cancelled games and irregular opponents make "
+      "Shown, but flagged. COVID-shortened schedules, canceled games and irregular opponents make "
       + "it incomparable with the seasons around it, so it carries a marker wherever seasons can be "
       + "pooled — it is fine on its own terms and misleading in an average. Coverage is partial: "
       + "team pages, the team explorer and the Team Game Log Explorer hold it in full, while the "

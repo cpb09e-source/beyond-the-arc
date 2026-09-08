@@ -131,7 +131,7 @@ export default async (req: Request, _context: Context) => {
       },
       metadata: { supabase_user_id: user.id, plan },
       success_url: `${origin}/account/?checkout=success`,
-      cancel_url: `${origin}/pricing/?checkout=cancelled`,
+      cancel_url: `${origin}/pricing/?checkout=canceled`,
       allow_promotion_codes: true,
       billing_address_collection: "auto",
     });

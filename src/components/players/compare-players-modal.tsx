@@ -519,7 +519,7 @@ export function ComparePlayersModal({ open, onClose }: { open: boolean; onClose:
   /** The comparison flattened for the share card. Derived from the same ROWS
    *  and rowExtremes() as the table so the picture cannot disagree with the
    *  screen. cellRender rows (the stacked rank badges) fall back to their raw
-   *  value — a card cell is one line, not a two-storey badge. */
+   *  value — a card cell is one line, not a two-story badge. */
   function buildShareRows(): ShareRow[] {
     return ROWS.map((row, ri) => {
       const { bestKey, worstKey } = rowExtremes(row);
@@ -951,7 +951,7 @@ function SlotPicker({
   const [hIdx, setHIdx] = useState(0);
 
   // Same adjust-during-render reset as the modal above: clearing the search
-  // is what closing MEANS, not a synchronisation with anything outside React.
+  // is what closing MEANS, not a synchronization with anything outside React.
   const [pickerWasOpen, setPickerWasOpen] = useState(open);
   if (pickerWasOpen !== open) {
     setPickerWasOpen(open);

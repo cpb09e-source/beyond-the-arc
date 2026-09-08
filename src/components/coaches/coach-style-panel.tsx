@@ -116,7 +116,7 @@ export function CoachStyleDimensionList({
  *
  * A vertex is drawn at its percentile from the center, with a floor so that a
  * 0th-percentile dimension is still a visible point rather than collapsing
- * into the middle and taking two neighbouring edges with it. Bennett's tempo
+ * into the middle and taking two neighboring edges with it. Bennett's tempo
  * is exactly that case.
  */
 function StyleRadar({ stylePct }: { stylePct: CoachStyle }) {

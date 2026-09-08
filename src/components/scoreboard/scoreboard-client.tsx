@@ -51,19 +51,19 @@ export function ScoreboardClient() {
   const slate = result?.key === key ? result.slate : EMPTY_SLATE;
 
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const ctrl = new AbortController();
     const requested = pinned ?? "latest";
     const tick = async () => {
       const next = await fetchSlate(pinned ?? undefined, ctrl.signal);
-      if (cancelled) return;
+      if (canceled) return;
       setResult({ key: requested, slate: next });
       // Only a live day is worth re-polling — a pinned past day cannot change.
       if (!pinned && !slateIsSettled(next)) timer = setTimeout(tick, POLL_MS);
     };
     void tick();
-    return () => { cancelled = true; ctrl.abort(); if (timer) clearTimeout(timer); };
+    return () => { canceled = true; ctrl.abort(); if (timer) clearTimeout(timer); };
   }, [pinned]);
 
   // Falls back to today so the stepper ALWAYS renders. Without this an empty
@@ -182,7 +182,7 @@ export function ScoreboardClient() {
               : `${slate.games.length} game${slate.games.length === 1 ? "" : "s"}${
                   // No demo caption. The eyebrow above already says "Sample
                   // slate", so explaining it again under the count was the
-                  // page apologising for itself in the one place a reader
+                  // page apologizing for itself in the one place a reader
                   // looks for the number.
                   slate.source === "live"
                     ? " · updating every minute"
@@ -194,7 +194,7 @@ export function ScoreboardClient() {
         </div>
 
         {/* Jump straight to a date. A native date input is deliberate: it gives
-            the platform's own calendar, keyboard entry, and localisation for
+            the platform's own calendar, keyboard entry, and localization for
             free, and on a phone it opens the OS picker — all things a
             hand-rolled calendar would have to reimplement worse. */}
         {!IS_DEMO && (
@@ -301,7 +301,7 @@ function WeekStrip({ shown, onPick }: { shown: string; onPick: (d: string) => vo
   // should let you look at it before committing, not silently swap the slate
   // out from under you and fire a fetch for a day you never asked for.
   const [anchor, setAnchor] = useState(shown);
-  // Re-centre when the selection changes from outside (calendar, a day click).
+  // Re-center when the selection changes from outside (calendar, a day click).
   // Adjust-during-render rather than an effect, so the strip never paints one
   // frame around the old week.
   const [lastShown, setLastShown] = useState(shown);
@@ -392,7 +392,7 @@ function GameCard({ g }: { g: ScoreGame }) {
         {/* THE CREST ANSWERS "WHOSE GYM IS THIS". An arena name only reads as
             a home team if you already know it — Gill Coliseum is Oregon State
             to about a thousand people and a place name to everyone else. The
-            home side is otherwise signalled only by the small `@` beside the
+            home side is otherwise signaled only by the small `@` beside the
             away team, which is easy to miss at this size.
 
             Nothing on a NEUTRAL site, because there is no home team to name and

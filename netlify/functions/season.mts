@@ -37,7 +37,7 @@ import { getSupabaseAdmin, requireUser } from "../shared/billing.mts";
  * dashboard's benefit to quietly widen who gets the data.
  *
  * `past_due` counts as paid on purpose, matching the dashboard: the
- * subscription has not been cancelled, a payment failed and Stripe is
+ * subscription has not been canceled, a payment failed and Stripe is
  * retrying. Cutting access at the first failed charge locks out anyone whose
  * card simply expired.
  */
@@ -53,7 +53,7 @@ function parseYear(raw: string | undefined): number | null {
 /**
  * Which staged corpus a request is for, from the path.
  *
- *   /api/season/2019          -> teams   (the original shape, still honoured)
+ *   /api/season/2019          -> teams   (the original shape, still honored)
  *   /api/season/players/2019  -> players
  *
  * AN ALLOW-LIST, NOT A PATH JOIN. Both segments end up in a filesystem path,
@@ -97,7 +97,7 @@ function parseTarget(pathname: string): { dir: string; year: number } | null {
  * routing. Every other function in this directory declares its own path; this
  * was the only one that did not.
  *
- * BOTH SHAPES, EXPLICITLY, because parseTarget honours both and a splat would
+ * BOTH SHAPES, EXPLICITLY, because parseTarget honors both and a splat would
  * not tell you that. The pathname the function receives is identical under
  * either routing mechanism, which is what makes adding this safe: the redirect
  * stays where it is, the two agree, and dev now matches prod.

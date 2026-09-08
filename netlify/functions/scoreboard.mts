@@ -417,7 +417,7 @@ async function recordsBefore(key: string, season: number, beforeDate: string): P
  *
  * SIGN CONVENTION: `spread` is from the HOME team's perspective, so −8.5 means
  * the home side is laying 8.5. Verified against 136 settled games from 7 Feb
- * 2026 — reading it as home-favoured makes the favorite win 72% of the time,
+ * 2026 — reading it as home-favored makes the favorite win 72% of the time,
  * which is the expected rate for college basketball; the opposite reading would
  * have put it at 28% and inverted every game on the page.
  *

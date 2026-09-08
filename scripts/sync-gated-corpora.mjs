@@ -119,7 +119,7 @@ if (missing.length) {
     console.error("Set up, once, in the Cloudflare dashboard:");
     console.error("  1. R2 → Create bucket, e.g. bta-gated.");
     console.error("     Do NOT enable public access, an r2.dev subdomain or a custom domain.");
-    console.error("     That is the whole gate — a public bucket makes presigning theatre.");
+    console.error("     That is the whole gate — a public bucket makes presigning theater.");
     console.error("  2. R2 -> API -> Create API token, Object Read & Write.");
     console.error("     The main R2 token is scoped to bta-data and CANNOT see a new");
     console.error("     bucket — it answers AccessDenied to ListBuckets. Scope the new");

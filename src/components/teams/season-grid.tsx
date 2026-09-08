@@ -264,7 +264,7 @@ export function SeasonGrid({
             // OPAQUE, mixed against the card surface rather than laid over it at 8%
             // alpha. This cell is sticky: a translucent fill lets the stat columns scroll
             // visibly through it, so POSS and MINS smeared across the lineup name as soon
-            // as the table was scrolled right. Same trap the explorer's honour cells hit
+            // as the table was scrolled right. Same trap the explorer's honor cells hit
             // — see the note in explorer-client.tsx.
             const rowStyle = isCurrent
               // var(--accent), not the raw prop: mixed at 12% against the
@@ -272,7 +272,7 @@ export function SeasonGrid({
               // on the dark theme.
               ? { backgroundColor: "color-mix(in oklab, var(--accent) 12%, var(--card))" }
               : undefined;
-            // The honour is the CELL, not a chip beside the season. It used to
+            // The honor is the CELL, not a chip beside the season. It used to
             // be a "CHAMP"/"F4" pill here and a gold cell on phones only; the
             // cell is now the single treatment at every width. One idea, one
             // visual language, and it costs no horizontal room in a group that
@@ -280,22 +280,22 @@ export function SeasonGrid({
             //
             // Same opacity rule as the current-season tint above: this cell is
             // sticky, so the fill mixes against the zebra base rather than
-            // laying over it. The .honour-* classes in globals.css do the mix.
-            const honour = tourneyBadge(r.teamName, r.year);
+            // laying over it. The .honor-* classes in globals.css do the mix.
+            const honor = tourneyBadge(r.teamName, r.year);
             const honourClass =
-              honour === "champion"
+              honor === "champion"
                 ? cn("text-court-ink font-bold",
-                     i % 2 === 0 ? "honour-champ-paper" : "honour-champ-card")
-                : honour === "final-four"
+                     i % 2 === 0 ? "honor-champ-paper" : "honor-champ-card")
+                : honor === "final-four"
                 ? cn("text-court-ink font-bold",
-                     i % 2 === 0 ? "honour-f4-paper" : "honour-f4-card")
+                     i % 2 === 0 ? "honor-f4-paper" : "honor-f4-card")
                 : "";
-            // An honour outranks the current-season tint on this one cell: a
+            // An honor outranks the current-season tint on this one cell: a
             // season can be both, and the gold is the rarer thing to say.
-            const cellStyle = honour ? undefined : rowStyle;
+            const cellStyle = honor ? undefined : rowStyle;
             const honourTitle =
-              honour === "champion" ? `${seasonLabel(r.year)} national champion`
-              : honour === "final-four" ? `${seasonLabel(r.year)} Final Four`
+              honor === "champion" ? `${seasonLabel(r.year)} national champion`
+              : honor === "final-four" ? `${seasonLabel(r.year)} Final Four`
               : undefined;
             return (
               <tr key={r.year} className={cn("group", rowBg)} style={rowStyle}>
@@ -450,7 +450,7 @@ function HeadCell({
           otherwise flatten "eFG%" to "EFG%" — StatLabel detects a
           lowercase-initial label, opts it out of the CSS transform and
           uppercases the tail by hand. Same component the explorer's headers
-          use, so the two rows capitalise identically. */}
+          use, so the two rows capitalize identically. */}
       {mobileLabel ? (
         <span>
           <span className="sm:hidden"><StatLabel label={mobileLabel} /></span>

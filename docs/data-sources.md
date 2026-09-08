@@ -109,7 +109,7 @@ them; they can be dropped once nothing external depends on them.
 - The box sidecars join by id (both sides are CBBD), so the fuzzy date/name
   matcher and its ±1-day window are gone: **100% join, zero misses, every
   season**.
-- Exhibitions and cancelled games are filtered at the source, not at read time.
+- Exhibitions and canceled games are filtered at the source, not at read time.
 
 ### What was genuinely lost
 
@@ -138,7 +138,7 @@ re-measuring.**
 
 | Problem | Scale | Guard |
 |---|---|---|
-| Cancelled games arrive as a real row with an all-zero stat line, and `0` passes a `typeof === "number"` check | ~34/season | reject when both sides scored 0 |
+| Canceled games arrive as a real row with an all-zero stat line, and `0` passes a `typeof === "number"` check | ~34/season | reject when both sides scored 0 |
 | `possessions` is sometimes a corrupt small integer — William & Mary 2020 had seven games reporting ~1 possession alongside 50+ FGA, deflating season pace to 53.0 and inflating DRtg to 158.8 | 0.35% overall, 2.90% in 2018 | use the provider value only within 35% of the standard estimator |
 | Point splits exceeding the team's own final score (854 fast-break points in a 55-point game) | rare, catastrophic | reject a split greater than total points |
 | Impossible adjusted ratings (ORtg 1148.5, ranked #1 offense *and* #351 defense) | 13 team-seasons | reject outside 60-150; falls back to Bart alone |

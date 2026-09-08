@@ -116,7 +116,7 @@ function buildSeason(year) {
   const idx = bartIndex(year);
   if (!idx) return null;
 
-  // Opponent quality by CBBD teamId. Mean-centred so "opponent strength" reads
+  // Opponent quality by CBBD teamId. Mean-centered so "opponent strength" reads
   // as points better or worse than an average D-I team, and a non-D-I opponent
   // (absent from the ratings file) is priced below the worst rated team rather
   // than dropped — those games are real minutes and real production.

@@ -19,7 +19,7 @@
  *
  * Fix: adaptive windowing. Start at 14 days; if a response comes back at (or
  * above) the cap, split the window in half and recurse until every response is
- * comfortably under it. Date maths uses real Date arithmetic, so leap days are
+ * comfortably under it. Date math uses real Date arithmetic, so leap days are
  * included by construction. The pull then asserts no window ended at the cap.
  *
  * Output is one deduped file per season keyed on (gameId, teamId), which also

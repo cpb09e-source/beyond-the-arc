@@ -20,7 +20,7 @@
  *
  * BOTH SIDES ARE TALLIED. `rim_rate` etc. is the share of a team's OWN field-goal
  * attempts; `rim_rate_def` is the share of attempts its OPPONENTS took from
- * there, which is the more interesting half (funnelling opponents off the rim is
+ * there, which is the more interesting half (funneling opponents off the rim is
  * a defensive scheme, not luck).
  *
  * COVERAGE IS PARTIAL BY DESIGN. PBP is only ingested for the seasons listed by

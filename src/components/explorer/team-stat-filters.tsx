@@ -176,7 +176,7 @@ let nextRowId = 1;
  *
  * It used to derive rows from the filters alone, and that quietly could not
  * represent the most ordinary thing in this panel: a column you want to SEE
- * but not bound. Such a row has no value, so it serialises to no `f` param,
+ * but not bound. Such a row has no value, so it serializes to no `f` param,
  * so the resync read it back as nothing and deleted the row — the reader
  * ticked four stats, got four columns, and watched the four rows they were
  * about to type into disappear.
@@ -364,7 +364,7 @@ export function TeamStatFilters({
    * keystroke — which would remount the row they were handed to.
    */
   /**
-   * A request to push the draft to the URL, honoured AFTER the state lands.
+   * A request to push the draft to the URL, honored AFTER the state lands.
    *
    * THIS EXISTS BECAUSE THE OBVIOUS VERSION IS WRONG, and wrong in a way that
    * looks like nothing happening. Calling submit() from inside the handler
@@ -527,7 +527,7 @@ export function TeamStatFilters({
   };
 
   /**
-   * Honour an apply request, once the state it should publish has committed.
+   * Honor an apply request, once the state it should publish has committed.
    *
    * Gated here rather than at each call site so the curated views can request
    * freely and simply be ignored — one place decides whether this view applies

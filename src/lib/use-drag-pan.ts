@@ -32,7 +32,7 @@ export function useDragPan(
 ) {
   const fromLinks = opts?.fromLinks ?? false;
   const pan = useRef<{ x: number; left: number; active: boolean } | null>(null);
-  /** Set when a drag actually moved, so the trailing click can be cancelled. */
+  /** Set when a drag actually moved, so the trailing click can be canceled. */
   const swallowClick = useRef(false);
 
   const onPointerDown = (e: ReactPointerEvent) => {

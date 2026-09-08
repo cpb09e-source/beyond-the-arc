@@ -63,12 +63,12 @@ export function useShotProfile(bartPlayerId: number, year: number | null): Shoot
 
   useEffect(() => {
     if (year === null) return;
-    let cancelled = false;
+    let canceled = false;
     fetch(`/data/shooting-${year}.json`)
       .then(jr)
-      .then((j) => { if (!cancelled) setGot({ key, data: j?.players?.[String(bartPlayerId)] ?? null }); })
-      .catch(() => { if (!cancelled) setGot({ key, data: null }); });
-    return () => { cancelled = true; };
+      .then((j) => { if (!canceled) setGot({ key, data: j?.players?.[String(bartPlayerId)] ?? null }); })
+      .catch(() => { if (!canceled) setGot({ key, data: null }); });
+    return () => { canceled = true; };
   }, [bartPlayerId, year, key]);
   // Only answer with data fetched for THIS player-season; anything else is
   // either not fetched yet or left over from the last one.
@@ -118,18 +118,18 @@ export function ShotProfileFallbackCard({ bartPlayerId, years }: { bartPlayerId:
   const [state, setState] = useState<{ year: number; s: Shooting } | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     (async () => {
       const bid = String(bartPlayerId);
       for (const y of [...years].sort((a, b) => b - a)) {
         const shoot = await fetch(`/data/shooting-${y}.json`).then(jr).catch(() => null);
         const s: Shooting | undefined = shoot?.players?.[bid];
         if (!s) continue;
-        if (!cancelled) setState({ year: y, s });
+        if (!canceled) setState({ year: y, s });
         return;
       }
     })();
-    return () => { cancelled = true; };
+    return () => { canceled = true; };
   }, [bartPlayerId, years]);
 
   if (!state) return null;

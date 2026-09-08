@@ -62,7 +62,7 @@ export const TEAM_STAT_COLUMNS: TeamStatColumn[] = [
   // These replace Bart's sos / ncsos / consos, which were dropped rather than
   // kept alongside. His SoS is a win-probability figure and `adj_sos` below is
   // a net rating, and the two shipped as "SoS" and "SOS" — labels differing
-  // only in capitalisation, in different units, in one searchable picker.
+  // only in capitalization, in different units, in one searchable picker.
   //
   // `sos_wp` keeps the win-percentage FRAMING people know from T-Rank, on our
   // own numbers and against a baseline we state: the 45th-ranked team, the same

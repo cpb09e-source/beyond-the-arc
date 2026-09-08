@@ -228,7 +228,7 @@ for (const [team, entry] of Object.entries(preview.teams ?? {})) {
    *
    * A player we list who is not on the school's page has left. A player on the
    * page we do not list is missing, and is only counted when he has prior D-I
-   * minutes — an unrecognised name is a true freshman, and a preview built
+   * minutes — an unrecognized name is a true freshman, and a preview built
    * before signing day will not have him yet.
    */
   const official = officialRoster.get(team);

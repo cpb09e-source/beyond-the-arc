@@ -54,10 +54,10 @@ export default function TermsPage() {
       <Clause id="billing" title="3. Billing, renewal and cancellation">
         <p>
           Payment is taken by Stripe. Subscriptions renew automatically at the end of each period
-          until cancelled.
+          until canceled.
         </p>
         <Plainly>
-          You can cancel at any time from your account page. Cancelling stops the next charge and
+          You can cancel at any time from your account page. Canceling stops the next charge and
           leaves your access running to the end of the period you have already paid for — we do not
           cut you off the moment you cancel.
         </Plainly>
@@ -158,7 +158,7 @@ export default function TermsPage() {
         <p>
           The metrics we build, the writing, the design and the code are ours. The underlying
           statistics are facts and belong to nobody; the feeds they arrive through belong to the
-          organisations named on the{" "}
+          organizations named on the{" "}
           <Link href="/sources" className="text-coral hover:underline">sources page</Link>. Team names
           and logos are the trademarks of their institutions, and this site is not affiliated with or
           endorsed by any of them.

@@ -13,7 +13,7 @@
  * one decision standing in for two, and only one of them was right:
  *
  *   "Is it comparable to other seasons?" No, and that has not changed. Games
- *   were cancelled wholesale, teams opted out mid-year, schedules went
+ *   were canceled wholesale, teams opted out mid-year, schedules went
  *   conference-only for long stretches, and most arenas had no crowd, so
  *   home-court advantage — and the venue and quadrant math built on it —
  *   behaves differently. 8,243 game rows against 12,358 in 2025-26, a 33%

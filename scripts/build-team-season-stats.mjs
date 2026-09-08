@@ -11,7 +11,7 @@
  *
  * WHY SUM THE GAME LOGS RATHER THAN CALL A SEASON-STATS ENDPOINT: CBBD does
  * expose /stats/team/season, but it aggregates over EVERY game including the
- * non-D1 tune-ups, while our game logs have already had cancelled games and
+ * non-D1 tune-ups, while our game logs have already had canceled games and
  * pre-season exhibitions filtered out. Summing the logs guarantees the season
  * totals and the per-game rows on /calc can never disagree — a team's "REB
  * Diff" on the explorer is exactly the sum of the REB Diffs the calculator
@@ -179,7 +179,7 @@ function blank() {
  * The game logs carry differentials, not both sides' raw counts, so the box
  * archive is re-read here to get own AND opponent totals. The logs are still
  * the authority on WHICH games count: a box row whose game_id isn't in the log
- * was filtered upstream (cancelled, exhibition, non-D1 perspective) and must be
+ * was filtered upstream (canceled, exhibition, non-D1 perspective) and must be
  * skipped so the two surfaces stay reconcilable.
  */
 function accumulate(season, totals) {

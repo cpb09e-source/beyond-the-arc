@@ -274,7 +274,7 @@ export async function fetchSlate(date?: string, signal?: AbortSignal): Promise<S
   // quietly returning it for any requested date is better than an empty page
   // from the scoreboard's day stepper.
   if (IS_DEMO) {
-    // Memoised across callers AND across navigations. The ticker and the
+    // Memoized across callers AND across navigations. The ticker and the
     // scoreboard page both want this file, and on /scoreboard they mount
     // together — without the shared promise that is two requests for identical
     // bytes on first paint. Holding the promise rather than the result also

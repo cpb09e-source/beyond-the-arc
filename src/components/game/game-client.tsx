@@ -55,7 +55,7 @@ export function GameClient() {
 
   useEffect(() => {
     if (!id || !date) return;
-    let cancelled = false;
+    let canceled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const ctrl = new AbortController();
 
@@ -66,7 +66,7 @@ export function GameClient() {
         ? AbortSignal.any([ctrl.signal, timeout])
         : ctrl.signal;
       // Demo mode reads the one baked bundle, whatever id the URL carries —
-      // every demo link points here anyway (see gameHref), and honouring a
+      // every demo link points here anyway (see gameHref), and honoring a
       // hand-typed id would mean a CBBD call for a season that has no data.
       const res = await fetch(
         IS_DEMO
@@ -82,14 +82,14 @@ export function GameClient() {
     const tick = async (attempt = 0) => {
       try {
         const j = await load();
-        if (cancelled) return;
+        if (canceled) return;
         bundleRef.current = j;
         setBundle(j);
         setFailed(false);
         // Keep asking only while there is something left to happen.
         if (!isFinal(j.game)) timer = setTimeout(() => void tick(), POLL_MS);
       } catch {
-        if (cancelled) return;
+        if (canceled) return;
         // A failed poll on a game we already hold keeps showing what we have.
         if (bundleRef.current) {
           if (!isFinal(bundleRef.current.game)) timer = setTimeout(() => void tick(), POLL_MS);
@@ -114,7 +114,7 @@ export function GameClient() {
     void tick();
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      cancelled = true;
+      canceled = true;
       ctrl.abort();
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);

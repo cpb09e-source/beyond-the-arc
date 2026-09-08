@@ -43,13 +43,13 @@ export function ScoreTicker() {
   const panHandlers = useDragPan(railRef, { fromLinks: true });
 
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const ctrl = new AbortController();
 
     const tick = async () => {
       const next = await fetchSlate(undefined, ctrl.signal);
-      if (cancelled) return;
+      if (canceled) return;
       setSlate(next);
       setResolved(true);
       // Stop once every game is final — the answer can't change until tomorrow,
@@ -70,7 +70,7 @@ export function ScoreTicker() {
     void tick();
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      cancelled = true;
+      canceled = true;
       ctrl.abort();
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);

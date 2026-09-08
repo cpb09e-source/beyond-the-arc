@@ -268,7 +268,7 @@ type RangeGroup = { label: string; stats: RangeStat[] };
 /**
  * "Minutes per game" → "Minutes Per Game", without wrecking the acronyms.
  *
- * A word is only capitalised when it is ENTIRELY lowercase. Anything already
+ * A word is only capitalized when it is ENTIRELY lowercase. Anything already
  * carrying a capital is left exactly as written, which is what protects PIR,
  * EPM, FG, 3PT, TS and — the one a naive title-case always ruins — eWins.
  */

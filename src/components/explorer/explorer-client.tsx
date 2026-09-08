@@ -114,7 +114,7 @@ const DEFAULT_COL_BY_KEY = new Map(DEFAULT_COLS.map((c) => [c.total as string, c
  * When the stat is already a default column we reuse that definition verbatim,
  * so a pinned REB Diff arrives with its per-game sub-figure and its chip keyed
  * to reb_diff_pg — a hand-rolled copy would quietly drop both. Everything else
- * is synthesised from the shared TEAM_STAT_COLUMNS metadata.
+ * is synthesized from the shared TEAM_STAT_COLUMNS metadata.
  */
 function pinnedColumn(key: string): TeamCol | null {
   const reuse = DEFAULT_COL_BY_KEY.get(key);
@@ -510,7 +510,7 @@ export function ExplorerClient({
    * the reset landed. Setting state during render makes React throw that
    * render away and re-run with page 1, so the empty frame never exists.
    *
-   * The comparison is against the memoised result set itself, not its inputs,
+   * The comparison is against the memoized result set itself, not its inputs,
    * which is the same trigger the dependency array had.
    */
   const [pagedFor, setPagedFor] = useState<{ spec: unknown; search: string }>({ spec, search: tableSearch });
@@ -1443,7 +1443,7 @@ export function ExplorerClient({
                   // Opaque zebra so the frozen columns can share it and still
                   // hide the scrolled content behind them.
                   const zebra = i % 2 === 0 ? "bg-paper" : "bg-card";
-                  // On phones the rank cell carries the tournament honour: the
+                  // On phones the rank cell carries the tournament honor: the
                   // chip cost ~23px of a ~71px team column, and this gutter is
                   // already mostly padding around one or two digits. Hardwood
                   // rather than a new hue — it is the color the chip has always
@@ -1451,25 +1451,25 @@ export function ExplorerClient({
                   // for a percentile, which is only ever green/amber/red.
                   // max-sm: so the desktop chip and the zebra stripe are
                   // untouched above the breakpoint.
-                  const honour = tourneyBadge(r.team_name, r.team_year);
+                  const honor = tourneyBadge(r.team_name, r.team_year);
                   // OPAQUE tint, keyed to which zebra stripe this row is on.
                   // bg-court/55 and /20 were translucent, and this cell is
                   // sticky — so on a champion or Final Four row the ratings
                   // columns scrolled visibly through the rank gutter while
-                  // every other row stayed clean. See the .honour-* classes in
+                  // every other row stayed clean. See the .honor-* classes in
                   // globals.css; they mix the hardwood against the same zebra
                   // base the rest of the frozen group uses.
                   const honourCell =
-                    honour === "champion"
+                    honor === "champion"
                       ? cn("text-court-ink font-bold",
-                           i % 2 === 0 ? "honour-champ-paper" : "honour-champ-card")
-                      : honour === "final-four"
+                           i % 2 === 0 ? "honor-champ-paper" : "honor-champ-card")
+                      : honor === "final-four"
                       ? cn("text-court-ink font-bold",
-                           i % 2 === 0 ? "honour-f4-paper" : "honour-f4-card")
+                           i % 2 === 0 ? "honor-f4-paper" : "honor-f4-card")
                       : "";
                   const honourTitle =
-                    honour === "champion" ? `${seasonLabel(r.team_year)} national champion`
-                    : honour === "final-four" ? `${seasonLabel(r.team_year)} Final Four`
+                    honor === "champion" ? `${seasonLabel(r.team_year)} national champion`
+                    : honor === "final-four" ? `${seasonLabel(r.team_year)} Final Four`
                     : undefined;
                   return (
                   <tr key={`${r.team_id}-${r.team_year}`} className={cn("group", zebra)}>

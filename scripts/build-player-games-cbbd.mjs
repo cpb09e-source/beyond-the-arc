@@ -90,7 +90,7 @@ function run(season) {
     if (!team) continue;
     const gameId = `${r.gameId}-${r.teamId}`;
     const log = logs.get(gameId);
-    // No log row = the game was filtered upstream (cancelled, exhibition,
+    // No log row = the game was filtered upstream (canceled, exhibition,
     // non-D1 perspective). Skip so a player's log can never contain a game
     // /calc and the team pages don't show.
     if (!log) { skippedGame++; continue; }

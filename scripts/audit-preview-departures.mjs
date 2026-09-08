@@ -141,7 +141,7 @@ for (const [team, entry] of Object.entries(preview.teams ?? {})) {
   const fuzzy = new Set(off.players.map((p) => loose(p.name)).filter(Boolean));
 
   // Newcomers are excluded: a true freshman is often added to the athletics
-  // roster later than he is to a preview, so his absence is a timing artefact
+  // roster later than he is to a preview, so his absence is a timing artifact
   // rather than a departure. Returners and transfers should both be listed.
   const shouldBeListed = (entry.roster ?? []).filter((p) => p.status !== "newcomer");
   const missing = shouldBeListed.filter(

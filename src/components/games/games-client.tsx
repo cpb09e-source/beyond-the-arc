@@ -125,7 +125,7 @@ type Hit = { pack: GamePack; row: number[]; idx: number; v: number | null };
 /**
  * Filter, sort and cut to `limit` in ONE linear scan.
  *
- * A conventional filter-then-sort would materialise every match — 115,000
+ * A conventional filter-then-sort would materialize every match — 115,000
  * objects on an unfiltered season, twelve times that across the archive — to
  * show at most five hundred. This keeps a sorted array of at most `limit` and
  * compares each row against its worst member, so the allocation is bounded by

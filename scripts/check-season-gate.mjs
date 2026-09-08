@@ -6,7 +6,7 @@
  *
  *   no token / bad token   -> 401
  *   subscriber             -> 200 with rows
- *   cancelled subscriber   -> 403
+ *   canceled subscriber   -> 403
  *   a FREE season          -> 404 (never bundled, so never reachable here)
  *   junk or traversal      -> 400
  *
@@ -19,7 +19,7 @@
  *
  * WARNING: this WRITES to the live profiles row for test@test.com — it flips
  * subscription_status to "canceled" to prove the 403 branch, then restores it.
- * If it dies between those two writes the test account is left cancelled; the
+ * If it dies between those two writes the test account is left canceled; the
  * fix is to set subscription_status back to "active" by hand. It touches no
  * other account and nothing in production data.
  */
@@ -70,10 +70,10 @@ console.log("\nMalformed input:");
 await hit("non-numeric year", `${BASE}/etc`, token);
 await hit("traversal attempt", `${BASE}/..%2f..%2fpackage`, token);
 
-console.log("\nSubscription cancelled (same user):");
+console.log("\nSubscription canceled (same user):");
 await admin.from("profiles").update({ subscription_status: "canceled" }).eq("id", uid);
 await new Promise((r) => setTimeout(r, 400));
-const denied = await hit("cancelled subscriber", `${BASE}/2019`, token);
+const denied = await hit("canceled subscriber", `${BASE}/2019`, token);
 await admin.from("profiles").update({ subscription_status: "active" }).eq("id", uid);
 console.log("  (restored to active)");
 

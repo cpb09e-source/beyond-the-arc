@@ -53,7 +53,7 @@ more tellingly, r 0.876 -> 0.964 — a correlation gain no rescaling can produce
 NOT SHIPPED, and the reasons are on the record so nobody re-derives them:
   - The zero point breaks. Unweighted mean is pinned to 0, so the possession-
     weighted mean goes to +5.5 and the median rotation player reads +5.7. EPM
-    stops meaning "versus average" until it is re-centred, and whether zero
+    stops meaning "versus average" until it is re-centered, and whether zero
     should be the average PLAYER or the average POSSESSION is a definitional
     call, not a bug fix.
   - The leaderboard regresses where it matters. 2024-25 comes back with

@@ -667,7 +667,7 @@ function SlotPicker({
   const [hIdx, setHIdx] = useState(0);
 
   // Same adjust-during-render reset as the modal above: clearing the search
-  // is what closing MEANS, not a synchronisation with anything outside React.
+  // is what closing MEANS, not a synchronization with anything outside React.
   const [pickerWasOpen, setPickerWasOpen] = useState(open);
   if (pickerWasOpen !== open) {
     setPickerWasOpen(open);

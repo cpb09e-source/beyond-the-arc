@@ -202,7 +202,7 @@ export function TeamStatsPanel({
       {blurBody ? <BlurOverlay>{body}</BlurOverlay> : body}
       <p className="mt-3 text-[0.65rem] text-ink-muted">
         Chips are national percentiles within the selected split — a team&rsquo;s away numbers are
-        ranked against every other team&rsquo;s away numbers, not against the full season. Grey chips
+        ranked against every other team&rsquo;s away numbers, not against the full season. Gray chips
         mark stats with no good direction — tempo, shot diet and the scoring shares — where the rank
         says how unusual a team is, not how good.
       </p>

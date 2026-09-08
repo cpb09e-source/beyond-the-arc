@@ -14,7 +14,7 @@
  * RK = rank by EPM among players with >= MIN_POSS.
  *
  * This is also where EPM's ZERO POINT is set — the fit does not pin it, so it
- * is re-centred on the average possession here and eWins is recomputed from the
+ * is re-centered on the average possession here and eWins is recomputed from the
  * corrected value. See the long note in main(). Consequence for anyone changing
  * this file: epm.csv is left exactly as the fit produced it, so the prior chain
  * (build-epm-priors.mjs -> compute-epm.py --priors) never sees a corrected
@@ -71,7 +71,7 @@ const LOW_USG_FLOOR = Number(process.env.BTA_LOW_USG_FLOOR ?? 0.85);
 
 /**
  * College points of margin per marginal win. Mirrors PTS_PER_WIN in
- * compute-epm-extras.py — eWins is recomputed here from the re-centred EPM, so
+ * compute-epm-extras.py — eWins is recomputed here from the re-centered EPM, so
  * the two must agree or the column would change meaning depending on which
  * script last touched it.
  */
@@ -145,7 +145,7 @@ function main() {
     name: r[iN], team: r[iT], poss: +r[iP], off: +r[iO], def: +r[iD], epm: +r[iE],
   }));
 
-  // ---- ZERO POINT: re-centre on the average POSSESSION ----
+  // ---- ZERO POINT: re-center on the average POSSESSION ----
   //
   // EPM claims to be "impact vs. an average player", and it wasn't. Over the
   // full fit the possession-weighted mean was +1.18 (2024), +1.25 (2025) and
@@ -230,12 +230,12 @@ function main() {
   //
   // ON/OFF is taken from here. eWINS IS NOT, any more: compute-epm-extras.py
   // derives it as (epm / 100) * poss / PTS_PER_WIN from the RAW fit, so the
-  // column on disk still carries the un-centred zero point. Shifting EPM is not
+  // column on disk still carries the un-centered zero point. Shifting EPM is not
   // enough to fix it either — the correction is multiplied by possessions, so a
   // 2,100-possession starter was being credited ~0.9 wins he did not earn and a
   // 400-possession reserve ~0.17. That is a real reordering, not an offset: it
   // was paying players twice for minutes, once honestly and once through the
-  // bias. So eWins is recomputed below from the re-centred EPM.
+  // bias. So eWins is recomputed below from the re-centered EPM.
   //
   // On/off needs no such treatment. It is measured, not fitted — a difference
   // of two observed net ratings — so it has no ridge zero point to be wrong.
@@ -325,7 +325,7 @@ function main() {
     if (!Number.isFinite(mpg) || mpg < MIN_PG) { suppressed++; continue; }
     matched++;
     const ex = extras.get(`${nn}|${nt}`);
-    // eWins from the re-centred EPM, on compute-epm-extras.py's own formula.
+    // eWins from the re-centered EPM, on compute-epm-extras.py's own formula.
     // Derivable from epm.csv alone, so it no longer depends on epm-extras.csv
     // having been produced; on/off still does, because nothing here can
     // reconstruct it.

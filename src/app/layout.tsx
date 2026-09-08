@@ -53,7 +53,7 @@ const mono = IBM_Plex_Mono({
   subsets: ["latin"],
   // 700 is loaded because .tabular wins the family on the 35 elements that
   // carry .font-display too — those are the big pull-out figures, and they ask
-  // for the display weight. Without a real 700 cut the browser synthesises one,
+  // for the display weight. Without a real 700 cut the browser synthesizes one,
   // which on a mono smears the very glyphs this face was chosen for.
   weight: ["400", "500", "600", "700"],
   display: "swap",

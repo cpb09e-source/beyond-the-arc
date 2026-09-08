@@ -101,7 +101,7 @@ export function FindGameModal({
   useEffect(() => {
     const missing = years.filter((y) => !yearData[y]);
     if (missing.length === 0) return;
-    let cancelled = false;
+    let canceled = false;
     /* eslint-disable-next-line react-hooks/set-state-in-effect -- the effect IS
        the external system here: it starts a fetch, and this flag is how the
        render learns one is in flight. There is nothing to derive during render
@@ -109,7 +109,7 @@ export function FindGameModal({
     setLoading(true);
     Promise.all(missing.map((y) => loadGamesForYear(y).then((arr) => ({ y, arr }))))
       .then((results) => {
-        if (cancelled) return;
+        if (canceled) return;
         setYearData((s) => {
           const next = { ...s };
           for (const { y, arr } of results) next[y] = arr;
@@ -117,7 +117,7 @@ export function FindGameModal({
         });
         setLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => { canceled = true; };
   }, [years, yearData]);
 
   // Concat across selected years, filtered via the predicate (team_id match

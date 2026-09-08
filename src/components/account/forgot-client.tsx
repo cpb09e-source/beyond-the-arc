@@ -19,7 +19,7 @@ import { AuthShell, AuthLink, Field, FormError, SubmitButton } from "./auth-shel
  * pretending the send definitely happened.
  *
  * WHERE THE LINK LANDS is /account/reset/, passed as `redirectTo`. Supabase
- * only honours a redirect that is on the project's allow-list, so this URL has
+ * only honors a redirect that is on the project's allow-list, so this URL has
  * to be added under Authentication → URL Configuration for both the production
  * origin and localhost, or the link silently returns people to the site root
  * with the recovery token still in the fragment and nothing to consume it.

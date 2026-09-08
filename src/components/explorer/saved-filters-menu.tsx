@@ -61,7 +61,7 @@ export function SavedFiltersMenu({
    */
   scope?: SavedScope;
 }) {
-  // Bound to the scope, and memoised so the store gets STABLE function
+  // Bound to the scope, and memoized so the store gets STABLE function
   // references: a fresh subscribe on every render tears down and re-adds the
   // listener each time, and a fresh getSnapshot re-renders without end.
   const subscribe = useMemo(() => (cb: () => void) => subscribeSaved(cb, scope), [scope]);

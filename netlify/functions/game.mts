@@ -34,7 +34,7 @@ setDefaultResultOrder("ipv4first");
  * the status of what was actually fetched — which means the archive costs
  * almost nothing and the live path costs what it has to.
  *
- * WRINKLE 2 — THE CONTEXT IS MEMOISED SEPARATELY FROM THE GAME. Standings,
+ * WRINKLE 2 — THE CONTEXT IS MEMOIZED SEPARATELY FROM THE GAME. Standings,
  * head-to-head history and recent form do not change while a game is being
  * played, but they are part of the same response. Re-fetching them on every
  * 60-second refresh would triple the call cost of a live game for data that
@@ -283,7 +283,7 @@ const handler = async (req: Request, _ctx: Context) => {
       ranksOn(key, season, date),
     ]);
 
-    // Context. Memoised separately (see the header) so a live refresh does not
+    // Context. Memoized separately (see the header) so a live refresh does not
     // re-buy the last three seasons of schedule every minute.
     const confs = [...new Set([g.homeConference, g.awayConference].filter(Boolean))] as string[];
     const [homeSched, awaySched, homePace, awayPace, ...confTables] = await Promise.all([

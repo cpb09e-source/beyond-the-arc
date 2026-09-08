@@ -111,41 +111,41 @@ export function PlayerShotChart({
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
 
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     fetch(dataUrl(`/data/shots/${bartPlayerId}.json`))
       .then((r) => (r.ok ? r.json() : null))
       .then((j: ShotsFile | null) => {
-        if (cancelled) return;
+        if (canceled) return;
         const yrs = j ? Object.keys(j.seasons).map(Number).sort((a, b) => b - a) : [];
         if (!j || yrs.length === 0) { setData("none"); return; }
         setData(j);
         setYear(yrs[0]);
       })
-      .catch(() => { if (!cancelled) setData("none"); });
-    return () => { cancelled = true; };
+      .catch(() => { if (!canceled) setData("none"); });
+    return () => { canceled = true; };
   }, [bartPlayerId]);
 
   // League baselines are one small shared file (~56 KB) — fetched alongside,
   // and the volume chart simply sits out if it never arrives.
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     fetch(dataUrl("/data/shot-baselines.json"))
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: Baselines | null) => { if (!cancelled) setBase(j); })
-      .catch(() => { if (!cancelled) setBase(null); });
-    return () => { cancelled = true; };
+      .then((j: Baselines | null) => { if (!canceled) setBase(j); })
+      .catch(() => { if (!canceled) setBase(null); });
+    return () => { canceled = true; };
   }, []);
 
   // Zone cohorts: the same rates pooled by zone, PLUS the distribution behind
   // them, which is what makes a percentile possible. ~119 KB, served from
   // /public rather than R2 — it is one file every player page wants.
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     fetch("/data/shot-zone-baselines.json")
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: ZoneBaselines | null) => { if (!cancelled) setZoneBase(j); })
-      .catch(() => { if (!cancelled) setZoneBase(null); });
-    return () => { cancelled = true; };
+      .then((j: ZoneBaselines | null) => { if (!canceled) setZoneBase(j); })
+      .catch(() => { if (!canceled) setZoneBase(null); });
+    return () => { canceled = true; };
   }, []);
 
   // Zone splits for the chart's season, shown in the band below.
@@ -158,7 +158,7 @@ export function PlayerShotChart({
 
   const shown = useMemo(() => applyFilters(rows, filters), [rows, filters]);
   // The accuracy chart needs both makes and misses to have a percentage at
-  // all, so it ignores the make/miss toggles and honours every other filter.
+  // all, so it ignores the make/miss toggles and honors every other filter.
   const outcomeFiltered = !filters.make || !filters.miss;
   const forAccuracy = useMemo(
     () => (outcomeFiltered ? applyFilters(rows, { ...filters, make: true, miss: true }) : shown),

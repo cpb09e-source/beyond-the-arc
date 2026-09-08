@@ -51,7 +51,7 @@ export function SearchableSelect({
    * Open, cleared, focused — in the handler, not in an effect.
    *
    * This was a useEffect on `open` that reset the query and the active index.
-   * The reset is not a synchronisation with anything outside React; it is part
+   * The reset is not a synchronization with anything outside React; it is part
    * of what opening MEANS, and doing it in an effect made it a second render
    * pass after the popover had already painted with the old query in it.
    */

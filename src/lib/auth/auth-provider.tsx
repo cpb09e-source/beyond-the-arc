@@ -101,12 +101,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return () => clearTimeout(t);
     }
 
-    let cancelled = false;
+    let canceled = false;
 
     // getSession reads the persisted token before any network call, so the
     // header settles without waiting on Supabase.
     supabase.auth.getSession().then(({ data }) => {
-      if (cancelled) return;
+      if (canceled) return;
       const s = data.session ?? null;
       setSession(s);
       setStatus(s ? "signedIn" : "signedOut");
@@ -116,7 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Covers sign-in, sign-out, token refresh, and the same account being
     // signed out in another tab.
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      if (cancelled) return;
+      if (canceled) return;
       setSession(s);
       setStatus(s ? "signedIn" : "signedOut");
       if (s?.user) void loadProfile(s.user.id);
@@ -124,7 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => {
-      cancelled = true;
+      canceled = true;
       sub.subscription.unsubscribe();
     };
   }, [loadProfile]);

@@ -409,7 +409,7 @@ export type TeamGameFilter = { stat: string; op: TeamGameOp; value: number };
 
 export const TEAM_OP_LABEL: Record<TeamGameOp, string> = { gte: "≥", gt: ">", lte: "≤", lt: "<" };
 
-/** Pre-rename ops, still honoured on the way in. */
+/** Pre-rename ops, still honored on the way in. */
 const TEAM_OP_ALIAS: Record<string, TeamGameOp> = { ge: "gte", le: "lte", gte: "gte", gt: "gt", lte: "lte", lt: "lt" };
 
 export function passesTeamFilters(r: number[], filters: TeamGameFilter[]): boolean {

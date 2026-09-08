@@ -36,7 +36,7 @@
  * Joins reuse the exact machinery of build-player-games-cbbd.mjs:
  *   shooter → bart id  via (normalized TEAM_MAP name | normalized player name)
  *   game    → W/L + venue  via game-logs-by-year on `${gameId}-${teamId}`
- * Plays whose game has no log row are skipped (exhibitions / cancelled / non-D1
+ * Plays whose game has no log row are skipped (exhibitions / canceled / non-D1
  * perspective), same eligibility rule as every other player surface.
  *
  * Dedupe: CBBD serves the same play under multiple date files near ET

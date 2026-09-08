@@ -423,7 +423,7 @@ export function subscribersTile(overview: Loaded<Overview>): TileModel {
   const s = overview.data.subscribers;
   const sub = [
     s.paidNew30d ? `+${s.paidNew30d} paid this month` : `${s.accounts} accounts`,
-    s.cancelling ? `${s.cancelling} canceling` : null,
+    s.canceling ? `${s.canceling} canceling` : null,
   ].filter(Boolean).join(" · ");
   // The split is the plan mix, not a target: monthly and yearly are the whole
   // of `active`, so the bar is full whenever anyone is paying at all.
@@ -878,7 +878,7 @@ export function SubscribersSection({ overview, footer }: { overview: Loaded<Over
             <dl className="px-4 py-4 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-4 border-b border-hairline">
               <Fact label="Paying now" value={<><span className="text-ink">{s.active}</span> <span className="text-ink-muted font-normal text-[0.78rem] ml-1">{s.monthly} monthly · {s.yearly} yearly</span></>} />
               <Fact label="New paid, 30d" value={s.paidNew30d} />
-              <Fact label="Canceling" value={s.cancelling} hint="Still paid today, already told Stripe to stop." />
+              <Fact label="Canceling" value={s.canceling} hint="Still paid today, already told Stripe to stop." />
               <Fact label="Past due" value={s.pastDue} hint="A card failed and Stripe is retrying. Access continues." />
               <Fact label="Accounts" value={s.accounts} />
               <Fact label="New, 7 days" value={s.new7d} />

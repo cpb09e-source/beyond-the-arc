@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
  * column and costs nothing but a row of height.
  *
  * IT IS ENCLOSED, AND THAT IS THE POINT. A track around the whole set with the
- * active section raised out of it on a card-coloured pill: seven items read as
+ * active section raised out of it on a card-colored pill: seven items read as
  * ONE CONTROL WITH SEVEN POSITIONS rather than seven links that happen to sit
  * in a row, which is what an underline gives you. The affordance is legible
  * before anything is hovered.
@@ -288,7 +288,7 @@ export function TeamBottomBar(props: NavProps) {
                 style={isActive ? { color: "var(--accent, var(--color-coral))" } : undefined}
               >
                 {/* Inset from the cell edges rather than spanning it: a rule
-                    that runs the full width of its cell meets its neighbour's
+                    that runs the full width of its cell meets its neighbor's
                     and the six read as one continuous line with a colored
                     segment, instead of as one tab that is marked. */}
                 <span

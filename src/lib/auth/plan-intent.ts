@@ -30,7 +30,7 @@ function isPlan(v: string | null): v is PlanIntent {
   return v !== null && (VALID as readonly string[]).includes(v);
 }
 
-/** Read `?plan=` off the current URL. Returns null when absent or unrecognised. */
+/** Read `?plan=` off the current URL. Returns null when absent or unrecognized. */
 export function planFromUrl(): PlanIntent | null {
   if (typeof window === "undefined") return null;
   // Deliberately reading location rather than useSearchParams: under

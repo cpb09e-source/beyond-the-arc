@@ -10,7 +10,7 @@ import { getSupabaseBrowser } from "@/lib/auth/supabase-browser";
  * served on this port" is the wrong sentence to show someone who was editing
  * a banner. The mechanism is four lines; the wording is the part that matters.
  *
- * EVERY CALL IS RE-AUTHORISED SERVER-SIDE. This file holds no privilege — it
+ * EVERY CALL IS RE-AUTHORIZED SERVER-SIDE. This file holds no privilege — it
  * attaches the caller's own token and the function decides. See requireAdmin.
  */
 
@@ -102,7 +102,7 @@ export type Overview = {
     monthly: number;
     yearly: number;
     pastDue: number;
-    cancelling: number;
+    canceling: number;
     admins: number;
     new7d: number;
     new30d: number;

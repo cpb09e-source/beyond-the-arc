@@ -145,7 +145,7 @@ async function fetchRange(season, from, to, sink) {
   }
   if (rows.length >= ROW_CAP) {
     // A single calendar day at the cap and unsplittable. Reported, but NOT
-    // treated as loss: the overlap padding means neighbouring windows usually
+    // treated as loss: the overlap padding means neighboring windows usually
     // carry this day too. The completeness verdict printed per season (row
     // parity with the team box) is what actually decides.
     console.warn(`    · ${iso(from)}..${iso(to)} at cap (${rows.length}) at 1-day granularity — checking coverage below`);

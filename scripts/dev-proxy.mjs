@@ -16,7 +16,7 @@
  *
  * WHAT THIS DOES INSTEAD. Almost nothing on this port needs Netlify. Three
  * functions exist — parse-query, scoreboard, game — and Netlify's own
- * `functions:serve` honours their `config.path`, so they answer on /api/* with
+ * `functions:serve` honors their `config.path`, so they answer on /api/* with
  * the real runtime and the real env injection. Everything else is Next talking
  * to itself: thousands of HMR, RSC and static requests an hour that the CLI
  * proxy was buffering for no reason at all.

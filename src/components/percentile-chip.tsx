@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
  * Two things were wrong with that. HSL yellow is far lighter than HSL red or
  * green at the same nominal lightness, so the ramp spent its loudest, most
  * forward color on the middle of the distribution — average stats shouted over
- * good ones. And because neighbouring percentiles differed by a fraction of a
+ * good ones. And because neighboring percentiles differed by a fraction of a
  * degree of hue, a 44th and a 60th were indistinguishable in practice.
  *
  * Banding fixes both. A percentile is already a rank, so a continuous fill was

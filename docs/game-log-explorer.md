@@ -102,7 +102,7 @@ a bounded sorted array of `limit` hits, comparing each row against the worst
 one kept. Player-level filters (conference, team, class, name) resolve once per
 player into a `Uint8Array`, not once per game.
 
-Rows stay packed number arrays for their whole life. Materialising them as
+Rows stay packed number arrays for their whole life. Materializing them as
 objects would allocate 115,000 to display 100.
 
 ## Gating

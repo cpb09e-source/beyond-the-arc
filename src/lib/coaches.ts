@@ -1007,7 +1007,7 @@ function computeCompositeScore(
     } else if (expected && !waiver && s.year !== 2020) {
       // Missed tournament as an expected-tier coach — penalty depends on
       // program tier. Mid-majors that didn't hit top-30 BTA escape penalty.
-      // 2020 exempt: the tournament was cancelled, not missed.
+      // 2020 exempt: the tournament was canceled, not missed.
       season += powerMissPenalty(s.team);
     }
 
@@ -1193,7 +1193,7 @@ function computeCompositeScore(
     }
 
     // Never-missed-the-tournament bonus — a tiny extra +1 for coaches who
-    // made the tournament every season they coached, ignoring the cancelled
+    // made the tournament every season they coached, ignoring the canceled
     // 2020 (which would otherwise disqualify everyone). Already gated by the
     // 5-season career-arc check above, so 1-year wonders don't qualify.
     {
@@ -1349,7 +1349,7 @@ function attachCareerAggregates(p: CoachProfile): void {
   p.top25_seasons = ranks.filter((r) => r <= 25).length;
 
   // Appearances over seasons coached. 2020 is excluded from the denominator —
-  // the tournament was cancelled, so counting it as a miss would penalise every
+  // the tournament was canceled, so counting it as a miss would penalize every
   // coach active that year for something nobody could reach.
   const eligible = seasons.filter((s) => s.year !== 2020).length;
   const appearances = seasons.filter((s) => s.year !== 2020 && s.round != null).length;

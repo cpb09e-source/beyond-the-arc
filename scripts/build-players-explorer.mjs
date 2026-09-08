@@ -164,7 +164,7 @@ const fromStart = (row, idx) => (!row || row.length <= idx ? null : row[idx]);
  * Trimming to nine significant digits looked free — every column formats to at
  * most three decimals — and saved 62 KB gzipped. It moved 660 of 5,060 HKM
  * percentiles. HKM is BLK% + STL%, which packs players tightly, and rounding
- * collapses near-neighbours into exact ties whose order then falls out of the
+ * collapses near-neighbors into exact ties whose order then falls out of the
  * sort rather than the data. Percentile chips are the visible casualty, and a
  * chip that changes by two for no reason a reader can see is worse than the
  * bytes are worth.

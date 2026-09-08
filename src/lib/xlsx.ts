@@ -6,7 +6,7 @@
  * expects Node's `stream` and `Buffer` — a fight with the bundler on a site
  * that has no server at all. SheetJS's free build cannot write cell styles,
  * and styles are the entire point here: an export whose percentiles are bare
- * numbers is a worse artefact than the screenshot it replaced.
+ * numbers is a worse artifact than the screenshot it replaced.
  *
  * What we actually need is narrow — inline strings, numbers, number formats,
  * solid fills, frozen panes, an autofilter and merged band headers — and that

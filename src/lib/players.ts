@@ -356,7 +356,7 @@ export type PlayerListSpec = {
    * those here would mean this file knowing about a catalog it does not
    * import.
    *
-   * The allow-list did real work, though — an unrecognised ?sort= used to fall
+   * The allow-list did real work, though — an unrecognized ?sort= used to fall
    * back to the default rather than order the table by nothing — so it did not
    * go away, it moved. See isSortableKey() below, which checks VALID_SORTS and
    * the two stat catalogs.
@@ -391,7 +391,7 @@ export const EWINS_FIRST_YEAR = 2024;
  *   PACK_STAT_COLUMNS    the extended catalog, loaded per view
  *
  * Checked rather than trusted because this comes off the query string, and an
- * unrecognised key would order the table by undefined — every row tying, and
+ * unrecognized key would order the table by undefined — every row tying, and
  * the reader seeing an arbitrary arrangement presented as a ranking.
  */
 export function isSortableKey(key: string): boolean {
@@ -523,7 +523,7 @@ export function parsePlayerSpec(searchParams: Record<string, string | string[] |
    *
    * So the default is eWins when every selected season can supply it, and EPM
    * otherwise, EPM being the same judgment one rung down (see the note on
-   * DEFAULT_PLAYER_SPEC.sortBy). An EXPLICIT ?sort= is always honoured — this
+   * DEFAULT_PLAYER_SPEC.sortBy). An EXPLICIT ?sort= is always honored — this
    * only changes what happens when the reader has not chosen.
    */
   const defaultSort: PlayerListSpec["sortBy"] =

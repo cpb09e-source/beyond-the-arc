@@ -66,7 +66,7 @@ function parseDate(v: string | null): Date | null {
  * Turn a profile row into what the dashboard shows.
  *
  * `past_due` deliberately counts as paid. The subscription has not been
- * cancelled — a payment failed and Stripe is retrying — so cutting access at
+ * canceled — a payment failed and Stripe is retrying — so cutting access at
  * the first failed charge would lock out someone whose card simply expired.
  * The status chip still says past due, which is the honest way to show it.
  */
@@ -141,8 +141,8 @@ export const STATUS_LABEL: Record<string, string> = {
   active: "Active",
   trialing: "Trial",
   past_due: "Payment failed",
-  canceled: "Cancelled",
-  cancelled: "Cancelled",
+  canceled: "Canceled",
+  cancelled: "Canceled",
   incomplete: "Incomplete",
   inactive: "No subscription",
 };

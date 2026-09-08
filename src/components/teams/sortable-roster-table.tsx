@@ -123,9 +123,9 @@ export function SortableRosterTable({
   // level cache means this fetch happens once per page session.
   const [draftees, setDraftees] = useState<Record<string, NbaDraftee>>({});
   useEffect(() => {
-    let cancelled = false;
-    loadNbaDraftees().then((d) => { if (!cancelled) setDraftees(d); });
-    return () => { cancelled = true; };
+    let canceled = false;
+    loadNbaDraftees().then((d) => { if (!canceled) setDraftees(d); });
+    return () => { canceled = true; };
   }, []);
 
   return (

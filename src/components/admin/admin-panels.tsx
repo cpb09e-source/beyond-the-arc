@@ -326,7 +326,7 @@ export function BannerPanel() {
  * DEST_ALIAS, a hand-kept map of shorthands — which covers the ones somebody
  * already thought of and silently fails on the next one.
  *
- * So the field offers the real names and marks the value as unrecognised until
+ * So the field offers the real names and marks the value as unrecognized until
  * one is chosen. It does NOT refuse a free-typed value: a brand-new program in
  * its first season will not be in a list built from last season's data, and
  * being unable to record a real move is worse than recording one that needs

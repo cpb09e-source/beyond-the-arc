@@ -639,7 +639,7 @@ function rateSeason({ bartId, year, gp, mpg, ppg, pir, conf, eligibility }) {
 const portal = JSON.parse(fs.readFileSync(PORTAL, "utf8"));
 const entries = portal.entries ?? [];
 
-let joined = 0, scored = 0, withEwins = 0, repaired = 0, renamed = 0, unhidden = 0, bumped = 0, pirScored = 0, penalised = 0, discounted = 0;
+let joined = 0, scored = 0, withEwins = 0, repaired = 0, renamed = 0, unhidden = 0, bumped = 0, pirScored = 0, penalized = 0, discounted = 0;
 const repairs = [];
 for (const e of entries) {
   const hit =
@@ -705,7 +705,7 @@ for (const e of entries) {
   e.onoff_pen = onOff === null || onOff >= 0
     ? 0
     : Math.round(ONOFF_PENALTY * Math.max(ONOFF_FLOOR, onOff) * 1000) / 1000;
-  if (e.onoff_pen < 0) penalised++;
+  if (e.onoff_pen < 0) penalized++;
 
   // The portal value a class total is built from: measured wins, plus the
   // freshman development bump, plus the tiered-PIR term, minus the on/off
@@ -828,7 +828,7 @@ const returnerNotes = [];
     if (!e.team_to || e.bart_player_id == null || e.last_year == null) continue;
     const seasons = bySeason.get(e.bart_player_id) ?? [];
     // The most recent season at the destination that is not the one he is
-    // leaving. Name comparison goes through the same canonicaliser the
+    // leaving. Name comparison goes through the same canonicalizer the
     // entries themselves were cleaned with.
     const target = resolveSchool(e.team_to) ?? e.team_to;
     /**
@@ -1096,6 +1096,6 @@ console.log(`portal rescored — stars on PVS, classes on eWins`);
 console.log(`  ${entries.length.toLocaleString()} entries · ${joined.toLocaleString()} joined an EPM · ${withEwins.toLocaleString()} joined an eWins · ${scored.toLocaleString()} cleared the baseline and were starred`);
 if (repaired) console.log(`  ${repaired} possession count(s) repaired:\n${repairs.map((r) => `    ${r}`).join("\n")}`);
 console.log(`  ${renamed} school name(s) resolved to the canonical team · ${unhidden} entr(ies) the feed's division field would have hidden`);
-console.log(`  ${bumped} sophomore-leap bump(s) · ${pirScored} tiered-PIR terms · ${penalised} negative-on/off penalt(ies) · ${discounted} mid-major discounts`);
+console.log(`  ${bumped} sophomore-leap bump(s) · ${pirScored} tiered-PIR terms · ${penalized} negative-on/off penalt(ies) · ${discounted} mid-major discounts`);
 console.log(`  tiers  5★ ${tiers[5]}  4★ ${tiers[4]}  3★ ${tiers[3]}  2★ ${tiers[2]}  1★ ${tiers[1]}  unrated ${tiers[0]}`);
 console.log(`  ${allRows.length} schools ranked · best ${top_overall[0]?.school} ${top_overall[0]?.net.toFixed(1)} wins (score ${top_overall[0]?.score}) · worst power ${worst_power[0]?.school} ${worst_power[0]?.net.toFixed(1)} (score ${worst_power[0]?.score})`);

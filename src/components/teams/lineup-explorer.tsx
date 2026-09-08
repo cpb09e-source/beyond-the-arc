@@ -615,7 +615,7 @@ function StatRow({
   // OPAQUE, mixed against the card surface rather than laid over it at 8%
   // alpha. This cell is sticky: a translucent fill lets the stat columns scroll
   // visibly through it, so POSS and MINS smeared across the lineup name as soon
-  // as the table was scrolled right. Same trap the explorer's honour cells hit
+  // as the table was scrolled right. Same trap the explorer's honor cells hit
   // — see the note in explorer-client.tsx.
   const rowStyle = emphasis
     ? { backgroundColor: "color-mix(in oklab, var(--accent) 10%, var(--card))" }

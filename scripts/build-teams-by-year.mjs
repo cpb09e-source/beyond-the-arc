@@ -3,7 +3,7 @@
  * shipping every season it isn't showing.
  *
  * THE PROBLEM THIS SOLVES. `/` passed the whole of teams-all.json to
- * ExplorerClient as props, which Next serialises into the page's RSC payload.
+ * ExplorerClient as props, which Next serializes into the page's RSC payload.
  * Measured on the 2026-07-29 build: index.html was 10.73 MB raw / 1.51 MB
  * gzipped, of which 99.9% was one <script> block holding 4,273 team-season
  * objects — 21x the weight of /players, which renders a comparable table. The
