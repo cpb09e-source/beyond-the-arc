@@ -41,10 +41,7 @@ export default async function MethodPage() {
     // the kicker sat at the far left of a column that starts a third of the way
     // across, which read as two pages stacked.
     <section className="mx-auto max-w-[68ch] px-6 lg:px-0 pt-4 lg:pt-5 pb-12">
-      <PageHeading
-        label="How the matchup predictor works"
-        sub="The model, the constants, and what three seasons of backtesting said actually decides a college basketball game."
-      />
+      <PageHeading label="How the matchup predictor works" />
 
       <div className="text-sm leading-relaxed text-ink-soft">
         <p className="mb-4">
