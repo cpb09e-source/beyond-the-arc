@@ -77,16 +77,12 @@ export function SiteFooter() {
           the two chrome elements line up at every breakpoint. */}
       <div className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 xl:px-16">
         <div className="flex flex-col lg:flex-row lg:items-start gap-10 lg:gap-16">
-          {/* The mark, and what the site is for. Fixed width on desktop so the
-              four link columns divide the remaining space evenly. */}
+          {/* The mark. Fixed width on desktop so the four link columns divide
+              the remaining space evenly. */}
           <div className="lg:w-64 shrink-0">
             <Link href="/" className="inline-flex items-center group">
               <SiteLogo className="h-9 w-auto group-hover:opacity-80 transition-opacity" />
             </Link>
-            <p className="mt-3 text-xs text-ink-muted leading-relaxed max-w-[22rem]">
-              Editorial-grade college basketball analytics — every team, every player,
-              every game since 2014.
-            </p>
           </div>
 
           <nav
@@ -117,7 +113,9 @@ export function SiteFooter() {
 
         <div className="mt-10 pt-5 border-t border-hairline flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 text-[0.7rem] text-ink-muted">
           <span>© {year} Beyond the Arc</span>
-          <span className="sm:max-w-[62ch] leading-relaxed">
+          {/* No measure cap: at 62ch this ran to three lines beside the
+              copyright, and the disclaimer is two sentences. */}
+          <span className="leading-relaxed">
             Not affiliated with, endorsed by, or sponsored by the NCAA, any conference, or any
             college or university. Team names and logos are the trademarks of their institutions.
           </span>

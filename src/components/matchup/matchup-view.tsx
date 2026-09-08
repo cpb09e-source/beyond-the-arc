@@ -12,9 +12,6 @@ import { getTeamColors, readableInk, readableOnPaper } from "@/lib/team-colors";
 import {
   HCA,
   SIGMA,
-  STYLE_HIGHER_BETTER,
-  STYLE_IN_MODEL,
-  STYLE_LABEL,
   fmt1,
   fmtPct,
   displayScores,
@@ -27,7 +24,6 @@ import {
   type MatchupTeam,
   type Projection,
   type Site,
-  type StyleKey,
 } from "@/lib/matchup";
 
 /**
@@ -50,8 +46,10 @@ import {
  *   4. Availability toggles — the largest single addition to the model, and
  *      the one input a team rating is structurally blind to. In or out; there
  *      is no minutes editor because the roster's LEVEL adds nothing.
- *   5. Style, labeled honestly: it says how the game gets played, and the
- *      page does not pretend it decides who wins.
+ *
+ * The style panel (each team's tendencies against what the other concedes)
+ * was here and was cut: it described the game without deciding it, and the
+ * four terms that do carry weight are already lines in the ledger.
  */
 
 export type MatchupHandlers = {
@@ -164,16 +162,25 @@ export function MatchupView({
             ruled out or the floor changes. Each side owns its half, score and
             all. The fr values are the tweened probability, which is what makes
             the seam slide rather than jump. The floor keeps the underdog's
-            name and record legible when the model is sure — a 90% favorite
-            gets 78% of the width, and the exact number is printed on the
-            card either way. The ratings themselves are not repeated here;
-            the ledger below shows them in the arithmetic. */}
+            name and record on one line each when the model is sure — 26% is
+            what "Michigan St." beside its logo needs at 2xl — so a 90%
+            favorite gets 74% of the width, and the exact number is printed
+            on the card either way. The ratings themselves are not repeated
+            here; the ledger below shows them in the arithmetic. */}
         <div
           className="relative grid isolate"
           // In percent, not as a fraction of one: flex factors that sum to
           // less than 1 hand out only that fraction of the free space, and
           // 0.84fr + 0.16fr left a sixth of the card empty.
-          style={{ gridTemplateColumns: `minmax(max(150px, 22%), ${Math.max(2, winA * 100)}fr) minmax(max(150px, 22%), ${Math.max(2, (1 - winA) * 100)}fr)` }}
+          //
+          // The LEFT team's wash is painted here, edge to edge, rather than
+          // on its half: the cut leans, so at the top a sliver of the right
+          // column belongs to the left team, and a half ends at the grid
+          // line. The right team's wash is a skewed layer inside its half.
+          style={{
+            gridTemplateColumns: `minmax(max(150px, 26%), ${Math.max(2, winA * 100)}fr) minmax(max(150px, 26%), ${Math.max(2, (1 - winA) * 100)}fr)`,
+            background: `color-mix(in srgb, ${fillA} var(--ma-wash), transparent)`,
+          }}
         >
           <Half team={a} color={colorA} fill={fillA} season={pack.season} side="left" score={showA} win={winA} hosting={p.site === "home"} />
           <Half team={b} color={colorB} fill={fillB} season={pack.season} side="right" score={showB} win={1 - winA} hosting={p.site === "away"} seam />
@@ -252,16 +259,6 @@ export function MatchupView({
               )}
             </div>
           )}
-        </Card>
-      </div>
-
-      {/* ── Style ───────────────────────────────────────────────────────── */}
-      <div className="mt-5">
-        <Card
-          title="How the game gets played"
-          note="Each team's adjusted tendency against what the other concedes. These describe the game far better than they decide it — the four that carry weight in the model are marked, and together they are worth about a point."
-        >
-          <StylePanel p={p} pack={pack} colorA={fillA} colorB={fillB} />
         </Card>
       </div>
 
@@ -533,22 +530,35 @@ function Half({ team, color, fill, season, side, score, win, hosting, seam }: {
   seam?: boolean;
 }) {
   const right = side === "right";
+  // The wash is the container's job on the left; see the grid above.
+  const wash = `color-mix(in srgb, ${fill} var(--ma-wash), transparent)`;
   return (
-    <div
-      className={cn("relative min-w-0 flex flex-col justify-between gap-4 px-4 py-4 sm:px-6 sm:py-5", right && "items-end text-right")}
-      style={{ background: `color-mix(in srgb, ${fill} var(--ma-wash), transparent)` }}
-    >
-      {/* The cut itself, on the underdog's edge so it sits exactly on the grid
-          line whatever the floor did to the proportions. The lean is slight
-          because a skew displaces by height: at 9° over a 200px half the top
-          of the line was 16px into the underdog's name. */}
-      {seam && <span aria-hidden className="absolute top-0 bottom-0 left-0 w-[3px] bg-ink" style={{ transform: "skewX(-5deg)" }} />}
+    // Rows stretch (no items-end): shrink-wrapped rows let a long name spill
+    // left past the padding and under the seam instead of wrapping.
+    <div className={cn("relative min-w-0 flex flex-col justify-between gap-4 px-4 py-4 sm:px-6 sm:py-5", right && "text-right")}>
+      {/* THE WASH AND THE CUT AGREE. This half's color is a layer skewed
+          from its bottom-left corner, so its leading edge leans exactly the
+          way the seam does, and the seam is the same skew three pixels wide.
+          Skewed about the center, as before, the line crossed a vertical
+          color boundary and left a sliver of each color on the wrong side.
+          The lean is slight because a skew displaces by height: at 9° the top
+          of the line was 16px into the underdog's name. The layer's overspill
+          at the top right is clipped by the card. */}
+      {seam && (
+        <>
+          <span aria-hidden className="absolute inset-0 -z-10 origin-bottom-left" style={{ background: wash, transform: "skewX(-5deg)" }} />
+          <span aria-hidden className="absolute top-0 bottom-0 left-0 w-0.75 bg-ink origin-bottom-left" style={{ transform: "skewX(-5deg)" }} />
+        </>
+      )}
       <div className={cn("flex items-center gap-2.5 min-w-0", right && "flex-row-reverse")}>
         {/* Wider than tall: a wordmark fills width where a crest fills height,
             and in a square box the wordmark draws a third smaller. */}
         <TeamLogo name={team.b} size={40} width={56} className="shrink-0" />
         <div className="min-w-0">
-          <Link href={`/teams/${team.s}/${season}/`} className="block font-display font-bold text-lg sm:text-2xl leading-tight text-ink hover:underline truncate">
+          {/* Wraps rather than truncates: a name longer than the underdog's
+              floor allows ("Northern Iowa" at 2xl) goes to two lines, and
+              "Northern…" is a worse answer than that. */}
+          <Link href={`/teams/${team.s}/${season}/`} className="block font-display font-bold text-lg sm:text-2xl leading-tight text-ink hover:underline text-balance">
             <TeamName name={team.b} />
           </Link>
           <div className="text-[0.7rem] text-ink-muted tabular">
@@ -722,49 +732,3 @@ function Roster({ team, out, color, onToggle, disabled }: {
   );
 }
 
-function StylePanel({ p, pack, colorA, colorB }: { p: Projection; pack: MatchupPack; colorA: string; colorB: string }) {
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
-      {pack.dims.map((k: StyleKey, i) => {
-        const ea = p.expA[k], eb = p.expB[k], L = pack.league.style[i]!;
-        const higherBetter = STYLE_HIGHER_BETTER[k];
-        // Who the collision favors, in that dimension's own terms.
-        const diff = (ea - eb) * (higherBetter ? 1 : -1);
-        const inModel = STYLE_IN_MODEL.has(k);
-        const scale = Math.max(6, Math.abs(ea - L), Math.abs(eb - L)) * 1.4;
-        const pos = (v: number) => 50 + ((v - L) / scale) * 50;
-        return (
-          <div key={k}>
-            <div className="flex items-baseline justify-between text-xs">
-              <span className={cn("text-ink-soft", k === "t3p" && inModel && "text-coral")}>
-                {STYLE_LABEL[k]}
-                {inModel && <span className="ml-1.5 text-[0.55rem] uppercase tracking-[0.12em] font-bold text-ink-muted/80">in model</span>}
-              </span>
-              <span className="tabular text-ink-muted text-[0.7rem]">
-                {Math.abs(diff) < 0.5 ? "even" : `${diff > 0 ? p.a.b : p.b.b} ${fmtSigned(Math.abs(diff)).replace("+", "+")}`}
-              </span>
-            </div>
-            {/* League average at the center; each team's expected value as a
-                marker; the two are joined so the gap reads as a length. */}
-            <div className="relative mt-1.5 h-4">
-              <div className="absolute inset-y-0 left-0 right-0 top-1/2 h-px bg-hairline" />
-              <div className="absolute top-0 bottom-0 left-1/2 w-px bg-ink/20" />
-              <div className="absolute top-1/2 h-1 -translate-y-1/2 rounded-full bg-ink/10"
-                style={{ left: `${Math.min(pos(ea), pos(eb))}%`, width: `${Math.abs(pos(ea) - pos(eb))}%` }} />
-              <Marker at={pos(ea)} color={colorA} label={fmt1(ea)} />
-              <Marker at={pos(eb)} color={colorB} label={fmt1(eb)} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-function Marker({ at, color, label }: { at: number; color: string; label: string }) {
-  return (
-    <span className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center" style={{ left: `${Math.max(2, Math.min(98, at))}%` }}>
-      <span className="h-2.5 w-2.5 rounded-full ring-2 ring-paper" style={{ background: color }} />
-      <span className="sr-only">{label}</span>
-    </span>
-  );
-}
