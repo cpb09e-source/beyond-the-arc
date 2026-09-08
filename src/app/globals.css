@@ -1268,8 +1268,19 @@ body {
 .matchup-root {
   --ma: var(--ma-light, var(--coral));
   --mb: var(--mb-light, var(--coral));
+  /* FILLS ARE NOT TEXT. The wash behind each half, the curve's areas and
+     the roster dots do not need 4.5:1, and the clamp that gets text there
+     turns Iowa's gold into olive on cream. A fill gets the brand color as
+     printed, at a wash strong enough to read as that color. */
+  --ma-fill: var(--ma-brand, var(--ma));
+  --mb-fill: var(--mb-brand, var(--mb));
+  --ma-wash: 20%;
 }
 [data-theme="dark"] .matchup-root {
   --ma: var(--ma-dark, var(--coral));
   --mb: var(--mb-dark, var(--coral));
+  /* On the dark ground the lifted text color is already the vivid one. */
+  --ma-fill: var(--ma);
+  --mb-fill: var(--mb);
+  --ma-wash: 12%;
 }

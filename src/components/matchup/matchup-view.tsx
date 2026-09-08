@@ -23,7 +23,6 @@ import {
   outShare,
   playerCost,
   project,
-  scoreBand,
   type MatchupPack,
   type MatchupTeam,
   type Projection,
@@ -96,8 +95,9 @@ export function MatchupView({
    * chosen value out of inline styles, where a theme rule could not reach it.
    */
   const inkA = teamInk(a.b), inkB = teamInk(b.b);
+  // Ink for anything read; fill for anything only seen. See .matchup-root.
   const colorA = "var(--ma)", colorB = "var(--mb)";
-  const band = scoreBand(p, pack.league.tempo);
+  const fillA = "var(--ma-fill)", fillB = "var(--mb-fill)";
   const inert = !handlers;
   const outCount = p.outA.length + p.outB.length;
   const scoreA = useTween(p.scoreA), scoreB = useTween(p.scoreB), winA = useTween(p.winA);
@@ -108,8 +108,8 @@ export function MatchupView({
     <div
       className="matchup-root mx-auto max-w-5xl"
       style={{
-        ["--ma-light" as string]: inkA.light, ["--ma-dark" as string]: inkA.dark,
-        ["--mb-light" as string]: inkB.light, ["--mb-dark" as string]: inkB.dark,
+        ["--ma-light" as string]: inkA.light, ["--ma-dark" as string]: inkA.dark, ["--ma-brand" as string]: inkA.brand,
+        ["--mb-light" as string]: inkB.light, ["--mb-dark" as string]: inkB.dark, ["--mb-brand" as string]: inkB.brand,
       }}
     >
       {error && (
@@ -175,15 +175,15 @@ export function MatchupView({
           // 0.84fr + 0.16fr left a sixth of the card empty.
           style={{ gridTemplateColumns: `minmax(max(150px, 22%), ${Math.max(2, winA * 100)}fr) minmax(max(150px, 22%), ${Math.max(2, (1 - winA) * 100)}fr)` }}
         >
-          <Half team={a} color={colorA} season={pack.season} side="left" score={showA} win={winA} hosting={p.site === "home"} />
-          <Half team={b} color={colorB} season={pack.season} side="right" score={showB} win={1 - winA} hosting={p.site === "away"} seam />
+          <Half team={a} color={colorA} fill={fillA} season={pack.season} side="left" score={showA} win={winA} hosting={p.site === "home"} />
+          <Half team={b} color={colorB} fill={fillB} season={pack.season} side="right" score={showB} win={1 - winA} hosting={p.site === "away"} seam />
         </div>
 
         <div className="px-4 sm:px-6 pt-4 pb-5">
           <dl className="grid grid-cols-3 gap-2 sm:flex sm:gap-8">
-            <Stat label="Margin" value={`${favorite.b} by ${fmt1(Math.abs(p.margin))}`} note={`give or take ${Math.round(SIGMA)}`} />
-            <Stat label="Pace" value={fmt1(p.pace)} note="possessions" />
-            <Stat label="Total" value={`${Math.round(p.total)}`} note={`${Math.round(band.total[0])}–${Math.round(band.total[1])}`} />
+            <Stat label="Margin" value={`${favorite.b} by ${fmt1(Math.abs(p.margin))}`} />
+            <Stat label="Pace" value={fmt1(p.pace)} />
+            <Stat label="Total" value={`${Math.round(p.total)}`} />
           </dl>
 
           {/* The receipt. The split above is not a number someone typed: it
@@ -193,7 +193,7 @@ export function MatchupView({
               upset-prone; the total's range says so while the curve keeps its
               shape. */}
           <div className="mt-3">
-            <MarginCurve margin={p.margin} colorA={colorA} colorB={colorB} a={a.b} b={b.b} />
+            <MarginCurve margin={p.margin} colorA={fillA} colorB={fillB} a={a.b} b={b.b} />
           </div>
 
           <Counterfactuals pack={pack} p={p} handlers={handlers} colorA={colorA} colorB={colorB} />
@@ -231,8 +231,8 @@ export function MatchupView({
           }
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-            <Roster team={a} out={p.outA} color={colorA} onToggle={handlers?.onToggleA} disabled={inert} />
-            <Roster team={b} out={p.outB} color={colorB} onToggle={handlers?.onToggleB} disabled={inert} />
+            <Roster team={a} out={p.outA} color={fillA} onToggle={handlers?.onToggleA} disabled={inert} />
+            <Roster team={b} out={p.outB} color={fillB} onToggle={handlers?.onToggleB} disabled={inert} />
           </div>
           {p.parts.availability !== 0 && (
             <div className="mt-4 pt-3 border-t border-hairline">
@@ -261,7 +261,7 @@ export function MatchupView({
           title="How the game gets played"
           note="Each team's adjusted tendency against what the other concedes. These describe the game far better than they decide it — the four that carry weight in the model are marked, and together they are worth about a point."
         >
-          <StylePanel p={p} pack={pack} colorA={colorA} colorB={colorB} />
+          <StylePanel p={p} pack={pack} colorA={fillA} colorB={fillB} />
         </Card>
       </div>
 
@@ -440,12 +440,13 @@ function ShareButton({ disabled }: { disabled?: boolean }) {
   );
 }
 
-function teamInk(bart: string): { light: string; dark: string } {
+function teamInk(bart: string): { light: string; dark: string; brand: string } {
   const c = getTeamColors(bart)?.primary;
-  if (!c) return { light: "var(--coral)", dark: "var(--coral)" };
+  if (!c) return { light: "var(--coral)", dark: "var(--coral)", brand: "var(--coral)" };
   // Light: the site's contrast-targeted clamp against the cream paper. Dark:
   // the same hue lifted into a lightness band that clears 4.5:1 on #1C1C1C.
-  return { light: readableOnPaper(c), dark: readableInk(c, { min: 0.6, max: 0.78 }) };
+  // Brand: the color as printed, for fills that nobody has to read.
+  return { light: readableOnPaper(c), dark: readableInk(c, { min: 0.6, max: 0.78 }), brand: c };
 }
 
 function Picker({
@@ -520,8 +521,13 @@ function SiteControl({ site, a, onSite, disabled }: { site: Site; a: MatchupTeam
  * mirrored by alignment only, because reversing the order made the numbers
  * read backwards.
  */
-function Half({ team, color, season, side, score, win, hosting, seam }: {
-  team: MatchupTeam; color: string; season: number; side: "left" | "right";
+function Half({ team, color, fill, season, side, score, win, hosting, seam }: {
+  team: MatchupTeam;
+  /** The team's color as text: rank and win probability. */
+  color: string;
+  /** The team's color as paint: the wash behind the half. */
+  fill: string;
+  season: number; side: "left" | "right";
   score: React.ReactNode; win: number; hosting: boolean;
   /** Draw the cut on this side's leading edge. */
   seam?: boolean;
@@ -530,7 +536,7 @@ function Half({ team, color, season, side, score, win, hosting, seam }: {
   return (
     <div
       className={cn("relative min-w-0 flex flex-col justify-between gap-4 px-4 py-4 sm:px-6 sm:py-5", right && "items-end text-right")}
-      style={{ background: `color-mix(in srgb, ${color} 12%, transparent)` }}
+      style={{ background: `color-mix(in srgb, ${fill} var(--ma-wash), transparent)` }}
     >
       {/* The cut itself, on the underdog's edge so it sits exactly on the grid
           line whatever the floor did to the proportions. The lean is slight
