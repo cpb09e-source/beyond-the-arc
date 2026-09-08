@@ -30,22 +30,31 @@ lifted the push half on 2026-09-01 ("you can push"), then authorized one build
 and deploy that same day ("build and deploy go ahead"). That authorization was
 for THAT deploy. Ask again before the next one.
 
-**PRODUCTION IS 42 COMMITS BEHIND as of 2026-09-02** (41 at the time of
-writing, plus this doc update). The last successful
-deploy was `6a974a4a10f35a71b4b98c0b` on 2026-09-01 23:08 UTC, state `ready`,
-verified through `netlify api listSiteDeploys` rather than the CLI's exit code.
-Everything through commit `b688a7422e` is live: the live-season architecture,
-per-team game files, the admin page and banner, the portalled dropdowns, the
-nav fix.
+**PRODUCTION STATE — check it, do not read it from here.** This block has been
+wrong twice and both times it was read out to Colin as the next thing to do.
+One command settles it:
 
-Everything after `b688a7422e` is local only — the legal pages, the glossary
-rewrite, the footer map, the headshot decision, the CBBD fixes, the whole 2021
-backfill, the gated-corpus code, the Stripe trial, the scoreboard work, the
-team-page tabs, and both stat panels.
+```bash
+netlify api listSiteDeploys --data '{"site_id":"d0f62630-5d43-42d4-98ae-86684e7a0df0"}' \
+  | python -c "import sys,json;print([x['created_at'] for x in json.load(sys.stdin) if x['state']=='ready'][:3])"
+```
 
-**The deploy is also the gate on the paywall leak.** Step 5 of the presigned-R2
-work — the purge that actually closes it — cannot run until the deploy lands,
-because purging first 404s every game log in production. See that section.
+`state: ready` is the only thing that counts — the CLI's exit code lies, and
+Netlify's own auto-build rows fail with `Canceled build due to no content
+change` by design.
+
+As of **2026-09-08** the deploys on 2026-09-02 and 2026-09-07 both landed
+`ready`, so the 2026-09-01/02 backlog described in the rest of this document —
+the legal pages, the glossary rewrite, the CBBD fixes, the 2021 backfill, the
+gated-corpus code, the Stripe trial, the scoreboard work, the team-page tabs
+and both stat panels — **is live.** Sections below that still call that work
+pending are stale; trust the deploy list.
+
+**The paywall leak is CLOSED, verified 2026-09-08.**
+`node scripts/sync-gated-corpora.mjs --verify` reports every paid season
+present in `bta-gated` and absent from `bta-data`. Steps 4 and 5 of the
+presigned-R2 section below are both done; the "STILL TO DO" labels there are
+left only because the surrounding ordering argument is still worth reading.
 
 Numbers from the last run, for the next estimate: build 32,868 pages; hashing
 343,647 files and 9 functions; **322,726 files uploaded, 71 minutes**. The 45
@@ -556,10 +565,12 @@ production:**
 
      Note for anyone listing Netlify env in future: `--plain` prints values.
      Use `cut -d= -f1` if you only need names.
-  4. **STILL TO DO — deploy**, so the browser asks for a signature.
-  5. **STILL TO DO, LAST — `node scripts/sync-gated-corpora.mjs --purge-public
-     --yes`.** This is the step that actually closes the hole. Until it runs,
-     all 22 objects are still readable by anyone on the public bucket.
+  4. **DONE 2026-09-07 — deploy**, so the browser asks for a signature.
+  5. **DONE 2026-09-07 — `node scripts/sync-gated-corpora.mjs --purge-public
+     --yes`.** 22 objects deleted from the public bucket. Re-verified
+     2026-09-08: `--verify` reports every paid season gated and none public.
+     The ordering argument below still applies to any FUTURE season that gets
+     gated, which is why it is kept.
 
 Purge before the deploy and production 404s until the deploy lands. The script
 refuses to delete a public object whose gated copy it cannot HEAD, which is the

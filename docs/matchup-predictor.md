@@ -1032,6 +1032,27 @@ Every constant fitted on 2023 + 2024 alone:
 
 **Variance explained on 2025: 36.5% base → 38.9% final.**
 
+> **Reconciliation, added 2026-09-08.** A second harness, written later and
+> independently to score the model against betting lines, puts the same two
+> seasons at **9.14** and **9.25** rather than 8.965 and 9.042, with accuracy
+> 72.2% and 71.7%. Neither is wrong. They score different sets of games: this
+> one uses the research harness's own filters, the later one scores every
+> fixture between two teams the shipping page actually lists — 5,655 and 5,724
+> games — with ratings refit before each date. **The method page quotes the
+> later numbers**, because everything else on that page (the closing-line
+> comparison, the young-ratings stretch, the totals correction) is measured on
+> that harness, and a page that mixes two measurement regimes cannot be
+> checked against itself. Prefer the later figures for anything user-facing;
+> the table above stands as the record of what this investigation found.
+>
+> One claim here did not survive. Part 3 concluded that knowing who is injured
+> is worth roughly a third of the correction block. Feeding the model the true
+> absences for all 5,724 games of 2025-26 — hindsight, so a ceiling — improved
+> mean error by **0.02 points**. The absence TERM is well calibrated (slope
+> 0.81 ± 0.16 regressing outcomes on the model's own adjustment); it simply
+> moves the line by a full point in only 15% of games, which is what a convex
+> cost curve is supposed to do. Both facts are on the method page.
+
 The part 2 conclusion survives part 3 essentially intact. The base model is
 still doing the overwhelming majority of the work; the player data roughly
 doubled the size of the correction block, which took it from 4% of the
