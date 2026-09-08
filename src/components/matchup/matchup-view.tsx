@@ -464,22 +464,38 @@ function Counterfactuals({ pack, p, handlers, colorA, colorB }: {
 
 /** The URL is the matchup, so sharing is copying it. */
 function ShareButton({ disabled }: { disabled?: boolean }) {
-  const [done, setDone] = useState(false);
+  const [state, setState] = useState<"idle" | "done" | "failed">("idle");
   return (
     <button
       type="button"
       disabled={disabled}
-      onClick={() => {
-        navigator.clipboard?.writeText(window.location.href).then(() => {
-          setDone(true);
-          setTimeout(() => setDone(false), 1600);
-        }).catch(() => {});
+      /**
+       * `navigator.clipboard?.writeText(...).then(...)` was a crash waiting
+       * for the wrong browser: when the API is missing the optional chain
+       * yields undefined and `.then` on undefined throws a TypeError that no
+       * `.catch` can see. The API is missing in every non-secure context, so
+       * anyone opening the site over plain http — a phone on the LAN, say —
+       * got an uncaught error instead of a link.
+       *
+       * And a silent failure is barely better than a crash. If the copy does
+       * not happen the button says so, which at least tells the reader to use
+       * the address bar, where the whole matchup already is.
+       */
+      onClick={async () => {
+        try {
+          if (!navigator.clipboard) throw new Error("no clipboard api");
+          await navigator.clipboard.writeText(window.location.href);
+          setState("done");
+        } catch {
+          setState("failed");
+        }
+        setTimeout(() => setState("idle"), 1800);
       }}
       className="inline-flex items-center gap-1.5 text-[0.6rem] uppercase tracking-[0.15em] font-semibold text-ink-muted hover:text-ink transition-colors disabled:opacity-60"
       title="Copy a link to this matchup"
     >
-      {done ? <Check className="h-3 w-3 text-coral" aria-hidden /> : <Link2 className="h-3 w-3" aria-hidden />}
-      {done ? "Copied" : "Share"}
+      {state === "done" ? <Check className="h-3 w-3 text-coral" aria-hidden /> : <Link2 className="h-3 w-3" aria-hidden />}
+      {state === "done" ? "Copied" : state === "failed" ? "Use the address bar" : "Share"}
     </button>
   );
 }
@@ -719,6 +735,15 @@ function Half({ team, color, fill, season, side, score, win, hosting, seam }: {
 }
 
 /**
+ * useLayoutEffect, except on the server, where it does nothing and React
+ * says so in a warning. This page is prerendered into a static export, so
+ * every client component runs once through the server renderer at build
+ * time; without this the build log carries the warning for every team name
+ * on the page and nothing is gained by it.
+ */
+const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+/**
  * Text that fits its parent on one line by scaling its font down, never by
  * wrapping. Measured at the natural size first, then scaled by the ratio
  * that would make it fit, and re-measured whenever the parent's width
@@ -728,7 +753,7 @@ function Half({ team, color, fill, season, side, score, win, hosting, seam }: {
  */
 function FitText({ dep, children }: { dep: string; children: React.ReactNode }) {
   const ref = useRef<HTMLSpanElement>(null);
-  useLayoutEffect(() => {
+  useIsoLayoutEffect(() => {
     const el = ref.current, parent = el?.parentElement;
     if (!el || !parent) return;
     const fit = () => {
