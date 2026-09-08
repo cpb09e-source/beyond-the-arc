@@ -656,7 +656,6 @@ function Ledger({ p, pack }: { p: Projection; pack: MatchupPack }) {
       <Step n="1" label="Efficiency, against this opponent">
         <Line k={a.b} v={`${fmt1(a.o)} + (${fmt1(b.d)} − ${fmt1(M)})${hcaA ? ` ${hcaA > 0 ? "+" : "−"} ${fmt1(Math.abs(hcaA))}` : ""} = ${fmt1(p.effA)}`} />
         <Line k={b.b} v={`${fmt1(b.o)} + (${fmt1(a.d)} − ${fmt1(M)})${hcaB ? ` ${hcaB > 0 ? "+" : "−"} ${fmt1(Math.abs(hcaB))}` : ""} = ${fmt1(p.effB)}`} />
-        <Hint>Own offense, plus how far the other defense sits from the league&rsquo;s {fmt1(M)}{loc ? `, ± ${HCA} for the floor` : ""}.</Hint>
       </Step>
       <Step n="2" label="Pace">
         <Line k="Projected" v={`${fmt1(L)} − 0.75 + 0.83 × (${fmt1(a.t)} + ${fmt1(b.t)} − 2 × ${fmt1(L)}) = ${fmt1(p.pace)}`} />
@@ -700,9 +699,6 @@ function Line({ k, v, strong }: { k: string; v: string; strong?: boolean }) {
       <span className={cn("text-right", strong ? "font-semibold text-ink" : "text-ink")}>{v}</span>
     </div>
   );
-}
-function Hint({ children }: { children: React.ReactNode }) {
-  return <p className="mt-1 text-[0.65rem] leading-relaxed text-ink-muted">{children}</p>;
 }
 
 function Roster({ team, out, color, onToggle, disabled }: {
