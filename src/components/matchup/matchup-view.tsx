@@ -43,7 +43,8 @@ import {
  * WHAT IS ON THE PAGE AND WHY, in the order the research ranked it
  * (docs/matchup-predictor.md):
  *
- *   1. The answer — score, margin, win probability. Large.
+ *   1. The answer — the card cut at the win probability, each team's score
+ *      on its own side. Large.
  *   2. The site selector, as a headline control rather than a checkbox. It is
  *      worth up to ~4.9 points, which is more than every style term together.
  *   3. The arithmetic, printed. The one thing the competition does well.
@@ -156,52 +157,45 @@ export function MatchupView({
       </div>
 
       {/* ── The answer ──────────────────────────────────────────────────── */}
-      <section
-        className="mt-5 border border-hairline rounded-xl shadow-sm bg-paper-deep/25 overflow-hidden"
-        // A wash of each team's color behind its own side — the tale of the
-        // tape, at an opacity that tints the paper without fighting the ink.
-        style={{ backgroundImage: `linear-gradient(90deg, color-mix(in srgb, ${colorA} 9%, transparent), transparent 38%, transparent 62%, color-mix(in srgb, ${colorB} 9%, transparent))` }}
-      >
-        {/* Three columns from sm up. On a phone the middle column has no room
-            between two team names, so the score takes its own row first and
-            the teams sit beneath it, one per column. */}
-        <div className="grid grid-cols-2 sm:grid-cols-[1fr_auto_1fr] items-center gap-x-3 gap-y-4 sm:gap-6 px-4 sm:px-8 pt-6 pb-4">
-          <TeamSide team={a} color={colorA} season={pack.season} side="left" />
-
-          <div className="text-center col-span-2 sm:col-span-1 order-first sm:order-0">
-            <div className="font-display tabular text-5xl sm:text-7xl font-bold leading-none tracking-tight text-ink whitespace-nowrap">
-              {showA}
-              <span className="text-ink-muted/60 font-medium mx-2 sm:mx-3">–</span>
-              {showB}
-            </div>
-            <div className="mt-2.5 text-[0.6rem] uppercase tracking-[0.15em] font-semibold text-ink-muted">
-              Projected score
-            </div>
-          </div>
-
-          <TeamSide team={b} color={colorB} season={pack.season} side="right" />
+      <section className="mt-5 border border-hairline rounded-xl shadow-sm bg-paper-deep/25 overflow-hidden">
+        {/* THE SEAM. The card is cut in two at the win probability: the
+            favorite's half is as wide as its share of the games, so the odds
+            are felt before they are read, and the cut moves when a player is
+            ruled out or the floor changes. Each side owns its half, score and
+            all. The fr values are the tweened probability, which is what makes
+            the seam slide rather than jump. The floor keeps the underdog's
+            name and record legible when the model is sure — a 90% favorite
+            gets 78% of the width, and the exact number is printed on the
+            card either way. The ratings themselves are not repeated here;
+            the ledger below shows them in the arithmetic. */}
+        <div
+          className="relative grid isolate"
+          // In percent, not as a fraction of one: flex factors that sum to
+          // less than 1 hand out only that fraction of the free space, and
+          // 0.84fr + 0.16fr left a sixth of the card empty.
+          style={{ gridTemplateColumns: `minmax(max(150px, 22%), ${Math.max(2, winA * 100)}fr) minmax(max(150px, 22%), ${Math.max(2, (1 - winA) * 100)}fr)` }}
+        >
+          <Half team={a} color={colorA} season={pack.season} side="left" score={showA} win={winA} hosting={p.site === "home"} />
+          <Half team={b} color={colorB} season={pack.season} side="right" score={showB} win={1 - winA} hosting={p.site === "away"} seam />
         </div>
 
-        {/* The probability is not a number someone typed. It is the area under
-            this curve on each side of zero, and the curve is drawn to scale:
-            σ is 11 points of margin, so even a clear favorite leaves a lot of
-            the other color showing. */}
-        <div className="px-4 sm:px-8 pb-5">
-          <div className="flex items-baseline justify-between text-sm font-semibold tabular">
-            <span style={{ color: colorA }}>{fmtPct(winA)}</span>
-            <span className="text-[0.6rem] uppercase tracking-[0.15em] text-ink-muted font-semibold">Win probability</span>
-            <span style={{ color: colorB }}>{fmtPct(1 - winA)}</span>
-          </div>
-          <MarginCurve margin={p.margin} colorA={colorA} colorB={colorB} a={a.b} b={b.b} />
-
-          <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
+        <div className="px-4 sm:px-6 pt-4 pb-5">
+          <dl className="grid grid-cols-3 gap-2 sm:flex sm:gap-8">
             <Stat label="Margin" value={`${favorite.b} by ${fmt1(Math.abs(p.margin))}`} note={`give or take ${Math.round(SIGMA)}`} />
             <Stat label="Pace" value={fmt1(p.pace)} note="possessions" />
             <Stat label="Total" value={`${Math.round(p.total)}`} note={`${Math.round(band.total[0])}–${Math.round(band.total[1])}`} />
           </dl>
 
-          {/* Fast games are wider, not more upset-prone — the range says so
-              while the curve above keeps its shape. */}
+          {/* The receipt. The split above is not a number someone typed: it
+              is the area under this curve on each side of zero, drawn to
+              scale — σ is 11 points of margin, so even a clear favorite leaves
+              a lot of the other color showing. Fast games are wider, not more
+              upset-prone; the total's range says so while the curve keeps its
+              shape. */}
+          <div className="mt-3">
+            <MarginCurve margin={p.margin} colorA={colorA} colorB={colorB} a={a.b} b={b.b} />
+          </div>
+
           <Counterfactuals pack={pack} p={p} handlers={handlers} colorA={colorA} colorB={colorB} />
         </div>
       </section>
@@ -519,10 +513,30 @@ function SiteControl({ site, a, onSite, disabled }: { site: Site; a: MatchupTeam
   );
 }
 
-function TeamSide({ team, color, season, side }: { team: MatchupTeam; color: string; season: number; side: "left" | "right" }) {
+/**
+ * One side of the seam: the team's identity at the top, its score and its
+ * share of the games at the bottom, on a wash of its own color. Both sides
+ * keep the same reading order — logo, name, numbers — and the right side is
+ * mirrored by alignment only, because reversing the order made the numbers
+ * read backwards.
+ */
+function Half({ team, color, season, side, score, win, hosting, seam }: {
+  team: MatchupTeam; color: string; season: number; side: "left" | "right";
+  score: React.ReactNode; win: number; hosting: boolean;
+  /** Draw the cut on this side's leading edge. */
+  seam?: boolean;
+}) {
   const right = side === "right";
   return (
-    <div className={cn("min-w-0 flex flex-col gap-1.5", right ? "items-end text-right" : "items-start text-left")}>
+    <div
+      className={cn("relative min-w-0 flex flex-col justify-between gap-4 px-4 py-4 sm:px-6 sm:py-5", right && "items-end text-right")}
+      style={{ background: `color-mix(in srgb, ${color} 12%, transparent)` }}
+    >
+      {/* The cut itself, on the underdog's edge so it sits exactly on the grid
+          line whatever the floor did to the proportions. The lean is slight
+          because a skew displaces by height: at 9° over a 200px half the top
+          of the line was 16px into the underdog's name. */}
+      {seam && <span aria-hidden className="absolute top-0 bottom-0 left-0 w-[3px] bg-ink" style={{ transform: "skewX(-5deg)" }} />}
       <div className={cn("flex items-center gap-2.5 min-w-0", right && "flex-row-reverse")}>
         {/* Wider than tall: a wordmark fills width where a crest fills height,
             and in a square box the wordmark draws a third smaller. */}
@@ -534,16 +548,20 @@ function TeamSide({ team, color, season, side }: { team: MatchupTeam; color: str
           <div className="text-[0.7rem] text-ink-muted tabular">
             {team.c ?? "Ind."} · {team.w}–{team.l}
             {team.br != null && <> · <span className="font-semibold" style={{ color }} title="BTA rank">#{team.br}</span></>}
+            {hosting && <> · <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-soft">home</span></>}
           </div>
         </div>
       </div>
-      {/* Same order on both sides — reversing it made the right-hand team's
-          numbers read backwards. Right-aligned is what "mirrored" should mean. */}
-      <dl className={cn("flex flex-wrap gap-x-3 gap-y-0.5 text-[0.7rem] tabular text-ink-soft", right && "justify-end")}>
-        <div><dt className="inline text-ink-muted">AdjO </dt><dd className="inline font-semibold text-ink">{fmt1(team.o)}</dd></div>
-        <div><dt className="inline text-ink-muted">AdjD </dt><dd className="inline font-semibold text-ink">{fmt1(team.d)}</dd></div>
-        <div><dt className="inline text-ink-muted">Tempo </dt><dd className="inline font-semibold text-ink">{fmt1(team.t)}</dd></div>
-      </dl>
+      <div className={cn("flex items-end justify-between gap-x-4 gap-y-1 flex-wrap", right && "flex-row-reverse")}>
+        <div>
+          <div className="font-display tabular text-5xl sm:text-7xl font-bold leading-[0.9] tracking-tight text-ink">{score}</div>
+          <div className="mt-1.5 text-[0.55rem] uppercase tracking-[0.15em] font-semibold text-ink-muted">Projected</div>
+        </div>
+        <div className="tabular">
+          <div className="text-base sm:text-lg font-bold leading-none" style={{ color }}>{fmtPct(win)}</div>
+          <div className="mt-1.5 text-[0.55rem] uppercase tracking-[0.15em] font-semibold text-ink-muted">Win probability</div>
+        </div>
+      </div>
     </div>
   );
 }
