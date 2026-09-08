@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeftRight, Check, Link2 } from "lucide-react";
+import { ArrowLeftRight, Check, Link2, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TeamLogo } from "@/components/team-logo";
 import { TeamName } from "@/components/team-name";
+import { teamShortName } from "@/lib/team-names";
 import { SearchableSelect, type SearchableOption } from "@/components/explorer/searchable-select";
 import { getTeamColors, readableInk, readableOnPaper } from "@/lib/team-colors";
 import {
@@ -17,6 +18,7 @@ import {
   fmt1,
   fmtPct,
   fmtSigned,
+  playerCost,
   project,
   scoreBand,
   type MatchupPack,
@@ -57,6 +59,8 @@ export type MatchupHandlers = {
   onToggleA: (i: number) => void;
   onToggleB: (i: number) => void;
   onClearOut: () => void;
+  /** Back to the default pair, floor and rotations. Absent when already there. */
+  onReset?: () => void;
 };
 
 export function MatchupView({
@@ -66,6 +70,7 @@ export function MatchupView({
   groupLabels,
   handlers,
   loading = false,
+  error = false,
 }: {
   pack: MatchupPack;
   projection: Projection;
@@ -75,6 +80,8 @@ export function MatchupView({
   /** Absent in the prerendered fallback — controls draw but do nothing. */
   handlers?: MatchupHandlers;
   loading?: boolean;
+  /** Set when the full pack could not be fetched. */
+  error?: boolean;
 }) {
   const { a, b } = p;
   /**
@@ -86,7 +93,7 @@ export function MatchupView({
    */
   const inkA = teamInk(a.b), inkB = teamInk(b.b);
   const colorA = "var(--ma)", colorB = "var(--mb)";
-  const band = scoreBand(p);
+  const band = scoreBand(p, pack.league.tempo);
   const inert = !handlers;
   const outCount = p.outA.length + p.outB.length;
   const scoreA = useTween(p.scoreA), scoreB = useTween(p.scoreB), winA = useTween(p.winA);
@@ -100,12 +107,19 @@ export function MatchupView({
         ["--mb-light" as string]: inkB.light, ["--mb-dark" as string]: inkB.dark,
       }}
     >
+      {error && (
+        <p role="status" className="mb-3 rounded-lg border border-hairline bg-paper-deep/40 px-3 py-2 text-xs text-ink-soft">
+          Could not load the full team list — showing the default matchup only.{" "}
+          <button type="button" onClick={() => window.location.reload()} className="font-semibold text-coral hover:underline">Retry</button>
+        </p>
+      )}
+
       {/* ── Controls ────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-3 md:gap-4 items-end">
         <Picker label="Team" team={a} options={options} groupLabels={groupLabels}
           onChange={handlers?.onTeamA} disabled={inert || loading} />
 
-        <div className="flex flex-col items-center gap-2 order-first md:order-none">
+        <div className="flex flex-col items-center gap-2 order-first md:order-0">
           <SiteControl site={p.site} a={a} onSite={handlers?.onSite} disabled={inert} />
           <div className="flex items-center gap-4">
             <button
@@ -119,6 +133,17 @@ export function MatchupView({
               Swap
             </button>
             <ShareButton disabled={inert} />
+            {handlers?.onReset && (
+              <button
+                type="button"
+                onClick={handlers.onReset}
+                className="inline-flex items-center gap-1.5 text-[0.6rem] uppercase tracking-[0.15em] font-semibold text-ink-muted hover:text-ink transition-colors"
+                title="Back to the default matchup"
+              >
+                <RotateCcw className="h-3 w-3" aria-hidden />
+                Reset
+              </button>
+            )}
           </div>
         </div>
 
@@ -139,7 +164,7 @@ export function MatchupView({
         <div className="grid grid-cols-2 sm:grid-cols-[1fr_auto_1fr] items-center gap-x-3 gap-y-4 sm:gap-6 px-4 sm:px-8 pt-6 pb-4">
           <TeamSide team={a} color={colorA} season={pack.season} side="left" />
 
-          <div className="text-center col-span-2 sm:col-span-1 order-first sm:order-none">
+          <div className="text-center col-span-2 sm:col-span-1 order-first sm:order-0">
             <div className="font-display tabular text-5xl sm:text-7xl font-bold leading-none tracking-tight text-ink whitespace-nowrap">
               {Math.round(scoreA)}
               <span className="text-ink-muted/60 font-medium mx-2 sm:mx-3">–</span>
@@ -168,14 +193,20 @@ export function MatchupView({
           <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
             <Stat label="Margin" value={`${favourite.b} by ${fmt1(Math.abs(p.margin))}`} note={`give or take ${Math.round(SIGMA)}`} />
             <Stat label="Pace" value={fmt1(p.pace)} note="possessions" />
-            <Stat label="Total" value={`${Math.round(p.total)}`} note="harder to call than the margin" />
+            <Stat label="Total" value={`${Math.round(p.total)}`} note={`${Math.round(band.total[0])}–${Math.round(band.total[1])}`} />
           </dl>
 
           {/* Fast games are wider, not more upset-prone — the range says so
               while the curve above keeps its shape. */}
-          <div className="mt-2.5 grid grid-cols-2 gap-3 text-[0.7rem] text-ink-muted tabular">
-            <div className="text-left">Likely range <span className="text-ink-soft font-medium">{Math.round(band.a[0])}–{Math.round(band.a[1])}</span></div>
-            <div className="text-right">Likely range <span className="text-ink-soft font-medium">{Math.round(band.b[0])}–{Math.round(band.b[1])}</span></div>
+          {/* Two games in three land in here — a real interval, not a
+              flourish. It widens with pace while the curve above holds its
+              shape, which is the finding in one picture. */}
+          <div className="mt-2.5 grid grid-cols-3 items-baseline gap-2 text-[0.7rem] text-ink-muted tabular">
+            <div className="text-left"><span className="text-ink-soft font-medium">{Math.round(band.a[0])}–{Math.round(band.a[1])}</span></div>
+            <div className="text-center text-[0.6rem] uppercase tracking-[0.12em] font-semibold leading-tight">
+              2 games in 3<span className="hidden sm:inline"> land here</span>
+            </div>
+            <div className="text-right"><span className="text-ink-soft font-medium">{Math.round(band.b[0])}–{Math.round(band.b[1])}</span></div>
           </div>
 
           <Counterfactuals pack={pack} p={p} handlers={handlers} colorA={colorA} colorB={colorB} />
@@ -226,8 +257,8 @@ export function MatchupView({
       <p className="mt-6 text-[0.7rem] leading-relaxed text-ink-muted max-w-[72ch]">
         Ratings are opponent-adjusted from all {pack.games.toLocaleString()} Division I games of {pack.season - 1}–{String(pack.season).slice(-2)}, with the prior season carried forward as a prior.
         Home court is a flat {HCA} per side per 100 possessions plus a floor that depends on the fixture: a conference game, a non-conference game, or a power-conference team hosting one from outside the six strongest leagues.
-        Constants were fitted on 2022–24 and verified out of sample on 2024–26; the win probability is a normal curve with σ = {SIGMA} points of margin.
-        Full method: <span className="text-ink-soft">Beyond the Arc · Matchup research, parts 1–3.</span>
+        Constants were fitted on 2022–24 and verified out of sample on 2024–26; the win probability is a normal curve with σ = {SIGMA} points of margin.{" "}
+        <Link href="/matchup/method/" className="text-coral hover:underline font-medium">How this works</Link>.
       </p>
     </div>
   );
@@ -290,7 +321,9 @@ function MarginCurve({ margin, colorA, colorB, a, b }: { margin: number; colorA:
   }
   const path = `M${PAD},${H - 6} L${pts.join(" L")} L${W - PAD},${H - 6} Z`;
   const dx = Math.max(-RANGE, Math.min(RANGE, margin)) * px;
-  const id = "mc-" + Math.abs(Math.round(margin * 100));
+  // Stable and unique per instance. Deriving it from the margin meant two
+  // curves showing the same number shared a clip region.
+  const id = useId().replace(/:/g, "");
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="mt-1 w-full h-auto" role="img"
       aria-label={`Projected margin ${fmtSigned(margin)} for ${a}; ${b} wins when the game lands left of zero.`}>
@@ -329,7 +362,7 @@ function Counterfactuals({ pack, p, handlers, colorA, colorB }: {
   const { a, b, site, outA, outB } = p;
   const chips: Array<{ key: string; label: string; win: number; color: string; apply?: () => void }> = [];
   const base = { pack, a, b, outA, outB };
-  const short = (t: MatchupTeam) => (t.b.length > 12 ? t.b.split(" ")[0]! : t.b);
+  const short = (t: MatchupTeam) => teamShortName(t.b);
 
   for (const s of ["home", "neutral", "away"] as const) {
     if (s === site) continue;
@@ -365,9 +398,9 @@ function Counterfactuals({ pack, p, handlers, colorA, colorB }: {
               type="button"
               onClick={c.apply}
               disabled={!c.apply}
-              className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-paper px-2.5 py-1 text-[0.7rem] text-ink-soft hover:border-ink/30 hover:text-ink transition-colors disabled:opacity-80 tabular"
+              className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-paper px-2.5 py-1 text-[0.7rem] text-ink-soft hover:border-ink/30 hover:text-ink transition-colors disabled:opacity-80 tabular max-w-full"
             >
-              <span>{c.label}</span>
+              <span className="truncate">{c.label}</span>
               <span className="font-semibold" style={{ color: colorA }}>{fmtPct(c.win)}</span>
               <span className={cn("text-[0.6rem]", delta > 0 ? "text-ink-muted" : "text-ink-muted")} style={{ color: delta > 0 ? colorA : colorB }}>
                 {delta > 0 ? "▲" : delta < 0 ? "▼" : "•"}{Math.abs(Math.round(delta * 100))}
@@ -447,7 +480,9 @@ function Picker({
  * means for the team on the left — "at home" is A's building, "away" is B's.
  */
 function SiteControl({ site, a, onSite, disabled }: { site: Site; a: MatchupTeam; onSite?: (s: Site) => void; disabled?: boolean }) {
-  const short = a.b.length > 12 ? a.b.split(" ")[0]! : a.b;
+  // The site's own short form, then CSS truncation — chopping to the first
+  // word turned "Northern Iowa" into "Northern", which is a different school.
+  const short = teamShortName(a.b);
   const opts: Array<[Site, string]> = [["home", `${short} home`], ["neutral", "Neutral"], ["away", `${short} away`]];
   return (
     <div role="group" aria-label="Site" className="inline-flex items-center gap-0.5 rounded-lg bg-ink/6 p-1">
@@ -461,7 +496,7 @@ function SiteControl({ site, a, onSite, disabled }: { site: Site; a: MatchupTeam
             onClick={() => onSite?.(s)}
             disabled={disabled}
             className={cn(
-              "whitespace-nowrap rounded-md px-2.5 py-1.5 text-[0.65rem] uppercase font-semibold tracking-[0.12em] transition-colors",
+              "max-w-36 truncate rounded-md px-2.5 py-1.5 text-[0.65rem] uppercase font-semibold tracking-[0.12em] transition-colors",
               active ? "bg-paper text-ink shadow-sm" : "text-ink-soft hover:text-ink",
             )}
           >
@@ -478,13 +513,16 @@ function TeamSide({ team, color, season, side }: { team: MatchupTeam; color: str
   return (
     <div className={cn("min-w-0 flex flex-col gap-1.5", right ? "items-end text-right" : "items-start text-left")}>
       <div className={cn("flex items-center gap-2.5 min-w-0", right && "flex-row-reverse")}>
-        <TeamLogo name={team.b} size={40} className="shrink-0" />
+        {/* Wider than tall: a wordmark fills width where a crest fills height,
+            and in a square box the wordmark draws a third smaller. */}
+        <TeamLogo name={team.b} size={40} width={56} className="shrink-0" />
         <div className="min-w-0">
           <Link href={`/teams/${team.s}/${season}/`} className="block font-display font-bold text-lg sm:text-2xl leading-tight text-ink hover:underline truncate">
             <TeamName name={team.b} />
           </Link>
           <div className="text-[0.7rem] text-ink-muted tabular">
-            {team.c ?? "Ind."} · {team.w}–{team.l} · <span className="font-semibold" style={{ color }}>#{team.rk}</span>
+            {team.c ?? "Ind."} · {team.w}–{team.l}
+            {team.br != null && <> · <span className="font-semibold" style={{ color }} title="BTA rank">#{team.br}</span></>}
           </div>
         </div>
       </div>
@@ -611,7 +649,7 @@ function Roster({ team, out, color, onToggle, disabled }: {
         <p className="text-xs text-ink-muted">No rotation on record.</p>
       ) : (
         <ul className="divide-y divide-hairline/70">
-          {team.r.map(([name, mpg, val], i) => {
+          {team.r.map(([name, mpg], i) => {
             const isOut = out.includes(i);
             const best = i === team.best;
             return (
@@ -621,7 +659,7 @@ function Roster({ team, out, color, onToggle, disabled }: {
                   aria-pressed={isOut}
                   onClick={() => onToggle?.(i)}
                   disabled={disabled}
-                  title={isOut ? "Ruled out — click to restore" : `Rule out (about ${fmt1(val * 0.0578 + (best ? 1.85 : 0))} pts)`}
+                  title={isOut ? "Ruled out — click to restore" : `Rule out — worth about ${fmt1(playerCost(team, i))} pts`}
                   className={cn(
                     "w-full flex items-center gap-2.5 py-1.5 text-left text-xs transition-colors group",
                     isOut ? "text-ink-muted" : "text-ink hover:text-coral",

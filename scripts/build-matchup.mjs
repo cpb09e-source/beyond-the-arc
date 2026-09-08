@@ -43,7 +43,18 @@ import zlib from "node:zlib";
 
 const args = process.argv.slice(2);
 const SEASON = Number(args[args.indexOf("--season") + 1]);
-if (!SEASON) { console.error("usage: node scripts/build-matchup.mjs --season 2026"); process.exit(1); }
+if (!SEASON) { console.error("usage: node scripts/build-matchup.mjs --season 2026 [--live]"); process.exit(1); }
+/**
+ * --live writes public/data/live/matchup.json instead of the per-season file.
+ *
+ * A season being played cannot ride in the deploy: the pack would be frozen at
+ * whatever the last upload held, and the whole point of carrying the prior
+ * forward is that the page works in NOVEMBER, when it changes every night.
+ * The live path is already an R2 mirror (src/lib/data-url.ts) and already has
+ * a nightly upload step (`sync-data-to-r2.mjs --only live`), so this file just
+ * joins the convoy. See src/lib/live-team-page.ts for the whole argument.
+ */
+const LIVE = args.includes("--live");
 const PRIOR = SEASON - 1;
 
 const ROOT = path.resolve(".");
@@ -312,15 +323,22 @@ const slugOf = (name) => name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g
 
 function bartResolver(season) {
   const all = JSON.parse(fs.readFileSync(path.join(ROOT, "public/data/teams-all.json"), "utf8"));
-  const names = new Set(all.filter((t) => t.year === season).map((t) => t.name));
+  const rows = all.filter((t) => t.year === season);
+  const names = new Set(rows.map((t) => t.name));
+  const rank = new Map(rows.map((t) => [t.name, typeof t.bta_rank === "number" ? t.bta_rank : null]));
   const byKey = new Map();
   for (const n of names) byKey.set(normKey(n), n);
-  return (cbbd) => {
+  const resolve = (cbbd) => {
     if (names.has(cbbd)) return cbbd;
     const alias = CBBD_TO_BART[cbbd];
     if (alias && names.has(alias)) return alias;
     return byKey.get(normKey(alias ?? cbbd)) ?? null;
   };
+  // The site's own rank, so the matchup page and the team page agree. They
+  // are different orderings — this model rates on adjusted net alone — and a
+  // reader one click apart should not be shown two numbers for one team.
+  resolve.rank = (bartName) => (bartName == null ? null : rank.get(bartName) ?? null);
+  return resolve;
 }
 
 // ── Build ──────────────────────────────────────────────────────────────────
@@ -379,6 +397,7 @@ const out = list.map((t, i) => {
     so: DIMS.map(([k]) => r1(so[k] ?? S.league[k])),
     sd: DIMS.map(([k]) => r1(sd[k] ?? S.league[k])),
     k: r3(cont.get(t.id) ?? 0.436),
+    br: bart.rank(b),
     best,
     // [name, minutes per game, value per game, games played]
     r: rot.map((p) => [p.name, r1(p.mpg), r2(p.val), p.gp]),
@@ -396,8 +415,9 @@ const pack = {
   teams: out,
 };
 
-fs.mkdirSync(OUT_DIR, { recursive: true });
-const file = path.join(OUT_DIR, `${SEASON}.json`);
+const dir = LIVE ? path.join(ROOT, "public/data/live") : OUT_DIR;
+fs.mkdirSync(dir, { recursive: true });
+const file = LIVE ? path.join(dir, "matchup.json") : path.join(dir, `${SEASON}.json`);
 const json = JSON.stringify(pack);
 fs.writeFileSync(file, json);
 

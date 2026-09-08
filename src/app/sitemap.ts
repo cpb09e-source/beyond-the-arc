@@ -46,7 +46,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // not exist and robots.txt said they did.
   for (const path of [
     "", "/players", "/teams", "/coaches", "/portal", "/calc",
-    "/conferences", "/scoreboard", "/glossary", "/pricing", "/matchup",
+    "/conferences", "/scoreboard", "/glossary", "/pricing", "/matchup", "/matchup/method",
   ]) {
     entries.push({
       url: `${BASE_URL}${path}/`,

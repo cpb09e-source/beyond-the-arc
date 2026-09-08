@@ -52,6 +52,15 @@ export type MatchupTeam = {
   sd: number[];
   /** Share of last season's minutes that returned. */
   k: number;
+  /**
+   * The site's own BTA rank, for display.
+   *
+   * SEPARATE FROM `rk`, which is this model's ordering by adjusted net. The
+   * two disagree — Belmont is 64th here and 88th on its team page — and a
+   * reader who sees one number on the matchup page and another one click away
+   * is right to distrust both. `rk` orders the picker; this is what is shown.
+   */
+  br: number | null;
   /** Index into `r` of the best player, or −1. */
   best: number;
   /** [name, minutes per game, value per game, games played] */
@@ -99,6 +108,33 @@ export const CORR = {
 
 /** Spread of the margin around its projection. Normal; the form is irrelevant. */
 export const SIGMA = 11.0;
+
+/**
+ * Spread of ONE TEAM'S SCORE around its projection, at league-average pace.
+ *
+ * NOT σ/2. A team's score carries the total's error as well as the margin's,
+ * and the total is the harder of the two: measured on 2025-26, per-team score
+ * error has sd 10.43 against the margin's 11.63 and the total's 17.30. Two in
+ * three projected scores land within 10.4 points; half land within 7.1.
+ *
+ * The first version of this file halved SIGMA and called it a range, which put
+ * a band of ±5.5 on the page — narrow enough to be read as a promise, and
+ * wrong by a factor of two.
+ */
+export const SCORE_SIGMA = 10.43;
+/** Spread of the total. Roughly 50% harder to call than the margin. */
+export const TOTAL_SIGMA = 17.30;
+
+/**
+ * How the score's spread grows with the pace of the game.
+ *
+ * Measured across pace octiles of 2025-26: a log-log slope of 0.452, which is
+ * the √pace a possession-level random walk predicts and nothing like the
+ * linear scaling a "more possessions, more points" intuition suggests. It is
+ * also why the win probability does NOT move with pace — the margin's own
+ * spread grows at the same rate as the margin, and the two cancel.
+ */
+export const SCORE_PACE_EXP = 0.452;
 
 /** Coefficients of the fitted pace form: L − 0.75 + 0.83 × (tA + tB − 2L). */
 const PACE_INTERCEPT = -0.75, PACE_SLOPE = 0.83;
@@ -241,16 +277,40 @@ export function project({ pack, a, b, site, outA = [], outB = [] }: ProjectInput
 }
 
 /**
- * The score range the page draws. σ is constant in the MARGIN; the spread in
- * either team's SCORE grows with the possessions played, which is the
- * "fast games are wider, not more upset-prone" result made visible.
+ * The score range the page draws, and the one it means.
+ *
+ * σ is constant in the MARGIN, so the win probability never moves with pace.
+ * The spread in either team's SCORE does move with it — as √pace — which is
+ * the "fast games are wider, but not more upset-prone" result made visible:
+ * the range opens up while the probability holds still.
+ *
+ * `z` is in standard deviations. 1.0 covers about two games in three, which
+ * is what the page labels it.
  */
-export function scoreBand(p: Projection, z = 1): { a: [number, number]; b: [number, number] } {
-  const half = (z * SIGMA) / 2;
+export function scoreBand(p: Projection, leagueTempo: number, z = 1): {
+  a: [number, number]; b: [number, number]; total: [number, number]; half: number;
+} {
+  const scale = Math.pow(p.pace / leagueTempo, SCORE_PACE_EXP);
+  const half = z * SCORE_SIGMA * scale;
+  const halfTotal = z * TOTAL_SIGMA * scale;
   return {
     a: [p.scoreA - half, p.scoreA + half],
     b: [p.scoreB - half, p.scoreB + half],
+    total: [p.total - halfTotal, p.total + halfTotal],
+    half,
   };
+}
+
+/**
+ * What ruling this player out is worth, in points of margin.
+ *
+ * Reads CORR rather than restating it: the roster tooltip quoted "+2.1 pts"
+ * as a literal once, which is a second copy of two coefficients waiting to
+ * drift from the first.
+ */
+export function playerCost(team: MatchupTeam, i: number): number {
+  const val = team.r[i]?.[2] ?? 0;
+  return CORR.missVal * val + (i === team.best ? CORR.missTop : 0);
 }
 
 // ── Presentation helpers ───────────────────────────────────────────────────

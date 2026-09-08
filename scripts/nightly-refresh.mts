@@ -188,6 +188,15 @@ const PUBLISH: Step[] = [
   { cmd: "npx", args: ["tsx", "scripts/build-team-season-games.mts", "--season", YEAR], note: "per-team game files" },
   { cmd: "npx", args: ["tsx", "scripts/build-live-team-pages.mts", "--season", YEAR], note: "the live team pages" },
   { cmd: "npx", args: ["tsx", "scripts/build-live-player-pages.mts", "--season", YEAR], note: "the live player pages" },
+  /**
+   * The Matchup Predictor's pack, written to public/data/live/ so it rides the
+   * `--only live` upload below. It CANNOT ship in the deploy during a season:
+   * the page would be projecting off whatever ratings the last full-site
+   * upload happened to contain, and the whole argument for carrying last
+   * season forward is that this thing is useful in November, when it moves
+   * every night. Same reasoning as the live team pages above.
+   */
+  { cmd: "node", args: ["scripts/build-matchup.mjs", "--season", YEAR, "--live"], note: "the matchup predictor pack" },
 ];
 
 /**

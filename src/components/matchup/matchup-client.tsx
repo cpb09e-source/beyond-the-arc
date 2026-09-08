@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { SearchableOption } from "@/components/explorer/searchable-select";
 import { dataUrl } from "@/lib/data-url";
 import { CONF_DISPLAY } from "@/lib/conf-display";
+import { isLiveSeason } from "@/lib/seasons";
 import { project, type MatchupPack, type MatchupTeam, type Site } from "@/lib/matchup";
 import { MatchupView, type MatchupHandlers } from "@/components/matchup/matchup-view";
 
@@ -39,14 +40,28 @@ export function MatchupClient({
 
   const [pack, setPack] = useState<MatchupPack>(initialPack);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   useEffect(() => {
-    let live = true;
-    fetch(dataUrl(`/data/matchup/${initialPack.season}.json`))
-      .then((r) => (r.ok ? (r.json() as Promise<MatchupPack>) : null))
-      .then((j) => { if (live && j) setPack(j); })
-      .catch(() => { /* the two-team pack still renders */ })
-      .finally(() => { if (live) setLoading(false); });
-    return () => { live = false; };
+    let alive = true;
+    /**
+     * A SEASON BEING PLAYED IS NOT IN THE DEPLOY. The baked file is whatever
+     * the last upload held, which during a season is last week's ratings. The
+     * nightly job writes /data/live/matchup.json to R2 instead — same pattern
+     * as the live team pages, and the same reason: publishing a number should
+     * not cost a full-site rebuild. Between seasons there is no live file and
+     * the per-season one is correct and final.
+     */
+    const path = isLiveSeason(initialPack.season)
+      ? "/data/live/matchup.json"
+      : `/data/matchup/${initialPack.season}.json`;
+    fetch(dataUrl(path))
+      .then((r) => (r.ok ? (r.json() as Promise<MatchupPack>) : Promise.reject(new Error(String(r.status)))))
+      .then((j) => { if (alive) setPack(j); })
+      // The two-team pack still renders the default matchup; the banner says
+      // why nothing else can be picked.
+      .catch(() => { if (alive) setError(true); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
   }, [initialPack.season]);
 
   const bySlug = useMemo(() => new Map(pack.teams.map((t) => [t.s, t])), [pack]);
@@ -99,6 +114,8 @@ export function MatchupClient({
     onToggleA: (i) => write({ oa: toggle(outA, i) }),
     onToggleB: (i) => write({ ob: toggle(outB, i) }),
     onClearOut: () => write({ oa: [], ob: [] }),
+    // Only offered once something has actually been changed.
+    ...(sp.toString() ? { onReset: () => router.replace(pathname, { scroll: false }) } : {}),
   };
 
   // ── Picker options, grouped by conference, strongest league first ────────
@@ -118,7 +135,9 @@ export function MatchupClient({
     const options: SearchableOption[] = sorted.map((t) => {
       const c = t.c ?? "Other";
       labels[c] = CONF_DISPLAY[c] ?? c;
-      return { value: t.s, label: t.b, group: c, desc: `#${t.rk} · ${t.w}–${t.l}` };
+      // BTA rank, not the model's ordering — `rk` sorts this list, but the
+      // number a reader sees has to be the one the team page shows.
+      return { value: t.s, label: t.b, group: c, desc: `${t.br != null ? `#${t.br} · ` : ""}${t.w}–${t.l}` };
     });
     return { options, groupLabels: labels };
   }, [pack, loading]);
@@ -131,6 +150,7 @@ export function MatchupClient({
       groupLabels={groupLabels}
       handlers={handlers}
       loading={loading}
+      error={error}
     />
   );
 }
