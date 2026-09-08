@@ -43,7 +43,21 @@ netlify api listSiteDeploys --data '{"site_id":"d0f62630-5d43-42d4-98ae-86684e7a
 Netlify's own auto-build rows fail with `Canceled build due to no content
 change` by design.
 
-As of **2026-09-08** the deploys on 2026-09-02 and 2026-09-07 both landed
+**Last deploy: `6aa08722016a896d920357b0`, 2026-09-08 22:07 UTC, state `ready`.**
+Authorized by Colin ("go ahead push and deploy"). That authorization was for
+THAT deploy — ask again before the next one. It carried the whole Matchup
+Predictor: the model, both pages, the totals correction, the young-ratings
+stretch, and the fixes from driving the page. Verified live at
+`/matchup/` and `/matchup/method/`, both 200, with the seam, the team colors,
+the ledger and the curve's end labels present in the served HTML.
+
+Cost, for the next estimate: build 32,873 pages in ~11 min; hashed 343,672
+files and 10 functions; CDN requested 161,116; **uploaded 322,752 files in 73
+minutes** (22:06 → 23:19 UTC). Almost exactly the previous shared-component
+run — this touched `globals.css` and the footer, so nearly every page's HTML
+and `.txt` was invalidated and little deduped.
+
+As of **2026-09-08** the deploys on 2026-09-02, 09-07 and 09-08 all landed
 `ready`, so the 2026-09-01/02 backlog described in the rest of this document —
 the legal pages, the glossary rewrite, the CBBD fixes, the 2021 backfill, the
 gated-corpus code, the Stripe trial, the scoreboard work, the team-page tabs
