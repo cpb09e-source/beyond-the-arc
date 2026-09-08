@@ -540,6 +540,18 @@ export function outIndexes(team: MatchupTeam, ids: readonly string[]): number[] 
 }
 
 export const fmtPct = (p: number): string => `${Math.round(p * 100)}%`;
+
+/**
+ * A win probability, which is never 0 and never 1.
+ *
+ * A 30-point projection is 99.68% and rounds to "100%". The model does not
+ * believe that and neither does anyone who has watched college basketball:
+ * σ is 11 points, the schedule is 5,700 games a season, and the tails are
+ * where the memorable ones live. Past the point where rounding would print
+ * certainty, the page says "greater than 99%" instead.
+ */
+export const fmtWin = (p: number): string =>
+  p >= 0.995 ? ">99%" : p <= 0.005 ? "<1%" : `${Math.round(p * 100)}%`;
 export const fmt1 = (x: number): string => (Math.round(x * 10) / 10).toFixed(1);
 export const fmtSigned = (x: number, digits = 1): string => {
   const v = x.toFixed(digits);

@@ -1284,3 +1284,53 @@ body {
   --mb-fill: var(--mb);
   --ma-wash: 12%;
 }
+
+/* ── The seam cuts the long way ───────────────────────────────────────────
+   ON A PHONE THE CUT IS HORIZONTAL, AND IT DOES NOT CARRY THE ODDS. Side by
+   side at 390px the underdog's column is about 150px, which has to hold a
+   school name, a record, a score and a percentage; "Northern Iowa" came out
+   shrunk to a caption. Stacked, both halves get the full width and are
+   properly readable.
+
+   The proportional cut is a DESKTOP idea and stays there. Rotating it —
+   proportional heights — trades a thin column for a thin band and reads
+   worse, and `fr` rows in an auto-height grid size against the tallest
+   content, so an 89:11 split stretched the favorite's half to 900px. The
+   percentage is printed on both halves regardless, so nothing is lost but
+   the flourish. */
+.matchup-split {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 640px) {
+  .matchup-split {
+    grid-template-columns: var(--ma-cols);
+  }
+}
+
+/* The cut itself and the wash behind the second half lean together. Both are
+   the same skew, on whichever edge is the boundary. */
+.matchup-seam,
+.matchup-wash {
+  transform: skewY(-3deg);
+  transform-origin: bottom left;
+}
+.matchup-seam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+}
+@media (min-width: 640px) {
+  .matchup-seam,
+  .matchup-wash {
+    transform: skewX(-5deg);
+  }
+  .matchup-seam {
+    right: auto;
+    bottom: 0;
+    width: 3px;
+    height: auto;
+  }
+}

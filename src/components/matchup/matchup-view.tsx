@@ -14,7 +14,7 @@ import {
   SIGMA,
   TOTAL_ADJ,
   fmt1,
-  fmtPct,
+  fmtWin,
   displayScores,
   OUT_SHARE_WARN,
   fmtSigned,
@@ -93,13 +93,16 @@ export function MatchupView({
    * the stylesheet picks — see .matchup-root in globals.css — which keeps the
    * chosen value out of inline styles, where a theme rule could not reach it.
    */
-  const inkA = teamInk(a.b), inkB = teamInk(b.b);
+  const { a: inkA, b: inkB } = pairInks(a.b, b.b);
   // Ink for anything read; fill for anything only seen. See .matchup-root.
   const colorA = "var(--ma)", colorB = "var(--mb)";
   const fillA = "var(--ma-fill)", fillB = "var(--mb-fill)";
   const inert = !handlers;
   const outCount = p.outA.length + p.outB.length;
+  // The curve's slide used to come from a CSS transform; now that the shift
+  // is in the path (see MarginCurve), the margin is tweened instead.
   const scoreA = useTween(p.scoreA), scoreB = useTween(p.scoreB), winA = useTween(p.winA);
+  const marginT = useTween(p.margin);
   const [showA, showB] = displayScores(scoreA, scoreB);
   const favorite = p.margin >= 0 ? a : b;
 
@@ -169,17 +172,21 @@ export function MatchupView({
             on the card either way. The ratings themselves are not repeated
             here; the ledger below shows them in the arithmetic. */}
         <div
-          className="relative grid isolate"
+          className="matchup-split relative isolate"
           // In percent, not as a fraction of one: flex factors that sum to
           // less than 1 hand out only that fraction of the free space, and
           // 0.84fr + 0.16fr left a sixth of the card empty.
           //
           // The LEFT team's wash is painted here, edge to edge, rather than
-          // on its half: the cut leans, so at the top a sliver of the right
-          // column belongs to the left team, and a half ends at the grid
-          // line. The right team's wash is a skewed layer inside its half.
+          // on its half: the cut leans, so along the boundary a sliver of the
+          // second track belongs to the first team. The right team's wash is
+          // a skewed layer inside its own half.
+          //
+          // Columns only. On a phone .matchup-split ignores this and stacks
+          // the halves at their natural height — see the rule in globals.css
+          // for why the split does not rotate.
           style={{
-            gridTemplateColumns: `minmax(max(150px, 26%), ${Math.max(2, winA * 100)}fr) minmax(max(150px, 26%), ${Math.max(2, (1 - winA) * 100)}fr)`,
+            ["--ma-cols" as string]: `minmax(max(150px, 26%), ${Math.max(2, winA * 100)}fr) minmax(max(150px, 26%), ${Math.max(2, (1 - winA) * 100)}fr)`,
             background: `color-mix(in srgb, ${fillA} var(--ma-wash), transparent)`,
           }}
         >
@@ -216,7 +223,7 @@ export function MatchupView({
               upset-prone; the total's range says so while the curve keeps its
               shape. */}
           <div className="mt-3">
-            <MarginCurve margin={p.margin} colorA={fillA} colorB={fillB} a={a.b} b={b.b} />
+            <MarginCurve margin={marginT} colorA={fillA} colorB={fillB} a={a.b} b={b.b} />
           </div>
 
           <Counterfactuals pack={pack} p={p} handlers={handlers} colorA={colorA} colorB={colorB} />
@@ -330,15 +337,27 @@ function MarginCurve({ margin, colorA, colorB, a, b }: { margin: number; colorA:
   const px = (W - 2 * PAD) / (2 * RANGE);              // pixels per point
   const zero = PAD + RANGE * px;
   const sig = SIGMA * px;
-  // The bell, centered at x = zero, sampled every 4px.
+  const dx = Math.max(-RANGE, Math.min(RANGE, margin)) * px;
+  /**
+   * THE SHIFT IS BAKED INTO THE PATH, NOT APPLIED AS A TRANSFORM.
+   *
+   * It used to be a translate on a group that also held the two clipped
+   * fills — and a clipPath resolves in the user space of the element that
+   * references it, which includes the ancestor's transform. So the clip slid
+   * along with the bell and the two colors always met at its PEAK. Every
+   * matchup drew as very nearly half one color and half the other, whatever
+   * the odds, while the caption underneath claimed the areas were the win
+   * probability. They were not. Centering the curve here leaves the clips in
+   * the untransformed space, where zero is really zero.
+   */
+  const center = zero + dx;
   const pts: string[] = [];
   for (let x = PAD; x <= W - PAD; x += 4) {
-    const z = (x - zero) / sig;
+    const z = (x - center) / sig;
     const y = H - 6 - (H - 14) * Math.exp(-0.5 * z * z);
     pts.push(`${x},${y.toFixed(1)}`);
   }
   const path = `M${PAD},${H - 6} L${pts.join(" L")} L${W - PAD},${H - 6} Z`;
-  const dx = Math.max(-RANGE, Math.min(RANGE, margin)) * px;
   // Stable and unique per instance. Deriving it from the margin meant two
   // curves showing the same number shared a clip region.
   const id = useId().replace(/:/g, "");
@@ -351,11 +370,11 @@ function MarginCurve({ margin, colorA, colorB, a, b }: { margin: number; colorA:
       </defs>
       {/* Colors go through `style`, not presentation attributes: a var() in
           an attribute is not guaranteed to resolve, and these are variables. */}
-      <g style={{ transform: `translateX(${dx}px)`, transition: "transform 320ms cubic-bezier(.2,.7,.2,1)" }}>
+      <g>
         <path d={path} style={{ fill: colorB, fillOpacity: 0.3 }} clipPath={`url(#${id}-l)`} />
         <path d={path} style={{ fill: colorA, fillOpacity: 0.3 }} clipPath={`url(#${id}-r)`} />
         <path d={path.replace(/ L\S+,\S+ Z$/, "")} style={{ fill: "none", stroke: "var(--ink)", strokeOpacity: 0.55, strokeWidth: 1.25 }} />
-        <line x1={zero} x2={zero} y1={H - 6} y2={12} style={{ stroke: "var(--ink)", strokeOpacity: 0.9, strokeWidth: 1 }} strokeDasharray="2 3" />
+        <line x1={center} x2={center} y1={H - 6} y2={12} style={{ stroke: "var(--ink)", strokeOpacity: 0.9, strokeWidth: 1 }} strokeDasharray="2 3" />
       </g>
       {/* Zero stays put: the game's one fixed point. */}
       <line x1={zero} x2={zero} y1={H - 6} y2={4} style={{ stroke: "var(--ink)", strokeOpacity: 0.35, strokeWidth: 1 }} />
@@ -419,7 +438,7 @@ function Counterfactuals({ pack, p, handlers, colorA, colorB }: {
               className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-paper px-2.5 py-1 text-[0.7rem] text-ink-soft hover:border-ink/30 hover:text-ink transition-colors disabled:opacity-80 tabular max-w-full"
             >
               <span className="truncate">{c.label}</span>
-              <span className="font-semibold" style={{ color: colorA }}>{fmtPct(c.win)}</span>
+              <span className="font-semibold" style={{ color: colorA }}>{fmtWin(c.win)}</span>
               <span className={cn("text-[0.6rem]", delta > 0 ? "text-ink-muted" : "text-ink-muted")} style={{ color: delta > 0 ? colorA : colorB }}>
                 {delta > 0 ? "▲" : delta < 0 ? "▼" : "•"}{Math.abs(Math.round(delta * 100))}
               </span>
@@ -453,13 +472,89 @@ function ShareButton({ disabled }: { disabled?: boolean }) {
   );
 }
 
-function teamInk(bart: string): { light: string; dark: string; brand: string } {
-  const c = getTeamColors(bart)?.primary;
-  if (!c) return { light: "var(--coral)", dark: "var(--coral)", brand: "var(--coral)" };
+type Ink = { light: string; dark: string; brand: string };
+
+function inkOf(hex: string | undefined): Ink {
+  if (!hex) return { light: "var(--coral)", dark: "var(--coral)", brand: "var(--coral)" };
   // Light: the site's contrast-targeted clamp against the cream paper. Dark:
   // the same hue lifted into a lightness band that clears 4.5:1 on #1C1C1C.
   // Brand: the color as printed, for fills that nobody has to read.
-  return { light: readableOnPaper(c), dark: readableInk(c, { min: 0.6, max: 0.78 }), brand: c };
+  return { light: readableOnPaper(hex), dark: readableInk(hex, { min: 0.6, max: 0.78 }), brand: hex };
+}
+
+/** Hue in degrees, or null for a color with no hue to speak of. */
+function hueOf(hex: string): number | null {
+  const s = hex.replace("#", "");
+  if (s.length !== 6) return null;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(s.slice(i, i + 2), 16) / 255) as [number, number, number];
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  if (d < 0.08) return null;                       // effectively gray
+  const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
+
+/** Shortest distance around the hue circle. */
+const hueDist = (a: number, b: number) => { const d = Math.abs(a - b); return Math.min(d, 360 - d); };
+
+/**
+ * Would these two read as the same color?
+ *
+ * Two grays do. A gray against a real color does not — that pair is already
+ * as separated as it needs to be. Otherwise it is a question of hue.
+ */
+function collides(x: string, y: string): boolean {
+  const a = hueOf(x), b = hueOf(y);
+  if (a == null && b == null) return true;
+  if (a == null || b == null) return false;
+  return hueDist(a, b) < 22;
+}
+
+/**
+ * A COLOR FOR EACH SIDE THAT CAN BE TOLD APART.
+ *
+ * The whole card is two washes meeting at a seam, which only works if the two
+ * washes are different colors. Across the 365 teams on offer, 19% of possible
+ * pairings have primary hues within 20° of each other — Illinois and Wake
+ * Forest are 2° apart, Iowa and Northern Iowa are both gold — and those
+ * matchups drew as one continuous block with a line through it.
+ *
+ * The left team always keeps its primary; it is the one the reader picked
+ * first. The right team gives way, in order: its own secondary when that has
+ * a real hue and separates, otherwise a neutral chosen to sit as far from the
+ * left team's hue as the small set allows. The neutrals belong to no school,
+ * so nobody is given a color they do not own, and the logo and the name still
+ * say who it is.
+ *
+ * The neutral has to be PICKED, not fixed. A single slate is itself a navy,
+ * so Duke against New Hampshire — two navies, whose only other color is a
+ * light gray that cannot carry text on cream — would have swapped one
+ * collision for another.
+ */
+const NEUTRALS = ["#8a6a4a", "#5b6472", "#6b4a6b"];
+
+function neutralAgainst(pa: string): string {
+  const ha = hueOf(pa);
+  if (ha == null) return NEUTRALS[1]!;
+  let best = NEUTRALS[0]!, bestD = -1;
+  for (const f of NEUTRALS) {
+    const hf = hueOf(f);
+    const d = hf == null ? 0 : hueDist(ha, hf);
+    if (d > bestD) { bestD = d; best = f; }
+  }
+  return best;
+}
+
+function pairInks(aName: string, bName: string): { a: Ink; b: Ink } {
+  const ca = getTeamColors(aName), cb = getTeamColors(bName);
+  const pa = ca?.primary, pb = cb?.primary;
+  if (!pa || !pb) return { a: inkOf(pa), b: inkOf(pb) };
+  if (!collides(pa, pb)) return { a: inkOf(pa), b: inkOf(pb) };
+  // A gray secondary is not a substitute: readableOnPaper has no hue to
+  // rebuild from and falls back to near-black, which is not a team color at
+  // all and reads as broken next to a real one.
+  const sb = cb?.secondary;
+  if (sb && hueOf(sb) != null && !collides(pa, sb)) return { a: inkOf(pa), b: inkOf(sb) };
+  return { a: inkOf(pa), b: inkOf(neutralAgainst(pa)) };
 }
 
 function Picker({
@@ -562,8 +657,8 @@ function Half({ team, color, fill, season, side, score, win, hosting, seam }: {
           at the top right is clipped by the card. */}
       {seam && (
         <>
-          <span aria-hidden className="absolute inset-0 -z-10 origin-bottom-left" style={{ background: wash, transform: "skewX(-5deg)" }} />
-          <span aria-hidden className="absolute top-0 bottom-0 left-0 w-0.75 bg-ink origin-bottom-left" style={{ transform: "skewX(-5deg)" }} />
+          <span aria-hidden className="matchup-wash absolute inset-0 -z-10" style={{ background: wash }} />
+          <span aria-hidden className="matchup-seam bg-ink" />
         </>
       )}
       <div className={cn("flex items-center gap-2.5 min-w-0", right && "flex-row-reverse")}>
@@ -591,7 +686,7 @@ function Half({ team, color, fill, season, side, score, win, hosting, seam }: {
           <div className="mt-1.5 text-[0.55rem] uppercase tracking-[0.15em] font-semibold text-ink-muted">Projected</div>
         </div>
         <div className="tabular">
-          <div className="text-base sm:text-lg font-bold leading-none" style={{ color }}>{fmtPct(win)}</div>
+          <div className="text-base sm:text-lg font-bold leading-none" style={{ color }}>{fmtWin(win)}</div>
           <div className="mt-1.5 text-[0.55rem] uppercase tracking-[0.15em] font-semibold text-ink-muted">Win probability</div>
         </div>
       </div>

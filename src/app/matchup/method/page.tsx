@@ -58,16 +58,16 @@ export default async function MethodPage() {
         <p className="mb-4">
           Opponent-adjusted efficiency, home court and pace do about <strong className="text-ink">94%</strong>{" "}of
           the achievable work. Every matchup nuance anyone argues about — style clashes, rebounding
-          collisions, three-point volume, travel, rest — is the other 6%, and roughly a third of that is
-          simply knowing who is injured.
+          collisions, three-point volume, travel, rest, who is hurt — is the other 6%.
         </p>
         <Table
-          head={["", "2024-25 holdout", "2025-26, never opened"]}
+          head={["", "2024-25", "2025-26"]}
           rows={[
-            ["Mean absolute error", "8.97", "9.04"],
-            ["Straight-up accuracy", "72.4%", "71.4%"],
-            ["Margin variance explained", "38.9%", "—"],
+            ["Mean absolute error", "9.14", "9.25"],
+            ["Straight-up accuracy", "72.2%", "71.7%"],
+            ["Margin variance explained", "38.2%", "39.9%"],
           ]}
+          note="Both seasons scored the same way: ratings refit before every date on the games already played, then every fixture between two teams this page lists — 5,655 games and 5,724 games. Numbers measured a different way, on a different set of games, will differ a little from these; the point of quoting one harness is that everything below can be compared against everything else."
         />
 
         <H>1 · Ratings</H>
@@ -151,6 +151,17 @@ export default async function MethodPage() {
           season including a team&rsquo;s first five games. Absences are the only player-level signal that
           survived. Roster continuity — the share of last season&rsquo;s minutes that came back — carries a
           smaller term worth {CORR.cont.toFixed(2)} points per unit.
+        </p>
+        <p className="mb-4">
+          The term is <em>correct</em>, and it is also <em>small</em>, and those are not in tension.
+          Regressing what actually happened on the adjustment the model makes for absences gives a slope
+          of <strong className="text-ink">0.81 ± 0.16</strong> — real, and not distinguishable from a
+          perfect 1.0. But it only moves the line by a full point in 15% of games, because the curve is
+          convex on purpose: one man out of a nine-man rotation is 11% of the minutes, and 0.11
+          <sup>2.5</sup> is almost nothing. Feeding the model the true absences for all 5,724 games of
+          2025-26 — which is hindsight, and therefore a ceiling on what any injury report could ever be
+          worth — improved it by <strong className="text-ink">0.02</strong>{" "}points. Rule players out
+          when you know something; do not expect the number to lurch.
         </p>
         <p className="mb-3">
           The cost of absences is <strong className="text-ink">steeply convex</strong>, and that matters
