@@ -349,8 +349,16 @@ function MarginCurve({ margin, colorA, colorB, a, b }: { margin: number; colorA:
    * the odds, while the caption underneath claimed the areas were the win
    * probability. They were not. Centering the curve here leaves the clips in
    * the untransformed space, where zero is really zero.
+   *
+   * THE AXIS RUNS THE SAME WAY AS THE CARD. `margin` is positive when the
+   * LEFT team wins, and plotting that with positive to the right put the left
+   * team's color on the right of the curve and the right team's on the left —
+   * directly contradicting the halves above, which are the reader's whole
+   * frame for which color is whom. So the shift is negated: the left team's
+   * outcomes are on the left, in the left team's color. The ticks lose their
+   * signs with it, because the side now says which team the points belong to.
    */
-  const center = zero + dx;
+  const center = zero - dx;
   const pts: string[] = [];
   for (let x = PAD; x <= W - PAD; x += 4) {
     const z = (x - center) / sig;
@@ -363,7 +371,7 @@ function MarginCurve({ margin, colorA, colorB, a, b }: { margin: number; colorA:
   const id = useId().replace(/:/g, "");
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="mt-1 w-full h-auto" role="img"
-      aria-label={`Projected margin ${fmtSigned(margin)} for ${a}; ${b} wins when the game lands left of zero.`}>
+      aria-label={`Projected margin ${fmtSigned(margin)} for ${a}. ${a} wins the games left of even, ${b} the games right of it; each side's share of the area is its win probability.`}>
       <defs>
         <clipPath id={`${id}-l`}><rect x="0" y="0" width={zero} height={H} /></clipPath>
         <clipPath id={`${id}-r`}><rect x={zero} y="0" width={W - zero} height={H} /></clipPath>
@@ -371,18 +379,22 @@ function MarginCurve({ margin, colorA, colorB, a, b }: { margin: number; colorA:
       {/* Colors go through `style`, not presentation attributes: a var() in
           an attribute is not guaranteed to resolve, and these are variables. */}
       <g>
-        <path d={path} style={{ fill: colorB, fillOpacity: 0.3 }} clipPath={`url(#${id}-l)`} />
-        <path d={path} style={{ fill: colorA, fillOpacity: 0.3 }} clipPath={`url(#${id}-r)`} />
+        <path d={path} style={{ fill: colorA, fillOpacity: 0.3 }} clipPath={`url(#${id}-l)`} />
+        <path d={path} style={{ fill: colorB, fillOpacity: 0.3 }} clipPath={`url(#${id}-r)`} />
         <path d={path.replace(/ L\S+,\S+ Z$/, "")} style={{ fill: "none", stroke: "var(--ink)", strokeOpacity: 0.55, strokeWidth: 1.25 }} />
         <line x1={center} x2={center} y1={H - 6} y2={12} style={{ stroke: "var(--ink)", strokeOpacity: 0.9, strokeWidth: 1 }} strokeDasharray="2 3" />
       </g>
       {/* Zero stays put: the game's one fixed point. */}
       <line x1={zero} x2={zero} y1={H - 6} y2={4} style={{ stroke: "var(--ink)", strokeOpacity: 0.35, strokeWidth: 1 }} />
       <line x1={PAD} x2={W - PAD} y1={H - 6} y2={H - 6} style={{ stroke: "var(--hairline)", strokeWidth: 1 }} />
+      {/* Unsigned: which side a tick is on says who those points belong to,
+          and the two names at the ends say which side is which. */}
       {[-30, -20, -10, 10, 20, 30].map((t) => (
-        <text key={t} x={zero + t * px} y={H} textAnchor="middle" fontSize="8" style={{ fill: "var(--ink-muted)" }} className="tabular">{t > 0 ? `+${t}` : t}</text>
+        <text key={t} x={zero + t * px} y={H} textAnchor="middle" fontSize="8" style={{ fill: "var(--ink-muted)" }} className="tabular">{Math.abs(t)}</text>
       ))}
       <text x={zero} y={H} textAnchor="middle" fontSize="8" fontWeight={700} style={{ fill: "var(--ink-soft)" }}>even</text>
+      <text x={PAD} y={H} textAnchor="start" fontSize="8" fontWeight={700} style={{ fill: colorA }}>{teamShortName(a)}</text>
+      <text x={W - PAD} y={H} textAnchor="end" fontSize="8" fontWeight={700} style={{ fill: colorB }}>{teamShortName(b)}</text>
     </svg>
   );
 }
@@ -552,8 +564,15 @@ function pairInks(aName: string, bName: string): { a: Ink; b: Ink } {
   // A gray secondary is not a substitute: readableOnPaper has no hue to
   // rebuild from and falls back to near-black, which is not a team color at
   // all and reads as broken next to a real one.
-  const sb = cb?.secondary;
-  if (sb && hueOf(sb) != null && !collides(pa, sb)) return { a: inkOf(pa), b: inkOf(sb) };
+  const usable = (c?: string) => !!c && hueOf(c) != null;
+  const sb = cb?.secondary, sa = ca?.secondary;
+  if (usable(sb) && !collides(pa, sb!)) return { a: inkOf(pa), b: inkOf(sb) };
+  // TRY THE LEFT TEAM'S SECONDARY BEFORE GIVING ANYONE A NEUTRAL. Iowa and
+  // Northern Iowa are both gold; Iowa's other color is black, which is not
+  // usable, but Northern Iowa's is purple. Moving the team that HAS a second
+  // color keeps two real ones on the card, and it stops the result depending
+  // on which side of the swap button you happen to be looking at.
+  if (usable(sa) && !collides(sa!, pb)) return { a: inkOf(sa), b: inkOf(pb) };
   return { a: inkOf(pa), b: inkOf(neutralAgainst(pa)) };
 }
 
@@ -597,10 +616,13 @@ function SiteControl({ site, a, onSite, disabled }: { site: Site; a: MatchupTeam
   // The site's own short form, then CSS truncation — chopping to the first
   // word turned "Northern Iowa" into "Northern", which is a different school.
   const short = teamShortName(a.b);
-  const opts: Array<[Site, string]> = [["home", `${short} home`], ["neutral", "Neutral"], ["away", `${short} away`]];
+  // THE SUFFIX NEVER TRUNCATES. Truncating the whole label turned both
+  // "Northern Iowa home" and "Northern Iowa away" into "NORTHERN IOWA …",
+  // two identical buttons that did opposite things. Only the name gives way.
+  const opts: Array<[Site, string, string]> = [["home", short, "home"], ["neutral", "", "Neutral"], ["away", short, "away"]];
   return (
     <div role="group" aria-label="Site" className="inline-flex items-center gap-0.5 rounded-lg bg-ink/6 p-1">
-      {opts.map(([s, label]) => {
+      {opts.map(([s, name, suffix]) => {
         const active = site === s;
         return (
           <button
@@ -609,12 +631,14 @@ function SiteControl({ site, a, onSite, disabled }: { site: Site; a: MatchupTeam
             aria-pressed={active}
             onClick={() => onSite?.(s)}
             disabled={disabled}
+            title={name ? `${name} ${suffix}` : suffix}
             className={cn(
-              "max-w-36 truncate rounded-md px-2.5 py-1.5 text-[0.65rem] uppercase font-semibold tracking-[0.12em] transition-colors",
+              "flex min-w-0 items-baseline gap-1 rounded-md px-2.5 py-1.5 text-[0.65rem] uppercase font-semibold tracking-[0.12em] transition-colors",
               active ? "bg-paper text-ink shadow-sm" : "text-ink-soft hover:text-ink",
             )}
           >
-            {label}
+            {name && <span className="max-w-24 truncate">{name}</span>}
+            <span className="shrink-0">{suffix}</span>
           </button>
         );
       })}
