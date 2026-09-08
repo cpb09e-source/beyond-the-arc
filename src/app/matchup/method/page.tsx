@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import Link from "next/link";
 import { PageHeading } from "@/components/page-heading";
-import { ABSENCE_EXP, CORR, HCA, SCORE_SIGMA, SIGMA, TOTAL_ADJ, TOTAL_SIGMA, type MatchupPack } from "@/lib/matchup";
+import { ABSENCE_EXP, CORR, HCA, SCORE_SIGMA, SIGMA, TOTAL_ADJ, TOTAL_SIGMA, YOUNG_DEN, type MatchupPack } from "@/lib/matchup";
 
 /**
  * How the Matchup Predictor works — the page the projection links to.
@@ -170,7 +170,28 @@ export default async function MethodPage() {
           note={`The model raises the missing share of the rotation to the power ${ABSENCE_EXP} and tilts it by whether the absent players are worth more or less per minute than their teammates. Beyond about two absences it is extrapolating: fewer than 1% of games in the sample were missing that much.`}
         />
 
-        <H>6 · Win probability, and what the ranges mean</H>
+        <H>6 · The young-ratings stretch</H>
+        <p className="mb-4">
+          Ratings are shrunk toward a prior and clamped at ±25, and both of those pull teams toward the
+          middle. So the projections come out too close together: regressing what happened on what was
+          projected gives a slope near <strong className="text-ink">1.1</strong>{" "}rather than 1.0, at every
+          stage of a season and 7.7 standard errors from calibrated. Good teams beat the number and bad
+          ones fall short of it. The squeeze is worst when the ratings are youngest, because that is when
+          the prior is doing the most work, so the margin is stretched by a factor that fades as games are
+          played: <strong className="text-ink">1 + 1 / (games played by both teams + {YOUNG_DEN})</strong>.
+          Two teams four games in are stretched 11%; two teams thirty games in, 1.5%.
+        </p>
+        <Table
+          head={["Fitted on 2024-25, checked on 2025-26", "Mean error", "First 14 games", "Log loss"]}
+          rows={[
+            ["No stretch", "9.274", "10.318", "0.53219"],
+            ["A flat ×1.055", "9.269", "10.257", "0.53240"],
+            ["This form", "9.254", "10.220", "0.53208"],
+          ]}
+          note="A flat multiplier fitted the same way is worse on every measure and makes the mature-ratings case worse than doing nothing. The gain here is a tenth of a point, and it lands in November, where the model's error is 10.3 against 8.9 in March. The stretch depends only on the two game counts, so swapping the teams still flips the margin exactly."
+        />
+
+        <H>7 · Win probability, and what the ranges mean</H>
         <p className="mb-4">
           The margin is normal around its projection with σ = <strong className="text-ink">{SIGMA}</strong>{" "}points.
           Normal, logistic, Student-t and Pythagorean were all tested and land within 0.001 of each other
@@ -185,7 +206,7 @@ export default async function MethodPage() {
           no more upsets.
         </p>
 
-        <H>7 · The total, and why it is marked</H>
+        <H>8 · The total, and why it is marked</H>
         <p className="mb-4">
           Efficiency times pace projects <em>regulation</em>{" "}scoring between two average-luck teams, and
           what a reader wants is the points in the game that actually gets played. Backtested against every

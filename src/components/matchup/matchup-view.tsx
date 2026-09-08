@@ -701,10 +701,29 @@ function Ledger({ p, pack }: { p: Projection; pack: MatchupPack }) {
             <span className={cn("font-medium", Math.abs(v) < 0.005 ? "text-ink-muted" : "text-ink")}>{fmtSigned(v, 2)}</span>
           </div>
         ))}
-        <div className="flex justify-between gap-3 mt-1.5 pt-1.5 border-t border-hairline font-semibold text-ink">
-          <span>Projected margin</span>
-          <span>{fmtSigned(p.baseMargin)} {p.correction >= 0 ? "+" : "−"} {fmt1(Math.abs(p.correction))} = {fmtSigned(p.margin)}</span>
-        </div>
+        {/* The stretch is a separate printed step, not folded into the sum:
+            without it a reader adds the column, gets one number, and the card
+            shows another. It only appears when it is big enough to change the
+            printed figure — early in a season it is 11%, by March 1.5%. */}
+        {Math.abs(p.scale - 1) * Math.abs(p.preScale) >= 0.05 ? (
+          <>
+            <div className="flex justify-between gap-3 mt-1.5 pt-1.5 border-t border-hairline text-ink">
+              <span className="text-ink-soft">Before the young-ratings stretch</span>
+              <span>{fmtSigned(p.baseMargin)} {p.correction >= 0 ? "+" : "−"} {fmt1(Math.abs(p.correction))} = {fmtSigned(p.preScale)}</span>
+            </div>
+            <div className="flex justify-between gap-3 py-0.5 font-semibold text-ink">
+              <span>Projected margin</span>
+              <span title="Shrunk ratings project too narrow a spread; the stretch fades as games accumulate." className="cursor-help">
+                {fmtSigned(p.preScale)} × {p.scale.toFixed(3)} = {fmtSigned(p.margin)}
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="flex justify-between gap-3 mt-1.5 pt-1.5 border-t border-hairline font-semibold text-ink">
+            <span>Projected margin</span>
+            <span>{fmtSigned(p.baseMargin)} {p.correction >= 0 ? "+" : "−"} {fmt1(Math.abs(p.correction))} = {fmtSigned(p.margin)}</span>
+          </div>
+        )}
       </Step>
     </div>
   );
