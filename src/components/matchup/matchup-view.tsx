@@ -17,7 +17,10 @@ import {
   STYLE_LABEL,
   fmt1,
   fmtPct,
+  displayScores,
+  OUT_SHARE_WARN,
   fmtSigned,
+  outShare,
   playerCost,
   project,
   scoreBand,
@@ -97,6 +100,7 @@ export function MatchupView({
   const inert = !handlers;
   const outCount = p.outA.length + p.outB.length;
   const scoreA = useTween(p.scoreA), scoreB = useTween(p.scoreB), winA = useTween(p.winA);
+  const [showA, showB] = displayScores(scoreA, scoreB);
   const favorite = p.margin >= 0 ? a : b;
 
   return (
@@ -166,9 +170,9 @@ export function MatchupView({
 
           <div className="text-center col-span-2 sm:col-span-1 order-first sm:order-0">
             <div className="font-display tabular text-5xl sm:text-7xl font-bold leading-none tracking-tight text-ink whitespace-nowrap">
-              {Math.round(scoreA)}
+              {showA}
               <span className="text-ink-muted/60 font-medium mx-2 sm:mx-3">–</span>
-              {Math.round(scoreB)}
+              {showB}
             </div>
             <div className="mt-2.5 text-[0.6rem] uppercase tracking-[0.15em] font-semibold text-ink-muted">
               Projected score
@@ -198,17 +202,6 @@ export function MatchupView({
 
           {/* Fast games are wider, not more upset-prone — the range says so
               while the curve above keeps its shape. */}
-          {/* Two games in three land in here — a real interval, not a
-              flourish. It widens with pace while the curve above holds its
-              shape, which is the finding in one picture. */}
-          <div className="mt-2.5 grid grid-cols-3 items-baseline gap-2 text-[0.7rem] text-ink-muted tabular">
-            <div className="text-left"><span className="text-ink-soft font-medium">{Math.round(band.a[0])}–{Math.round(band.a[1])}</span></div>
-            <div className="text-center text-[0.6rem] uppercase tracking-[0.12em] font-semibold leading-tight">
-              2 games in 3<span className="hidden sm:inline"> land here</span>
-            </div>
-            <div className="text-right"><span className="text-ink-soft font-medium">{Math.round(band.b[0])}–{Math.round(band.b[1])}</span></div>
-          </div>
-
           <Counterfactuals pack={pack} p={p} handlers={handlers} colorA={colorA} colorB={colorB} />
         </div>
       </section>
@@ -248,9 +241,22 @@ export function MatchupView({
             <Roster team={b} out={p.outB} color={colorB} onToggle={handlers?.onToggleB} disabled={inert} />
           </div>
           {p.parts.availability !== 0 && (
-            <p className="mt-4 pt-3 border-t border-hairline text-xs text-ink-soft tabular">
-              Absences move the line <strong className="text-ink">{fmtSigned(p.parts.availability, 2)} pts</strong> toward {p.parts.availability > 0 ? a.b : b.b}.
-            </p>
+            <div className="mt-4 pt-3 border-t border-hairline">
+              <p className="text-xs text-ink-soft tabular">
+                Absences move the line <strong className="text-ink">{fmtSigned(p.parts.availability, 2)} pts</strong> toward {p.parts.availability > 0 ? a.b : b.b}.
+              </p>
+              {/* Past about a quarter of a rotation the model is extrapolating:
+                  fewer than 1% of the games it was fitted on were missing that
+                  much, and the coefficient's own error bar is wide enough that
+                  the true effect could be half this or double it. Saying so is
+                  better than a number that looks as confident as the rest. */}
+              {(outShare(a, p.outA) > OUT_SHARE_WARN || outShare(b, p.outB) > OUT_SHARE_WARN) && (
+                <p className="mt-2 text-[0.7rem] leading-relaxed text-ink-muted">
+                  That much of a rotation missing is beyond what the model was fitted on — fewer than 1% of games in the
+                  sample lost this many minutes. Treat the size of the swing as a rough guide, not a measurement.
+                </p>
+              )}
+            </div>
           )}
         </Card>
       </div>

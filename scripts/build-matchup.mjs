@@ -255,7 +255,7 @@ function rosters(season) {
       const mpg = recent.reduce((s, x) => s + x, 0) / recent.length;
       if (mpg < 8) continue;
       const gs40 = h.gsMin.length ? (h.gsMin.reduce((s, x) => s + x, 0) / h.gsMin.length) * 40 : 0;
-      list.push({ id: h.id, name: h.name, mpg, gs40, val: (mpg / 40) * gs40, gp: h.apps, totalMin: h.totalMin });
+      list.push({ id: h.id, name: h.name, mpg, gs40, val: (mpg / 40) * Math.max(0, gs40), gp: h.apps, totalMin: h.totalMin });
     }
     list.sort((a, b) => b.mpg - a.mpg);
     out.set(tid, { list, minutes: hist.get(tid) });
@@ -399,8 +399,16 @@ const out = list.map((t, i) => {
     k: r3(cont.get(t.id) ?? 0.436),
     br: bart.rank(b),
     best,
-    // [name, minutes per game, value per game, games played]
-    r: rot.map((p) => [p.name, r1(p.mpg), r2(p.val), p.gp]),
+    /**
+     * [name, minutes per game, value per game, games played, PLAYER ID]
+     *
+     * The id is what the page puts in the URL when someone rules a player
+     * out. It used to be the index into this array, which is positional and
+     * therefore a bug waiting for the next rebuild: a rotation reorders, and
+     * a link someone shared last week silently benches different players.
+     * athleteSourceId is stable across seasons and rebuilds.
+     */
+    r: rot.map((p) => [p.name, r1(p.mpg), r2(p.val), p.gp, String(p.id)]),
   };
 });
 

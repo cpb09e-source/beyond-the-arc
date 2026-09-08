@@ -63,8 +63,8 @@ export type MatchupTeam = {
   br: number | null;
   /** Index into `r` of the best player, or −1. */
   best: number;
-  /** [name, minutes per game, value per game, games played] */
-  r: Array<[string, number, number, number]>;
+  /** [name, minutes per game, value per game, games played, stable player id] */
+  r: Array<[string, number, number, number, string]>;
 };
 
 export type MatchupPack = {
@@ -399,6 +399,52 @@ export const STYLE_HIGHER_BETTER: Record<StyleKey, boolean> = {
 
 /** Which style dimensions carry a coefficient in the model. */
 export const STYLE_IN_MODEL: ReadonlySet<StyleKey> = new Set<StyleKey>(["orb", "tov", "t3r", "t3p"]);
+
+/**
+ * The two scores as the headline prints them.
+ *
+ * Rounding each independently could show 70-70 under a line that reads
+ * "by 0.8", which is the page contradicting itself in the space of two
+ * elements. When the rounded pair ties and the margin does not, the favorite
+ * takes the extra point: the projection is a point estimate either way, and
+ * a headline that disagrees with its own margin is the worse error.
+ */
+export function displayScores(scoreA: number, scoreB: number): [number, number] {
+  let a = Math.round(scoreA), b = Math.round(scoreB);
+  const m = scoreA - scoreB;
+  if (a === b && Math.abs(m) >= 0.05) {
+    if (m > 0) a += 1; else b += 1;
+  }
+  return [a, b];
+}
+
+/**
+ * The share of a team's rotation minutes that is missing.
+ *
+ * Used to tell the reader when the projection has left the evidence behind.
+ * The absence coefficient is fitted at 20.2 with a standard error near 6 — and
+ * near 10 once the fit is restricted to players who genuinely returned rather
+ * than left the programme. Anywhere from half to double the printed effect is
+ * consistent with the data once a rotation is gutted, and fewer than 1% of the
+ * games in the sample were missing that much. The number is still the best
+ * estimate available; it is not a confident one, and the page says so.
+ */
+export function outShare(team: MatchupTeam, out: readonly number[]): number {
+  if (!out.length || !team.r.length) return 0;
+  let tot = 0, miss = 0;
+  team.r.forEach((p, i) => { tot += p[1]; if (out.includes(i)) miss += p[1]; });
+  return tot > 0 ? Math.min(1, miss / tot) : 0;
+}
+
+/** Above this share of the rotation, the absence term is extrapolating. */
+export const OUT_SHARE_WARN = 0.25;
+
+/** Player ids ruled out, as indexes into `team.r`. Unknown ids are dropped. */
+export function outIndexes(team: MatchupTeam, ids: readonly string[]): number[] {
+  if (!ids.length) return [];
+  const at = new Map(team.r.map((p, i) => [p[4], i]));
+  return [...new Set(ids.map((id) => at.get(id)).filter((i): i is number => i != null))].sort((x, y) => x - y);
+}
 
 export const fmtPct = (p: number): string => `${Math.round(p * 100)}%`;
 export const fmt1 = (x: number): string => (Math.round(x * 10) / 10).toFixed(1);

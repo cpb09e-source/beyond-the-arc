@@ -6,13 +6,13 @@ import type { SearchableOption } from "@/components/explorer/searchable-select";
 import { dataUrl } from "@/lib/data-url";
 import { CONF_DISPLAY } from "@/lib/conf-display";
 import { isLiveSeason } from "@/lib/seasons";
-import { project, type MatchupPack, type MatchupTeam, type Site } from "@/lib/matchup";
+import { outIndexes, project, type MatchupPack, type MatchupTeam, type Site } from "@/lib/matchup";
 import { MatchupView, type MatchupHandlers } from "@/components/matchup/matchup-view";
 
 /**
  * State, URL and data for the Matchup Predictor.
  *
- * THE URL IS THE STATE. ?a=duke&b=michigan&site=neutral&oa=0,3&ob= is a
+ * THE URL IS THE STATE. ?a=duke&b=michigan&site=neutral&oa=<player ids> is a
  * matchup someone can send to a friend, and a static export cannot enumerate
  * 365² of them — so the pair is chosen client-side and the page prerenders
  * one real default (the top two teams) as the Suspense fallback. That is
@@ -66,18 +66,28 @@ export function MatchupClient({
 
   const bySlug = useMemo(() => new Map(pack.teams.map((t) => [t.s, t])), [pack]);
 
-  // ── Read the URL, tolerating anything ────────────────────────────────────
-  const readIdx = (key: string, team: MatchupTeam | undefined): number[] => {
+  /**
+   * ── Read the URL, tolerating anything ──────────────────────────────────
+   *
+   * PLAYER IDS, NOT ROSTER POSITIONS. `oa=0,1` meant "the first two names in
+   * the rotation", which is only stable until the next rebuild reorders it —
+   * at which point a link someone shared benches two different players and
+   * says nothing. Ids survive a rebuild and a season roll-over, and an id that
+   * no longer exists resolves to nobody rather than to somebody else.
+   */
+  const readOut = (key: string, team: MatchupTeam | undefined): number[] => {
     const raw = sp.get(key);
     if (!raw || !team) return [];
-    return [...new Set(raw.split(",").map((s) => Number(s)).filter((n) => Number.isInteger(n) && n >= 0 && n < team.r.length))];
+    return outIndexes(team, raw.split(",").filter(Boolean));
   };
+  const idsOf = (team: MatchupTeam, idx: readonly number[]) =>
+    idx.map((i) => team.r[i]?.[4]).filter((x): x is string => !!x);
   let a = bySlug.get(sp.get("a") ?? "") ?? bySlug.get(defaultA)!;
   let b = bySlug.get(sp.get("b") ?? "") ?? bySlug.get(defaultB)!;
   if (a === b) b = bySlug.get(defaultB === a.s ? defaultA : defaultB)!;
   const siteRaw = sp.get("site");
   const site: Site = siteRaw === "home" || siteRaw === "away" ? siteRaw : "neutral";
-  const outA = readIdx("oa", a), outB = readIdx("ob", b);
+  const outA = readOut("oa", a), outB = readOut("ob", b);
 
   // The slim pack cannot show a team the URL asks for until the full one
   // arrives; in that window fall back to the defaults rather than crash.
@@ -90,7 +100,7 @@ export function MatchupClient({
   );
 
   // ── Write the URL ────────────────────────────────────────────────────────
-  const write = useCallback((next: { a?: string; b?: string; site?: Site; oa?: number[]; ob?: number[] }) => {
+  const write = useCallback((next: { a?: string; b?: string; site?: Site; oa?: string[]; ob?: string[] }) => {
     const q = new URLSearchParams(sp.toString());
     const set = (k: string, v: string | undefined) => { if (v) q.set(k, v); else q.delete(k); };
     if (next.a !== undefined) set("a", next.a);
@@ -102,17 +112,18 @@ export function MatchupClient({
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [router, pathname, sp]);
 
-  const toggle = (list: number[], i: number) => (list.includes(i) ? list.filter((x) => x !== i) : [...list, i].sort((x, y) => x - y));
+  const toggle = (team: MatchupTeam, list: number[], i: number) =>
+    idsOf(team, list.includes(i) ? list.filter((x) => x !== i) : [...list, i].sort((x, y) => x - y));
 
   const handlers: MatchupHandlers = {
-    // Changing a team clears its absences: the indexes mean nothing on
-    // another roster.
+    // Changing a team clears its absences: the ids belong to the old roster.
     onTeamA: (slug) => write({ a: slug, oa: [], ...(slug === b.s ? { b: a.s, ob: [] } : {}) }),
     onTeamB: (slug) => write({ b: slug, ob: [], ...(slug === a.s ? { a: b.s, oa: [] } : {}) }),
     onSite: (s) => write({ site: s }),
-    onSwap: () => write({ a: b.s, b: a.s, oa: outB, ob: outA, site: site === "home" ? "away" : site === "away" ? "home" : "neutral" }),
-    onToggleA: (i) => write({ oa: toggle(outA, i) }),
-    onToggleB: (i) => write({ ob: toggle(outB, i) }),
+    // Swapping carries each side's absences with its team, not with its slot.
+    onSwap: () => write({ a: b.s, b: a.s, oa: idsOf(b, outB), ob: idsOf(a, outA), site: site === "home" ? "away" : site === "away" ? "home" : "neutral" }),
+    onToggleA: (i) => write({ oa: toggle(a, outA, i) }),
+    onToggleB: (i) => write({ ob: toggle(b, outB, i) }),
     onClearOut: () => write({ oa: [], ob: [] }),
     // Only offered once something has actually been changed.
     ...(sp.toString() ? { onReset: () => router.replace(pathname, { scroll: false }) } : {}),
