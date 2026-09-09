@@ -765,27 +765,37 @@ export function CalcClient({
   /**
    * REORDERING. Row order IS column order in the results table (colsOf reads
    * the rows in sequence), so moving a row and pressing Calculate is how the
-   * reader arranges the answer. Native drag and drop, armed from the grip
-   * only: a wrapper that is draggable all the time steals the mousedown from
-   * the value box inside it, and selecting a number becomes a drag. Arrow
-   * keys on the grip do the same job without a mouse.
+   * reader arranges the answer. Arrow keys on the grip do the same job
+   * without a mouse.
    *
-   * LIVE, NOT ON RELEASE. The row moves the moment the pointer crosses the
-   * middle of a neighbour, so the strip shows the order being built rather
-   * than revealing it on drop. The midpoint rule is what keeps that stable:
-   * rows are different widths, and swapping on first contact made the pair
-   * flip back and forth under a stationary pointer.
+   * POINTER EVENTS, NOT HTML5 DRAG AND DROP. The native API paints a
+   * half-transparent copy of the row as the thing you are holding and leaves
+   * the original faded in its slot; you cannot read what you are moving. It
+   * also does nothing on touch. Here the real row is lifted and translated
+   * under the pointer at full opacity, with pointer capture on the grip so
+   * the move keeps arriving after the pointer has left it.
+   *
+   * LIVE, NOT ON RELEASE. The row moves in the array the moment the pointer
+   * crosses the middle of a neighbour, so the strip shows the order being
+   * built. Rows are different widths, and swapping on first contact made a
+   * pair flip back and forth under a stationary pointer — crossing the
+   * midpoint in the direction of travel is what makes it stable.
    *
    * THE SLIDE IS FLIP. React re-renders the new order instantly; before that
-   * paints, each row is parked at the spot it was just measured in and a
-   * transition carries it to where it now sits. Positions are snapshotted
-   * right before every move (`snapshotRows`), so a row already sliding
-   * animates on from wherever it visibly is, not from where it started.
+   * paints, each row is parked where it was just measured and a transition
+   * carries it to where it now sits. Positions are snapshotted right before
+   * every move (`snapshotRows`), so a row already sliding animates on from
+   * wherever it visibly is. The lifted row is the one exception: the effect
+   * re-anchors it under the pointer in its new slot's coordinates instead of
+   * sliding it, and on release the same machinery slides it home — the last
+   * snapshot has it under the pointer, the next commit has it in its slot.
    */
   const [dragId, setDragId] = useState<number | null>(null);
-  const [armedId, setArmedId] = useState<number | null>(null);
   const stripRef = useRef<HTMLDivElement>(null);
+  /** Where every row is, by id — layout boxes after each commit, visual boxes just before a move. */
   const rowRects = useRef(new Map<number, DOMRect>());
+  /** The lift in progress: which row, where the pointer started, how far it has gone. */
+  const dragRef = useRef<{ id: number; startX: number; startY: number; dx: number; dy: number; origin: DOMRect; el: HTMLElement } | null>(null);
   const snapshotRows = useCallback(() => {
     const strip = stripRef.current;
     if (!strip) return;
@@ -801,13 +811,19 @@ export function CalcClient({
     const reduce = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
     const prev = rowRects.current;
     const next = new Map<number, DOMRect>();
+    const lift = dragRef.current;
     strip.querySelectorAll<HTMLElement>("[data-row-id]").forEach((el) => {
+      const id = Number(el.dataset.rowId);
       // Snap any slide still in flight so the box measured is the layout box.
       el.style.transition = "none";
       el.style.transform = "";
       const rect = el.getBoundingClientRect();
-      const id = Number(el.dataset.rowId);
       next.set(id, rect);
+      if (lift && lift.id === id) {
+        // Under the pointer, expressed from wherever its slot is now.
+        el.style.transform = `translate(${lift.origin.left + lift.dx - rect.left}px, ${lift.origin.top + lift.dy - rect.top}px)`;
+        return;
+      }
       const old = prev.get(id);
       if (!old || reduce) return;
       const dx = old.left - rect.left;
@@ -823,6 +839,30 @@ export function CalcClient({
     });
     rowRects.current = next;
   });
+  /** Pick the row up. */
+  const liftRow = useCallback((e: React.PointerEvent<HTMLElement>, id: number) => {
+    if (e.button !== 0) return;
+    const el = e.currentTarget.closest<HTMLElement>("[data-row-id]");
+    if (!el) return;
+    e.preventDefault();
+    // Capture can refuse an id it does not recognise; the lift still works
+    // without it as long as the pointer stays over the grip.
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* no capture */ }
+    dragRef.current = { id, startX: e.clientX, startY: e.clientY, dx: 0, dy: 0, origin: el.getBoundingClientRect(), el };
+    el.style.transition = "none";
+    document.body.style.cursor = "grabbing";
+    setDragId(id);
+  }, []);
+  /** Let it go: the next commit slides it from under the pointer into its slot. */
+  const dropRow = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    const lift = dragRef.current;
+    if (!lift) return;
+    dragRef.current = null;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    document.body.style.cursor = "";
+    snapshotRows();
+    setDragId(null);
+  }, [snapshotRows]);
   const moveRow = useCallback((fromId: number, toId: number) => {
     setRows((r) => {
       const from = r.findIndex((x) => x.id === fromId);
@@ -834,6 +874,34 @@ export function CalcClient({
       return next;
     });
   }, []);
+  /** Follow the pointer, and reorder when it crosses a neighbour's middle. */
+  const trackRow = (e: React.PointerEvent<HTMLElement>) => {
+    const lift = dragRef.current;
+    if (!lift) return;
+    lift.dx = e.clientX - lift.startX;
+    lift.dy = e.clientY - lift.startY;
+    const slot = rowRects.current.get(lift.id) ?? lift.origin;
+    lift.el.style.transform = `translate(${lift.origin.left + lift.dx - slot.left}px, ${lift.origin.top + lift.dy - slot.top}px)`;
+    const from = rows.findIndex((x) => x.id === lift.id);
+    for (const [id, rect] of rowRects.current) {
+      if (id === lift.id) continue;
+      if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) continue;
+      const to = rows.findIndex((x) => x.id === id);
+      if (to < 0) continue;
+      // On the same line the pointer has to pass this row's middle in the
+      // direction of travel. Across lines any contact counts — there is no
+      // width to cross.
+      const sameLine = Math.abs(slot.top - rect.top) < rect.height / 2;
+      if (sameLine) {
+        const mid = rect.left + rect.width / 2;
+        if (to > from && e.clientX < mid) return;
+        if (to < from && e.clientX > mid) return;
+      }
+      snapshotRows();
+      moveRow(lift.id, id);
+      return;
+    }
+  };
   const nudgeRow = useCallback((id: number, delta: -1 | 1) => {
     setRows((r) => {
       const from = r.findIndex((x) => x.id === id);
@@ -1320,56 +1388,36 @@ export function CalcClient({
               matching-games table and nothing more. */}
           <div
             ref={stripRef}
-            onDragOver={(e) => { if (dragId !== null) e.preventDefault(); }}
-            onDrop={(e) => { e.preventDefault(); setDragId(null); setArmedId(null); }}
-            className="rounded-lg border border-hairline bg-paper-deep/30 px-3 py-2.5 flex items-center flex-wrap gap-x-3 gap-y-2"
+            className={cn(
+              "rounded-lg border border-hairline bg-paper-deep/30 px-3 py-2.5 flex items-center flex-wrap gap-x-3 gap-y-2",
+              dragId !== null && "select-none",
+            )}
           >
             {rows.map((r) => (
               <div
                 key={r.id}
                 data-row-id={r.id}
-                draggable={armedId === r.id}
-                onDragStart={(e) => {
-                  setDragId(r.id);
-                  e.dataTransfer.effectAllowed = "move";
-                  e.dataTransfer.setData("text/plain", String(r.id));
-                }}
-                onDragOver={(e) => {
-                  if (dragId === null || dragId === r.id) return;
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const from = rows.findIndex((x) => x.id === dragId);
-                  const to = rows.findIndex((x) => x.id === r.id);
-                  const dragged = rowRects.current.get(dragId);
-                  // On the same line, the pointer has to pass this row's
-                  // middle in the direction of travel. Across lines any
-                  // contact counts — there is no width to cross.
-                  const sameLine = dragged ? Math.abs(dragged.top - rect.top) < rect.height / 2 : true;
-                  if (sameLine) {
-                    const mid = rect.left + rect.width / 2;
-                    if (to > from && e.clientX < mid) return;
-                    if (to < from && e.clientX > mid) return;
-                  }
-                  snapshotRows();
-                  moveRow(dragId, r.id);
-                }}
-                onDrop={(e) => { e.preventDefault(); setDragId(null); setArmedId(null); }}
-                onDragEnd={() => { setDragId(null); setArmedId(null); }}
-                className={cn("inline-flex items-center gap-1 rounded-md", dragId === r.id && "opacity-40")}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-md",
+                  // Lifted: above its neighbours, with a shadow that says so.
+                  // Full opacity — the whole point is being able to read it.
+                  dragId === r.id && "relative z-10 bg-card shadow-lg ring-1 ring-coral/30",
+                )}
               >
                 <span
                   role="button"
                   tabIndex={0}
                   aria-label={`Move ${statLabel(r.stat)} — drag, or use the arrow keys`}
                   title="Drag to reorder"
-                  onMouseDown={() => setArmedId(r.id)}
-                  onMouseUp={() => setArmedId(null)}
+                  onPointerDown={(e) => liftRow(e, r.id)}
+                  onPointerMove={trackRow}
+                  onPointerUp={dropRow}
+                  onPointerCancel={dropRow}
                   onKeyDown={(e) => {
                     if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); snapshotRows(); nudgeRow(r.id, -1); }
                     else if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); snapshotRows(); nudgeRow(r.id, 1); }
                   }}
-                  className="shrink-0 -mr-0.5 inline-flex items-center justify-center w-4 h-8 rounded text-ink-muted/60 hover:text-ink cursor-grab active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
+                  className="shrink-0 -mr-0.5 inline-flex items-center justify-center w-4 h-8 rounded text-ink-muted/60 hover:text-ink cursor-grab active:cursor-grabbing touch-none focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
                 >
                   <GripVertical size={14} />
                 </span>
