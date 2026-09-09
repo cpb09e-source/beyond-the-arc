@@ -779,6 +779,20 @@ export function CalcClient({
     return out;
   }, [games, cols]);
 
+  /**
+   * SCOPE AS COLUMNS. A filter the reader narrowed on is a thing they want
+   * to see per game, so quad, conference and coach become columns of the
+   * matching-games table only when they were actually used. The rest of the
+   * scope is already on every row: seasons are the date, venue is the
+   * vs / @ / N badge, team and opponent have columns of their own, and
+   * D-I only has nothing per-row to show.
+   */
+  const scopeCols = {
+    quad: !!submitted && submitted.quads.length > 0 && submitted.quads.length < 4,
+    conf: !!submitted && submitted.conferences.length > 0 && submitted.conferences.length < conferenceOptions.length,
+    coach: !!submitted && submitted.coaches.length > 0,
+  };
+
   return (
     <div className="space-y-6">
       {/* Natural-language entry. Fills the form below; never runs the query
@@ -1293,6 +1307,18 @@ export function CalcClient({
                   Coach in [{submitted.coaches.join(", ")}]
                 </ConditionChip>
               )}
+              {/* Venue, quad and opponent used to appear only in the fold's
+                  chip strip, which is gone — so a Q1-only answer said nothing
+                  about being Q1-only. Every narrowing is named here now. */}
+              {submitted.venue !== "all" && (
+                <ConditionChip>{VENUE_OPTIONS.find((v) => v.value === submitted.venue)?.label}</ConditionChip>
+              )}
+              {submitted.quads.length > 0 && submitted.quads.length < 4 && (
+                <ConditionChip>Quad {submitted.quads.join("/")}</ConditionChip>
+              )}
+              {submitted.opponents.length > 0 && (
+                <ConditionChip>vs {submitted.opponents.join(", ")}</ConditionChip>
+              )}
               {submitted.filters.map((f) => (
                 <ConditionChip key={f.id}>{labelFor(f)}</ConditionChip>
               ))}
@@ -1386,6 +1412,9 @@ export function CalcClient({
                       <thead className="border-b border-hairline text-left">
                         <tr>
                           <Th>Date</Th><Th>Team</Th><Th>Opp</Th><Th>Result</Th>
+                          {scopeCols.quad && <Th>Quad</Th>}
+                          {scopeCols.conf && <Th>Conf</Th>}
+                          {scopeCols.coach && <Th>Coach</Th>}
                           {submitted.cols.map((key) => (
                             <Th key={key} align="right">{statLabel(key)}</Th>
                           ))}
@@ -1452,6 +1481,15 @@ export function CalcClient({
                                 </span>
                               </button>
                             </Td>
+                            {scopeCols.quad && (
+                              <Td className="tabular whitespace-nowrap text-ink-soft">{g.quad ? `Q${g.quad}` : "—"}</Td>
+                            )}
+                            {scopeCols.conf && (
+                              <Td className="whitespace-nowrap text-ink-soft">{g.team_conference ? confDisplay(g.team_conference) : "—"}</Td>
+                            )}
+                            {scopeCols.coach && (
+                              <Td className="whitespace-nowrap text-ink-soft">{coachByTeamYear[g.team_name]?.[g.year] ?? "—"}</Td>
+                            )}
                             {submitted.cols.map((key) => (
                               <Td key={key} align="right" className="tabular">
                                 {formatStat(g[key] ?? null, key)}
