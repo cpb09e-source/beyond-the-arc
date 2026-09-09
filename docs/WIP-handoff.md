@@ -118,6 +118,71 @@ them. Ask for a resize rather than guessing at what an image shows.
 
 ---
 
+## 2026-09-08 — the scoreboard archive, and what "live" would take
+
+`/scoreboard/<date>/` (141 pages) and `/games/2026/<id>-<away>-vs-<home>/`
+(5,910 pages) are real prerendered URLs for all of 2025-26. Built by
+`npx tsx scripts/build-scoreboard-archive.mts`, which replays the two Netlify
+handlers against `data/cbbd/2026/` through a `fetch` shim — so the output is
+byte-identical in shape to what the live path serves and costs zero API calls.
+93 seconds for the season. `--fetch-lines` is the one thing that touches CBBD
+(a dozen calls, cached to `lines-full.json.gz`); run it once per season.
+
+**Both output dirs are R2-mirrored** (`data/scoreboard`, `data/games` — 6.5 MB
+and 719 MB) and are in all four lists. Synced 2026-09-08; `verify-deploy-ready`
+passes 29/29.
+
+### Is a live scoreboard feasible? Yes — most of it already exists.
+
+The whole live path was built in July and is sitting behind one flag. To turn
+it on when 2026-27 tips: `SCOREBOARD_MODE = "live"` in `src/lib/flags.ts`, and
+`DEMO_DATE = null` in `netlify/functions/scoreboard.mts`. Nothing else.
+
+**How the page refreshes.** The client polls `/api/scoreboard` every 60s, and
+stops when the tab is hidden or every game is final. `Netlify-CDN-Cache-Control`
+is the design: the edge answers almost every poll, so CBBD sees at most one
+call a minute no matter how many people are watching. Reader traffic and API
+cost are decoupled — that is what makes this affordable at all.
+
+**How one game updates.** Same 60s poll on `/api/game`, with the context
+(standings, form, head-to-head) memoized separately from the scoreline so a
+live refresh costs ~5 upstream calls rather than 15. A final game is cached
+hard (a day at the edge) because it cannot change.
+
+**Is each game its own page?** For a completed season, yes — that is what
+just shipped, and it is what makes a search for one score land on us. A game
+being PLAYED cannot have one: `output: "export"` has to enumerate every route
+at build time, and tonight's game did not exist at the last build. Those use
+`/game?id=…&date=…`, which is `noindex`. The season then gets baked into real
+pages by re-running the archive builder, and every link switches over on its
+own — `gameHref()` picks the static path whenever the season is archived.
+
+**The honest limit is CBBD quota, and it is a money problem.** Tier 3 is
+75,000 calls/month.
+
+| what | cost |
+|---|---|
+| scoreboard + ticker, 60s | ~9,000/month |
+| each DISTINCT live game page being watched | ~5 calls/minute |
+
+The scoreboard is nearly free. Game pages are not: the edge collapses viewers,
+but not distinct games. After the scoreboard's 9k, Tier 3 leaves room for
+roughly **four games being watched concurrently, every night of the season**.
+Above that it needs Tier 5 or 6 ($20–$30/month, 200k–500k) — see
+`docs/cbbd-api-quota.md`. Refresh interval is the other lever: 30s doubles
+everything, and ESPN-like 15s quadruples it.
+
+**Not yet done for live:** nothing in the code. The open question is whether to
+buy more quota before the season, and that is a decision, not a task.
+
+### Rebuilding after the 2026-27 season
+
+1. `npx tsx scripts/build-scoreboard-archive.mts --season 2027 --fetch-lines`
+2. `npm run sync:r2 -- --only scoreboard` then `--only games`
+3. Rebuild and deploy. The new season's pages appear; nothing about 2026 moves.
+
+---
+
 ## 2026-09-08 — the Win Calculator rebuilt, and NOT deployed
 
 `/calc/`. The condition sheet — every one of the ~60 stats with its own slider,

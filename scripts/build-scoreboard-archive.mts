@@ -28,8 +28,8 @@
  * answers every api.collegebasketballdata.com request from the files under
  * data/cbbd/<season>/. The archive holds the full schedule, both box scores
  * and every day's play-by-play, so nothing is missing and nothing is spent
- * against the quota. Same trick scripts/build-demo-slate.mjs used, minus the
- * network.
+ * against the quota. Same trick the old build-demo-slate.mjs used to bake its
+ * two sample files, minus the network — and this replaced it.
  *
  * WHAT THE SHIM HAS TO GET RIGHT is the handful of query shapes the handlers
  * use (see the switch in `answer`). A path it does not recognise throws rather
