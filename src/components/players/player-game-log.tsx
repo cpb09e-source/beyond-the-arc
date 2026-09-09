@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { isFlaggedSeason } from "@/lib/seasons";
 import { TeamLogo } from "@/components/team-logo";
 import { Select } from "@/components/select";
 import { PercentileChip } from "@/components/percentile-chip";
 import { cn } from "@/lib/utils";
+import { useGameLinks } from "@/lib/game-link";
 
 /**
  * Game log — one row per game, with the columns grouped the way a box score is
@@ -49,6 +51,13 @@ import { cn } from "@/lib/utils";
 
 export type GameLogRow = {
   year: number;
+  /**
+   * CBBD's game id. Present in the built files since the CBBD migration; it
+   * was simply never read here. It is what turns the W/L cell into a link to
+   * that game's page — see src/lib/game-link.ts for why the URL has to be
+   * looked up rather than composed from the opponent name in this row.
+   */
+  game_id?: number | string | null;
   game_date: string | null;
   opp_team_market: string | null;
   is_home: boolean | null;
@@ -392,6 +401,9 @@ export function PlayerGameLog({
    */
   emptySeason?: number;
 }) {
+  // Resolves a game id to its page. Fetches one season's map, once, and only
+  // because this table is going to link every row it draws.
+  const gameLink = useGameLinks();
   const years = useMemo(
     () => [...new Set(rows.map((r) => r.year))].sort((a, b) => b - a),
     [rows],
@@ -550,12 +562,24 @@ export function PlayerGameLog({
               >
                 <Td className="tabular whitespace-nowrap text-ink-soft">{shortDate(r.game_date)}</Td>
                 <Td align="center">
-                  <span
-                    className="font-semibold text-xs"
-                    style={{ color: r.won === true ? "var(--good)" : r.won === false ? "var(--bad)" : "var(--ink-muted)" }}
-                  >
-                    {r.won === true ? "W" : r.won === false ? "L" : "—"}
-                  </span>
+                  {(() => {
+                    // The result opens that game's page: the full box score,
+                    // play-by-play and four factors, with this player's line
+                    // in it. Plain text until the season's link map lands, and
+                    // for any season the archive does not hold.
+                    const href = gameLink(r.year, r.game_id);
+                    const mark = (
+                      <span
+                        className={cn("font-semibold text-xs", href && "underline decoration-dotted decoration-current/40 underline-offset-4 hover:decoration-current")}
+                        style={{ color: r.won === true ? "var(--good)" : r.won === false ? "var(--bad)" : "var(--ink-muted)" }}
+                      >
+                        {r.won === true ? "W" : r.won === false ? "L" : "—"}
+                      </span>
+                    );
+                    return href ? (
+                      <Link href={href} prefetch={false} title="Box score and play-by-play">{mark}</Link>
+                    ) : mark;
+                  })()}
                 </Td>
                 <Td title={r.opp_team_market ?? undefined}>
                   <span className="flex items-center gap-2 whitespace-nowrap">
