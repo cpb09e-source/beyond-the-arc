@@ -132,6 +132,56 @@ byte-identical in shape to what the live path serves and costs zero API calls.
 and 719 MB) and are in all four lists. Synced 2026-09-08; `verify-deploy-ready`
 passes 29/29.
 
+### Every season has game pages now — 2026-09-08
+
+**74,275 games, 2013-14 through 2026-27.** Built per season:
+
+    npx tsx scripts/build-scoreboard-archive.mts --fetch-schedule --season 2019   # once
+    npx tsx scripts/build-scoreboard-archive.mts --season 2019
+    node scripts/build-game-slugs.mjs                                             # after any build
+    npm run sync:r2 -- --only scoreboard
+    npm run sync:r2 -- --only games
+
+`--fetch-schedule` exists because 2014-2024 had box scores, play-by-play and
+rankings archived but never the schedule — nothing needed it until the game
+pages did. It is windowed and backs off on 429; CBBD rate-limits a decade of
+requests even when the monthly quota is nowhere near.
+
+Sizes: **4.9 GB across ~73,000 files** in `public/data/games`, plus 78 MB of
+slates. Older seasons are much smaller than 2025-26 (~265 MB against 719 MB)
+because CBBD's play-by-play coverage thins out going back — roughly half of
+2018-19 has none. Box scores are complete for every season: `no-box 0`
+throughout.
+
+**THE MODALS ARE GONE.** /calc's results, the team schedule ticker, the
+find-a-game panel and the coach tournament rows all used to open a box score in
+an overlay. They link to the game's page now. `GameBoxModal`,
+`GameBoxModalById` and `ScheduleGameModal` are deleted; `game-box-modal.tsx`
+keeps only the shared drawing pieces (`sideColors`, `PctRing`, `SplitBar`,
+`PlayerBoxTable`, `Th`/`Td`), which the game page itself uses.
+
+**A GAME LINK IS A LOOKUP, NEVER A COMPOSITION.** The URL carries both team
+names and the only place those exact spellings live is CBBD's schedule. The
+game logs the rest of the site runs on spell teams differently — "Morgan St"
+vs "Morgan State", "Queens" vs "Queens University", "IU Indy" vs "IU
+Indianapolis". Measured on 2025-26, composing a slug from log names gets **41%
+wrong**, and a wrong slug is a 404. `scripts/build-game-slugs.mjs` writes
+`slugs.json` per season; `src/lib/game-link.ts` fetches one season's map once,
+on demand. Re-run the script after every archive build or links go stale.
+
+### The sitemap is split — 2026-09-08
+
+Google discards a sitemap file above 50,000 URLs outright. The site is now near
+120,000. `src/lib/sitemap-entries.ts` builds the list once (memoized — three
+callers), `src/app/sitemap.ts` slices it at 40,000 through `generateSitemaps`,
+and `src/app/robots.ts` names every resulting `/sitemap/<n>.xml` because Next
+emits no index file.
+
+**NOT YET VERIFIED IN A BUILD.** `generateSitemaps` under `output: "export"` is
+the one part of this that has never been run — the whole feature is unbuilt.
+Check that `out/sitemap/0.xml` and friends exist and that robots.txt lists the
+same count.
+
 ### The upcoming season has pages BEFORE it is played — 2026-09-08
 
 The question this answers: how do tonight's games get pages without a deploy

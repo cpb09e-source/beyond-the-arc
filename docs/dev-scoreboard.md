@@ -65,6 +65,20 @@ Those days have real pages: `/scoreboard/2026-02-07/` and
 you can read them with JavaScript off. Only the season being PLAYED goes
 through `/api/*`.
 
+A season that has box scores locally but no schedule (2014-2024 were like this
+until 2026-09-08) needs one extra step first:
+
+```
+npx tsx scripts/build-scoreboard-archive.mts --fetch-schedule --season 2019
+```
+
+After ANY archive build, rewrite the link map or every link to a game goes
+stale:
+
+```
+node scripts/build-game-slugs.mjs
+```
+
 Both directories are R2-mirrored. After a rebuild:
 
 ```
