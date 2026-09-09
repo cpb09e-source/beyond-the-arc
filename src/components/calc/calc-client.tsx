@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Link from "next/link";
-import { Lock } from "lucide-react";
+import { GripVertical, Lock } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { TeamLogo } from "@/components/team-logo";
 import {
   GameBoxModal,
@@ -760,6 +761,40 @@ export function CalcClient({
   const removeRow = useCallback((id: number) => setRows((r) => r.filter((x) => x.id !== id)), []);
 
   /**
+   * REORDERING. Row order IS column order in the results table (colsOf reads
+   * the rows in sequence), so moving a row and pressing Calculate is how the
+   * reader arranges the answer. Native drag and drop, armed from the grip
+   * only: a wrapper that is draggable all the time steals the mousedown from
+   * the value box inside it, and selecting a number becomes a drag. Arrow
+   * keys on the grip do the same job without a mouse.
+   */
+  const [dragId, setDragId] = useState<number | null>(null);
+  const [armedId, setArmedId] = useState<number | null>(null);
+  const [overId, setOverId] = useState<number | null>(null);
+  const moveRow = useCallback((fromId: number, toId: number) => {
+    setRows((r) => {
+      const from = r.findIndex((x) => x.id === fromId);
+      const to = r.findIndex((x) => x.id === toId);
+      if (from < 0 || to < 0 || from === to) return r;
+      const next = [...r];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved!);
+      return next;
+    });
+  }, []);
+  const nudgeRow = useCallback((id: number, delta: -1 | 1) => {
+    setRows((r) => {
+      const from = r.findIndex((x) => x.id === id);
+      const to = from + delta;
+      if (from < 0 || to < 0 || to >= r.length) return r;
+      const next = [...r];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved!);
+      return next;
+    });
+  }, []);
+
+  /**
    * The typical range for each stat on screen, from the games actually
    * loaded — the hint in an empty value box. 5th to 95th percentile in
    * display units, so a reader who has never seen a TOV% learns that 12 is
@@ -1233,20 +1268,62 @@ export function CalcClient({
               matching-games table and nothing more. */}
           <div className="rounded-lg border border-hairline bg-paper-deep/30 px-3 py-2.5 flex items-center flex-wrap gap-x-3 gap-y-2">
             {rows.map((r) => (
-              <CalcConditionRow
+              <div
                 key={r.id}
-                row={r}
-                label={statLabel(r.stat)}
-                bounds={bounds.get(r.stat)}
-                pct={isPctKey(r.stat)}
-                autoFocus={r.id === freshId}
-                onChange={patchRow}
-                onRemove={removeRow}
-                // Enter in a value box runs the question. Picking a stat and
-                // typing a number is the whole gesture; the answer is what
-                // comes next, not another picker.
-                onNext={calculate}
-              />
+                draggable={armedId === r.id}
+                onDragStart={(e) => {
+                  setDragId(r.id);
+                  e.dataTransfer.effectAllowed = "move";
+                  e.dataTransfer.setData("text/plain", String(r.id));
+                }}
+                onDragOver={(e) => {
+                  if (dragId === null || dragId === r.id) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  if (overId !== r.id) setOverId(r.id);
+                }}
+                onDragLeave={() => { if (overId === r.id) setOverId(null); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (dragId !== null) moveRow(dragId, r.id);
+                  setDragId(null); setOverId(null); setArmedId(null);
+                }}
+                onDragEnd={() => { setDragId(null); setOverId(null); setArmedId(null); }}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-md transition-[opacity,box-shadow]",
+                  dragId === r.id && "opacity-40",
+                  overId === r.id && dragId !== r.id && "ring-2 ring-coral/50 ring-offset-2 ring-offset-paper",
+                )}
+              >
+                <span
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Move ${statLabel(r.stat)} — drag, or use the arrow keys`}
+                  title="Drag to reorder"
+                  onMouseDown={() => setArmedId(r.id)}
+                  onMouseUp={() => setArmedId(null)}
+                  onKeyDown={(e) => {
+                    if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); nudgeRow(r.id, -1); }
+                    else if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); nudgeRow(r.id, 1); }
+                  }}
+                  className="shrink-0 -mr-0.5 inline-flex items-center justify-center w-4 h-8 rounded text-ink-muted/60 hover:text-ink cursor-grab active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
+                >
+                  <GripVertical size={14} />
+                </span>
+                <CalcConditionRow
+                  row={r}
+                  label={statLabel(r.stat)}
+                  bounds={bounds.get(r.stat)}
+                  pct={isPctKey(r.stat)}
+                  autoFocus={r.id === freshId}
+                  onChange={patchRow}
+                  onRemove={removeRow}
+                  // Enter in a value box runs the question. Picking a stat and
+                  // typing a number is the whole gesture; the answer is what
+                  // comes next, not another picker.
+                  onNext={calculate}
+                />
+              </div>
             ))}
             <StatPicker
               mode="filter"
