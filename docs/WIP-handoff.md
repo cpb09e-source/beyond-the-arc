@@ -43,19 +43,50 @@ netlify api listSiteDeploys --data '{"site_id":"d0f62630-5d43-42d4-98ae-86684e7a
 Netlify's own auto-build rows fail with `Canceled build due to no content
 change` by design.
 
-**Last deploy: `6aa08722016a896d920357b0`, 2026-09-08 22:07 UTC, state `ready`.**
-Authorized by Colin ("go ahead push and deploy"). That authorization was for
-THAT deploy — ask again before the next one. It carried the whole Matchup
-Predictor: the model, both pages, the totals correction, the young-ratings
-stretch, and the fixes from driving the page. Verified live at
-`/matchup/` and `/matchup/method/`, both 200, with the seam, the team colors,
-the ledger and the curve's end labels present in the served HTML.
+**Last deploy: `6aa1dda9c9d661d566948238`, published 2026-09-09 23:43 UTC,
+state `ready`, 4,456s.** Built from `6fde38a1d8`. Authorized by Colin ("Commit
++ rebuild + deploy"). That authorization was for THAT deploy — ask again
+before the next one.
 
-Cost, for the next estimate: build 32,873 pages in ~11 min; hashed 343,672
-files and 10 functions; CDN requested 161,116; **uploaded 322,752 files in 73
-minutes** (22:06 → 23:19 UTC). Almost exactly the previous shared-component
-run — this touched `globals.css` and the footer, so nearly every page's HTML
-and `.txt` was invalidated and little deduped.
+It carried the box-score and mobile work: Four Factors collapsible, conference
+standings fully expanded with every team linking to its team-season page, 3PAR
+and FTAR spelled out, the matchup predictor's phone layout (scoreline, logos,
+counterfactuals and margin curve hidden below sm), the scoreboard date picker
+as a bottom sheet, and Transfer Portal moved under Players.
+
+Verified live: `/build-info.json` reports `6fde38a1d8`; `/matchup/`,
+`/glossary/`, `/scoreboard/`, `/players/`, `/portal/` all 200; a game page
+under `/games/2026/…/` returns 200 through the R2 rewrite **byte-identical to
+`page-mirror/`**, and the chunks its HTML references all resolve 200.
+
+**THE FIRST DEPLOY WITH GAME PAGES ON R2 — and the shape of every one after.**
+Three legs, ~2h50m total:
+
+| leg | cost |
+|---|---|
+| build | 109,129 pages, generation 4.8 min across 23 workers, ~40 min wall including the derive steps and the 319,439-file RSC flatten |
+| `sync-pages-to-r2.mjs` | **743,070 files, 78 min, 0 failed, 0 head misses**, flat 159/s at concurrency 64 |
+| `netlify deploy` | CDN requested 170,830 of 340,252; **74 min** |
+
+Two things worth keeping. The sync crossed 300k — where the pre-batching
+version reproducibly died at exit 127 — without a stumble, so the 50k-batch
+fresh-client fix is proven at full scale. And the CDN diff stage, which 422'd
+then 500'd on 1,104,267 files, is now unremarkable at 340,252.
+
+**Run the sync BEFORE the deploy.** Game-page HTML that names a chunk the
+deploy has not uploaded yet still renders its content and merely fails to
+hydrate; deploying first would leave the old HTML naming chunks the deploy
+just deleted. The build script's own `NEXT:` line says the same thing.
+
+Do NOT run the two in parallel to save the 74 minutes. The sync broke twice at
+higher concurrency and the deploy CLI has been killed once mid-upload;
+bandwidth contention against a 10s connect / 60s request timeout reintroduces
+exactly those failures, and a redo costs 78 minutes.
+
+`build-info.json` will say `dirty` after any build: `build-bta-porpag.mjs`
+runs inside the build and rewrites `built_at` on all 13 `porpag-*.json`.
+Confirmed content-identical with that field removed. `git checkout --
+public/data/porpag-*.json` afterwards.
 
 As of **2026-09-08** the deploys on 2026-09-02, 09-07 and 09-08 all landed
 `ready`, so the 2026-09-01/02 backlog described in the rest of this document —
