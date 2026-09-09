@@ -151,11 +151,18 @@ type DraftChip = { team: string; logo: string | null; round: number; pick: numbe
  */
 function StatBand({ now }: { now: StatLine }) {
   // ORDER IS THE LAYOUT. Four counting stats then three shooting rates, in a
-  // grid four wide — so a phone gets games/PPG/RPG/APG on one line and
-  // FG%/3P%/FT% on the next without either row being declared. The split is
-  // also the right one to read on: the first four are how much a player did and
-  // the last three are how well he did it, and they do not compare to each
-  // other. From md the grid opens to seven and they all sit on one line.
+  // grid four wide — so games/PPG/RPG/APG land on one line and FG%/3P%/FT% on
+  // the next without either row being declared. The split is also the right one
+  // to read on: the first four are how much a player did and the last three are
+  // how well he did it, and they do not compare to each other.
+  //
+  // FOUR WIDE AT EVERY SIZE, and capped rather than filling the shell. It used
+  // to open to seven across from md, which on a wide monitor stretched seven
+  // tiles over the full page width — a two-digit number marooned in 190px of
+  // its own tile, and the counting/shooting split flattened into one
+  // undifferentiated run. Holding the phone's 4+3 everywhere keeps that split
+  // visible and keeps the figures near each other, where they can be compared.
+  // Colin, 2026-09-09.
   //
   // Each figure gets its own tile rather than sitting bare in a ruled column.
   // Seven numbers read as a run whatever you set them in; a bordered cell makes
@@ -175,7 +182,19 @@ function StatBand({ now }: { now: StatLine }) {
     // No rule above the band. Bare figures needed one to separate them from the
     // vitals; a row of bordered cells is already a block, and a hairline on top
     // of it is a second edge doing the first one's job.
-    <div className="mt-5 grid grid-cols-4 md:grid-cols-7 gap-2">
+    // THE TILES HUG THEIR CONTENTS from sm up, rather than dividing a fixed
+    // width four ways. Capping the grid narrowed the row but not the problem:
+    // equal columns still stretched every tile to the same width, so "34" and
+    // "6.1" each sat at the left edge of a box with a slab of dead padding to
+    // their right. `w-fit` plus max-content columns lets each tile end where
+    // its number ends. The 6rem floor keeps a short value like "34" from
+    // collapsing to a chip narrower than its own "GAMES" label, and max-content
+    // means a three-digit "100.0" still fits without a magic width.
+    //
+    // A phone keeps the old behaviour — four equal columns across the full
+    // width — because there the space is worth using and hugging would leave a
+    // ragged strip down the right of the screen.
+    <div className="mt-5 grid grid-cols-4 gap-2 sm:w-fit sm:grid-cols-[repeat(4,minmax(6rem,max-content))]">
       {cells.map((c) => (
         <div
           key={c.unit}

@@ -274,10 +274,17 @@ export function CareerTable({ seasons }: { seasons: Season[] }) {
                         all 63,128 player-season rows resolve against it. */}
                     <Link href={`/teams/${teamSlug(s.team_name)}/${s.year}/`} className="inline-flex items-center gap-2 hover:text-coral transition-colors" prefetch={false} title={`${s.team_name} — ${seasonLabel(s.year)}`}>
                       <TeamLogo name={s.team_name} size={20} />
-                      {/* nowrap: the table already scrolls sideways, so there
-                          is no width to save by breaking "Robert Morris" over
-                          two lines — it only makes the row twice as tall. */}
-                      <span className="text-ink-soft hidden sm:inline whitespace-nowrap">{s.team_name}</span>
+                      {/* nowrap, and now CAPPED. Every other column here is a
+                          number three or four characters wide; this one is a
+                          school name, so it alone decides whether the table
+                          fits. "Florida" costs 55px and "Southeastern
+                          Louisiana" costs 150px — which is the difference
+                          between the ledger fitting on a 1366px screen and
+                          not. Truncating at 8rem holds the column to something
+                          the rest of the table can budget around, and the
+                          Link's title already carries the full name for
+                          anything that clips. */}
+                      <span className="text-ink-soft hidden sm:inline whitespace-nowrap truncate max-w-32">{s.team_name}</span>
                     </Link>
                   </Td>
                   <Td className="text-ink-muted" hideUntil="sm">{s.class ?? "—"}</Td>
@@ -318,7 +325,14 @@ function Th({
   align?: "left" | "right";
   hideUntil?: "sm" | "md" | "lg";
 }) {
-  return <th className={`px-1.5 sm:px-3 py-2 text-xs uppercase tracking-widest text-ink-muted font-medium ${align === "right" ? "text-right" : ""} ${hideClass(hideUntil)}`}>{children}</th>;
+  // px-2 rather than px-3, and tracking-wider rather than widest. Twenty-one
+  // columns turn every per-column pixel into twenty-one, and this table is
+  // meant to be read whole: at 1366px the card is 1072px wide, and the old
+  // padding alone was 504px of that. Letter-spacing on a six-character
+  // uppercase header is the same tax in miniature. Neither is a visual change
+  // anyone would notice; together they are what lets the ledger fit on screen
+  // instead of hiding PTS behind a scrollbar. Colin, 2026-09-09.
+  return <th className={`px-1.5 sm:px-2 py-2 text-xs uppercase tracking-wider text-ink-muted font-medium ${align === "right" ? "text-right" : ""} ${hideClass(hideUntil)}`}>{children}</th>;
 }
 function Td({
   children, align = "left", className = "", hideUntil,
@@ -328,7 +342,7 @@ function Td({
   className?: string;
   hideUntil?: "sm" | "md" | "lg";
 }) {
-  return <td className={`px-1.5 sm:px-3 py-2.5 ${align === "right" ? "text-right" : ""} ${hideClass(hideUntil)} ${className}`}>{children}</td>;
+  return <td className={`px-1.5 sm:px-2 py-2.5 ${align === "right" ? "text-right" : ""} ${hideClass(hideUntil)} ${className}`}>{children}</td>;
 }
 // Mobile now swipes the full table horizontally (min-w on <table>), so every
 // column renders at every width — no more column dropping on narrow screens.
