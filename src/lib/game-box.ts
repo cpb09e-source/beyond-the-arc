@@ -79,7 +79,10 @@ export const BOX_FIELDS = [
   { key: "fouls",        label: "Fouls",         group: "Box", lower: true },
   // Game shape
   { key: "largest_lead",     label: "Largest Lead",     group: "Game Shape" },
-  { key: "largest_lead_opp", label: "Opp Largest Lead", group: "Game Shape", lower: true },
+  // Not marked lower-is-better, on purpose: the question people ask of this
+  // stat is "games where the opponent led by 10 or more" — comebacks — so the
+  // picker defaults to ≥. The flag only drives that default.
+  { key: "largest_lead_opp", label: "Opp Largest Lead", group: "Game Shape" },
   { key: "h1_margin",        label: "1st-Half Margin",  group: "Game Shape" },
   { key: "h2_margin",        label: "2nd-Half Margin",  group: "Game Shape" },
   // Yes/no flags. Exposed as 0/1 because the condition row is a numeric
