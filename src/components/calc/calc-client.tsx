@@ -107,7 +107,14 @@ const GROUP_LABEL: Record<string, string> = Object.fromEntries(
 const PICKER_LIST_ID = "calc-conditions-picker";
 /** Ceiling on rows. Each one is a column in the results table. */
 const MAX_CONDITIONS = 12;
-let nextRowId = 1;
+/**
+ * Seeded from the clock, not from 1. Fast Refresh re-runs this module and
+ * resets a module-level counter while the rows already in state keep their
+ * ids — so in a dev session every row added after a save came back as id 1,
+ * and typing in one of them typed in all of them. Time only moves forward,
+ * so a re-run can never hand out an id a live row already holds.
+ */
+let nextRowId = Date.now();
 
 const statLabel = (key: string): string =>
   cleanLabel(CALC_STAT_OPTIONS.find((s) => s.key === key)?.label ?? key);
