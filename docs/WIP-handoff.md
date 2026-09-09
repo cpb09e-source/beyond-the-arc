@@ -132,6 +132,74 @@ byte-identical in shape to what the live path serves and costs zero API calls.
 and 719 MB) and are in all four lists. Synced 2026-09-08; `verify-deploy-ready`
 passes 29/29.
 
+### THE ARCHIVE CAN BE SILENTLY STALE — 2026-09-09
+
+**The 2025-26 archive was missing the national championship game** and nobody
+could tell. `data/cbbd/2026/games-*.json.gz` had been fetched before the season
+ended, so it stopped after the NIT final and `/scoreboard` opened on
+Tulsa-Auburn. CBBD had the rest all along: UConn 63-69 Michigan on 6 April,
+plus Michigan-Arizona and Oklahoma-West Virginia. Refetching added **108 games**
+to that one season.
+
+Nothing in the build warns about this. The builder happily bakes whatever the
+schedule files contain, and a season that is short by three games looks exactly
+like a season that is complete. **Refetch the schedule before trusting a
+season's archive:**
+
+    npx tsx scripts/build-scoreboard-archive.mts --fetch-schedule --season 2026
+
+Seasons 2014-2024 were fetched fresh on 2026-09-08 and are complete. 2025 and
+2026 were refetched on 2026-09-09.
+
+### Tournaments are a filter — 2026-09-09
+
+Games carry CBBD's `tournament` through `normalize()` in the scoreboard
+function, the baked slates and the index. The Show dropdown offers whatever the
+day actually holds, NCAA and NIT pinned first — and nothing for the ten months
+with no tournament, because a permanent "NCAA Tournament" entry in a December
+dropdown can only return an empty list.
+
+**CBBD tags only NCAA and NIT in this data.** The unlabelled April games are
+probably CBI/CIT but come through `tournament: null`, so they cannot be
+filtered. If CBBD starts labelling them the option appears on its own.
+
+### One night is fetched once — 2026-09-09
+
+`netlify/functions/game.mts` used to ask CBBD for its own copy of the night per
+game: `/games`, `/games/teams`, `/games/players` ×2, `/games/media` and
+`/lines`, all window-scoped but filtered by `&team=`. Forty games being watched
+bought forty copies.
+
+Verified against the live API before relying on it: the busiest Saturday of
+2025-26 returns **368 rows / 184 games from one unfiltered `/games/teams`
+call**, well inside the 3,000-row cap. Those calls are now memoized per window
+(`windowed()`, 45s TTL, promise-cached) and shared by every game in it.
+
+**A live game page went from ~5 CBBD calls a minute to ~1** — its own
+play-by-play is the only per-game endpoint left. That is the difference between
+four games and fifty being watched at once on the same quota.
+
+TWO TRAPS THIS HIT, both worth knowing:
+
+1. The rows are no longer pre-filtered by team, so each game has TWO rows in
+   each array. Matching on `gameId` alone takes whichever comes first and
+   shows the away box under the home name about half the time. Selection is by
+   game AND team.
+2. The offline builder's shim REFUSED the unfiltered query, `soft()` swallowed
+   the throw, and every bundle built with no box score at all. `no-box 205` on
+   the first run caught it — that counter earns its keep.
+
+### Still open on the live path
+
+**The R2 live slate is NOT built, deliberately.** Reader polling goes through a
+Netlify function; moving it to an R2 object written on a schedule would make
+egress free and drop invocations to one a minute. Netlify Pro's 1 TB covers
+roughly 3,000 concurrent readers at 30s polling, so this is not yet needed —
+and its failure mode is worse than what it replaces: a writer that stops leaves
+every reader looking at a frozen scoreline, which is the one thing a scoreboard
+must never do. Build it with a staleness guard, before a season where real
+traffic is expected, and not on the eve of one.
+
 ### Every season has game pages now — 2026-09-08
 
 **74,275 games, 2013-14 through 2026-27.** Built per season:
