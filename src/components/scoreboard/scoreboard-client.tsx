@@ -75,8 +75,16 @@ export function ScoreboardClient({
    * scheduled day therefore forgot its own date the moment it rendered —
    * /scoreboard/2026-11-02/ drew the heading of the last completed night.
    */
-  const pinned = initial?.date
-    ?? (fromUrl && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl) ? fromUrl : null);
+  /**
+   * THE URL OUTRANKS THE PRERENDER. /scoreboard ships the last night played as
+   * its initial slate, and for a moment that also became the answer to "which
+   * day is this" — so ?date= was ignored on the one route that exists to
+   * honour it, and every link into a day without a page of its own landed on
+   * the wrong night. A day page has no query, so it still falls through to
+   * its own date.
+   */
+  const fromUrlDay = fromUrl && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl) ? fromUrl : null;
+  const pinned = fromUrlDay ?? initial?.date ?? null;
   /**
    * Go to a day.
    *
