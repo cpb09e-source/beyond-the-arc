@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { GameLinks } from "@/lib/game-team-links";
 import Link from "next/link";
 import { useUrlSearchParams } from "@/lib/use-url-search-params";
 import { dataUrl } from "@/lib/data-url";
@@ -38,7 +39,10 @@ export function GameClient({
   date: dateProp,
   initial,
   live = false,
+  links,
 }: {
+  /** Team and coach links, resolved at build time by the static game page. */
+  links?: GameLinks;
   /** Given by the static archive route; read from the URL otherwise. */
   id?: string;
   date?: string;
@@ -179,7 +183,7 @@ export function GameClient({
 
   return (
     <>
-      <GameDetail b={bundle} partial={partial} detailFailed={detailFailed} />
+      <GameDetail b={bundle} partial={partial} detailFailed={detailFailed} links={links} />
       {isLive(bundle.game) && (
         <p className="sr-only" role="status">Live game; the page refreshes every minute.</p>
       )}

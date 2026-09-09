@@ -7,6 +7,7 @@ import { longDate } from "./types";
 import { ScoreHeader } from "./score-header";
 import { OverviewTab } from "./overview-tab";
 import { PlayersTab } from "./players-tab";
+import type { GameLinks } from "@/lib/game-team-links";
 import { PlaysTab } from "./plays-tab";
 import type { GameBundle } from "./types";
 
@@ -26,8 +27,10 @@ const TABS = [
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
-export function GameDetail({ b, partial = false, detailFailed = false }: {
+export function GameDetail({ b, partial = false, detailFailed = false, links }: {
   b: GameBundle;
+  /** Team and coach links, resolved at build time by the game page. */
+  links?: GameLinks;
   /** The box score could not be loaded. The scoreline above is still real. */
   detailFailed?: boolean;
   /**
@@ -67,7 +70,7 @@ export function GameDetail({ b, partial = false, detailFailed = false }: {
 
   return (
     <div className="pb-20">
-      <ScoreHeader b={b} records={records} hc={hc} ac={ac} />
+      <ScoreHeader b={b} records={records} />
 
       <nav className="sticky top-0 z-30 border-b border-hairline bg-paper/95 backdrop-blur">
         <div className="mx-auto max-w-[var(--page-narrow)] px-5 lg:px-10">
@@ -118,7 +121,7 @@ export function GameDetail({ b, partial = false, detailFailed = false }: {
         ) : (
           <>
             {tab === "overview" && <OverviewTab b={b} hc={hc} ac={ac} onOpenBox={() => setTab("players")} />}
-            {tab === "players" && <PlayersTab b={b} hc={hc} ac={ac} />}
+            {tab === "players" && <PlayersTab b={b} hc={hc} ac={ac} links={links} />}
             {tab === "plays" && <PlaysTab b={b} />}
           </>
         )}

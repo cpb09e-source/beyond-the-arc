@@ -368,9 +368,25 @@ export function PlayerAtlas({
               <span className="text-ink-muted shrink-0 hidden sm:inline">· {seasonLabel(year)}</span>
             </div>
 
-            <h1 className="font-display text-2xl sm:text-5xl lg:text-[3.25rem] tracking-tight text-ink leading-[1.05] md:leading-[1.02] break-words">
-              {name}
-            </h1>
+            {/* The Top-100 mark sits WITH the name, not at the far edge of the
+                masthead. It was in the right-hand column, a full page-width
+                away from the player it describes, with the eye having to cross
+                the vitals and the stat band to connect the two. Beside the name
+                it reads as part of the identity — the same argument the phone
+                layout already made, where the seal has always been on the name
+                row. Colin, 2026-09-09. */}
+            <div className="flex items-center gap-4 md:gap-6 min-w-0">
+              <h1 className="font-display text-2xl sm:text-5xl lg:text-[3.25rem] tracking-tight text-ink leading-[1.05] md:leading-[1.02] break-words min-w-0">
+                {name}
+              </h1>
+              {heroRanks && (
+                // Hidden on a phone because the compact seal in the photo row
+                // above already carries it; two would be the same badge twice.
+                <div className="hidden md:block shrink-0">
+                  <TopHundredSeal season={heroRanks} size={76} />
+                </div>
+              )}
+            </div>
 
             {/* Vitals sit under the name on desktop but break out to full width
                 below the photo on a phone — five fields and a draft chip do not
@@ -400,12 +416,11 @@ export function PlayerAtlas({
               the player stands at all — the thing the page is for. Smaller, and
               below the vitals rather than beside the name, because three of them
               at ring size do not fit next to a headshot. */}
-          {/* The right-hand column of the masthead: the Top-100 mark, and the
-              teammate picker under it. The picker keeps ml-auto even when the
-              mark is absent, so it stays on the right edge for the ~99% of
-              players who have no seal. */}
+          {/* The right-hand column of the masthead. The Top-100 mark used to
+              head this column and now sits beside the name instead, so the
+              picker is all that is left — it keeps ml-auto to stay on the
+              right edge. */}
           <div className="hidden md:flex md:ml-auto shrink-0 md:pb-1 flex-col items-end gap-3">
-            {heroRanks && <TopHundredSeal season={heroRanks} size={96} />}
             <TeammatePicker teammates={teammates} teamName={teamName} />
           </div>
         </div>

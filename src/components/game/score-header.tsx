@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
-import { readableInk } from "@/lib/team-colors";
 import { cn } from "@/lib/utils";
 import {
   isFinal, isLive, longDate, periodHeadings, periodLabel, tipLabel,
@@ -31,12 +30,10 @@ import {
  * Final shows everything, with the loser dimmed.
  */
 export function ScoreHeader({
-  b, records, hc, ac,
+  b, records,
 }: {
   b: GameBundle;
   records?: { home: string; away: string };
-  /** Home and away display colors, already de-conflicted by `sideColors`. */
-  hc: string; ac: string;
 }) {
   const g = b.game;
   const final = isFinal(g);
@@ -61,11 +58,11 @@ export function ScoreHeader({
           <TeamBlock side={g.away} record={records?.away} align="right" final={final} />
 
           <div className="flex items-center gap-3 sm:gap-5 lg:gap-7">
-            {started && <Num v={g.away.points} dim={final && g.away.winner === false} color={ac} />}
+            {started && <Num v={g.away.points} dim={final && g.away.winner === false} />}
             <div className="text-center min-w-14 sm:min-w-18">
               <Status b={b} />
             </div>
-            {started && <Num v={g.home.points} dim={final && g.home.winner === false} color={hc} />}
+            {started && <Num v={g.home.points} dim={final && g.home.winner === false} />}
           </div>
 
           <TeamBlock side={g.home} record={records?.home} align="left" final={final}
@@ -114,15 +111,21 @@ function Status({ b }: { b: GameBundle }) {
  * The display face draws `1` as a bare stem with no flag or foot, which at
  * poster scale turns 81 into "8I" and 11 into "||". At 24px it is a quirk; at
  * 96px it is a misprint. Weight and tabular figures carry the emphasis instead.
+ *
+ * INK, NOT TEAM COLOR. These used to be drawn in each side's color, which put
+ * two loud unrelated hues at the largest point size on the page and made the
+ * header read as a logo rather than a result. The line score below it already
+ * had the right answer — ink for the winner, muted for the loser — and the
+ * team name beside it uses the same pair. Now all three agree, and the only
+ * thing color says on this page is which side won.
  */
-function Num({ v, dim, color }: { v: number | null; dim: boolean; color: string }) {
+function Num({ v, dim }: { v: number | null; dim: boolean }) {
   return (
     <span
-      className="text-5xl sm:text-6xl lg:text-7xl font-bold leading-none tabular tracking-tight"
-      style={{
-        color: dim ? "var(--ink-muted)" : readableInk(color, { min: 0.28, max: 0.46 }),
-        opacity: dim ? 0.45 : 1,
-      }}
+      className={cn(
+        "text-5xl sm:text-6xl lg:text-7xl font-bold leading-none tabular tracking-tight",
+        dim ? "text-ink-muted" : "text-ink",
+      )}
     >
       {v ?? "—"}
     </span>

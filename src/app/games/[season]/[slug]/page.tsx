@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { GameClient } from "@/components/game/game-client";
 import { gameSlug, idFromSlug, isArchivedSeason, knownSeasons } from "@/lib/scoreboard-archive";
 import { minimalBundle, readArchiveIndex, shortDate, type ArchiveGame } from "@/lib/game-archive";
+import { gameTeamLinks } from "@/lib/game-team-links";
 
 /**
  * /games/<season>/<id>-<away>-vs-<home>/ — one game, played or scheduled.
@@ -112,10 +113,21 @@ export default async function ArchivedGamePage({ params }: { params: Promise<{ s
   // ask the live feed what is happening.
   const settled = isArchivedSeason(Number(season)) && g.home.pts !== null;
 
+  /**
+   * The box score's team and coach links, resolved HERE rather than in the
+   * browser. CBBD's team spelling has to be reconciled against ours before a
+   * /teams/ or /coaches/ URL can be built, and doing that at build time costs
+   * the reader nothing and ships no lookup table. A team we cannot identify —
+   * every D-II and D-III opponent on the schedule — comes back null and
+   * renders as plain text, which is the correct answer for a school with no
+   * page here. See src/lib/game-team-links.ts.
+   */
+  const links = await gameTeamLinks(g.home.team, g.away.team, Number(season));
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <GameClient id={String(g.id)} date={g.date} initial={initial} live={!settled} />
+      <GameClient id={String(g.id)} date={g.date} initial={initial} live={!settled} links={links} />
     </>
   );
 }

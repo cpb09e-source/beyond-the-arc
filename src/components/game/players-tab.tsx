@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
+import { loadPhotoIndex, lookupId, type PhotoIndex } from "@/lib/player-photo-index";
+import type { GameLinks, SideLinks } from "@/lib/game-team-links";
 import type { BoxPlayer, GameBundle, GameSide, Play, TeamStats } from "./types";
 
 /**
@@ -44,24 +47,51 @@ function plusMinus(plays: Play[]): Map<number, number> {
   return out;
 }
 
-export function PlayersTab({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
+export function PlayersTab({ b, hc, ac, links }: {
+  b: GameBundle; hc: string; ac: string;
+  /**
+   * Team and coach links, resolved at build time by the game page. Absent on
+   * the live /game route, where the box simply renders unlinked — the same
+   * degradation useGameLinks() uses when a slug map has not loaded.
+   */
+  links?: GameLinks;
+}) {
   const pm = useMemo(() => plusMinus(b.plays), [b.plays]);
   const hasPm = pm.size > 0;
+
+  /**
+   * Box-score names → our player ids, so a name can link to its profile.
+   *
+   * The box comes from CBBD, which keys athletes on its own id; /players/ URLs
+   * use bart ids, and names are the only field the two worlds share. The index
+   * excludes anyone ambiguous within a season, so a lookup either resolves to
+   * the right player or to nothing — see src/lib/player-photo-index.ts. The
+   * overview tab already loads the same file, and the module-level cache means
+   * both panels share one fetch.
+   */
+  const [photos, setPhotos] = useState<PhotoIndex>({});
+  useEffect(() => {
+    let live = true;
+    void loadPhotoIndex(b.game.season).then((i) => { if (live) setPhotos(i); });
+    return () => { live = false; };
+  }, [b.game.season]);
+
   return (
     <div className="space-y-6">
       <TeamBox side={b.game.away} players={b.players.away} stats={b.teamStats.away}
-        color={ac} pm={pm} pmSign={-1} hasPm={hasPm} />
+        color={ac} pm={pm} pmSign={-1} hasPm={hasPm} photos={photos} links={links?.away} />
       <TeamBox side={b.game.home} players={b.players.home} stats={b.teamStats.home}
-        color={hc} pm={pm} pmSign={1} hasPm={hasPm} />
+        color={hc} pm={pm} pmSign={1} hasPm={hasPm} photos={photos} links={links?.home} />
     </div>
   );
 }
 
 function TeamBox({
-  side, players, stats, color, pm, pmSign, hasPm,
+  side, players, stats, color, pm, pmSign, hasPm, photos, links,
 }: {
   side: GameSide; players: BoxPlayer[]; stats: TeamStats | null; color: string;
   pm: Map<number, number>; pmSign: 1 | -1; hasPm: boolean;
+  photos: PhotoIndex; links?: SideLinks;
 }) {
   const [sort, setSort] = useState<SortKey>("min");
 
@@ -85,17 +115,38 @@ function TeamBox({
 
   return (
     <section className="rounded-xl border border-hairline bg-card overflow-hidden">
+      {/*
+        The team's shooting line used to sit beside the name — FG, 3P, FT and
+        possessions. It is gone because the table under it already carries
+        every one of those numbers on its own Team row, so the header was
+        restating the footer in smaller type. The coach is there instead:
+        something the box score does NOT otherwise say, and a way into the
+        coach's own page.
+      */}
       <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-hairline" style={{ background: `${color}12` }}>
         <TeamLogo name={side.team} size={22} />
-        <h2 className="font-display text-lg text-ink">{side.team}</h2>
-        {stats && (
-          <span className="text-[0.65rem] tabular text-ink-muted hidden sm:inline">
-            {stats.fieldGoals.made}-{stats.fieldGoals.attempted} FG ·{" "}
-            {stats.threePointFieldGoals.made}-{stats.threePointFieldGoals.attempted} 3P ·{" "}
-            {stats.freeThrows.made}-{stats.freeThrows.attempted} FT · {stats.possessions} poss
-          </span>
+        <h2 className="font-display text-lg text-ink">
+          {links?.teamHref ? (
+            <Link href={links.teamHref} className="hover:text-coral transition-colors" prefetch={false}>
+              {side.team}
+            </Link>
+          ) : (
+            side.team
+          )}
+        </h2>
+        {links?.coach && (
+          <Link
+            href={links.coach.href}
+            className="text-[0.68rem] text-ink-muted hover:text-coral transition-colors truncate hidden sm:inline"
+            prefetch={false}
+          >
+            {links.coach.name}
+          </Link>
         )}
-        <span className="ml-auto font-display text-2xl tabular" style={{ color }}>{side.points ?? "—"}</span>
+        {/* Ink, not team color — matches the line score in the header above. */}
+        <span className={cn("ml-auto font-display text-2xl tabular", side.winner === false ? "text-ink-muted" : "text-ink")}>
+          {side.points ?? "—"}
+        </span>
       </div>
 
       <div className="overflow-x-auto overscroll-x-contain">
@@ -124,7 +175,7 @@ function TeamBox({
             {rows.map((p) => (
               <tr key={p.athleteId} className="border-b border-hairline/60 last:border-b-0 hover:bg-paper-deep/40">
                 <td className="px-3 py-1.5 whitespace-nowrap sticky left-0 bg-card">
-                  <span className={p.starter ? "text-ink font-medium" : "text-ink-soft"}>{p.name}</span>
+                  <PlayerName name={p.name} starter={p.starter} id={lookupId(photos, p.name)} />
                   {p.position && <span className="text-ink-muted/70 ml-1.5 text-[0.58rem]">{p.position}</span>}
                   {p.ejected && <span className="ml-1.5 text-[0.55rem] uppercase tracking-wider font-bold text-bad">ej</span>}
                 </td>
@@ -171,6 +222,24 @@ function TeamBox({
         </table>
       </div>
     </section>
+  );
+}
+
+/**
+ * A player's name, linked to their profile when we can identify them.
+ *
+ * `id` is null for anyone the photo index could not resolve — a name that is
+ * ambiguous within the season, or a player with no page here at all. Those
+ * render exactly as before, as text. The index never guesses, so a link on
+ * this table is either the right player or absent.
+ */
+function PlayerName({ name, starter, id }: { name: string; starter: boolean; id: number | null }) {
+  const tone = starter ? "text-ink font-medium" : "text-ink-soft";
+  if (id === null) return <span className={tone}>{name}</span>;
+  return (
+    <Link href={`/players/${id}/`} className={cn(tone, "hover:text-coral transition-colors")} prefetch={false}>
+      {name}
+    </Link>
   );
 }
 

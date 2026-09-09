@@ -121,7 +121,8 @@ export function TeammatePicker({
           aria-expanded={open}
           className="relative w-full h-10 pl-3 pr-8 rounded-md border border-ink/15 bg-card text-ink text-sm text-left shadow-sm hover:border-ink/25 focus:outline-none focus:ring-2 focus:ring-coral/40 focus:border-coral/40 transition-colors"
         >
-          Select…
+          {/* The space before the ellipsis is deliberate — Colin, 2026-09-09. */}
+          Select&nbsp;…
           <span aria-hidden className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted text-[0.7rem]">▾</span>
         </button>
       </div>
