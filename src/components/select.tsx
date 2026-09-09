@@ -206,6 +206,13 @@ export function Select({
            */
           style={{
             ...popoverStyle(at),
+            // CAPPED, whatever the viewport offers. The anchor hands back every
+            // pixel between the trigger and the bottom of the screen, and the
+            // scoreboard's Show list — four groups and thirty-odd leagues — took
+            // all of it, a column the full height of the page. Nine rows is
+            // enough to see the groups and the top of the leagues; the rest
+            // scrolls, which the list does anyway.
+            maxHeight: Math.min(at.maxHeight, 320),
             width: "max-content",
             minWidth: at.width,
             maxWidth: `calc(100vw - ${Math.round(at.left) + 8}px)`,

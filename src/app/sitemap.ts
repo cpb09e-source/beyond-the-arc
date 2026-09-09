@@ -2,6 +2,8 @@ import type { MetadataRoute } from "next";
 import { tabbedSeasonParams } from "@/lib/team-tab-route";
 import { readIndex, readAllTeams } from "@/lib/static-data";
 import { loadAllCoachProfiles } from "@/lib/coaches";
+import { archivedDays, archivedSeasons, gameSlug } from "@/lib/scoreboard-archive";
+import { readArchiveIndex } from "@/lib/game-archive";
 
 // Required for Next 16 metadata routes under `output: "export"` — opts the
 // generated file into the static export bundle. Without it the build errors.
@@ -66,6 +68,35 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "yearly",
       priority: 0.3,
     });
+  }
+
+  /**
+   * The scoreboard archive: a day per night played, and a page per game.
+   *
+   * ~6,000 URLs a season, and the reason they exist. Somebody searching
+   * "oklahoma vs florida state basketball score" is searching for one of
+   * these pages; a sitemap that lists only the front doors leaves them
+   * undiscoverable. Weekly on the days (their links keep resolving) and
+   * yearly on the games, which are finished and will never change again.
+   */
+  for (const season of archivedSeasons()) {
+    for (const date of archivedDays(season)) {
+      entries.push({
+        url: `${BASE_URL}/scoreboard/${date}/`,
+        lastModified: now,
+        changeFrequency: "yearly",
+        priority: 0.6,
+      });
+    }
+    const idx = await readArchiveIndex(season);
+    for (const g of idx?.games ?? []) {
+      entries.push({
+        url: `${BASE_URL}/games/${season}/${gameSlug(g.id, g.away.team, g.home.team)}/`,
+        lastModified: now,
+        changeFrequency: "yearly",
+        priority: 0.5,
+      });
+    }
   }
 
   // /teams/<slug> — every team's latest-season landing page

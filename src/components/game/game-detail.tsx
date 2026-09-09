@@ -25,7 +25,18 @@ const TABS = [
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
-export function GameDetail({ b }: { b: GameBundle }) {
+export function GameDetail({ b, partial = false, detailFailed = false }: {
+  b: GameBundle;
+  /** The box score could not be loaded. The scoreline above is still real. */
+  detailFailed?: boolean;
+  /**
+   * The scoreline is real but the box score has not arrived yet — the state an
+   * archived game page renders in for the moment between its HTML and its
+   * bundle. The tabs say so rather than drawing empty tables, which read as a
+   * game nobody has stats for.
+   */
+  partial?: boolean;
+}) {
   const [tab, setTab] = useState<TabKey>("overview");
   const [hc, ac] = useMemo(
     () => sideColors(b.game.home.team, b.game.away.team),
@@ -51,7 +62,7 @@ export function GameDetail({ b }: { b: GameBundle }) {
       <ScoreHeader b={b} records={records} hc={hc} ac={ac} />
 
       <nav className="sticky top-0 z-30 border-b border-hairline bg-paper/95 backdrop-blur">
-        <div className="mx-auto max-w-[var(--page-max)] px-5 lg:px-10">
+        <div className="mx-auto max-w-[var(--page-narrow)] px-5 lg:px-10">
           <div className="flex gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {TABS.map((t) => (
               <button
@@ -72,10 +83,20 @@ export function GameDetail({ b }: { b: GameBundle }) {
         </div>
       </nav>
 
-      <div className="mx-auto max-w-[var(--page-max)] px-5 lg:px-10 pt-6">
-        {tab === "overview" && <OverviewTab b={b} hc={hc} ac={ac} onOpenBox={() => setTab("players")} />}
-        {tab === "players" && <PlayersTab b={b} hc={hc} ac={ac} />}
-        {tab === "plays" && <PlaysTab b={b} />}
+      <div className="mx-auto max-w-[var(--page-narrow)] px-5 lg:px-10 pt-6">
+        {detailFailed ? (
+          <p className="py-16 text-center text-sm text-ink-muted">
+            The box score for this game could not be loaded. The result above is final.
+          </p>
+        ) : partial ? (
+          <p className="py-16 text-center text-sm text-ink-muted">Loading the box score…</p>
+        ) : (
+          <>
+            {tab === "overview" && <OverviewTab b={b} hc={hc} ac={ac} onOpenBox={() => setTab("players")} />}
+            {tab === "players" && <PlayersTab b={b} hc={hc} ac={ac} />}
+            {tab === "plays" && <PlaysTab b={b} />}
+          </>
+        )}
       </div>
     </div>
   );

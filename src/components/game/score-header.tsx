@@ -48,7 +48,7 @@ export function ScoreHeader({
     // paper rather than a masthead on it. The deeper tone also gives the white
     // panels below it something to sit against.
     <header className="border-b border-hairline bg-paper-deep/70">
-      <div className="mx-auto max-w-[var(--page-max)] px-5 lg:px-10 pt-5 pb-6">
+      <div className="mx-auto max-w-[var(--page-narrow)] px-5 lg:px-10 pt-5 pb-6">
         <p className="text-center text-[0.6rem] uppercase tracking-[0.22em] font-bold text-ink-muted">
           {g.conferenceGame && g.home.conference
             ? g.home.conference

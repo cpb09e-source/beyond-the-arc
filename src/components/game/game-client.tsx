@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import { DEMO_GAME_URL, IS_DEMO } from "@/lib/flags";
+import { useUrlSearchParams } from "@/lib/use-url-search-params";
+import { dataUrl } from "@/lib/data-url";
+import { gameBundleUrl, isArchivedSeason, seasonOfDate } from "@/lib/scoreboard-archive";
 import { GameDetail } from "./game-detail";
 import { isFinal, isLive, type GameBundle } from "./types";
 
@@ -32,11 +33,25 @@ const RETRY_DELAY_MS = 1_500;
  * cache. A completed game is the overwhelmingly common case and costs exactly
  * one request.
  */
-export function GameClient() {
-  const params = useSearchParams();
-  const id = params.get("id");
-  const date = params.get("date");
-  const [bundle, setBundle] = useState<GameBundle | null>(null);
+export function GameClient({
+  id: idProp,
+  date: dateProp,
+  initial,
+}: {
+  /** Given by the static archive route; read from the URL otherwise. */
+  id?: string;
+  date?: string;
+  /**
+   * The scoreline, prerendered. An archived game page renders this on the
+   * server so the result is in the HTML, then swaps in the full bundle — same
+   * shape, same components, so only the tabs change when it lands.
+   */
+  initial?: GameBundle;
+} = {}) {
+  const params = useUrlSearchParams();
+  const id = idProp ?? params.get("id");
+  const date = dateProp ?? params.get("date");
+  const [bundle, setBundle] = useState<GameBundle | null>(initial ?? null);
   const [failed, setFailed] = useState(false);
 
   // A link with no id or date can never resolve, so that is DERIVED during
@@ -45,13 +60,30 @@ export function GameClient() {
   // react-hooks/set-state-in-effect flags.
   const usable = Boolean(id && date);
   const state: "loading" | "ready" | "error" =
-    !usable || failed ? "error" : bundle ? "ready" : "loading";
+    bundle ? "ready" : !usable || failed ? "error" : "loading";
+  /**
+   * The header is real but the box score has not arrived.
+   *
+   * `failed` ends it either way: a prerendered page whose bundle never lands
+   * must say so, not sit on "Loading the box score…" forever. The scoreline
+   * above it is still true and still worth reading, so the page stays.
+   */
+  const partial = bundle === initial && initial !== undefined && !failed;
+  const detailFailed = bundle === initial && initial !== undefined && failed;
 
   // Mirrors the last good bundle so the poll loop can read it without taking
   // `bundle` as a dependency — that would tear the loop down and rebuild it on
   // every refresh. Written only from the fetch callback: assigning during
   // render is what react-hooks/refs-during-render forbids.
   const bundleRef = useRef<GameBundle | null>(null);
+  /**
+   * A COMPLETED SEASON IS A STATIC FILE, NOT A FUNCTION CALL. Every game of
+   * the archive was baked by scripts/build-scoreboard-archive.mts and lives on
+   * R2, so opening one costs a CDN hit and nothing against the CBBD quota —
+   * which is what lets 5,900 game pages be free and indexable. Only a game in
+   * the season being played goes through /api/game.
+   */
+  const archived = Boolean(date) && isArchivedSeason(seasonOfDate(date!));
 
   useEffect(() => {
     if (!id || !date) return;
@@ -69,8 +101,8 @@ export function GameClient() {
       // every demo link points here anyway (see gameHref), and honoring a
       // hand-typed id would mean a CBBD call for a season that has no data.
       const res = await fetch(
-        IS_DEMO
-          ? DEMO_GAME_URL
+        archived
+          ? dataUrl(gameBundleUrl(seasonOfDate(date), Number(id)))
           : `/api/game?id=${encodeURIComponent(id)}&date=${encodeURIComponent(date)}`,
         { signal },
       );
@@ -119,6 +151,8 @@ export function GameClient() {
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
+    // `archived` is derived from `date`, which is already a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, date]);
 
   if (state === "loading") {
@@ -138,7 +172,7 @@ export function GameClient() {
 
   return (
     <>
-      <GameDetail b={bundle} />
+      <GameDetail b={bundle} partial={partial} detailFailed={detailFailed} />
       {isLive(bundle.game) && (
         <p className="sr-only" role="status">Live game; the page refreshes every minute.</p>
       )}
@@ -147,5 +181,5 @@ export function GameClient() {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-10 pb-20">{children}</div>;
+  return <div className="mx-auto max-w-[var(--page-narrow)] px-6 lg:px-10 pt-10 pb-20">{children}</div>;
 }

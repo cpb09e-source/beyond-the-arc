@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useUrlSearchParams } from "@/lib/use-url-search-params";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { confDisplay } from "@/lib/conf-display";
 import { isPowerConference } from "@/lib/conf-tiers";
 import { cn } from "@/lib/utils";
 import { Select } from "@/components/select";
-import { IS_DEMO } from "@/lib/flags";
+import { isArchivedDay, latestArchivedDay } from "@/lib/scoreboard-archive";
 import { DatePicker } from "./date-picker";
 import {
   EMPTY_SLATE, POLL_MS, dateLabel, fetchSlate, gameHref, isFinal, isLive, isRanked, lineLabel, recordLabel, slateIsSettled, tipLabel,
@@ -30,27 +31,73 @@ function todayEastern(): string {
   return ET_DATE.format(new Date());
 }
 
-export function ScoreboardClient() {
-  // ?date=YYYY-MM-DD makes a given day linkable — "here's the night Duke lost"
-  // — and is what the stepper writes as you move through days.
-  const search = useSearchParams();
+/**
+ * The day's slate — live from the function, or a prerendered day of a
+ * completed season.
+ *
+ * TWO CALLERS, ONE COMPONENT. /scoreboard fetches (it has to: a static export
+ * cannot know tonight's scores at build time). /scoreboard/<date>/ is a real
+ * page per day of the archive and hands its slate straight in, so the scores
+ * are in the HTML a crawler reads. Everything below this line is the same
+ * either way.
+ *
+ * NAVIGATION IS BY LINK, NOT BY QUERY. Every archived day has its own URL, so
+ * the week strip and the date picker move between pages rather than rewriting
+ * a query string — which is what makes the whole season indexable. A date
+ * with no archived slate (tonight, or a day nobody played) falls back to
+ * /scoreboard?date=, where the function answers.
+ */
+export function ScoreboardClient({
+  initial,
+  seasonNote,
+}: {
+  /**
+   * A slate rendered into the HTML on the server.
+   *
+   * `fixed` says whether it is the final answer. An archived day page is
+   * fixed — that night is over and nothing can change it, so the client never
+   * fetches. /scoreboard itself is NOT fixed: it prerenders the last night
+   * the archive holds so a crawler and a first paint both get real scores,
+   * and then asks the function whether anything is happening now.
+   */
+  initial?: { date: string; slate: Slate; fixed: boolean };
+  /** e.g. "2025-26 season" — says which season an archived day belongs to. */
+  seasonNote?: string;
+} = {}) {
+  // ?date=YYYY-MM-DD still works on /scoreboard itself, for a day the archive
+  // does not hold. Archived days are their own pages and never come through here.
+  const search = useUrlSearchParams();
   const router = useRouter();
   const fromUrl = search.get("date");
-  const pinned = fromUrl && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl) ? fromUrl : null;
-  const setPinned = (d: string | null) => {
-    router.replace(d ? `/scoreboard?date=${d}` : "/scoreboard", { scroll: false });
+  const pinned = (initial?.fixed ? initial.date : null)
+    ?? (fromUrl && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl) ? fromUrl : null);
+  /**
+   * Go to a day. An archived day is a page of its own; anything else is the
+   * live route with a query, which is the only way to ask the function for a
+   * specific date.
+   */
+  const goToDay = (d: string | null) => {
+    if (!d) { router.push("/scoreboard"); return; }
+    if (isArchivedDay(d)) { router.push(`/scoreboard/${d}/`); return; }
+    router.push(`/scoreboard?date=${d}`);
   };
+  const setPinned = goToDay;
   // The result carries the request it answers. Loading is then DERIVED from
   // "what we hold doesn't match what we're asking for", rather than a second
   // state set synchronously inside the effect — which would trip
   // react-hooks/set-state-in-effect and cause a cascading render on every day
   // change.
-  const [result, setResult] = useState<{ key: string; slate: Slate } | null>(null);
+  const [result, setResult] = useState<{ key: string; slate: Slate } | null>(
+    initial ? { key: initial.date, slate: initial.slate } : null,
+  );
   const key = pinned ?? "latest";
-  const loading = result?.key !== key;
-  const slate = result?.key === key ? result.slate : EMPTY_SLATE;
+  const loading = !initial && result?.key !== key;
+  const slate = result?.key === key ? result.slate : initial?.slate ?? EMPTY_SLATE;
 
   useEffect(() => {
+    // A fixed day is complete and can never change; asking again would spend
+    // a request to be told the same thing.
+    if (initial?.fixed) return;
     let canceled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const ctrl = new AbortController();
@@ -64,17 +111,16 @@ export function ScoreboardClient() {
     };
     void tick();
     return () => { canceled = true; ctrl.abort(); if (timer) clearTimeout(timer); };
-  }, [pinned]);
+  }, [pinned, initial]);
 
   // Falls back to today so the stepper ALWAYS renders. Without this an empty
   // slate left `shown` null, the stepper was hidden, and the offseason page had
   // no way to reach a day that actually has games — a dead end.
   //
-  // In demo mode there is exactly ONE baked day, so the heading is pinned to it
-  // and the day controls are hidden below. Left in, they would relabel the same
-  // 128 games with whatever date you clicked, which is a worse answer than not
-  // offering the control.
-  const shown = IS_DEMO ? (slate.date ?? "2026-02-07") : (pinned ?? slate.date ?? todayEastern());
+  // Out of season the function has nothing to serve, so the fallback anchor is
+  // the last day the archive holds rather than a today with no games — which
+  // would open the page on an empty slate eight months of the year.
+  const shown = pinned ?? slate.date ?? latestArchivedDay() ?? todayEastern();
 
   // Conference filter. Every conference with a game today, plus the
   // non-conference bucket; "" means show everything.
@@ -158,15 +204,18 @@ export function ScoreboardClient() {
   const liveCount = slate.games.filter(isLive).length;
 
   return (
-    <div className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-6 pb-20">
+    <div className="mx-auto max-w-[var(--page-narrow)] px-6 lg:px-10 pt-6 pb-20">
       <div className="flex flex-wrap items-end justify-between gap-4 mb-5">
         <div>
           <div className="text-[0.6rem] uppercase tracking-[0.18em] text-coral font-bold mb-1.5 flex items-center gap-2">
             <span className="h-px w-6 bg-coral" />
-            {IS_DEMO
-              ? "Sample slate"
-              : slate.source === "live" && liveCount > 0
+            {/* Anything actually happening outranks the note: a page that
+                says "Latest results" over eleven live games is wrong about the
+                only thing it exists to report. */}
+            {slate.source === "live" && liveCount > 0
               ? `${liveCount} game${liveCount === 1 ? "" : "s"} in progress`
+              : seasonNote
+              ? seasonNote
               : slate.source === "upcoming"
               ? "Next up"
               : "Scoreboard"}
@@ -197,7 +246,7 @@ export function ScoreboardClient() {
             the platform's own calendar, keyboard entry, and localization for
             free, and on a phone it opens the OS picker — all things a
             hand-rolled calendar would have to reimplement worse. */}
-        {!IS_DEMO && (
+        {(
           <div className="flex items-center gap-2">
             <span className="text-[0.6rem] uppercase tracking-[0.12em] font-semibold text-ink-muted">Jump to</span>
             <DatePicker value={shown} onChange={setPinned} />
@@ -208,7 +257,7 @@ export function ScoreboardClient() {
       {/* Week strip: the shown day centered, three either side, arrows stepping a
           week at a time. Gives the whole week at a glance and makes "the night
           before" one tap instead of a round trip through the picker. */}
-      {!IS_DEMO && <WeekStrip shown={shown} onPick={setPinned} />}
+      <WeekStrip shown={shown} onPick={setPinned} />
 
       {confOptions.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-6">

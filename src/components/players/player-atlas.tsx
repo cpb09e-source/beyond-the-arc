@@ -327,7 +327,7 @@ export function PlayerAtlas({
   if (vitals.length === 0) vitals.push("—");
 
   return (
-    <section className="mx-auto max-w-[var(--page-max)] px-0 sm:px-6 lg:px-10 pt-5 sm:pt-8 pb-5 sm:pb-6">
+    <section className="mx-auto max-w-[var(--page-narrow)] px-0 sm:px-6 lg:px-10 pt-5 sm:pt-8 pb-5 sm:pb-6">
       <div className="bg-[color-mix(in_oklab,var(--card)_55%,var(--paper-deep))] border-y sm:border border-ink/10 sm:rounded-xl shadow-md overflow-hidden ring-0 sm:ring-1 ring-ink/5 px-5 sm:px-7 lg:px-9 py-6 sm:py-7">
         {/* Masthead — the whole card now. It carried a 2px rule along its
             bottom edge for as long as there was something under it: six stat

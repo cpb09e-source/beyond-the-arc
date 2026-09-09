@@ -1,0 +1,408 @@
+#!/usr/bin/env npx tsx
+/**
+ * build-scoreboard-archive.mts — bake a whole season of scoreboards and game
+ * pages from the local CBBD archive, with no API calls.
+ *
+ *   npx tsx scripts/build-scoreboard-archive.mts                 # 2026, everything
+ *   npx tsx scripts/build-scoreboard-archive.mts --limit 3       # first 3 days + their games
+ *   npx tsx scripts/build-scoreboard-archive.mts --slates-only
+ *   npx tsx scripts/build-scoreboard-archive.mts --games-only
+ *   npx tsx scripts/build-scoreboard-archive.mts --fetch-lines   # one-time: cache betting lines
+ *
+ * Writes:
+ *   public/data/scoreboard/<season>/<YYYY-MM-DD>.json   one Slate per day (the
+ *                                                        shape /api/scoreboard returns)
+ *   public/data/scoreboard/<season>/index.json          every game, compact — what the
+ *                                                        static day and game pages are
+ *                                                        generated from at build time
+ *   public/data/games/<season>/<id>.json                one GameBundle per game (the
+ *                                                        shape /api/game returns)
+ *   src/data/scoreboard-archive.json                    the archived seasons and their
+ *                                                        days — tiny, committed, what the
+ *                                                        client reads to know which dates
+ *                                                        are static files
+ *
+ * THE FUNCTIONS ARE THE BUILDERS. Rather than reimplementing how a slate or a
+ * game bundle is shaped, this imports the two Netlify handlers and calls them
+ * exactly as the browser would — but with `fetch` replaced by a shim that
+ * answers every api.collegebasketballdata.com request from the files under
+ * data/cbbd/<season>/. The archive holds the full schedule, both box scores
+ * and every day's play-by-play, so nothing is missing and nothing is spent
+ * against the quota. Same trick scripts/build-demo-slate.mjs used, minus the
+ * network.
+ *
+ * WHAT THE SHIM HAS TO GET RIGHT is the handful of query shapes the handlers
+ * use (see the switch in `answer`). A path it does not recognise throws rather
+ * than returning [] — an unknown query silently answered empty would bake a
+ * season of pages with a panel quietly missing.
+ *
+ * Lines are the one thing the archive does not carry. `--fetch-lines` pulls
+ * the season's closing lines from CBBD once (a dozen calls, windowed to stay
+ * under the 3,000-row cap) into data/cbbd/<season>/lines-full.json.gz, and
+ * every later run reads that file.
+ */
+import fs from "node:fs";
+import path from "node:path";
+import zlib from "node:zlib";
+import { setDefaultResultOrder } from "node:dns";
+
+setDefaultResultOrder("ipv4first");
+
+const API = "https://api.collegebasketballdata.com";
+const root = process.cwd();
+const argv = process.argv.slice(2);
+const flag = (name: string) => argv.includes(name);
+const opt = (name: string) => { const i = argv.indexOf(name); return i > -1 ? argv[i + 1] : undefined; };
+
+const SEASON = Number(opt("--season") ?? 2026);
+const LIMIT = Number(opt("--limit") ?? 0);
+const SLATES_ONLY = flag("--slates-only");
+const GAMES_ONLY = flag("--games-only");
+const FETCH_LINES = flag("--fetch-lines");
+
+const archiveDir = (season: number) => path.join(root, "data", "cbbd", String(season));
+const outSlates = path.join(root, "public", "data", "scoreboard", String(SEASON));
+const outGames = path.join(root, "public", "data", "games", String(SEASON));
+const committedIndex = path.join(root, "src", "data", "scoreboard-archive.json");
+
+/* ------------------------------ archive loading ---------------------------- */
+
+type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+function gz<T = Row[]>(file: string): T {
+  return JSON.parse(zlib.gunzipSync(fs.readFileSync(file)).toString("utf8")) as T;
+}
+function exists(file: string): boolean {
+  try { return fs.statSync(file).isFile(); } catch { return false; }
+}
+
+/** The calendar date a game belongs to, US Eastern — same rule as the functions. */
+const ET_DATE = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+});
+function easternDate(iso: string): string | null {
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? ET_DATE.format(new Date(t)) : null;
+}
+
+/** All schedule rows for a season, deduped by id, sorted by start. */
+const gamesCache = new Map<number, Row[]>();
+function seasonGames(season: number): Row[] {
+  const hit = gamesCache.get(season);
+  if (hit) return hit;
+  const dir = archiveDir(season);
+  const out: Row[] = [];
+  const seen = new Set<number>();
+  if (fs.existsSync(dir)) {
+    for (const f of fs.readdirSync(dir).filter((x) => /^games-\d{8}-\d{8}\.json\.gz$/.test(x)).sort()) {
+      for (const r of gz(path.join(dir, f))) {
+        if (typeof r.id !== "number" || seen.has(r.id)) continue;
+        seen.add(r.id);
+        out.push(r);
+      }
+    }
+  }
+  out.sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)));
+  gamesCache.set(season, out);
+  return out;
+}
+
+const rankCache = new Map<number, Row[]>();
+function rankings(season: number): Row[] {
+  const hit = rankCache.get(season);
+  if (hit) return hit;
+  const f = path.join(archiveDir(season), "rankings.json.gz");
+  const rows = exists(f) ? gz(f) : [];
+  rankCache.set(season, rows);
+  return rows;
+}
+
+/** Team box rows and player box rows, indexed by team. Loaded once per season. */
+type BoxIndex = { byTeam: Map<string, Row[]> };
+const boxTeamCache = new Map<number, BoxIndex>();
+const boxPlayerCache = new Map<number, BoxIndex>();
+function indexByTeam(rows: Row[]): BoxIndex {
+  const byTeam = new Map<string, Row[]>();
+  for (const r of rows) {
+    const t = r.team;
+    if (typeof t !== "string") continue;
+    let arr = byTeam.get(t);
+    if (!arr) { arr = []; byTeam.set(t, arr); }
+    arr.push(r);
+  }
+  return { byTeam };
+}
+function boxTeams(season: number): BoxIndex {
+  let hit = boxTeamCache.get(season);
+  if (!hit) {
+    const f = path.join(archiveDir(season), "box-teams-full.json.gz");
+    hit = indexByTeam(exists(f) ? gz(f) : []);
+    boxTeamCache.set(season, hit);
+  }
+  return hit;
+}
+function boxPlayers(season: number): BoxIndex {
+  let hit = boxPlayerCache.get(season);
+  if (!hit) {
+    const f = path.join(archiveDir(season), "box-players-full.json.gz");
+    hit = indexByTeam(exists(f) ? gz(f) : []);
+    boxPlayerCache.set(season, hit);
+  }
+  return hit;
+}
+
+/**
+ * Play-by-play, one file per EASTERN game date, grouped by game on first read.
+ * A game's plays are looked up by its own date, then a day either side —
+ * the files are cut by the date CBBD stamps on the game, which is Eastern,
+ * and this guards the one or two a year that land on the wrong side of it.
+ */
+const playsCache = new Map<string, Map<number, Row[]>>();
+function playsFile(season: number, date: string): Map<number, Row[]> {
+  const hit = playsCache.get(date);
+  if (hit) return hit;
+  const f = path.join(archiveDir(season), `plays-${date.replace(/-/g, "")}.json.gz`);
+  const byGame = new Map<number, Row[]>();
+  if (exists(f)) {
+    for (const p of gz(f)) {
+      const id = p.gameId;
+      if (typeof id !== "number") continue;
+      let arr = byGame.get(id);
+      if (!arr) { arr = []; byGame.set(id, arr); }
+      arr.push(p);
+    }
+  }
+  playsCache.set(date, byGame);
+  // Keep memory bounded: a season is 150 files of ~60k rows.
+  if (playsCache.size > 4) {
+    const oldest = playsCache.keys().next().value;
+    if (oldest && oldest !== date) playsCache.delete(oldest);
+  }
+  return byGame;
+}
+function shiftDay(d: string, n: number): string {
+  return new Date(Date.parse(`${d}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+}
+const gameDate = new Map<number, string>(); // id → eastern date, filled from the schedule
+function playsFor(season: number, id: number): Row[] {
+  const d = gameDate.get(id);
+  if (!d) return [];
+  for (const cand of [d, shiftDay(d, -1), shiftDay(d, 1)]) {
+    const rows = playsFile(season, cand).get(id);
+    if (rows && rows.length) return rows;
+  }
+  return [];
+}
+
+const linesCache = new Map<number, Row[]>();
+function lines(season: number): Row[] {
+  const hit = linesCache.get(season);
+  if (hit) return hit;
+  const f = path.join(archiveDir(season), "lines-full.json.gz");
+  const rows = exists(f) ? gz(f) : [];
+  linesCache.set(season, rows);
+  return rows;
+}
+
+/* --------------------------------- the shim -------------------------------- */
+
+const inRange = (iso: unknown, from: string | null, to: string | null) => {
+  if (typeof iso !== "string") return false;
+  const d = iso.slice(0, 10);
+  return (!from || d >= from) && (!to || d <= to);
+};
+
+function answer(url: URL): Row[] {
+  const p = url.pathname;
+  const q = url.searchParams;
+  const season = Number(q.get("season"));
+  const from = q.get("startDateRange"), to = q.get("endDateRange");
+  const team = q.get("team"), conference = q.get("conference");
+
+  if (p === "/scoreboard") return []; // never live in the archive
+  if (p === "/games") {
+    let rows = seasonGames(season);
+    if (team) rows = rows.filter((r) => r.homeTeam === team || r.awayTeam === team);
+    if (conference) rows = rows.filter((r) => r.homeConference === conference || r.awayConference === conference);
+    if (from || to) rows = rows.filter((r) => inRange(r.startDate, from, to));
+    return rows;
+  }
+  if (p === "/rankings") return rankings(season);
+  if (p === "/games/teams" || p === "/games/players") {
+    const idx = p === "/games/teams" ? boxTeams(season) : boxPlayers(season);
+    let rows = team ? (idx.byTeam.get(team) ?? []) : [];
+    if (!team) throw new Error(`shim: ${p} without team is not a query the archive answers`);
+    if (from || to) rows = rows.filter((r) => inRange(r.startDate, from, to));
+    return rows;
+  }
+  const playsMatch = p.match(/^\/plays\/game\/(\d+)$/);
+  if (playsMatch) return playsFor(SEASON, Number(playsMatch[1]));
+  if (p === "/games/media") return []; // not archived; broadcasts render as absent
+  if (p === "/lines") return lines(season).filter((r) => inRange(r.startDate, from, to));
+  throw new Error(`shim: no local answer for ${p}?${q}`);
+}
+
+const realFetch = globalThis.fetch;
+globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+  if (url.origin !== API) return realFetch(input, init);
+  const rows = answer(url);
+  return new Response(JSON.stringify(rows), { status: 200, headers: { "content-type": "application/json" } });
+}) as typeof fetch;
+
+process.env.CBBD_API_KEY ??= "offline";
+delete process.env.NETLIFY_DEV;
+
+/* ------------------------------- lines cache ------------------------------- */
+
+async function fetchLines(season: number): Promise<void> {
+  const key = fs.readFileSync(path.join(root, ".env.local"), "utf8").match(/^CBBD_API_KEY=(.+)$/m)?.[1]?.trim();
+  if (!key) throw new Error("CBBD_API_KEY not found in .env.local");
+  const games = seasonGames(season);
+  const first = String(games[0]!.startDate).slice(0, 10);
+  const last = String(games[games.length - 1]!.startDate).slice(0, 10);
+  const out: Row[] = [];
+  let cursor = first;
+  while (cursor <= last) {
+    const to = shiftDay(cursor, 13);
+    const res = await realFetch(`${API}/lines?season=${season}&startDateRange=${cursor}&endDateRange=${to}`, {
+      headers: { Authorization: `Bearer ${key}`, accept: "application/json" },
+    });
+    if (!res.ok) throw new Error(`CBBD ${res.status} on /lines ${cursor}..${to}`);
+    const rows = (await res.json()) as Row[];
+    if (rows.length >= 3000) throw new Error(`/lines ${cursor}..${to} hit the 3,000-row cap — narrow the window`);
+    console.log(`  lines ${cursor}..${to}: ${rows.length}`);
+    out.push(...rows);
+    cursor = shiftDay(to, 1);
+  }
+  const f = path.join(archiveDir(season), "lines-full.json.gz");
+  fs.writeFileSync(f, zlib.gzipSync(JSON.stringify(out)));
+  linesCache.delete(season);
+  console.log(`wrote ${f}: ${out.length} rows`);
+}
+
+/* ---------------------------------- build ---------------------------------- */
+
+async function call(handler: (req: Request, ctx: unknown) => Promise<Response>, url: string) {
+  const res = await handler(new Request(url), {});
+  const text = await res.text();
+  if (!res.ok) throw new Error(`${url} → HTTP ${res.status}`);
+  const json = JSON.parse(text);
+  if (json?.error) throw new Error(`${url} → ${json.error}`);
+  return { json, text };
+}
+
+async function main() {
+  const t0 = Date.now();
+  if (FETCH_LINES) await fetchLines(SEASON);
+
+  const games = seasonGames(SEASON);
+  if (games.length === 0) throw new Error(`no schedule files under data/cbbd/${SEASON}`);
+  for (const r of games) {
+    const d = easternDate(String(r.startDate));
+    if (d) gameDate.set(r.id, d);
+  }
+  const played = games.filter((r) => r.status === "final" && typeof r.homePoints === "number");
+  const daySet = new Set<string>();
+  for (const r of played) daySet.add(gameDate.get(r.id)!);
+  let days = [...daySet].sort();
+  if (LIMIT) days = days.slice(0, LIMIT);
+  console.log(`season ${SEASON}: ${games.length} scheduled, ${played.length} played, ${daySet.size} days${LIMIT ? ` (limited to ${days.length})` : ""}`);
+  console.log(`lines: ${lines(SEASON).length ? "cached" : "NONE — run with --fetch-lines once to add betting lines"}`);
+
+  const { default: scoreboard } = await import("../netlify/functions/scoreboard.mts");
+  const { default: game } = await import("../netlify/functions/game.mts");
+
+  fs.mkdirSync(outSlates, { recursive: true });
+  fs.mkdirSync(outGames, { recursive: true });
+
+  /* ---- slates ---- */
+  type IndexGame = {
+    id: number; date: string; start: string; status: string;
+    venue: string | null; city: string | null; state: string | null; attendance: number | null;
+    neutral: boolean; confGame: boolean; excitement: number | null;
+    home: IndexSide; away: IndexSide;
+    line: { spread: number | null; overUnder: number | null; provider: string } | null;
+  };
+  type IndexSide = {
+    team: string; conf: string | null; pts: number | null; periods: number[]; winner: boolean | null;
+    rank: number | null; seed: number | null; rec: [number, number] | null; elo: [number, number] | null;
+  };
+  const index: IndexGame[] = [];
+  const dayCounts: Array<{ date: string; games: number }> = [];
+  let slateBytes = 0;
+  if (!GAMES_ONLY) {
+    for (const d of days) {
+      const { json } = await call(scoreboard, `http://x/api/scoreboard?date=${d}`);
+      if (json.date !== d) throw new Error(`slate for ${d} came back dated ${json.date}`);
+      /**
+       * A FINISHED DAY CONTAINS ONLY FINISHED GAMES. CBBD keeps cancelled and
+       * postponed rows in the schedule with 0-0 scores, and the live path
+       * cannot drop them — a 0-0 at 7pm is a game about to tip. On a day that
+       * is over it is a game that never happened, and printing "0 - 0 Final"
+       * beside fifty real results is the scoreboard being wrong about the only
+       * thing it does. 15 rows across 2025-26.
+       */
+      json.games = json.games.filter((g: Row) => g.status === "final" && g.home?.points !== null && g.away?.points !== null);
+      if (!json.games.length) throw new Error(`slate for ${d} is empty`);
+      const text = JSON.stringify(json);
+      fs.writeFileSync(path.join(outSlates, `${d}.json`), text);
+      slateBytes += text.length;
+      dayCounts.push({ date: d, games: json.games.length });
+      const rawById = new Map<number, Row>(games.map((r) => [r.id, r]));
+      for (const g of json.games) {
+        const raw = rawById.get(g.id) ?? {};
+        const side = (s: Row, p: "home" | "away"): IndexSide => ({
+          team: s.team, conf: s.conference ?? null, pts: s.points ?? null, periods: s.periods ?? [],
+          winner: s.winner ?? null, rank: s.rank ?? null, seed: s.seed ?? null,
+          rec: s.record ? [s.record.w, s.record.l] : null,
+          elo: typeof raw[`${p}TeamEloStart`] === "number" && typeof raw[`${p}TeamEloEnd`] === "number"
+            ? [raw[`${p}TeamEloStart`], raw[`${p}TeamEloEnd`]] : null,
+        });
+        index.push({
+          id: g.id, date: d, start: g.startDate, status: g.status,
+          venue: g.venue ?? null, city: raw.city ?? null, state: raw.state ?? null,
+          attendance: typeof raw.attendance === "number" ? raw.attendance : null,
+          neutral: g.neutralSite === true, confGame: g.conferenceGame === true,
+          excitement: typeof raw.excitement === "number" ? raw.excitement : null,
+          home: side(g.home, "home"), away: side(g.away, "away"),
+          line: g.line ?? null,
+        });
+      }
+      process.stdout.write(`\r  slates ${dayCounts.length}/${days.length}  ${d}  ${json.games.length} games   `);
+    }
+    process.stdout.write("\n");
+    index.sort((a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start) || a.id - b.id);
+    fs.writeFileSync(path.join(outSlates, "index.json"), JSON.stringify({ season: SEASON, days: dayCounts, games: index }));
+    console.log(`  ${dayCounts.length} slates, ${(slateBytes / 1024).toFixed(0)} KB; index ${index.length} games`);
+
+    // The committed index: seasons and their days, nothing else.
+    const existing = exists(committedIndex) ? JSON.parse(fs.readFileSync(committedIndex, "utf8")) : {};
+    existing[String(SEASON)] = { first: days[0], last: days[days.length - 1], days: dayCounts.map((x) => x.date) };
+    fs.writeFileSync(committedIndex, JSON.stringify(existing));
+    console.log(`  wrote ${path.relative(root, committedIndex)}`);
+  }
+
+  /* ---- games ---- */
+  if (!SLATES_ONLY) {
+    const wanted = played.filter((r) => days.includes(gameDate.get(r.id)!));
+    let n = 0, bytes = 0, noPlays = 0, noBox = 0;
+    for (const r of wanted) {
+      const d = gameDate.get(r.id)!;
+      const { json, text } = await call(game, `http://x/api/game?id=${r.id}&date=${d}`);
+      if (json.game?.id !== r.id) throw new Error(`game ${r.id} came back as ${json.game?.id}`);
+      if (!json.plays?.length) noPlays++;
+      if (!json.teamStats?.home) noBox++;
+      fs.writeFileSync(path.join(outGames, `${r.id}.json`), text);
+      bytes += text.length;
+      n++;
+      if (n % 50 === 0 || n === wanted.length) {
+        process.stdout.write(`\r  games ${n}/${wanted.length}  ${(bytes / 1048576).toFixed(0)} MB  no-plays ${noPlays}  no-box ${noBox}   `);
+      }
+    }
+    process.stdout.write("\n");
+  }
+  console.log(`done in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });

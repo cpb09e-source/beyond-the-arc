@@ -108,6 +108,13 @@ gated-data/
 # in one command: npx tsx scripts/build-team-season-games.mts
 /public/data/team-season-games/
 
+# The scoreboard archive — one slate per day, one bundle per game, per season.
+# ~6,000 files and ~600 MB a season, rebuilt in one command and served from
+# R2:  npx tsx scripts/build-scoreboard-archive.mts
+# The small committed index it also writes lives in src/data/.
+/public/data/scoreboard/
+/public/data/games/
+
 # The live season's team pages as data — one ~137 KB file per team, rewritten
 # by the nightly job and served from R2. Regenerable in one command:
 #   npx tsx scripts/build-live-team-pages.mts

@@ -50,6 +50,10 @@ export const R2_MIRRORED_DIRS = [
   // file-count problem like the rest of this list, a git-history one.
   "data/game-index",
   "data/team-game-index",
+  // Added 2026-09-08 with the scoreboard archive: a slate per day and a game
+  // bundle per game for every completed season. ~6,000 files a season.
+  "data/scoreboard",
+  "data/games",
   // Added 2026-09-01. One ~9 KB file per team-season with the percentiles
   // already ranked, so a team page's Game Log stops downloading the season's
   // whole 1.6 MB corpus to draw thirty rows. 4,631 files.

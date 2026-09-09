@@ -7,7 +7,11 @@
  * parse-query.mts inlines its stat list). Keep the two in step.
  */
 
-import { DEMO_GAME, DEMO_SLATE_URL, IS_DEMO } from "./flags";
+import { dataUrl } from "./data-url";
+import { IS_DEMO } from "./flags";
+import {
+  gamePagePath, isArchivedDay, isArchivedSeason, latestArchivedDay, seasonOfDate, slateUrl,
+} from "./scoreboard-archive";
 
 export type ScoreTeam = {
   team: string;
@@ -55,8 +59,34 @@ export type Slate = {
 
 export const EMPTY_SLATE: Slate = { source: "recent", date: null, games: [], fetchedAt: "" };
 
-/** The in-flight (then resolved) demo slate, shared by every caller. */
-let demoSlate: Promise<Slate> | null = null;
+/**
+ * In-flight archived slates, by date, shared by every caller.
+ *
+ * The ticker and the scoreboard page both want the same file and on
+ * /scoreboard they mount together — without the shared promise that is two
+ * requests for identical bytes on first paint. Holding the PROMISE rather than
+ * the result also collapses the two calls that race on mount into one.
+ */
+const archivedSlates = new Map<string, Promise<Slate>>();
+
+/**
+ * One archived day, as a static file. Never passed an abort signal: one
+ * component unmounting must not cancel a fetch the other is still waiting on.
+ */
+function fetchArchivedSlate(date: string): Promise<Slate> {
+  let p = archivedSlates.get(date);
+  if (!p) {
+    p = fetch(dataUrl(slateUrl(date)))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: Slate | null) => (Array.isArray(j?.games) ? j : EMPTY_SLATE))
+      .catch(() => {
+        archivedSlates.delete(date); // let a later mount retry a network failure
+        return EMPTY_SLATE;
+      });
+    archivedSlates.set(date, p);
+  }
+  return p;
+}
 
 /**
  * DEV ONLY — rewind or wind forward the baked slate so the live and preseason
@@ -164,7 +194,8 @@ export function isFinal(g: ScoreGame): boolean {
 export function slateIsSettled(s: Slate): boolean {
   // A baked slate cannot change. Polling it would re-read the same static file
   // forever, on every page of the site.
-  if (IS_DEMO) return true;
+  // An archived day is finished by definition.
+  if (s.date && isArchivedDay(s.date)) return true;
   if (s.games.length === 0) return false;
   if (s.date && s.date > todayEastern()) return true;
   return s.games.every((g) => isFinal(g));
@@ -238,12 +269,16 @@ const ET_DAY = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
 });
 export function gameHref(g: ScoreGame): string {
-  // Demo mode has one baked box score, so every card opens it. Pointing the
-  // links at their real ids instead would give 127 of the 128 cards a page that
-  // can only fail — a dead end is worse than a sample.
-  if (IS_DEMO) return `/game?id=${DEMO_GAME.id}&date=${DEMO_GAME.date}`;
   const t = Date.parse(g.startDate);
   const date = Number.isFinite(t) ? ET_DAY.format(new Date(t)) : "";
+  // A completed season has a real page per game — /games/2026/214837-duke-vs-
+  // north-carolina/ — with the score in its HTML and its own title. That is
+  // the whole point of baking the archive, so link to it wherever it exists.
+  // A game in the season being played has no page of its own (a static export
+  // cannot enumerate what has not been scheduled) and goes to /game?id=.
+  if (date && isArchivedSeason(seasonOfDate(date))) {
+    return gamePagePath(seasonOfDate(date), g.id, g.away.team, g.home.team);
+  }
   return `/game?id=${g.id}${date ? `&date=${date}` : ""}`;
 }
 
@@ -267,29 +302,18 @@ export function dateLabel(d: string | null): string {
  * a broken one.
  */
 export async function fetchSlate(date?: string, signal?: AbortSignal): Promise<Slate> {
-  // DEMO MODE: one static asset, no function, no CBBD, no retry loop. The
-  // ticker is on every page of the site, so this is the difference between a
-  // browser-cached file and a serverless round trip per navigation. The `date`
-  // argument is ignored on purpose — there is exactly one baked day, and
-  // quietly returning it for any requested date is better than an empty page
-  // from the scoreboard's day stepper.
-  if (IS_DEMO) {
-    // Memoized across callers AND across navigations. The ticker and the
-    // scoreboard page both want this file, and on /scoreboard they mount
-    // together — without the shared promise that is two requests for identical
-    // bytes on first paint. Holding the promise rather than the result also
-    // collapses the two calls that race on mount into one.
-    //
-    // Deliberately NOT passed the abort signal: one component unmounting must
-    // not cancel a fetch the other is still waiting on.
-    demoSlate ??= fetch(DEMO_SLATE_URL)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: Slate | null) => (Array.isArray(j?.games) ? j : EMPTY_SLATE))
-      .catch(() => {
-        demoSlate = null; // let a later mount retry a genuine network failure
-        return EMPTY_SLATE;
-      });
-    return simulate(await demoSlate);
+  // A DAY THE ARCHIVE HOLDS IS A STATIC FILE. No function, no CBBD, no retry
+  // loop, no quota — a gzipped asset on the CDN that cannot go stale because
+  // nothing in a finished day can change. That covers every date the day
+  // stepper can reach outside the season being played.
+  if (date && isArchivedDay(date)) return simulate(await fetchArchivedSlate(date));
+
+  // No date, and no season being played: the ticker and the page open on the
+  // last day the archive holds rather than on an empty slate. This is what the
+  // baked demo file used to do, without a second copy of the data.
+  if (!date && IS_DEMO) {
+    const last = latestArchivedDay();
+    if (last) return simulate(await fetchArchivedSlate(last));
   }
 
   const qs = new URLSearchParams();

@@ -43,6 +43,22 @@
    */
   --page-max: max(88rem, min(80vw, 180rem));
 
+  /**
+   * The narrower measure, for pages that are read rather than scanned.
+   *
+   * --page-max is sized for the big tables: the explorers put twelve columns
+   * and a hundred rows on screen and genuinely want a 2560px monitor. A team
+   * page, a player page, a coach page, the Win Calculator and the scoreboard
+   * are not that shape — they are panels, cards and a scoreline, and at 80vw
+   * a three-column card grid stretches until the eye has to travel the whole
+   * desk to get from a label to its number.
+   *
+   * Same floor-and-ceiling shape as --page-max so it behaves identically on
+   * the way down: below 72rem it is the viewport, which is every phone and
+   * most tablets, so nothing about mobile changes.
+   */
+  --page-narrow: max(72rem, min(64vw, 110rem));
+
   /* Brand palette */
   --paper: #faf7f2;          /* warm off-white background */
   --paper-deep: #f1ece2;     /* one shade deeper for cards/dividers */

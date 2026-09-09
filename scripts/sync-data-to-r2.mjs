@@ -67,6 +67,10 @@ const ALL_DIRS = [
   // src/lib/data-url.ts for why it is on R2 anyway.
   "public/data/game-index",
   "public/data/team-game-index",
+  // The scoreboard archive — a slate per day and a bundle per game for every
+  // completed season. Built by scripts/build-scoreboard-archive.mts.
+  "public/data/scoreboard",
+  "public/data/games",
   // 4,745 small files — one per team-season. Count, not size.
   "public/data/team-season-games",
   // The live season, rewritten nightly. Frequency, not count or size.

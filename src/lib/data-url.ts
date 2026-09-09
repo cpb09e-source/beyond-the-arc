@@ -43,6 +43,11 @@ const R2_DIRS = [
   // Its team-side twin: twelve files, 1.7 MB each, same git-history
   // argument.
   "/data/team-game-index/",
+  // The scoreboard archive: one slate per day and one bundle per game of
+  // every completed season, plus the index the static pages are built from.
+  // ~6,000 files and ~600 MB a season — count AND size.
+  "/data/scoreboard/",
+  "/data/games/",
   // The per-team slice of that twin — one ~9 KB file per team-season, which a
   // team page's Game Log section reads instead of the whole 1.6 MB corpus.
   // Here for the ORIGINAL reason in this list: 365 teams x 13 seasons is 4,745
