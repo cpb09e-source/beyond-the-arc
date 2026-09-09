@@ -3,6 +3,7 @@ import path from "node:path";
 import { readAllTeams } from "@/lib/static-data";
 import { teamSlug } from "@/lib/team-slug";
 import { coachSlug } from "@/lib/coach-slug";
+import { buildCanonMap, canonicalTeamName } from "@/lib/team-name-match";
 
 /**
  * A game's team and coach links, resolved at BUILD time.
@@ -49,65 +50,6 @@ import { coachSlug } from "@/lib/coach-slug";
  * Do not add a value import of this module to anything under "use client".
  */
 
-/**
- * CBBD's spelling → ours, for the names no fold reaches.
- *
- * Verified one by one against the 2025-26 schedule and public/data/team-names.json
- * on 2026-09-09. Both sides are exact strings; do not "tidy" either.
- *
- * NOT LISTED, DELIBERATELY: Hartford, St. Francis NY, Savannah St., Centenary
- * and Winston Salem St. are in our team list but have left D-I, so they never
- * appear in a current schedule and need no alias.
- */
-const ALIAS: Record<string, string> = {
-  "UAlbany": "Albany",
-  "App State": "Appalachian St.",
-  "California Baptist": "Cal Baptist",
-  "UConn": "Connecticut",
-  "Florida International": "FIU",
-  "Grambling": "Grambling St.",
-  "UIC": "Illinois Chicago",
-  "IU Indianapolis": "IU Indy",
-  "Long Island University": "LIU",
-  "UL Monroe": "Louisiana Monroe",
-  "Loyola Maryland": "Loyola MD",
-  "McNeese": "McNeese St.",
-  "Miami": "Miami FL",
-  "Ole Miss": "Mississippi",
-  "Omaha": "Nebraska Omaha",
-  "Nicholls": "Nicholls St.",
-  "Pennsylvania": "Penn",
-  "Sam Houston": "Sam Houston St.",
-  "Seattle U": "Seattle",
-  "SE Louisiana": "Southeastern Louisiana",
-  "St. Thomas-Minnesota": "St. Thomas",
-  "UT Martin": "Tennessee Martin",
-  "Texas A&M-Corpus Christi": "Texas A&M Corpus Chris",
-  "Kansas City": "UMKC",
-  "South Carolina Upstate": "USC Upstate",
-  "St. Francis (PA)": "Saint Francis",
-};
-
-/**
- * Case, accents, punctuation, "University", and State → St.
- *
- * `\bstate\b` → `st` is the single highest-value rule: CBBD writes the word
- * out and we abbreviate it, across dozens of programs.
- */
-function fold(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/&/g, " and ")
-    .replace(/[.'’]/g, "")
-    .replace(/\buniversity\b|\buniv\b/g, " ")
-    .replace(/\bstate\b/g, "st")
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 type CoachSeason = { name: string; slug: string };
 type CoachHistory = Record<string, Record<string, CoachSeason>>;
 
@@ -116,9 +58,7 @@ let _canon: Promise<Map<string, string>> | null = null;
 function canonMap(): Promise<Map<string, string>> {
   return (_canon ??= (async () => {
     const all = await readAllTeams();
-    const m = new Map<string, string>();
-    for (const t of all) m.set(fold(t.name), t.name);
-    return m;
+    return buildCanonMap(all.map((t) => t.name));
   })());
 }
 
@@ -164,9 +104,7 @@ export type GameLinks = { home: SideLinks; away: SideLinks };
 
 /** Our canonical name for a CBBD spelling, or null if it is not a D-I program. */
 async function canonical(cbbdName: string): Promise<string | null> {
-  const aliased = ALIAS[cbbdName];
-  if (aliased) return aliased;
-  return (await canonMap()).get(fold(cbbdName)) ?? null;
+  return canonicalTeamName(await canonMap(), cbbdName);
 }
 
 async function sideLinks(cbbdName: string, season: number): Promise<SideLinks> {

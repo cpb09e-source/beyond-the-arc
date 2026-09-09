@@ -171,6 +171,19 @@ export function MatchupView({
             favorite gets 74% of the width, and the exact number is printed
             on the card either way. The ratings themselves are not repeated
             here; the ledger below shows them in the arithmetic. */}
+        {/* PHONES GET A SCORELINE INSTEAD OF THE SEAM — see MobileScoreline.
+            The cut only means something when the halves are side by side. */}
+        <MobileScoreline
+          a={a} b={b} season={pack.season} showA={showA} showB={showB}
+          winA={winA} colorA={colorA} colorB={colorB} fillA={fillA} fillB={fillB} site={p.site}
+        />
+        {/* WRAPPED, RATHER THAN max-sm:hidden ON THE SPLIT ITSELF. That is the
+            obvious move and it silently does nothing: `.matchup-split` sets
+            `display: grid` from globals.css OUTSIDE any @layer, and unlayered
+            CSS beats a layered Tailwind utility whatever the source order or
+            specificity. The seam kept drawing under the scoreline. A plain
+            wrapper carries the utility with nothing to lose to. */}
+        <div className="max-sm:hidden">
         <div
           className="matchup-split relative isolate"
           // In percent, not as a fraction of one: flex factors that sum to
@@ -193,9 +206,15 @@ export function MatchupView({
           <Half team={a} color={colorA} fill={fillA} season={pack.season} side="left" score={showA} win={winA} hosting={p.site === "home"} />
           <Half team={b} color={colorB} fill={fillB} season={pack.season} side="right" score={showB} win={1 - winA} hosting={p.site === "away"} seam />
         </div>
+        </div>
 
         <div className="px-4 sm:px-6 pt-4 pb-5">
-          <dl className="grid grid-cols-3 gap-2 sm:flex sm:gap-8">
+          {/* Three EQUAL columns gave the two short numbers the same width as
+              a sentence: "Houston by 1.7" wrapped to two lines inside its
+              third while Total sat in half an inch of empty column. The margin
+              takes the leftover instead and the other two take only what they
+              need, which is the shape the content actually has. */}
+          <dl className="grid grid-cols-[1fr_auto_auto] gap-x-5 gap-y-2 sm:flex sm:gap-8">
             <Stat label="Margin" value={`${favorite.b} by ${fmt1(Math.abs(p.margin))}`} />
             <Stat label="Pace" value={fmt1(p.pace)} />
             {/* THE TOTAL IS THE WEAKEST NUMBER ON THIS PAGE and is drawn to
@@ -222,7 +241,14 @@ export function MatchupView({
               a lot of the other color showing. Fast games are wider, not more
               upset-prone; the total's range says so while the curve keeps its
               shape. */}
-          <div className="mt-3">
+          {/* DESKTOP ONLY. The curve is the receipt for the split — the win
+              probability is the area under it either side of zero — and it
+              needs width to be that: at 390px the tick labels collide, the two
+              team names shrink into the corners, and what is left is a shape
+              with no readable scale. The number it justifies is printed twice
+              on the scoreline above, so a phone loses the working, not the
+              answer. Same reasoning as the counterfactual chips. */}
+          <div className="hidden sm:block mt-3">
             <MarginCurve margin={marginT} colorA={fillA} colorB={fillB} a={a.b} b={b.b} />
           </div>
 
@@ -231,24 +257,9 @@ export function MatchupView({
       </section>
 
       <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
-        {/* ── The arithmetic ──────────────────────────────────────────── */}
-        <Card
-          title="How the number is made"
-          note="Every step, so the projection can be argued with."
-          aside={
-            <Link
-              href="/matchup/method/"
-              className="shrink-0 whitespace-nowrap text-[0.6rem] uppercase tracking-[0.15em] font-semibold text-coral hover:underline"
-            >
-              How this works
-            </Link>
-          }
-        >
-          <Ledger p={p} pack={pack} />
-        </Card>
-
         {/* ── Availability ────────────────────────────────────────────── */}
         <Card
+          className="lg:order-2"
           title="Who's playing"
           note="Click a name to rule a player out."
           aside={
@@ -282,6 +293,30 @@ export function MatchupView({
               )}
             </div>
           )}
+        </Card>
+
+        {/* ── The arithmetic ──────────────────────────────────────────── */}
+        {/* SECOND ON A PHONE, FIRST ON A DESKTOP. Side by side the ledger reads
+            left-to-right as the argument and the roster as its input, so the
+            arithmetic leads. Stacked, that order buries the one thing a reader
+            can actually touch — ruling a player out — under a full column of
+            derivation they have to scroll past to reach it. The DOM keeps the
+            phone's order so the tab order matches what is on screen there, and
+            lg puts the columns back. Colin, 2026-09-09. */}
+        <Card
+          className="lg:order-1"
+          title="How the number is made"
+          note="Every step, so the projection can be argued with."
+          aside={
+            <Link
+              href="/matchup/method/"
+              className="shrink-0 whitespace-nowrap text-[0.6rem] uppercase tracking-[0.15em] font-semibold text-coral hover:underline"
+            >
+              How this works
+            </Link>
+          }
+        >
+          <Ledger p={p} pack={pack} />
         </Card>
       </div>
 
@@ -436,7 +471,14 @@ function Counterfactuals({ pack, p, handlers, colorA, colorB }: {
   });
 
   return (
-    <div className="mt-4 pt-3 border-t border-hairline/80">
+    // DESKTOP ONLY. These chips are a browsing device — six alternate
+    // projections you flick between to see what moves the line. On a phone
+    // they land between the headline number and the ledger as a block of
+    // wrapped buttons the reader has to get past, and every one of them is
+    // reachable anyway by using the site toggle or ruling a player out
+    // directly. Hidden, not shrunk: there is no small version of six chips
+    // that is worth the vertical space. Colin, 2026-09-09.
+    <div className="hidden lg:block mt-4 pt-3 border-t border-hairline/80">
       <div className="text-[0.6rem] uppercase tracking-[0.15em] font-semibold text-ink-muted mb-1.5">What would it take</div>
       <div className="flex flex-wrap gap-1.5">
         {chips.map((c) => {
@@ -649,15 +691,110 @@ function SiteControl({ site, a, onSite, disabled }: { site: Site; a: MatchupTeam
             disabled={disabled}
             title={name ? `${name} ${suffix}` : suffix}
             className={cn(
-              "flex min-w-0 items-baseline gap-1 rounded-md px-2.5 py-1.5 text-[0.65rem] uppercase font-semibold tracking-[0.12em] transition-colors",
+              // items-center, not baseline: the crest below sm has no baseline
+              // to sit on and hung low against the word beside it.
+              "flex min-w-0 items-center gap-1.5 rounded-md px-2 sm:px-2.5 py-1.5 text-[0.65rem] uppercase font-semibold tracking-[0.1em] sm:tracking-[0.12em] transition-colors",
               active ? "bg-paper text-ink shadow-sm" : "text-ink-soft hover:text-ink",
             )}
           >
-            {name && <span className="max-w-24 truncate">{name}</span>}
+            {/* ON A PHONE THE CREST STANDS IN FOR THE NAME. Three buttons plus
+                two suffixes do not fit beside a school name at 390px, and
+                truncation there produced "GEORGE MAS… HOME" — a label that is
+                neither a name nor readable. The logo says which team in 16px,
+                which is the one thing the truncated text could not do, and the
+                title attribute still spells it out. From sm the name returns,
+                where there is room for it. */}
+            {name && (
+              <>
+                <TeamLogo name={a.b} size={16} className="sm:hidden shrink-0" />
+                <span className="hidden sm:inline max-w-24 truncate">{name}</span>
+              </>
+            )}
             <span className="shrink-0">{suffix}</span>
           </button>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * The answer, on a phone: one scoreline, then the odds under it.
+ *
+ * WHY THE SEAM DOES NOT SURVIVE HERE. The cut carries its meaning by being
+ * horizontal — two halves side by side, the wider one likelier. Stacked into a
+ * single column it becomes a band across the middle, which says nothing about
+ * probability; the second team ends up mirrored so its logo and numbers read
+ * right-to-left; and the four figures land in opposite corners with about a
+ * third of the card empty. The device that carries the idea at desktop width
+ * is the thing breaking it at 390px, so below sm it is replaced rather than
+ * squeezed. Colin picked this shape from four mock-ups, 2026-09-09.
+ *
+ * "77 – 76" IS ONE FIGURE, the way a score is actually spoken, and the teams
+ * flank it in the order they are named. The bar underneath keeps the thing the
+ * seam was for — a width you can see — without needing the layout to carry it.
+ *
+ * THE WORD "PROJECTED" STAYS ABOVE THE NUMBERS. Set like a final score, a
+ * projection gets screenshotted as one; the label is what stops that, and it
+ * is why it leads rather than sitting underneath as a caption.
+ */
+function MobileScoreline({
+  a, b, season, showA, showB, winA, colorA, colorB, fillA, fillB, site,
+}: {
+  a: MatchupTeam; b: MatchupTeam; season: number;
+  showA: number; showB: number; winA: number;
+  colorA: string; colorB: string; fillA: string; fillB: string; site: Site;
+}) {
+  const pct = Math.round(winA * 100);
+  return (
+    <div className="sm:hidden px-4 pt-4 pb-1">
+      <div className="text-center text-[0.55rem] uppercase tracking-[0.15em] font-semibold text-ink-muted">Projected</div>
+
+      <div className="mt-2 flex items-center justify-center gap-3.5">
+        <span className="font-display tabular text-[2.9rem] font-bold leading-none tracking-tight text-ink">{showA}</span>
+        <span className="text-ink-muted text-xl font-light leading-none" aria-hidden>&ndash;</span>
+        <span className="font-display tabular text-[2.9rem] font-bold leading-none tracking-tight text-ink-soft">{showB}</span>
+      </div>
+
+      {/* The two identities, facing each other across the scoreline above —
+          the one thing the stacked seam lost. */}
+      <div className="mt-3.5 flex items-start justify-between gap-3">
+        <SideChip team={a} season={season} color={colorA} hosting={site === "home"} />
+        <SideChip team={b} season={season} color={colorB} hosting={site === "away"} align="right" />
+      </div>
+
+      <div className="mt-3.5">
+        <div className="h-2 rounded-full overflow-hidden flex" style={{ background: `color-mix(in srgb, ${fillB} 70%, transparent)` }}>
+          <i className="block h-full" style={{ width: `${winA * 100}%`, background: `color-mix(in srgb, ${fillA} 90%, transparent)` }} />
+        </div>
+        <div className="mt-1.5 flex items-center justify-between">
+          <span className="tabular text-[0.8rem] font-bold leading-none" style={{ color: colorA }}>{pct}%</span>
+          <span className="text-[0.55rem] uppercase tracking-[0.15em] font-semibold text-ink-muted">Win probability</span>
+          <span className="tabular text-[0.8rem] font-bold leading-none" style={{ color: colorB }}>{100 - pct}%</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** One team's crest, name and record beside the phone scoreline. */
+function SideChip({ team, season, color, hosting, align }: {
+  team: MatchupTeam; season: number; color: string; hosting: boolean; align?: "right";
+}) {
+  const right = align === "right";
+  return (
+    <div className={cn("flex items-center gap-2 min-w-0 flex-1", right && "flex-row-reverse")}>
+      <TeamLogo name={team.b} size={24} width={34} className="shrink-0" />
+      <div className={cn("min-w-0", right && "text-right")}>
+        <Link href={`/teams/${team.s}/${season}/`} className="block font-display font-bold text-[0.9rem] leading-tight text-ink hover:underline truncate">
+          <TeamName name={team.b} />
+        </Link>
+        <div className="text-[0.62rem] text-ink-muted tabular truncate">
+          {team.br != null && <span className="font-semibold" style={{ color }}>#{team.br}</span>}
+          {team.br != null && " · "}{team.w}&ndash;{team.l}
+          {hosting && <> · <span className="uppercase tracking-[0.1em] font-semibold text-ink-soft">home</span></>}
+        </div>
+      </div>
     </div>
   );
 }
@@ -781,15 +918,18 @@ function Stat({ label, value, note, muted, title }: {
         {label}
         {muted && <span aria-hidden className="ml-1 font-normal">*</span>}
       </dt>
-      <dd className={cn("mt-0.5 font-display tabular text-base sm:text-lg leading-tight", muted ? "font-semibold text-ink-muted" : "font-bold text-ink")}>{value}</dd>
+      {/* text-balance so a margin long enough to wrap ("Southeastern Louisiana
+          by 12.3") splits into two even lines rather than a full one and a
+          single trailing word. */}
+      <dd className={cn("mt-0.5 font-display tabular text-base sm:text-lg leading-tight text-balance", muted ? "font-semibold text-ink-muted" : "font-bold text-ink")}>{value}</dd>
       {note && <dd className="text-[0.65rem] text-ink-muted">{note}</dd>}
     </div>
   );
 }
 
-function Card({ title, note, aside, children }: { title: string; note?: string; aside?: React.ReactNode; children: React.ReactNode }) {
+function Card({ title, note, aside, children, className }: { title: string; note?: string; aside?: React.ReactNode; children: React.ReactNode; className?: string }) {
   return (
-    <section className="border border-hairline rounded-xl shadow-sm bg-paper-deep/25 p-4 sm:p-5">
+    <section className={cn("border border-hairline rounded-xl shadow-sm bg-paper-deep/25 p-4 sm:p-5", className)}>
       <header className="flex items-start justify-between gap-3 mb-3">
         <div>
           <h2 className="text-[0.7rem] uppercase tracking-[0.15em] font-bold leading-none" style={{ color: "var(--court-ink)" }}>{title}</h2>
@@ -899,7 +1039,12 @@ function Roster({ team, out, color, onToggle, disabled }: {
   return (
     <div>
       <div className="flex items-center gap-2 mb-1.5">
-        <span className="h-2 w-2 rounded-full" style={{ background: color }} aria-hidden />
+        {/* The crest, not a color dot. The dot was a legend key for the wash
+            behind each half of the card above — but the two rosters sit side
+            by side under their own headings, so nothing needed decoding, and a
+            green circle beside "George Mason" says less than the logo does in
+            the same 16px. */}
+        <TeamLogo name={team.b} size={16} className="shrink-0" />
         <span className="text-[0.65rem] uppercase tracking-[0.12em] font-semibold text-ink-soft truncate"><TeamName name={team.b} /></span>
         <span className="ml-auto text-[0.6rem] uppercase tracking-[0.12em] text-ink-muted">mpg</span>
       </div>

@@ -5,7 +5,7 @@ import { SiteLogo } from "@/components/site-logo";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
-  Search, ChevronDown, Table2, ListOrdered, Trophy, Swords,
+  Search, ChevronDown, Table2, ListOrdered, Trophy, Swords, ArrowLeftRight,
   type LucideIcon,
 } from "lucide-react";
 import { SearchDialog } from "@/components/search/search-dialog";
@@ -82,6 +82,13 @@ const SUBNAV: Record<string, ReadonlyArray<SubnavItem>> = {
       desc: "Rate and compare full player seasons" },
     { href: "/players/games", label: "Game Log Explorer", icon: ListOrdered,
       desc: "The best single games anyone has had" },
+    // Moved off the top row 2026-09-09. It is a page about players — who left,
+    // where they went — so it belongs behind the label that already says so,
+    // and the row gets a seventh word back. Note it does NOT live under
+    // /players/, which is why isCurrent has to consult this menu rather than
+    // matching on the path prefix alone.
+    { href: "/portal", label: "Transfer Portal", icon: ArrowLeftRight,
+      desc: "Who moved this offseason, and where they landed" },
   ],
 };
 
@@ -93,7 +100,6 @@ const NAV = [
   { href: "/players", label: "Players" },
   { href: "/coaches", label: "Coaches" },
   { href: "/calc", label: "Win Calc" },
-  { href: "/portal", label: "Transfer Portal" },
 ];
 
 // The mobile menu carries one extra entry. Pricing is a real page that the
@@ -122,7 +128,12 @@ function isCurrent(pathname: string, href: string): boolean {
   // a static export cannot enumerate every game id at build time. It is still
   // the scoreboard's territory, so it lights that tab.
   if (href === "/scoreboard" && pathname.startsWith("/game")) return true;
-  return pathname === href || pathname.startsWith(href + "/");
+  if (pathname === href || pathname.startsWith(href + "/")) return true;
+  // A menu's children do not have to live under its own path. /portal hangs
+  // off Players, so without this the row goes dark on the one page the reader
+  // navigated to from it — which reads as having left the site.
+  const kids = SUBNAV[href];
+  return kids?.some((k) => k.href !== href && (pathname === k.href || pathname.startsWith(k.href + "/"))) ?? false;
 }
 
 /**
@@ -340,9 +351,11 @@ export function SiteHeader() {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  // Nowrap plus a tighter tier at lg: seven labels on one
-                  // line need the room, and "Transfer Portal" breaking across
-                  // two lines in a nav bar reads as a layout accident.
+                  // Nowrap plus a tighter tier at lg. The row is five labels
+                  // since Transfer Portal moved into the Players menu, so the
+                  // width is no longer scarce — but a nav label wrapping to two
+                  // lines still reads as a layout accident, and "Scoreboard"
+                  // is long enough to do it in a narrow lg gutter.
                   "relative whitespace-nowrap rounded-md py-1.5 text-[0.7rem] uppercase font-medium transition-colors",
                   "px-2 tracking-[0.1em] xl:px-3 xl:tracking-[0.18em]",
                   active

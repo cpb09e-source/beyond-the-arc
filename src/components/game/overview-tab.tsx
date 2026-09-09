@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowUpDown, CircleDollarSign, Clock, Landmark, MapPin, Tv, Users } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpDown, ChevronDown, CircleDollarSign, Clock, Landmark, MapPin, Tv, Users } from "lucide-react";
 import { TeamLogo } from "@/components/team-logo";
 import { PlayerPhoto } from "@/components/player-photo";
 import { loadPhotoIndex, lookupId, type PhotoIndex } from "@/lib/player-photo-index";
+import { useTeamLinks } from "@/lib/team-link";
 import { readableInk } from "@/lib/team-colors";
 import { orebBaseline, FACTOR_WIN_RATE, seasonLabel } from "@/lib/league-averages";
 import { cn } from "@/lib/utils";
@@ -60,18 +62,66 @@ export function OverviewTab({ b, hc, ac, onOpenBox }: { b: GameBundle; hc: strin
 /* --------------------------------- shell --------------------------------- */
 
 function Panel({
-  title, note, children, className, flush,
+  title, note, children, className, flush, collapsible, defaultOpen = true,
 }: {
   title: string; note?: string; children: React.ReactNode; className?: string;
   /** Drop the body padding, for panels whose rows carry their own and need to
    *  run edge to edge — a tinted row inset by 16px reads as a chip. */
   flush?: boolean;
+  /**
+   * Give the panel a disclosure header. Built on <details>, not on state:
+   * it works before hydration, keyboard and screen readers get the open/closed
+   * relationship for free, and there is no flash of the wrong state on a page
+   * that server-renders.
+   */
+  collapsible?: boolean;
+  /** Only meaningful with `collapsible`. */
+  defaultOpen?: boolean;
 }) {
+  const head = (
+    <>
+      <h2 className="text-[0.6rem] uppercase tracking-[0.18em] font-bold text-ink">{title}</h2>
+      {note && <span className="text-[0.6rem] text-ink-muted ml-auto">{note}</span>}
+    </>
+  );
+
+  if (collapsible) {
+    return (
+      <details
+        open={defaultOpen}
+        className={cn("group rounded-xl border border-hairline bg-card overflow-hidden", className)}
+      >
+        <summary
+          className={cn(
+            // list-none plus the webkit rule kills the default disclosure
+            // triangle on both engines; the chevron on the right replaces it,
+            // where it lines up with the other panels' notes.
+            "px-4 py-2.5 bg-paper-deep/30 flex items-baseline gap-2 cursor-pointer select-none",
+            "list-none [&::-webkit-details-marker]:hidden",
+            // The rule under the header belongs to the OPEN state — a border
+            // beneath a closed panel draws a line to nothing.
+            "group-open:border-b group-open:border-hairline",
+            "hover:bg-paper-deep/50 transition-colors",
+          )}
+        >
+          {head}
+          <ChevronDown
+            className={cn(
+              "size-3.5 shrink-0 text-ink-muted transition-transform group-open:rotate-180 self-center",
+              !note && "ml-auto",
+            )}
+            aria-hidden
+          />
+        </summary>
+        <div className={cn(!flush && "p-4")}>{children}</div>
+      </details>
+    );
+  }
+
   return (
     <section className={cn("rounded-xl border border-hairline bg-card overflow-hidden flex flex-col", className)}>
       <div className="px-4 py-2.5 border-b border-hairline bg-paper-deep/30 flex items-baseline gap-2">
-        <h2 className="text-[0.6rem] uppercase tracking-[0.18em] font-bold text-ink">{title}</h2>
-        {note && <span className="text-[0.6rem] text-ink-muted ml-auto">{note}</span>}
+        {head}
       </div>
       <div className={cn("flex-1", !flush && "p-4")}>{children}</div>
     </section>
@@ -212,10 +262,11 @@ function LeaderRow({
         </p>
         <p className="text-[0.65rem] tabular text-ink-muted leading-tight">{c.detail(p)}</p>
       </div>
-      <span
-        className="text-2xl font-bold tabular leading-none shrink-0"
-        style={{ color: won ? readableInk(color) : "var(--ink-muted)" }}
-      >
+      {/* Ink for the category leader, muted for the other — the same pair the
+          scoreline and the box panels use. It was the team's color, which meant
+          six numbers in two hues down one short panel, each of them restating
+          what the tinted row and the crest beside it already say. */}
+      <span className={cn("text-2xl font-bold tabular leading-none shrink-0", won ? "text-ink" : "text-ink-muted")}>
         {c.pick(p)}
       </span>
     </div>
@@ -300,9 +351,19 @@ function TeamStatsPanel({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }
     { label: "Effective FG%", a: a.fourFactors.effectiveFieldGoalPct, h: h.fourFactors.effectiveFieldGoalPct, unit: "%" },
     // Rate stats, both denominated in field-goal attempts, which is what makes
     // them comparable between teams that played at different speeds.
-    { label: "3PAR", a: rate(a.threePointFieldGoals.attempted, a.fieldGoals.attempted),
+    //
+    // SPELLED OUT, like every other row here. "3PAR" and "FTAR" were the only
+    // acronyms in a list that otherwise reads "Points in the Paint" and
+    // "Fast-break Points", and they are the two rows a reader is least likely
+    // to already know.
+    //
+    // Both say ATTEMPT RATE, which is what the R in each acronym stands for
+    // and what the stat actually is: attempts over field-goal attempts, not a
+    // make rate. Naming them in parallel is also the point — they are the same
+    // measurement pointed at two different shots.
+    { label: "3-Point Attempt Rate", a: rate(a.threePointFieldGoals.attempted, a.fieldGoals.attempted),
       h: rate(h.threePointFieldGoals.attempted, h.fieldGoals.attempted), unit: "%" },
-    { label: "FTAR", a: a.fourFactors.freeThrowRate, h: h.fourFactors.freeThrowRate, unit: "%" },
+    { label: "Free Throw Attempt Rate", a: a.fourFactors.freeThrowRate, h: h.fourFactors.freeThrowRate, unit: "%" },
     { label: "Largest Lead", a: a.points.largestLead, h: h.points.largestLead },
   ];
   if (led) rows.push({ label: "Percent Led", a: led.away, h: led.home, unit: "%" });
@@ -557,7 +618,12 @@ function FourFactors({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
   const won = winner === "a" ? b.game.away.winner : winner === "h" ? b.game.home.winner : null;
 
   return (
-    <Panel title="Four factors" note="This game">
+    // CLOSED BY DEFAULT. The four factors are an argument about WHY a game went
+    // the way it did — worth having, but second to the standings sitting under
+    // them, which are what a reader checks against the result. Folding it also
+    // gives the standings the room to run their full length instead of through
+    // a scrolling window. One click gets it back.
+    <Panel title="Four factors" note="This game" collapsible defaultOpen={false}>
       <div className="divide-y divide-hairline/50">
         {factors.map((f) => <FactorRow key={f.key} f={f} b={b} hc={hc} ac={ac} />)}
       </div>
@@ -775,11 +841,19 @@ function Standings({
 }: { b: GameBundle; hc: string; ac: string; className?: string }) {
   const g = b.game;
   const confs = Object.keys(b.standings);
+  // ABOVE THE EARLY RETURN, because it is a hook: a game with no standings
+  // would otherwise skip it and change the hook order between renders.
+  // Resolved in the browser rather than at build time — these names arrive
+  // with the bundle, which is fetched after hydration. See src/lib/team-link.ts.
+  const teamHref = useTeamLinks(g.season);
   if (confs.length === 0) return null;
-  // An in-conference game has ONE table, and it is the table both teams are
-  // actually racing in — so it runs at full length rather than through a
-  // scrolling window. A non-conference game shows two, and those stay capped
-  // so one panel doesn't run to forty rows.
+  // NOTHING SCROLLS HERE ANY MORE. A non-conference game shows two tables and
+  // those used to be capped at 20rem apiece, on the reasoning that one panel
+  // should not run to forty rows. But a standings table read through a
+  // scrolling window is the one thing it must not be: you cannot see where a
+  // team sits without dragging, and the rows either side of it are the whole
+  // point. The panel is long on those games and that is the honest shape.
+  // Folding the four factors above it paid for the height. Colin, 2026-09-09.
   const single = confs.length === 1;
   const colorOf = (team: string) =>
     team === g.home.team ? hc : team === g.away.team ? ac : null;
@@ -790,13 +864,18 @@ function Standings({
       note="Entering this game"
       className={className}
     >
-      <div className="space-y-4">
+      <div className="space-y-6">
         {confs.map((c) => (
           <div key={c}>
+            {/* The conference is the SECTION, and it was set smaller and
+                lighter than the TEAM / CONF / ALL labels inside it — the
+                heading outranked by its own column headers. Full ink, a step
+                up in size, and a rule under it so two conferences read as two
+                blocks rather than one long list with a word in the middle. */}
             {!single && (
-              <p className="text-[0.58rem] uppercase tracking-[0.12em] font-bold text-ink-muted mb-1">{c}</p>
+              <p className="text-[0.75rem] uppercase tracking-[0.16em] font-bold text-ink mb-2 pb-1.5 border-b border-hairline">{c}</p>
             )}
-            <StandingsTable rows={b.standings[c]!} colorOf={colorOf} capped={!single} />
+            <StandingsTable rows={b.standings[c]!} colorOf={colorOf} teamHref={teamHref} />
           </div>
         ))}
       </div>
@@ -805,19 +884,26 @@ function Standings({
 }
 
 function StandingsTable({
-  rows, colorOf, capped,
+  rows, colorOf, teamHref,
 }: {
   rows: StandingRow[];
   colorOf: (team: string) => string | null;
-  capped: boolean;
+  /** CBBD name → team-season href, or null when it is not a school we cover. */
+  teamHref: (team: string) => string | null;
 }) {
   return (
-    <div className={cn("-mx-1 px-1", capped && "max-h-80 overflow-y-auto")}>
+    <div className="-mx-1 px-1">
       {/* Sized to be READ, not skimmed past. At 0.72rem this ran a full
           conference of eighteen rows in type smaller than the footnotes beside
           it, which is the wrong way round: the table is the panel. */}
       <table className="w-full text-sm tabular">
-        <thead className="sticky top-0 bg-card">
+        {/* Not sticky any more. It was pinned against the scrolling window
+            this table used to sit in; with the cap gone the nearest scrolling
+            ancestor is the page, so sticky would pin the header to the
+            viewport for as long as any part of a long table is on screen —
+            solving a problem that no longer exists, in a place it was never
+            aimed at. */}
+        <thead className="bg-card">
           <tr className="text-[0.58rem] uppercase tracking-widest text-ink-muted">
             <th className="text-left font-bold pb-1">Team</th>
             <th className="w-14 text-right font-bold pb-1">Conf</th>
@@ -840,10 +926,22 @@ function StandingsTable({
                   <span className="inline-flex items-center gap-2 min-w-0">
                     <span className="w-5 text-right text-ink-muted shrink-0">{i + 1}</span>
                     <TeamLogo name={r.team} size={20} />
-                    <span className={cn("truncate", c ? "font-semibold" : "text-ink-soft")}
-                      style={c ? { color: readableInk(c) } : undefined}>
-                      {r.team}
-                    </span>
+                    {/* Linked when we can identify the school. href is null
+                        until the name map lands and for anyone outside D-I, and
+                        the unlinked span is the same treatment either way — so
+                        the table does not reflow when the map arrives. */}
+                    {(() => {
+                      const cls = cn("truncate", c ? "font-semibold" : "text-ink-soft");
+                      const style = c ? { color: readableInk(c) } : undefined;
+                      const href = teamHref(r.team);
+                      return href ? (
+                        <Link href={href} className={cn(cls, "hover:text-coral transition-colors")} style={style} prefetch={false}>
+                          {r.team}
+                        </Link>
+                      ) : (
+                        <span className={cls} style={style}>{r.team}</span>
+                      );
+                    })()}
                   </span>
                 </td>
                 <td className={cn("text-right", !c && "text-ink-soft")}

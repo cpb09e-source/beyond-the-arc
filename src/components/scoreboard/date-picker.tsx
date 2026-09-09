@@ -67,11 +67,35 @@ export function DatePicker({ value, onChange }: { value: string; onChange: (d: s
         </svg>
       </button>
 
+      {/* A BOTTOM SHEET ON A PHONE, AN ANCHORED DROPDOWN ON A DESKTOP.
+          It was `absolute right-0 w-[19rem]` at every width: the panel hangs
+          off the trigger's right edge and grows leftward, which is correct
+          beside a wide toolbar and runs straight off the screen when the
+          trigger sits near the left of a 390px one. Clamping the width does
+          not fix it — the anchor is the problem, not the size.
+
+          Pinned to the viewport instead, so where the trigger happens to sit
+          stops mattering. It is also the easier target: a calendar grid at the
+          bottom of the screen is under the thumb rather than up beside the
+          header. The backdrop only exists below sm; on a desktop the existing
+          pointerdown-outside handler still closes it, and the panel stays a
+          DOM child of the wrapper either way, so that handler is unchanged. */}
+      {open && (
+        <div
+          className="sm:hidden fixed inset-0 z-40 bg-ink/40"
+          onClick={() => setOpen(false)}
+          aria-hidden
+        />
+      )}
       {open && (
         <div
           role="dialog"
           aria-label="Choose a date"
-          className="absolute right-0 z-50 mt-2 w-[19rem] rounded-xl border border-ink/10 bg-card shadow-xl ring-1 ring-ink/5 p-3"
+          className={cn(
+            "z-50 rounded-xl border border-ink/10 bg-card shadow-xl ring-1 ring-ink/5 p-3",
+            "fixed inset-x-3 bottom-3",
+            "sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:mt-2 sm:w-[19rem]",
+          )}
         >
           <div className="flex items-center justify-between mb-2">
             <MonthNav label="Previous month" onClick={() => setCursor(shiftMonth(cursor, -1))}>‹</MonthNav>

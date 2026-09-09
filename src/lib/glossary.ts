@@ -447,9 +447,9 @@ const MANUAL: GlossaryEntry[] = [
     formula: "OREB / (OREB + opponent DREB)",
   },
   {
-    term: "Free Throw Rate",
+    term: "Free Throw Attempt Rate",
     category: "Four Factors",
-    aka: ["ft rate", "fta rate"],
+    aka: ["ft rate", "fta rate", "free throw rate", "ftar"],
     body: "How often a team gets to the line relative to how often it shoots. The fourth Four Factor.",
     formula: "FTA / FGA",
   },
