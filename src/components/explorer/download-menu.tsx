@@ -322,13 +322,18 @@ export function DownloadMenu<R>({
               />
               {/* Its own screen rather than a straight download: the reason to
                   reach for this is comparison, and which views are worth
-                  comparing is the reader's question, not ours. */}
-              <MenuItem
-                title="Excel - Select Views"
-                sub={`One tab per view. Same ${noun}, same order, same filters on every tab.`}
-                trailing={<ChevronRight size={14} className="text-ink-muted" />}
-                onClick={() => setScreen("views")}
-              />
+                  comparing is the reader's question, not ours. Only where
+                  there ARE views — the Win Calculator has one table and no
+                  registry, and a picker with nothing to pick is a broken
+                  door. */}
+              {exportable.length > 0 && (
+                <MenuItem
+                  title="Excel - Select Views"
+                  sub={`One tab per view. Same ${noun}, same order, same filters on every tab.`}
+                  trailing={<ChevronRight size={14} className="text-ink-muted" />}
+                  onClick={() => setScreen("views")}
+                />
+              )}
               <MenuItem
                 title="CSV"
                 sub="Raw values — rates as decimals, nothing rounded for display"

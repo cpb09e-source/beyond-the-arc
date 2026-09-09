@@ -16,6 +16,9 @@ import { AskStatus } from "@/components/calc/ask-status";
 import { useEntitlement } from "@/lib/use-entitlement";
 import { type SearchableOption } from "@/components/explorer/searchable-select";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
+import { DownloadMenu } from "@/components/explorer/download-menu";
+import { EXPORT_ORIGIN, type ExportCol, type ExportEntity, type ExportInput } from "@/lib/table-export";
+import { teamSlug } from "@/lib/team-slug";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { Select } from "@/components/select";
 import {
@@ -643,7 +646,7 @@ export function CalcClient({
   // Visible-rows derivation — applies both filters, then pages. Only one page
   // of rows ever reaches the DOM, so a 50k-game result set stays cheap.
   const visibleSample = useMemo(() => {
-    if (!results) return { rows: [] as GameLog[], filteredTotal: 0, pageCount: 1, safePage: 0 };
+    if (!results) return { rows: [] as GameLog[], filtered: [] as GameLog[], filteredTotal: 0, pageCount: 1, safePage: 0 };
     const teamQ = teamFilter.trim().toLowerCase();
     const filtered = results.matching.filter((g) => {
       if (dateFilter) {
@@ -660,6 +663,7 @@ export function CalcClient({
     const start = safePage * pageSize;
     return {
       rows: filtered.slice(start, start + pageSize),
+      filtered,
       filteredTotal: filtered.length,
       pageCount,
       safePage,
@@ -785,6 +789,81 @@ export function CalcClient({
     }
     return out;
   }, [games, cols]);
+
+  // ── Export ───────────────────────────────────────────────────────────────
+  /**
+   * The same file the game-log pages hand out, over the matching games.
+   *
+   * THE IDENTITY COLUMNS ARE THE FULL SET, not the ones on screen. The table
+   * shows quad, conference and coach only when the reader narrowed on them,
+   * because on screen they would be a column of the same value. In a file
+   * that is opened next week on another machine, the same value is the
+   * context — a sheet of Duke games that does not say ACC or Scheyer anywhere
+   * has lost the question it answered.
+   */
+  const exportEntity = useMemo((): ExportEntity<GameLog> => ({
+    title: "Win Calculator",
+    sheetName: "Matching games",
+    wideHeader: "Team",
+    fileStem: "win-calc",
+    identity: [
+      { header: "Date", get: (g) => g.game_date ?? "" },
+      { header: "Season", get: (g) => `${g.year - 1}-${String(g.year).slice(2)}` },
+      {
+        header: "Team", width: 22, get: (g) => g.team_name,
+        href: (g) => `${EXPORT_ORIGIN}/teams/${teamSlug(g.team_name)}/${g.year}/`,
+      },
+      { header: "Conf", get: (g) => (g.team_conference ? confDisplay(g.team_conference) : "") },
+      { header: "Coach", width: 18, get: (g) => coachByTeamYear[g.team_name]?.[g.year] ?? "" },
+      // No link on the opponent: opp_team_market is its own name space
+      // ("UConn" against a team_name of "Connecticut"), so a slug built from
+      // it lands on the wrong page often enough to be worse than no link.
+      { header: "Opponent", width: 22, get: (g) => g.opp_team_market ?? "" },
+      { header: "Site", get: (g) => (g.is_neutral ? "N" : g.is_home ? "H" : "A") },
+      { header: "Quad", get: (g) => (g.quad ? `Q${g.quad}` : "") },
+      { header: "Result", get: (g) => (g.won ? "W" : "L") },
+      { header: "Score", get: (g) => `${g.pts_scored ?? ""}-${g.pts_against ?? ""}` },
+    ],
+    num: (g, key) => { const v = g[key]; return typeof v === "number" ? v : null; },
+    // No percentiles: a single game's rank among a hundred thousand others
+    // is not a number anyone reads.
+    pctOf: () => null,
+  }), [coachByTeamYear]);
+
+  const buildExport = useCallback((): ExportInput<GameLog> => {
+    const sub = submitted;
+    const cols: ExportCol[] = (sub?.cols ?? []).map((key) => ({
+      label: statLabel(key),
+      total: key,
+      pct: "",
+      fmt: FLAG_KEYS.has(key) ? "int" : isPctKey(key) ? "pct1" : key.endsWith("_diff") ? "signed" : "num1",
+      band: "Conditions",
+    }));
+    const seasonName = (y: number) => `${y - 1}-${String(y).slice(2)}`;
+    const scope: string[] = [];
+    if (sub && sub.venue !== "all") scope.push(VENUE_OPTIONS.find((v) => v.value === sub.venue)?.label ?? sub.venue);
+    if (sub && sub.quads.length > 0 && sub.quads.length < 4) scope.push(`Quad ${sub.quads.join("/")}`);
+    if (sub && sub.coaches.length) scope.push(`Coach in [${sub.coaches.join(", ")}]`);
+    if (sub && sub.opponents.length) scope.push(`vs ${sub.opponents.join(", ")}`);
+    if (sub && sub.d1Only) scope.push("D-I opponents only");
+    return {
+      cols,
+      rows: visibleSample.filtered,
+      entity: exportEntity,
+      meta: {
+        viewLabel: "Matching games",
+        seasons: years.length === ALL_SEASONS.length ? "All seasons" : [...years].sort((a, b) => b - a).map(seasonName).join(", "),
+        conference: sub?.conferences.length ? sub.conferences.map((c) => confDisplay(c)).join(", ") : "All conferences",
+        teams: sub?.teams.length ? sub.teams.join(", ") : "All teams",
+        filters: [...scope, ...(sub?.filters ?? []).map(labelFor)].length
+          ? [...scope, ...(sub?.filters ?? []).map(labelFor)]
+          : ["No conditions"],
+        sort: "Date — oldest first",
+        search: teamFilter,
+        url: typeof window === "undefined" ? "" : window.location.href,
+      },
+    };
+  }, [submitted, visibleSample.filtered, exportEntity, years, teamFilter]);
 
   /**
    * SCOPE AS COLUMNS. A filter the reader narrowed on is a thing they want
@@ -1340,6 +1419,20 @@ export function CalcClient({
                         ? "No matches"
                         : `${rangeStart.toLocaleString()}–${rangeEnd.toLocaleString()} of ${visibleSample.filteredTotal.toLocaleString()}${hasResultFilter ? " filtered" : ""}`}
                     </span>
+                    {/* Every matching game, not the page on screen — the
+                        menu says how many rows before anything is built. */}
+                    <DownloadMenu<GameLog>
+                      views={[]}
+                      noun="games"
+                      build={buildExport}
+                      buildAll={() => {
+                        const one = buildExport();
+                        return { sheets: [{ name: "Matching games", cols: one.cols }], rows: one.rows, entity: one.entity, meta: one.meta };
+                      }}
+                      rowCount={visibleSample.filteredTotal}
+                      colCount={10 + submitted.cols.length}
+                      disabled={visibleSample.filteredTotal === 0}
+                    />
                   </div>
                   <div className="w-full grid grid-cols-2 gap-3 sm:w-auto sm:ml-auto sm:flex sm:items-center sm:gap-6 sm:flex-wrap">
                     {/* Year picker — a NATIVE select on purpose. The searchable
