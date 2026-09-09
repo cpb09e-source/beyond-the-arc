@@ -9,7 +9,7 @@ import { confDisplay } from "@/lib/conf-display";
 import { isPowerConference } from "@/lib/conf-tiers";
 import { cn } from "@/lib/utils";
 import { Select } from "@/components/select";
-import { isArchivedDay, latestArchivedDay } from "@/lib/scoreboard-archive";
+import { isKnownDay, latestArchivedDay } from "@/lib/scoreboard-archive";
 import { DatePicker } from "./date-picker";
 import {
   EMPTY_SLATE, POLL_MS, dateLabel, fetchSlate, gameHref, isFinal, isLive, isRanked, lineLabel, recordLabel, slateIsSettled, tipLabel,
@@ -78,13 +78,17 @@ export function ScoreboardClient({
   const pinned = initial?.date
     ?? (fromUrl && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl) ? fromUrl : null);
   /**
-   * Go to a day. An archived day is a page of its own; anything else is the
-   * live route with a query, which is the only way to ask the function for a
-   * specific date.
+   * Go to a day.
+   *
+   * ANY day we have a page for, played or merely scheduled — isArchivedDay
+   * was the wrong test and sent every 2026-27 fixture date to the query
+   * route instead of to its own page, which is the page that exists and the
+   * one Google indexes. Only a date with no page at all falls back to the
+   * query, where the function answers.
    */
   const goToDay = (d: string | null) => {
     if (!d) { router.push("/scoreboard"); return; }
-    if (isArchivedDay(d)) { router.push(`/scoreboard/${d}/`); return; }
+    if (isKnownDay(d)) { router.push(`/scoreboard/${d}/`); return; }
     router.push(`/scoreboard?date=${d}`);
   };
   const setPinned = goToDay;
