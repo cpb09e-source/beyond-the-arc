@@ -24,6 +24,7 @@ export function SearchableMultiSelect({
   groupLabels,
   align = "left",
   inlineSearch = false,
+  panelWidth,
   renderIcon,
 }: {
   /** Selected values. Empty array = "All". */
@@ -61,6 +62,13 @@ export function SearchableMultiSelect({
    */
   inlineSearch?: boolean;
   /**
+   * How wide the panel is. Defaults to 240px, or the trigger's own width in
+   * inline mode. "trigger" makes a full-width control open a full-width
+   * list — the calculator's conference picker fills a grid column, and a
+   * 240px panel under a 300px trigger read as the wrong dropdown opening.
+   */
+  panelWidth?: number | "trigger";
+  /**
    * An icon for each row, and for the trigger when one option is chosen.
    *
    * A prop rather than a field on the option, because the option lists are
@@ -89,7 +97,7 @@ export function SearchableMultiSelect({
    */
   const { anchorRef: containerRef, popRef, at } = usePopoverAnchor({
     open,
-    width: inlineSearch ? "trigger" : 240,
+    width: panelWidth ?? (inlineSearch ? "trigger" : 240),
     align,
   });
   // Ties the inline combobox to the list it controls. useId so two pickers on

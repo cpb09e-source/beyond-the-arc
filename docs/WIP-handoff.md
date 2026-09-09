@@ -118,6 +118,51 @@ them. Ask for a resize rather than guessing at what an image shows.
 
 ---
 
+## 2026-09-08 — the Win Calculator rebuilt, and NOT deployed
+
+`/calc/`. The condition sheet — every one of the ~60 stats with its own slider,
+comparator and number box, on screen all the time — is gone. Conditions are now
+the front page's builder: **Add a Filter** (one stat, caret lands in its value
+box, Enter runs the question) and **Add Columns** (tick several; a row left
+blank is a column in the matching-games table and filters nothing). Same
+`StatPicker` and `FilterRow` as the team explorer; `src/components/calc/
+condition-row.tsx` wraps the row and adds the Yes/No shape for the three flags.
+The value-box hint is the 5th–95th percentile of that stat over the games
+actually loaded, so it changes with the seasons selected.
+
+The panel no longer folds into a chip strip after Calculate — Colin asked for
+everything expanded — and the page scrolls to the answer instead. The
+31-pill conference grid is the front page's grouped `SearchableMultiSelect`
+(power / mid-majors, All and Clear in its footer). The header Calculate button
+is gone; the one under the conditions is the only one.
+
+**Ask the Calculator's wait.** The 2px sweep read as frozen. It WAS animating
+(verified: transform moving, reduced-motion off) — too thin to register, and it
+unmounted the moment the parse landed, so the season load that follows showed
+as a static "Loading game logs…". Now three bouncing dots take the button's
+label (`.ask-dots`) and a breathing point sits beside the status copy
+(`.ask-orb`), both transform/opacity so they keep moving through the ~1s the
+main thread spends parsing season files; the status stays up through BOTH
+halves (`askPhase`: parsing → loading → idle, idle when `allLoaded`). Colin
+chose this from four mockups ("The button thinks").
+
+**A correctness fix rode along.** `results` waits for every selected season
+(`allLoaded`). Before, a question asked of thirteen seasons was answered from
+the one already cached and then silently re-answered as the rest arrived.
+
+`find-game-modal.tsx` still uses `ConditionSheet` — untouched on purpose; the
+ask was the calculator page.
+
+**Locally `/api/parse-query` returns 502** through the netlify dev proxy — the
+function, not the page. The busy state was verified by stubbing `fetch` in the
+browser so the parse never resolved.
+
+Deploy: `6b157a49f8` (front-page flash fix + random matchup) and this are both
+pushed and NOT deployed. Ask before deploying — the front page is in the diff,
+so it is the expensive shared-component case again.
+
+---
+
 ## 2026-09-07 — the Matchup Predictor, built and NOT deployed
 
 `/matchup/` — one page, free, 2025-26 only. Pick any two teams, choose the

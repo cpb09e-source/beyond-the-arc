@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { Lock } from "lucide-react";
 import { TeamLogo } from "@/components/team-logo";
@@ -15,14 +15,17 @@ import {
 import { AskStatus } from "@/components/calc/ask-status";
 import { useEntitlement } from "@/lib/use-entitlement";
 import { type SearchableOption } from "@/components/explorer/searchable-select";
+import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
+import { POWER_CONFS } from "@/lib/conf-tiers";
 import { Select } from "@/components/select";
 import {
-  ConditionSheet,
   FLAG_KEYS,
   isPctKey,
-  defaultValueFor,
   cleanLabel,
+  conditionGroups,
 } from "@/components/filters/condition-sheet";
+import { StatPicker, type PickOption } from "@/components/filters/stat-picker";
+import { CalcConditionRow, type ConditionRow } from "@/components/calc/condition-row";
 import { confDisplay, CONF_DISPLAY } from "@/lib/conf-display";
 // Single source of truth for the game-log shape + filter catalog. This file
 // used to carry its own copy, which had already drifted from the shared one
@@ -31,11 +34,9 @@ import { confDisplay, CONF_DISPLAY } from "@/lib/conf-display";
 import {
   CALC_STAT_OPTIONS,
   OPS,
-  makeFilter,
   matches,
   type GameLog,
   type Filter,
-  type Op,
 } from "@/lib/game-filters";
 import { isExhibitionGame, ALL_SEASONS, SEASON_CEIL } from "@/lib/seasons";
 import { resolveQuery, searchKeysFor, normName, type ParsedQuery, type ResolvedQuery } from "@/lib/query-parse";
@@ -71,44 +72,84 @@ const QUAD_OPTIONS: SearchableOption[] = [
 ];
 
 /**
- * Static conference list. This used to derive from loaded games, which made
- * the pill grid visibly reflow as season files streamed in ("All seasons"
- * finished loading and the Pac-12 shoved everything sideways). CONF_DISPLAY
- * is the app's master code list; GWC is dropped because it folded before our
- * 2014 data floor, so it could only ever be a dead option.
+ * Static conference list, grouped and ordered exactly as the front page's
+ * picker has it — power conferences first, alphabetical within each group.
  *
- * Power conferences lead, in their own order — they're what most questions
- * are about — and get a subtly heavier pill.
+ * Static rather than derived from loaded games, which made the list change
+ * as season files streamed in. CONF_DISPLAY is the app's master code list;
+ * GWC is dropped because it folded before our 2014 data floor, so it could
+ * only ever be a dead option.
  */
-const POWER_CONFS = ["ACC", "B10", "B12", "BE", "SEC", "P12"];
-const CONFERENCE_OPTIONS: SearchableOption[] = (() => {
-  const rest = Object.keys(CONF_DISPLAY)
-    .filter((c) => c !== "GWC" && !POWER_CONFS.includes(c))
-    .sort((a, b) => a.localeCompare(b));
-  return [...POWER_CONFS, ...rest].map((c) => ({ value: c, label: confDisplay(c) }));
-})();
+const CONF_GROUP_LABELS = { power: "Power Conferences", midmajor: "Mid-Majors" } as const;
+const CONFERENCE_OPTIONS: SearchableOption[] = Object.keys(CONF_DISPLAY)
+  .filter((c) => c !== "GWC")
+  .map((c) => ({ value: c, label: confDisplay(c), group: POWER_CONFS.has(c) ? "power" : "midmajor" }))
+  .sort((a, b) => (a.group !== b.group ? (a.group === "power" ? -1 : 1) : a.label.localeCompare(b.label)));
 
 /* ------------------------------------------------------------------
- * Stat-sheet metadata. The conditions builder lays every stat out on a
- * grouped sheet of compact tile rows — engage a tile and it becomes a
- * condition — so every stat needs a display range and every group a hue.
+ * Conditions — the front page's "Add a Filter" / "Add Columns" pair, over
+ * the game-log stats. A row with a value is a condition; a row without one
+ * is a column in the matching-games table. Same rule as the team explorer.
+ *
+ * This replaced a sheet that laid out every one of the ~60 stats with its
+ * own slider, comparator and number box, all the time. Showing everything
+ * meant the reader scrolled past fifty things they were not asking about
+ * to find the one they were.
  * ---------------------------------------------------------------- */
+
+/** Every stat the picker offers, in the sheet's own section order. */
+const PICK_OPTIONS: PickOption[] = conditionGroups(CALC_STAT_OPTIONS).flatMap(([group, opts]) =>
+  opts.map((o) => ({ key: o.key as string, label: cleanLabel(o.label), desc: group, group })),
+);
+const GROUP_LABEL: Record<string, string> = Object.fromEntries(
+  conditionGroups(CALC_STAT_OPTIONS).map(([g]) => [g, g]),
+);
+const PICKER_LIST_ID = "calc-conditions-picker";
+/** Ceiling on rows. Each one is a column in the results table. */
+const MAX_CONDITIONS = 12;
+let nextRowId = 1;
+
+const statLabel = (key: string): string =>
+  cleanLabel(CALC_STAT_OPTIONS.find((s) => s.key === key)?.label ?? key);
+
+/** Rows → the filters the calculator runs. A blank numeric row filters nothing. */
+function rowsToFilters(rows: ConditionRow[]): Filter[] {
+  const out: Filter[] = [];
+  for (const r of rows) {
+    if (FLAG_KEYS.has(r.stat)) {
+      out.push({ id: String(r.id), stat: r.stat, op: "eq", value: r.value === "0" ? 0 : 1 });
+      continue;
+    }
+    const raw = r.value.trim();
+    const n = Number(raw);
+    if (raw === "" || !Number.isFinite(n)) continue;
+    out.push({ id: String(r.id), stat: r.stat, op: r.op, value: isPctKey(r.stat) ? n / 100 : n });
+  }
+  return out;
+}
+/** Every stat with a row, once, in row order — the results table's columns. */
+const colsOf = (rows: ConditionRow[]): string[] => [...new Set(rows.map((r) => r.stat))];
+/** A parsed condition's value the way a reader would have typed it. */
+function rowValue(stat: string, v: number): string {
+  if (FLAG_KEYS.has(stat)) return v === 0 ? "0" : "1";
+  return String(isPctKey(stat) ? Math.round(v * 1000) / 10 : v);
+}
+/** A fresh row for a stat: flags start at Yes, everything else blank. */
+function newRow(stat: string): ConditionRow {
+  const def = CALC_STAT_OPTIONS.find((s) => s.key === stat);
+  return {
+    id: nextRowId++,
+    stat,
+    op: FLAG_KEYS.has(stat) ? "eq" : def?.defaultDir === "lt" ? "lte" : "gte",
+    value: FLAG_KEYS.has(stat) ? "1" : "",
+  };
+}
 
 /** Format a value the way the stat reads: 40% / +5 / 72.5. */
 function fmtCondValue(key: string, v: number): string {
   if (isPctKey(key)) return `${Math.round(v * 1000) / 10}%`;
   if (key.endsWith("_diff") || key.endsWith("_margin")) return v > 0 ? `+${v}` : String(v);
   return String(Math.round(v * 10) / 10);
-}
-
-/** "2014-15 → 2025-26 (12)" style summary for the collapsed bar. */
-function seasonSummary(years: number[]): string {
-  if (years.length === 0) return "No seasons";
-  if (years.length === ALL_SEASONS.length) return "All seasons";
-  const s = [...years].sort((a, b) => a - b);
-  const name = (y: number) => `${y - 1}-${String(y).slice(2)}`;
-  if (s.length <= 3) return s.map(name).join(", ");
-  return `${name(s[0]!)} → ${name(s[s.length - 1]!)} (${s.length})`;
 }
 
 /**
@@ -205,7 +246,14 @@ export function CalcClient({
   // `askResult` the last parse (kept so its analysis / caveats stay on
   // screen while the user reviews the filled-in form before calculating).
   const [ask, setAsk] = useState("");
-  const [asking, setAsking] = useState(false);
+  /**
+   * Which stage of an Ask is in flight, so the status line can cover the
+   * whole wait: the parse, and then the season files the parse asked for.
+   * It used to vanish the moment the parse landed, which left the reader
+   * looking at a static "Loading game logs…" while thirteen files arrived.
+   */
+  const [askPhase, setAskPhase] = useState<"idle" | "parsing" | "loading">("idle");
+  const asking = askPhase === "parsing";
   const [askErr, setAskErr] = useState<string | null>(null);
   const [askResult, setAskResult] = useState<ResolvedQuery | null>(null);
   // Games against non-D1 opponents count toward a team's official NCAA record
@@ -214,11 +262,19 @@ export function CalcClient({
   // excluding them here; the toggle keeps the official-record view available.
   const [d1Only, setD1Only] = useState(true);
   const [yearData, setYearData] = useState<Record<number, GameLog[]>>({});
-  // Active conditions. Starts empty — every stat is visible on the sheet
-  // below, so the starting state is "nothing constrained" rather than a demo.
-  // At most one condition per stat (the tile IS the condition).
-  const [filters, setFilters] = useState<Filter[]>([]);
-  const [submitted, setSubmitted] = useState<{ filters: Filter[]; conferences: string[]; teams: string[]; coaches: string[]; venue: Venue; opponents: string[]; quads: string[]; d1Only: boolean } | null>(null);
+  /**
+   * The conditions, as rows — stat, comparator, what was typed. A row with a
+   * value is a condition; a row left blank is a column in the matching-games
+   * table and filters nothing. `filters` and `cols` are derived, never stored.
+   */
+  const [rows, setRows] = useState<ConditionRow[]>([]);
+  const filters = useMemo(() => rowsToFilters(rows), [rows]);
+  const cols = useMemo(() => colsOf(rows), [rows]);
+  /** The row that just appeared, so exactly one value box claims the caret. */
+  const [freshId, setFreshId] = useState<number | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [colsPickerOpen, setColsPickerOpen] = useState(false);
+  const [submitted, setSubmitted] = useState<{ filters: Filter[]; cols: string[]; conferences: string[]; teams: string[]; coaches: string[]; venue: Venue; opponents: string[]; quads: string[]; d1Only: boolean } | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   // Two independent post-result filters. Persist across re-calcs so power
@@ -232,11 +288,13 @@ export function CalcClient({
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
 
-  // Builder chrome. `panelOpen` is the scope+conditions panel — Calculate
-  // collapses it to a chip summary so the numbers get the screen; "Edit
-  // filters" reopens it. `collapsedGroups` folds individual stat-sheet
-  // sections (all open by default).
-  const [panelOpen, setPanelOpen] = useState(true);
+  /**
+   * Where the answer lands, and whether the next one should be scrolled to.
+   * The panel used to fold into a chip strip after Calculate so the numbers
+   * got the screen; it stays open now, and the page scrolls instead.
+   */
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const scrollOnResult = useRef(false);
   // Game whose box score is open in the modal (double-click a row / click a
   // score). The opponent's row is looked up at render via the game-id pair.
   const [boxGame, setBoxGame] = useState<GameLog | null>(null);
@@ -360,7 +418,7 @@ export function CalcClient({
   async function runAsk() {
     const q = ask.trim();
     if (q.length < 3 || asking) return;
-    setAsking(true);
+    setAskPhase("parsing");
     setAskErr(null);
     setAskResult(null);
     try {
@@ -446,15 +504,17 @@ export function CalcClient({
       const nextOpponents = keep(resolved.resolved.opponents, opponents);
       const nextQuads = keep(resolved.quads.map(String), quads);
       const nextVenue = resolved.venue !== "all" ? resolved.venue : namesSubject ? "all" : venue;
-      const nextFilters = resolved.conditions.length
-        ? resolved.conditions.slice(0, 8).map((c) => ({
-            ...makeFilter(c.stat as keyof GameLog),
+      const nextRows: ConditionRow[] = resolved.conditions.length
+        ? resolved.conditions.slice(0, MAX_CONDITIONS).map((c) => ({
+            id: nextRowId++,
+            stat: String(c.stat),
             op: c.op,
-            value: c.value,
+            value: rowValue(String(c.stat), c.value),
           }))
         : namesSubject
         ? []
-        : filters;
+        : rows;
+      const nextFilters = rowsToFilters(nextRows);
 
       setYears(nextYears);
       setConferences(nextConferences);
@@ -463,7 +523,8 @@ export function CalcClient({
       setOpponents(nextOpponents);
       setQuads(nextQuads);
       setVenue(nextVenue);
-      setFilters(nextFilters);
+      setRows(nextRows);
+      setFreshId(null);
       setAskResult(resolved);
 
       // Auto-calculate. Asking a question and then having to press a second
@@ -475,6 +536,7 @@ export function CalcClient({
       // parse (unmatched name, no condition found) sits directly above.
       setSubmitted({
         filters: nextFilters,
+        cols: colsOf(nextRows),
         conferences: nextConferences,
         teams: nextTeams,
         coaches: nextCoaches,
@@ -483,18 +545,40 @@ export function CalcClient({
         quads: nextQuads,
         d1Only,
       });
-      // Same fold as pressing Calculate — the answer takes the screen, the
-      // parse summary above explains what was understood, Edit reopens.
-      setPanelOpen(false);
+      // The answer is scrolled to once it exists — which, for a question
+      // that named seasons not yet in memory, is after they load.
+      scrollOnResult.current = true;
+      setAskPhase("loading");
     } catch (e) {
       setAskErr(e instanceof Error ? e.message : "Could not parse that question.");
-    } finally {
-      setAsking(false);
+      setAskPhase("idle");
     }
   }
 
+  /**
+   * Every selected season is in memory. `results` waits for this: the games
+   * array holds whatever HAS arrived, so without the gate a question asked
+   * of thirteen seasons was answered from the one already cached and then
+   * silently re-answered as the rest landed.
+   */
+  const allLoaded = years.every((y) => !!yearData[y]);
+  /** An Ask is in flight, in either half of its wait. */
+  const askBusy = asking || (askPhase === "loading" && !allLoaded);
+  useEffect(() => {
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- the phase
+       ends when the LAST file lands, which only the fetch effect knows; this
+       is the one place that fact meets the status line. */
+    if (askPhase === "loading" && allLoaded) setAskPhase("idle");
+  }, [askPhase, allLoaded]);
+  // Scroll to the answer once, when it exists after a Calculate or an Ask.
+  useEffect(() => {
+    if (!scrollOnResult.current || !submitted || !allLoaded) return;
+    scrollOnResult.current = false;
+    resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [submitted, allLoaded]);
+
   const results = useMemo(() => {
-    if (!submitted || games.length === 0) return null;
+    if (!submitted || !allLoaded || games.length === 0) return null;
     const confSet = submitted.conferences.length === 0 ? null : new Set(submitted.conferences);
     const teamSet = submitted.teams.length === 0 ? null : new Set(submitted.teams);
     const coachSet = submitted.coaches.length === 0 ? null : new Set(submitted.coaches);
@@ -535,7 +619,7 @@ export function CalcClient({
       avgMargin,
       matching,
     };
-  }, [submitted, games, coachByTeamYear]);
+  }, [submitted, allLoaded, games, coachByTeamYear]);
 
   // Year options derived from matching results — only show years that
   // actually have games in the current result set, sorted newest first.
@@ -596,9 +680,9 @@ export function CalcClient({
   /** Snapshot the current form and run it. Shared by the top and bottom
    *  Calculate buttons so they can never drift apart. */
   function calculate() {
-    setSubmitted({ filters: [...filters], conferences: [...conferences], teams: [...teams], coaches: [...coaches], venue, opponents: [...opponents], quads: [...quads], d1Only });
-    setPanelOpen(false);
+    setSubmitted({ filters, cols, conferences: [...conferences], teams: [...teams], coaches: [...coaches], venue, opponents: [...opponents], quads: [...quads], d1Only });
     setPage(0); // a new question starts at the first page of its answer
+    scrollOnResult.current = true;
   }
 
   /** "Clear All": no scope filters, no conditions, no stale results. */
@@ -611,37 +695,89 @@ export function CalcClient({
     setVenue("all");
     setQuads([]);
     setD1Only(true);
-    setFilters([]);
+    setRows([]);
     setSubmitted(null);
   }
 
   /**
-   * Engage a stat tile — patch its condition if live, otherwise bring it to
-   * life with sensible defaults merged with whatever the interaction set.
-   * Comparator direction comes from CALC_STAT_OPTIONS (not makeFilter, whose
-   * lookup misses the calc-only stats like opp_rank); flags are forced to
-   * their only sensible shape, "= Yes".
+   * Set the conferences, and drop any chosen team the new set no longer
+   * contains — otherwise a hidden chip silently constrains the calc.
+   * Skipped when nothing narrows.
    */
-  function tilePatch(stat: keyof GameLog, patch: Partial<Filter>) {
-    setFilters((fs) => {
-      const existing = fs.find((f) => f.stat === stat);
-      if (existing) return fs.map((f) => (f.stat === stat ? { ...f, ...patch } : f));
-      const key = stat as string;
-      const def = CALC_STAT_OPTIONS.find((s) => s.key === stat);
-      return [
-        ...fs,
-        {
-          ...makeFilter(stat),
-          op: FLAG_KEYS.has(key) ? ("eq" as Op) : def?.defaultDir === "lt" ? ("lt" as Op) : ("gt" as Op),
-          value: defaultValueFor(key),
-          ...patch,
-        },
-      ];
+  function chooseConferences(next: string[]) {
+    setConferences(next);
+    if (next.length > 0 && next.length < conferenceOptions.length) {
+      const confSet = new Set(next);
+      setTeams((prev) =>
+        prev.filter((t) => {
+          const g = games.find((x) => x.team_name === t);
+          return g?.team_conference != null && confSet.has(g.team_conference);
+        }),
+      );
+    }
+  }
+
+  /** "Add a Filter": one stat, and the caret lands in its value box. */
+  const addFilter = useCallback((stat: string) => {
+    const row = newRow(stat);
+    setRows((r) => (r.length >= MAX_CONDITIONS ? r : [...r, row]));
+    setFreshId(row.id);
+  }, []);
+  /**
+   * "Add Columns": `next` is the FULL set that should have a row afterwards,
+   * so this adds and removes. Unticking a stat takes its condition with it —
+   * a bound on a column nobody can see is the thing the pairing exists to
+   * prevent.
+   */
+  const setColumns = useCallback((next: string[]) => {
+    setRows((r) => {
+      const keep = new Set(next);
+      const kept = r.filter((x) => keep.has(x.stat));
+      const have = new Set(kept.map((x) => x.stat));
+      const added = next
+        .filter((k) => !have.has(k))
+        .slice(0, Math.max(0, MAX_CONDITIONS - kept.length))
+        .map(newRow);
+      return [...kept, ...added];
     });
-  }
-  function tileClear(stat: keyof GameLog) {
-    setFilters((fs) => fs.filter((f) => f.stat !== stat));
-  }
+    setFreshId(null);
+  }, []);
+  const patchRow = useCallback((id: number, patch: Partial<ConditionRow>) => {
+    setRows((r) => r.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    setFreshId(null);
+  }, []);
+  const removeRow = useCallback((id: number) => setRows((r) => r.filter((x) => x.id !== id)), []);
+
+  /**
+   * The typical range for each stat on screen, from the games actually
+   * loaded — the hint in an empty value box. 5th to 95th percentile in
+   * display units, so a reader who has never seen a TOV% learns that 12 is
+   * low and 22 is high before typing anything. One pass over the games for
+   * every column at once, redone only when the columns or the data change.
+   */
+  const bounds = useMemo(() => {
+    const out = new Map<string, [number, number]>();
+    if (cols.length === 0) return out;
+    const lists = new Map<string, number[]>(cols.map((k) => [k, []]));
+    for (const g of games) {
+      for (const [k, xs] of lists) {
+        const v = g[k];
+        if (typeof v === "number") xs.push(v);
+      }
+    }
+    for (const [k, xs] of lists) {
+      if (xs.length < 50) continue;
+      // A typed array sorts numerically without a comparator, and in a
+      // fraction of the time — this runs over up to 150,000 games.
+      const a = Float64Array.from(xs).sort();
+      const scale = isPctKey(k) ? 100 : 1;
+      out.set(k, [
+        Math.round(a[Math.floor(a.length * 0.05)]! * scale),
+        Math.round(a[Math.floor(a.length * 0.95)]! * scale),
+      ]);
+    }
+    return out;
+  }, [games, cols]);
 
   return (
     <div className="space-y-6">
@@ -706,20 +842,33 @@ export function CalcClient({
           <button
             type="button"
             onClick={runAsk}
-            disabled={asking || ask.trim().length < 3}
-            className="h-10 shrink-0 text-sm font-medium bg-ink text-paper px-5 rounded hover:bg-ink/85 disabled:opacity-40 transition-colors inline-flex items-center justify-center gap-2"
+            disabled={askBusy || ask.trim().length < 3}
+            aria-busy={askBusy}
+            className={`h-10 min-w-28 shrink-0 text-sm font-medium bg-ink text-paper px-5 rounded hover:bg-ink/85 transition-colors inline-flex items-center justify-center gap-2 ${
+              askBusy ? "" : "disabled:opacity-40"
+            }`}
           >
-            {/* No spinner in here any more. The status orb below is the one
-                moving thing while a parse runs, and two indicators for one wait
-                read as two waits. */}
-            {asking ? "Reading…" : "Fill filters"}
+            {/* THE BUTTON THINKS. The thing that was pressed is the thing that
+                shows the work: three dots take its label until the answer is
+                on screen, and the status line below says which half of the
+                wait this is. Not dimmed while busy — the dots carry the
+                "not now" on their own, and a faded button under them read as
+                a second, contradictory signal. */}
+            {askBusy ? (
+              <>
+                <span className="ask-dots" aria-hidden="true"><i /><i /><i /></span>
+                <span className="sr-only">Working</span>
+              </>
+            ) : (
+              "Fill filters"
+            )}
           </button>
         </div>
         )}
 
         {/* Sits in the slot the result line will occupy, so the panel does not
             jump when the parse lands. */}
-        {asking && <AskStatus />}
+        {askBusy && <AskStatus phase={asking ? "parsing" : "loading"} seasons={years.length} />}
 
         {askErr && <p className="mt-2 text-sm text-coral">{askErr}</p>}
 
@@ -753,54 +902,11 @@ export function CalcClient({
         )}
       </div>
 
-      {/* Scope + conditions. After Calculate the whole panel folds into the
-          chip summary below — the answer is the point, the machinery isn't —
-          and "Edit filters" unfolds it. The fold is a grid-rows transition
-          (1fr → 0fr), which animates height without measuring anything. */}
+      {/* Scope + conditions. Always open: this used to fold into a chip strip
+          after Calculate and reopen from an "Edit filters" button, and the
+          reader's first question was always where the filters had gone. The
+          answer takes the screen by being scrolled to instead. */}
       <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-hidden">
-        {!panelOpen && (
-          <div className="bta-pop-in flex flex-wrap items-center gap-2 p-4 lg:px-5">
-            <span className="text-xs uppercase tracking-widest text-ink font-bold mr-1">
-              Filters
-            </span>
-            <ConditionChip>{seasonSummary(years)}</ConditionChip>
-            {submitted && submitted.conferences.length > 0 && submitted.conferences.length < conferenceOptions.length && (
-              <ConditionChip>{submitted.conferences.map((c) => confDisplay(c)).join(", ")}</ConditionChip>
-            )}
-            {submitted && submitted.teams.length > 0 && submitted.teams.length < teamOptions.length && (
-              <ConditionChip>{submitted.teams.join(", ")}</ConditionChip>
-            )}
-            {submitted && submitted.coaches.length > 0 && (
-              <ConditionChip>{submitted.coaches.join(", ")}</ConditionChip>
-            )}
-            {submitted && submitted.opponents.length > 0 && (
-              <ConditionChip>vs {submitted.opponents.join(", ")}</ConditionChip>
-            )}
-            {submitted && submitted.venue !== "all" && (
-              <ConditionChip>{VENUE_OPTIONS.find((v) => v.value === submitted.venue)?.label}</ConditionChip>
-            )}
-            {submitted && submitted.quads.length > 0 && submitted.quads.length < 4 && (
-              <ConditionChip>Quad {submitted.quads.join("/")}</ConditionChip>
-            )}
-            {submitted?.filters.map((f) => (
-              <ConditionChip key={f.id}>{labelFor(f)}</ConditionChip>
-            ))}
-            {loading && <span className="text-xs text-ink-muted">Loading game logs…</span>}
-            <button
-              type="button"
-              onClick={() => setPanelOpen(true)}
-              className="ml-auto shrink-0 text-sm font-medium text-coral border border-coral/40 rounded px-4 py-1.5 hover:bg-coral hover:text-white transition-colors"
-            >
-              Edit filters
-            </button>
-          </div>
-        )}
-        <div
-          className={`grid transition-[grid-template-rows] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-            panelOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-          }`}
-        >
-        <div className="min-h-0 overflow-hidden">
         <div className="p-4 lg:p-5 border-b border-hairline space-y-5">
           {/* Panel header — mirrors the D&3 filter drawer: name, live count of
               active filters, one Clear all. The records-loaded note earns the
@@ -818,17 +924,6 @@ export function CalcClient({
                 ? `Game-log data not exported yet — run sync + re-export`
                 : ""}
             </span>
-            {/* Calculate lives at both ends of the panel — the header copy is
-                for people who came back to tweak one pill and shouldn't have
-                to scroll past the conditions to re-run. */}
-            <button
-              type="button"
-              onClick={calculate}
-              disabled={loading || games.length === 0}
-              className="text-sm font-medium bg-coral text-white px-5 py-2 rounded-lg shadow-sm hover:bg-coral-soft hover:shadow-md active:scale-[0.98] disabled:opacity-40 transition-all"
-            >
-              Calculate
-            </button>
           </div>
 
           <div>
@@ -904,80 +999,6 @@ export function CalcClient({
             )}
           </div>
 
-          <div>
-            <SectionLabel
-              count={conferences.length}
-              action={
-                <>
-                  <MiniButton onClick={() => setConferences(conferenceOptions.map((c) => c.value))}>All</MiniButton>
-                  <MiniButton onClick={() => setConferences([])}>Clear</MiniButton>
-                </>
-              }
-            >
-              Conferences
-            </SectionLabel>
-            {(() => {
-              // One handler for both grids so the power/rest split stays
-              // purely presentational.
-              const toggleConf = (code: string) => {
-                const next = conferences.includes(code)
-                  ? conferences.filter((x) => x !== code)
-                  : [...conferences, code];
-                setConferences(next);
-                // Drop any selected team that's no longer in the narrowed
-                // conference set, so a hidden chip can't silently constrain
-                // the calc. Skipped when nothing narrows.
-                if (next.length > 0 && next.length < conferenceOptions.length) {
-                  const confSet = new Set(next);
-                  setTeams((prev) =>
-                    prev.filter((t) => {
-                      const g = games.find((x) => x.team_name === t);
-                      return g?.team_conference != null && confSet.has(g.team_conference);
-                    }),
-                  );
-                }
-              };
-              const power = conferenceOptions.filter((c) => POWER_CONFS.includes(c.value));
-              const rest = conferenceOptions.filter((c) => !POWER_CONFS.includes(c.value));
-              const pill = (c: SearchableOption) => (
-                <TogglePill
-                  key={c.value}
-                  active={conferences.includes(c.value)}
-                  title={c.label}
-                  className="w-full px-1 text-center"
-                  emphasis={POWER_CONFS.includes(c.value)}
-                  onClick={() => toggleConf(c.value)}
-                >
-                  {c.value}
-                </TogglePill>
-              );
-              return (
-                <div className="space-y-2">
-                  {/* Power conferences get their own bordered plate — they
-                      answer most questions, so they're worth finding without
-                      reading all 31 codes. */}
-                  <div className="inline-block rounded-lg border border-ink/15 bg-paper-deep/30 p-2 pt-1.5">
-                    <div className="text-[0.6rem] uppercase tracking-widest text-ink-muted font-semibold mb-1.5">
-                      Power Conferences
-                    </div>
-                    <div className="grid gap-1.5 grid-cols-3 sm:grid-cols-6">{power.map(pill)}</div>
-                  </div>
-                  {/* Column count derived from the list length so the rows stay
-                      near-even and never leave a one-pill orphan row. */}
-                  <div
-                    className="grid gap-1.5 grid-cols-5 sm:grid-cols-6 lg:grid-cols-[repeat(var(--cc3),minmax(0,1fr))] xl:grid-cols-[repeat(var(--cc2),minmax(0,1fr))]"
-                    style={{
-                      "--cc2": Math.ceil(rest.length / 2),
-                      "--cc3": Math.ceil(rest.length / 3),
-                    } as React.CSSProperties}
-                  >
-                    {rest.map(pill)}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-
           <div className="flex flex-wrap gap-x-10 gap-y-5">
             <div>
               <SectionLabel count={venue !== "all" ? 1 : 0}>Venue</SectionLabel>
@@ -1025,7 +1046,26 @@ export function CalcClient({
             </div>
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-3">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <SectionLabel count={conferences.length}>Conferences</SectionLabel>
+              {/* THE FRONT PAGE'S PICKER, not a grid of thirty-one pills. The
+                  grid answered "which conferences exist" at the cost of a
+                  third of the panel, for a control most questions never
+                  touch. The picker answers it on demand, grouped the way the
+                  front page groups it, with All and Clear in its footer. */}
+              <SearchableMultiSelect
+                value={conferences}
+                options={conferenceOptions}
+                onChange={chooseConferences}
+                placeholder="Type to filter…"
+                emptyLabel="All conferences"
+                ariaLabel="Conferences"
+                groupLabels={CONF_GROUP_LABELS}
+                panelWidth="trigger"
+                className="w-full"
+              />
+            </div>
             <ChipSearchMulti
               label="Teams"
               values={teams}
@@ -1076,28 +1116,77 @@ export function CalcClient({
         </div>
 
         <div className="p-4 lg:p-5">
-          <div className="mb-4">
+          <div className="mb-3">
             <SectionLabel
               count={filters.length}
-              action={filters.length > 0 ? <MiniButton onClick={() => setFilters([])}>Clear</MiniButton> : null}
+              action={rows.length > 0 ? <MiniButton onClick={() => setRows([])}>Clear</MiniButton> : null}
             >
               Conditions
             </SectionLabel>
             <span className="hidden sm:block -mt-1 text-xs text-ink-muted">
-              Every stat is listed — set the ones that matter. All must be true; perspective = the team in the row.
+              All must be true. Every stat is from the perspective of the team in the row.
             </span>
           </div>
 
-          {/* The stat sheet, shared with the team and coach "Find a game"
-              modals so the same question is built the same way wherever it
-              is asked. See components/filters/condition-sheet.tsx — search,
-              grouping, collapse and the tiles themselves all live there. */}
-          <ConditionSheet
-            options={CALC_STAT_OPTIONS}
-            filters={filters}
-            onPatch={(key, patch) => tilePatch(key as Filter["stat"], patch)}
-            onClear={(key) => tileClear(key as Filter["stat"])}
-          />
+          {/* THE FRONT PAGE'S BUILDER, over game-log stats. Rows wrap rather
+              than scroll, for the same reason they do there: a strip that
+              scrolls sideways hides the conditions you cannot see with nothing
+              to say they are there. A row with a value is a condition; a row
+              added through "Add Columns" and left blank is a column in the
+              matching-games table and nothing more. */}
+          <div className="rounded-lg border border-hairline bg-paper-deep/30 px-3 py-2.5 flex items-center flex-wrap gap-x-3 gap-y-2">
+            {rows.map((r) => (
+              <CalcConditionRow
+                key={r.id}
+                row={r}
+                label={statLabel(r.stat)}
+                bounds={bounds.get(r.stat)}
+                pct={isPctKey(r.stat)}
+                autoFocus={r.id === freshId}
+                onChange={patchRow}
+                onRemove={removeRow}
+                // Enter in a value box runs the question. Picking a stat and
+                // typing a number is the whole gesture; the answer is what
+                // comes next, not another picker.
+                onNext={calculate}
+              />
+            ))}
+            <StatPicker
+              mode="filter"
+              options={PICK_OPTIONS}
+              groupLabel={GROUP_LABEL}
+              listId={PICKER_LIST_ID}
+              alwaysFree
+              onPick={addFilter}
+              onSetColumns={setColumns}
+              current={cols}
+              remaining={MAX_CONDITIONS - rows.length}
+              disabled={rows.length >= MAX_CONDITIONS}
+              open={pickerOpen}
+              setOpen={setPickerOpen}
+            />
+            <StatPicker
+              mode="columns"
+              options={PICK_OPTIONS}
+              groupLabel={GROUP_LABEL}
+              listId={`${PICKER_LIST_ID}-cols`}
+              alwaysFree
+              onPick={addFilter}
+              onSetColumns={setColumns}
+              current={cols}
+              remaining={MAX_CONDITIONS}
+              open={colsPickerOpen}
+              setOpen={setColsPickerOpen}
+            />
+            {rows.length === 0 && (
+              <span className="text-xs text-ink-muted">
+                No conditions yet — this returns the overall record for everything in scope.
+              </span>
+            )}
+            {rows.length >= MAX_CONDITIONS && (
+              <span className="text-xs text-ink-muted">{MAX_CONDITIONS} is the most one question carries.</span>
+            )}
+          </div>
 
           <div className="flex items-center gap-3 pt-4 border-t border-hairline mt-5">
             <button
@@ -1110,13 +1199,11 @@ export function CalcClient({
             </button>
           </div>
         </div>
-        </div>
-        </div>
       </div>
 
       {/* Results */}
       {submitted && results && (
-        <div className="bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-hidden">
+        <div ref={resultsRef} className="scroll-mt-20 bg-paper-deep/25 border border-hairline rounded-xl shadow-sm overflow-hidden">
           <div className="border-b border-hairline">
             <div className="p-4 sm:p-6 lg:p-8 lg:pb-6 grid grid-cols-3 gap-3 sm:gap-6">
               <div>
@@ -1299,8 +1386,8 @@ export function CalcClient({
                       <thead className="border-b border-hairline text-left">
                         <tr>
                           <Th>Date</Th><Th>Team</Th><Th>Opp</Th><Th>Result</Th>
-                          {submitted.filters.map((f) => (
-                            <Th key={f.id} align="right">{cleanLabel(CALC_STAT_OPTIONS.find((s) => s.key === f.stat)?.label ?? String(f.stat))}</Th>
+                          {submitted.cols.map((key) => (
+                            <Th key={key} align="right">{statLabel(key)}</Th>
                           ))}
                         </tr>
                       </thead>
@@ -1365,9 +1452,9 @@ export function CalcClient({
                                 </span>
                               </button>
                             </Td>
-                            {submitted.filters.map((f) => (
-                              <Td key={f.id} align="right" className="tabular">
-                                {formatStat(g[f.stat] ?? null, f.stat as string)}
+                            {submitted.cols.map((key) => (
+                              <Td key={key} align="right" className="tabular">
+                                {formatStat(g[key] ?? null, key)}
                               </Td>
                             ))}
                           </tr>
@@ -1474,16 +1561,6 @@ function ConditionChip({ children }: { children: React.ReactNode }) {
   );
 }
 
-/**
- * One stat as a compact sheet row: name, comparator glyph (tap to cycle),
- * exact-value input, thin slider. Dormant until touched — any interaction
- * turns the row into a live condition (bold name, hue-filled slider, ×);
- * × puts it back to sleep. Flags trade the whole apparatus for Any/Yes/No.
- *
- * The slider is the thumb-only .bta-range the Players drawer uses: track and
- * fill are plain divs behind a transparent input, which is what lets the fill
- * take the group hue with no per-hue CSS.
- */
 function PagerButton({
   onClick,
   disabled,
@@ -1669,7 +1746,7 @@ function ChipSearchMulti({
           }}
           placeholder={placeholder}
           aria-label={label}
-          className="h-9 w-full px-3 rounded-md border border-hairline bg-card text-ink text-base sm:text-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-coral/40 placeholder:text-xs sm:placeholder:text-sm"
+          className="h-10 w-full px-3 rounded-md border border-hairline bg-card text-ink text-base sm:text-sm placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-coral/40 placeholder:text-xs sm:placeholder:text-sm"
         />
         {matches.length > 0 && (
           <ul className="bta-pop-in absolute z-20 mt-1 w-full rounded-md border border-hairline bg-popover shadow-md overflow-hidden" role="listbox">

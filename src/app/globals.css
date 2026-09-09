@@ -1184,35 +1184,48 @@ body {
   .highlight-swipe { animation: none; }
 }
 
-/* Indeterminate sweep under the Ask box (components/calc/ask-status.tsx).
-   A parse is one round trip with no progress to report, so this is honestly
-   indeterminate: a segment that crosses and restarts, never a bar that fills.
-   The gradient's transparent ends keep it from reading as a block sliding
-   along a track — it enters and leaves the rule rather than butting against
-   its own edges. */
-@keyframes ask-sweep {
-  from { transform: translateX(-105%); }
-  to   { transform: translateX(400%); }
+/* Ask the Calculator, thinking — the Fill filters button in
+   components/calc/calc-client.tsx and the status line in ask-status.tsx.
+   Three dots take the button's label and a point breathes beside the status
+   copy. The 2px sweep this replaced was technically animating and read as
+   frozen: too thin to register, and it unmounted when the parse landed, so
+   the second half of the wait was a static line of text.
+
+   Transforms and opacity only, on purpose. Both run on the compositor, so
+   they keep moving through the second the main thread spends parsing
+   thirteen season files — the one moment an indicator most needs to move. */
+@keyframes ask-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.55; }
+  30%           { transform: translateY(-5px); opacity: 1; }
 }
-.ask-sweep::after {
-  content: "";
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 34%;
-  border-radius: 2px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--coral) 22%,
-    var(--coral) 78%,
-    transparent
-  );
-  animation: ask-sweep 1500ms cubic-bezier(0.65, 0, 0.35, 1) infinite;
+.ask-dots { display: inline-flex; gap: 5px; }
+.ask-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: ask-bounce 1.1s ease-in-out infinite;
 }
-/* Reduced motion still needs to look like something is happening, so the
-   segment parks mid-track rather than vanishing. */
+.ask-dots i:nth-child(2) { animation-delay: 0.15s; }
+.ask-dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes ask-breathe {
+  0%, 100% { transform: scale(0.7); opacity: 0.45; }
+  50%      { transform: scale(1);   opacity: 1; }
+}
+.ask-orb {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--coral);
+  animation: ask-breathe 1.4s ease-in-out infinite;
+}
+/* Reduced motion still needs to look like something is happening. A change
+   of opacity is not movement, so the dots and the point fade in and out
+   where they are. */
+@keyframes ask-blink { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .ask-sweep::after { animation: none; transform: translateX(95%); }
+  .ask-dots i { animation: ask-blink 1.2s ease-in-out infinite; }
+  .ask-orb    { animation: ask-blink 1.4s ease-in-out infinite; }
 }
 
 /* Full-screen mobile menu (components/mobile-menu.tsx). Rises rather than
