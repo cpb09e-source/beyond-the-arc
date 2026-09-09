@@ -68,6 +68,47 @@
   to     = "/.netlify/functions/season/:splat"
   status = 200
 
+# ---------------------------------------------------------------------------
+# Game pages come from R2, not from the deploy.
+#
+# WHY. The scoreboard archive prerenders a page per game since 2014 — 74,307 of
+# them — and Next 16 writes TEN files per page: index.html plus nine RSC
+# payloads. That is 743,070 files, which took the deploy from ~361,000 (the
+# last one that succeeded) to 1,104,267. Netlify hashed them all and then died
+# while diffing against the CDN: a 422 carrying an internal Mongo read timeout
+# on the first try, a bare 500 on the second. Two different backend errors at
+# the same stage is a size ceiling, not bad luck, and Netlify publishes no
+# per-deploy file cap to design against.
+#
+# So the pages are mirrored to R2 by scripts/sync-pages-to-r2.mjs and stripped
+# from out/ by the build wrapper, and these two rules put them back at exactly
+# the URLs they had. status 200 is a rewrite, so the reader and Googlebot both
+# get real HTML from btacbb.xyz — same origin, same path, nothing about the
+# SEO plan changes. The deploy drops back to its known-good size.
+#
+# ORDER MATTERS. A game page is /games/<season>/<slug>/ (three segments) and
+# its RSC payloads are one segment deeper. Placeholders match a single segment
+# each, so the four-segment rule cannot swallow a page URL and the
+# three-segment rule cannot swallow a payload — but the deeper rule is first
+# regardless, because Netlify takes the first match and that is the order that
+# stays correct if anyone adds a splat here later.
+#
+# No `force`: out/games does not ship, so there is no file to lose to. If you
+# ever see a game page 404, check that the build wrapper still strips it AND
+# that the sync ran — a rewrite to a key that isn't in the bucket is a 404 with
+# nothing in the deploy log to explain it.
+#
+# The pages/ prefix must match KEY_PREFIX in scripts/sync-pages-to-r2.mjs.
+[[redirects]]
+  from   = "/games/:season/:slug/:file"
+  to     = "https://pub-86f242cc47a6490a8a66813d2650b86d.r2.dev/pages/games/:season/:slug/:file"
+  status = 200
+
+[[redirects]]
+  from   = "/games/:season/:slug"
+  to     = "https://pub-86f242cc47a6490a8a66813d2650b86d.r2.dev/pages/games/:season/:slug/index.html"
+  status = 200
+
 # THIS BLOCK NO LONGER DRIVES `npm run dev`. It is kept only for
 # `npm run dev:netlify`, an escape hatch for reproducing Netlify's own routing.
 #

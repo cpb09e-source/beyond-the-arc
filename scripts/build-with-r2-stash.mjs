@@ -19,10 +19,11 @@
  * Mirror DIRS with R2_DIRS in src/lib/data-url.ts when adding new R2
  * subdirs.
  */
-import { rm, writeFile } from "node:fs/promises";
+import { rm, writeFile, rename, mkdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
-import { R2_MIRRORED_DIRS, BUILD_ONLY_DIRS, BUILD_ONLY_FILES } from "./lib/out-strip-lists.mjs";
+import { R2_MIRRORED_DIRS, BUILD_ONLY_DIRS, BUILD_ONLY_FILES, PAGE_MIRRORED_DIRS } from "./lib/out-strip-lists.mjs";
 
 const ROOT = process.cwd();
 const OUT = path.join(ROOT, "out");
@@ -223,6 +224,40 @@ async function main() {
   console.log("");
   const gate = spawnSync(process.execPath, [path.join(ROOT, "scripts/stage-gated-data.mjs")], { stdio: "inherit" });
   if (gate.status !== 0) throw new Error("stage-gated-data.mjs failed — refusing to finish the build");
+
+  /**
+   * The game pages MOVE out of the deploy rather than being deleted, because
+   * something still has to upload them. See PAGE_MIRRORED_DIRS for why they
+   * cannot ship (743,070 files broke Netlify's CDN diff twice).
+   *
+   * A move, not a copy: leaving them in out/ is exactly the failure this is
+   * here to prevent, and a half-stripped out/ is worse than an obvious one.
+   * page-mirror/ is rebuilt from scratch each time so a slug that disappears
+   * between builds cannot linger and get re-uploaded forever.
+   *
+   * THE UPLOAD IS A SEPARATE STEP ON PURPOSE — `node scripts/sync-pages-to-r2.mjs`,
+   * the same shape as `npm run sync:r2` for the data. The build stays offline
+   * and needs no credentials; syncing stays re-runnable after a failure.
+   */
+  console.log("\n→ Moving page dirs out of out/ for the R2 mirror…");
+  const MIRROR = path.join(ROOT, "page-mirror");
+  await rm(MIRROR, { recursive: true, force: true });
+  let movedDirs = 0;
+  for (const d of PAGE_MIRRORED_DIRS) {
+    const from = path.join(OUT, d);
+    if (!existsSync(from)) {
+      console.log(`   (no out/${d} — nothing to move)`);
+      continue;
+    }
+    const to = path.join(MIRROR, d);
+    await mkdir(path.dirname(to), { recursive: true });
+    await rename(from, to);
+    console.log(`   moved out/${d} → page-mirror/${d}`);
+    movedDirs++;
+  }
+  if (movedDirs) {
+    console.log("   NEXT: node scripts/sync-pages-to-r2.mjs  (or every game page 404s)");
+  }
 
   console.log(`\n✓ Stripped ${stripped}/${STRIP_DIRS.length} R2 dirs. Build complete.`);
 }

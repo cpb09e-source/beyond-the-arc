@@ -96,5 +96,29 @@ export const BUILD_ONLY_FILES = [
   "data/assist-network.json",
 ];
 
+/**
+ * Rendered PAGES that move to R2 instead of riding in the deploy.
+ *
+ * A DIFFERENT KIND OF ENTRY FROM EVERYTHING ABOVE. The lists above are all
+ * `data/...` — JSON the browser fetches. These are top-level route directories
+ * full of HTML that Netlify would otherwise serve itself.
+ *
+ * WHY THEY HAD TO MOVE. The scoreboard archive prerenders a page per game
+ * since 2014 — 74,307 of them — and Next 16 writes ten files per page:
+ * index.html plus nine RSC payloads. 743,070 files, which took the deploy from
+ * ~361,000 (the last that succeeded, a 72-minute upload) to 1,104,267. Netlify
+ * hashed all of them and then failed while diffing against the CDN — a 422
+ * with an internal Mongo read timeout, then a plain 500 on the retry. Two
+ * different backend errors at the same stage is a ceiling, not a flake, and
+ * Netlify documents no per-deploy file cap to aim under. The per-DIRECTORY cap
+ * of 54,000 is real but not our problem: our widest is out/players at 15,729.
+ *
+ * These are NOT stripped in place like the lists above. The build wrapper
+ * MOVES them to page-mirror/, because something still has to upload them —
+ * see scripts/sync-pages-to-r2.mjs, and the rewrite in netlify.toml that puts
+ * them back at their original URLs.
+ */
+export const PAGE_MIRRORED_DIRS = ["games"];
+
 /** Everything that must be absent from out/ by the time the deploy runs. */
 export const ALL_STRIP_DIRS = [...R2_MIRRORED_DIRS, ...BUILD_ONLY_DIRS];

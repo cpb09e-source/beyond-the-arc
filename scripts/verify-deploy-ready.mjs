@@ -14,7 +14,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { ALL_STRIP_DIRS, BUILD_ONLY_FILES, R2_MIRRORED_DIRS } from "./lib/out-strip-lists.mjs";
+import { ALL_STRIP_DIRS, BUILD_ONLY_FILES, R2_MIRRORED_DIRS, PAGE_MIRRORED_DIRS } from "./lib/out-strip-lists.mjs";
 
 const OUT = path.resolve("out");
 const fail = [];
@@ -162,6 +162,32 @@ if (paywallOff) {
 const MUST_BE_GONE = [...ALL_STRIP_DIRS, ...BUILD_ONLY_FILES];
 const stillThere = MUST_BE_GONE.filter(exists);
 check("R2-mirrored and build-only data stripped", stillThere.length === 0, stillThere.join(", "));
+
+/**
+ * The page dirs are the difference between a deploy that uploads and one that
+ * dies at the CDN diff. out/games alone is 743,070 files and took the total to
+ * 1,104,267 on 2026-09-09, which Netlify refused twice (422, then 500). This
+ * is a separate check from the one above because the failure is different in
+ * kind: a stray data dir makes the deploy fat, a stray page dir makes it
+ * impossible.
+ */
+const pagesStillThere = PAGE_MIRRORED_DIRS.filter(exists);
+check(
+  "page dirs moved to page-mirror/ for R2",
+  pagesStillThere.length === 0,
+  pagesStillThere.length ? `${pagesStillThere.join(", ")} still in out/ — the deploy will fail at "CDN diffing files"` : "",
+);
+
+/**
+ * And having moved them out, they must actually BE on R2 — a rewrite pointing
+ * at a key that was never uploaded is a 404 with nothing in the deploy log to
+ * explain it. Checking the mirror exists locally is the cheap half; the sync
+ * script reports the other half.
+ */
+for (const d of PAGE_MIRRORED_DIRS) {
+  const mirrored = fs.existsSync(path.resolve("page-mirror", d));
+  check(`page-mirror/${d} staged for upload`, mirrored, mirrored ? "" : "run the build wrapper, then scripts/sync-pages-to-r2.mjs");
+}
 
 // ── 4. Things a past deploy got wrong ─────────────────────────────────────
 if (exists("robots.txt")) {
