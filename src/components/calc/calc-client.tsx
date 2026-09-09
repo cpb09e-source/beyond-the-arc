@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { GripVertical, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -109,6 +109,8 @@ const GROUP_LABEL: Record<string, string> = Object.fromEntries(
   conditionGroups(CALC_STAT_OPTIONS).map(([g]) => [g, g]),
 );
 const PICKER_LIST_ID = "calc-conditions-picker";
+/** Layout effects are a no-op during the export's server pass. */
+const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 /** Ceiling on rows. Each one is a column in the results table. */
 const MAX_CONDITIONS = 12;
 /**
@@ -767,10 +769,60 @@ export function CalcClient({
    * only: a wrapper that is draggable all the time steals the mousedown from
    * the value box inside it, and selecting a number becomes a drag. Arrow
    * keys on the grip do the same job without a mouse.
+   *
+   * LIVE, NOT ON RELEASE. The row moves the moment the pointer crosses the
+   * middle of a neighbour, so the strip shows the order being built rather
+   * than revealing it on drop. The midpoint rule is what keeps that stable:
+   * rows are different widths, and swapping on first contact made the pair
+   * flip back and forth under a stationary pointer.
+   *
+   * THE SLIDE IS FLIP. React re-renders the new order instantly; before that
+   * paints, each row is parked at the spot it was just measured in and a
+   * transition carries it to where it now sits. Positions are snapshotted
+   * right before every move (`snapshotRows`), so a row already sliding
+   * animates on from wherever it visibly is, not from where it started.
    */
   const [dragId, setDragId] = useState<number | null>(null);
   const [armedId, setArmedId] = useState<number | null>(null);
-  const [overId, setOverId] = useState<number | null>(null);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const rowRects = useRef(new Map<number, DOMRect>());
+  const snapshotRows = useCallback(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const m = new Map<number, DOMRect>();
+    strip.querySelectorAll<HTMLElement>("[data-row-id]").forEach((el) => {
+      m.set(Number(el.dataset.rowId), el.getBoundingClientRect());
+    });
+    rowRects.current = m;
+  }, []);
+  useIsoLayoutEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const reduce = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const prev = rowRects.current;
+    const next = new Map<number, DOMRect>();
+    strip.querySelectorAll<HTMLElement>("[data-row-id]").forEach((el) => {
+      // Snap any slide still in flight so the box measured is the layout box.
+      el.style.transition = "none";
+      el.style.transform = "";
+      const rect = el.getBoundingClientRect();
+      const id = Number(el.dataset.rowId);
+      next.set(id, rect);
+      const old = prev.get(id);
+      if (!old || reduce) return;
+      const dx = old.left - rect.left;
+      const dy = old.top - rect.top;
+      if (!dx && !dy) return;
+      el.style.transform = `translate(${dx}px, ${dy}px)`;
+      // Flush, so the parked position is what the first frame paints.
+      void el.offsetWidth;
+      requestAnimationFrame(() => {
+        el.style.transition = "transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1)";
+        el.style.transform = "";
+      });
+    });
+    rowRects.current = next;
+  });
   const moveRow = useCallback((fromId: number, toId: number) => {
     setRows((r) => {
       const from = r.findIndex((x) => x.id === fromId);
@@ -1266,10 +1318,16 @@ export function CalcClient({
               to say they are there. A row with a value is a condition; a row
               added through "Add Columns" and left blank is a column in the
               matching-games table and nothing more. */}
-          <div className="rounded-lg border border-hairline bg-paper-deep/30 px-3 py-2.5 flex items-center flex-wrap gap-x-3 gap-y-2">
+          <div
+            ref={stripRef}
+            onDragOver={(e) => { if (dragId !== null) e.preventDefault(); }}
+            onDrop={(e) => { e.preventDefault(); setDragId(null); setArmedId(null); }}
+            className="rounded-lg border border-hairline bg-paper-deep/30 px-3 py-2.5 flex items-center flex-wrap gap-x-3 gap-y-2"
+          >
             {rows.map((r) => (
               <div
                 key={r.id}
+                data-row-id={r.id}
                 draggable={armedId === r.id}
                 onDragStart={(e) => {
                   setDragId(r.id);
@@ -1280,20 +1338,25 @@ export function CalcClient({
                   if (dragId === null || dragId === r.id) return;
                   e.preventDefault();
                   e.dataTransfer.dropEffect = "move";
-                  if (overId !== r.id) setOverId(r.id);
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const from = rows.findIndex((x) => x.id === dragId);
+                  const to = rows.findIndex((x) => x.id === r.id);
+                  const dragged = rowRects.current.get(dragId);
+                  // On the same line, the pointer has to pass this row's
+                  // middle in the direction of travel. Across lines any
+                  // contact counts — there is no width to cross.
+                  const sameLine = dragged ? Math.abs(dragged.top - rect.top) < rect.height / 2 : true;
+                  if (sameLine) {
+                    const mid = rect.left + rect.width / 2;
+                    if (to > from && e.clientX < mid) return;
+                    if (to < from && e.clientX > mid) return;
+                  }
+                  snapshotRows();
+                  moveRow(dragId, r.id);
                 }}
-                onDragLeave={() => { if (overId === r.id) setOverId(null); }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (dragId !== null) moveRow(dragId, r.id);
-                  setDragId(null); setOverId(null); setArmedId(null);
-                }}
-                onDragEnd={() => { setDragId(null); setOverId(null); setArmedId(null); }}
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-md transition-[opacity,box-shadow]",
-                  dragId === r.id && "opacity-40",
-                  overId === r.id && dragId !== r.id && "ring-2 ring-coral/50 ring-offset-2 ring-offset-paper",
-                )}
+                onDrop={(e) => { e.preventDefault(); setDragId(null); setArmedId(null); }}
+                onDragEnd={() => { setDragId(null); setArmedId(null); }}
+                className={cn("inline-flex items-center gap-1 rounded-md", dragId === r.id && "opacity-40")}
               >
                 <span
                   role="button"
@@ -1303,8 +1366,8 @@ export function CalcClient({
                   onMouseDown={() => setArmedId(r.id)}
                   onMouseUp={() => setArmedId(null)}
                   onKeyDown={(e) => {
-                    if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); nudgeRow(r.id, -1); }
-                    else if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); nudgeRow(r.id, 1); }
+                    if (e.key === "ArrowLeft" || e.key === "ArrowUp") { e.preventDefault(); snapshotRows(); nudgeRow(r.id, -1); }
+                    else if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); snapshotRows(); nudgeRow(r.id, 1); }
                   }}
                   className="shrink-0 -mr-0.5 inline-flex items-center justify-center w-4 h-8 rounded text-ink-muted/60 hover:text-ink cursor-grab active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-coral/40"
                 >
