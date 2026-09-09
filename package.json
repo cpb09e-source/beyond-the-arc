@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "next build",
+    "build": "node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build",
     "postbuild": "node scripts/strip-r2-mirrored-from-out.mjs",
     "start": "next start",
     "lint": "eslint",

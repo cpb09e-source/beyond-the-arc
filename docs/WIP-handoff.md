@@ -132,6 +132,41 @@ byte-identical in shape to what the live path serves and costs zero API calls.
 and 719 MB) and are in all four lists. Synced 2026-09-08; `verify-deploy-ready`
 passes 29/29.
 
+### BEFORE THE FIRST BUILD WITH THE ARCHIVE — 2026-09-09
+
+**The build now asks for 8 GB.** `npm run build` was a bare `next build`, on
+Node's default heap, for a site that prerendered 30,649 pages. The archive
+takes that past 105,000. An out-of-memory failure twenty minutes into a
+half-hour build is the expensive way to discover the default was not enough,
+so the build script now mirrors the dev command:
+
+    node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build
+
+**What to expect.** The last measured build was 8m 12s / 30,649 pages /
+319,479 files / 11.34 GB. This adds ~74,600 pages, so budget roughly **30
+minutes to build** and **one to two hours for the first deploy** — file count
+drives upload time, and every deploy after this one is incremental. 381 GB free
+on C: as of this note; `out/` should land near 16-18 GB.
+
+**Verified before building** (all zero unless noted):
+
+| check | result |
+|---|---|
+| game pages | 74,307 |
+| duplicate URLs | 0 |
+| blank team names in a slug | 0 |
+| index entries with no bundle | 0 |
+| index entries with no slug | 0 |
+| slug disagreeing with the index | 0 |
+| days in the committed index with no slate file | 0 |
+| R2 spot check, a bundle + slug map per season | 27/27 present |
+| sitemap files / URLs | 3 / 118,825, none over 50k |
+| orphan bundles on R2 | 576 (no page is built for them; harmless) |
+
+The 576 orphans are bundles for games later dropped from an index — cancelled
+and postponed fixtures, mostly. Nothing links to them and nothing builds them.
+Not worth a destructive prune.
+
 ### THE ARCHIVE CAN BE SILENTLY STALE — 2026-09-09
 
 **The 2025-26 archive was missing the national championship game** and nobody
