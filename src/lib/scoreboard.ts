@@ -43,6 +43,8 @@ export type ScoreGame = {
   line: { spread: number | null; overUnder: number | null; provider: string } | null;
   /** The tip time has not been set — a fixture whose slot nobody has chosen. */
   tbd?: boolean;
+  /** "NCAA" / "NIT" / a conference tournament name, else null. */
+  tournament?: string | null;
 };
 
 export type Slate = {

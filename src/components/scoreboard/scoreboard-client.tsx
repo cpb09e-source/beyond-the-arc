@@ -139,6 +139,24 @@ export function ScoreboardClient({
   // Conference filter. Every conference with a game today, plus the
   // non-conference bucket; "" means show everything.
   const [conf, setConf] = useState("");
+
+  /**
+   * Tournaments actually being played on this date.
+   *
+   * Offered ONLY when the slate has them, which for most of the year is never
+   * — a permanent "NCAA Tournament" entry in a December dropdown is a filter
+   * that can only ever return nothing. In March it is the first question
+   * anybody asks of a slate, so it leads the list.
+   *
+   * NCAA and NIT are pinned in that order because they are the two everyone
+   * means; conference tournaments follow alphabetically.
+   */
+  const tourneyOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const g of slate.games) if (g.tournament) set.add(g.tournament);
+    const rank = (t: string) => (t === "NCAA" ? 0 : t === "NIT" ? 1 : 2);
+    return [...set].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  }, [slate.games]);
   const confOptions = useMemo(() => {
     const set = new Set<string>();
     for (const g of slate.games) {
@@ -178,6 +196,7 @@ export function ScoreboardClient({
   // league wants.
   const inConf = (g: ScoreGame) => {
     if (!conf) return true;
+    if (conf.startsWith("@t:")) return g.tournament === conf.slice(3);
     if (conf === "@top25") return isRanked(g);
     if (conf === "@power") return isPowerGame(g);
     if (conf === "@mid") return !isPowerGame(g);
@@ -285,6 +304,12 @@ export function ScoreboardClient({
             ariaLabel="Filter the slate"
           >
             <option value="">All</option>
+            {/* Only in the weeks they are actually played — see tourneyOptions. */}
+            {tourneyOptions.map((t) => (
+              <option key={t} value={`@t:${t}`}>
+                {t === "NCAA" ? "NCAA Tournament" : t === "NIT" ? "NIT" : t}
+              </option>
+            ))}
             <option value="@top25">Top 25</option>
             <option value="@power">Power Conferences</option>
             <option value="@mid">Mid Majors</option>

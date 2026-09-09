@@ -127,6 +127,8 @@ type Game = {
   clock: string | null;
   /** The tip time has not been set. True for most of a schedule released early. */
   tbd: boolean;
+  /** "NCAA" / "NIT" / a conference tournament name, else null. */
+  tournament: string | null;
   /** Closing betting line, HOME perspective (negative = home favored). */
   line: { spread: number | null; overUnder: number | null; provider: string } | null;
 };
@@ -298,6 +300,9 @@ function normalize(r: Record<string, unknown>): Game | null {
     period: num(r.period),
     clock: str(r.clock),
     tbd,
+    // March is the one month where "which tournament is this" is the first
+    // question anybody asks of a slate.
+    tournament: str(r.tournament),
     line: null,
   };
 }

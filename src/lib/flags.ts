@@ -9,12 +9,19 @@
 /**
  * Score rail on/off, sitewide.
  *
- * Off for now. The rail is the only thing on the page that arrives after
- * first paint and changes the page height when it does, so it pushes
- * everything below it down a second or two in. Flip to true to bring it
- * back; nothing else has to change.
+ * ON since 2026-09-09. It was off because the rail arrived after first paint
+ * and pushed the page down with it — chrome that shifts every page on the
+ * site is worse than no chrome. Two things fixed that: the rail reserves its
+ * 53px before the slate lands (see score-ticker.tsx), and the slate itself is
+ * now a static file from the archive rather than a function call, so out of
+ * season it is a CDN hit with nothing to wait for.
+ *
+ * The one remaining shift is upward, and only when the fetch fails outright:
+ * the reserved strip collapses rather than showing an empty bar. That is the
+ * right way round — it happens rarely, and content moving up as something
+ * disappears is far less disruptive than content appearing under the reader.
  */
-export const SHOW_SCORE_TICKER = false;
+export const SHOW_SCORE_TICKER = true;
 
 /**
  * How the scoreboard, the score ticker and the game pages get their data.

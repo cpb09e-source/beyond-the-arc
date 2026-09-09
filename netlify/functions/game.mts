@@ -104,6 +104,44 @@ const str = (v: unknown) => (typeof v === "string" && v.length > 0 ? v : null);
 
 type Cached<T> = { at: number; value: T };
 const scheduleCache = new Map<string, Cached<Row[]>>();
+
+/**
+ * ONE NIGHT'S DATA, FETCHED ONCE, SHARED BY EVERY GAME IN IT.
+ *
+ * The window endpoints — /games, /games/teams, /games/players, /games/media,
+ * /lines — are all scoped by a date range, not by a game. This function used
+ * to ask each of them with a `&team=` filter, so a night with forty games
+ * being watched bought forty copies of the same night.
+ *
+ * Verified against CBBD before relying on it: the biggest Saturday of 2025-26
+ * returns 368 rows / 184 games from ONE unfiltered `/games/teams` call, well
+ * inside the 3,000-row cap. So a whole night's team box scores cost one call
+ * and a whole night's player box scores cost one more, no matter how many
+ * games anyone has open.
+ *
+ * What that changes in practice: a live game page went from ~5 CBBD calls a
+ * minute to ~1 (its own play-by-play, the only genuinely per-game endpoint),
+ * plus a handful shared across the entire slate. That is the difference
+ * between four games and fifty being watched at once on the same quota.
+ *
+ * TTL is short because a live night moves. A finished night is immutable, and
+ * the edge cache in front of this is what actually spares the repeat work.
+ */
+const WINDOW_TTL_MS = 45_000;
+const windowCache = new Map<string, { at: number; rows: Promise<Row[]> }>();
+function windowed(path: string, key: string): Promise<Row[]> {
+  const hit = windowCache.get(path);
+  if (hit && Date.now() - hit.at < WINDOW_TTL_MS) return hit.rows;
+  // The PROMISE is cached, not the result: four games resolving together on a
+  // cold container must make one request between them, not four.
+  const rows = soft(cbbd(path, key));
+  windowCache.set(path, { at: Date.now(), rows });
+  // A warm container serving a busy night should not grow without bound.
+  if (windowCache.size > 24) {
+    for (const [k, v] of windowCache) if (Date.now() - v.at > WINDOW_TTL_MS) windowCache.delete(k);
+  }
+  return rows;
+}
 const standingsCache = new Map<string, Cached<Row[]>>();
 let rankCache: { season: number; at: number; rows: Row[] } | null = null;
 
@@ -266,22 +304,39 @@ const handler = async (req: Request, _ctx: Context) => {
   const from = shiftDay(date, -1), to = shiftDay(date, 1);
 
   try {
-    const games = await cbbd(`/games?season=${season}&startDateRange=${from}&endDateRange=${to}`, key);
+    const games = await windowed(`/games?season=${season}&startDateRange=${from}&endDateRange=${to}`, key);
     const g = games.find((r) => r.id === id);
     if (!g) return fail("game not found");
 
     const home: string = g.homeTeam, away: string = g.awayTeam;
     const window = `season=${season}&startDateRange=${from}&endDateRange=${to}`;
 
-    const [teamRows, homeBox, awayBox, rawPlays, media, lines, ranks] = await Promise.all([
-      soft(cbbd(`/games/teams?${window}&team=${q(home)}`, key)),
-      soft(cbbd(`/games/players?${window}&team=${q(home)}`, key)),
-      soft(cbbd(`/games/players?${window}&team=${q(away)}`, key)),
+    /**
+     * Four of these are the whole night, shared; only the play-by-play is
+     * this game's alone. The box endpoints are no longer filtered by team,
+     * so the box arrays are the whole night and this game's rows are picked
+     * out of them below.
+     */
+    const [nightTeams, nightPlayers, rawPlays, media, lines, ranks] = await Promise.all([
+      windowed(`/games/teams?${window}`, key),
+      windowed(`/games/players?${window}`, key),
       soft(cbbd(`/plays/game/${id}`, key)),
-      soft(cbbd(`/games/media?${window}`, key)),
-      soft(cbbd(`/lines?season=${season}&startDateRange=${from}&endDateRange=${to}`, key)),
+      windowed(`/games/media?${window}`, key),
+      windowed(`/lines?season=${season}&startDateRange=${from}&endDateRange=${to}`, key),
       ranksOn(key, season, date),
     ]);
+    /**
+     * This game's rows, picked out of the night by BOTH game and team.
+     *
+     * The team half is load-bearing now that the fetches are shared: each
+     * game has two rows in each array, one per side, and matching on gameId
+     * alone would take whichever happened to come first — silently showing
+     * the away team's box under the home team's name about half the time.
+     */
+    const teamRow = nightTeams.find((r) => r.gameId === id && r.team === home)
+      ?? nightTeams.find((r) => r.gameId === id) ?? null;
+    const homePlayers = nightPlayers.find((r) => r.gameId === id && r.team === home) ?? null;
+    const awayPlayers = nightPlayers.find((r) => r.gameId === id && r.team === away) ?? null;
 
     // Context. Memoized separately (see the header) so a live refresh does not
     // re-buy the last three seasons of schedule every minute.
@@ -294,7 +349,7 @@ const handler = async (req: Request, _ctx: Context) => {
       ...confs.map((c) => standings(key, season, c, g.startDate)),
     ]) as [Row[], Row[], number | null, number | null, ...Row[][]];
 
-    const tr = teamRows.find((r) => r.gameId === id) ?? null;
+    const tr = teamRow;
     const homeStats = tr ? (tr.isHome ? tr.teamStats : tr.opponentStats) : null;
     const awayStats = tr ? (tr.isHome ? tr.opponentStats : tr.teamStats) : null;
 
@@ -317,13 +372,11 @@ const handler = async (req: Request, _ctx: Context) => {
     // ids are translated to box ids HERE — once, server-side — and the client
     // keeps a plain id join.
     const boxIdByName = new Map<string, number>();
-    for (const row of [homeBox, awayBox]) {
-      for (const r of row) {
-        if (r.gameId !== id || !Array.isArray(r.players)) continue;
-        for (const pl of r.players) {
-          if (typeof pl?.name === "string" && typeof pl?.athleteId === "number") {
-            boxIdByName.set(pl.name.trim().toLowerCase(), pl.athleteId);
-          }
+    for (const r of [homePlayers, awayPlayers]) {
+      if (!r || !Array.isArray(r.players)) continue;
+      for (const pl of r.players) {
+        if (typeof pl?.name === "string" && typeof pl?.athleteId === "number") {
+          boxIdByName.set(pl.name.trim().toLowerCase(), pl.athleteId);
         }
       }
     }
@@ -408,8 +461,8 @@ const handler = async (req: Request, _ctx: Context) => {
         seasonPace: { home: homePace, away: awayPace },
       },
       players: {
-        home: homeBox.find((r) => r.gameId === id)?.players ?? [],
-        away: awayBox.find((r) => r.gameId === id)?.players ?? [],
+        home: homePlayers?.players ?? [],
+        away: awayPlayers?.players ?? [],
       },
       plays,
       broadcasts: media.find((m) => m.gameId === id)?.broadcasts ?? [],

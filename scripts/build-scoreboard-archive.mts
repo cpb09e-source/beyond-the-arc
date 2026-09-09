@@ -141,7 +141,7 @@ function rankings(season: number): Row[] {
 }
 
 /** Team box rows and player box rows, indexed by team. Loaded once per season. */
-type BoxIndex = { byTeam: Map<string, Row[]> };
+type BoxIndex = { byTeam: Map<string, Row[]>; all: Row[] };
 const boxTeamCache = new Map<number, BoxIndex>();
 const boxPlayerCache = new Map<number, BoxIndex>();
 function indexByTeam(rows: Row[]): BoxIndex {
@@ -153,7 +153,7 @@ function indexByTeam(rows: Row[]): BoxIndex {
     if (!arr) { arr = []; byTeam.set(t, arr); }
     arr.push(r);
   }
-  return { byTeam };
+  return { byTeam, all: rows };
 }
 function boxTeams(season: number): BoxIndex {
   let hit = boxTeamCache.get(season);
@@ -253,8 +253,16 @@ function answer(url: URL): Row[] {
   if (p === "/rankings") return rankings(season);
   if (p === "/games/teams" || p === "/games/players") {
     const idx = p === "/games/teams" ? boxTeams(season) : boxPlayers(season);
-    let rows = team ? (idx.byTeam.get(team) ?? []) : [];
-    if (!team) throw new Error(`shim: ${p} without team is not a query the archive answers`);
+    /**
+     * A TEAM FILTER IS OPTIONAL, and the unfiltered form is now the one the
+     * function actually uses: it fetches a whole night's box scores once and
+     * shares them across every game in it (see the windowed() cache in
+     * netlify/functions/game.mts). This used to throw for that shape, which
+     * `soft()` swallowed into an empty array — every bundle built with no box
+     * score at all. The builder's own `no-box` counter caught it on the first
+     * run, which is exactly what it is for.
+     */
+    let rows = team ? (idx.byTeam.get(team) ?? []) : idx.all;
     if (from || to) rows = rows.filter((r) => inRange(r.startDate, from, to));
     return rows;
   }
@@ -428,6 +436,7 @@ async function buildSchedule(season: number): Promise<void> {
         home: side(r, "home"), away: side(r, "away"),
         neutralSite: r.neutralSite === true, conferenceGame: r.conferenceGame === true,
         venue: r.venue ?? null, period: null, clock: null, line: null,
+        tournament: r.tournament ?? null,
         /**
          * CBBD'"'"'S OWN "TIP TIME NOT SET" FLAG, carried rather than inferred.
          * Every unscheduled game comes back at midnight Eastern, so without
@@ -445,6 +454,7 @@ async function buildSchedule(season: number): Promise<void> {
     for (const g of games) {
       index.push({
         id: g.id, date: d, start: g.startDate, status: g.status, tbd: g.tbd,
+        tournament: g.tournament ?? null,
         venue: g.venue, city: null, state: null, attendance: null,
         neutral: g.neutralSite, confGame: g.conferenceGame, excitement: null,
         home: { team: g.home.team, conf: g.home.conference, pts: null, periods: [], winner: null, rank: null, seed: g.home.seed, rec: null, elo: null },
@@ -554,6 +564,7 @@ async function main() {
         });
         index.push({
           id: g.id, date: d, start: g.startDate, status: g.status,
+          tournament: g.tournament ?? raw.tournament ?? null,
           venue: g.venue ?? null, city: raw.city ?? null, state: raw.state ?? null,
           attendance: typeof raw.attendance === "number" ? raw.attendance : null,
           neutral: g.neutralSite === true, confGame: g.conferenceGame === true,

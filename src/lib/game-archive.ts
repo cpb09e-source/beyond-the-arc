@@ -23,6 +23,8 @@ export type ArchiveGame = {
   id: number; date: string; start: string; status: string;
   /** Tip time not set — every 2026-27 fixture as of September 2026. */
   tbd?: boolean;
+  /** "NCAA" / "NIT" / a conference tournament name, else null. */
+  tournament?: string | null;
   venue: string | null; city: string | null; state: string | null; attendance: number | null;
   neutral: boolean; confGame: boolean; excitement: number | null;
   home: ArchiveSide; away: ArchiveSide;
