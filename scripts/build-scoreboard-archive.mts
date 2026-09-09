@@ -10,6 +10,9 @@
  *   npx tsx scripts/build-scoreboard-archive.mts --fetch-lines   # one-time: cache betting lines
  *   npx tsx scripts/build-scoreboard-archive.mts --schedule --season 2027
  *                                                # the UPCOMING season's fixtures
+ *   npx tsx scripts/build-scoreboard-archive.mts --fetch-schedule --season 2019
+ *                                                # backfill an old season's games-*.json.gz
+ *                                                # the UPCOMING season's fixtures
  *
  * Writes:
  *   public/data/scoreboard/<season>/<YYYY-MM-DD>.json   one Slate per day (the
@@ -78,6 +81,7 @@ const SLATES_ONLY = flag("--slates-only");
 const GAMES_ONLY = flag("--games-only");
 const FETCH_LINES = flag("--fetch-lines");
 const SCHEDULE_ONLY = flag("--schedule");
+const FETCH_SCHEDULE = flag("--fetch-schedule");
 
 const archiveDir = (season: number) => path.join(root, "data", "cbbd", String(season));
 const outSlates = path.join(root, "public", "data", "scoreboard", String(SEASON));
@@ -300,6 +304,62 @@ async function fetchLines(season: number): Promise<void> {
   console.log(`wrote ${f}: ${out.length} rows`);
 }
 
+/**
+ * Backfill a season's schedule into the archive, in the same shape and naming
+ * the ingest scripts use, so the shim finds it like any other season.
+ *
+ * 2014-2024 have box scores, play-by-play and rankings locally but no
+ * `games-*.json.gz` — the schedule was never archived because nothing needed
+ * it until the game pages did. It is the cheapest file in the set: a dozen
+ * windowed calls a season.
+ */
+/**
+ * A CBBD GET with backoff.
+ *
+ * CBBD rate-limits per short window as well as per month, and answers 429
+ * rather than queueing. Backfilling a decade of schedules is the first thing
+ * here fast enough to trip it, and a bare throw halfway through leaves the
+ * archive in a state nobody can tell apart from "done".
+ */
+async function cbbdGet(url: string, key: string, tries = 5): Promise<Row[]> {
+  for (let i = 0; i < tries; i++) {
+    const res = await realFetch(url, { headers: { Authorization: `Bearer ${key}`, accept: "application/json" } });
+    if (res.status === 429) {
+      const wait = 2000 * 2 ** i;
+      console.log(`    429 — waiting ${wait / 1000}s`);
+      await new Promise((r) => setTimeout(r, wait));
+      continue;
+    }
+    if (!res.ok) throw new Error(`CBBD ${res.status} on ${url.replace(API, "")}`);
+    return (await res.json()) as Row[];
+  }
+  throw new Error(`CBBD kept rate-limiting ${url.replace(API, "")}`);
+}
+
+async function fetchSchedule(season: number): Promise<void> {
+  const key = fs.readFileSync(path.join(root, ".env.local"), "utf8").match(/^CBBD_API_KEY=(.+)$/m)?.[1]?.trim();
+  if (!key) throw new Error("CBBD_API_KEY not found in .env.local");
+  const dir = archiveDir(season);
+  fs.mkdirSync(dir, { recursive: true });
+  let cursor = `${season - 1}-10-25`;
+  const end = `${season}-04-15`;
+  let total = 0, files = 0;
+  while (cursor <= end) {
+    const to = shiftDay(cursor, 13);
+    const batch = await cbbdGet(`${API}/games?season=${season}&startDateRange=${cursor}&endDateRange=${to}`, key);
+    if (batch.length >= 3000) throw new Error(`/games ${cursor}..${to} hit the 3,000-row cap`);
+    if (batch.length) {
+      const name = `games-${cursor.replace(/-/g, "")}-${to.replace(/-/g, "")}.json.gz`;
+      fs.writeFileSync(path.join(dir, name), zlib.gzipSync(JSON.stringify(batch)));
+      total += batch.length;
+      files++;
+    }
+    cursor = shiftDay(to, 1);
+  }
+  gamesCache.delete(season);
+  console.log(`schedule ${season}: ${total} games in ${files} files`);
+}
+
 /* ------------------------------ the schedule ------------------------------- */
 
 /**
@@ -417,6 +477,11 @@ async function call(handler: (req: Request, ctx: unknown) => Promise<Response>, 
 
 async function main() {
   const t0 = Date.now();
+  if (FETCH_SCHEDULE) {
+    await fetchSchedule(SEASON);
+    console.log(`done in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+    return;
+  }
   if (SCHEDULE_ONLY) {
     await buildSchedule(SEASON);
     console.log(`done in ${((Date.now() - t0) / 1000).toFixed(0)}s`);

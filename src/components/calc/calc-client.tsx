@@ -6,7 +6,6 @@ import { GripVertical, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TeamLogo } from "@/components/team-logo";
 import {
-  GameBoxModal,
   fmtGameDate,
   RankBadge,
   SeedBadge,
@@ -14,6 +13,7 @@ import {
   Td,
 } from "@/components/box/game-box-modal";
 import { AskStatus } from "@/components/calc/ask-status";
+import { useGameLinks } from "@/lib/game-link";
 import { useEntitlement } from "@/lib/use-entitlement";
 import { type SearchableOption } from "@/components/explorer/searchable-select";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
@@ -308,9 +308,16 @@ export function CalcClient({
    */
   const resultsRef = useRef<HTMLDivElement>(null);
   const scrollOnResult = useRef(false);
-  // Game whose box score is open in the modal (double-click a row / click a
-  // score). The opponent's row is looked up at render via the game-id pair.
-  const [boxGame, setBoxGame] = useState<GameLog | null>(null);
+  /**
+   * Where each row's game lives on the site.
+   *
+   * The score used to open a modal. It is a link now: every game since 2014
+   * has a page of its own with the same box score, play-by-play and four
+   * factors, at a URL that can be shared and that Google indexes — which a
+   * modal could never be. See src/lib/game-link.ts for why the URL has to be
+   * looked up rather than composed.
+   */
+  const gameLink = useGameLinks();
 
   // Fetch every selected year that isn't already cached. Parallel fetches.
   useEffect(() => {
@@ -1709,9 +1716,7 @@ export function CalcClient({
                         {visibleSample.rows.map((g) => (
                           <tr
                             key={g.game_id + "-" + g.team_id}
-                            onDoubleClick={() => setBoxGame(g)}
-                            title="Double-click for the box score"
-                            className="border-b border-hairline/60 hover:bg-paper-deep/40 transition-colors cursor-pointer select-none"
+                            className="border-b border-hairline/60 hover:bg-paper-deep/40 transition-colors"
                           >
                             <Td className="text-ink-muted tabular whitespace-nowrap">{fmtGameDate(g.game_date)}</Td>
                             <Td>
@@ -1748,23 +1753,33 @@ export function CalcClient({
                               )}
                             </Td>
                             <Td>
-                              <button
-                                type="button"
-                                onClick={() => setBoxGame(g)}
-                                title="Open box score"
-                                className="inline-flex items-center gap-2 whitespace-nowrap group/score"
-                              >
-                                <span
-                                  className={`inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold ${
-                                    g.won ? "bg-coral text-white" : "bg-ink/10 text-ink-soft"
-                                  }`}
-                                >
-                                  {g.won ? "W" : "L"}
-                                </span>
-                                <span className="tabular text-ink group-hover/score:text-coral underline decoration-dotted decoration-hairline underline-offset-4 group-hover/score:decoration-coral/60 transition-colors">
-                                  {g.pts_scored ?? "—"}-{g.pts_against ?? "—"}
-                                </span>
-                              </button>
+                              {(() => {
+                                const href = gameLink(g.year, g.game_id);
+                                const inner = (
+                                  <>
+                                    <span
+                                      className={`inline-flex items-center justify-center w-5 h-5 rounded text-[11px] font-bold ${
+                                        g.won ? "bg-coral text-white" : "bg-ink/10 text-ink-soft"
+                                      }`}
+                                    >
+                                      {g.won ? "W" : "L"}
+                                    </span>
+                                    <span className={`tabular text-ink ${href ? "group-hover/score:text-coral underline decoration-dotted decoration-hairline underline-offset-4 group-hover/score:decoration-coral/60 transition-colors" : ""}`}>
+                                      {g.pts_scored ?? "—"}-{g.pts_against ?? "—"}
+                                    </span>
+                                  </>
+                                );
+                                // No link until the season's slug map lands,
+                                // and none at all for a season the archive
+                                // does not hold — the score still reads.
+                                return href ? (
+                                  <Link href={href} title="Full box score, play-by-play and four factors" className="inline-flex items-center gap-2 whitespace-nowrap group/score" prefetch={false}>
+                                    {inner}
+                                  </Link>
+                                ) : (
+                                  <span className="inline-flex items-center gap-2 whitespace-nowrap">{inner}</span>
+                                );
+                              })()}
                             </Td>
                             {scopeCols.quad && (
                               <Td className="tabular whitespace-nowrap text-ink-soft">{g.quad ? `Q${g.quad}` : "—"}</Td>
@@ -1840,17 +1855,6 @@ export function CalcClient({
         </div>
       )}
 
-      {boxGame && (
-        <GameBoxModal
-          game={boxGame}
-          opp={
-            games.find(
-              (x) => x !== boxGame && gameKey(x.game_id) === gameKey(boxGame.game_id),
-            ) ?? null
-          }
-          onClose={() => setBoxGame(null)}
-        />
-      )}
     </div>
   );
 }

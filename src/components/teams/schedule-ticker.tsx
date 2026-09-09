@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import type { GameLog } from "@/lib/static-data";
-import { ScheduleGameModal } from "@/components/teams/schedule-game-modal";
+import { useGameLinks } from "@/lib/game-link";
 import { BlurOverlay } from "@/components/teams/preview-blur";
 import { cn } from "@/lib/utils";
 
@@ -44,7 +45,9 @@ function seasonLabel(yearEnd: number): string {
 
 export function ScheduleTicker({
   games,
-  teamName,
+  // Accepted for call-site compatibility. The box-score modal that read it is
+  // gone; the cells link to each game's own page instead.
+  teamName: _teamName,
   eyebrow = "Schedule",
   helpText = "click + drag to scroll · click a game for box score",
   helpTextMobile = "swipe to scroll · tap a game",
@@ -52,7 +55,7 @@ export function ScheduleTicker({
   blurBody = false,
 }: {
   games: GameLog[];
-  teamName: string;
+  teamName?: string;
   eyebrow?: string;
   helpText?: string;
   helpTextMobile?: string;
@@ -64,7 +67,14 @@ export function ScheduleTicker({
   const scrollerRef = useRef<HTMLDivElement>(null);
   const dragState = useRef({ down: false, startX: 0, startScrollLeft: 0, moved: 0 });
   const suppressClickRef = useRef(false);
-  const [openGame, setOpenGame] = useState<GameLog | null>(null);
+  /**
+   * Each cell is a LINK to that game's page now, not a button that opened a
+   * modal over the strip. The page has the same box score and more besides,
+   * at a URL somebody can send to a friend — and, because these are real
+   * anchors, it is also how a crawler finds seventy thousand game pages that
+   * would otherwise be reachable only from the scoreboard.
+   */
+  const gameLink = useGameLinks();
 
   useEffect(() => {
     const el = scrollerRef.current;
@@ -125,13 +135,12 @@ export function ScheduleTicker({
     el.scrollLeft = el.scrollWidth;
   }, [games]);
 
-  function handleCellClick(game: GameLog) {
-    // If the user just finished dragging, swallow this click.
+  /** A drag that ends on a cell must not also follow its link. */
+  function swallowDragClick(e: React.MouseEvent) {
     if (suppressClickRef.current) {
       suppressClickRef.current = false;
-      return;
+      e.preventDefault();
     }
-    setOpenGame(game);
   }
 
   if (games.length === 0) return null;
@@ -196,13 +205,8 @@ export function ScheduleTicker({
                         <GameCell
                           key={`${g.game_date}-${i}`}
                           game={g}
-                          /* eslint-disable-next-line react-hooks/refs --
-                             handleCellClick reads suppressClickRef, and the
-                             compiler cannot see that GameCell only ever calls
-                             this from a click. It is an event handler; the ref
-                             is read when the pointer is released, which is the
-                             one thing a ref is for. */
-                          onClick={() => handleCellClick(g)}
+                          href={gameLink(seasonOfGame(g), g.game_id)}
+                          onClick={swallowDragClick}
                         />
                       ))}
                     </div>
@@ -215,7 +219,8 @@ export function ScheduleTicker({
                   <GameCell
                     key={`${g.game_date}-${i}`}
                     game={g}
-                    onClick={() => handleCellClick(g)}
+                    href={gameLink(seasonOfGame(g), g.game_id)}
+                    onClick={swallowDragClick}
                   />
                 ))}
           </div>
@@ -224,26 +229,25 @@ export function ScheduleTicker({
         return blurBody ? <BlurOverlay subtext={null}>{scroller}</BlurOverlay> : scroller;
         })()}
       </div>
-      {openGame && (
-        <ScheduleGameModal
-          game={openGame}
-          // Prefer the game's own team_name so the modal sorts the box-score
-          // correctly when a single ticker spans multiple schools (e.g. a
-          // coach's career-resume ticker covering past programs).
-          teamName={openGame.team_name ?? teamName}
-          onClose={() => setOpenGame(null)}
-        />
-      )}
     </>
   );
 }
 
+/** Season-end year for a game date: Nov-Dec belong to the next year's season. */
+function seasonOfGame(g: GameLog): number {
+  const [y, m] = String(g.game_date).split("-").map(Number);
+  return (m ?? 1) >= 8 ? (y ?? 0) + 1 : (y ?? 0);
+}
+
 function GameCell({
   game,
+  href,
   onClick,
 }: {
   game: GameLog;
-  onClick: () => void;
+  /** Null until the season's slug map lands, or for a season with no pages. */
+  href: string | null;
+  onClick: (e: React.MouseEvent) => void;
 }) {
   const opp = game.opp_team_market ?? "TBD";
   const venue = game.is_neutral ? "vs" : game.is_home ? "vs" : "@";
@@ -252,13 +256,24 @@ function GameCell({
       ? `${game.pts_scored}-${game.pts_against}`
       : "";
   const isTourney = !!game.tournamentRound;
+  /**
+   * A REAL ANCHOR WHERE THERE IS SOMEWHERE TO GO, a span otherwise.
+   *
+   * It matters that this is an <a> and not a button with a router push: these
+   * strips are on every team and coach page, and they are how a crawler
+   * reaches ~76,000 game pages that the scoreboard alone would leave three
+   * clicks deep. Before the season's slug map lands there is nothing to point
+   * at, so the cell renders inert rather than as a broken link.
+   */
+  const CellTag = (href ? Link : "span") as React.ElementType;
   const title = `${fmtDate(game.game_date)} ${venue} ${opp}${scoreStr ? ` · ${scoreStr}` : ""}${game.won === true ? " W" : game.won === false ? " L" : ""}${isTourney ? ` · ${game.tournamentRound}` : ""}`;
 
   return (
-    <button
-      type="button"
+    <CellTag
+      {...(href ? { href } : {})}
       onClick={onClick}
       title={title}
+      aria-label={title}
       // Disable drag from native browser so it doesn't try to drag the image.
       draggable={false}
       className={cn(
@@ -316,6 +331,6 @@ function GameCell({
       <span className="pointer-events-none">
         <TeamLogo name={opp} size={28} />
       </span>
-    </button>
+    </CellTag>
   );
 }

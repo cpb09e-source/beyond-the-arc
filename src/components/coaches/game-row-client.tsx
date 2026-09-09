@@ -1,17 +1,20 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { BoxscoreModal } from "./boxscore-modal";
-import { GameBoxModalById } from "@/components/box/game-box-modal";
+import { useGameLinks } from "@/lib/game-link";
 
 /**
  * Client wrapper rendering a clickable `<tr>` that opens a box score. Children
  * are the row's `<td>` cells. A row with no `gameSlug` renders static, with no
  * click handler.
  *
- * WHICH MODAL OPENS: the shared one (the same component /calc and the team pages
- * render) whenever this game resolves to one of ours, and the older
- * Sports-Reference renderer otherwise.
+ * WHERE A CLICK GOES: to that game's own page — /games/<season>/<id>-<away>-
+ * vs-<home>/ — whenever the game resolves to one of ours, and to the older
+ * Sports-Reference modal otherwise. It used to open our box score in a modal;
+ * the page has the same box score plus play-by-play and four factors, at a URL
+ * that can be shared and indexed.
  *
  * The two sources share no id. The coach pages are driven by SR scrapes in
  * public/data/tournament-box/, keyed by slugs like
@@ -41,6 +44,22 @@ function loadTournamentIds(): Promise<Record<string, string>> {
   return _idMapFetch;
 }
 
+/**
+ * Navigate once the id and the slug map have both landed.
+ *
+ * A component rather than an effect in the parent because it must run only
+ * while a resolved click is outstanding, and unmount the moment it has.
+ * A null href means the season has no pages, which cannot happen for a game
+ * the id map matched — but if it ever did, nothing happens rather than a
+ * navigation to a 404.
+ */
+function GoToGame({ href, onGo }: { href: string | null; onGo: (href: string) => void }) {
+  useEffect(() => {
+    if (href) onGo(href);
+  }, [href, onGo]);
+  return null;
+}
+
 export function GameRowTr({
   children,
   year,
@@ -54,6 +73,8 @@ export function GameRowTr({
   sportsRefHref: string;
   title: string;
 }) {
+  const router = useRouter();
+  const gameLink = useGameLinks();
   const [open, setOpen] = useState(false);
   const [gameId, setGameId] = useState<string | null>(null);
   const [resolved, setResolved] = useState(false);
@@ -88,9 +109,10 @@ export function GameRowTr({
       >
         {children}
       </tr>
-      {open && resolved && gameId && (
-        <GameBoxModalById gameId={gameId} season={year} onClose={() => setOpen(false)} />
-      )}
+      {/* Resolved to one of ours: leave for its page rather than opening
+          anything. Rendered as an effect-free branch because the id only
+          arrives after the click that asked for it. */}
+      {open && resolved && gameId && <GoToGame href={gameLink(year, gameId)} onGo={(h) => { setOpen(false); router.push(h); }} />}
       {open && resolved && !gameId && (
         <BoxscoreModal
           open

@@ -1,174 +1,38 @@
 import type { MetadataRoute } from "next";
-import { tabbedSeasonParams } from "@/lib/team-tab-route";
-import { readIndex, readAllTeams } from "@/lib/static-data";
-import { loadAllCoachProfiles } from "@/lib/coaches";
-import { archivedDays, gameSlug, isArchivedSeason, knownSeasons } from "@/lib/scoreboard-archive";
-import { readArchiveIndex } from "@/lib/game-archive";
+import { allSitemapEntries, sitemapCount, SITEMAP_CHUNK } from "@/lib/sitemap-entries";
 
 // Required for Next 16 metadata routes under `output: "export"` — opts the
 // generated file into the static export bundle. Without it the build errors.
 export const dynamic = "force-static";
 
 /**
- * Generates /sitemap.xml at build time. Covers every static URL we serve:
+ * The sitemap, split across several files.
  *
- *   /, /players, /teams, /coaches, /portal, /calc
- *   /teams/<slug>                  — one per D-I team
- *   /teams/<slug>/<year>           — one per team-season
- *   /players/<bartId>              — one per player (~27k)
- *   /coaches/<slug>                — one per head coach (~800)
+ * WHY IT IS SPLIT. Google rejects a sitemap above 50,000 URLs, and rejects it
+ * whole — going over does not truncate, it discards. This site passed that on
+ * the day the scoreboard archive landed: 25,474 players and ~11,000 team tab
+ * routes were already most of the budget, and a page per game since 2014 adds
+ * roughly 76,000 more.
  *
- * NEXT_PUBLIC_SITE_URL lets us swap to a custom domain later without a
- * code change. Falls back to the Netlify default.
+ * `generateSitemaps` writes /sitemap/0.xml, /sitemap/1.xml and so on. Next
+ * does NOT emit an index naming them, so robots.txt lists every one — which is
+ * a documented discovery mechanism and one fewer file to keep in step.
+ *
+ * The URL list itself lives in src/lib/sitemap-entries.ts because robots.ts
+ * needs the same count, and building it twice would double a walk over every
+ * team-season, player and game on disk.
  */
-
-const BASE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://beyond-the-arc.netlify.app").replace(/\/$/, "");
-
-function slugForTeam(name: string): string {
-  return name
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+export async function generateSitemaps(): Promise<Array<{ id: number }>> {
+  const n = await sitemapCount();
+  return Array.from({ length: n }, (_, id) => ({ id }));
 }
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const idx = await readIndex();
-  const allTeams = await readAllTeams();
-  const coaches = await loadAllCoachProfiles();
-
-  const entries: MetadataRoute.Sitemap = [];
-  const now = new Date();
-
-  // Top-level pages — high priority, weekly refresh.
-  //
-  // /conferences, /scoreboard, /glossary and /pricing were missing from this
-  // list while being fully public, indexable pages: the sitemap said they did
-  // not exist and robots.txt said they did.
-  for (const path of [
-    "", "/players", "/teams", "/coaches", "/portal", "/calc",
-    "/conferences", "/scoreboard", "/glossary", "/pricing", "/matchup", "/matchup/method",
-  ]) {
-    entries.push({
-      url: `${BASE_URL}${path}/`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: path === "" ? 1.0 : 0.8,
-    });
-  }
-
-  // Sources, terms and privacy. Indexed deliberately — on a paid site they are
-  // a trust signal a reader goes looking for, and one that is missing reads
-  // badly. Low priority and rarely changed, which is exactly what they are.
-  for (const path of ["/sources", "/terms", "/privacy"]) {
-    entries.push({
-      url: `${BASE_URL}${path}/`,
-      lastModified: now,
-      changeFrequency: "yearly",
-      priority: 0.3,
-    });
-  }
-
-  /**
-   * The scoreboard archive: a day per night played, and a page per game.
-   *
-   * ~6,000 URLs a season, and the reason they exist. Somebody searching
-   * "oklahoma vs florida state basketball score" is searching for one of
-   * these pages; a sitemap that lists only the front doors leaves them
-   * undiscoverable. Weekly on the days (their links keep resolving) and
-   * yearly on the games, which are finished and will never change again.
-   */
-  for (const season of knownSeasons()) {
-    // A finished season never changes again; the one being played changes
-    // every night, and saying so is what stops a crawler treating a live
-    // fixture page as settled.
-    const done = isArchivedSeason(season);
-    const freq = done ? "yearly" as const : "daily" as const;
-    for (const date of archivedDays(season)) {
-      entries.push({
-        url: `${BASE_URL}/scoreboard/${date}/`,
-        lastModified: now,
-        changeFrequency: freq,
-        priority: done ? 0.6 : 0.7,
-      });
-    }
-    const idx = await readArchiveIndex(season);
-    for (const g of idx?.games ?? []) {
-      entries.push({
-        url: `${BASE_URL}/games/${season}/${gameSlug(g.id, g.away.team, g.home.team)}/`,
-        lastModified: now,
-        changeFrequency: freq,
-        priority: 0.5,
-      });
-    }
-  }
-
-  // /teams/<slug> — every team's latest-season landing page
-  for (const slug of idx.teamSlugs) {
-    entries.push({
-      url: `${BASE_URL}/teams/${slug}/`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.7,
-    });
-  }
-
-  // /teams/<slug>/<year> — every team-season variant. Dedupe in case
-  // readAllTeams ever returns multiple rows for the same (slug, year).
-  const seenTeamYear = new Set<string>();
-  for (const t of allTeams) {
-    const slug = slugForTeam(t.name);
-    const key = `${slug}|${t.year}`;
-    if (seenTeamYear.has(key)) continue;
-    seenTeamYear.add(key);
-    entries.push({
-      url: `${BASE_URL}/teams/${slug}/${t.year}/`,
-      lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.5,
-    });
-  }
-
-  // /teams/<slug>/<year>/{games,roster,history,shooting,lineups,on-off} — the tab
-  // routes. Indexing them is the entire reason they are routes rather than
-  // client-side tabs, so they belong here.
-  //
-  // MUST MATCH tabbedSeasonParams() EXACTLY. Only some team-seasons are
-  // prebuilt (see team-tab-route.ts); the rest render every section on the
-  // season page, which is already listed above. Listing a season the build did
-  // not emit would be a sitemap full of 404s, so both sides go through the
-  // same helper rather than reimplementing the rule.
-  for (const { slug, year } of await tabbedSeasonParams()) {
-    for (const seg of ["games", "roster", "history", "shooting", "lineups", "on-off"]) {
-      entries.push({
-        url: `${BASE_URL}/teams/${slug}/${year}/${seg}/`,
-        lastModified: now,
-        changeFrequency: "monthly",
-        priority: 0.4,
-      });
-    }
-  }
-
-  // /players/<bartId> — long tail; lower priority but worth indexing
-  for (const id of idx.playerIds) {
-    entries.push({
-      url: `${BASE_URL}/players/${id}/`,
-      lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.4,
-    });
-  }
-
-  // /coaches/<slug> — every head coach we have history for
-  for (const c of coaches) {
-    entries.push({
-      url: `${BASE_URL}/coaches/${c.slug}/`,
-      lastModified: now,
-      changeFrequency: "weekly",
-      priority: 0.6,
-    });
-  }
-
-  return entries;
+export default async function sitemap({ id }: { id: Promise<string> }): Promise<MetadataRoute.Sitemap> {
+  // Next 16 hands the id over as a promise that resolves to a STRING — see the
+  // version history in generate-sitemaps.md. Treating it as a number would
+  // slice from NaN and every file would come out empty.
+  const n = Number(await id);
+  const all = await allSitemapEntries();
+  const start = n * SITEMAP_CHUNK;
+  return all.slice(start, start + SITEMAP_CHUNK);
 }

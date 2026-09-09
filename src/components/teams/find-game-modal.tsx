@@ -12,7 +12,7 @@ import {
 } from "@/components/filters/condition-sheet";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
 import type { SearchableOption } from "@/components/explorer/searchable-select";
-import { ScheduleGameModal } from "@/components/teams/schedule-game-modal";
+import { useGameLinks } from "@/lib/game-link";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
 import {
   STAT_OPTIONS,
@@ -22,7 +22,6 @@ import {
   type Filter,
   type GameLog,
 } from "@/lib/game-filters";
-import type { GameLog as StaticGameLog } from "@/lib/static-data";
 import { useMounted } from "@/lib/use-mounted";
 
 /**
@@ -74,7 +73,6 @@ export function FindGameModal({
   const [yearData, setYearData] = useState<Record<number, GameLog[]>>({});
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState<{ filters: Filter[]; years: number[] } | null>(null);
-  const [openBoxScore, setOpenBoxScore] = useState<GameLog | null>(null);
   // Optional team-name filter (coach context only). Empty = all teams the
   // coach has coached at.
   const [selectedTeams, setSelectedTeams] = useState<string[]>([]);
@@ -311,22 +309,10 @@ export function FindGameModal({
             <p className="text-sm text-ink-muted text-center py-8">Loading game data…</p>
           )}
           {submitted && !loading && results && (
-            <ResultsView displayName={displayName} results={results} onOpenBoxScore={setOpenBoxScore} />
+            <ResultsView displayName={displayName} results={results} />
           )}
         </div>
       </div>
-      {/* Box-score modal stacked above this modal. Reuses the same
-          ScheduleGameModal as the team-page schedule ticker so player names
-          link and the box-score data loads identically. */}
-      {openBoxScore && (
-        <ScheduleGameModal
-          game={openBoxScore as unknown as StaticGameLog}
-          // Prefer each game's own team_name so a coach-scoped modal still
-          // sorts the box score with the right "our team" on each game.
-          teamName={openBoxScore.team_name ?? displayName}
-          onClose={() => setOpenBoxScore(null)}
-        />
-      )}
     </div>
   );
   return createPortal(body, document.body);
@@ -335,12 +321,13 @@ export function FindGameModal({
 function ResultsView({
   displayName,
   results,
-  onOpenBoxScore,
 }: {
   displayName: string;
   results: { total: number; wins: number; losses: number; games: GameLog[] };
-  onOpenBoxScore: (g: GameLog) => void;
 }) {
+  // Resolved here rather than in the parent: this is where the rows are, and
+  // a season's map is only worth fetching once something is going to link.
+  const gameLink = useGameLinks();
   if (results.total === 0) {
     return (
       <div className="text-center py-8">
@@ -399,14 +386,25 @@ function ResultsView({
             >
               {g.won ? "W" : "L"}
             </span>
-            <button
-              type="button"
-              onClick={() => onOpenBoxScore(g)}
-              className="tabular text-sm text-ink-soft w-16 text-right hover:text-coral hover:underline transition-colors cursor-pointer"
-              title="Open box score"
-            >
-              {g.pts_scored}-{g.pts_against}
-            </button>
+            {(() => {
+              // The score opens that game's own page — same box score, plus
+              // play-by-play and four factors, at a shareable URL. A modal
+              // stacked over this one could be none of those things.
+              const href = gameLink(g.year, g.game_id);
+              const score = `${g.pts_scored}-${g.pts_against}`;
+              return href ? (
+                <Link
+                  href={href}
+                  prefetch={false}
+                  className="tabular text-sm text-ink-soft w-16 text-right hover:text-coral hover:underline transition-colors"
+                  title="Full box score and play-by-play"
+                >
+                  {score}
+                </Link>
+              ) : (
+                <span className="tabular text-sm text-ink-soft w-16 text-right">{score}</span>
+              );
+            })()}
             <span className="text-[0.6rem] uppercase tracking-widest text-ink-muted/70 font-medium tabular w-12 text-right shrink-0">
               {seasonShort(g.year)}
             </span>
