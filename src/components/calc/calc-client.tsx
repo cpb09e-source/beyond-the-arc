@@ -1137,16 +1137,13 @@ export function CalcClient({
         </div>
 
         <div className="p-4 lg:p-5">
-          <div className="mb-3">
+          <div className="mb-2">
             <SectionLabel
               count={filters.length}
               action={rows.length > 0 ? <MiniButton onClick={() => setRows([])}>Clear</MiniButton> : null}
             >
               Conditions
             </SectionLabel>
-            <span className="hidden sm:block -mt-1 text-xs text-ink-muted">
-              All must be true. Every stat is from the perspective of the team in the row.
-            </span>
           </div>
 
           {/* THE FRONT PAGE'S BUILDER, over game-log stats. Rows wrap rather
