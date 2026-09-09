@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { tabbedSeasonParams } from "@/lib/team-tab-route";
 import { readIndex, readAllTeams } from "@/lib/static-data";
 import { loadAllCoachProfiles } from "@/lib/coaches";
-import { archivedDays, archivedSeasons, gameSlug } from "@/lib/scoreboard-archive";
+import { archivedDays, gameSlug, isArchivedSeason, knownSeasons } from "@/lib/scoreboard-archive";
 import { readArchiveIndex } from "@/lib/game-archive";
 
 // Required for Next 16 metadata routes under `output: "export"` — opts the
@@ -79,13 +79,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
    * undiscoverable. Weekly on the days (their links keep resolving) and
    * yearly on the games, which are finished and will never change again.
    */
-  for (const season of archivedSeasons()) {
+  for (const season of knownSeasons()) {
+    // A finished season never changes again; the one being played changes
+    // every night, and saying so is what stops a crawler treating a live
+    // fixture page as settled.
+    const done = isArchivedSeason(season);
+    const freq = done ? "yearly" as const : "daily" as const;
     for (const date of archivedDays(season)) {
       entries.push({
         url: `${BASE_URL}/scoreboard/${date}/`,
         lastModified: now,
-        changeFrequency: "yearly",
-        priority: 0.6,
+        changeFrequency: freq,
+        priority: done ? 0.6 : 0.7,
       });
     }
     const idx = await readArchiveIndex(season);
@@ -93,7 +98,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       entries.push({
         url: `${BASE_URL}/games/${season}/${gameSlug(g.id, g.away.team, g.home.team)}/`,
         lastModified: now,
-        changeFrequency: "yearly",
+        changeFrequency: freq,
         priority: 0.5,
       });
     }

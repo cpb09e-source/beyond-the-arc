@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { sideColors } from "@/components/box/game-box-modal";
 import { cn } from "@/lib/utils";
+import { longDate } from "./types";
 import { ScoreHeader } from "./score-header";
 import { OverviewTab } from "./overview-tab";
 import { PlayersTab } from "./players-tab";
@@ -46,6 +47,13 @@ export function GameDetail({ b, partial = false, detailFailed = false }: {
   // Season records entering the game, read off the standings tables. Taken
   // from there rather than counted from `form`, which only holds five games —
   // a "5-0" beside a team that is 21-1 is worse than no record at all.
+  /**
+   * Nothing has happened yet. `status` is what the feed says; the points
+   * check catches a stale "scheduled" on a game that has plainly started.
+   */
+  const notStarted = b.game.status === "scheduled"
+    && b.game.home.points === null && b.game.away.points === null;
+
   const records = useMemo(() => {
     const find = (team: string) => {
       for (const rows of Object.values(b.standings)) {
@@ -84,7 +92,24 @@ export function GameDetail({ b, partial = false, detailFailed = false }: {
       </nav>
 
       <div className="mx-auto max-w-[var(--page-narrow)] px-5 lg:px-10 pt-6">
-        {detailFailed ? (
+        {/* A GAME THAT HAS NOT TIPPED HAS NOTHING TO SHOW, and must say that
+            rather than spin. These pages are built from the fixture list
+            months ahead, so "Loading the box score…" would be the honest
+            answer to a question nobody asked — the box score is not late, it
+            does not exist yet. */}
+        {notStarted ? (
+          <div className="py-16 text-center">
+            <p className="text-sm text-ink-soft">This game has not been played yet.</p>
+            <p className="mt-1.5 text-xs text-ink-muted">
+              {longDate(b.game.startDate)}
+              {b.game.venue ? ` · ${b.game.venue}` : ""}
+              {b.game.tbd ? " · tip time to be announced" : ""}
+            </p>
+            <p className="mt-4 text-xs text-ink-muted">
+              The box score, four factors and play-by-play appear here once it tips.
+            </p>
+          </div>
+        ) : detailFailed ? (
           <p className="py-16 text-center text-sm text-ink-muted">
             The box score for this game could not be loaded. The result above is final.
           </p>

@@ -132,6 +132,46 @@ byte-identical in shape to what the live path serves and costs zero API calls.
 and 719 MB) and are in all four lists. Synced 2026-09-08; `verify-deploy-ready`
 passes 29/29.
 
+### The upcoming season has pages BEFORE it is played — 2026-09-08
+
+The question this answers: how do tonight's games get pages without a deploy
+every night? They do not need one, because they already have pages.
+
+CBBD publishes the fixture list weeks ahead, so every game has an id — and
+therefore a URL — long before tip-off:
+
+    npx tsx scripts/build-scoreboard-archive.mts --schedule --season 2027
+
+That bakes `/scoreboard/<date>/` and `/games/2027/<id>-<away>-vs-<home>/` from
+the schedule. The page renders the matchup, venue and date on the server,
+fetches the live score while the game is on, and is rebuilt with the result
+baked in whenever the archive is next run. **The URL never changes**, so a link
+shared at tip-off still resolves years later, and nothing has to be redirected.
+
+Chosen over the obvious alternative — a Netlify rewrite catching unknown
+/games/ URLs and serving an empty shell — because this works identically in
+`next dev`, and a crawler gets real content instead of a spinner.
+
+`scheduled: true` in `src/data/scoreboard-archive.json` is what marks the
+season as not-yet-final: those pages always refetch, an archived one never
+does.
+
+**As of 2026-09-08 the 2026-27 list is about a quarter published** — 1,482
+games across 106 days, Nov 2 to Mar 6, conference play mostly absent. Rerun
+`--schedule` whenever CBBD publishes more; games already built keep their URLs.
+A rebuild + deploy is then a periodic tidy, not a nightly requirement.
+
+**Every tip time in that list is a placeholder.** CBBD dates an unscheduled
+fixture at midnight Eastern and flags it `startTimeTbd`. Three places now
+refuse to print it as a real time (the scoreboard function's `normalize`, the
+game function, and the schedule builder), and the UI says "Time TBD".
+
+**CBBD also scores an unplayed game 0-0 rather than null.** Taken literally
+that rendered a fixture list as a wall of nil-nil draws. Both functions and the
+builder now null the score of anything that has not started. This was a latent
+bug in the live path too: the first slate of any night, before tips, would have
+shown 0-0 everywhere.
+
 ### Is a live scoreboard feasible? Yes — most of it already exists.
 
 The whole live path was built in July and is sitting behind one flag. To turn

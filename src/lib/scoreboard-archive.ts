@@ -18,7 +18,13 @@
 import archive from "@/data/scoreboard-archive.json";
 import { teamSlug } from "@/lib/team-slug";
 
-type ArchiveSeason = { first: string; last: string; days: string[] };
+/**
+ * `scheduled` marks the season being PLAYED (or about to be). Its pages are
+ * built from the fixture list, so they exist before tip-off — but their
+ * contents are not final, so everything that reads them must refetch rather
+ * than trust the file. A season without the flag is over and immutable.
+ */
+type ArchiveSeason = { first: string; last: string; days: string[]; scheduled?: boolean };
 const ARCHIVE = archive as Record<string, ArchiveSeason>;
 
 /** CBBD's label for the season a date falls in: 2025-26 is 2026, rolling over in July. */
@@ -33,12 +39,36 @@ export function seasonLabel(season: number): string {
   return `${season - 1}-${String(season).slice(2)}`;
 }
 
+/** Seasons that are over. */
 export function archivedSeasons(): number[] {
+  return knownSeasons().filter(isArchivedSeason);
+}
+
+/** Any season we have pages for — played or merely scheduled. */
+export function isKnownSeason(season: number): boolean {
+  return String(season) in ARCHIVE;
+}
+
+/** A season that is over: every file for it is final and can be trusted. */
+export function isArchivedSeason(season: number): boolean {
+  const s = ARCHIVE[String(season)];
+  return !!s && !s.scheduled;
+}
+
+/** The season being played, whose pages exist but whose scores do not yet. */
+export function isScheduledSeason(season: number): boolean {
+  return ARCHIVE[String(season)]?.scheduled === true;
+}
+
+/** Every season with pages, played or scheduled. */
+export function knownSeasons(): number[] {
   return Object.keys(ARCHIVE).map(Number).sort((a, b) => a - b);
 }
 
-export function isArchivedSeason(season: number): boolean {
-  return String(season) in ARCHIVE;
+/** True when this date has a page at all, of either kind. */
+export function isKnownDay(date: string): boolean {
+  const season = ARCHIVE[String(seasonOfDate(date))];
+  return !!season && season.days.includes(date);
 }
 
 export function archivedDays(season: number): string[] {
@@ -50,7 +80,7 @@ const daySets = new Map<string, Set<string>>();
 export function isArchivedDay(date: string): boolean {
   const key = String(seasonOfDate(date));
   const season = ARCHIVE[key];
-  if (!season) return false;
+  if (!season || season.scheduled) return false;
   let set = daySets.get(key);
   if (!set) {
     set = new Set(season.days);
@@ -59,7 +89,7 @@ export function isArchivedDay(date: string): boolean {
   return set.has(date);
 }
 
-/** The last day any archived season played — what /scoreboard opens on out of season. */
+/** The last day any COMPLETED season played — what /scoreboard falls back to. */
 export function latestArchivedDay(): string | null {
   const seasons = archivedSeasons();
   if (seasons.length === 0) return null;

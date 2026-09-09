@@ -10,7 +10,7 @@
 import { dataUrl } from "./data-url";
 import { IS_DEMO } from "./flags";
 import {
-  gamePagePath, isArchivedDay, isArchivedSeason, latestArchivedDay, seasonOfDate, slateUrl,
+  gamePagePath, isArchivedDay, isKnownSeason, latestArchivedDay, seasonOfDate, slateUrl,
 } from "./scoreboard-archive";
 
 export type ScoreTeam = {
@@ -41,6 +41,8 @@ export type ScoreGame = {
   clock: string | null;
   /** Closing betting line, HOME perspective (negative = home favored). */
   line: { spread: number | null; overUnder: number | null; provider: string } | null;
+  /** The tip time has not been set — a fixture whose slot nobody has chosen. */
+  tbd?: boolean;
 };
 
 export type Slate = {
@@ -271,12 +273,12 @@ const ET_DAY = new Intl.DateTimeFormat("en-CA", {
 export function gameHref(g: ScoreGame): string {
   const t = Date.parse(g.startDate);
   const date = Number.isFinite(t) ? ET_DAY.format(new Date(t)) : "";
-  // A completed season has a real page per game — /games/2026/214837-duke-vs-
-  // north-carolina/ — with the score in its HTML and its own title. That is
-  // the whole point of baking the archive, so link to it wherever it exists.
-  // A game in the season being played has no page of its own (a static export
-  // cannot enumerate what has not been scheduled) and goes to /game?id=.
-  if (date && isArchivedSeason(seasonOfDate(date))) {
+  // Every game we know about has a real page — /games/2026/214837-duke-vs-
+  // north-carolina/ — whether it has been played or merely scheduled. CBBD
+  // publishes the fixture list weeks ahead, so the page exists before tip-off
+  // and the URL never changes when the result lands. Only a game missing from
+  // the last build (a rescheduled fixture, mostly) falls back to /game?id=.
+  if (date && isKnownSeason(seasonOfDate(date))) {
     return gamePagePath(seasonOfDate(date), g.id, g.away.team, g.home.team);
   }
   return `/game?id=${g.id}${date ? `&date=${date}` : ""}`;

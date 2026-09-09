@@ -100,7 +100,10 @@ function Status({ b }: { b: GameBundle }) {
   // the one-line status a played game needs.
   return (
     <span className="block text-base sm:text-lg font-semibold tabular text-ink whitespace-nowrap">
-      {tipLabel(g.startDate)}
+      {/* CBBD dates a fixture whose time nobody has set at midnight Eastern.
+          Printing that would put a confident "12:00 AM ET" on every game in a
+          schedule released months before tip-off. */}
+      {g.tbd ? "Time TBD" : tipLabel(g.startDate)}
     </span>
   );
 }

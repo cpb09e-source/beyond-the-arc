@@ -38,6 +38,8 @@ export type GameHead = {
   /** Live only. */
   period?: number | null;
   clock?: string | null;
+  /** The tip time has not been set yet — a fixture, not a schedule entry. */
+  tbd?: boolean;
   home: GameSide;
   away: GameSide;
 };

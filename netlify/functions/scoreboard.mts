@@ -125,6 +125,8 @@ type Game = {
   /** Live only: current period and game clock, when CBBD supplies them. */
   period: number | null;
   clock: string | null;
+  /** The tip time has not been set. True for most of a schedule released early. */
+  tbd: boolean;
   /** Closing betting line, HOME perspective (negative = home favored). */
   line: { spread: number | null; overUnder: number | null; provider: string } | null;
 };
@@ -249,15 +251,31 @@ function normalize(r: Record<string, unknown>): Game | null {
   const str = (v: unknown) => (typeof v === "string" && v.length > 0 ? v : null);
   const home = str(r.homeTeam), away = str(r.awayTeam);
   if (!home || !away) return null;
+  // CBBD uses lowercase status strings ("scheduled" / "in_progress" / "final").
+  const status = (str(r.status) ?? "scheduled").toLowerCase();
+  /**
+   * A GAME THAT HAS NOT TIPPED HAS NO SCORE, and CBBD says 0 rather than null.
+   * Taken literally that renders a fixture list as a wall of 0-0 games, which
+   * reads as "everybody lost nil-nil" rather than "nobody has played yet".
+   * Only a game that has started can have a number.
+   */
+  const scoreless = status === "scheduled";
+  const pts = (v: unknown) => (scoreless ? null : num(v));
+  /**
+   * The tip time is not set. CBBD flags this, and also dates such a game at
+   * midnight Eastern — which is a real tip time for nothing, so the flag is
+   * taken from either signal.
+   */
+  const tbd = r.startTimeTbd === true
+    || (scoreless && (str(r.startDate) ?? "").slice(11, 16) === "05:00");
   return {
     id,
     startDate: str(r.startDate) ?? "",
-    // CBBD uses lowercase status strings ("scheduled" / "in_progress" / "final").
-    status: (str(r.status) ?? "scheduled").toLowerCase(),
+    status,
     home: {
       team: home,
       conference: str(r.homeConference),
-      points: num(r.homePoints),
+      points: pts(r.homePoints),
       winner: typeof r.homeWinner === "boolean" ? r.homeWinner : null,
       seed: num(r.homeSeed),
       rank: null,
@@ -267,7 +285,7 @@ function normalize(r: Record<string, unknown>): Game | null {
     away: {
       team: away,
       conference: str(r.awayConference),
-      points: num(r.awayPoints),
+      points: pts(r.awayPoints),
       winner: typeof r.awayWinner === "boolean" ? r.awayWinner : null,
       seed: num(r.awaySeed),
       rank: null,
@@ -279,6 +297,7 @@ function normalize(r: Record<string, unknown>): Game | null {
     venue: str(r.venue),
     period: num(r.period),
     clock: str(r.clock),
+    tbd,
     line: null,
   };
 }

@@ -8,6 +8,8 @@
  *   npx tsx scripts/build-scoreboard-archive.mts --slates-only
  *   npx tsx scripts/build-scoreboard-archive.mts --games-only
  *   npx tsx scripts/build-scoreboard-archive.mts --fetch-lines   # one-time: cache betting lines
+ *   npx tsx scripts/build-scoreboard-archive.mts --schedule --season 2027
+ *                                                # the UPCOMING season's fixtures
  *
  * Writes:
  *   public/data/scoreboard/<season>/<YYYY-MM-DD>.json   one Slate per day (the
@@ -36,6 +38,22 @@
  * than returning [] — an unknown query silently answered empty would bake a
  * season of pages with a panel quietly missing.
  *
+ * ── THE UPCOMING SEASON ────────────────────────────────────────────────────
+ *
+ * `--schedule` is the other half, and it is what makes a season work without a
+ * deploy every night. CBBD publishes the fixture list weeks ahead, so every
+ * game HAS an id before it is played — which means its page can be built
+ * before it is played. A scheduled page renders the teams, the tip time and
+ * the venue on the server and fetches the score live once the game starts.
+ *
+ * The alternative was a Netlify rewrite catching unknown /games/ URLs and
+ * serving an empty shell. This is better on every axis: it works identically
+ * in `next dev`, a crawler gets real content instead of a spinner, and there
+ * is no rule to keep in step with the routes.
+ *
+ * Rerun it whenever CBBD publishes more of the season; games already built
+ * keep their URLs, so nothing that was shared ever breaks.
+ *
  * Lines are the one thing the archive does not carry. `--fetch-lines` pulls
  * the season's closing lines from CBBD once (a dozen calls, windowed to stay
  * under the 3,000-row cap) into data/cbbd/<season>/lines-full.json.gz, and
@@ -59,6 +77,7 @@ const LIMIT = Number(opt("--limit") ?? 0);
 const SLATES_ONLY = flag("--slates-only");
 const GAMES_ONLY = flag("--games-only");
 const FETCH_LINES = flag("--fetch-lines");
+const SCHEDULE_ONLY = flag("--schedule");
 
 const archiveDir = (season: number) => path.join(root, "data", "cbbd", String(season));
 const outSlates = path.join(root, "public", "data", "scoreboard", String(SEASON));
@@ -281,6 +300,110 @@ async function fetchLines(season: number): Promise<void> {
   console.log(`wrote ${f}: ${out.length} rows`);
 }
 
+/* ------------------------------ the schedule ------------------------------- */
+
+/**
+ * Bake the upcoming season's fixtures: one slate per day, plus an index.
+ *
+ * Straight from CBBD rather than through the shim — there is no local archive
+ * for a season that has not been played, and there is nothing to assemble
+ * beyond the schedule itself. Windowed at 14 days to stay clear of the
+ * 3,000-row response cap.
+ */
+async function buildSchedule(season: number): Promise<void> {
+  const key = fs.readFileSync(path.join(root, ".env.local"), "utf8").match(/^CBBD_API_KEY=(.+)$/m)?.[1]?.trim();
+  if (!key) throw new Error("CBBD_API_KEY not found in .env.local");
+  const rows: Row[] = [];
+  const seen = new Set<number>();
+  // A season labeled N opens in early November of N-1 and ends in April.
+  let cursor = `${season - 1}-10-25`;
+  const end = `${season}-04-15`;
+  while (cursor <= end) {
+    const to = shiftDay(cursor, 13);
+    const res = await realFetch(`${API}/games?season=${season}&startDateRange=${cursor}&endDateRange=${to}`, {
+      headers: { Authorization: `Bearer ${key}`, accept: "application/json" },
+    });
+    if (!res.ok) throw new Error(`CBBD ${res.status} on /games ${cursor}..${to}`);
+    const batch = (await res.json()) as Row[];
+    if (batch.length >= 3000) throw new Error(`/games ${cursor}..${to} hit the 3,000-row cap — narrow the window`);
+    for (const r of batch) {
+      if (typeof r.id !== "number" || seen.has(r.id)) continue;
+      seen.add(r.id);
+      rows.push(r);
+    }
+    if (batch.length) console.log(`  ${cursor}..${to}: ${batch.length}`);
+    cursor = shiftDay(to, 1);
+  }
+  if (rows.length === 0) throw new Error(`CBBD has published no schedule for ${season}`);
+
+  const outDir = path.join(root, "public", "data", "scoreboard", String(season));
+  fs.mkdirSync(outDir, { recursive: true });
+  const byDay = new Map<string, Row[]>();
+  for (const r of rows) {
+    const d = easternDate(String(r.startDate));
+    if (!d) continue;
+    let arr = byDay.get(d);
+    if (!arr) { arr = []; byDay.set(d, arr); }
+    arr.push(r);
+  }
+  const side = (r: Row, p: "home" | "away") => ({
+    team: r[`${p}Team`] ?? "", conference: r[`${p}Conference`] ?? null,
+    // CBBD scores an unplayed game 0-0; only a game that has started may
+    // carry a number. Same rule as normalize() in the scoreboard function.
+    points: (r.status ?? "scheduled").toLowerCase() !== "scheduled" && typeof r[`${p}Points`] === "number"
+      ? r[`${p}Points`] : null,
+    winner: typeof r[`${p}Winner`] === "boolean" ? r[`${p}Winner`] : null,
+    seed: typeof r[`${p}Seed`] === "number" ? r[`${p}Seed`] : null,
+    rank: null,
+    periods: Array.isArray(r[`${p}PeriodPoints`]) ? r[`${p}PeriodPoints`].filter((n: unknown) => typeof n === "number") : [],
+    record: null,
+  });
+  const days: Array<{ date: string; games: number }> = [];
+  const index: Row[] = [];
+  for (const d of [...byDay.keys()].sort()) {
+    const games = byDay.get(d)!
+      .sort((a, b) => String(a.startDate).localeCompare(String(b.startDate)))
+      .map((r) => ({
+        id: r.id, startDate: r.startDate ?? "", status: (r.status ?? "scheduled").toLowerCase(),
+        home: side(r, "home"), away: side(r, "away"),
+        neutralSite: r.neutralSite === true, conferenceGame: r.conferenceGame === true,
+        venue: r.venue ?? null, period: null, clock: null, line: null,
+        /**
+         * CBBD'"'"'S OWN "TIP TIME NOT SET" FLAG, carried rather than inferred.
+         * Every unscheduled game comes back at midnight Eastern, so without
+         * this the card would print a confident "12:00 AM ET" for a game
+         * whose time nobody has decided. In September 2026 that is every
+         * fixture in the 2026-27 list.
+         */
+        tbd: r.startTimeTbd === true || String(r.startDate ?? "").slice(11, 16) === "05:00",
+      }));
+    fs.writeFileSync(
+      path.join(outDir, `${d}.json`),
+      JSON.stringify({ source: "upcoming", date: d, games, fetchedAt: new Date().toISOString() }),
+    );
+    days.push({ date: d, games: games.length });
+    for (const g of games) {
+      index.push({
+        id: g.id, date: d, start: g.startDate, status: g.status, tbd: g.tbd,
+        venue: g.venue, city: null, state: null, attendance: null,
+        neutral: g.neutralSite, confGame: g.conferenceGame, excitement: null,
+        home: { team: g.home.team, conf: g.home.conference, pts: null, periods: [], winner: null, rank: null, seed: g.home.seed, rec: null, elo: null },
+        away: { team: g.away.team, conf: g.away.conference, pts: null, periods: [], winner: null, rank: null, seed: g.away.seed, rec: null, elo: null },
+        line: null,
+      });
+    }
+  }
+  fs.writeFileSync(path.join(outDir, "index.json"), JSON.stringify({ season, days, games: index }));
+  const committed = exists(committedIndex) ? JSON.parse(fs.readFileSync(committedIndex, "utf8")) : {};
+  // `scheduled` is what tells the site these pages must fetch live rather than
+  // trusting the file: an archived day is over, a scheduled one has not
+  // happened yet.
+  committed[String(season)] = { first: days[0]!.date, last: days[days.length - 1]!.date, days: days.map((x) => x.date), scheduled: true };
+  fs.writeFileSync(committedIndex, JSON.stringify(committed));
+  console.log(`schedule ${season}: ${rows.length} games across ${days.length} days`);
+  console.log(`  wrote ${path.relative(root, outDir)} and ${path.relative(root, committedIndex)}`);
+}
+
 /* ---------------------------------- build ---------------------------------- */
 
 async function call(handler: (req: Request, ctx: unknown) => Promise<Response>, url: string) {
@@ -294,6 +417,11 @@ async function call(handler: (req: Request, ctx: unknown) => Promise<Response>, 
 
 async function main() {
   const t0 = Date.now();
+  if (SCHEDULE_ONLY) {
+    await buildSchedule(SEASON);
+    console.log(`done in ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+    return;
+  }
   if (FETCH_LINES) await fetchLines(SEASON);
 
   const games = seasonGames(SEASON);

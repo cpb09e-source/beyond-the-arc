@@ -21,6 +21,8 @@ export type ArchiveSide = {
 };
 export type ArchiveGame = {
   id: number; date: string; start: string; status: string;
+  /** Tip time not set — every 2026-27 fixture as of September 2026. */
+  tbd?: boolean;
   venue: string | null; city: string | null; state: string | null; attendance: number | null;
   neutral: boolean; confGame: boolean; excitement: number | null;
   home: ArchiveSide; away: ArchiveSide;
@@ -91,7 +93,7 @@ export function minimalBundle(g: ArchiveGame, season: number): GameBundle {
       id: g.id, startDate: g.start, status: g.status, season,
       venue: g.venue, city: g.city, state: g.state, attendance: g.attendance,
       neutralSite: g.neutral, conferenceGame: g.confGame, excitement: g.excitement,
-      period: null, clock: null,
+      period: null, clock: null, tbd: g.tbd,
       home: side(g.home), away: side(g.away),
     },
     teamStats: { home: null, away: null, pace: null, gameMinutes: null },

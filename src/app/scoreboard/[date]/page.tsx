@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ScoreboardClient } from "@/components/scoreboard/scoreboard-client";
-import { archivedDays, archivedSeasons, seasonLabel, seasonOfDate } from "@/lib/scoreboard-archive";
+import { archivedDays, isArchivedSeason, knownSeasons, seasonLabel, seasonOfDate } from "@/lib/scoreboard-archive";
 import { readArchivedSlate } from "@/lib/game-archive";
 import { dateLabel } from "@/lib/scoreboard";
 
@@ -22,13 +22,25 @@ import { dateLabel } from "@/lib/scoreboard";
 export const dynamicParams = false;
 
 export function generateStaticParams(): Array<{ date: string }> {
-  return archivedSeasons().flatMap((s) => archivedDays(s).map((date) => ({ date })));
+  return knownSeasons().flatMap((s) => archivedDays(s).map((date) => ({ date })));
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ date: string }> }): Promise<Metadata> {
   const { date } = await params;
   const slate = await readArchivedSlate(date);
   const n = slate?.games.length ?? 0;
+  // A day that has not been played yet is a fixture list, and its title has
+  // to say so — "Final scores from all 56 games" about tomorrow night would
+  // be the page lying before anyone has read a word of it.
+  if (!isArchivedSeason(seasonOfDate(date))) {
+    return {
+      title: `College Basketball Schedule — ${dateLabel(date)}, ${date.slice(0, 4)}`,
+      description: n
+        ? `All ${n} Division I men's college basketball games scheduled for ${dateLabel(date)}, ${date.slice(0, 4)}, with live scores once they tip.`
+        : `College basketball schedule for ${dateLabel(date)}, ${date.slice(0, 4)}.`,
+      alternates: { canonical: `/scoreboard/${date}/` },
+    };
+  }
   // The slate is ordered ranked-first, so the first few are the night's
   // headline results — the ones a searcher is most likely asking about.
   const top = (slate?.games ?? [])
@@ -49,10 +61,18 @@ export default async function ScoreboardDayPage({ params }: { params: Promise<{ 
   const { date } = await params;
   const slate = await readArchivedSlate(date);
   if (!slate) notFound();
+  /**
+   * A COMPLETED DAY IS FIXED; A SCHEDULED ONE IS NOT. The file for a night
+   * already played can never change, so the client is told not to ask again.
+   * The file for a night still to come holds fixtures and no scores, so the
+   * page renders those for a crawler and then asks the live feed what is
+   * actually happening.
+   */
+  const settled = isArchivedSeason(seasonOfDate(date));
   return (
     <ScoreboardClient
-      initial={{ date, slate, fixed: true }}
-      seasonNote={`${seasonLabel(seasonOfDate(date))} season`}
+      initial={{ date, slate, fixed: settled }}
+      seasonNote={settled ? `${seasonLabel(seasonOfDate(date))} season` : undefined}
     />
   );
 }

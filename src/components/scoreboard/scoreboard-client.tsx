@@ -69,7 +69,13 @@ export function ScoreboardClient({
   const search = useUrlSearchParams();
   const router = useRouter();
   const fromUrl = search.get("date");
-  const pinned = (initial?.fixed ? initial.date : null)
+  /**
+   * WHICH DAY THIS PAGE IS, which is NOT the same question as whether it may
+   * refetch. `fixed` answers the second; it used to answer both, and a
+   * scheduled day therefore forgot its own date the moment it rendered —
+   * /scoreboard/2026-11-02/ drew the heading of the last completed night.
+   */
+  const pinned = initial?.date
     ?? (fromUrl && /^\d{4}-\d{2}-\d{2}$/.test(fromUrl) ? fromUrl : null);
   /**
    * Go to a day. An archived day is a page of its own; anything else is the
@@ -105,6 +111,10 @@ export function ScoreboardClient({
     const tick = async () => {
       const next = await fetchSlate(pinned ?? undefined, ctrl.signal);
       if (canceled) return;
+      // AN EMPTY ANSWER NEVER REPLACES A PRERENDERED ONE. Out of season the
+      // live feed has nothing for a November fixture list, and letting that
+      // land would blank a page that was rendered correctly on the server.
+      if (next.games.length === 0 && initial) return;
       setResult({ key: requested, slate: next });
       // Only a live day is worth re-polling — a pinned past day cannot change.
       if (!pinned && !slateIsSettled(next)) timer = setTimeout(tick, POLL_MS);
@@ -457,7 +467,12 @@ function GameCard({ g }: { g: ScoreGame }) {
           live ? "text-coral" : "text-ink-muted",
         )}>
           {live ? `${g.clock ?? "Live"}${g.period != null ? ` · ${ordinalPeriod(g.period)}` : ""}`
-            : final ? "Final" : tipLabel(g.startDate)}
+            : final ? "Final"
+            // A fixture whose time nobody has set yet. Saying "TBD" is the
+            // whole truth; printing the placeholder midnight would be a
+            // confident wrong answer.
+            : g.tbd ? "Time TBD"
+            : tipLabel(g.startDate)}
         </span>
       </div>
 

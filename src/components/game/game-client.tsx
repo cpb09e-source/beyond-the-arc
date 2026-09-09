@@ -37,10 +37,17 @@ export function GameClient({
   id: idProp,
   date: dateProp,
   initial,
+  live = false,
 }: {
   /** Given by the static archive route; read from the URL otherwise. */
   id?: string;
   date?: string;
+  /**
+   * Ask the live feed rather than the archive. Set by a scheduled game's page:
+   * its file was built from the fixture list and holds no score, so the
+   * only place tonight's number exists is /api/game.
+   */
+  live?: boolean;
   /**
    * The scoreline, prerendered. An archived game page renders this on the
    * server so the result is in the HTML, then swaps in the full bundle — same
@@ -83,7 +90,7 @@ export function GameClient({
    * which is what lets 5,900 game pages be free and indexable. Only a game in
    * the season being played goes through /api/game.
    */
-  const archived = Boolean(date) && isArchivedSeason(seasonOfDate(date!));
+  const archived = !live && Boolean(date) && isArchivedSeason(seasonOfDate(date!));
 
   useEffect(() => {
     if (!id || !date) return;

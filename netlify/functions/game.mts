@@ -359,21 +359,30 @@ const handler = async (req: Request, _ctx: Context) => {
       ? (lineRow.lines.find((l: Row) => l.provider === "Draft Kings") ?? lineRow.lines[0])
       : null;
 
+    const status = (str(g.status) ?? "scheduled").toLowerCase();
+    /**
+     * A GAME THAT HAS NOT TIPPED HAS NO SCORE. CBBD reports 0-0 rather than
+     * null for a fixture, and taken literally that renders next month's game
+     * as a nil-nil draw in the header. Only a game that has started may carry
+     * a number — same rule as normalize() in the scoreboard function.
+     */
+    const scoreless = status === "scheduled";
     const side = (isHome: boolean) => {
       const p = isHome ? "home" : "away";
       const eloStart = num(g[`${p}TeamEloStart`]), eloEnd = num(g[`${p}TeamEloEnd`]);
       return {
         team: g[`${p}Team`],
         conference: str(g[`${p}Conference`]),
-        points: num(g[`${p}Points`]),
-        periods: Array.isArray(g[`${p}PeriodPoints`]) ? g[`${p}PeriodPoints`].filter((n: unknown) => typeof n === "number") : [],
+        points: scoreless ? null : num(g[`${p}Points`]),
+        periods: scoreless || !Array.isArray(g[`${p}PeriodPoints`])
+          ? []
+          : g[`${p}PeriodPoints`].filter((n: unknown) => typeof n === "number"),
         winner: typeof g[`${p}Winner`] === "boolean" ? g[`${p}Winner`] : null,
         rank: ranks.get(g[`${p}Team`]) ?? null,
         elo: eloStart !== null && eloEnd !== null ? [eloStart, eloEnd] : null,
       };
     };
 
-    const status = (str(g.status) ?? "scheduled").toLowerCase();
     const bundle = {
       game: {
         id: g.id,
@@ -386,6 +395,10 @@ const handler = async (req: Request, _ctx: Context) => {
         conferenceGame: g.conferenceGame === true,
         excitement: num(g.excitement),
         period: num(g.period), clock: str(g.clock),
+        // The tip time is not set: CBBD flags it, and also dates such a game
+        // at midnight Eastern, which is a real time for nothing.
+        tbd: g.startTimeTbd === true
+          || (scoreless && (str(g.startDate) ?? "").slice(11, 16) === "05:00"),
         home: side(true), away: side(false),
       },
       teamStats: {

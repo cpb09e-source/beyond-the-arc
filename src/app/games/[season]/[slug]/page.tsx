@@ -1,31 +1,37 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { GameClient } from "@/components/game/game-client";
-import { archivedSeasons, gameSlug, idFromSlug } from "@/lib/scoreboard-archive";
+import { gameSlug, idFromSlug, isArchivedSeason, knownSeasons } from "@/lib/scoreboard-archive";
 import { minimalBundle, readArchiveIndex, shortDate, type ArchiveGame } from "@/lib/game-archive";
 
 /**
- * /games/<season>/<id>-<away>-vs-<home>/ — one game of a completed season.
+ * /games/<season>/<id>-<away>-vs-<home>/ — one game, played or scheduled.
  *
  * THIS IS THE PAGE A SEARCH FOR THE SCORE SHOULD LAND ON. /game?id=… is one
- * HTML file that fetches everything after hydration, which is right for a
- * game that tips tomorrow and wrong for the 5,900 that are already final: a
- * crawler that arrives there reads "Loading the game…". This route gives every
- * archived game its own URL with the final score, the halves, the venue and
- * both records in the markup, a title that says who beat whom, and a
- * SportsEvent record for the machines. The full box score and play-by-play
- * still arrive from R2 once the page is open — 120 KB a game would be 700 MB
- * of HTML across the season, for a body a crawler does not need.
+ * HTML file that fetches everything after hydration, so a crawler arriving
+ * there reads "Loading the game…". This route gives every game its own URL
+ * with the teams, the venue and (once played) the final score and halves in
+ * the markup, a title that says who beat whom, and a SportsEvent record for
+ * the machines. The box score and play-by-play still arrive afterwards —
+ * 120 KB a game would be 700 MB of HTML across a season, for a body a crawler
+ * does not need.
+ *
+ * BUILT FROM THE FIXTURE LIST, NOT ONLY FROM RESULTS, and that is what makes a
+ * season work without deploying every night. CBBD publishes the schedule weeks
+ * ahead, so a game has an id — and therefore a page — long before it is
+ * played. The page renders the matchup on the server, fetches the live score
+ * while the game is on, and is rebuilt with the result baked in whenever the
+ * archive is next run. The URL is identical throughout, so a link shared at
+ * tip-off still resolves years later.
  *
  * The header is rendered from the SAME component and the SAME shape the full
- * bundle fills in, so nothing moves when it lands; only the tabs go from a
- * loading line to their content.
+ * bundle fills in, so nothing moves when it lands.
  */
 export const dynamicParams = false;
 
 export async function generateStaticParams(): Promise<Array<{ season: string; slug: string }>> {
   const out: Array<{ season: string; slug: string }> = [];
-  for (const s of archivedSeasons()) {
+  for (const s of knownSeasons()) {
     const idx = await readArchiveIndex(s);
     if (!idx) continue;
     for (const g of idx.games) out.push({ season: String(s), slug: gameSlug(g.id, g.away.team, g.home.team) });
@@ -53,10 +59,23 @@ export async function generateMetadata({ params }: { params: Promise<{ season: s
   const g = await lookup(season, slug);
   if (!g) return { title: "Game" };
   const when = shortDate(g.start);
+  const where = g.neutral ? (g.venue ? ` at ${g.venue} (neutral site)` : " at a neutral site") : g.venue ? ` at ${g.venue}` : "";
+  const played = g.home.pts !== null && g.away.pts !== null;
+  // A GAME THAT HAS NOT HAPPENED MUST NOT CLAIM A SCORE. The page is built
+  // from the fixture list weeks ahead, so until it is played the honest title
+  // is the matchup and the date; the result replaces it at the next rebuild,
+  // at the same URL.
+  if (!played) {
+    return {
+      title: `${g.away.team} vs ${g.home.team} — ${when}`,
+      description:
+        `${g.away.team} vs ${g.home.team} men's college basketball, ${when}${where}. Live score, box score and play-by-play.`,
+      alternates: { canonical: `/games/${season}/${slug}/` },
+    };
+  }
   const halves = g.home.periods.length >= 2 && g.away.periods.length >= 2
     ? ` Halves: ${g.away.periods.map((p, i) => `${p}-${g.home.periods[i]}`).join(", ")}.`
     : "";
-  const where = g.neutral ? (g.venue ? ` at ${g.venue} (neutral site)` : " at a neutral site") : g.venue ? ` at ${g.venue}` : "";
   return {
     title: `${g.away.team} vs ${g.home.team} — ${resultLine(g)} · ${when}`,
     description:
@@ -89,11 +108,14 @@ export default async function ArchivedGamePage({ params }: { params: Promise<{ s
     awayTeam: { "@type": "SportsTeam", name: g.away.team },
     ...(g.home.pts !== null && g.away.pts !== null ? { description: `Final: ${resultLine(g)}` } : {}),
   };
+  // A played game is finished and its file is final; a scheduled one has to
+  // ask the live feed what is happening.
+  const settled = isArchivedSeason(Number(season)) && g.home.pts !== null;
 
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <GameClient id={String(g.id)} date={g.date} initial={initial} />
+      <GameClient id={String(g.id)} date={g.date} initial={initial} live={!settled} />
     </>
   );
 }
