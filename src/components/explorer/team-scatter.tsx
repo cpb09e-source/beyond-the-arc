@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { confDisplay } from "@/lib/conf-display";
 import { Select } from "@/components/select";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import {
   METRICS, METRIC_BY_KEY, METRIC_GROUPS, METRIC_PRESETS,
-  fmtMetric, niceTicks, type Metric,
+  fmtMetric, fmtTick, niceTicks, tickCount, type Metric,
 } from "@/lib/team-scatter-metrics";
 
 /**
@@ -279,7 +279,7 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
           />
           <p className="mt-2 text-xs text-ink-muted leading-snug">
             {season - 1}-{String(season).slice(2)} season. The axes fit the teams shown, so the
-            dashed crosshair — the D-I median — is the fixed reference. Where a metric has a
+            crosshair — the D-I median across all 365 teams — is the fixed reference. Where a metric has a
             good direction the axis is turned so that better is up and to the right.
           </p>
         </div>
@@ -492,6 +492,9 @@ function Plot({
    * scale factor to disagree about. It also renders every label at its true
    * size instead of ~7% under.
    */
+  // useId, because several of these can render at once and a duplicated marker
+  // id would make them share one — or none.
+  const arrowId = `arr-${useId().replace(/:/g, "")}`;
   const boxRef = useRef<HTMLDivElement>(null);
   const [W, setW] = useState(700);
   useEffect(() => {
@@ -596,45 +599,52 @@ function Plot({
     <div ref={boxRef} className="relative w-full" style={{ height: H }}>
       <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 w-full h-full" role="img"
         aria-label={`Teams by ${xM.label} against ${yM.label}`}>
-        {niceTicks(geo.x0, geo.x1).map((v) => (
+        <defs>
+          {/* auto-start-reverse turns the same marker round at the start of a
+              line, so one definition arms both ends. */}
+          <marker id={arrowId} viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-muted)" />
+          </marker>
+        </defs>
+        {niceTicks(geo.x0, geo.x1, tickCount(W - L - R, "x")).map((v) => (
           <g key={`x${v}`}>
             <line x1={X(v)} y1={T} x2={X(v)} y2={H - B} stroke="var(--hairline)" />
             <text x={X(v)} y={H - B + 12} textAnchor="middle" fontSize={11.5}
-              fill="var(--ink-muted)" className="tabular">{fmtMetric(xM, v)}</text>
+              fill="var(--ink-muted)" className="tabular">{fmtTick(xM, v)}</text>
           </g>
         ))}
-        {niceTicks(geo.y0, geo.y1).map((v) => (
+        {niceTicks(geo.y0, geo.y1, tickCount(H - T - B, "y")).map((v) => (
           <g key={`y${v}`}>
             <line x1={L} y1={Y(v)} x2={W - R} y2={Y(v)} stroke="var(--hairline)" />
             <text x={L - 6} y={Y(v) + 3} textAnchor="end" fontSize={11.5}
-              fill="var(--ink-muted)" className="tabular">{fmtMetric(yM, v)}</text>
+              fill="var(--ink-muted)" className="tabular">{fmtTick(yM, v)}</text>
           </g>
         ))}
 
-        {/* THE D-I MEDIAN, from every team rather than from the selection, and
-            drawn only when it falls inside the frame. With the background dots
-            gone this is the only national context left on the plot, and the
-            axes now move with the selection — so without it a reader has no way
-            to tell "good" from "good for this league". Skipped rather than
-            clamped to an edge, because a reference line pinned to the border
-            would claim the median is at the edge of the range. */}
+        {/* THE D-I MEDIAN, as a cross rather than two captioned rules.
+
+            It is still the same reference — computed from every team rather
+            than from the selection, which matters because the axes fit the
+            selection and without a fixed mark there is no telling "good" from
+            "good for this league". What went is the "D-I MED" text, twice: two
+            labels floating inside the plot read as annotations on whichever
+            crest they landed near.
+
+            Arrowheads instead, pointing out along each line, which say
+            "direction" rather than "a value here" — and the meaning lives in
+            the caption under the chart where it does not compete with a team.
+            Drawn only when the median falls inside the frame; a line clamped to
+            the border would claim the median is at the edge of the range. */}
         {inRange(geo.mx, geo.x0, geo.x1) && (
-          <g>
-            <line x1={X(geo.mx)} y1={T} x2={X(geo.mx)} y2={H - B}
-              stroke="var(--ink-muted)" strokeDasharray="3 3" opacity={0.5} />
-            <text x={X(geo.mx) + 3} y={H - B - 4} fontSize={9.5} fill="var(--ink-muted)" letterSpacing="0.06em">
-              D-I MED
-            </text>
-          </g>
+          <line x1={X(geo.mx)} y1={T} x2={X(geo.mx)} y2={H - B}
+            stroke="var(--ink-muted)" strokeWidth={1} opacity={0.45}
+            markerStart={`url(#${arrowId})`} markerEnd={`url(#${arrowId})`} />
         )}
         {inRange(geo.my, geo.y0, geo.y1) && (
-          <g>
-            <line x1={L} y1={Y(geo.my)} x2={W - R} y2={Y(geo.my)}
-              stroke="var(--ink-muted)" strokeDasharray="3 3" opacity={0.5} />
-            <text x={L + 3} y={Y(geo.my) - 3} fontSize={9.5} fill="var(--ink-muted)" letterSpacing="0.06em">
-              D-I MED
-            </text>
-          </g>
+          <line x1={L} y1={Y(geo.my)} x2={W - R} y2={Y(geo.my)}
+            stroke="var(--ink-muted)" strokeWidth={1} opacity={0.45}
+            markerStart={`url(#${arrowId})`} markerEnd={`url(#${arrowId})`} />
         )}
 
         {/* Corner captions only where both axes actually have a direction —

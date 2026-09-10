@@ -127,6 +127,35 @@ export function fmtMetric(m: Metric, v: number | null): string {
   }
 }
 
+/**
+ * A tick's label. Same formatter as a cell, minus the trailing tenth when there
+ * is not one — an axis reading 104.0, 106.0, 108.0 spends three characters a
+ * tick saying nothing, and the column beside it is where precision belongs.
+ */
+export function fmtTick(m: Metric, v: number): string {
+  return fmtMetric(m, v).replace(/\.0(?=%?$)/, "");
+}
+
+/**
+ * How many ticks an axis of this many pixels should carry.
+ *
+ * Fixed at five, a 810px tall axis got a gridline every 160px and a step of 5
+ * rating points, which is coarse enough that a team's position has to be
+ * estimated rather than read. Deriving the count from the length instead gets
+ * the step down to 2 on a tall axis without crowding a short one — and because
+ * niceTicks only ever picks 1, 2, 5 or 10 times a power of ten, asking for a
+ * few more is safe: it lands on the next step down, not on an ugly number.
+ *
+ * 75px per tick vertically and 62 horizontally. The vertical number is larger
+ * on purpose: at 60 an 18-point rating range asked for 14 ticks, niceTicks
+ * rounded the step down to 1, and the axis came back with eighteen gridlines
+ * 45px apart. Asking for slightly fewer lands on a step of 2, which is the
+ * density a rating axis wants.
+ */
+export function tickCount(px: number, axis: "x" | "y"): number {
+  return Math.max(4, Math.min(14, Math.round(px / (axis === "y" ? 75 : 62))));
+}
+
 /** Axis tick values that land on round numbers, whatever the metric's scale. */
 export function niceTicks(lo: number, hi: number, want = 5): number[] {
   const span = hi - lo;
