@@ -6,6 +6,10 @@ import { cn } from "@/lib/utils";
 import { Select } from "@/components/select";
 import { dataUrl } from "@/lib/data-url";
 import { StatInfo } from "@/components/players/stat-info";
+import {
+  Court, volColor, diffColor, mix,
+  COLD, NEUTRAL, HOT, COLD_HEX, HOT_HEX, DIFF_DOMAIN,
+} from "@/components/shot/court";
 import { pctBg, pctColor } from "@/components/percentile-chip";
 import {
   ShotProfileFallbackCard, useShotProfile, seasonLabel,
@@ -367,108 +371,6 @@ export function PlayerShotChart({
 
 // Where the corner line meets the arc: sqrt(r² − (250−33.5)²) below the rim.
 
-
-// Light, grainy canvas. The court used to be a navy slab, which forced every
-// mark to be a glow on darkness; on warm paper the same marks read as ink and
-// the line work stops fighting the shots.
-const COURT_BG = "#e8e3d8";
-const LINE = "rgba(26,34,56,0.30)";
-
-// Volume ramp — pale sand through to deep brick. Single hue, so it reads as
-// one quantity getting bigger; the accuracy chart beside it is the only place
-// hue itself carries meaning.
-const VOL_RAMP: [number, number, number][] = [
-  [0xf2, 0xe3, 0xcd],
-  [0xe2, 0x82, 0x4a],
-  [0x9c, 0x2f, 0x1d],
-];
-/**
- * Accuracy diverging scale: blue = cold (below the cohort), red = hot (above).
- *
- * This deliberately inverts the site's --good/--bad semantics, where red means
- * trouble. On a shot chart red-is-hot is the older and stronger convention
- * (it's what every heat map in the sport uses), and the scale is read as
- * temperature, not as a verdict. The aggregate delta under the chart is tinted
- * off these same two poles so the card can't contradict itself.
- */
-const COLD: [number, number, number] = [0x1f, 0x5e, 0x9e];
-const NEUTRAL: [number, number, number] = [0xf4, 0xf1, 0xe8];
-const HOT: [number, number, number] = [0xbd, 0x2f, 0x24];
-const COLD_HEX = "#1f5e9e";
-const HOT_HEX = "#bd2f24";
-
-/**
- * Half-width of the color scale, in percentage points of FG%.
- *
- * Measured, not guessed, and re-measured whenever the bin radius moves — a
- * coarser grid puts more attempts behind each cell, which survives shrinkage
- * and widens the spread. At the current r=22, across 600 qualifying 2026
- * players (38,050 cells), the shrunk difference is |1.9| points at the median,
- * |4.7| at p90, |5.8| at p95. An early ±10 domain left the typical cell using
- * 16% of the scale, which is exactly why the court first read as washed out.
- */
-const DIFF_DOMAIN = 0.06;
-/**
- * Slight gamma on the ramp, lifting mid-range cells further out of the paper.
- * Safe to apply because the legend is drawn by this same function over evenly
- * spaced values — any monotone curve stays self-consistent, so matching a hex
- * against the legend still reads the right number off it.
- */
-const DIFF_GAMMA = 0.8;
-
-const mix = (a: [number, number, number], b: [number, number, number], t: number) =>
-  `rgb(${Math.round(a[0] + (b[0] - a[0]) * t)},${Math.round(a[1] + (b[1] - a[1]) * t)},${Math.round(a[2] + (b[2] - a[2]) * t)})`;
-
-function volColor(t: number): string {
-  const c = Math.max(0, Math.min(1, t));
-  return c < 0.5 ? mix(VOL_RAMP[0]!, VOL_RAMP[1]!, c * 2) : mix(VOL_RAMP[1]!, VOL_RAMP[2]!, (c - 0.5) * 2);
-}
-function diffColor(d: number): string {
-  const t = Math.max(-1, Math.min(1, d / DIFF_DOMAIN));
-  const s = Math.pow(Math.abs(t), DIFF_GAMMA);
-  return t < 0 ? mix(NEUTRAL, COLD, s) : mix(NEUTRAL, HOT, s);
-}
-
-/** Shared court frame: grainy floor, then children (the marks), then line work. */
-function Court({ children, label }: { children: React.ReactNode; label: string }) {
-  // useId keeps the filter unique — two of these render side by side, and a
-  // duplicated id would make both courts share one (or neither) grain.
-  const uid = useId().replace(/:/g, "");
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto rounded-lg" role="img" aria-label={label}>
-      <defs>
-        {/* TV-static floor. fractalNoise + full desaturation gives gray grain;
-            the rect's low opacity keeps it a texture rather than a pattern. */}
-        <filter id={`grain-${uid}`} x="0" y="0" width="100%" height="100%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch" />
-          <feColorMatrix type="saturate" values="0" />
-        </filter>
-        <clipPath id={`clip-${uid}`}><rect width={W} height={H} rx={8} /></clipPath>
-      </defs>
-
-      <g clipPath={`url(#clip-${uid})`}>
-        <rect width={W} height={H} fill={COURT_BG} />
-        <rect width={W} height={H} filter={`url(#grain-${uid})`} opacity={0.22} />
-        {/* Marks sit under the line work so the court stays legible. */}
-        {children}
-        <g stroke={LINE} strokeWidth={2} fill="none">
-          {/* Lane + free-throw circle */}
-          <rect x={RIM_X - 60} y={0} width={120} height={190} />
-          <circle cx={RIM_X} cy={190} r={60} />
-          {/* Backboard + rim + restricted arc */}
-          <line x1={RIM_X - 30} y1={40} x2={RIM_X + 30} y2={40} strokeWidth={3} />
-          <circle cx={RIM_X} cy={RIM_Y} r={7.5} />
-          <path d={`M ${RIM_X - 40} ${RIM_Y} A 40 40 0 0 0 ${RIM_X + 40} ${RIM_Y}`} />
-          {/* Three-point line: corner segments + arc */}
-          <line x1={CORNER_X} y1={0} x2={CORNER_X} y2={CORNER_Y} />
-          <line x1={W - CORNER_X} y1={0} x2={W - CORNER_X} y2={CORNER_Y} />
-          <path d={`M ${CORNER_X} ${CORNER_Y} A ${THREE_R} ${THREE_R} 0 0 0 ${W - CORNER_X} ${CORNER_Y}`} />
-        </g>
-      </g>
-      <rect width={W} height={H} rx={8} fill="none" stroke="rgba(26,34,56,0.14)" />
-    </svg>
-  );
-}
 
 const VOL_R = 9;
 

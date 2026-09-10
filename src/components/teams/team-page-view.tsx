@@ -3,6 +3,7 @@ import { TeamLogo } from "@/components/team-logo";
 import { midrankPercentileMap } from "@/lib/percentile";
 import { TeamName } from "@/components/team-name";
 import { SeasonPreview } from "@/components/teams/season-preview";
+import { TeamShotChart } from "@/components/teams/team-shot-chart";
 
 // Bart's year key for the upcoming season (season-END year: 2027 = 2026-27).
 export const PREVIEW_SEASON_YEAR = 2027;
@@ -880,6 +881,19 @@ export function TeamPageView({
           />
         )}
       </section>
+      )}
+
+      {/* THE SHOT CHART LEADS THE TAB. Everything else under Shooting is a
+          rate against a percentile — true, and unreadable at a glance. The
+          court is the only thing here that answers "what does this team do"
+          before you have read a single number, so it goes first and full
+          width. Seasons before 2021-22 have no coordinates and the card says
+          so rather than disappearing, because a team page that silently drops
+          a panel on older seasons reads as broken. */}
+      {show.shooting && !preview && (
+        <section data-pane="shooting" className="mt-10">
+          <TeamShotChart team={team.name} season={current.year} />
+        </section>
       )}
 
       {show.shooting && (

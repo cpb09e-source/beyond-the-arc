@@ -140,10 +140,17 @@ export function ScoreTicker() {
         >
           <div className="flex items-stretch w-max">
             {slate.games.map((g) => <TickerGame key={g.id} g={g} />)}
+            {/* TWO SHORT LINES, NOT ONE LONG ONE. "Full scoreboard →" set on a
+                single line is the widest thing in the ticker, and it sits at
+                the end of a horizontally scrolling rail — so on a phone it
+                either pushes a game off the strip or trails off the edge
+                itself. Stacked, it takes the width of "SCORES" and reads as a
+                label rather than a sentence. */}
             <Link
               href="/scoreboard"
-              className="shrink-0 flex items-center px-4 text-[0.62rem] uppercase tracking-[0.12em] font-semibold text-coral hover:underline whitespace-nowrap" prefetch={false}>
-              Full scoreboard →
+              className="shrink-0 flex flex-col items-start justify-center leading-[1.15] px-4 text-[0.62rem] uppercase tracking-[0.12em] font-semibold text-coral hover:underline whitespace-nowrap" prefetch={false}>
+              <span>All</span>
+              <span>Scores →</span>
             </Link>
           </div>
         </div>

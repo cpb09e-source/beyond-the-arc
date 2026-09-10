@@ -63,6 +63,7 @@ const ALL_DIRS = [
   "public/data/team",
   "public/data/game-players",
   "public/data/shots",
+  "public/data/team-shots",
   // Twelve files rather than thousands — see the note beside it in
   // src/lib/data-url.ts for why it is on R2 anyway.
   "public/data/game-index",

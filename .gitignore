@@ -108,6 +108,17 @@ gated-data/
 # in one command: npx tsx scripts/build-team-season-games.mts
 /public/data/team-season-games/
 
+# Team shot locations, both ends — 1,812 files, 107 MB across five seasons,
+# served from R2. Same argument as the line above: it is derived wholly from
+# the tracked CBBD plays archive and the builder rewrites a season's directory
+# in full, so tracking it would write 27 MB of history every time one season is
+# re-run. Rebuild in one command: npx tsx scripts/build-team-shots.mts
+#
+# NOTE the sibling public/data/shots IS tracked, at 77 MB. That predates this
+# and is not the precedent to follow — team-season-games is the closer case,
+# and it is ignored for exactly this reason.
+/public/data/team-shots/
+
 # The scoreboard archive — one slate per day, one bundle per game, per season.
 # ~6,000 files and ~600 MB a season, rebuilt in one command and served from
 # R2:  npx tsx scripts/build-scoreboard-archive.mts
