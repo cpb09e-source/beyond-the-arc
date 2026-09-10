@@ -75,7 +75,8 @@ export function AssistFlow({
     return active.side === side && active.id === id;
   };
 
-  const readout = describe(active, ribbons, pNodes, sNodes, label, names);
+  const readout = describe(active, ribbons, pNodes, sNodes, label, names, network.players);
+  const selfMade = mostSelfMade(network, label);
 
   return (
     <div>
@@ -149,9 +150,20 @@ export function AssistFlow({
           </>
         ) : (
           <div className="text-[0.62rem] text-ink-muted leading-snug">
-            The team&apos;s {edgeCount} biggest connections — thickness is volume.
-            <span className="hidden sm:inline"> Hover</span>
-            <span className="sm:hidden"> Tap</span> a band or a name for the detail; click to keep it.
+            {/* THE RESTING STATE CARRIES THE HEADLINE. The self-made rates used
+                to be a six-row list under the chart; folded into hover they
+                would be reachable only one player at a time, and the one thing
+                that list actually said — who on this team creates his own —
+                would be gone. So the readout says it while nothing is selected,
+                and the per-player rate is on every node. */}
+            {selfMade && (
+              <span className="text-ink-soft">
+                {selfMade.name} is the least-assisted finisher — {selfMade.pct} of rim makes unassisted.{" "}
+              </span>
+            )}
+            <span className="hidden sm:inline">Hover</span>
+            <span className="sm:hidden">Tap</span> a band or a name for the detail; click to keep it.
+            {" "}({edgeCount} biggest connections shown.)
           </div>
         )}
       </div>
@@ -283,6 +295,33 @@ function build(network: AssistNetwork, max: number, label: Record<string, string
 type Ribbon = NonNullable<ReturnType<typeof build>>["ribbons"][number];
 type NodeGeo = { id: number; total: number; hue: string };
 
+/**
+ * The team's most self-made finisher, for the readout's resting state.
+ *
+ * Rim makes, not all makes, because that is where the number separates roles:
+ * threes are 75-95% assisted for nearly everyone and tell you nothing, while a
+ * centre finishing lobs runs ~65% at the rim against under 20% for a guard who
+ * gets there himself. The 40-make floor is the same one the old list used — a
+ * 4-for-6 season is noise, not a role.
+ */
+function mostSelfMade(network: AssistNetwork, label: Record<string, string>) {
+  const best = Object.entries(network.players)
+    .filter(([, p]) => p.fgm >= 40 && p.rim_ast_rate != null)
+    .sort((a, b) => (a[1].rim_ast_rate ?? 0) - (b[1].rim_ast_rate ?? 0))[0];
+  if (!best) return null;
+  return {
+    name: label[best[0]] ?? network.names[best[0]] ?? "—",
+    pct: `${Math.round((1 - (best[1].rim_ast_rate ?? 0)) * 100)}%`,
+  };
+}
+
+/** "61% of rim makes unassisted", or null when the sample is too thin to say. */
+function selfMadeLine(players: AssistNetwork["players"], id: number): string | null {
+  const p = players[id];
+  if (!p || p.fgm < 40 || p.rim_ast_rate == null) return null;
+  return `${Math.round((1 - p.rim_ast_rate) * 100)}% of rim makes unassisted`;
+}
+
 function describe(
   active: Sel,
   ribbons: Ribbon[],
@@ -290,6 +329,7 @@ function describe(
   sNodes: NodeGeo[],
   label: Record<string, string>,
   names: Record<string, string>,
+  players: AssistNetwork["players"],
 ): { hue: string; title: string; total: string; detail: string } | null {
   if (!active) return null;
 
@@ -306,14 +346,14 @@ function describe(
 
   const n = (active.side === "p" ? pNodes : sNodes).find((x) => x.id === active.id);
   if (!n) return null;
-  const mine = ribbons.filter((r) => (active.side === "p" ? r.p : r.s) === active.id);
-  const partners = mine.length;
+  const partners = ribbons.filter((r) => (active.side === "p" ? r.p : r.s) === active.id).length;
+  const who = `${partners} teammate${partners === 1 ? "" : "s"} shown`;
+  const self = selfMadeLine(players, active.id);
   return {
     hue: n.hue,
     title: label[String(active.id)] ?? names[active.id] ?? "—",
     total: `${n.total}`,
-    detail: active.side === "p"
-      ? `assists to ${partners} teammate${partners === 1 ? "" : "s"} shown`
-      : `assisted makes, from ${partners} teammate${partners === 1 ? "" : "s"} shown`,
+    detail: (active.side === "p" ? `assists to ${who}` : `assisted makes, from ${who}`)
+      + (self ? ` · ${self}` : ""),
   };
 }
