@@ -36,7 +36,13 @@ export const METRICS: Metric[] = [
   // ── Ratings ────────────────────────────────────────────────────────────
   { key: "adjoe", label: "Adjusted offensive rating", short: "ORtg", group: "Ratings", fmt: "num1" },
   { key: "adjde", label: "Adjusted defensive rating", short: "DRtg", group: "Ratings", fmt: "num1", lowerBetter: true },
-  { key: "margin", label: "Adjusted margin", short: "Margin", group: "Ratings", fmt: "num1" },
+  // TWO NET NUMBERS, and they are not the same one. `margin` is Torvik's
+  // adjusted offense minus his adjusted defense; `net_rtg_adj` is the site's
+  // own adjusted net rating, carried on the season row. They disagree by
+  // several points a team — Saint Mary's 2026 is +24.4 against a +19.9 margin
+  // — so collapsing them into one entry would quietly pick a winner.
+  { key: "margin", label: "Adjusted margin (ORtg − DRtg)", short: "Margin", group: "Ratings", fmt: "num1" },
+  { key: "net_rtg_adj", label: "Adjusted net rating", short: "NetRtg", group: "Ratings", fmt: "num1" },
   { key: "adjt", label: "Adjusted tempo", short: "Tempo", group: "Ratings", fmt: "num1", neutral: true },
   { key: "sos", label: "Strength of schedule", short: "SOS", group: "Ratings", fmt: "num3" },
   { key: "wab", label: "Wins above bubble", short: "WAB", group: "Ratings", fmt: "num1" },

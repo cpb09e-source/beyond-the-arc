@@ -261,7 +261,7 @@ export function SearchableMultiSelect({
           {renderIcon && value.length === 1 && soleOption ? (
             <span className="flex items-center gap-1.5 min-w-0">
               <span className="shrink-0 flex items-center">{renderIcon(soleOption)}</span>
-              <span className="truncate">{triggerLabel}</span>
+              <span className="truncate min-w-0">{triggerLabel}</span>
             </span>
           ) : (
             <span className="truncate block">{triggerLabel}</span>
@@ -349,7 +349,12 @@ export function SearchableMultiSelect({
                             className="accent-coral shrink-0"
                           />
                           {renderIcon && <span className="shrink-0 flex items-center">{renderIcon(o)}</span>}
-                          <span className={cn("truncate", isSelected && "font-medium text-coral")}>{o.label}</span>
+                          {/* min-w-0 IS LOAD-BEARING. A flex item defaults to
+                              min-width:auto, which refuses to shrink below its
+                              own content — so  never engaged and a
+                              label wider than the panel ran straight out of it.
+                              "Big 10" was leaving its "10" outside the box. */}
+                          <span className={cn("truncate min-w-0", isSelected && "font-medium text-coral")}>{o.label}</span>
                         </label>
                       );
                     })}

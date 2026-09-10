@@ -143,7 +143,7 @@ export function SearchableSelect({
         aria-expanded={open}
         className="h-9 w-full min-w-40 px-2 rounded border border-hairline bg-card text-ink text-xs text-left flex items-center justify-between gap-2 focus:outline-none focus:ring-2 focus:ring-coral/40"
       >
-        <span className="truncate">{currentLabel}</span>
+        <span className="truncate min-w-0">{currentLabel}</span>
         <span aria-hidden className="text-ink-muted text-xs">▾</span>
       </button>
 
@@ -214,7 +214,7 @@ export function SearchableSelect({
                           isSelected && "text-coral font-medium"
                         )}
                       >
-                        <span>{o.label}</span>
+                        <span className="truncate min-w-0">{o.label}</span>
                         {isSelected && <span aria-hidden className="text-coral text-xs">✓</span>}
                       </button>
                     );
