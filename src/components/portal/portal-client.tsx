@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useRef } from "react";
+import { StickyHeaderClone } from "@/components/table/sticky-header-clone";
 import Link from "next/link";
 import { Star, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { TeamLogo } from "@/components/team-logo";
@@ -339,13 +340,18 @@ export function PortalClient({
             scrollport; without it this box never scrolls vertically and
             `sticky top-0` has nothing to hold on to. svh keeps the box
             inside the visible area with the URL bar out. */}
-        {/* Vertical overscroll CHAINS below md, matching the player and team
-            explorers — see the long note in players-client.tsx. `none` meant a
-            swipe that reached either end of the table stopped dead instead of
-            scrolling the page, which is the "too sensitive" complaint.
-            `overscroll-x-contain` stays: panning columns must not scroll the
-            page sideways. */}
-        <div ref={gridScrollRef} className="overflow-auto overscroll-x-contain max-h-[80svh] md:max-h-[calc(100vh-1.5rem)]">
+        {/* NO VERTICAL CAP BELOW md, matching the player and team explorers —
+            the full reasoning is in players-client.tsx. Short version: a
+            capped box is a second scroller inside a scrolling page, and
+            overscroll-behavior has no setting that both hands the swipe off to
+            the page and refuses to be dragged past its own end. Removing the
+            cap means there is no vertical overflow to do either. It costs the
+            pinned header row below md; the frozen left columns are unaffected.
+
+            `overscroll-x-none` because panning the columns must not scroll the
+            page sideways, and `none` also kills iOS's sideways rubber-band. */}
+        <StickyHeaderClone scrollerRef={gridScrollRef} />
+        <div ref={gridScrollRef} className="overflow-auto overscroll-x-none md:max-h-[calc(100vh-1.5rem)]">
           {/* border-separate so the header cells carry their own bottom
               rule — a collapsed border belongs to the table and scrolls
               away underneath a sticky cell. Nothing in the body draws a

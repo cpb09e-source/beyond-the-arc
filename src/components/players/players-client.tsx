@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { StickyHeaderClone } from "@/components/table/sticky-header-clone";
 import { CLASS_BADGE } from "@/lib/class-badge";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -1520,6 +1521,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
         {/* ~24 rows tall before the internal scroll takes over. Custom vertical
             rail (starts at the player rows); native thin horizontal bar. */}
         <div className="relative">
+        <StickyHeaderClone scrollerRef={gridScrollRef} />
         <div
           ref={gridScrollRef}
           
@@ -1536,30 +1538,43 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           // and an opaque custom property behind every sticky cell. Their box
           // is 675px of an 844px phone.
           //
-          // THE MARGIN IS THE POINT, not a rounding choice. A viewport-tall
-          // window fills the screen, so every touch lands inside the table and
-          // the page has no exposed surface left to scroll from — and with
-          // overscroll `none` below md (see further down) that is not merely
-          // awkward, it is a trap: no gesture anywhere on screen would scroll
-          // the page. The gap is what keeps the table a component on a page
-          // rather than a second scrolling application.
+          // NO VERTICAL CAP BELOW md. Settled 2026-09-10 after three attempts;
+          // the reasoning is written out because each attempt looked right in
+          // isolation and the constraint only shows up on a real phone.
           //
-          // Widened from 80svh to 90svh on 2026-09-10 — Colin asked to see more
-          // rows at once. The remaining 10% is still a real strip of page at
-          // every phone size (~84px at 844px tall), so the escape hatch holds.
-          // Do not take it to 100: the cap cannot go to zero while
-          // overscroll-behavior is `none`.
+          // A capped box is a SECOND SCROLLER inside a scrolling page, and on
+          // iOS every arrangement of that is bad in one of three ways. The
+          // knob is overscroll-behavior-y, and it has exactly three settings:
           //
-          // UNCAPPING THIS ON A PHONE WAS TRIED AND REVERSED, 2026-09-10. It
-          // does fix the "too sensitive" feel — one scroller under the finger
-          // instead of two nested ones — but it costs the pinned header row,
-          // because a sticky cell pins to its nearest scrollport and an
-          // uncapped box's top never moves. There is no way to keep both: a box
-          // cannot scroll one axis and delegate the other, since
-          // `overflow-y: visible` computes to `auto` beside an `auto` x. Colin
-          // chose the header. Do not remove the cap without deciding that
-          // trade again — and if it ever does come off, `overscroll-none`
-          // below md has to come off with it.
+          //   auto     chains to the page at the ends  +  elastic bounce
+          //   contain  no chaining                     +  elastic bounce
+          //   none     no chaining                     +  no bounce
+          //
+          // There is no value that chains WITHOUT bouncing. So a scrollable box
+          // can have the swipe hand off to the page, or it can refuse to be
+          // dragged past its own end, never both. We shipped `none` (swipes
+          // died at the last row — "too sensitive", you had to lift your finger
+          // and start from the page margin), then `auto` (handoff worked, but
+          // the bounce dragged the sticky header and frozen columns visibly
+          // away from the rows — photographed on a phone, 2026-09-10).
+          //
+          // Removing the cap dissolves the trilemma instead of picking a
+          // corner: with no vertical overflow there is nothing to chain from
+          // and nothing to bounce, the page is the only scroller, and one
+          // finger does one obvious thing.
+          //
+          // WHAT IT COSTS: the header row stops pinning below md. Sticky pins
+          // to the nearest scrollport, this box is still that (it keeps
+          // overflow-auto for the columns), and with no vertical scroll its top
+          // never moves — so `top-0` holds the header at the top of the TABLE,
+          // not the screen. That cannot be worked around by moving the sticky
+          // elsewhere: a box cannot scroll one axis and delegate the other,
+          // because `overflow-y: visible` computes to `auto` beside an `auto`
+          // x. The frozen RK/Player columns are NOT affected — `left-0` pins
+          // against the horizontal axis, which this box still owns.
+          //
+          // Desktop is untouched: md keeps the viewport-height window, its
+          // pinned header and the custom rails.
           //
           // svh rather than their vh: vh resolves to the LARGEST viewport, so
           // on iOS the box is sized as though the URL bar were hidden and
@@ -1590,7 +1605,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           // thing. The header still pins for the whole time the box is on
           // screen, which is when it is doing its job.
           //
-          // `overscroll-x-contain` STAYS. Horizontal is the box's own axis —
+          // `overscroll-x-none`, not `contain`. Horizontal is the box's own axis —
           // panning the columns must never scroll the page sideways, and that
           // was never the thing that felt wrong.
           //
@@ -1608,7 +1623,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           // removes pan-y for the whole gesture and the page cannot scroll
           // from any finger that lands on the table. Shipped exactly that on
           // 2026-08-22 and had to pull it.
-          className="overflow-auto overscroll-x-contain players-scroll cursor-grab max-h-[90svh] md:max-h-[calc(100vh-1.5rem)]"
+          className="overflow-auto overscroll-x-none players-scroll cursor-grab md:max-h-[calc(100vh-1.5rem)]"
           {...panHandlers}
         >
           <table className="w-full text-sm border-separate border-spacing-0">
@@ -1848,7 +1863,14 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
           </table>
           <HScrollRail target={gridScrollRef} />
         </div>
-        <VScrollRail target={gridScrollRef} />
+        {/* Desktop only. Below md the box has no vertical overflow to drive
+            (see the cap note above), and this renders its track and both
+            arrows unconditionally — a dead grey rail with buttons that do
+            nothing. sync() nulls the THUMB when there is nothing to scroll,
+            which is not the same as hiding the control. */}
+        <div className="max-md:hidden">
+          <VScrollRail target={gridScrollRef} />
+        </div>
         </div>
         {anyEstimated && (
           <div className="px-3 lg:px-4 py-2 border-t border-hairline bg-paper-deep/20 flex items-center gap-1.5 text-[0.68rem] text-ink-muted">
