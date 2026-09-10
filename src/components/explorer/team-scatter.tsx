@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { confDisplay } from "@/lib/conf-display";
+import { Select } from "@/components/select";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import {
   METRICS, METRIC_BY_KEY, METRIC_GROUPS, METRIC_PRESETS,
@@ -45,7 +46,6 @@ export type ScatterTeam = {
   rank: number;
   id: number | null;
   record: string;
-  color: string;
   m: Record<string, number | null>;
 };
 
@@ -75,6 +75,10 @@ function crestSize(n: number): number {
 
 type SortKey = "rank" | "name" | "x" | "y";
 
+/** Rows per page. Chosen to end level with the plot beside it, not for a round
+ *  number — see the note on the table. */
+const PER_PAGE = 25;
+
 export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: number }) {
   const [confs, setConfs] = useState<Set<string>>(() => new Set(["ACC"]));
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
@@ -82,7 +86,6 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
   const [hover, setHover] = useState<string | null>(null);
   const [xKey, setXKey] = useState("adjoe");
   const [yKey, setYKey] = useState("adjde");
-  const [logos, setLogos] = useState(true);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "rank", dir: 1 });
 
   const xM = METRIC_BY_KEY[xKey]!, yM = METRIC_BY_KEY[yKey]!;
@@ -174,27 +177,16 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
           <Picker label="X" value={xKey} onChange={setXKey} />
           <Picker label="Y" value={yKey} onChange={setYKey} />
           <Btn onClick={() => { setXKey(yKey); setYKey(xKey); }} title="Swap the two axes">Flip</Btn>
-          <button
-            type="button"
-            onClick={() => setLogos((v) => !v)}
-            aria-pressed={logos}
-            className={`text-[0.68rem] uppercase tracking-[0.08em] rounded-full border px-3 py-1 transition-colors ${
-              logos ? "border-coral bg-coral/12 text-coral font-semibold" : "border-hairline text-ink-soft hover:text-ink"
-            }`}
-          >
-            Logos
-          </button>
-          <select
-            value=""
-            onChange={(e) => {
-              const p = METRIC_PRESETS.find((q) => q.label === e.target.value);
-              if (p) { setXKey(p.x); setYKey(p.y); }
-            }}
-            className="text-xs rounded-full border border-hairline bg-paper px-2.5 py-1 text-ink-soft"
-          >
+          {/* Presets resolve to an X/Y pair and then clear themselves — the
+              control is a shortcut, not a mode, and leaving one selected after
+              the reader edits an axis by hand would make it a label that lies. */}
+          <Select value="" onChange={(v) => {
+            const p = METRIC_PRESETS.find((q) => q.label === v);
+            if (p) { setXKey(p.x); setYKey(p.y); }
+          }} compact ariaLabel="Metric presets" className="w-40">
             <option value="">Presets…</option>
             {METRIC_PRESETS.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}
-          </select>
+          </Select>
         </Row>
 
         <Row label="Show">
@@ -258,7 +250,6 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
 
       <h2 className="text-base text-ink mb-2">
         <span className="tabular font-semibold">{shown.length}</span> teams
-        <span className="text-ink-muted"> · {xM.label} vs {yM.label}</span>
       </h2>
 
       {/* Table first in the DOM and on a phone, where a wide plot is the worse
@@ -270,7 +261,7 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
         />
         <div className="flex-1 min-w-0 w-full">
           <Plot
-            teams={teams} shown={shown} xM={xM} yM={yM} logos={logos}
+            teams={teams} shown={shown} xM={xM} yM={yM}
             hover={hover} setHover={setHover}
           />
           <p className="mt-2 text-xs text-ink-muted leading-snug">
@@ -329,10 +320,9 @@ function Picker({ label, value, onChange }: {
   label: string; value: string; onChange: (v: string) => void;
 }) {
   return (
-    <label className="inline-flex items-center gap-1 rounded-full border border-hairline bg-paper pl-2 pr-1 py-0.5">
-      <span className="text-[0.6rem] uppercase tracking-[0.14em] text-ink-muted">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)}
-        className="text-xs bg-transparent text-ink outline-none max-w-[12rem]">
+    <div className="inline-flex items-center gap-1.5">
+      <span className="text-[0.6rem] uppercase tracking-[0.14em] text-ink-muted shrink-0">{label}</span>
+      <Select value={value} onChange={onChange} compact ariaLabel={`${label} axis metric`} className="w-52">
         {METRIC_GROUPS.map((g) => (
           <optgroup key={g} label={g}>
             {METRICS.filter((m) => m.group === g).map((m) => (
@@ -340,8 +330,8 @@ function Picker({ label, value, onChange }: {
             ))}
           </optgroup>
         ))}
-      </select>
-    </label>
+      </Select>
+    </div>
   );
 }
 
@@ -354,6 +344,17 @@ function TeamTable({
   sort: { key: SortKey; dir: 1 | -1 }; onSort: (k: SortKey) => void;
   hover: string | null; setHover: (v: string | null) => void;
 }) {
+  const [page, setPage] = useState(0);
+
+  // CLAMPED RATHER THAN RESET. Changing the sort should leave the reader where
+  // they were; shrinking the selection while on page 8 must not leave them
+  // staring at an empty table. Deriving the page from the current row count
+  // instead of resetting it on every change does both.
+  const pages = Math.max(1, Math.ceil(rows.length / PER_PAGE));
+  const safePage = Math.min(page, pages - 1);
+  const from = safePage * PER_PAGE;
+  const pageRows = rows.slice(from, from + PER_PAGE);
+
   if (!rows.length) {
     return (
       <div className="w-full lg:w-[22rem] shrink-0 rounded-lg border border-hairline p-4 text-sm text-ink-muted">
@@ -370,9 +371,12 @@ function TeamTable({
 
   return (
     <div className="w-full lg:w-[22rem] shrink-0 rounded-lg border border-hairline overflow-hidden">
-      {/* Capped and scrolling: 286 rows next to a fixed-height plot would leave
-          the chart stranded at the top of a very long page. */}
-      <div className="max-h-[32rem] overflow-y-auto">
+      {/* PAGED, NOT SCROLLED. 286 rows in a scrolling box next to a fixed-height
+          plot leaves the chart stranded at the top of a very long column, and a
+          reader who scrolls the list loses the plot from view entirely. Twenty
+          five rows is about the height of the chart beside it, so the two panes
+          end level and the whole tool fits one screen. */}
+      <div>
         <table className="w-full border-collapse">
           <thead className="sticky top-0 bg-paper-deep z-10">
             <tr className="border-b border-hairline">
@@ -387,7 +391,7 @@ function TeamTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((t) => (
+            {pageRows.map((t) => (
               <tr
                 key={t.name}
                 onPointerEnter={() => setHover(t.name)}
@@ -419,19 +423,45 @@ function TeamTable({
           </tbody>
         </table>
       </div>
+
+      {pages > 1 && (
+        <div className="flex items-center justify-between gap-2 border-t border-hairline px-2 py-1.5">
+          <span className="text-xs text-ink-muted tabular">
+            {from + 1}–{Math.min(from + PER_PAGE, rows.length)} of {rows.length}
+          </span>
+          <span className="flex items-center gap-1">
+            <Pager onClick={() => setPage(0)} disabled={safePage === 0} label="First">«</Pager>
+            <Pager onClick={() => setPage(safePage - 1)} disabled={safePage === 0} label="Previous">‹</Pager>
+            <span className="text-xs text-ink-soft tabular px-1">{safePage + 1} / {pages}</span>
+            <Pager onClick={() => setPage(safePage + 1)} disabled={safePage >= pages - 1} label="Next">›</Pager>
+            <Pager onClick={() => setPage(pages - 1)} disabled={safePage >= pages - 1} label="Last">»</Pager>
+          </span>
+        </div>
+      )}
     </div>
+  );
+}
+
+function Pager({ onClick, disabled, label, children }: {
+  onClick: () => void; disabled: boolean; label: string; children: React.ReactNode;
+}) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} aria-label={label} title={label}
+      className="w-6 h-6 rounded border border-hairline text-sm leading-none text-ink-soft hover:border-ink-muted hover:text-ink disabled:opacity-30 disabled:hover:border-hairline">
+      {children}
+    </button>
   );
 }
 
 /* ---------------------------------- plot ---------------------------------- */
 
 function Plot({
-  teams, shown, xM, yM, logos, hover, setHover,
+  teams, shown, xM, yM, hover, setHover,
 }: {
-  teams: ScatterTeam[]; shown: ScatterTeam[]; xM: Metric; yM: Metric; logos: boolean;
+  teams: ScatterTeam[]; shown: ScatterTeam[]; xM: Metric; yM: Metric;
   hover: string | null; setHover: (v: string | null) => void;
 }) {
-  const W = 760, H = 520, L = 52, R = 20, T = 16, B = 44;
+  const W = 760, H = 470, L = 52, R = 20, T = 16, B = 44;
 
   const geo = useMemo(() => {
     // THE FRAME FITS THE SELECTION, NOT THE COUNTRY. It used to be the full D-I
@@ -486,7 +516,7 @@ function Plot({
    * size; relocating is not.
    */
   const placed = useMemo(() => {
-    const dodge = shown.length <= 40 && logos;
+    const dodge = shown.length <= 40;
     const taken: { x: number; y: number }[] = [];
     return shown
       .filter((p) => p.m[xM.key] != null && p.m[yM.key] != null)
@@ -504,7 +534,7 @@ function Plot({
         }
         return { p, x: bx, y: by, base };
       });
-  }, [shown, X, Y, size, logos, xM, yM]);
+  }, [shown, X, Y, size, xM, yM]);
 
   // The DODGED position, not the data position — the card has to sit against
   // the crest the pointer is actually over, which for a nudged mark is not
@@ -520,7 +550,14 @@ function Plot({
   const inRange = (v: number, a: number, b: number) => v > Math.min(a, b) && v < Math.max(a, b);
 
   return (
-    <div className="relative w-full" style={{ aspectRatio: `${W} / ${H}` }}>
+    // HEIGHT IS CAPPED AS WELL AS RATIOED. On a wide screen the column beside
+    // the table is ~700px, and a 760x470 box at that width is over 430px tall
+    // — stacked under the toolbar and the count that ran the chart off the
+    // bottom of the viewport. maxHeight bounds it while aspect-ratio keeps the
+    // box in proportion, which matters because the crests are positioned as a
+    // percentage of THIS element: letting the SVG letterbox inside a differently
+    // shaped box would slide every crest off its own coordinates.
+    <div className="relative w-full mx-auto" style={{ aspectRatio: `${W} / ${H}`, maxHeight: "26rem" }}>
       <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 w-full h-full" role="img"
         aria-label={`Teams by ${xM.label} against ${yM.label}`}>
         {niceTicks(geo.x0, geo.x1).map((v) => (
@@ -582,20 +619,7 @@ function Plot({
             on the page, and it made a small selection look like a handful of
             crests dropped on a field of static. The national context it carried
             is now the median crosshair above, which costs two lines. */}
-        {!logos && shown.map((t) => {
-          const vx = t.m[xM.key], vy = t.m[yM.key];
-          if (vx == null || vy == null) return null;
-          return (
-            <circle key={t.name} cx={X(vx)} cy={Y(vy)} r={4.5}
-              fill={t.color} fillOpacity={0.95} stroke="var(--paper)" strokeWidth={0.8}
-              className="cursor-pointer"
-              onPointerEnter={() => setHover(t.name)}
-              onPointerLeave={() => setHover(null)}
-            />
-          );
-        })}
-
-        {logos && placed.map(({ p, x, y, base }) => (
+        {placed.map(({ p, x, y, base }) => (
           Math.abs(y - base) > 1
             ? <line key={`ld${p.name}`} x1={x} y1={base} x2={x} y2={y} stroke="var(--ink-muted)" strokeWidth={0.7} opacity={0.55} />
             : null
@@ -615,7 +639,7 @@ function Plot({
           runs best-first — the dodge has to give the top of the sport its
           natural position — but at 250 crests the later ones occlude the
           earlier ones, and the reader is not looking for the 280th team. */}
-      {logos && [...placed].reverse().map(({ p, x, y }) => {
+      {[...placed].reverse().map(({ p, x, y }) => {
         const lit = hover === p.name;
         const pad = size <= 16 ? 3 : 2;
         return (
