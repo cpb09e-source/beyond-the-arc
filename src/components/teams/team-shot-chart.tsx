@@ -281,8 +281,13 @@ export function TeamShotChart({ team, season }: { team: string; season: number }
         <FilterBar f={f} setF={setF} />
       </div>
 
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_18rem] gap-5 p-4 sm:p-5">
-        <div>
+      {/* THE CARD STACKS, because it now shares a row with the Shooting panel
+          and is half the page wide. Splitting that half again put the court in
+          about 21rem and the readouts in less — both too narrow to be worth
+          looking at. Full card width for the court, everything else beneath it
+          in a row that wraps. */}
+      <div className="p-4 sm:p-5">
+        <div className="w-full">
           <Court
             label={`${team} ${sideLabel.toLowerCase()} by court location`}
             onPointerLeave={() => setHover(null)}
@@ -303,7 +308,7 @@ export function TeamShotChart({ team, season }: { team: string; season: number }
           <Legend side={side} metric={metric} />
         </div>
 
-        <div className="min-w-0 space-y-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <Headline team={team} side={side} totals={totals} count={shown.length} />
           <Readout cell={active} side={side} />
           <ZoneStrip off={offRows} def={defRows} side={side} />

@@ -883,22 +883,27 @@ export function TeamPageView({
       </section>
       )}
 
-      {/* THE SHOT CHART LEADS THE TAB. Everything else under Shooting is a
-          rate against a percentile — true, and unreadable at a glance. The
-          court is the only thing here that answers "what does this team do"
-          before you have read a single number, so it goes first and full
-          width. Seasons before 2021-22 have no coordinates and the card says
-          so rather than disappearing, because a team page that silently drops
-          a panel on older seasons reads as broken. */}
-      {show.shooting && !preview && (
-        <section data-pane="shooting" className="mt-10">
-          <TeamShotChart team={team.name} season={current.year} />
-        </section>
+      {/* THE SHOT CHART LEADS THE TAB, BESIDE THE SHOOTING RATES. Everything
+          else under Shooting is a rate against a percentile — true, and
+          unreadable at a glance. The court is the only thing here that answers
+          "what does this team do" before you have read a single number, so it
+          shares the top row rather than sitting under the numbers it explains:
+          the rates say a team shoots 38.2% from three, the court says from
+          where.
+
+          Seasons before 2021-22 have no coordinates and the card says so
+          rather than disappearing, because a team page that silently drops a
+          panel on older seasons reads as broken. The preview build skips it —
+          it fetches per-team data a blurred page has no business requesting. */}
+      {show.shooting && (
+      <section id={TAB_ANCHORS.shooting} data-pane="shooting" className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8 scroll-mt-20">
+        {!preview && <TeamShotChart team={team.name} season={current.year} />}
+        <DistributionPanel title="Shooting" ranks={shootingRanks} blurBody={preview} />
+      </section>
       )}
 
       {show.shooting && (
-      <section id={TAB_ANCHORS.shooting} data-pane="shooting" className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8 scroll-mt-20">
-        <DistributionPanel title="Shooting" ranks={shootingRanks} blurBody={preview} />
+      <section data-pane="shooting" className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
         <DistributionPanel title="Four Factors" ranks={fourFactorRanks} blurBody={preview}>
           {current.four_factor_record && current.four_factor_record.games > 0 && (
             <>
