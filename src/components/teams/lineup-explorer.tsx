@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { PanScroller } from "@/components/table/pan-scroller";
 import { PercentileChip } from "@/components/percentile-chip";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
 import { PlayerChips } from "@/components/teams/player-chips";
@@ -400,11 +401,20 @@ export function LineupExplorer({
               : `${rows.length.toLocaleString()} ${size}-player ${rows.length === 1 ? "combination" : "combinations"} match, but none reached ${MIN_POSS} possessions together. The Totals above still cover all of them.`}
           </p>
         ) : (
-          // overscroll-x-contain ONLY. `none` also suppresses the vertical
-          // rubber-band, and overflow-x:auto makes this a scroll container in
-          // both axes, so `none` would stop the page scrolling from any finger
-          // that lands on the table. Documented at the other grids too.
-          <div className="overflow-x-auto overscroll-x-contain">
+          // DRAG TO PAN, like every other wide grid on the site. Without it
+          // this table was the one place a reader had to find the horizontal
+          // scrollbar and use it, which on a trackpad means aiming at a 6px
+          // target. useDragPan ignores touch — a finger already gets native
+          // momentum scrolling, and hijacking it makes the gesture worse.
+          //
+          // A `//` comment, not `{/* */}`: this sits in a ternary branch, not
+          // in a child position, so a JSX comment here has no parent element.
+          // overscroll-x-none: the X AXIS ONLY, which stops the sideways
+          // rubber-band as well as sideways chaining. Never bare
+          // `overscroll-none` — that covers both axes, and this box is a
+          // scroll container in both, so it would stop the page scrolling
+          // from any finger that lands on the table.
+          <PanScroller>
             <table className="w-full text-sm border-separate border-spacing-0">
               <thead>
                 <tr>
@@ -463,7 +473,7 @@ export function LineupExplorer({
                 ))}
               </tbody>
             </table>
-          </div>
+          </PanScroller>
         )}
       </div>
 

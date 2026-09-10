@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { PanScroller } from "@/components/table/pan-scroller";
 import { PercentileChip } from "@/components/percentile-chip";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
 import { PlayerChips } from "@/components/teams/player-chips";
@@ -292,10 +293,15 @@ export function OnOffExplorer({
               the px-4 gutter the heading, blurb and note sit in. The surface
               runs to the edge; the words line up. */}
           <div className="border-y border-x-0 lg:border-x border-hairline rounded-none lg:rounded-xl shadow-sm overflow-hidden bg-paper-deep/25 -mx-6 lg:mx-0">
-            {/* overscroll-x-contain ONLY — `none` also kills the vertical
-                rubber-band and this box scrolls in both axes. Documented at the
-                other grids. */}
-            <div className="overflow-x-auto overscroll-x-contain">
+          {/* DRAG TO PAN, like every other wide grid on the site. Without it
+              this table was the one place a reader had to find the horizontal
+              scrollbar and use it, which on a trackpad means aiming at a 6px
+              target. useDragPan ignores touch — a finger already gets native
+              momentum scrolling, and hijacking it makes the gesture worse. */}
+            {/* overscroll-x-none: the X AXIS ONLY. Bare `overscroll-none`
+                would cover both axes and this box scrolls in both, which would
+                stop the page scrolling from any finger on the table. */}
+            <PanScroller>
               <table className="w-full text-sm border-separate border-spacing-0">
                 <thead>
                   <tr>
@@ -404,7 +410,7 @@ export function OnOffExplorer({
                   ))}
                 </tbody>
               </table>
-            </div>
+            </PanScroller>
           </div>
         </section>
       ))}
