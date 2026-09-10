@@ -179,8 +179,28 @@ export function StickyHeaderClone({
       // pointer-events-none: this is a readout, not a control. The sort buttons
       // it copies would be dead ringers for the real ones and fire nothing, so
       // taps fall through to whatever is genuinely underneath.
-      className="md:hidden fixed top-0 inset-x-0 z-40 overflow-hidden pointer-events-none shadow-[0_1px_0_var(--color-hairline)]"
-      style={{ display: visible ? "block" : "none" }}
+      // IT SLIDES, IT DOES NOT BLINK. This was `display: none/block`, which
+      // made the bar appear and vanish in a single frame — the table looked
+      // like it flinched every time the header crossed the top of the screen.
+      //
+      // It stays in the layout at all times and animates opacity and offset
+      // instead, so there is something for the transition to interpolate.
+      // `display` cannot be transitioned; a hidden element has no rendered
+      // state to move from.
+      //
+      // `visibility` rides along on the same transition so the bar leaves the
+      // accessibility tree once it has finished fading, rather than sitting
+      // there invisible. Going out, the delay holds it visible for the length
+      // of the fade; coming in it is immediate — hence the two durations.
+      className="md:hidden fixed top-0 inset-x-0 z-40 overflow-hidden pointer-events-none shadow-[0_1px_0_var(--color-hairline)] motion-reduce:transition-none"
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(-100%)",
+        visibility: visible ? "visible" : "hidden",
+        transition: visible
+          ? "opacity 140ms ease-out, transform 160ms cubic-bezier(0.2,0.8,0.2,1), visibility 0s"
+          : "opacity 120ms ease-in, transform 140ms ease-in, visibility 0s linear 140ms",
+      }}
       aria-hidden
     />,
     document.body,

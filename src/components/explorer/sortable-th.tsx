@@ -107,6 +107,18 @@ export function SortableTh({
   // 44px touch target guideline, on every sortable column of every table.
   // Moving it inside makes the whole cell tappable, and the extra vertical
   // padding below `sm` takes a phone tap from 16px to 40px.
+  /**
+   * TWO-WORD LABELS STACK ON A PHONE. "OFF EPM" and "DEF EPM" set on one line
+   * make the header the widest thing in a column whose numbers are four
+   * characters, so the column is sized by its caption rather than its data.
+   * Letting it wrap below md puts OFF over EPM and the column shrinks to the
+   * numbers — real width back on a 390px screen, across every table that uses
+   * this header.
+   *
+   * `nowrap` still holds from md up, where there is room and a wrapped caption
+   * would just look ragged. Single-word labels are unaffected: there is no
+   * space to break at.
+   */
   const baseClasses =
     "p-0 text-xs uppercase tracking-wide sm:tracking-widest font-medium select-none cursor-pointer transition-colors";
   const variantClasses =
@@ -127,7 +139,7 @@ export function SortableTh({
             ? "text-right border-l border-coral/30"
             : align === "left" ? "text-left" : "text-right",
           "text-ink-muted/70",
-          nowrap ? "whitespace-nowrap" : "whitespace-normal",
+          nowrap ? "max-md:whitespace-normal whitespace-nowrap" : "whitespace-normal",
           className,
         )}
       >
@@ -144,7 +156,7 @@ export function SortableTh({
   return (
     <th
       title={title ?? label}
-      className={cn(baseClasses, variantClasses, activeClass, nowrap ? "whitespace-nowrap" : "whitespace-normal", className)}
+      className={cn(baseClasses, variantClasses, activeClass, nowrap ? "max-md:whitespace-normal whitespace-nowrap" : "whitespace-normal", className)}
     >
       <Link
         href={href}

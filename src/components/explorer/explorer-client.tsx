@@ -461,7 +461,15 @@ export function ExplorerClient({
   // below becomes a safety net for cases it cannot be (very narrow viewports,
   // a four-digit rank).
   const [rankThRef, rankW] = useMeasuredWidth<HTMLTableCellElement>(48);
-  const teamLeft = { left: `${rankW}px` };
+  /**
+   * Where the frozen Team column pins. Same reasoning as players-client: below
+   * md the `#` column stops freezing and scrolls away when you pan right,
+   * handing 48px back to the stats on a phone, so Team pins at 0 instead of
+   * clearing it. The custom property carries the measured width; the class
+   * picks which value applies at which width.
+   */
+  const teamLeft = { "--rank-w": `${rankW}px` } as React.CSSProperties;
+  const TEAM_PIN = "left-0 md:left-[var(--rank-w)]";
   // Focus the input on open WITHOUT letting the browser scroll it into view
   // (that scroll-jump is what reads as a "flash" of the table on mobile).
   useEffect(() => {
@@ -1371,7 +1379,7 @@ export function ExplorerClient({
                   header row. Same two-tier treatment as /players. */}
               <tr>
                 <th className="sticky top-0 left-0 z-40 w-12 min-w-12 bg-paper-deep h-6 p-0" />
-                <th style={teamLeft} className="sticky top-0 z-40 bg-paper-deep h-6 p-0 border-r border-hairline" />
+                <th style={teamLeft} className={cn("sticky top-0 z-40 bg-paper-deep h-6 p-0 border-r border-hairline", TEAM_PIN)} />
                 {/* Spacers for Conf / Season / Rec. These MIRROR the column
                     row below one cell at a time rather than collapsing into a
                     single colSpan, because Conf is `hidden sm:table-cell`: a
@@ -1408,8 +1416,8 @@ export function ExplorerClient({
                 <th className="sticky top-0 z-30 bg-paper-deep h-6 p-0 w-full" />
               </tr>
               <tr>
-                <th ref={rankThRef} className="sticky top-6 left-0 z-40 w-12 min-w-12 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
-                <th style={teamLeft} className="sticky top-6 z-40 bg-paper-deep border-b border-r border-hairline px-2 sm:px-3 py-3 sm:py-2 text-xs uppercase tracking-wide sm:tracking-widest text-ink-muted font-medium text-left align-middle">Team</th>
+                <th ref={rankThRef} className="sticky top-6 left-auto md:left-0 z-40 w-12 min-w-12 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">#</th>
+                <th style={teamLeft} className={cn("sticky top-6 z-40 bg-paper-deep border-b border-r border-hairline px-2 sm:px-3 py-3 sm:py-2 text-xs uppercase tracking-wide sm:tracking-widest text-ink-muted font-medium text-left align-middle", TEAM_PIN)}>Team</th>
                 <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle hidden sm:table-cell">Conf</th>
                 {multiYear && <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Season</th>}
                 <th className="sticky top-6 z-30 bg-paper-deep border-b border-hairline px-1.5 sm:px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">
@@ -1529,7 +1537,7 @@ export function ExplorerClient({
                   <tr key={`${r.team_id}-${r.team_year}`} className={cn("group", zebra)}>
                     <td
                       title={honourTitle}
-                      className={cn("sticky left-0 z-20 w-12 min-w-12 px-1 sm:px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER, honourCell)}
+                      className={cn("sticky left-auto md:left-0 z-20 w-12 min-w-12 px-1 sm:px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER, honourCell)}
                     >
                       {rowOffset + i + 1}
                     </td>
@@ -1539,7 +1547,7 @@ export function ExplorerClient({
                         touching the F4 badge. The line says "this column is
                         pinned, that content is passing behind it" — same
                         hairline the stat bands already use. */}
-                    <td style={teamLeft} className={cn("sticky z-20 px-2 sm:px-3 py-1 border-r border-hairline transition-colors", zebra, ROW_HOVER)}>
+                    <td style={teamLeft} className={cn("sticky z-20 px-2 sm:px-3 py-1 border-r border-hairline transition-colors", TEAM_PIN, zebra, ROW_HOVER)}>
                       <Link
                         href={`/teams/${teamSlug(r.team_name)}/${r.team_year}`}
                         className="inline-flex items-center gap-2.5 group"

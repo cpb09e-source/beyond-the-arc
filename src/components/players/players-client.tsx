@@ -755,7 +755,21 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   // the meantime. A minimum floors the shrink; the measurement still handles
   // the grow case, such as a four-digit rank.
   const [rkThRef, rkW] = useMeasuredWidth<HTMLTableCellElement>(40);
-  const playerLeft = { left: `${rkW}px` };
+  /**
+   * Where the frozen Player column pins.
+   *
+   * Below md the RK column no longer freezes — it scrolls away when you pan
+   * right, which is 40px of a 390px screen handed back to the stats. So Player
+   * has nothing to its left and pins at 0. From md up RK is frozen again and
+   * Player has to clear it.
+   *
+   * A custom property rather than `left` directly, because the value is
+   * measured at runtime and the breakpoint is not expressible in an inline
+   * style: the class picks 0 or var(--rk-w), the style just supplies the
+   * number.
+   */
+  const playerLeft = { "--rk-w": `${rkW}px` } as React.CSSProperties;
+  const PLAYER_PIN = "left-0 md:left-[var(--rk-w)]";
 
   // Click-and-drag panning over the stat columns (MPG → HKM): grab anywhere in
   // the data area and drag left/right.
@@ -1632,7 +1646,7 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                   row (sticky top-6) sits FLUSH beneath it: no see-through gap. */}
               <tr>
                 <th className="sticky top-0 left-0 z-40 bg-paper-deep h-6 p-0" />
-                <th style={playerLeft} className="sticky top-0 z-40 bg-paper-deep h-6 p-0" />
+                <th style={playerLeft} className={cn("sticky top-0 z-40 bg-paper-deep h-6 p-0", PLAYER_PIN)} />
                 {dynamicCols.length > 0 && (
                   <th colSpan={dynamicCols.length} className="sticky top-0 z-30 bg-paper-deep h-6 p-0 px-2 text-[0.58rem] uppercase tracking-[0.15em] font-semibold text-ink-muted text-center border-l border-hairline align-middle">
                     Your columns
@@ -1667,8 +1681,8 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
               </tr>
               {/* Column row — search lives in the Player cell (D&3-style). */}
               <tr>
-                <th ref={rkThRef} className="sticky top-6 left-0 z-40 w-10 min-w-10 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">RK</th>
-                <th style={playerLeft} className="sticky top-6 z-40 bg-paper-deep border-b border-hairline px-1.5 sm:px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle">Player</th>
+                <th ref={rkThRef} className="sticky top-6 left-auto md:left-0 z-40 w-10 min-w-10 bg-paper-deep border-b border-hairline px-1 sm:px-2 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-center align-middle">RK</th>
+                <th style={playerLeft} className={cn("sticky top-6 z-40 bg-paper-deep border-b border-hairline px-1.5 sm:px-3 py-3 sm:py-2 text-xs uppercase tracking-widest text-ink-muted font-medium text-left align-middle", PLAYER_PIN)}>Player</th>
                 {[...dynamicCols, ...viewCols].map((c, i) =>
                   c.sortKey ? (
                     // Index-qualified: a pinned stat that is also a default
@@ -1735,11 +1749,11 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
                   return (
                   <tr key={p.id} className={cn("group", zebra)}>
                     {/* RK — rank within the CURRENT sort */}
-                    <td className={cn("sticky left-0 z-20 w-10 min-w-10 px-1 sm:px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
+                    <td className={cn("sticky left-auto md:left-0 z-20 w-10 min-w-10 px-1 sm:px-2 py-1 text-center text-ink-muted tabular text-xs font-semibold transition-colors cursor-default", zebra, ROW_HOVER)}>
                       {previewCapped ? i + 1 : (pageSafe - 1) * spec.limit + i + 1}
                     </td>
                     {/* Player — photo + name + team/class/height meta */}
-                    <td style={playerLeft} className={cn("sticky z-20 px-1.5 sm:px-3 py-1 transition-colors", zebra, ROW_HOVER)}>
+                    <td style={playerLeft} className={cn("sticky z-20 px-1.5 sm:px-3 py-1 transition-colors", PLAYER_PIN, zebra, ROW_HOVER)}>
                       <span className="flex items-center gap-2 sm:gap-2.5 min-w-0 sm:min-w-44">
                         <PlayerPhoto bartPlayerId={p.bart_player_id} name={p.name} size={28} />
                         <span className="min-w-0">
