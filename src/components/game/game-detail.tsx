@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { sideColors } from "@/components/box/game-box-modal";
 import { cn } from "@/lib/utils";
 import { longDate } from "./types";
@@ -42,6 +42,34 @@ export function GameDetail({ b, partial = false, detailFailed = false, links }: 
   partial?: boolean;
 }) {
   const [tab, setTab] = useState<TabKey>("overview");
+  const tabsTopRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Land the reader on the tab bar when they switch tabs from further down.
+   *
+   * Switching tabs does not move the scroll position, so "Full box score" —
+   * a button sitting well below the fold inside Game leaders — swapped the
+   * content underneath and left the reader stranded in the middle of a table
+   * they had not seen the top of, with no header row and no tabs in sight.
+   *
+   * ONLY WHEN THE BAR HAS ALREADY SCROLLED OFF. Scrolling unconditionally
+   * would be worse than the bug: tap a tab while the scoreline is on screen
+   * and the page would jump down past it. `top >= 0` means the bar is still
+   * visible, so there is nothing to fix.
+   *
+   * The anchor is a separate zero-height div rather than the <nav>, because
+   * the nav is `sticky top-0` — once it is pinned its rect reports the pinned
+   * position, not its place in the document, and scrolling to that is a no-op.
+   * A static sibling directly above it always reports the real one.
+   */
+  const snapToTabs = () => {
+    const el = tabsTopRef.current;
+    if (!el || el.getBoundingClientRect().top >= 0) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+  };
+
+  const openTab = (k: TabKey) => { setTab(k); snapToTabs(); };
   const [hc, ac] = useMemo(
     () => sideColors(b.game.home.team, b.game.away.team),
     [b.game.home.team, b.game.away.team],
@@ -72,6 +100,7 @@ export function GameDetail({ b, partial = false, detailFailed = false, links }: 
     <div className="pb-20">
       <ScoreHeader b={b} records={records} />
 
+      <div ref={tabsTopRef} aria-hidden className="h-0" />
       <nav className="sticky top-0 z-30 border-b border-hairline bg-paper/95 backdrop-blur">
         <div className="mx-auto max-w-[var(--page-narrow)] px-5 lg:px-10">
           <div className="flex gap-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -79,7 +108,7 @@ export function GameDetail({ b, partial = false, detailFailed = false, links }: 
               <button
                 key={t.key}
                 type="button"
-                onClick={() => setTab(t.key)}
+                onClick={() => openTab(t.key)}
                 aria-current={t.key === tab ? "page" : undefined}
                 className={cn(
                   "relative shrink-0 px-3.5 h-11 text-sm transition-colors whitespace-nowrap",
@@ -120,7 +149,7 @@ export function GameDetail({ b, partial = false, detailFailed = false, links }: 
           <p className="py-16 text-center text-sm text-ink-muted">Loading the box score…</p>
         ) : (
           <>
-            {tab === "overview" && <OverviewTab b={b} hc={hc} ac={ac} onOpenBox={() => setTab("players")} />}
+            {tab === "overview" && <OverviewTab b={b} hc={hc} ac={ac} onOpenBox={() => openTab("players")} />}
             {tab === "players" && <PlayersTab b={b} hc={hc} ac={ac} links={links} />}
             {tab === "plays" && <PlaysTab b={b} />}
           </>

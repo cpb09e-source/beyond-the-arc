@@ -35,24 +35,52 @@ export function OverviewTab({ b, hc, ac, onOpenBox }: { b: GameBundle; hc: strin
   }, [g.season]);
 
   return (
-    <div className="space-y-5">
-      {/* Form and history lead: context you want BEFORE the box score. Flat on
-          the page, no card — they are a strip of results, not a panel. */}
-      <div className="grid gap-5 lg:grid-cols-3">
-        <Form side={g.away} rows={b.form.away} />
-        <Form side={g.home} rows={b.form.home} />
-        <HeadToHead b={b} />
+    /*
+      TWO READING ORDERS FROM ONE DOM.
+
+      A desktop reads in columns — form across the top, then Leaders/GameInfo,
+      TeamStats, and FourFactors/Standings packing independently down three
+      tracks. A phone has no columns, so it gets whatever the DOM says, and the
+      DOM order that produces those columns is the wrong order to read down:
+      form and head-to-head first, the box score's own numbers last.
+
+      Colin's order for a phone is leaders → team stats → form → game info →
+      four factors → standings.
+
+      `order` alone cannot do that, because ordering only sorts SIBLINGS and
+      GameInfo has to leave Leaders' column to sit after form. So below lg the
+      grids and the column wrappers are `display: contents`: they stop
+      generating boxes, their children become direct flex items of the one
+      container here, and a single `order` scale sorts all eight. At lg the
+      wrappers become real grids again and every order resets to 0, so the
+      desktop layout is byte-for-byte the one that was already here.
+
+      `empty:hidden` on each wrapper because Standings and FourFactors render
+      null before 2014 and on a game with no conference table — without it an
+      empty div is still a flex item and `gap-5` would leave a hole where a
+      panel is not.
+    */
+    <div className="flex flex-col gap-5 lg:block lg:space-y-5">
+      {/* Form and history: a strip of results, not a panel — no card. */}
+      <div className="contents lg:grid lg:gap-5 lg:grid-cols-3">
+        <div className="order-3 lg:order-none empty:hidden"><Form side={g.away} rows={b.form.away} /></div>
+        <div className="order-4 lg:order-none empty:hidden"><Form side={g.home} rows={b.form.home} /></div>
+        <div className="order-5 lg:order-none empty:hidden"><HeadToHead b={b} /></div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3 items-start">
-        <div className="space-y-5">
-          <Leaders b={b} hc={hc} ac={ac} photos={photos} onOpenBox={onOpenBox} />
-          <GameInfo b={b} />
+      <div className="contents lg:grid lg:gap-5 lg:grid-cols-2 xl:grid-cols-3 lg:items-start">
+        <div className="contents lg:block lg:space-y-5">
+          <div className="order-1 lg:order-none empty:hidden">
+            <Leaders b={b} hc={hc} ac={ac} photos={photos} onOpenBox={onOpenBox} />
+          </div>
+          <div className="order-6 lg:order-none empty:hidden"><GameInfo b={b} /></div>
         </div>
-        <TeamStatsPanel b={b} hc={hc} ac={ac} />
-        <div className="space-y-5">
-          <FourFactors b={b} hc={hc} ac={ac} />
-          <Standings b={b} hc={hc} ac={ac} />
+        <div className="order-2 lg:order-none empty:hidden">
+          <TeamStatsPanel b={b} hc={hc} ac={ac} />
+        </div>
+        <div className="contents lg:block lg:space-y-5">
+          <div className="order-7 lg:order-none empty:hidden"><FourFactors b={b} hc={hc} ac={ac} /></div>
+          <div className="order-8 lg:order-none empty:hidden"><Standings b={b} hc={hc} ac={ac} /></div>
         </div>
       </div>
     </div>

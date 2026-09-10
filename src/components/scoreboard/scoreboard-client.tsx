@@ -13,8 +13,7 @@ import { isKnownDay, latestArchivedDay } from "@/lib/scoreboard-archive";
 import { DatePicker } from "./date-picker";
 import {
   EMPTY_SLATE, POLL_MS, dateLabel, fetchSlate, gameHref, isFinal, isLive, isRanked, lineLabel, recordLabel, slateIsSettled, tipLabel,
-  type ScoreGame, type Slate,
-} from "@/lib/scoreboard";
+  type ScoreGame, type Slate, isSeed,} from "@/lib/scoreboard";
 
 function teamSlug(name: string): string {
   return name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -226,13 +225,26 @@ export function ScoreboardClient({
     const m = new Map<string, ScoreGame[]>();
     for (const g of slate.games) {
       if (!inConf(g) || isRanked(g)) continue;
-      const key = g.conferenceGame && g.home.conference ? confDisplay(g.home.conference) : "Non-conference";
+      // TOURNAMENT FIRST. An NIT or NCAA game is not a conference game, so it
+      // used to fall through to "Non-conference" — which is technically true
+      // and reads as nonsense next to a bracket. CBBD tags the tournament and
+      // it has been carried through normalize() and the baked slates since
+      // 2026-09-09; this is the first thing to use it for grouping.
+      const key = g.tournament
+        ? g.tournament
+        : g.conferenceGame && g.home.conference
+        ? confDisplay(g.home.conference)
+        : "Non-conference";
       if (!m.has(key)) m.set(key, []);
       m.get(key)!.push(g);
     }
     for (const list of m.values()) list.sort((a, b) => a.startDate.localeCompare(b.startDate));
-    return [...m.entries()].sort((a, b) =>
-      a[0] === "Non-conference" ? 1 : b[0] === "Non-conference" ? -1 : a[0].localeCompare(b[0]));
+    // Tournaments lead (NCAA, then NIT, then anything else CBBD labels),
+    // conferences in the middle alphabetically, non-conference last.
+    const tours = new Set(slate.games.map((g) => g.tournament).filter(Boolean) as string[]);
+    const bucket = (k: string) =>
+      k === "Non-conference" ? 3 : !tours.has(k) ? 2 : k === "NCAA" ? 0 : k === "NIT" ? 1 : 1.5;
+    return [...m.entries()].sort((a, b) => bucket(a[0]) - bucket(b[0]) || a[0].localeCompare(b[0]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slate.games, conf]);
 
@@ -562,7 +574,7 @@ function TeamRow({ t, final, halves, at }: { t: ScoreGame["home"]; final: boolea
       <TeamLogo name={t.team} size={20} />
       {/* Poll rank displaces tournament seed where a team carries both — two
           small numerals beside one team read as a score. */}
-      {t.rank != null ? <RankBadge rank={t.rank} /> : t.seed != null ? (
+      {t.rank != null ? <RankBadge rank={t.rank} /> : isSeed(t.seed) ? (
         <span className="text-[0.6rem] text-ink-muted tabular">{t.seed}</span>
       ) : null}
       <Link

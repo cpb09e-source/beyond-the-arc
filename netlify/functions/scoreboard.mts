@@ -250,6 +250,16 @@ function normalize(r: Record<string, unknown>): Game | null {
   const id = Number(r.id ?? r.gameId);
   if (!Number.isFinite(id)) return null;
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  /**
+   * CBBD SENDS 99 FOR "NO SEED", NOT null, on every non-tournament game. Taken
+   * literally that badges both teams "99" all season. A bracket has 16 seeds;
+   * anything else is a sentinel. Mirrored by isSeed() in src/lib/scoreboard.ts,
+   * which the renderers use for slates baked before this existed.
+   */
+  const seedOf = (v: unknown) => {
+    const n = num(v);
+    return n !== null && Number.isInteger(n) && n >= 1 && n <= 16 ? n : null;
+  };
   const str = (v: unknown) => (typeof v === "string" && v.length > 0 ? v : null);
   const home = str(r.homeTeam), away = str(r.awayTeam);
   if (!home || !away) return null;
@@ -279,7 +289,7 @@ function normalize(r: Record<string, unknown>): Game | null {
       conference: str(r.homeConference),
       points: pts(r.homePoints),
       winner: typeof r.homeWinner === "boolean" ? r.homeWinner : null,
-      seed: num(r.homeSeed),
+      seed: seedOf(r.homeSeed),
       rank: null,
       periods: Array.isArray(r.homePeriodPoints) ? (r.homePeriodPoints as number[]).filter((n) => typeof n === "number") : [],
       record: null,
@@ -289,7 +299,7 @@ function normalize(r: Record<string, unknown>): Game | null {
       conference: str(r.awayConference),
       points: pts(r.awayPoints),
       winner: typeof r.awayWinner === "boolean" ? r.awayWinner : null,
-      seed: num(r.awaySeed),
+      seed: seedOf(r.awaySeed),
       rank: null,
       periods: Array.isArray(r.awayPeriodPoints) ? (r.awayPeriodPoints as number[]).filter((n) => typeof n === "number") : [],
       record: null,

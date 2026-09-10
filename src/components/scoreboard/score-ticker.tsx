@@ -7,8 +7,7 @@ import { cn } from "@/lib/utils";
 import { useDragPan } from "@/lib/use-drag-pan";
 import {
   EMPTY_SLATE, POLL_MS, fetchSlate, gameHref, isFinal, isLive, shortDateLabel, slateIsSettled, tipLabel, todayEastern,
-  type ScoreGame, type Slate,
-} from "@/lib/scoreboard";
+  type ScoreGame, type Slate, isSeed,} from "@/lib/scoreboard";
 
 /**
  * Site-wide score rail, directly under the nav.
@@ -195,7 +194,7 @@ function TickerSide({ side, won }: { side: ScoreGame["home"]; won: boolean }) {
         <span className="shrink-0 inline-flex items-center justify-center min-w-4 h-3.5 px-0.5 rounded-sm bg-coral text-white text-[0.5rem] font-bold tabular leading-none">
           {side.rank}
         </span>
-      ) : side.seed != null ? (
+      ) : isSeed(side.seed) ? (
         <span className="text-[0.5rem] text-ink-muted tabular">{side.seed}</span>
       ) : null}
       <span className={cn("text-[0.68rem] max-w-28 truncate", won ? "text-ink font-semibold" : "text-ink-soft")}>

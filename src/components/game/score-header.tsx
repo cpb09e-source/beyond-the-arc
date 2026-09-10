@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
@@ -54,22 +55,50 @@ export function ScoreHeader({
           {longDate(g.startDate)}
         </p>
 
-        <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-5 lg:gap-8">
-          <TeamBlock side={g.away} record={records?.away} align="right" final={final} />
+        {/* TWO LAYOUTS, BECAUSE THE OPEN-OUTWARD ONE CANNOT SURVIVE A PHONE.
+            The grid below is [1fr auto 1fr] with the totals in the middle. At
+            390px the middle column is two 5xl numerals plus the status —
+            about 230px of the ~350px available — so each team column gets
+            roughly 48px, which is exactly the width of the logo sitting in
+            it. The names truncated to nothing and the record rendered as a
+            lone "3…". Clamping the type would not fix it; the arrangement is
+            what does not fit.
 
-          <div className="flex items-center gap-3 sm:gap-5 lg:gap-7">
-            {started && <Num v={g.away.points} dim={final && g.away.winner === false} />}
-            <div className="text-center min-w-14 sm:min-w-18">
-              <Status b={b} />
+            A phone gets a scoreboard row per side instead: logo, name and
+            record running the full width, score right-aligned. It is the
+            shape every reader already knows from a scoreboard, and the record
+            has ~250px to sit in rather than 48.
+
+            Wrapped in plain divs rather than putting max-sm:hidden on the
+            grid itself. A utility that flips `display` competing with the
+            `grid` utility on one element is the bug that cost an afternoon on
+            .matchup-split, and a wrapper cannot lose that fight. */}
+        <div className="max-sm:hidden">
+          <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-5 lg:gap-8">
+            <TeamBlock side={g.away} record={records?.away} align="right" final={final} />
+
+            <div className="flex items-center gap-3 sm:gap-5 lg:gap-7">
+              {started && <Num v={g.away.points} dim={final && g.away.winner === false} />}
+              <div className="text-center min-w-14 sm:min-w-18">
+                <Status b={b} />
+              </div>
+              {started && <Num v={g.home.points} dim={final && g.home.winner === false} />}
             </div>
-            {started && <Num v={g.home.points} dim={final && g.home.winner === false} />}
-          </div>
 
-          <TeamBlock side={g.home} record={records?.home} align="left" final={final}
-            at={!g.neutralSite} />
+            <TeamBlock side={g.home} record={records?.home} align="left" final={final}
+              at={!g.neutralSite} />
+          </div>
         </div>
 
-        <LineScore b={b} />
+        <div className="sm:hidden">
+          <MobileScore b={b} records={records} final={final} started={started} />
+        </div>
+
+        {/* Desktop only — a phone gets these numbers inline on each team's
+            row instead, in MobileScore. */}
+        <div className="max-sm:hidden">
+          <LineScore b={b} />
+        </div>
       </div>
     </header>
   );
@@ -132,6 +161,136 @@ function Num({ v, dim }: { v: number | null; dim: boolean }) {
   );
 }
 
+/** The rank chip. Shared so the two layouts cannot drift on it. */
+function Rank({ n }: { n: number }) {
+  return (
+    <span className="shrink-0 inline-flex items-center justify-center min-w-[1.3rem] h-[1.3rem] px-1 rounded bg-coral text-white text-[0.65rem] font-bold tabular leading-none">
+      {n}
+    </span>
+  );
+}
+
+/**
+ * The whole scoreline on a phone: a team per row, the halves inline, the total
+ * at the end.
+ *
+ * WHY THE PERIODS MOVED UP HERE. They used to be a separate centered table
+ * below (LineScore, still what a desktop gets). That put four numbers a full
+ * band away from the two they belong to, keyed only by a 22px logo, so reading
+ * "how did UConn get to 63" meant matching marks across a gap. Inline, each
+ * half sits on its own team's row and the total is the last column — the shape
+ * of a newspaper line score, which is where this convention comes from.
+ *
+ * ONE GRID, NOT A ROW COMPONENT PER SIDE. The half columns have to align
+ * between the two teams and under their headings, and independent flex rows
+ * only line up by luck. Every cell below is a direct child of this grid, so
+ * the track widths are decided once.
+ */
+function MobileScore({
+  b, records, final, started,
+}: {
+  b: GameBundle; records?: { home: string; away: string }; final: boolean; started: boolean;
+}) {
+  const g = b.game;
+  const cols = Math.max(g.home.periods.length, g.away.periods.length);
+  const heads = periodHeadings(cols);
+  const sides: Array<[GameSide, string | undefined, boolean]> = [
+    [g.away, records?.away, false],
+    [g.home, records?.home, !g.neutralSite],
+  ];
+
+  return (
+    <div className="mt-4">
+      <div
+        className="grid items-center gap-x-2.5 gap-y-2.5"
+        style={{
+          // auto logo · flexible team · one narrow track per half · auto total.
+          // minmax(0,1fr) rather than 1fr so the team cell can actually shrink
+          // and let its name truncate; a bare 1fr floors at max-content and
+          // pushes the total off the right edge on a long school name.
+          gridTemplateColumns: `auto minmax(0,1fr) repeat(${cols}, 1.6rem) auto`,
+        }}
+      >
+        {cols > 0 && (
+          <>
+            <span aria-hidden />
+            <span aria-hidden />
+            {heads.map((h) => (
+              <span key={h} className="text-center text-[0.5rem] uppercase tracking-[0.1em] font-bold text-ink-muted">
+                {h}
+              </span>
+            ))}
+            <span aria-hidden />
+          </>
+        )}
+
+        {sides.map(([side, record, at]) => {
+          const lost = final && side.winner === false;
+          return (
+            <Fragment key={side.team}>
+              <span className="shrink-0">
+                <TeamLogo name={side.team} size={38} />
+              </span>
+
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  {at && <span className="text-ink-muted text-xs shrink-0" aria-hidden>@</span>}
+                  {side.rank != null && <Rank n={side.rank} />}
+                  <Link
+                    href={`/teams/${teamSlug(side.team)}/`}
+                    className={cn(
+                      "text-lg font-semibold tracking-tight leading-tight truncate hover:text-coral transition-colors",
+                      lost ? "text-ink-muted" : "text-ink",
+                    )} prefetch={false}>
+                    {side.team}
+                  </Link>
+                </div>
+                <p className="mt-0.5 text-[0.68rem] tabular text-ink-muted truncate">
+                  {record}
+                  {side.conference && <span className="ml-2">{side.conference}</span>}
+                </p>
+              </div>
+
+              {Array.from({ length: cols }, (_, i) => (
+                <span
+                  key={i}
+                  className={cn(
+                    "text-center text-sm font-semibold tabular",
+                    lost ? "text-ink-muted" : "text-ink-soft",
+                  )}
+                >
+                  {side.periods[i] ?? "—"}
+                </span>
+              ))}
+
+              {/* pl-5 pulls the halves LEFT. The total's track is `auto`, so
+                  padding widens it, the 1fr team track gives up that width,
+                  and the half columns slide over with it — one number to
+                  change instead of a spacer column in every row. */}
+              <span
+                className={cn(
+                  "pl-5 text-right text-4xl font-bold leading-none tabular tracking-tight",
+                  lost ? "text-ink-muted" : "text-ink",
+                )}
+              >
+                {started ? side.points ?? "—" : ""}
+              </span>
+            </Fragment>
+          );
+        })}
+      </div>
+
+      {/* Under the rows, not between them: the two totals have to sit in one
+          vertical column to be compared, and a status band across the middle
+          breaks that column. A scheduled game has no totals to separate
+          anyway, and this is where its tip time goes. */}
+      <div className="mt-3 text-center">
+        <Status b={b} />
+      </div>
+    </div>
+  );
+}
+
 function TeamBlock({
   side, record, align, final, at = false,
 }: {
@@ -150,11 +309,7 @@ function TeamBlock({
       <div className={cn("min-w-0", align === "right" && "text-right")}>
         <div className={cn("flex items-center gap-1.5 sm:gap-2", align === "right" && "justify-end")}>
           {at && <span className="text-ink-muted text-sm" aria-hidden>@</span>}
-          {side.rank != null && (
-            <span className="shrink-0 inline-flex items-center justify-center min-w-[1.3rem] h-[1.3rem] px-1 rounded bg-coral text-white text-[0.65rem] font-bold tabular leading-none">
-              {side.rank}
-            </span>
-          )}
+          {side.rank != null && <Rank n={side.rank} />}
           <Link
             href={`/teams/${teamSlug(side.team)}/`}
             className={cn(

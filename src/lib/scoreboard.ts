@@ -173,6 +173,24 @@ function simulate(slate: Slate): Slate {
 export const POLL_MS = 60_000;
 
 /** A game with at least one AP Top 25 side — what leads both surfaces. */
+/**
+ * Is this a real tournament seed?
+ *
+ * CBBD SENDS 99 FOR "NO SEED", NOT null. Taken literally that drew a small
+ * grey "99" beside both teams in every non-tournament game on the board —
+ * spotted on the 2026-03-24 NIT slate, where Wichita State and Tulsa were both
+ * badged 99. The normalizer in netlify/functions/scoreboard.mts rejects it at
+ * the source now, but every slate baked before that fix still carries it, and
+ * re-baking fourteen seasons to correct a decoration is not worth ninety
+ * minutes of upload. So the renderers check too.
+ *
+ * A bracket has 16 seeds. Anything outside that is a sentinel, whatever value
+ * the feed picks for it next.
+ */
+export function isSeed(v: number | null | undefined): v is number {
+  return typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 16;
+}
+
 export function isRanked(g: ScoreGame): boolean {
   return g.home.rank !== null || g.away.rank !== null;
 }

@@ -54,11 +54,21 @@ export function PlaysTab({ b }: { b: GameBundle }) {
     });
 
   return (
-    <div className="rounded-xl border border-hairline bg-card overflow-hidden">
+    /* Full bleed on a phone, same reasoning as the box score: the page shell
+       is px-5 and the card adds its own inset, which is 40px of a 390px screen
+       spent on paper beside the one thing on the tab worth reading. */
+    <div className="-mx-5 sm:mx-0 rounded-none sm:rounded-xl border-y sm:border border-hairline bg-card overflow-hidden">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 border-b border-hairline bg-paper-deep/30">
         <Seg opts={[["all", "Both"], ["away", b.game.away.team], ["home", b.game.home.team]]} v={side} on={(x) => setSide(x as never)} />
         <span className="w-px h-5 bg-hairline hidden sm:block" />
-        <Seg opts={[["all", "Everything"], ["scoring", "Scoring"], ["shots", "Shots"], ["turnovers", "Turnovers"]]} v={kind} on={(x) => setKind(x as never)} />
+        {/* Desktop only. Two chip rows wrapping over each other ate most of a
+            phone's first screen before a single play was visible, and the team
+            filter beside it is the one people actually reach for. `kind` stays
+            at "all" with the control gone, so a phone sees the whole log —
+            which is what someone opening a play-by-play asked for. */}
+        <div className="max-sm:hidden">
+          <Seg opts={[["all", "Everything"], ["scoring", "Scoring"], ["shots", "Shots"], ["turnovers", "Turnovers"]]} v={kind} on={(x) => setKind(x as never)} />
+        </div>
         <span className="ml-auto text-[0.65rem] tabular text-ink-muted">{rows.length} plays</span>
       </div>
 

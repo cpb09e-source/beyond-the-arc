@@ -339,7 +339,13 @@ export function PortalClient({
             scrollport; without it this box never scrolls vertically and
             `sticky top-0` has nothing to hold on to. svh keeps the box
             inside the visible area with the URL bar out. */}
-        <div ref={gridScrollRef} className="overflow-auto overscroll-x-contain max-md:overscroll-none max-h-[80svh] md:max-h-[calc(100vh-1.5rem)]">
+        {/* Vertical overscroll CHAINS below md, matching the player and team
+            explorers — see the long note in players-client.tsx. `none` meant a
+            swipe that reached either end of the table stopped dead instead of
+            scrolling the page, which is the "too sensitive" complaint.
+            `overscroll-x-contain` stays: panning columns must not scroll the
+            page sideways. */}
+        <div ref={gridScrollRef} className="overflow-auto overscroll-x-contain max-h-[80svh] md:max-h-[calc(100vh-1.5rem)]">
           {/* border-separate so the header cells carry their own bottom
               rule — a collapsed border belongs to the table and scrolls
               away underneath a sticky cell. Nothing in the body draws a

@@ -114,7 +114,17 @@ function TeamBox({
   const rows = [...players].sort((a, c) => val(c, sort) - val(a, sort));
 
   return (
-    <section className="rounded-xl border border-hairline bg-card overflow-hidden">
+    /*
+      FULL BLEED ON A PHONE. The page shell is px-5 and the card adds its own
+      rounded border, so a 16-column table was scrolling inside roughly 350px
+      of a 390px screen while 40px of paper sat either side of it doing
+      nothing. Cancelling the shell's padding hands that back: the table is
+      the widest thing on the page and the only one that wants the glass.
+
+      The card returns at sm, where the page is wide enough that an
+      edge-to-edge table would read as a layout that had come apart.
+    */
+    <section className="-mx-5 sm:mx-0 rounded-none sm:rounded-xl border-y sm:border border-hairline bg-card overflow-hidden">
       {/*
         The team's shooting line used to sit beside the name — FG, 3P, FT and
         possessions. It is gone because the table under it already carries
@@ -150,49 +160,49 @@ function TeamBox({
       </div>
 
       <div className="overflow-x-auto overscroll-x-contain">
-        <table className="w-full text-[0.74rem] tabular min-w-[44rem]">
+        <table className="w-full text-[0.74rem] tabular min-w-[32rem] sm:min-w-[44rem]">
           <thead>
             <tr className="text-[0.52rem] uppercase tracking-[0.08em] text-ink-muted border-b border-hairline">
-              <th className="text-left font-bold px-3 py-2 sticky left-0 bg-card">Player</th>
+              <th className="text-left font-bold px-2 sm:px-3 py-2 sticky left-0 bg-card">Player</th>
               <Th k="min" sort={sort} on={setSort}>Min</Th>
               <Th k="pts" sort={sort} on={setSort}>Pts</Th>
-              <th className="text-right font-bold px-2">FG</th>
-              <th className="text-right font-bold px-2">3P</th>
-              <th className="text-right font-bold px-2">FT</th>
+              <th className="text-right font-bold px-1.5 sm:px-2">FG</th>
+              <th className="text-right font-bold px-1.5 sm:px-2">3P</th>
+              <th className="text-right font-bold px-1.5 sm:px-2">FT</th>
               <Th k="reb" sort={sort} on={setSort}>Reb</Th>
-              <th className="text-right font-bold px-2">Off</th>
+              <th className="text-right font-bold px-1.5 sm:px-2">Off</th>
               <Th k="ast" sort={sort} on={setSort}>Ast</Th>
-              <th className="text-right font-bold px-2">TO</th>
-              <th className="text-right font-bold px-2">Stl</th>
-              <th className="text-right font-bold px-2">Blk</th>
-              <th className="text-right font-bold px-2">PF</th>
-              <Th k="usg" sort={sort} on={setSort}>Usg%</Th>
-              <Th k="ts" sort={sort} on={setSort}>TS%</Th>
+              <th className="text-right font-bold px-1.5 sm:px-2">TO</th>
+              <th className="text-right font-bold px-1.5 sm:px-2">Stl</th>
+              <th className="text-right font-bold px-1.5 sm:px-2">Blk</th>
+              <th className="text-right font-bold px-1.5 sm:px-2">PF</th>
+              <Th k="usg" sort={sort} on={setSort} className="hidden sm:table-cell">Usg%</Th>
+              <Th k="ts" sort={sort} on={setSort} className="hidden sm:table-cell">TS%</Th>
               <Th k="pm" sort={sort} on={setSort}>+/&minus;</Th>
             </tr>
           </thead>
           <tbody>
             {rows.map((p) => (
               <tr key={p.athleteId} className="border-b border-hairline/60 last:border-b-0 hover:bg-paper-deep/40">
-                <td className="px-3 py-1.5 whitespace-nowrap sticky left-0 bg-card">
+                <td className="px-2 sm:px-3 py-1.5 whitespace-nowrap sticky left-0 bg-card">
                   <PlayerName name={p.name} starter={p.starter} id={lookupId(photos, p.name)} />
                   {p.position && <span className="text-ink-muted/70 ml-1.5 text-[0.58rem]">{p.position}</span>}
                   {p.ejected && <span className="ml-1.5 text-[0.55rem] uppercase tracking-wider font-bold text-bad">ej</span>}
                 </td>
                 <Td v={p.minutes} muted />
                 <Td v={p.points} strong />
-                <td className="text-right px-2 text-ink-soft">{p.fieldGoals.made}-{p.fieldGoals.attempted}</td>
-                <td className="text-right px-2 text-ink-soft">{p.threePointFieldGoals.made}-{p.threePointFieldGoals.attempted}</td>
-                <td className="text-right px-2 text-ink-soft">{p.freeThrows.made}-{p.freeThrows.attempted}</td>
-                <Td v={p.rebounds.total} />
+                <td className="text-right px-1.5 sm:px-2 text-ink-soft">{p.fieldGoals.made}-{p.fieldGoals.attempted}</td>
+                <td className="text-right px-1.5 sm:px-2 text-ink-soft">{p.threePointFieldGoals.made}-{p.threePointFieldGoals.attempted}</td>
+                <td className="text-right px-1.5 sm:px-2 text-ink-soft">{p.freeThrows.made}-{p.freeThrows.attempted}</td>
+                <Td v={p.rebounds.total} strong />
                 <Td v={p.rebounds.offensive} muted />
-                <Td v={p.assists} />
+                <Td v={p.assists} strong />
                 <Td v={p.turnovers} />
                 <Td v={p.steals} />
                 <Td v={p.blocks} />
                 <Td v={p.fouls} muted />
-                <td className="text-right px-2 text-ink-soft">{p.usage === null ? "—" : `${num(p.usage)}%`}</td>
-                <Td v={p.trueShootingPct} round />
+                <td className="text-right px-1.5 sm:px-2 text-ink-soft hidden sm:table-cell">{p.usage === null ? "—" : `${num(p.usage)}%`}</td>
+                <Td v={p.trueShootingPct} round className="hidden sm:table-cell" />
                 <PlusMinus v={pmOf(p)} />
               </tr>
             ))}
@@ -200,22 +210,22 @@ function TeamBox({
           {stats && (
             <tfoot>
               <tr className="border-t-2 border-ink/15 text-[0.72rem]">
-                <td className="px-3 py-2 font-semibold text-ink sticky left-0 bg-card">Team</td>
-                <td className="text-right px-2 text-ink-muted">{sumOf(players, (p) => p.minutes)}</td>
-                <td className="text-right px-2 font-semibold text-ink">{stats.points.total}</td>
-                <td className="text-right px-2 text-ink-soft">{stats.fieldGoals.made}-{stats.fieldGoals.attempted}</td>
-                <td className="text-right px-2 text-ink-soft">{stats.threePointFieldGoals.made}-{stats.threePointFieldGoals.attempted}</td>
-                <td className="text-right px-2 text-ink-soft">{stats.freeThrows.made}-{stats.freeThrows.attempted}</td>
-                <td className="text-right px-2 text-ink-soft">{stats.rebounds.total}</td>
-                <td className="text-right px-2 text-ink-muted">{stats.rebounds.offensive}</td>
-                <td className="text-right px-2 text-ink-soft">{stats.assists}</td>
-                <td className="text-right px-2 text-ink-soft">{stats.turnovers.total}</td>
-                <td className="text-right px-2 text-ink-soft">{stats.steals}</td>
-                <td className="text-right px-2 text-ink-soft">{stats.blocks}</td>
-                <td className="text-right px-2 text-ink-muted">{stats.fouls.total}</td>
-                <td className="text-right px-2 text-ink-muted">—</td>
-                <td className="text-right px-2 text-ink-muted">{num(stats.trueShooting)}</td>
-                <td className="text-right px-2 text-ink-muted">—</td>
+                <td className="px-2 sm:px-3 py-2 font-semibold text-ink sticky left-0 bg-card">Team</td>
+                <td className="text-right px-1.5 sm:px-2 text-ink-muted">{sumOf(players, (p) => p.minutes)}</td>
+                <td className="text-right px-1.5 sm:px-2 font-semibold text-ink">{stats.points.total}</td>
+                <td className="text-right px-1.5 sm:px-2 text-ink-soft">{stats.fieldGoals.made}-{stats.fieldGoals.attempted}</td>
+                <td className="text-right px-1.5 sm:px-2 text-ink-soft">{stats.threePointFieldGoals.made}-{stats.threePointFieldGoals.attempted}</td>
+                <td className="text-right px-1.5 sm:px-2 text-ink-soft">{stats.freeThrows.made}-{stats.freeThrows.attempted}</td>
+                <td className="text-right px-1.5 sm:px-2 font-semibold text-ink">{stats.rebounds.total}</td>
+                <td className="text-right px-1.5 sm:px-2 text-ink-muted">{stats.rebounds.offensive}</td>
+                <td className="text-right px-1.5 sm:px-2 font-semibold text-ink">{stats.assists}</td>
+                <td className="text-right px-1.5 sm:px-2 text-ink-soft">{stats.turnovers.total}</td>
+                <td className="text-right px-1.5 sm:px-2 text-ink-soft">{stats.steals}</td>
+                <td className="text-right px-1.5 sm:px-2 text-ink-soft">{stats.blocks}</td>
+                <td className="text-right px-1.5 sm:px-2 text-ink-muted">{stats.fouls.total}</td>
+                <td className="text-right px-1.5 sm:px-2 text-ink-muted hidden sm:table-cell">—</td>
+                <td className="text-right px-1.5 sm:px-2 text-ink-muted hidden sm:table-cell">{num(stats.trueShooting)}</td>
+                <td className="text-right px-1.5 sm:px-2 text-ink-muted">—</td>
               </tr>
             </tfoot>
           )}
@@ -243,9 +253,11 @@ function PlayerName({ name, starter, id }: { name: string; starter: boolean; id:
   );
 }
 
-function Th({ k, sort, on, children }: { k: SortKey; sort: SortKey; on: (k: SortKey) => void; children: React.ReactNode }) {
+function Th({ k, sort, on, className, children }: {
+  k: SortKey; sort: SortKey; on: (k: SortKey) => void; className?: string; children: React.ReactNode;
+}) {
   return (
-    <th className="text-right font-bold px-2">
+    <th className={cn("text-right font-bold px-1.5 sm:px-2", className)}>
       <button type="button" onClick={() => on(k)}
         className={cn("uppercase tracking-[0.08em] hover:text-coral transition-colors", sort === k && "text-coral")}>
         {children}
@@ -254,9 +266,11 @@ function Th({ k, sort, on, children }: { k: SortKey; sort: SortKey; on: (k: Sort
   );
 }
 
-function Td({ v, strong, muted, round }: { v: number | null; strong?: boolean; muted?: boolean; round?: boolean }) {
+function Td({ v, strong, muted, round, className }: {
+  v: number | null; strong?: boolean; muted?: boolean; round?: boolean; className?: string;
+}) {
   return (
-    <td className={cn("text-right px-2", strong ? "font-semibold text-ink" : muted ? "text-ink-muted" : "text-ink-soft")}>
+    <td className={cn("text-right px-1.5 sm:px-2", strong ? "font-semibold text-ink" : muted ? "text-ink-muted" : "text-ink-soft", className)}>
       {round ? num(v) : v ?? "—"}
     </td>
   );
@@ -265,7 +279,7 @@ function Td({ v, strong, muted, round }: { v: number | null; strong?: boolean; m
 /** Zero is neither good nor bad; coloring it green would read as a positive. */
 function PlusMinus({ v }: { v: number | null }) {
   return (
-    <td className="text-right px-2 font-semibold"
+    <td className="text-right px-1.5 sm:px-2 font-semibold"
       style={{ color: v === null || v === 0 ? "var(--ink-muted)" : v > 0 ? "var(--good)" : "var(--bad)" }}>
       {v === null ? "—" : v > 0 ? `+${v}` : String(v)}
     </td>

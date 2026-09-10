@@ -1271,11 +1271,30 @@ export function ExplorerClient({
           // and an opaque custom property behind every sticky cell. Their box
           // is 675px of an 844px phone.
           //
-          // THE 20% IS THE POINT, not a rounding choice. A viewport-tall window
-          // fills the screen, so every touch lands inside the table and the
-          // page has no exposed surface left to scroll from. At 80svh there is
-          // always page above or below the box, which is what keeps the table
-          // a component on a page rather than a second scrolling application.
+          // THE MARGIN IS THE POINT, not a rounding choice. A viewport-tall
+          // window fills the screen, so every touch lands inside the table and
+          // the page has no exposed surface left to scroll from — and with
+          // overscroll `none` below md (see further down) that is not merely
+          // awkward, it is a trap: no gesture anywhere on screen would scroll
+          // the page. The gap is what keeps the table a component on a page
+          // rather than a second scrolling application.
+          //
+          // Widened from 80svh to 90svh on 2026-09-10 — Colin asked to see more
+          // rows at once. The remaining 10% is still a real strip of page at
+          // every phone size (~84px at 844px tall), so the escape hatch holds.
+          // Do not take it to 100: the cap cannot go to zero while
+          // overscroll-behavior is `none`.
+          //
+          // UNCAPPING THIS ON A PHONE WAS TRIED AND REVERSED, 2026-09-10. It
+          // does fix the "too sensitive" feel — one scroller under the finger
+          // instead of two nested ones — but it costs the pinned header row,
+          // because a sticky cell pins to its nearest scrollport and an
+          // uncapped box's top never moves. There is no way to keep both: a box
+          // cannot scroll one axis and delegate the other, since
+          // `overflow-y: visible` computes to `auto` beside an `auto` x. Colin
+          // chose the header. Do not remove the cap without deciding that
+          // trade again — and if it ever does come off, `overscroll-none`
+          // below md has to come off with it.
           //
           // svh rather than their vh: vh resolves to the LARGEST viewport, so
           // on iOS the box is sized as though the URL bar were hidden and
@@ -1289,14 +1308,33 @@ export function ExplorerClient({
           // the table moves the table, the box's own top never moves, and the
           // header stays pinned. The page scrolls from the margins instead.
           //
-          // overscroll-behavior is `none` below md. Left to chain, hitting the
-          // last row hands the gesture on to the page, which slides the box's
-          // top off screen and takes the header with it. `contain` stops the
-          // chaining but keeps iOS's local rubber-band — the "I can drag the
-          // entire table" complaint from 2026-08-22. Only `none` stops both.
-          // The old warning against `none` here was written for an UNCAPPED
-          // box, which had no vertical scroll to absorb the gesture; this one
-          // does.
+          // THE VERTICAL AXIS CHAINS AGAIN — 2026-09-10, Colin's call.
+          //
+          // It was `overscroll-none` below md, on the reasoning that chaining
+          // hands the gesture to the page at the last row, which slides the
+          // box's top off screen and takes the pinned header with it. True,
+          // but the cost was worse than the symptom: the box is 90svh, so
+          // nearly every vertical swipe lands inside it, and `none` meant
+          // reaching either end simply STOPPED. To get past the table you had
+          // to lift your finger and start again from the page margin. That is
+          // the "too sensitive" complaint — the table never gives the gesture
+          // back.
+          //
+          // Chaining is what a page normally does, and the header sliding away
+          // with the box is what a reader expects when they scroll past a
+          // thing. The header still pins for the whole time the box is on
+          // screen, which is when it is doing its job.
+          //
+          // `overscroll-x-contain` STAYS. Horizontal is the box's own axis —
+          // panning the columns must never scroll the page sideways, and that
+          // was never the thing that felt wrong.
+          //
+          // Note for anyone testing this on a desktop: it will still feel
+          // grabby there, and that is a different bug that is not present on a
+          // phone. useDragPan bails on `pointerType === "touch"`, so a real
+          // finger never starts a pan — but a mouse in a narrow window does,
+          // after 4px. Test the gesture on a device, or with touch emulation
+          // actually enabled.
           //
           // DO NOT ADD `touch-action: pan-x` HERE. It looks like the tidy way
           // to say "horizontal is mine, vertical is the page's", but
@@ -1305,7 +1343,7 @@ export function ExplorerClient({
           // removes pan-y for the whole gesture and the page cannot scroll
           // from any finger that lands on the table. Shipped exactly that on
           // 2026-08-22 and had to pull it.
-          className="overflow-auto overscroll-x-contain max-md:overscroll-none cursor-grab max-h-[80svh] md:max-h-[calc(100vh-1.5rem)]"
+          className="overflow-auto overscroll-x-contain cursor-grab max-h-[90svh] md:max-h-[calc(100vh-1.5rem)]"
           {...panHandlers}
         >
           <table className="w-full text-sm border-separate border-spacing-0">
