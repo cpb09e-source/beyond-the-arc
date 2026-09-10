@@ -14,7 +14,7 @@ import { W, H, RIM_X, RIM_Y, THREE_R, CORNER_X, CORNER_Y, ZONES, zoneOf } from "
  * Where a team shoots, where it lets you shoot, and the gap between the two.
  *
  * TWO VIEWS: what this team shoots, and what it lets you shoot. Both are
- * coloured against the D-I rate AT THAT SPOT rather than a single league
+ * colored against the D-I rate AT THAT SPOT rather than a single league
  * average, so a hex says "better than the field is from here" instead of
  * "better than the field is on average", which at the rim are very different
  * sentences.
@@ -31,15 +31,14 @@ import { W, H, RIM_X, RIM_Y, THREE_R, CORNER_X, CORNER_Y, ZONES, zoneOf } from "
  * loudest cells are the emptiest: 2-for-2 from the corner would paint bright
  * red. See SHRINK_K.
  *
- * The filters exist because the underlying rows carry more than a location.
- * Assisted-vs-unassisted in particular is a question no other public chart can
- * answer — "where do their threes come from when someone creates them" is a
- * different map from "where do they shoot".
+ * The filters exist because the underlying rows carry more than a location:
+ * shot type, value, result and venue all narrow the court to a question, and
+ * every panel on the card recomputes against them.
  */
 
 // Tuple positions in public/data/team-shots/<season>/<slug>.json. Identical to
 // the player shot files; see scripts/build-team-shots.mts.
-const CX = 0, CY = 1, MADE = 2, TYPE = 3, IS3 = 4, WON = 5, LOC = 6, AST = 7;
+const CX = 0, CY = 1, MADE = 2, TYPE = 3, IS3 = 4, WON = 5, LOC = 6;
 
 type Row = number[];
 type File = { team: string; season: number; off: Row[]; def: Row[] };
@@ -65,7 +64,6 @@ type Metric = "volume" | "accuracy";
 type Filters = {
   types: [boolean, boolean, boolean, boolean]; // jump, layup, dunk, tip
   pts2: boolean; pts3: boolean;
-  assisted: boolean; unassisted: boolean;
   win: boolean; loss: boolean;
   home: boolean; away: boolean; neutral: boolean;
 };
@@ -73,13 +71,12 @@ type Filters = {
 const ALL: Filters = {
   types: [true, true, true, true],
   pts2: true, pts3: true,
-  assisted: true, unassisted: true,
   win: true, loss: true,
   home: true, away: true, neutral: true,
 };
 
 const isDefault = (f: Filters) =>
-  f.types.every(Boolean) && f.pts2 && f.pts3 && f.assisted && f.unassisted &&
+  f.types.every(Boolean) && f.pts2 && f.pts3 &&
   f.win && f.loss && f.home && f.away && f.neutral;
 
 function applyFilters(rows: Row[], f: Filters): Row[] {
@@ -87,10 +84,6 @@ function applyFilters(rows: Row[], f: Filters): Row[] {
   return rows.filter((s) => {
     if (!f.types[s[TYPE]!]) return false;
     if (s[IS3] === 1 ? !f.pts3 : !f.pts2) return false;
-    // `assisted` is only ever set on makes, so an unassisted filter has to mean
-    // "everything that is not a recorded assisted make" — misses included, or
-    // the filter would silently drop every miss and report a wild FG%.
-    if (s[AST] === 1 ? !f.assisted : !f.unassisted) return false;
     if (s[WON] === 1 ? !f.win : s[WON] === 0 ? !f.loss : false) return false;
     const loc = s[LOC];
     if (loc === 0 ? !f.home : loc === 1 ? !f.away : !f.neutral) return false;
@@ -194,7 +187,7 @@ export function TeamShotChart({ team, season }: { team: string; season: number }
    */
   const hexLayer = useMemo(() => (
     // One attempt is not a shooting percentage. Drawing it invites the reader
-    // to read a colour off a cell that has none.
+    // to read a color off a cell that has none.
     cells.filter((c) => c.att >= 2).map((c) => {
       const fill = metric === "accuracy"
         ? (c.diff === null ? "rgba(255,255,255,0.35)" : diffColor(c.diff))
@@ -211,7 +204,7 @@ export function TeamShotChart({ team, season }: { team: string; season: number }
        * Full-size hexes tessellate into one continuous surface. Volume moves
        * to opacity instead, so heavily-shot floor is vivid, lightly-shot floor
        * sinks toward the court, and the eye lands on the parts with something
-       * behind them. Colour still means exactly one thing.
+       * behind them. Color still means exactly one thing.
        */
       const weight = Math.sqrt(Math.min(1, c.att / Math.max(4, maxAtt * 0.55)));
       const opacity = metric === "accuracy" ? 0.10 + 0.90 * weight : 1;
@@ -250,7 +243,7 @@ export function TeamShotChart({ team, season }: { team: string; season: number }
     );
   }
 
-  const sideLabel = side === "off" ? "Shots taken" : side === "def" ? "Shots allowed" : "Offence − defence";
+  const sideLabel = side === "off" ? "Shots taken" : side === "def" ? "Shots allowed" : "Offense − defense";
 
   return (
     <Shell>
@@ -259,13 +252,18 @@ export function TeamShotChart({ team, season }: { team: string; season: number }
           <Seg
             value={side}
             onChange={(v) => setSide(v as Side)}
-            options={[["off", "Offence"], ["def", "Defence"]]}
+            options={[["off", "Offense"], ["def", "Defense"]]}
           />
           <Seg
             value={metric}
             onChange={(v) => setMetric(v as Metric)}
             options={[["accuracy", "Accuracy"], ["volume", "Volume"]]}
           />
+          {/* Venue rides the top row rather than the filter bar. It is the one
+              filter that changes WHICH GAMES are on the court rather than
+              which shots within them, which puts it closer to the view
+              toggles than to shot type. */}
+          <VenueChips f={f} setF={setF} />
           {!isDefault(f) && (
             <button
               type="button"
@@ -427,6 +425,22 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
   );
 }
 
+function VenueChips({ f, setF }: { f: Filters; setF: (f: Filters) => void }) {
+  const venue = (k: "home" | "away" | "neutral") => {
+    const next = { ...f, [k]: !f[k] };
+    // Never let the group empty itself — no venue means no shots, which is
+    // never what the tap meant.
+    if (next.home || next.away || next.neutral) setF(next);
+  };
+  return (
+    <Group label="Venue">
+      <Chip on={f.home} onClick={() => venue("home")}>Home</Chip>
+      <Chip on={f.away} onClick={() => venue("away")}>Away</Chip>
+      <Chip on={f.neutral} onClick={() => venue("neutral")}>Neutral</Chip>
+    </Group>
+  );
+}
+
 function FilterBar({ f, setF }: { f: Filters; setF: (f: Filters) => void }) {
   const t = (i: number) => {
     const types = [...f.types] as Filters["types"];
@@ -440,13 +454,7 @@ function FilterBar({ f, setF }: { f: Filters; setF: (f: Filters) => void }) {
     if (next[a] || next[b]) setF(next);
   };
   const shotSide = pair("pts2", "pts3");
-  const astSide = pair("assisted", "unassisted");
   const wlSide = pair("win", "loss");
-  const venue = (k: "home" | "away" | "neutral") => {
-    const next = { ...f, [k]: !f[k] };
-    if (next.home || next.away || next.neutral) setF(next);
-  };
-
   return (
     <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
       <Group label="Type">
@@ -459,18 +467,9 @@ function FilterBar({ f, setF }: { f: Filters; setF: (f: Filters) => void }) {
         <Chip on={f.pts2} onClick={() => shotSide("pts2")}>2PT</Chip>
         <Chip on={f.pts3} onClick={() => shotSide("pts3")}>3PT</Chip>
       </Group>
-      <Group label="Creation">
-        <Chip on={f.assisted} onClick={() => astSide("assisted")}>Assisted</Chip>
-        <Chip on={f.unassisted} onClick={() => astSide("unassisted")}>Unassisted</Chip>
-      </Group>
       <Group label="Result">
         <Chip on={f.win} onClick={() => wlSide("win")}>Wins</Chip>
         <Chip on={f.loss} onClick={() => wlSide("loss")}>Losses</Chip>
-      </Group>
-      <Group label="Venue">
-        <Chip on={f.home} onClick={() => venue("home")}>Home</Chip>
-        <Chip on={f.away} onClick={() => venue("away")}>Away</Chip>
-        <Chip on={f.neutral} onClick={() => venue("neutral")}>Neutral</Chip>
       </Group>
     </div>
   );

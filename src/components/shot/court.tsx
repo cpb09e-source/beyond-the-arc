@@ -4,7 +4,7 @@ import { useId } from "react";
 import { W, H, RIM_X, RIM_Y, THREE_R, CORNER_X, CORNER_Y } from "@/lib/shot-zones";
 
 /**
- * The half court, and the two colour scales drawn on it.
+ * The half court, and the two color scales drawn on it.
  *
  * Extracted from the player-page chart when the team chart arrived, for the
  * same reason lib/shot-zones.ts exists: a court drawn in two files is a court
@@ -13,7 +13,7 @@ import { W, H, RIM_X, RIM_Y, THREE_R, CORNER_X, CORNER_Y } from "@/lib/shot-zone
  * few units would put a team's threes on a different line from its own
  * players' threes, on pages a reader moves between in one click.
  *
- * Both charts also have to agree on what a colour MEANS. Red is hot on both,
+ * Both charts also have to agree on what a color MEANS. Red is hot on both,
  * the volume ramp is one hue on both, and the diverging domain is the same
  * number of percentage points on both — otherwise the same shade would say
  * different things one page apart.
@@ -43,10 +43,10 @@ export const VOL_RAMP: [number, number, number][] = [
  * temperature, not as a verdict.
  *
  * ON A DEFENSIVE CHART THE VERDICT FLIPS BUT THE SCALE DOES NOT. Red still
- * means shots are going in from there; for the defence that is bad. Recolouring
- * defence would break the one thing a reader can carry between the two views —
+ * means shots are going in from there; for the defense that is bad. Recoloring
+ * defense would break the one thing a reader can carry between the two views —
  * that red is where the ball goes in — so the label says whose shooting it is
- * and the colour keeps meaning the same physical fact.
+ * and the color keeps meaning the same physical fact.
  */
 export const COLD: [number, number, number] = [0x1f, 0x5e, 0x9e];
 export const NEUTRAL: [number, number, number] = [0xf4, 0xf1, 0xe8];
@@ -55,7 +55,7 @@ export const COLD_HEX = "#1f5e9e";
 export const HOT_HEX = "#bd2f24";
 
 /**
- * Half-width of the colour scale, in percentage points of FG%.
+ * Half-width of the color scale, in percentage points of FG%.
  *
  * Measured, not guessed, and re-measured whenever the bin radius moves — a
  * coarser grid puts more attempts behind each cell, which survives shrinkage
