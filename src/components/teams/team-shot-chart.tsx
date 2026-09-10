@@ -309,7 +309,6 @@ export function TeamShotChart({ team, season }: { team: string; season: number }
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <Headline side={side} totals={totals} count={shown.length} />
           <Readout cell={active} />
-          <Diet off={offRows} def={defRows} />
         </div>
       </div>
     </Shell>
@@ -550,75 +549,6 @@ function Readout({ cell }: { cell: Cell | null }) {
       ) : (
         <p className="text-[0.7rem] text-ink-muted leading-snug">No league baseline for this spot.</p>
       )}
-    </div>
-  );
-}
-
-/**
- * Shot diet as a stacked bar: what share of attempts come from each band.
- *
- * The zone table above answers "how well from there"; this answers "how often",
- * and the two together are the whole of shot selection. It is a bar rather than
- * three more numbers because share is a part-of-whole, and a row of percentages
- * makes the reader add them up to see that.
- *
- * It ALWAYS draws both diets, whichever view the court is showing. A team that
- * takes 43% threes while allowing 30% is running a different game at each end,
- * and that shows up as two visibly different bars long before anyone reads a
- * number off them — so hiding one behind the view toggle would hide the point.
- */
-function Diet({ off, def }: { off: Row[]; def: Row[] }) {
-  const split = (rows: Row[]) => {
-    let rim = 0, mid = 0, three = 0;
-    for (const s of rows) {
-      if (s[IS3] === 1) three++;
-      else if (Math.hypot(s[CX]! - RIM_X, s[CY]! - RIM_Y) <= 80) rim++;
-      else mid++;
-    }
-    const n = rows.length || 1;
-    return [rim / n, mid / n, three / n] as const;
-  };
-  const bars: Array<[string, readonly [number, number, number]]> =
-    [["Taken", split(off)], ["Allowed", split(def)]];
-
-  const BANDS = [
-    { label: "Rim", fill: "#9c2f1d" },
-    { label: "Mid", fill: "#e2824a" },
-    { label: "Three", fill: "#f2e3cd" },
-  ];
-
-  return (
-    <div className="rounded-lg border border-hairline p-3">
-      <p className="text-[0.55rem] uppercase tracking-[0.16em] font-bold text-ink-muted">Shot diet</p>
-      <div className="mt-2 space-y-2">
-        {bars.map(([label, parts]) => (
-          <div key={label}>
-            <div className="flex items-baseline justify-between">
-              <span className="text-[0.6rem] uppercase tracking-wider text-ink-muted/80">{label}</span>
-              <span className="text-[0.62rem] tabular text-ink-muted">
-                {parts.map((v) => (100 * v).toFixed(0) + "%").join(" · ")}
-              </span>
-            </div>
-            <div className="mt-1 flex h-3 rounded-full overflow-hidden ring-1 ring-ink/10">
-              {parts.map((v, i) => (
-                <span
-                  key={i}
-                  style={{ width: `${Math.max(0, 100 * v)}%`, background: BANDS[i]!.fill }}
-                  title={`${BANDS[i]!.label}: ${(100 * v).toFixed(1)}%`}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="mt-2 flex items-center gap-3">
-        {BANDS.map((b) => (
-          <span key={b.label} className="inline-flex items-center gap-1 text-[0.55rem] text-ink-muted">
-            <span className="h-2 w-2 rounded-sm ring-1 ring-ink/10" style={{ background: b.fill }} />
-            {b.label}
-          </span>
-        ))}
-      </div>
     </div>
   );
 }
