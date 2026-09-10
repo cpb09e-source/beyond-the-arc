@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { confDisplay } from "@/lib/conf-display";
 import { Select } from "@/components/select";
 import { POWER_CONFS } from "@/lib/conf-tiers";
@@ -78,6 +78,19 @@ type SortKey = "rank" | "name" | "x" | "y";
 /** Rows per page. Chosen to end level with the plot beside it, not for a round
  *  number — see the note on the table. */
 const PER_PAGE = 25;
+
+/**
+ * The two panes are the same height, always.
+ *
+ * Measured off a rendered 25-row table: a row is 33px and the sticky head is
+ * 45. The plot takes that same box whether two teams are selected or
+ * twenty-five, and the table holds it when a page is short — otherwise the
+ * chart grew and shrank as the reader paged, which is the one thing a fixed
+ * frame is for.
+ */
+const ROW_H = 33;
+const HEAD_H = 45;
+const PANE_H = HEAD_H + PER_PAGE * ROW_H;
 
 export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: number }) {
   const [confs, setConfs] = useState<Set<string>>(() => new Set(["ACC"]));
@@ -376,7 +389,7 @@ function TeamTable({
           reader who scrolls the list loses the plot from view entirely. Twenty
           five rows is about the height of the chart beside it, so the two panes
           end level and the whole tool fits one screen. */}
-      <div>
+      <div style={{ height: PANE_H }} className="overflow-hidden">
         <table className="w-full border-collapse">
           <thead className="sticky top-0 bg-paper-deep z-10">
             <tr className="border-b border-hairline">
@@ -461,7 +474,35 @@ function Plot({
   teams: ScatterTeam[]; shown: ScatterTeam[]; xM: Metric; yM: Metric;
   hover: string | null; setHover: (v: string | null) => void;
 }) {
-  const W = 760, H = 470, L = 52, R = 20, T = 16, B = 44;
+  const L = 52, R = 20, T = 16, B = 44;
+  const H = PANE_H;
+
+  /**
+   * THE viewBox IS THE PIXEL BOX, measured rather than assumed.
+   *
+   * This used to be a fixed 760x470 viewBox in a box sized by aspect-ratio,
+   * and capping that box's height broke it: aspect-ratio computes height from
+   * width, max-height then clamps the USED height and leaves the width alone,
+   * so the box went 704x416 against a 760x470 viewBox. The SVG letterboxed to
+   * 622px wide and centred itself — while the crests, which are HTML absolutely
+   * positioned as a percentage of the BOX, stayed on the full 704. Every crest
+   * slid outward off its own gridlines, some of them past the edge entirely.
+   *
+   * Measuring means the viewBox and the box are the same number, so there is no
+   * scale factor to disagree about. It also renders every label at its true
+   * size instead of ~7% under.
+   */
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(700);
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      if (entry) setW(Math.round(entry.contentRect.width));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const geo = useMemo(() => {
     // THE FRAME FITS THE SELECTION, NOT THE COUNTRY. It used to be the full D-I
@@ -534,7 +575,7 @@ function Plot({
         }
         return { p, x: bx, y: by, base };
       });
-  }, [shown, X, Y, size, xM, yM]);
+  }, [shown, X, Y, size, xM, yM, H]);
 
   // The DODGED position, not the data position — the card has to sit against
   // the crest the pointer is actually over, which for a nudged mark is not
@@ -550,14 +591,9 @@ function Plot({
   const inRange = (v: number, a: number, b: number) => v > Math.min(a, b) && v < Math.max(a, b);
 
   return (
-    // HEIGHT IS CAPPED AS WELL AS RATIOED. On a wide screen the column beside
-    // the table is ~700px, and a 760x470 box at that width is over 430px tall
-    // — stacked under the toolbar and the count that ran the chart off the
-    // bottom of the viewport. maxHeight bounds it while aspect-ratio keeps the
-    // box in proportion, which matters because the crests are positioned as a
-    // percentage of THIS element: letting the SVG letterbox inside a differently
-    // shaped box would slide every crest off its own coordinates.
-    <div className="relative w-full mx-auto" style={{ aspectRatio: `${W} / ${H}`, maxHeight: "26rem" }}>
+    // Fixed height, matching a full page of the table beside it. Width comes
+    // from the column; the viewBox above follows both, so nothing scales.
+    <div ref={boxRef} className="relative w-full" style={{ height: H }}>
       <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 w-full h-full" role="img"
         aria-label={`Teams by ${xM.label} against ${yM.label}`}>
         {niceTicks(geo.x0, geo.x1).map((v) => (
