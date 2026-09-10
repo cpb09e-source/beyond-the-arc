@@ -70,7 +70,7 @@ export default async function TeamScatterPage() {
     <section className="mx-auto max-w-[var(--page-narrow)] px-6 lg:px-10 pt-4 lg:pt-5 pb-10">
       <PageHeading label="Team scatter" />
       <div className="mt-4">
-        <TeamScatter teams={teams} season={SEASON} />
+        <TeamScatter teams={teams} />
       </div>
     </section>
   );

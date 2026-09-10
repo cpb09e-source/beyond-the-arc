@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { confDisplay } from "@/lib/conf-display";
 import { Select } from "@/components/select";
 import { POWER_CONFS } from "@/lib/conf-tiers";
@@ -19,9 +19,14 @@ import {
  *
  * The whole D-I field used to sit behind them as faint dots. At 365 of those
  * it was most of the ink on the page, and a small selection read as a handful
- * of crests dropped on a field of static. The national context they carried is
- * now the D-I median crosshair, which costs two lines instead of 365 marks —
- * and it matters more than before, because the axes fit the selection.
+ * of crests dropped on a field of static.
+ *
+ * THE AXES THEREFORE FIT THE SELECTION rather than the country: without the
+ * background filling it, the full D-I extent left an eighteen-team league in
+ * one corner of an empty box. The trade is that the range moves when the
+ * selection does, so two views are only comparable by reading the ticks. A
+ * D-I median crosshair used to guard that and has been taken out again — it
+ * read as confusing next to the crests rather than as a reference.
  *
  * BETTER IS ALWAYS UP AND TO THE RIGHT. Adjusted defensive rating is better
  * when it is low, turnover rate is better when it is low, and once the axes are
@@ -54,23 +59,22 @@ export type ScatterTeam = {
 const MAX_TEAMS = 25;
 
 /**
- * Crest size against how many are on the plate.
+ * Crest size, from the room the plot actually has.
  *
- * The mid-major preset is ~286 teams and is meant to be: the point of it is the
- * shape of a whole tier, not reading individual schools.
- *
- * 12 IS THE FLOOR, and it is a floor rather than a formula. Below it a crest
+ * 16 IS THE FLOOR, and it is a floor rather than a formula. Below it a crest
  * stops being a crest: the light-on-light schools disappear into the paper and
  * the rest read as smudges, which is strictly worse than the plain dot it
- * replaced. Overlap at 250 teams is the better failure — the tier's shape still
- * reads, and leaning in still identifies a school.
+ * replaced. Overlap at 286 teams is the better failure — the tier's shape
+ * still reads, and leaning in still identifies a school. 30 is the ceiling,
+ * past which a handful of teams look like a logo wall rather than a chart.
  */
-function crestSize(n: number): number {
-  if (n <= 20) return 26;
-  if (n <= 50) return 20;
-  if (n <= 100) return 16;
-  if (n <= 180) return 14;
-  return 12;
+function crestSize(n: number, W: number, H: number): number {
+  // Share of the plot each mark can have, if they were laid out in a grid.
+  // The old ladder was a fixed table of sizes that ignored the box, and once
+  // the plot grew to 870px tall it was handing 286 teams a 12px crest inside
+  // 600,000 square pixels — about six per cent of the area used. Deriving it
+  // from the room available keeps the marks as large as the count allows.
+  return Math.max(16, Math.min(30, Math.round(Math.sqrt((W * H) / Math.max(1, n)) * 0.4)));
 }
 
 type SortKey = "rank" | "name" | "x" | "y";
@@ -92,7 +96,7 @@ const ROW_H = 33;
 const HEAD_H = 45;
 const PANE_H = HEAD_H + PER_PAGE * ROW_H;
 
-export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: number }) {
+export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
   const [confs, setConfs] = useState<Set<string>>(() => new Set(["ACC"]));
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [query, setQuery] = useState("");
@@ -277,11 +281,6 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
             teams={teams} shown={shown} xM={xM} yM={yM}
             hover={hover} setHover={setHover}
           />
-          <p className="mt-2 text-xs text-ink-muted leading-snug">
-            {season - 1}-{String(season).slice(2)} season. The axes fit the teams shown, so the
-            crosshair — the D-I median across all 365 teams — is the fixed reference. Where a metric has a
-            good direction the axis is turned so that better is up and to the right.
-          </p>
         </div>
       </div>
     </div>
@@ -492,9 +491,6 @@ function Plot({
    * scale factor to disagree about. It also renders every label at its true
    * size instead of ~7% under.
    */
-  // useId, because several of these can render at once and a duplicated marker
-  // id would make them share one — or none.
-  const arrowId = `arr-${useId().replace(/:/g, "")}`;
   const boxRef = useRef<HTMLDivElement>(null);
   const [W, setW] = useState(700);
   useEffect(() => {
@@ -530,8 +526,6 @@ function Plot({
       return [lo - m, hi + m] as const;
     };
     const [x0, x1] = pad(xs), [y0, y1] = pad(ys);
-    const mid = (a: number[]) => [...a].sort((p, q) => p - q)[Math.floor(a.length / 2)] ?? 0;
-    const allX = pick(teams, xM.key), allY = pick(teams, yM.key);
 
     // INVERTED WHEN LOWER IS BETTER, so better is always right and always up.
     const X = (v: number) => {
@@ -543,11 +537,11 @@ function Plot({
       // Screen y grows downward, so the un-inverted case already flips once.
       return T + (yM.lowerBetter ? t : 1 - t) * (H - T - B);
     };
-    return { X, Y, x0, x1, y0, y1, mx: mid(allX), my: mid(allY) };
+    return { X, Y, x0, x1, y0, y1 };
   }, [teams, shown, xM, yM, W, H]);
 
   const { X, Y } = geo;
-  const size = crestSize(shown.length);
+  const size = crestSize(shown.length, W, H);
 
   /**
    * Nudge crests apart only while the selection is small.
@@ -587,11 +581,11 @@ function Plot({
 
   // Empty for a metric with no good direction — a "better" arrow on tempo or
   // three-point rate would be an editorial claim the data does not make.
-  const axisNote = (m: Metric) => (m.neutral ? "" : "— BETTER");
-
-  // A reference line only means something inside the frame — see the note on
-  // the crosshair below.
-  const inRange = (v: number, a: number, b: number) => v > Math.min(a, b) && v < Math.max(a, b);
+  // Rendered as its own tspan rather than concatenated into the label, so it
+  // can carry the accent — set in the same muted gray at the same weight, it
+  // read as another word in the metric's name rather than as the thing that
+  // tells you which way the axis runs.
+  const better = (m: Metric) => !m.neutral;
 
   return (
     // Fixed height, matching a full page of the table beside it. Width comes
@@ -599,14 +593,6 @@ function Plot({
     <div ref={boxRef} className="relative w-full" style={{ height: H }}>
       <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 w-full h-full" role="img"
         aria-label={`Teams by ${xM.label} against ${yM.label}`}>
-        <defs>
-          {/* auto-start-reverse turns the same marker round at the start of a
-              line, so one definition arms both ends. */}
-          <marker id={arrowId} viewBox="0 0 10 10" refX="9" refY="5"
-            markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--ink-muted)" />
-          </marker>
-        </defs>
         {niceTicks(geo.x0, geo.x1, tickCount(W - L - R, "x")).map((v) => (
           <g key={`x${v}`}>
             <line x1={X(v)} y1={T} x2={X(v)} y2={H - B} stroke="var(--hairline)" />
@@ -621,31 +607,6 @@ function Plot({
               fill="var(--ink-muted)" className="tabular">{fmtTick(yM, v)}</text>
           </g>
         ))}
-
-        {/* THE D-I MEDIAN, as a cross rather than two captioned rules.
-
-            It is still the same reference — computed from every team rather
-            than from the selection, which matters because the axes fit the
-            selection and without a fixed mark there is no telling "good" from
-            "good for this league". What went is the "D-I MED" text, twice: two
-            labels floating inside the plot read as annotations on whichever
-            crest they landed near.
-
-            Arrowheads instead, pointing out along each line, which say
-            "direction" rather than "a value here" — and the meaning lives in
-            the caption under the chart where it does not compete with a team.
-            Drawn only when the median falls inside the frame; a line clamped to
-            the border would claim the median is at the edge of the range. */}
-        {inRange(geo.mx, geo.x0, geo.x1) && (
-          <line x1={X(geo.mx)} y1={T} x2={X(geo.mx)} y2={H - B}
-            stroke="var(--ink-muted)" strokeWidth={1} opacity={0.45}
-            markerStart={`url(#${arrowId})`} markerEnd={`url(#${arrowId})`} />
-        )}
-        {inRange(geo.my, geo.y0, geo.y1) && (
-          <line x1={L} y1={Y(geo.my)} x2={W - R} y2={Y(geo.my)}
-            stroke="var(--ink-muted)" strokeWidth={1} opacity={0.45}
-            markerStart={`url(#${arrowId})`} markerEnd={`url(#${arrowId})`} />
-        )}
 
         {/* Corner captions only where both axes actually have a direction —
             "strong both ways" is a lie about a plot of tempo against 3PA rate. */}
@@ -673,11 +634,13 @@ function Plot({
 
         <text x={(L + W - R) / 2} y={H - 5} textAnchor="middle" fontSize={11.5}
           fill="var(--ink-muted)" letterSpacing="0.08em">
-          {[xM.label.toUpperCase(), axisNote(xM), "→"].filter(Boolean).join(" ")}
+          {xM.label.toUpperCase()}
+          {better(xM) && <tspan dx="10" fill="var(--coral)" fontWeight={700}>BETTER →</tspan>}
         </text>
         <text x={11} y={(T + H - B) / 2} fontSize={11.5} fill="var(--ink-muted)" letterSpacing="0.08em"
           textAnchor="middle" transform={`rotate(-90 11 ${(T + H - B) / 2})`}>
-          {[yM.label.toUpperCase(), axisNote(yM), "↑"].filter(Boolean).join(" ")}
+          {yM.label.toUpperCase()}
+          {better(yM) && <tspan dx="10" fill="var(--coral)" fontWeight={700}>BETTER ↑</tspan>}
         </text>
       </svg>
 
