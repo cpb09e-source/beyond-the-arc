@@ -58,7 +58,13 @@ export default async function TeamScatterPage() {
         label="Team scatter"
         sub={`Adjusted efficiency for all ${teams.length} Division I teams, ${seasonLabel}. Better is up and to the right.`}
       />
-      <div className="mt-4">
+      {/* CAPPED, not full-bleed. --page-max is 88rem at its narrowest and grows
+          with the viewport, which is sized for the explorers' twelve-column
+          tables — a chart taking all of it ran past 1300px and a metre of
+          screen, and a scatter gains nothing from width the way a table does.
+          Its job is a shape you take in at once, and past about 900px the eye
+          has to travel to compare two corners of the same cloud. */}
+      <div className="mt-4 max-w-[52rem]">
         <TeamScatter teams={teams} season={SEASON} />
       </div>
     </section>

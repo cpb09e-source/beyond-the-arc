@@ -78,6 +78,13 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
       .map(([code, n]) => ({ code, n }));
   }, [teams]);
 
+  // SPLIT, not just sorted. Thirty-one chips in one unbroken ribbon is a wall —
+  // the power leagues were already first but nothing said so, which made the
+  // order look arbitrary and left the reader scanning all thirty-one to find
+  // the six they wanted. Two labelled groups is the same information, findable.
+  const powerConfs = useMemo(() => allConfs.filter((c) => POWER_CONFS.has(c.code)), [allConfs]);
+  const midConfs = useMemo(() => allConfs.filter((c) => !POWER_CONFS.has(c.code)), [allConfs]);
+
   const selected = useMemo(() => {
     const out = new Set<string>();
     for (const t of teams) if (confs.has(t.conf) || picked.has(t.name)) out.add(t.name);
@@ -131,74 +138,76 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-1.5 mb-2">
-        <Btn onClick={() => preset("power")}>Power 6</Btn>
-        <Btn onClick={() => preset("mid")}>All mid-majors</Btn>
-        <Btn onClick={() => preset("top25")}>Top {MAX_TEAMS}</Btn>
-        <Btn onClick={() => preset("clear")}>Clear</Btn>
-        <span className="text-[0.62rem] text-ink-muted ml-1 tabular">
-          {shown.length} of {teams.length} shown
-        </span>
-      </div>
+      {/* ONE TOOLBAR, THREE LABELLED ROWS. These were three loose rows of
+          controls floating on the page with nothing holding them together and
+          nothing saying which did what — the chips in particular read as a
+          ribbon of debris. A frame and a row label each is the whole fix. */}
+      <div className="rounded-lg border border-hairline bg-paper-deep/40 divide-y divide-hairline mb-3">
+        <Row label="Show">
+          <Btn onClick={() => preset("power")}>Power 6</Btn>
+          <Btn onClick={() => preset("mid")}>All mid-majors</Btn>
+          <Btn onClick={() => preset("top25")}>Top {MAX_TEAMS}</Btn>
+          <Btn onClick={() => preset("clear")}>Clear</Btn>
+          <span className="text-[0.62rem] text-ink-muted tabular ml-auto pl-2 shrink-0">
+            {shown.length} of {teams.length}
+          </span>
+        </Row>
 
-      <div className="flex flex-wrap gap-1 mb-2">
-        {allConfs.map(({ code, n }) => {
-          const on = confs.has(code);
-          return (
+        <Row label="Leagues">
+          {powerConfs.map(({ code, n }) => (
+            <Chip key={code} on={confs.has(code)} onClick={() => toggleConf(code)}
+              title={`${confDisplay(code)} — ${n} teams`}>{confDisplay(code)}</Chip>
+          ))}
+          <span className="w-px self-stretch bg-hairline mx-1" aria-hidden />
+          {midConfs.map(({ code, n }) => (
+            <Chip key={code} on={confs.has(code)} onClick={() => toggleConf(code)}
+              title={`${confDisplay(code)} — ${n} teams`}>{confDisplay(code)}</Chip>
+          ))}
+        </Row>
+
+        <Row label="Teams">
+          <div className="relative">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={picked.size >= MAX_TEAMS ? "25 is the limit" : "Add a team…"}
+              disabled={picked.size >= MAX_TEAMS}
+              className="text-[0.7rem] rounded-full border border-hairline bg-paper px-2.5 py-0.5 w-32 focus:w-40 transition-[width] outline-none focus:border-coral disabled:opacity-50"
+            />
+            {matches.length > 0 && (
+              <ul className="absolute z-20 mt-1 w-56 rounded-md border border-hairline bg-paper shadow-lg overflow-hidden">
+                {matches.map((t) => (
+                  <li key={t.name}>
+                    <button
+                      type="button"
+                      onClick={() => { togglePick(t.name); setQuery(""); }}
+                      className="w-full text-left text-[0.72rem] px-2.5 py-1 hover:bg-paper-deep/60 flex justify-between gap-2"
+                    >
+                      <span className="truncate">{t.name}</span>
+                      <span className="tabular text-ink-muted shrink-0">#{t.rank}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {[...picked].map((name) => (
             <button
-              key={code}
+              key={name}
               type="button"
-              onClick={() => toggleConf(code)}
-              aria-pressed={on}
-              className={`text-[0.62rem] rounded-full px-2 py-0.5 border transition-colors ${
-                on ? "border-coral bg-coral/12 text-coral font-semibold"
-                   : "border-hairline text-ink-soft hover:border-ink-muted"
-              }`}
-              title={`${confDisplay(code)} — ${n} teams`}
+              onClick={() => togglePick(name)}
+              title="Remove"
+              className="text-[0.62rem] rounded-full pl-2 pr-1.5 py-0.5 border border-coral/50 bg-coral/10 text-coral inline-flex items-center gap-1 hover:border-coral"
             >
-              {confDisplay(code)}
+              {name}<span aria-hidden className="opacity-60">×</span>
             </button>
-          );
-        })}
-      </div>
-
-      {/* Individual teams, on top of whatever conferences are on. */}
-      <div className="flex flex-wrap items-center gap-1.5 mb-3">
-        <div className="relative">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={picked.size >= MAX_TEAMS ? `${MAX_TEAMS} teams is the limit` : "Add a team…"}
-            disabled={picked.size >= MAX_TEAMS}
-            className="text-[0.72rem] rounded-md border border-hairline bg-paper px-2.5 py-1 w-44 disabled:opacity-50"
-          />
-          {matches.length > 0 && (
-            <ul className="absolute z-20 mt-1 w-56 rounded-md border border-hairline bg-paper shadow-lg overflow-hidden">
-              {matches.map((t) => (
-                <li key={t.name}>
-                  <button
-                    type="button"
-                    onClick={() => { togglePick(t.name); setQuery(""); }}
-                    className="w-full text-left text-[0.72rem] px-2.5 py-1 hover:bg-paper-deep/60 flex justify-between gap-2"
-                  >
-                    <span className="truncate">{t.name}</span>
-                    <span className="tabular text-ink-muted shrink-0">#{t.rank}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+          ))}
+          {picked.size > 0 && (
+            <span className="text-[0.62rem] text-ink-muted tabular ml-auto pl-2 shrink-0">
+              {picked.size} of {MAX_TEAMS}
+            </span>
           )}
-        </div>
-        {[...picked].map((name) => (
-          <button
-            key={name}
-            type="button"
-            onClick={() => togglePick(name)}
-            className="text-[0.62rem] rounded-full pl-2 pr-1.5 py-0.5 border border-ink-soft/40 bg-paper-deep/50 text-ink-soft inline-flex items-center gap-1"
-          >
-            {name}<span aria-hidden className="text-ink-muted">×</span>
-          </button>
-        ))}
+        </Row>
       </div>
 
       <Plot teams={teams} shown={shown} hover={hover} setHover={setHover} />
@@ -227,10 +236,37 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
   );
 }
 
+/** A labelled row of the toolbar. The label is what stops the controls reading
+ *  as loose debris — it is 4.6rem wide so all three line up down the left. */
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2 px-2.5 py-2">
+      <span className="text-[0.52rem] uppercase tracking-[0.16em] text-ink-muted shrink-0 w-[3.6rem] pt-1">
+        {label}
+      </span>
+      <div className="flex flex-wrap items-center gap-1 flex-1 min-w-0">{children}</div>
+    </div>
+  );
+}
+
 function Btn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
     <button type="button" onClick={onClick}
-      className="text-[0.62rem] uppercase tracking-[0.12em] rounded-md border border-hairline px-2 py-1 text-ink-soft hover:border-ink-muted hover:text-ink transition-colors">
+      className="text-[0.6rem] uppercase tracking-[0.1em] rounded-full border border-hairline px-2.5 py-0.5 text-ink-soft hover:border-ink-muted hover:text-ink transition-colors">
+      {children}
+    </button>
+  );
+}
+
+function Chip({ on, onClick, title, children }: {
+  on: boolean; onClick: () => void; title: string; children: React.ReactNode;
+}) {
+  return (
+    <button type="button" onClick={onClick} aria-pressed={on} title={title}
+      className={`text-[0.62rem] rounded-full px-2 py-0.5 border transition-colors ${
+        on ? "border-coral bg-coral/12 text-coral font-semibold"
+           : "border-hairline text-ink-soft hover:border-ink-muted hover:text-ink"
+      }`}>
       {children}
     </button>
   );
