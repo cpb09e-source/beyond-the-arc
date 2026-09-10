@@ -23,10 +23,86 @@ import { rm, writeFile, rename, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
+import os from "node:os";
 import { R2_MIRRORED_DIRS, BUILD_ONLY_DIRS, BUILD_ONLY_FILES, PAGE_MIRRORED_DIRS } from "./lib/out-strip-lists.mjs";
 
 const ROOT = process.cwd();
 const OUT = path.join(ROOT, "out");
+
+/**
+ * --skip-build resumes the POST-BUILD half against an out/ that already exists.
+ *
+ * Why this exists: on 2026-09-10 the build was killed three times at
+ * "Finalizing page optimization" with no error text at all — not a Node
+ * exception, the whole process tree going down. It was Windows reclaiming
+ * memory: free physical RAM measured 3.1 GB and falling at that step, against
+ * an editor holding ~6 GB and a build asking for an 8 GB heap. `npm run build`
+ * on its own then completed, leaving a finished out/ and none of the steps
+ * below run — two of which (the RSC flatten and the paywall staging) are
+ * load-bearing, so out/ was NOT deployable and also not obviously broken.
+ *
+ * Redoing eight minutes of prerendering to reach them is the wrong answer, so:
+ *
+ *     node scripts/build-with-r2-stash.mjs --skip-build
+ *
+ * It skips the three derive scripts and `next build`, and runs everything from
+ * verify-player-links onward. Only use it when out/ came from the CURRENT
+ * source — it cannot tell, and a stale out/ will sail straight through.
+ */
+const SKIP_BUILD = process.argv.includes("--skip-build");
+
+/**
+ * REFUSE TO START A BUILD THAT THE MACHINE CANNOT FINISH.
+ *
+ * On 2026-09-10 three builds died at "Finalizing page optimization" with no
+ * error output whatsoever — no Node exception, no heap message, the whole
+ * process tree going down at once, including this orchestrator. That last part
+ * is the tell: Node does not kill its own parent. Windows was reclaiming
+ * memory.
+ *
+ * Measured during the failing step: free physical RAM at 3.1 GB and falling,
+ * from 10.9 GB at the start. The build itself sat around 4.7 GB resident, the
+ * editor was holding ~6 GB, and `next build` is handed an 8 GB heap ceiling it
+ * will happily grow into. Each of those is fine alone.
+ *
+ * The cost of finding this out the hard way is ~8 minutes of prerendering
+ * before anything fails, so it is worth two lines to check up front. This is a
+ * FLOOR, not a prediction: it does not know how big the site has become, only
+ * that the last known-good run needed roughly 8 GB of headroom over its
+ * lifetime.
+ *
+ * `--force` skips the check, for when you know better than a number written in
+ * September 2026.
+ */
+const GB = 1024 ** 3;
+const WARN_FREE_GB = 12;
+const REFUSE_FREE_GB = 8;
+
+function checkMemory() {
+  if (process.argv.includes("--force")) return;
+  const freeGb = os.freemem() / GB;
+  const totalGb = os.totalmem() / GB;
+  if (freeGb >= WARN_FREE_GB) return;
+
+  const line = `free RAM ${freeGb.toFixed(1)} GB of ${totalGb.toFixed(1)} GB`;
+  if (freeGb < REFUSE_FREE_GB) {
+    console.error(`
+✗ Not enough memory to build — ${line}.`);
+    console.error(`  A build of this site needs about ${REFUSE_FREE_GB} GB of headroom and takes`);
+    console.error("  ~8 minutes to reach the step that runs out. Close what you can (an editor");
+    console.error("  with a large workspace is usually the biggest single consumer) and retry.");
+    console.error("  If the build then dies anyway AFTER `next build` prints its route table,");
+    console.error("  resume with --skip-build rather than starting over.");
+    console.error("  Override with --force.");
+    console.error("");
+    process.exit(1);
+  }
+  console.warn(`
+⚠ Low memory — ${line}.`);
+  console.warn(`  Builds have been killed silently below about ${REFUSE_FREE_GB} GB free. Continuing,`);
+  console.warn('  but if this dies with no error at "Finalizing page optimization", that is why.');
+  console.warn("");
+}
 
 /**
  * WHAT GETS STRIPPED LIVES IN scripts/lib/out-strip-lists.mjs.
@@ -41,71 +117,84 @@ const OUT = path.join(ROOT, "out");
 const STRIP_DIRS = R2_MIRRORED_DIRS;
 
 async function main() {
+  if (!SKIP_BUILD) checkMemory();
+
+  if (SKIP_BUILD) {
+    if (!existsSync(OUT)) {
+      console.error("✗ --skip-build needs an existing out/. There is none.");
+      process.exit(1);
+    }
+    console.log("--skip-build: resuming from verify-player-links against the existing out/.");
+    console.log("");
+  }
+
   // Regenerate the per-season shards the home page fetches at runtime BEFORE
   // building. They are derived wholly from teams-all.json, so leaving them to a
   // manual step means a data refresh silently serves last export's numbers on
   // the explorer while every server-rendered page shows the new ones — a
   // divergence with nothing to signal it. Cheap (a couple of seconds) and
   // idempotent, so it runs every build.
-  console.log("→ node scripts/build-teams-by-year.mjs…");
-  const shardCode = await new Promise((resolve) => {
-    const child = spawn("node", ["scripts/build-teams-by-year.mjs"], {
-      stdio: "inherit",
-      shell: true,
-      cwd: ROOT,
+  if (!SKIP_BUILD) {
+    console.log("→ node scripts/build-teams-by-year.mjs…");
+    const shardCode = await new Promise((resolve) => {
+      const child = spawn("node", ["scripts/build-teams-by-year.mjs"], {
+        stdio: "inherit",
+        shell: true,
+        cwd: ROOT,
+      });
+      child.on("close", (code) => resolve(code ?? 1));
     });
-    child.on("close", (code) => resolve(code ?? 1));
-  });
-  if (shardCode !== 0) {
-    console.error(`✗ teams-by-year shard build failed (exit ${shardCode})`);
-    process.exit(shardCode);
-  }
+    if (shardCode !== 0) {
+      console.error(`✗ teams-by-year shard build failed (exit ${shardCode})`);
+      process.exit(shardCode);
+    }
 
-  // BTA points-over-replacement, from the CBBD box scores. Must run BEFORE the
-  // explorer payload, which merges its output in as the bta_porpag column.
-  console.log("\n→ node scripts/build-bta-porpag.mjs…");
-  const porpagCode = await new Promise((resolve) => {
-    const child = spawn("node", ["scripts/build-bta-porpag.mjs"], {
-      stdio: "inherit",
-      shell: true,
-      cwd: ROOT,
+    // BTA points-over-replacement, from the CBBD box scores. Must run BEFORE the
+    // explorer payload, which merges its output in as the bta_porpag column.
+    console.log("\n→ node scripts/build-bta-porpag.mjs…");
+    const porpagCode = await new Promise((resolve) => {
+      const child = spawn("node", ["scripts/build-bta-porpag.mjs"], {
+        stdio: "inherit",
+        shell: true,
+        cwd: ROOT,
+      });
+      child.on("close", (code) => resolve(code ?? 1));
     });
-    child.on("close", (code) => resolve(code ?? 1));
-  });
-  if (porpagCode !== 0) {
-    console.error(`✗ bta-porpag build failed (exit ${porpagCode})`);
-    process.exit(porpagCode);
-  }
+    if (porpagCode !== 0) {
+      console.error(`✗ bta-porpag build failed (exit ${porpagCode})`);
+      process.exit(porpagCode);
+    }
 
-  // Same reasoning as the shards above: the explorer payload is derived wholly
-  // from players-by-year, so regenerating it every build keeps the two from
-  // drifting after a data refresh.
-  console.log("\n→ node scripts/build-players-explorer.mjs…");
-  const explorerCode = await new Promise((resolve) => {
-    const child = spawn("node", ["scripts/build-players-explorer.mjs"], {
-      stdio: "inherit",
-      shell: true,
-      cwd: ROOT,
+    // Same reasoning as the shards above: the explorer payload is derived wholly
+    // from players-by-year, so regenerating it every build keeps the two from
+    // drifting after a data refresh.
+    console.log("\n→ node scripts/build-players-explorer.mjs…");
+    const explorerCode = await new Promise((resolve) => {
+      const child = spawn("node", ["scripts/build-players-explorer.mjs"], {
+        stdio: "inherit",
+        shell: true,
+        cwd: ROOT,
+      });
+      child.on("close", (code) => resolve(code ?? 1));
     });
-    child.on("close", (code) => resolve(code ?? 1));
-  });
-  if (explorerCode !== 0) {
-    console.error(`✗ players-explorer build failed (exit ${explorerCode})`);
-    process.exit(explorerCode);
-  }
+    if (explorerCode !== 0) {
+      console.error(`✗ players-explorer build failed (exit ${explorerCode})`);
+      process.exit(explorerCode);
+    }
 
-  console.log("\n→ npm run build…");
-  const exitCode = await new Promise((resolve) => {
-    const child = spawn("npm", ["run", "build"], {
-      stdio: "inherit",
-      shell: true,
-      cwd: ROOT,
+    console.log("\n→ npm run build…");
+    const exitCode = await new Promise((resolve) => {
+      const child = spawn("npm", ["run", "build"], {
+        stdio: "inherit",
+        shell: true,
+        cwd: ROOT,
+      });
+      child.on("close", (code) => resolve(code ?? 1));
     });
-    child.on("close", (code) => resolve(code ?? 1));
-  });
-  if (exitCode !== 0) {
-    console.error(`✗ build failed (exit ${exitCode})`);
-    process.exit(exitCode);
+    if (exitCode !== 0) {
+      console.error(`✗ build failed (exit ${exitCode})`);
+      process.exit(exitCode);
+    }
   }
 
   // Next writes its segment-prefetch payloads as nested directories but its own
