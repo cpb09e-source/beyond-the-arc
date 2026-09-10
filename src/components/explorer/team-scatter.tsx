@@ -3,12 +3,15 @@
 import { useMemo, useState } from "react";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
+import {
+  METRICS, METRIC_BY_KEY, METRIC_GROUPS, METRIC_PRESETS,
+  fmtMetric, niceTicks, type Metric,
+} from "@/lib/team-scatter-metrics";
 
 /**
- * Adjusted offense against adjusted defense, for whichever teams the reader
- * asks for, with school crests as the marks.
+ * Any two team metrics against each other, with school crests as the marks.
  *
- * WHY THE SELECTION IS THE WHOLE DESIGN. A dot is 6px and a crest is 24px, so a
+ * WHY THE SELECTION IS HALF THE DESIGN. A dot is 6px and a crest is 24px, so a
  * logo carries sixteen times the area — and there are 365 of them, thickest
  * exactly where the cloud is already thickest. Drawing every crest at once is a
  * pile, not a chart. So the reader picks, and everything unpicked stays on the
@@ -16,24 +19,31 @@ import { POWER_CONFS } from "@/lib/conf-tiers";
  * than against its own panel's edges, which is what stops the ACC and the
  * Patriot League producing identical-looking pictures.
  *
- * THE DEFENSIVE AXIS IS INVERTED. Adjusted defensive efficiency is a number you
- * want LOW, and a plot where down is good on one axis and up is good on the
- * other cannot be read at a glance by anybody. Better is always up and to the
- * right here.
+ * BETTER IS ALWAYS UP AND TO THE RIGHT. Adjusted defensive rating is better
+ * when it is low, turnover rate is better when it is low, and once the axes are
+ * configurable a reader cannot be asked to remember which of the two they
+ * picked runs backwards. So an axis whose metric is `lowerBetter` is drawn
+ * inverted, and the axis label says which way better runs. Metrics with no good
+ * direction — tempo, three-point rate — say nothing and are not inverted.
+ *
+ * THE TABLE IS THE SAME SELECTION, SORTED. It is not a second view bolted on:
+ * a scatter answers "what is the shape" and cannot answer "who is fourth", and
+ * pointing at a crest to find out is the slowest possible way to read a
+ * ranking. Hovering either one lights the other.
  *
  * There is deliberately no "select every conference" control. The reader can
- * get there by hand if they insist, and the crest ramp below will cope, but
- * offering it as a button would advertise the one view this chart is worst at.
+ * get there by hand if they insist, and the crest ramp copes, but offering it
+ * as a button would advertise the one view this chart is worst at.
  */
 
 export type ScatterTeam = {
   name: string;
   conf: string;
   rank: number;
-  oe: number;
-  de: number;
   id: number | null;
   record: string;
+  color: string;
+  m: Record<string, number | null>;
 };
 
 /** Individually-picked teams, capped. Conference picks are not — that is how
@@ -43,29 +53,36 @@ const MAX_TEAMS = 25;
 /**
  * Crest size against how many are on the plate.
  *
- * The mid-major preset is ~250 teams and is meant to be: the point of it is the
- * shape of a whole tier, not reading individual schools. So the crests shrink
- * rather than the selection being refused, and by ~180 they are small enough to
- * behave like colored dots that happen to be identifiable when you lean in.
+ * The mid-major preset is ~286 teams and is meant to be: the point of it is the
+ * shape of a whole tier, not reading individual schools.
+ *
+ * 12 IS THE FLOOR, and it is a floor rather than a formula. Below it a crest
+ * stops being a crest: the light-on-light schools disappear into the paper and
+ * the rest read as smudges, which is strictly worse than the plain dot it
+ * replaced. Overlap at 250 teams is the better failure — the tier's shape still
+ * reads, and leaning in still identifies a school.
  */
 function crestSize(n: number): number {
   if (n <= 20) return 26;
   if (n <= 50) return 20;
   if (n <= 100) return 16;
   if (n <= 180) return 14;
-  // 12 IS THE FLOOR, and it is a floor rather than a formula. Below it a crest
-  // stops being a crest: the light-on-light schools disappear into the paper
-  // entirely and the rest read as smudges, which is strictly worse than the
-  // plain dot it replaced. Overlap at 250 teams is the better failure — you
-  // can still see the tier's shape, and leaning in still identifies a school.
   return 12;
 }
+
+type SortKey = "rank" | "name" | "x" | "y";
 
 export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: number }) {
   const [confs, setConfs] = useState<Set<string>>(() => new Set(["ACC"]));
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [query, setQuery] = useState("");
   const [hover, setHover] = useState<string | null>(null);
+  const [xKey, setXKey] = useState("adjoe");
+  const [yKey, setYKey] = useState("adjde");
+  const [logos, setLogos] = useState(true);
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "rank", dir: 1 });
+
+  const xM = METRIC_BY_KEY[xKey]!, yM = METRIC_BY_KEY[yKey]!;
 
   const allConfs = useMemo(() => {
     const counts = new Map<string, number>();
@@ -85,24 +102,31 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
   const powerConfs = useMemo(() => allConfs.filter((c) => POWER_CONFS.has(c.code)), [allConfs]);
   const midConfs = useMemo(() => allConfs.filter((c) => !POWER_CONFS.has(c.code)), [allConfs]);
 
-  const selected = useMemo(() => {
-    const out = new Set<string>();
-    for (const t of teams) if (confs.has(t.conf) || picked.has(t.name)) out.add(t.name);
-    return out;
-  }, [teams, confs, picked]);
-
   const shown = useMemo(
-    () => teams.filter((t) => selected.has(t.name)).sort((a, b) => a.rank - b.rank),
-    [teams, selected],
+    () => teams
+      .filter((t) => confs.has(t.conf) || picked.has(t.name))
+      .sort((a, b) => a.rank - b.rank),
+    [teams, confs, picked],
   );
+
+  const sorted = useMemo(() => {
+    const val = (t: ScatterTeam) => {
+      if (sort.key === "rank") return t.rank;
+      if (sort.key === "x") return t.m[xKey] ?? Number.POSITIVE_INFINITY;
+      if (sort.key === "y") return t.m[yKey] ?? Number.POSITIVE_INFINITY;
+      return 0;
+    };
+    return [...shown].sort((a, b) =>
+      sort.key === "name"
+        ? sort.dir * a.name.localeCompare(b.name)
+        : sort.dir * (val(a) - val(b)));
+  }, [shown, sort, xKey, yKey]);
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return teams
-      .filter((t) => t.name.toLowerCase().includes(q))
-      .sort((a, b) => a.rank - b.rank)
-      .slice(0, 8);
+    return teams.filter((t) => t.name.toLowerCase().includes(q))
+      .sort((a, b) => a.rank - b.rank).slice(0, 8);
   }, [teams, query]);
 
   const toggleConf = (code: string) =>
@@ -127,22 +151,49 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
       setPicked(new Set(teams.filter((t) => t.rank <= MAX_TEAMS).map((t) => t.name)));
       return;
     }
-    const want = allConfs
+    setConfs(new Set(allConfs
       .filter(({ code }) => (kind === "power" ? POWER_CONFS.has(code) : !POWER_CONFS.has(code)))
-      .map(({ code }) => code);
-    setConfs(new Set(want));
+      .map(({ code }) => code)));
     setPicked(new Set());
   };
 
-  const hovered = hover ? teams.find((t) => t.name === hover) ?? null : null;
+  const sortBy = (key: SortKey) =>
+    setSort((s) => (s.key === key ? { key, dir: (s.dir * -1) as 1 | -1 } : { key, dir: 1 }));
 
   return (
     <div>
-      {/* ONE TOOLBAR, THREE LABELLED ROWS. These were three loose rows of
-          controls floating on the page with nothing holding them together and
-          nothing saying which did what — the chips in particular read as a
-          ribbon of debris. A frame and a row label each is the whole fix. */}
+      {/* ONE TOOLBAR, FOUR LABELLED ROWS. These were loose rows of controls
+          floating on the page with nothing holding them together and nothing
+          saying which did what — the chips in particular read as a ribbon of
+          debris. A frame and a row label each is the whole fix. */}
       <div className="rounded-lg border border-hairline bg-paper-deep/40 divide-y divide-hairline mb-3">
+        <Row label="Plot">
+          <Picker label="X" value={xKey} onChange={setXKey} />
+          <Picker label="Y" value={yKey} onChange={setYKey} />
+          <Btn onClick={() => { setXKey(yKey); setYKey(xKey); }} title="Swap the two axes">Flip</Btn>
+          <button
+            type="button"
+            onClick={() => setLogos((v) => !v)}
+            aria-pressed={logos}
+            className={`text-[0.6rem] uppercase tracking-[0.1em] rounded-full border px-2.5 py-0.5 transition-colors ${
+              logos ? "border-coral bg-coral/12 text-coral font-semibold" : "border-hairline text-ink-soft hover:text-ink"
+            }`}
+          >
+            Logos
+          </button>
+          <select
+            value=""
+            onChange={(e) => {
+              const p = METRIC_PRESETS.find((q) => q.label === e.target.value);
+              if (p) { setXKey(p.x); setYKey(p.y); }
+            }}
+            className="text-[0.68rem] rounded-full border border-hairline bg-paper px-2 py-0.5 text-ink-soft"
+          >
+            <option value="">Presets…</option>
+            {METRIC_PRESETS.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}
+          </select>
+        </Row>
+
         <Row label="Show">
           <Btn onClick={() => preset("power")}>Power 6</Btn>
           <Btn onClick={() => preset("mid")}>All mid-majors</Btn>
@@ -175,14 +226,11 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
               className="text-[0.7rem] rounded-full border border-hairline bg-paper px-2.5 py-0.5 w-32 focus:w-40 transition-[width] outline-none focus:border-coral disabled:opacity-50"
             />
             {matches.length > 0 && (
-              <ul className="absolute z-20 mt-1 w-56 rounded-md border border-hairline bg-paper shadow-lg overflow-hidden">
+              <ul className="absolute z-30 mt-1 w-56 rounded-md border border-hairline bg-paper shadow-lg overflow-hidden">
                 {matches.map((t) => (
                   <li key={t.name}>
-                    <button
-                      type="button"
-                      onClick={() => { togglePick(t.name); setQuery(""); }}
-                      className="w-full text-left text-[0.72rem] px-2.5 py-1 hover:bg-paper-deep/60 flex justify-between gap-2"
-                    >
+                    <button type="button" onClick={() => { togglePick(t.name); setQuery(""); }}
+                      className="w-full text-left text-[0.72rem] px-2.5 py-1 hover:bg-paper-deep/60 flex justify-between gap-2">
                       <span className="truncate">{t.name}</span>
                       <span className="tabular text-ink-muted shrink-0">#{t.rank}</span>
                     </button>
@@ -192,13 +240,8 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
             )}
           </div>
           {[...picked].map((name) => (
-            <button
-              key={name}
-              type="button"
-              onClick={() => togglePick(name)}
-              title="Remove"
-              className="text-[0.62rem] rounded-full pl-2 pr-1.5 py-0.5 border border-coral/50 bg-coral/10 text-coral inline-flex items-center gap-1 hover:border-coral"
-            >
+            <button key={name} type="button" onClick={() => togglePick(name)} title="Remove"
+              className="text-[0.62rem] rounded-full pl-2 pr-1.5 py-0.5 border border-coral/50 bg-coral/10 text-coral inline-flex items-center gap-1 hover:border-coral">
               {name}<span aria-hidden className="opacity-60">×</span>
             </button>
           ))}
@@ -210,34 +253,38 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
         </Row>
       </div>
 
-      <Plot teams={teams} shown={shown} hover={hover} setHover={setHover} />
+      <h2 className="text-sm text-ink mb-2">
+        <span className="tabular font-semibold">{shown.length}</span> teams
+        <span className="text-ink-muted"> · {xM.label} vs {yM.label}</span>
+      </h2>
 
-      {/* Fixed height, so the plot does not jump as the pointer crosses crests. */}
-      <div className="mt-2 min-h-[2.1rem] rounded-md border border-hairline bg-paper-deep/30 px-2.5 py-1.5">
-        {hovered ? (
-          <div className="flex items-baseline gap-2 min-w-0">
-            <span className="text-[0.75rem] text-ink truncate">{hovered.name}</span>
-            <span className="text-[0.62rem] text-ink-muted tabular">
-              {hovered.record} · #{hovered.rank} · {confDisplay(hovered.conf)}
-            </span>
-            <span className="text-[0.62rem] tabular text-ink-soft ml-auto shrink-0">
-              {hovered.oe.toFixed(1)} off · {hovered.de.toFixed(1)} def ·{" "}
-              {hovered.oe - hovered.de >= 0 ? "+" : "−"}{Math.abs(hovered.oe - hovered.de).toFixed(1)} margin
-            </span>
-          </div>
-        ) : (
-          <div className="text-[0.62rem] text-ink-muted leading-snug">
-            {season - 1}-{String(season).slice(2)} adjusted efficiency, points per 100 possessions.
-            Unselected teams stay on as faint dots so a selection is read against the whole country.
-          </div>
-        )}
+      {/* Table first in the DOM and on a phone, where a wide plot is the worse
+          of the two. Side by side from lg, table fixed and plot elastic. */}
+      <div className="flex flex-col lg:flex-row gap-4 items-start">
+        <TeamTable
+          rows={sorted} xM={xM} yM={yM} sort={sort} onSort={sortBy}
+          hover={hover} setHover={setHover}
+        />
+        <div className="flex-1 min-w-0 w-full">
+          <Plot
+            teams={teams} shown={shown} xM={xM} yM={yM} logos={logos}
+            hover={hover} setHover={setHover}
+          />
+          <p className="mt-2 text-[0.62rem] text-ink-muted leading-snug">
+            {season - 1}-{String(season).slice(2)} season. Unselected teams stay on as faint
+            dots, so a selection is read against the whole country. Where a metric has a good
+            direction the axis is turned so that better is up and to the right.
+          </p>
+        </div>
       </div>
     </div>
   );
 }
 
-/** A labelled row of the toolbar. The label is what stops the controls reading
- *  as loose debris — it is 4.6rem wide so all three line up down the left. */
+/* -------------------------------- controls -------------------------------- */
+
+/** A labelled row of the toolbar. The label is a fixed width so all four line
+ *  up down the left — that alignment is what makes it read as one panel. */
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-2 px-2.5 py-2">
@@ -249,9 +296,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function Btn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+function Btn({ onClick, title, children }: { onClick: () => void; title?: string; children: React.ReactNode }) {
   return (
-    <button type="button" onClick={onClick}
+    <button type="button" onClick={onClick} title={title}
       className="text-[0.6rem] uppercase tracking-[0.1em] rounded-full border border-hairline px-2.5 py-0.5 text-ink-soft hover:border-ink-muted hover:text-ink transition-colors">
       {children}
     </button>
@@ -272,27 +319,142 @@ function Chip({ on, onClick, title, children }: {
   );
 }
 
-function Plot({
-  teams, shown, hover, setHover,
+/** Axis metric picker. A native select, grouped — twenty-two options is past
+ *  what a row of chips can carry, and the browser's own list is better at this
+ *  than anything hand-rolled would be on a phone. */
+function Picker({ label, value, onChange }: {
+  label: string; value: string; onChange: (v: string) => void;
+}) {
+  return (
+    <label className="inline-flex items-center gap-1 rounded-full border border-hairline bg-paper pl-2 pr-1 py-0.5">
+      <span className="text-[0.52rem] uppercase tracking-[0.14em] text-ink-muted">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)}
+        className="text-[0.68rem] bg-transparent text-ink outline-none max-w-[11rem]">
+        {METRIC_GROUPS.map((g) => (
+          <optgroup key={g} label={g}>
+            {METRICS.filter((m) => m.group === g).map((m) => (
+              <option key={m.key} value={m.key}>{m.label}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/* --------------------------------- table ---------------------------------- */
+
+function TeamTable({
+  rows, xM, yM, sort, onSort, hover, setHover,
 }: {
-  teams: ScatterTeam[]; shown: ScatterTeam[];
+  rows: ScatterTeam[]; xM: Metric; yM: Metric;
+  sort: { key: SortKey; dir: 1 | -1 }; onSort: (k: SortKey) => void;
   hover: string | null; setHover: (v: string | null) => void;
 }) {
-  const W = 800, H = 520, L = 46, R = 18, T = 16, B = 40;
+  if (!rows.length) {
+    return (
+      <div className="w-full lg:w-[22rem] shrink-0 rounded-lg border border-hairline p-4 text-xs text-ink-muted">
+        Nothing selected. Pick a league or a team above.
+      </div>
+    );
+  }
+
+  // The arrow points the way the column is sorted, not the way "better" runs —
+  // it is a control, and a control that lies about its own state is worse than
+  // one that says nothing.
+  const arrow = (k: SortKey) => (sort.key === k ? (sort.dir === 1 ? " ↑" : " ↓") : "");
+  const th = "px-1.5 py-1 text-[0.55rem] uppercase tracking-[0.1em] text-ink-muted font-semibold cursor-pointer hover:text-ink select-none";
+
+  return (
+    <div className="w-full lg:w-[22rem] shrink-0 rounded-lg border border-hairline overflow-hidden">
+      {/* Capped and scrolling: 286 rows next to a fixed-height plot would leave
+          the chart stranded at the top of a very long page. */}
+      <div className="max-h-[32rem] overflow-y-auto">
+        <table className="w-full border-collapse">
+          <thead className="sticky top-0 bg-paper-deep z-10">
+            <tr className="border-b border-hairline">
+              <th className={`${th} text-right w-8`} onClick={() => onSort("rank")}>#{arrow("rank")}</th>
+              <th className={`${th} text-left`} onClick={() => onSort("name")}>Team{arrow("name")}</th>
+              <th className={`${th} text-right`} onClick={() => onSort("x")} title={xM.label}>
+                {xM.short}{arrow("x")}
+              </th>
+              <th className={`${th} text-right`} onClick={() => onSort("y")} title={yM.label}>
+                {yM.short}{arrow("y")}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((t) => (
+              <tr
+                key={t.name}
+                onPointerEnter={() => setHover(t.name)}
+                onPointerLeave={() => setHover(null)}
+                className={`border-b border-hairline/60 last:border-b-0 cursor-default ${
+                  hover === t.name ? "bg-coral/10" : "hover:bg-paper-deep/50"
+                }`}
+              >
+                <td className="px-1.5 py-1 text-right text-[0.62rem] tabular text-ink-muted">{t.rank}</td>
+                <td className="px-1.5 py-1">
+                  <span className="flex items-center gap-1.5 min-w-0">
+                    {t.id != null && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={`/ttz-logos/${t.id}.png`} alt="" width={14} height={14}
+                        loading="lazy" className="object-contain shrink-0" style={{ width: 14, height: 14 }} />
+                    )}
+                    <span className="text-[0.7rem] text-ink truncate">{t.name}</span>
+                    <span className="text-[0.55rem] tabular text-ink-muted shrink-0 ml-auto">{t.record}</span>
+                  </span>
+                </td>
+                <td className="px-1.5 py-1 text-right text-[0.68rem] tabular text-ink-soft">
+                  {fmtMetric(xM, t.m[xM.key] ?? null)}
+                </td>
+                <td className="px-1.5 py-1 text-right text-[0.68rem] tabular text-ink-soft">
+                  {fmtMetric(yM, t.m[yM.key] ?? null)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------- plot ---------------------------------- */
+
+function Plot({
+  teams, shown, xM, yM, logos, hover, setHover,
+}: {
+  teams: ScatterTeam[]; shown: ScatterTeam[]; xM: Metric; yM: Metric; logos: boolean;
+  hover: string | null; setHover: (v: string | null) => void;
+}) {
+  const W = 760, H = 520, L = 52, R = 20, T = 16, B = 44;
 
   const geo = useMemo(() => {
-    const oe = teams.map((t) => t.oe), de = teams.map((t) => t.de);
-    const x0 = Math.min(...oe) - 1, x1 = Math.max(...oe) + 1;
-    const y0 = Math.max(...de) + 1, y1 = Math.min(...de) - 1;
-    const mid = (a: number[]) => [...a].sort((p, q) => p - q)[Math.floor(a.length / 2)] ?? 0;
-    return {
-      X: (v: number) => L + ((v - x0) / (x1 - x0)) * (W - L - R),
-      Y: (v: number) => T + ((v - y1) / (y0 - y1)) * (H - T - B),
-      x0, x1, y0, y1, mOe: mid(oe), mDe: mid(de),
+    const xs = teams.map((t) => t.m[xM.key]).filter((v): v is number => v != null);
+    const ys = teams.map((t) => t.m[yM.key]).filter((v): v is number => v != null);
+    const pad = (a: number[]) => {
+      const lo = Math.min(...a), hi = Math.max(...a);
+      const m = (hi - lo) * 0.04 || 1;
+      return [lo - m, hi + m] as const;
     };
-  }, [teams]);
-  const { X, Y, x0, x1, y0, y1 } = geo;
+    const [x0, x1] = pad(xs), [y0, y1] = pad(ys);
+    const mid = (a: number[]) => [...a].sort((p, q) => p - q)[Math.floor(a.length / 2)] ?? 0;
 
+    // INVERTED WHEN LOWER IS BETTER, so better is always right and always up.
+    const X = (v: number) => {
+      const t = (v - x0) / (x1 - x0);
+      return L + (xM.lowerBetter ? 1 - t : t) * (W - L - R);
+    };
+    const Y = (v: number) => {
+      const t = (v - y0) / (y1 - y0);
+      // Screen y grows downward, so the un-inverted case already flips once.
+      return T + (yM.lowerBetter ? t : 1 - t) * (H - T - B);
+    };
+    return { X, Y, x0, x1, y0, y1, mx: mid(xs), my: mid(ys) };
+  }, [teams, xM, yM, W, H]);
+
+  const { X, Y } = geo;
   const size = crestSize(shown.length);
 
   /**
@@ -301,85 +463,108 @@ function Plot({
    * Under about forty marks a vertical push plus a leader line keeps every
    * crest legible at almost no cost in accuracy. Past that the pushes compound
    * — a tight cluster of a hundred would end up as a column bearing no relation
-   * to the numbers — so above the threshold the crests are drawn where the data
-   * actually puts them and are allowed to overlap. Shrinking is the honest
-   * answer at that size; relocating is not.
+   * to the numbers — so above the threshold the crests sit where the data puts
+   * them and are allowed to overlap. Shrinking is the honest answer at that
+   * size; relocating is not.
    */
   const placed = useMemo(() => {
-    const dodge = shown.length <= 40;
+    const dodge = shown.length <= 40 && logos;
     const taken: { x: number; y: number }[] = [];
-    return shown.map((p) => {
-      const bx = X(p.oe), base = Y(p.de);
-      let by = base;
-      if (dodge) {
-        let step = 0;
-        while (step < 14 && taken.some((q) => Math.abs(q.x - bx) < size * 0.8 && Math.abs(q.y - by) < size * 0.8)) {
-          step++;
-          by = base + (step % 2 ? 1 : -1) * Math.ceil(step / 2) * size * 0.85;
+    return shown
+      .filter((p) => p.m[xM.key] != null && p.m[yM.key] != null)
+      .map((p) => {
+        const bx = X(p.m[xM.key]!), base = Y(p.m[yM.key]!);
+        let by = base;
+        if (dodge) {
+          let step = 0;
+          while (step < 14 && taken.some((q) => Math.abs(q.x - bx) < size * 0.8 && Math.abs(q.y - by) < size * 0.8)) {
+            step++;
+            by = base + (step % 2 ? 1 : -1) * Math.ceil(step / 2) * size * 0.85;
+          }
+          by = Math.max(T + size / 2, Math.min(H - B - size / 2, by));
+          taken.push({ x: bx, y: by });
         }
-        by = Math.max(T + size / 2, Math.min(H - B - size / 2, by));
-        taken.push({ x: bx, y: by });
-      }
-      return { p, x: bx, y: by, base };
-    });
-  }, [shown, X, Y, size]);
+        return { p, x: bx, y: by, base };
+      });
+  }, [shown, X, Y, size, logos, xM, yM]);
 
   const sel = useMemo(() => new Set(shown.map((t) => t.name)), [shown]);
+  // The DODGED position, not the data position — the card has to sit against
+  // the crest the pointer is actually over, which for a nudged mark is not
+  // where its numbers put it.
+  const hoveredMark = hover ? placed.find((m) => m.p.name === hover) ?? null : null;
+
+  // Empty for a metric with no good direction — a "better" arrow on tempo or
+  // three-point rate would be an editorial claim the data does not make.
+  const axisNote = (m: Metric) => (m.neutral ? "" : "— BETTER");
 
   return (
     <div className="relative w-full" style={{ aspectRatio: `${W} / ${H}` }}>
       <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 w-full h-full" role="img"
-        aria-label="Teams by adjusted offensive and defensive efficiency">
-        {[95, 100, 105, 110, 115, 120, 125, 130].filter((v) => v > x0 && v < x1).map((v) => (
+        aria-label={`Teams by ${xM.label} against ${yM.label}`}>
+        {niceTicks(geo.x0, geo.x1).map((v) => (
           <g key={`x${v}`}>
             <line x1={X(v)} y1={T} x2={X(v)} y2={H - B} stroke="var(--hairline)" />
             <text x={X(v)} y={H - B + 12} textAnchor="middle" fontSize={8.5}
-              fill="var(--ink-muted)" className="tabular">{v}</text>
+              fill="var(--ink-muted)" className="tabular">{fmtMetric(xM, v)}</text>
           </g>
         ))}
-        {[95, 100, 105, 110, 115, 120, 125].filter((v) => v > y1 && v < y0).map((v) => (
+        {niceTicks(geo.y0, geo.y1).map((v) => (
           <g key={`y${v}`}>
             <line x1={L} y1={Y(v)} x2={W - R} y2={Y(v)} stroke="var(--hairline)" />
             <text x={L - 6} y={Y(v) + 3} textAnchor="end" fontSize={8.5}
-              fill="var(--ink-muted)" className="tabular">{v}</text>
+              fill="var(--ink-muted)" className="tabular">{fmtMetric(yM, v)}</text>
           </g>
         ))}
 
-        <line x1={X(geo.mOe)} y1={T} x2={X(geo.mOe)} y2={H - B} stroke="var(--ink-muted)" strokeDasharray="3 3" opacity={0.5} />
-        <line x1={L} y1={Y(geo.mDe)} x2={W - R} y2={Y(geo.mDe)} stroke="var(--ink-muted)" strokeDasharray="3 3" opacity={0.5} />
+        <line x1={X(geo.mx)} y1={T} x2={X(geo.mx)} y2={H - B} stroke="var(--ink-muted)" strokeDasharray="3 3" opacity={0.5} />
+        <line x1={L} y1={Y(geo.my)} x2={W - R} y2={Y(geo.my)} stroke="var(--ink-muted)" strokeDasharray="3 3" opacity={0.5} />
 
-        <text x={W - R - 5} y={T + 11} textAnchor="end" fontSize={8} fill="var(--ink-muted)" letterSpacing="0.08em">
-          ELITE BOTH WAYS
-        </text>
-        <text x={L + 5} y={T + 11} fontSize={8} fill="var(--ink-muted)" letterSpacing="0.08em">
-          DEFENSE CARRIES THEM
-        </text>
-        <text x={L + 5} y={H - B - 6} fontSize={8} fill="var(--ink-muted)" letterSpacing="0.08em">
-          BAD BOTH WAYS
-        </text>
-        <text x={W - R - 5} y={H - B - 6} textAnchor="end" fontSize={8} fill="var(--ink-muted)" letterSpacing="0.08em">
-          OUTSCORE EVERYBODY
-        </text>
+        {/* Corner captions only where both axes actually have a direction —
+            "strong both ways" is a lie about a plot of tempo against 3PA rate. */}
+        {!xM.neutral && !yM.neutral && (
+          <>
+            <text x={W - R - 5} y={T + 11} textAnchor="end" fontSize={8} fill="var(--ink-muted)" letterSpacing="0.08em">
+              STRONG BOTH
+            </text>
+            <text x={L + 5} y={H - B - 6} fontSize={8} fill="var(--ink-muted)" letterSpacing="0.08em">
+              WEAK BOTH
+            </text>
+          </>
+        )}
 
-        {/* Only the UNSELECTED teams get a dot. A selected team already has a
-            crest at that spot, and drawing a gray dot under it made the two
-            compete — at the small sizes the dot was winning, so the picked
-            teams read as fainter than the ones the reader did not pick. */}
-        {teams.filter((t) => !sel.has(t.name)).map((t) => (
-          <circle key={t.name} cx={X(t.oe)} cy={Y(t.de)} r={2.6} fill="var(--ink-muted)" fillOpacity={0.16} />
-        ))}
+        {/* Only the UNSELECTED teams get a dot when crests are on. A selected
+            team already has a mark there, and drawing a gray dot under it made
+            the two compete — at the small sizes the dot was winning, so the
+            picked teams read as fainter than the ones nobody picked. */}
+        {teams.filter((t) => !sel.has(t.name) || !logos).map((t) => {
+          const vx = t.m[xM.key], vy = t.m[yM.key];
+          if (vx == null || vy == null) return null;
+          const on = sel.has(t.name);
+          return (
+            <circle key={t.name} cx={X(vx)} cy={Y(vy)} r={on ? 4.5 : 2.6}
+              fill={on ? t.color : "var(--ink-muted)"} fillOpacity={on ? 0.95 : 0.16}
+              stroke={on ? "var(--paper)" : "none"} strokeWidth={0.8}
+              className={on ? "cursor-pointer" : undefined}
+              onPointerEnter={on ? () => setHover(t.name) : undefined}
+              onPointerLeave={on ? () => setHover(null) : undefined}
+            />
+          );
+        })}
 
-        {placed.map(({ p, x, y, base }) => (
+        {logos && placed.map(({ p, x, y, base }) => (
           Math.abs(y - base) > 1
             ? <line key={`ld${p.name}`} x1={x} y1={base} x2={x} y2={y} stroke="var(--ink-muted)" strokeWidth={0.7} opacity={0.55} />
             : null
         ))}
 
         <text x={(L + W - R) / 2} y={H - 5} textAnchor="middle" fontSize={8.5}
-          fill="var(--ink-muted)" letterSpacing="0.08em">ADJUSTED OFFENSE — POINTS PER 100 →</text>
+          fill="var(--ink-muted)" letterSpacing="0.08em">
+          {[xM.label.toUpperCase(), axisNote(xM), "→"].filter(Boolean).join(" ")}
+        </text>
         <text x={11} y={(T + H - B) / 2} fontSize={8.5} fill="var(--ink-muted)" letterSpacing="0.08em"
           textAnchor="middle" transform={`rotate(-90 11 ${(T + H - B) / 2})`}>
-          ← ADJUSTED DEFENSE — BETTER IS UP
+          {[yM.label.toUpperCase(), axisNote(yM), "↑"].filter(Boolean).join(" ")}
         </text>
       </svg>
 
@@ -387,7 +572,7 @@ function Plot({
           runs best-first — the dodge has to give the top of the sport its
           natural position — but at 250 crests the later ones occlude the
           earlier ones, and the reader is not looking for the 280th team. */}
-      {[...placed].reverse().map(({ p, x, y }) => {
+      {logos && [...placed].reverse().map(({ p, x, y }) => {
         const lit = hover === p.name;
         const pad = size <= 16 ? 3 : 2;
         return (
@@ -395,16 +580,14 @@ function Plot({
             key={p.name}
             className="absolute cursor-pointer rounded-full"
             style={{
-              left: `${(x / W) * 100}%`,
-              top: `${(y / H) * 100}%`,
+              left: `${(x / W) * 100}%`, top: `${(y / H) * 100}%`,
               transform: `translate(-50%,-50%) scale(${lit ? 1.5 : 1})`,
               zIndex: lit ? 50 : 1,
               // A paper disc behind every crest. Several schools' marks are
               // white or near-white and vanish into the page without it, and at
               // the dense sizes it also gives overlapping crests an edge so a
               // pile reads as many things rather than one smear.
-              width: size + pad * 2,
-              height: size + pad * 2,
+              width: size + pad * 2, height: size + pad * 2,
               background: "color-mix(in oklab, var(--paper) 88%, transparent)",
               boxShadow: lit ? "0 0 0 1.5px var(--coral)" : "0 0 0 0.5px var(--hairline)",
             }}
@@ -413,7 +596,7 @@ function Plot({
           >
             <span className="absolute inset-0 flex items-center justify-center">
               {p.id == null ? (
-                <span className="inline-flex items-center justify-center rounded-sm text-ink-soft font-semibold"
+                <span className="inline-flex items-center justify-center text-ink-soft font-semibold"
                   style={{ width: size, height: size, fontSize: size * 0.42 }} title={p.name}>
                   {p.name.slice(0, 2).toUpperCase()}
                 </span>
@@ -427,6 +610,68 @@ function Plot({
           </div>
         );
       })}
+
+      {hover && <Card team={teams.find((t) => t.name === hover)!} X={X} Y={Y} xM={xM} yM={yM}
+        mark={hoveredMark} W={W} H={H} />}
+    </div>
+  );
+}
+
+/**
+ * The hovered team's numbers, anchored on its mark.
+ *
+ * ANCHORED, NOT PARKED UNDER THE PLOT. A readout in a strip below makes the
+ * reader look away from the mark they are pointing at and then back again to
+ * check which one it was, which is most of the work of reading the chart.
+ *
+ * It flips rather than clips. The card is a few inches of unwrapping text and
+ * the plot's most interesting corner is the top right, which is exactly where a
+ * card drawn down-and-right would run off the edge — so it swaps to the other
+ * side of the mark past 60% across, and drops below near the top.
+ *
+ * pointer-events-none throughout: the card can cover neighbouring crests, and a
+ * tooltip that eats the hover of the thing behind it makes a dense cluster
+ * impossible to explore.
+ */
+function Card({
+  team, X, Y, xM, yM, mark, W, H,
+}: {
+  team: ScatterTeam; X: (v: number) => number; Y: (v: number) => number;
+  xM: Metric; yM: Metric; mark: { x: number; y: number } | null; W: number; H: number;
+}) {
+  const vx = team.m[xM.key], vy = team.m[yM.key];
+  if (vx == null || vy == null) return null;
+  // The mark's DODGED position when it has one — hovering a table row has no
+  // mark in hand, so fall back to where the data puts it.
+  const x = mark?.x ?? X(vx), y = mark?.y ?? Y(vy);
+  const flipX = x / W > 0.6;
+  const flipY = y / H < 0.22;
+
+  return (
+    <div className="absolute z-[60] pointer-events-none"
+      style={{ left: `${(x / W) * 100}%`, top: `${(y / H) * 100}%` }}>
+      <div
+        className="absolute rounded-lg border border-hairline bg-paper shadow-xl px-2.5 py-1.5 whitespace-nowrap"
+        style={{ [flipX ? "right" : "left"]: "1rem", [flipY ? "top" : "bottom"]: "0.85rem" }}
+      >
+        <div className="flex items-center gap-1.5">
+          {team.id != null && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={`/ttz-logos/${team.id}.png`} alt="" width={16} height={16}
+              className="object-contain" style={{ width: 16, height: 16 }} />
+          )}
+          <span className="text-[0.78rem] font-semibold text-ink">{team.name}</span>
+          <span className="text-[0.62rem] tabular text-ink-muted">
+            {team.record} · #{team.rank} · {confDisplay(team.conf)}
+          </span>
+        </div>
+        <div className="text-[0.65rem] text-ink-soft mt-0.5">
+          <span className="text-ink-muted">{xM.short}</span>{" "}
+          <span className="tabular">{fmtMetric(xM, vx)}</span>
+          <span className="text-ink-muted"> · {yM.short}</span>{" "}
+          <span className="tabular">{fmtMetric(yM, vy)}</span>
+        </div>
+      </div>
     </div>
   );
 }
