@@ -19,7 +19,7 @@ export async function generateMetadata({
     yearStr: year,
     tabLabel: "Shooting",
     segment: "shooting",
-    describe: "shooting splits and Four Factors, each ranked against the D-I field.",
+    describe: "an interactive shot chart, shooting and shot-profile splits ranked against the D-I field, plus shot-clock and assist-network breakdowns.",
   });
 }
 

@@ -273,8 +273,9 @@ export function TeamPageView({
   confRecords,
   shootingRanks,
   shotProfileRanks,
-  shotDefenseRanks,
-  fourFactorRanks,
+  // shotDefenseRanks and fourFactorRanks stay on the props type below and stay
+  // built upstream; they are not destructured because nothing renders them
+  // right now. See the note where those two sections used to be.
   scheduleGames,
   netRanks,
   teamSplits,
@@ -911,46 +912,19 @@ export function TeamPageView({
       </section>
       )}
 
-      {show.shooting && (
-      <section data-pane="shooting" className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <DistributionPanel title="Four Factors" ranks={fourFactorRanks} blurBody={preview}>
-          {current.four_factor_record && current.four_factor_record.games > 0 && (
-            <>
-              <div className="text-xs uppercase tracking-widest text-ink-muted font-medium mb-1">
-                Record when all three positive
-              </div>
-              <div className="flex items-baseline gap-3">
-                <span className="font-display text-5xl text-ink tabular leading-none">
-                  {current.four_factor_record.wins}-{current.four_factor_record.losses}
-                </span>
-                <span className="text-xs text-ink-muted">
-                  {`across ${current.four_factor_record.games} game${current.four_factor_record.games === 1 ? "" : "s"} where REB Diff > 0, FBP Diff > 0, 3PM Diff > 0`}
-                </span>
-              </div>
-            </>
-          )}
-        </DistributionPanel>
-      </section>
-      )}
+      {/* FOUR FACTORS AND SHOT DEFENSE ARE PULLED, 2026-09-10. Both were
+          DistributionPanels — a stack of rate-against-percentile bars — and
+          sitting under the shot chart they turned the back half of this tab
+          into the same bar drawn three dozen times.
 
-      {/* WHERE THE SHOTS COME FROM. Reconstructed from the play-by-play, so it
-          sits under Shooting with the rest of the shot-selection material
-          rather than in a tab named after the data source.
+          THE DATA IS STILL BUILT AND STILL PASSED IN. `fourFactorRanks` and
+          `shotDefenseRanks` are still assembled in lib/team-page-data.ts and
+          still declared on this component's props; only the two sections that
+          rendered them are gone, so bringing either back is re-adding JSX,
+          not rebuilding a pipeline.
 
-          The columns behind this have been computed per lineup and per player
-          since those pages were built; the team itself was never asked, which
-          is the gap this closes. Rates go back to 2014 — including 2021 as of
-          2026-09-02 — and the zone percentages start in 2022, so an older
-          season shows the rates and a dash for the rest.
-
-          Omitted entirely, not dashed, when there is no play-by-play at all. */}
-      {show.shooting && shotDefenseRanks && (
-        <section data-pane="shooting" className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {shotDefenseRanks
-            ? <DistributionPanel title="Shot Defense" ranks={shotDefenseRanks} blurBody={preview} />
-            : <div />}
-        </section>
-      )}
+          Four Factors also carried the "record when all three positive" line,
+          which has no other home on the site — it goes back with the panel. */}
 
       {/* Play-by-play derivatives. Both are reconstructed from the CBBD plays
           archive rather than reported by anyone, and both are absent before
