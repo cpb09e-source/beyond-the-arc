@@ -33,6 +33,7 @@ const COLUMNS: Array<{ title: string; links: FooterLink[] }> = [
     links: [
       { href: "/", label: "Team explorer" },
       { href: "/teams/games", label: "Team game logs" },
+      { href: "/teams/scatter", label: "Team scatter" },
       { href: "/conferences", label: "Conference rankings" },
       { href: "/scoreboard", label: "Scoreboard" },
     ],

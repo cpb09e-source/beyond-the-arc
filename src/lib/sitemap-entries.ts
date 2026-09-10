@@ -50,7 +50,7 @@ async function build(): Promise<MetadataRoute.Sitemap> {
 
   // Top-level pages — high priority, weekly refresh.
   for (const path of [
-    "", "/players", "/teams", "/coaches", "/portal", "/calc",
+    "", "/players", "/teams", "/teams/scatter", "/coaches", "/portal", "/calc",
     "/conferences", "/scoreboard", "/glossary", "/pricing", "/matchup", "/matchup/method",
   ]) {
     entries.push({

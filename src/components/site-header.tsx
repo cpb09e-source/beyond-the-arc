@@ -5,7 +5,7 @@ import { SiteLogo } from "@/components/site-logo";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import {
-  Search, ChevronDown, Table2, ListOrdered, Trophy, Swords, ArrowLeftRight,
+  Search, ChevronDown, Table2, ListOrdered, Trophy, Swords, ArrowLeftRight, ScatterChart,
   type LucideIcon,
 } from "lucide-react";
 import { SearchDialog } from "@/components/search/search-dialog";
@@ -66,10 +66,15 @@ const SUBNAV: Record<string, ReadonlyArray<SubnavItem>> = {
       desc: "Rate and compare full team seasons" },
     { href: "/teams/games", label: "Team Game Log Explorer", icon: ListOrdered,
       desc: "The best single-game team performances" },
+    // Not a table and not a ranked list, but a picture.
+    // The blurb names the axes rather than the chart, because "scatter plot"
+    // tells a reader what it is drawn as and nothing about what it answers.
+    { href: "/teams/scatter", label: "Team Scatter", icon: ScatterChart,
+      desc: "Offense against defense, every team, by logo" },
     { href: "/conferences", label: "Conference Power Rankings", icon: Trophy,
       desc: "How the leagues stack up against each other" },
-    // A third page type in this menu: not a table of the season and not a
-    // ranked list of nights, but a projection of a game that has not been
+    // A fourth page type in this menu: not a table of the season, not a
+    // ranked list of nights, not a plot, but a projection of a game that has not been
     // played. The blurb says the one thing the title does not — that the
     // pair, the floor and the absences are all yours to set.
     { href: "/matchup", label: "Matchup Predictor", icon: Swords,
