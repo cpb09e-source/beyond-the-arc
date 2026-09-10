@@ -67,7 +67,7 @@ export default async function TeamScatterPage() {
     // explorers' --page-max. This is panels and a chart, not a twelve-column
     // table that genuinely wants a 2560px monitor: at 80vw the plot ran past a
     // metre of screen, and a scatter's job is a shape taken in at once.
-    <section className="mx-auto max-w-[var(--page-narrow)] px-6 lg:px-10 pt-4 lg:pt-5 pb-10">
+    <section className="mx-auto max-w-[var(--page-narrow)] px-2 sm:px-6 lg:px-10 pt-4 lg:pt-5 pb-10">
       <PageHeading label="Team scatter" />
       <div className="mt-4">
         <TeamScatter teams={teams} />

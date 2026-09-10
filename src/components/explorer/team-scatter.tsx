@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { confDisplay } from "@/lib/conf-display";
 import { Select } from "@/components/select";
+import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
+import type { SearchableOption } from "@/components/explorer/searchable-select";
+import { ScopeCollapse } from "@/components/filters/scope-collapse";
+import { cn } from "@/lib/utils";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import {
   METRICS, METRIC_BY_KEY, METRIC_GROUPS, METRIC_PRESETS,
@@ -77,6 +81,8 @@ function crestSize(n: number, W: number, H: number): number {
   return Math.max(16, Math.min(30, Math.round(Math.sqrt((W * H) / Math.max(1, n)) * 0.4)));
 }
 
+const CONF_GROUP_LABELS = { power: "Power Conferences", midmajor: "Mid-Majors" } as const;
+
 type SortKey = "rank" | "name" | "x" | "y";
 
 /** Rows per page. Chosen to end level with the plot beside it, not for a round
@@ -99,11 +105,11 @@ const PANE_H = HEAD_H + PER_PAGE * ROW_H;
 export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
   const [confs, setConfs] = useState<Set<string>>(() => new Set(["ACC"]));
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
-  const [query, setQuery] = useState("");
   const [hover, setHover] = useState<string | null>(null);
   const [xKey, setXKey] = useState("adjoe");
   const [yKey, setYKey] = useState("adjde");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "rank", dir: 1 });
+  const [tableOpen, setTableOpen] = useState(false);
 
   const xM = METRIC_BY_KEY[xKey]!, yM = METRIC_BY_KEY[yKey]!;
 
@@ -118,12 +124,21 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
       .map(([code, n]) => ({ code, n }));
   }, [teams]);
 
-  // SPLIT, not just sorted. Thirty-one chips in one unbroken ribbon is a wall —
-  // the power leagues were already first but nothing said so, which made the
-  // order look arbitrary and left the reader scanning all thirty-one to find
-  // the six they wanted. Two labelled groups is the same information, findable.
-  const powerConfs = useMemo(() => allConfs.filter((c) => POWER_CONFS.has(c.code)), [allConfs]);
-  const midConfs = useMemo(() => allConfs.filter((c) => !POWER_CONFS.has(c.code)), [allConfs]);
+  // Power section first, then mid-majors, alpha within each: the picker renders
+  // its sections in the order the groups first appear in the options array, so
+  // the order here is the order on screen.
+  const confOptions = useMemo<SearchableOption[]>(
+    () => allConfs.map(({ code }) => ({
+      value: code,
+      label: confDisplay(code),
+      group: POWER_CONFS.has(code) ? "power" : "midmajor",
+    })),
+    [allConfs],
+  );
+  const teamOptions = useMemo<SearchableOption[]>(
+    () => [...teams].sort((a, b) => a.name.localeCompare(b.name)).map((t) => ({ value: t.name, label: t.name })),
+    [teams],
+  );
 
   const shown = useMemo(
     () => teams
@@ -145,27 +160,13 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
         : sort.dir * (val(a) - val(b)));
   }, [shown, sort, xKey, yKey]);
 
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return [];
-    return teams.filter((t) => t.name.toLowerCase().includes(q))
-      .sort((a, b) => a.rank - b.rank).slice(0, 8);
-  }, [teams, query]);
-
-  const toggleConf = (code: string) =>
-    setConfs((s) => {
-      const next = new Set(s);
-      if (next.has(code)) next.delete(code); else next.add(code);
-      return next;
-    });
-
-  const togglePick = (name: string) =>
-    setPicked((s) => {
-      const next = new Set(s);
-      if (next.has(name)) next.delete(name);
-      else if (next.size < MAX_TEAMS) next.add(name);
-      return next;
-    });
+  /** Values the picker must gray out: everything unpicked, once 25 are on. */
+  const atCap = useMemo(
+    () => (picked.size >= MAX_TEAMS
+      ? new Set(teams.map((t) => t.name).filter((n) => !picked.has(n)))
+      : undefined),
+    [teams, picked],
+  );
 
   const preset = (kind: "power" | "mid" | "top25" | "clear") => {
     if (kind === "clear") { setConfs(new Set()); setPicked(new Set()); return; }
@@ -183,100 +184,100 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
   const sortBy = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, dir: (s.dir * -1) as 1 | -1 } : { key, dir: 1 }));
 
+  const summary = `${shown.length} of ${teams.length} teams · ${xM.short} vs ${yM.short}`;
+
   return (
     <div>
-      {/* ONE TOOLBAR, FOUR LABELLED ROWS. These were loose rows of controls
-          floating on the page with nothing holding them together and nothing
-          saying which did what — the chips in particular read as a ribbon of
-          debris. A frame and a row label each is the whole fix. */}
-      <div className="rounded-lg border border-hairline bg-paper-deep/40 divide-y divide-hairline mb-3">
-        <Row label="Plot">
-          <Picker label="X" value={xKey} onChange={setXKey} />
-          <Picker label="Y" value={yKey} onChange={setYKey} />
-          <Btn onClick={() => { setXKey(yKey); setYKey(xKey); }} title="Swap the two axes">Flip</Btn>
-          {/* Presets resolve to an X/Y pair and then clear themselves — the
-              control is a shortcut, not a mode, and leaving one selected after
-              the reader edits an axis by hand would make it a label that lies. */}
-          <Select value="" onChange={(v) => {
-            const p = METRIC_PRESETS.find((q) => q.label === v);
-            if (p) { setXKey(p.x); setYKey(p.y); }
-          }} compact ariaLabel="Metric presets" className="w-40">
-            <option value="">Presets…</option>
-            {METRIC_PRESETS.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}
-          </Select>
-        </Row>
-
-        <Row label="Show">
-          <Btn onClick={() => preset("power")}>Power 6</Btn>
-          <Btn onClick={() => preset("mid")}>All mid-majors</Btn>
-          <Btn onClick={() => preset("top25")}>Top {MAX_TEAMS}</Btn>
-          <Btn onClick={() => preset("clear")}>Clear</Btn>
-          <span className="text-xs text-ink-muted tabular ml-auto pl-2 shrink-0">
-            {shown.length} of {teams.length}
-          </span>
-        </Row>
-
-        <Row label="Leagues">
-          {powerConfs.map(({ code, n }) => (
-            <Chip key={code} on={confs.has(code)} onClick={() => toggleConf(code)}
-              title={`${confDisplay(code)} — ${n} teams`}>{confDisplay(code)}</Chip>
-          ))}
-          <span className="w-px self-stretch bg-hairline mx-1" aria-hidden />
-          {midConfs.map(({ code, n }) => (
-            <Chip key={code} on={confs.has(code)} onClick={() => toggleConf(code)}
-              title={`${confDisplay(code)} — ${n} teams`}>{confDisplay(code)}</Chip>
-          ))}
-        </Row>
-
-        <Row label="Teams">
-          <div className="relative">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={picked.size >= MAX_TEAMS ? "25 is the limit" : "Add a team…"}
-              disabled={picked.size >= MAX_TEAMS}
-              className="text-sm rounded-full border border-hairline bg-paper px-3 py-1 w-36 focus:w-44 transition-[width] outline-none focus:border-coral disabled:opacity-50"
+      {/* The explorer's scope controls, and its components. This was a bespoke
+          panel of pills and a hand-rolled search box, which is exactly the kind
+          of second implementation that drifts: the team explorer already has a
+          searchable multi-select with keyboard navigation and a mobile collapse,
+          and a reader who has used one page should not have to learn another
+          idiom on the next. ScopeCollapse folds all of it behind one line on a
+          phone and is always open from md. */}
+      <ScopeCollapse summary={summary}>
+        <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+          <Field label="X axis">
+            <MetricSelect value={xKey} onChange={setXKey} label="X" />
+          </Field>
+          <Field label="Y axis">
+            <MetricSelect value={yKey} onChange={setYKey} label="Y" />
+          </Field>
+          <Field label="Conference">
+            <SearchableMultiSelect
+              value={[...confs]}
+              options={confOptions}
+              onChange={(v) => setConfs(new Set(v))}
+              placeholder="Type to filter…"
+              emptyLabel="None"
+              ariaLabel="Conferences"
+              groupLabels={CONF_GROUP_LABELS}
+              className="w-44"
             />
-            {matches.length > 0 && (
-              <ul className="absolute z-30 mt-1 w-56 rounded-md border border-hairline bg-paper shadow-lg overflow-hidden">
-                {matches.map((t) => (
-                  <li key={t.name}>
-                    <button type="button" onClick={() => { togglePick(t.name); setQuery(""); }}
-                      className="w-full text-left text-sm px-2.5 py-1.5 hover:bg-paper-deep/60 flex justify-between gap-2">
-                      <span className="truncate">{t.name}</span>
-                      <span className="tabular text-ink-muted shrink-0">#{t.rank}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+          </Field>
+          <Field label="Teams">
+            <SearchableMultiSelect
+              value={[...picked]}
+              options={teamOptions}
+              onChange={(v) => setPicked(new Set(v.slice(0, MAX_TEAMS)))}
+              placeholder="Type to filter…"
+              emptyLabel="None"
+              ariaLabel="Teams"
+              // AT THE CAP, the unpicked rows go inert rather than vanishing.
+              // A picker that hides what you cannot choose reads as broken data;
+              // one that grays it reads as a limit, which is what it is.
+              disabledValues={atCap}
+              className="w-52"
+            />
+          </Field>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Btn onClick={() => { setXKey(yKey); setYKey(xKey); }} title="Swap the two axes">Flip</Btn>
+            {/* Presets resolve to an X/Y pair and then clear themselves — the
+                control is a shortcut, not a mode, and one left selected after
+                the reader edits an axis by hand is a label that lies. */}
+            <Select value="" onChange={(v) => {
+              const p = METRIC_PRESETS.find((q) => q.label === v);
+              if (p) { setXKey(p.x); setYKey(p.y); }
+            }} compact ariaLabel="Metric presets" className="w-36">
+              <option value="">Presets…</option>
+              {METRIC_PRESETS.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}
+            </Select>
+            <Btn onClick={() => preset("power")}>Power 6</Btn>
+            <Btn onClick={() => preset("mid")}>Mid Majors</Btn>
+            <Btn onClick={() => preset("top25")}>Top {MAX_TEAMS}</Btn>
+            <Btn onClick={() => preset("clear")}>Clear</Btn>
           </div>
-          {[...picked].map((name) => (
-            <button key={name} type="button" onClick={() => togglePick(name)} title="Remove"
-              className="text-xs rounded-full pl-2.5 pr-2 py-1 border border-coral/50 bg-coral/10 text-coral inline-flex items-center gap-1 hover:border-coral">
-              {name}<span aria-hidden className="opacity-60">×</span>
-            </button>
-          ))}
-          {picked.size > 0 && (
-            <span className="text-xs text-ink-muted tabular ml-auto pl-2 shrink-0">
-              {picked.size} of {MAX_TEAMS}
-            </span>
-          )}
-        </Row>
+        </div>
+      </ScopeCollapse>
+
+      <div className="flex items-baseline justify-between gap-3 mb-2">
+        <h2 className="text-base text-ink">
+          <span className="tabular font-semibold">{shown.length}</span> teams
+        </h2>
+        {/* THE TABLE IS FOLDED ON A PHONE. It is 870px of column, and with it
+            open above the chart a reader had to scroll past every row to reach
+            the thing they came for. On lg it is simply always there. */}
+        <button
+          type="button"
+          onClick={() => setTableOpen((o) => !o)}
+          aria-expanded={tableOpen}
+          className="lg:hidden text-xs uppercase tracking-widest text-ink-muted hover:text-ink"
+        >
+          {tableOpen ? "Hide teams" : "Show teams"}
+        </button>
       </div>
 
-      <h2 className="text-base text-ink mb-2">
-        <span className="tabular font-semibold">{shown.length}</span> teams
-      </h2>
-
-      {/* Table first in the DOM and on a phone, where a wide plot is the worse
-          of the two. Side by side from lg, table fixed and plot elastic. */}
+      {/* Plot first on a phone, where the table is the thing you open on
+          purpose. Side by side from lg, table fixed and plot elastic. */}
       <div className="flex flex-col lg:flex-row gap-4 items-start">
-        <TeamTable
-          rows={sorted} xM={xM} yM={yM} sort={sort} onSort={sortBy}
-          hover={hover} setHover={setHover}
-        />
-        <div className="flex-1 min-w-0 w-full">
+        <div className={cn("w-full lg:w-auto order-2 lg:order-1", !tableOpen && "hidden lg:block")}>
+          <TeamTable
+            rows={sorted} xM={xM} yM={yM} sort={sort} onSort={sortBy}
+            hover={hover} setHover={setHover}
+          />
+        </div>
+        <div className="flex-1 min-w-0 w-full order-1 lg:order-2">
           <Plot
             teams={teams} shown={shown} xM={xM} yM={yM}
             hover={hover} setHover={setHover}
@@ -289,61 +290,44 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
 
 /* -------------------------------- controls -------------------------------- */
 
-/** A labelled row of the toolbar. The label is a fixed width so all four line
- *  up down the left — that alignment is what makes it read as one panel. */
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+/** Same label-over-control field the team explorer uses, so the two scope bars
+ *  read as the same control set rather than two house styles. */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-2 px-2.5 py-2">
-      <span className="text-[0.62rem] uppercase tracking-[0.14em] text-ink-muted shrink-0 w-[4.2rem] pt-1">
+    <label className="flex flex-col gap-1">
+      <span className="text-xs uppercase tracking-widest text-ink-muted font-medium">
         {label}
       </span>
-      <div className="flex flex-wrap items-center gap-1 flex-1 min-w-0">{children}</div>
-    </div>
+      {children}
+    </label>
   );
 }
 
 function Btn({ onClick, title, children }: { onClick: () => void; title?: string; children: React.ReactNode }) {
   return (
     <button type="button" onClick={onClick} title={title}
-      className="text-[0.68rem] uppercase tracking-[0.08em] rounded-full border border-hairline px-3 py-1 text-ink-soft hover:border-ink-muted hover:text-ink transition-colors">
+      className="h-8 text-xs uppercase tracking-[0.08em] rounded-md border border-hairline px-2.5 whitespace-nowrap shrink-0 text-ink-soft hover:border-ink-muted hover:text-ink transition-colors">
       {children}
     </button>
   );
 }
 
-function Chip({ on, onClick, title, children }: {
-  on: boolean; onClick: () => void; title: string; children: React.ReactNode;
-}) {
-  return (
-    <button type="button" onClick={onClick} aria-pressed={on} title={title}
-      className={`text-xs rounded-full px-2.5 py-1 border transition-colors ${
-        on ? "border-coral bg-coral/12 text-coral font-semibold"
-           : "border-hairline text-ink-soft hover:border-ink-muted hover:text-ink"
-      }`}>
-      {children}
-    </button>
-  );
-}
-
-/** Axis metric picker. A native select, grouped — twenty-two options is past
- *  what a row of chips can carry, and the browser's own list is better at this
- *  than anything hand-rolled would be on a phone. */
-function Picker({ label, value, onChange }: {
+/** Axis metric picker. Grouped, because twenty-two options is past what a row
+ *  of chips can carry — and it is the site's Select, so its list is drawn by
+ *  the page rather than by Windows. */
+function MetricSelect({ label, value, onChange }: {
   label: string; value: string; onChange: (v: string) => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-1.5">
-      <span className="text-[0.6rem] uppercase tracking-[0.14em] text-ink-muted shrink-0">{label}</span>
-      <Select value={value} onChange={onChange} compact ariaLabel={`${label} axis metric`} className="w-52">
-        {METRIC_GROUPS.map((g) => (
-          <optgroup key={g} label={g}>
-            {METRICS.filter((m) => m.group === g).map((m) => (
-              <option key={m.key} value={m.key}>{m.label}</option>
-            ))}
-          </optgroup>
-        ))}
-      </Select>
-    </div>
+    <Select value={value} onChange={onChange} compact ariaLabel={`${label} axis metric`} className="w-52">
+      {METRIC_GROUPS.map((g) => (
+        <optgroup key={g} label={g}>
+          {METRICS.filter((m) => m.group === g).map((m) => (
+            <option key={m.key} value={m.key}>{m.label}</option>
+          ))}
+        </optgroup>
+      ))}
+    </Select>
   );
 }
 
@@ -474,8 +458,6 @@ function Plot({
   hover: string | null; setHover: (v: string | null) => void;
 }) {
   const L = 52, R = 20, T = 16, B = 44;
-  const H = PANE_H;
-
   /**
    * THE viewBox IS THE PIXEL BOX, measured rather than assumed.
    *
@@ -502,6 +484,14 @@ function Plot({
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+  // A PHONE GETS A SHORTER PLOT. PANE_H is the height of a 25-row table, which
+  // is the right pairing when the two sit side by side — but stacked on a
+  // 370px-wide screen it is a 370x870 box, a portrait sliver nobody can read a
+  // cloud in. Capping the height against the measured width keeps the box in
+  // sensible proportion there and changes nothing on a desktop, where 1.3x the
+  // width is already past PANE_H.
+  const H = Math.min(PANE_H, Math.round(W * 1.3));
+
 
   const geo = useMemo(() => {
     // THE FRAME FITS THE SELECTION, NOT THE COUNTRY. It used to be the full D-I
@@ -608,19 +598,6 @@ function Plot({
           </g>
         ))}
 
-        {/* Corner captions only where both axes actually have a direction —
-            "strong both ways" is a lie about a plot of tempo against 3PA rate. */}
-        {!xM.neutral && !yM.neutral && (
-          <>
-            <text x={W - R - 5} y={T + 11} textAnchor="end" fontSize={10} fill="var(--ink-muted)" letterSpacing="0.08em">
-              STRONG BOTH
-            </text>
-            <text x={L + 5} y={H - B - 6} fontSize={10} fill="var(--ink-muted)" letterSpacing="0.08em">
-              WEAK BOTH
-            </text>
-          </>
-        )}
-
         {/* NOTHING UNSELECTED IS DRAWN. The whole D-I field used to sit behind
             the selection as faint dots; at 365 of them that is most of the ink
             on the page, and it made a small selection look like a handful of
@@ -632,15 +609,35 @@ function Plot({
             : null
         ))}
 
+        {/* WORSE, the metric, BETTER — one line, three tspans, in the order the
+            axis runs. Pinned to the two ends they were a long way from the name
+            they qualified; together they read as a sentence about that axis.
+
+            The METRIC is the bold one; the direction words are the annotation
+            and stay at normal weight. Red for worse, green for better, which is
+            the site's own good/bad pair rather than the accent — the accent is
+            already doing selection elsewhere on this page. Neither appears on a
+            metric with no good direction: tempo has no worse end. */}
         <text x={(L + W - R) / 2} y={H - 5} textAnchor="middle" fontSize={11.5}
-          fill="var(--ink-muted)" letterSpacing="0.08em">
-          {xM.label.toUpperCase()}
-          {better(xM) && <tspan dx="10" fill="var(--coral)" fontWeight={700}>BETTER →</tspan>}
+          fill="var(--ink-soft)" letterSpacing="0.08em">
+          {better(xM) && <tspan fill="var(--bad)">← WORSE</tspan>}
+          <tspan dx={better(xM) ? 12 : 0} fontWeight={700}>{xM.label.toUpperCase()}</tspan>
+          {better(xM) && <tspan dx={12} fill="var(--good)">BETTER →</tspan>}
         </text>
-        <text x={11} y={(T + H - B) / 2} fontSize={11.5} fill="var(--ink-muted)" letterSpacing="0.08em"
-          textAnchor="middle" transform={`rotate(-90 11 ${(T + H - B) / 2})`}>
-          {yM.label.toUpperCase()}
-          {better(yM) && <tspan dx="10" fill="var(--coral)" fontWeight={700}>BETTER ↑</tspan>}
+
+        {/* Rotated as one line, so the same reading order runs bottom to top:
+            worse at the bottom of the axis, better at the top.
+
+            THE ARROWS ARE SIDEWAYS ON PURPOSE. The whole label is rotated -90,
+            which turns every glyph with it — an up arrow typed here comes out
+            pointing LEFT on screen. The pair that renders as down-then-up after
+            the rotation is the same left-and-right pair the x-axis uses. */}
+        <text x={11} y={(T + H - B) / 2} fontSize={11.5} fill="var(--ink-soft)"
+          letterSpacing="0.08em" textAnchor="middle"
+          transform={`rotate(-90 11 ${(T + H - B) / 2})`}>
+          {better(yM) && <tspan fill="var(--bad)">← WORSE</tspan>}
+          <tspan dx={better(yM) ? 12 : 0} fontWeight={700}>{yM.label.toUpperCase()}</tspan>
+          {better(yM) && <tspan dx={12} fill="var(--good)">BETTER →</tspan>}
         </text>
       </svg>
 
