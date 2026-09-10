@@ -82,18 +82,16 @@ export default async function TeamScatterPage() {
     .sort((a, b) => a.rank - b.rank);
 
   return (
-    <section className="mx-auto max-w-[var(--page-max)] px-6 lg:px-10 pt-4 lg:pt-5 pb-10">
+    // --page-narrow, the player/team/coach page measure, rather than the
+    // explorers' --page-max. This is panels and a chart, not a twelve-column
+    // table that genuinely wants a 2560px monitor: at 80vw the plot ran past a
+    // metre of screen, and a scatter's job is a shape taken in at once.
+    <section className="mx-auto max-w-[var(--page-narrow)] px-6 lg:px-10 pt-4 lg:pt-5 pb-10">
       <PageHeading
         label="Team scatter"
         sub={`Any two metrics, all ${teams.length} Division I teams, ${seasonLabel}. Better is up and to the right.`}
       />
-      {/* 78rem, not the full --page-max. That token is 88rem at its narrowest
-          and grows with the viewport because it is sized for the explorers'
-          twelve-column tables; a chart taking all of it ran past 1300px and a
-          metre of screen. A scatter's job is a shape you take in at once, and
-          past about 900px of PLOT the eye has to travel to compare two corners
-          of the same cloud — the table beside it is what earns the rest. */}
-      <div className="mt-4 max-w-[78rem]">
+      <div className="mt-4">
         <TeamScatter teams={teams} season={SEASON} />
       </div>
     </section>

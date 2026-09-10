@@ -14,10 +14,13 @@ import {
  * WHY THE SELECTION IS HALF THE DESIGN. A dot is 6px and a crest is 24px, so a
  * logo carries sixteen times the area — and there are 365 of them, thickest
  * exactly where the cloud is already thickest. Drawing every crest at once is a
- * pile, not a chart. So the reader picks, and everything unpicked stays on the
- * plot as a faint dot: a selection is read against the whole country rather
- * than against its own panel's edges, which is what stops the ACC and the
- * Patriot League producing identical-looking pictures.
+ * pile, not a chart. So the reader picks, and ONLY the picked teams are drawn.
+ *
+ * The whole D-I field used to sit behind them as faint dots. At 365 of those
+ * it was most of the ink on the page, and a small selection read as a handful
+ * of crests dropped on a field of static. The national context they carried is
+ * now the D-I median crosshair, which costs two lines instead of 365 marks —
+ * and it matters more than before, because the axes fit the selection.
  *
  * BETTER IS ALWAYS UP AND TO THE RIGHT. Adjusted defensive rating is better
  * when it is low, turnover rate is better when it is low, and once the axes are
@@ -175,7 +178,7 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
             type="button"
             onClick={() => setLogos((v) => !v)}
             aria-pressed={logos}
-            className={`text-[0.6rem] uppercase tracking-[0.1em] rounded-full border px-2.5 py-0.5 transition-colors ${
+            className={`text-[0.68rem] uppercase tracking-[0.08em] rounded-full border px-3 py-1 transition-colors ${
               logos ? "border-coral bg-coral/12 text-coral font-semibold" : "border-hairline text-ink-soft hover:text-ink"
             }`}
           >
@@ -187,7 +190,7 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
               const p = METRIC_PRESETS.find((q) => q.label === e.target.value);
               if (p) { setXKey(p.x); setYKey(p.y); }
             }}
-            className="text-[0.68rem] rounded-full border border-hairline bg-paper px-2 py-0.5 text-ink-soft"
+            className="text-xs rounded-full border border-hairline bg-paper px-2.5 py-1 text-ink-soft"
           >
             <option value="">Presets…</option>
             {METRIC_PRESETS.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}
@@ -199,7 +202,7 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
           <Btn onClick={() => preset("mid")}>All mid-majors</Btn>
           <Btn onClick={() => preset("top25")}>Top {MAX_TEAMS}</Btn>
           <Btn onClick={() => preset("clear")}>Clear</Btn>
-          <span className="text-[0.62rem] text-ink-muted tabular ml-auto pl-2 shrink-0">
+          <span className="text-xs text-ink-muted tabular ml-auto pl-2 shrink-0">
             {shown.length} of {teams.length}
           </span>
         </Row>
@@ -223,14 +226,14 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
               onChange={(e) => setQuery(e.target.value)}
               placeholder={picked.size >= MAX_TEAMS ? "25 is the limit" : "Add a team…"}
               disabled={picked.size >= MAX_TEAMS}
-              className="text-[0.7rem] rounded-full border border-hairline bg-paper px-2.5 py-0.5 w-32 focus:w-40 transition-[width] outline-none focus:border-coral disabled:opacity-50"
+              className="text-sm rounded-full border border-hairline bg-paper px-3 py-1 w-36 focus:w-44 transition-[width] outline-none focus:border-coral disabled:opacity-50"
             />
             {matches.length > 0 && (
               <ul className="absolute z-30 mt-1 w-56 rounded-md border border-hairline bg-paper shadow-lg overflow-hidden">
                 {matches.map((t) => (
                   <li key={t.name}>
                     <button type="button" onClick={() => { togglePick(t.name); setQuery(""); }}
-                      className="w-full text-left text-[0.72rem] px-2.5 py-1 hover:bg-paper-deep/60 flex justify-between gap-2">
+                      className="w-full text-left text-sm px-2.5 py-1.5 hover:bg-paper-deep/60 flex justify-between gap-2">
                       <span className="truncate">{t.name}</span>
                       <span className="tabular text-ink-muted shrink-0">#{t.rank}</span>
                     </button>
@@ -241,19 +244,19 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
           </div>
           {[...picked].map((name) => (
             <button key={name} type="button" onClick={() => togglePick(name)} title="Remove"
-              className="text-[0.62rem] rounded-full pl-2 pr-1.5 py-0.5 border border-coral/50 bg-coral/10 text-coral inline-flex items-center gap-1 hover:border-coral">
+              className="text-xs rounded-full pl-2.5 pr-2 py-1 border border-coral/50 bg-coral/10 text-coral inline-flex items-center gap-1 hover:border-coral">
               {name}<span aria-hidden className="opacity-60">×</span>
             </button>
           ))}
           {picked.size > 0 && (
-            <span className="text-[0.62rem] text-ink-muted tabular ml-auto pl-2 shrink-0">
+            <span className="text-xs text-ink-muted tabular ml-auto pl-2 shrink-0">
               {picked.size} of {MAX_TEAMS}
             </span>
           )}
         </Row>
       </div>
 
-      <h2 className="text-sm text-ink mb-2">
+      <h2 className="text-base text-ink mb-2">
         <span className="tabular font-semibold">{shown.length}</span> teams
         <span className="text-ink-muted"> · {xM.label} vs {yM.label}</span>
       </h2>
@@ -270,10 +273,10 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
             teams={teams} shown={shown} xM={xM} yM={yM} logos={logos}
             hover={hover} setHover={setHover}
           />
-          <p className="mt-2 text-[0.62rem] text-ink-muted leading-snug">
-            {season - 1}-{String(season).slice(2)} season. Unselected teams stay on as faint
-            dots, so a selection is read against the whole country. Where a metric has a good
-            direction the axis is turned so that better is up and to the right.
+          <p className="mt-2 text-xs text-ink-muted leading-snug">
+            {season - 1}-{String(season).slice(2)} season. The axes fit the teams shown, so the
+            dashed crosshair — the D-I median — is the fixed reference. Where a metric has a
+            good direction the axis is turned so that better is up and to the right.
           </p>
         </div>
       </div>
@@ -288,7 +291,7 @@ export function TeamScatter({ teams, season }: { teams: ScatterTeam[]; season: n
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-2 px-2.5 py-2">
-      <span className="text-[0.52rem] uppercase tracking-[0.16em] text-ink-muted shrink-0 w-[3.6rem] pt-1">
+      <span className="text-[0.62rem] uppercase tracking-[0.14em] text-ink-muted shrink-0 w-[4.2rem] pt-1">
         {label}
       </span>
       <div className="flex flex-wrap items-center gap-1 flex-1 min-w-0">{children}</div>
@@ -299,7 +302,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 function Btn({ onClick, title, children }: { onClick: () => void; title?: string; children: React.ReactNode }) {
   return (
     <button type="button" onClick={onClick} title={title}
-      className="text-[0.6rem] uppercase tracking-[0.1em] rounded-full border border-hairline px-2.5 py-0.5 text-ink-soft hover:border-ink-muted hover:text-ink transition-colors">
+      className="text-[0.68rem] uppercase tracking-[0.08em] rounded-full border border-hairline px-3 py-1 text-ink-soft hover:border-ink-muted hover:text-ink transition-colors">
       {children}
     </button>
   );
@@ -310,7 +313,7 @@ function Chip({ on, onClick, title, children }: {
 }) {
   return (
     <button type="button" onClick={onClick} aria-pressed={on} title={title}
-      className={`text-[0.62rem] rounded-full px-2 py-0.5 border transition-colors ${
+      className={`text-xs rounded-full px-2.5 py-1 border transition-colors ${
         on ? "border-coral bg-coral/12 text-coral font-semibold"
            : "border-hairline text-ink-soft hover:border-ink-muted hover:text-ink"
       }`}>
@@ -327,9 +330,9 @@ function Picker({ label, value, onChange }: {
 }) {
   return (
     <label className="inline-flex items-center gap-1 rounded-full border border-hairline bg-paper pl-2 pr-1 py-0.5">
-      <span className="text-[0.52rem] uppercase tracking-[0.14em] text-ink-muted">{label}</span>
+      <span className="text-[0.6rem] uppercase tracking-[0.14em] text-ink-muted">{label}</span>
       <select value={value} onChange={(e) => onChange(e.target.value)}
-        className="text-[0.68rem] bg-transparent text-ink outline-none max-w-[11rem]">
+        className="text-xs bg-transparent text-ink outline-none max-w-[12rem]">
         {METRIC_GROUPS.map((g) => (
           <optgroup key={g} label={g}>
             {METRICS.filter((m) => m.group === g).map((m) => (
@@ -353,7 +356,7 @@ function TeamTable({
 }) {
   if (!rows.length) {
     return (
-      <div className="w-full lg:w-[22rem] shrink-0 rounded-lg border border-hairline p-4 text-xs text-ink-muted">
+      <div className="w-full lg:w-[22rem] shrink-0 rounded-lg border border-hairline p-4 text-sm text-ink-muted">
         Nothing selected. Pick a league or a team above.
       </div>
     );
@@ -363,7 +366,7 @@ function TeamTable({
   // it is a control, and a control that lies about its own state is worse than
   // one that says nothing.
   const arrow = (k: SortKey) => (sort.key === k ? (sort.dir === 1 ? " ↑" : " ↓") : "");
-  const th = "px-1.5 py-1 text-[0.55rem] uppercase tracking-[0.1em] text-ink-muted font-semibold cursor-pointer hover:text-ink select-none";
+  const th = "px-2 py-1.5 text-xs uppercase tracking-wide text-ink-muted font-semibold cursor-pointer hover:text-ink select-none";
 
   return (
     <div className="w-full lg:w-[22rem] shrink-0 rounded-lg border border-hairline overflow-hidden">
@@ -393,22 +396,22 @@ function TeamTable({
                   hover === t.name ? "bg-coral/10" : "hover:bg-paper-deep/50"
                 }`}
               >
-                <td className="px-1.5 py-1 text-right text-[0.62rem] tabular text-ink-muted">{t.rank}</td>
-                <td className="px-1.5 py-1">
+                <td className="px-2 py-1.5 text-right text-xs tabular text-ink-muted">{t.rank}</td>
+                <td className="px-2 py-1.5">
                   <span className="flex items-center gap-1.5 min-w-0">
                     {t.id != null && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={`/ttz-logos/${t.id}.png`} alt="" width={14} height={14}
                         loading="lazy" className="object-contain shrink-0" style={{ width: 14, height: 14 }} />
                     )}
-                    <span className="text-[0.7rem] text-ink truncate">{t.name}</span>
-                    <span className="text-[0.55rem] tabular text-ink-muted shrink-0 ml-auto">{t.record}</span>
+                    <span className="text-sm text-ink truncate">{t.name}</span>
+                    <span className="text-[0.65rem] tabular text-ink-muted shrink-0 ml-auto">{t.record}</span>
                   </span>
                 </td>
-                <td className="px-1.5 py-1 text-right text-[0.68rem] tabular text-ink-soft">
+                <td className="px-2 py-1.5 text-right text-sm tabular text-ink-soft">
                   {fmtMetric(xM, t.m[xM.key] ?? null)}
                 </td>
-                <td className="px-1.5 py-1 text-right text-[0.68rem] tabular text-ink-soft">
+                <td className="px-2 py-1.5 text-right text-sm tabular text-ink-soft">
                   {fmtMetric(yM, t.m[yM.key] ?? null)}
                 </td>
               </tr>
@@ -431,15 +434,30 @@ function Plot({
   const W = 760, H = 520, L = 52, R = 20, T = 16, B = 44;
 
   const geo = useMemo(() => {
-    const xs = teams.map((t) => t.m[xM.key]).filter((v): v is number => v != null);
-    const ys = teams.map((t) => t.m[yM.key]).filter((v): v is number => v != null);
+    // THE FRAME FITS THE SELECTION, NOT THE COUNTRY. It used to be the full D-I
+    // extent, which was only readable because every unselected team was on the
+    // plot as a faint dot filling the space. With those gone an 18-team league
+    // sat in one corner of a mostly empty box. Fitting the axes to what is
+    // actually drawn is also what makes two crests near each other separable,
+    // which is the whole reason to narrow a selection in the first place.
+    //
+    // The cost is real and worth naming: the axis range now moves when the
+    // selection does, so two screenshots of this page are not comparable
+    // unless the ticks are read. The D-I median crosshair below is the guard
+    // against that — it is the one fixed landmark, and it is drawn from ALL
+    // teams rather than from the selection for exactly that reason.
+    const pick = (src: ScatterTeam[], k: string) =>
+      src.map((t) => t.m[k]).filter((v): v is number => v != null);
+    const base = shown.length ? shown : teams;
+    const xs = pick(base, xM.key), ys = pick(base, yM.key);
     const pad = (a: number[]) => {
       const lo = Math.min(...a), hi = Math.max(...a);
-      const m = (hi - lo) * 0.04 || 1;
+      const m = (hi - lo) * 0.07 || 1;
       return [lo - m, hi + m] as const;
     };
     const [x0, x1] = pad(xs), [y0, y1] = pad(ys);
     const mid = (a: number[]) => [...a].sort((p, q) => p - q)[Math.floor(a.length / 2)] ?? 0;
+    const allX = pick(teams, xM.key), allY = pick(teams, yM.key);
 
     // INVERTED WHEN LOWER IS BETTER, so better is always right and always up.
     const X = (v: number) => {
@@ -451,8 +469,8 @@ function Plot({
       // Screen y grows downward, so the un-inverted case already flips once.
       return T + (yM.lowerBetter ? t : 1 - t) * (H - T - B);
     };
-    return { X, Y, x0, x1, y0, y1, mx: mid(xs), my: mid(ys) };
-  }, [teams, xM, yM, W, H]);
+    return { X, Y, x0, x1, y0, y1, mx: mid(allX), my: mid(allY) };
+  }, [teams, shown, xM, yM, W, H]);
 
   const { X, Y } = geo;
   const size = crestSize(shown.length);
@@ -488,7 +506,6 @@ function Plot({
       });
   }, [shown, X, Y, size, logos, xM, yM]);
 
-  const sel = useMemo(() => new Set(shown.map((t) => t.name)), [shown]);
   // The DODGED position, not the data position — the card has to sit against
   // the crest the pointer is actually over, which for a nudged mark is not
   // where its numbers put it.
@@ -498,6 +515,10 @@ function Plot({
   // three-point rate would be an editorial claim the data does not make.
   const axisNote = (m: Metric) => (m.neutral ? "" : "— BETTER");
 
+  // A reference line only means something inside the frame — see the note on
+  // the crosshair below.
+  const inRange = (v: number, a: number, b: number) => v > Math.min(a, b) && v < Math.max(a, b);
+
   return (
     <div className="relative w-full" style={{ aspectRatio: `${W} / ${H}` }}>
       <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 w-full h-full" role="img"
@@ -505,49 +526,71 @@ function Plot({
         {niceTicks(geo.x0, geo.x1).map((v) => (
           <g key={`x${v}`}>
             <line x1={X(v)} y1={T} x2={X(v)} y2={H - B} stroke="var(--hairline)" />
-            <text x={X(v)} y={H - B + 12} textAnchor="middle" fontSize={8.5}
+            <text x={X(v)} y={H - B + 12} textAnchor="middle" fontSize={11.5}
               fill="var(--ink-muted)" className="tabular">{fmtMetric(xM, v)}</text>
           </g>
         ))}
         {niceTicks(geo.y0, geo.y1).map((v) => (
           <g key={`y${v}`}>
             <line x1={L} y1={Y(v)} x2={W - R} y2={Y(v)} stroke="var(--hairline)" />
-            <text x={L - 6} y={Y(v) + 3} textAnchor="end" fontSize={8.5}
+            <text x={L - 6} y={Y(v) + 3} textAnchor="end" fontSize={11.5}
               fill="var(--ink-muted)" className="tabular">{fmtMetric(yM, v)}</text>
           </g>
         ))}
 
-        <line x1={X(geo.mx)} y1={T} x2={X(geo.mx)} y2={H - B} stroke="var(--ink-muted)" strokeDasharray="3 3" opacity={0.5} />
-        <line x1={L} y1={Y(geo.my)} x2={W - R} y2={Y(geo.my)} stroke="var(--ink-muted)" strokeDasharray="3 3" opacity={0.5} />
+        {/* THE D-I MEDIAN, from every team rather than from the selection, and
+            drawn only when it falls inside the frame. With the background dots
+            gone this is the only national context left on the plot, and the
+            axes now move with the selection — so without it a reader has no way
+            to tell "good" from "good for this league". Skipped rather than
+            clamped to an edge, because a reference line pinned to the border
+            would claim the median is at the edge of the range. */}
+        {inRange(geo.mx, geo.x0, geo.x1) && (
+          <g>
+            <line x1={X(geo.mx)} y1={T} x2={X(geo.mx)} y2={H - B}
+              stroke="var(--ink-muted)" strokeDasharray="3 3" opacity={0.5} />
+            <text x={X(geo.mx) + 3} y={H - B - 4} fontSize={9.5} fill="var(--ink-muted)" letterSpacing="0.06em">
+              D-I MED
+            </text>
+          </g>
+        )}
+        {inRange(geo.my, geo.y0, geo.y1) && (
+          <g>
+            <line x1={L} y1={Y(geo.my)} x2={W - R} y2={Y(geo.my)}
+              stroke="var(--ink-muted)" strokeDasharray="3 3" opacity={0.5} />
+            <text x={L + 3} y={Y(geo.my) - 3} fontSize={9.5} fill="var(--ink-muted)" letterSpacing="0.06em">
+              D-I MED
+            </text>
+          </g>
+        )}
 
         {/* Corner captions only where both axes actually have a direction —
             "strong both ways" is a lie about a plot of tempo against 3PA rate. */}
         {!xM.neutral && !yM.neutral && (
           <>
-            <text x={W - R - 5} y={T + 11} textAnchor="end" fontSize={8} fill="var(--ink-muted)" letterSpacing="0.08em">
+            <text x={W - R - 5} y={T + 11} textAnchor="end" fontSize={10} fill="var(--ink-muted)" letterSpacing="0.08em">
               STRONG BOTH
             </text>
-            <text x={L + 5} y={H - B - 6} fontSize={8} fill="var(--ink-muted)" letterSpacing="0.08em">
+            <text x={L + 5} y={H - B - 6} fontSize={10} fill="var(--ink-muted)" letterSpacing="0.08em">
               WEAK BOTH
             </text>
           </>
         )}
 
-        {/* Only the UNSELECTED teams get a dot when crests are on. A selected
-            team already has a mark there, and drawing a gray dot under it made
-            the two compete — at the small sizes the dot was winning, so the
-            picked teams read as fainter than the ones nobody picked. */}
-        {teams.filter((t) => !sel.has(t.name) || !logos).map((t) => {
+        {/* NOTHING UNSELECTED IS DRAWN. The whole D-I field used to sit behind
+            the selection as faint dots; at 365 of them that is most of the ink
+            on the page, and it made a small selection look like a handful of
+            crests dropped on a field of static. The national context it carried
+            is now the median crosshair above, which costs two lines. */}
+        {!logos && shown.map((t) => {
           const vx = t.m[xM.key], vy = t.m[yM.key];
           if (vx == null || vy == null) return null;
-          const on = sel.has(t.name);
           return (
-            <circle key={t.name} cx={X(vx)} cy={Y(vy)} r={on ? 4.5 : 2.6}
-              fill={on ? t.color : "var(--ink-muted)"} fillOpacity={on ? 0.95 : 0.16}
-              stroke={on ? "var(--paper)" : "none"} strokeWidth={0.8}
-              className={on ? "cursor-pointer" : undefined}
-              onPointerEnter={on ? () => setHover(t.name) : undefined}
-              onPointerLeave={on ? () => setHover(null) : undefined}
+            <circle key={t.name} cx={X(vx)} cy={Y(vy)} r={4.5}
+              fill={t.color} fillOpacity={0.95} stroke="var(--paper)" strokeWidth={0.8}
+              className="cursor-pointer"
+              onPointerEnter={() => setHover(t.name)}
+              onPointerLeave={() => setHover(null)}
             />
           );
         })}
@@ -558,11 +601,11 @@ function Plot({
             : null
         ))}
 
-        <text x={(L + W - R) / 2} y={H - 5} textAnchor="middle" fontSize={8.5}
+        <text x={(L + W - R) / 2} y={H - 5} textAnchor="middle" fontSize={11.5}
           fill="var(--ink-muted)" letterSpacing="0.08em">
           {[xM.label.toUpperCase(), axisNote(xM), "→"].filter(Boolean).join(" ")}
         </text>
-        <text x={11} y={(T + H - B) / 2} fontSize={8.5} fill="var(--ink-muted)" letterSpacing="0.08em"
+        <text x={11} y={(T + H - B) / 2} fontSize={11.5} fill="var(--ink-muted)" letterSpacing="0.08em"
           textAnchor="middle" transform={`rotate(-90 11 ${(T + H - B) / 2})`}>
           {[yM.label.toUpperCase(), axisNote(yM), "↑"].filter(Boolean).join(" ")}
         </text>
@@ -660,12 +703,12 @@ function Card({
             <img src={`/ttz-logos/${team.id}.png`} alt="" width={16} height={16}
               className="object-contain" style={{ width: 16, height: 16 }} />
           )}
-          <span className="text-[0.78rem] font-semibold text-ink">{team.name}</span>
-          <span className="text-[0.62rem] tabular text-ink-muted">
+          <span className="text-sm font-semibold text-ink">{team.name}</span>
+          <span className="text-xs tabular text-ink-muted">
             {team.record} · #{team.rank} · {confDisplay(team.conf)}
           </span>
         </div>
-        <div className="text-[0.65rem] text-ink-soft mt-0.5">
+        <div className="text-xs text-ink-soft mt-1">
           <span className="text-ink-muted">{xM.short}</span>{" "}
           <span className="tabular">{fmtMetric(xM, vx)}</span>
           <span className="text-ink-muted"> · {yM.short}</span>{" "}
