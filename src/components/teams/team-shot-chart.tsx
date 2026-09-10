@@ -13,13 +13,11 @@ import { W, H, RIM_X, RIM_Y, THREE_R, CORNER_X, CORNER_Y, ZONES, zoneOf } from "
 /**
  * Where a team shoots, where it lets you shoot, and the gap between the two.
  *
- * THE THIRD VIEW IS THE POINT. Offence and defence charts exist elsewhere;
- * putting them side by side still leaves the reader doing the subtraction by
- * eye across two courts, which is exactly the comparison eyes are worst at.
- * "Edge" does it on one court: at every spot, what this team shoots there
- * minus what it allows there. Red is floor the team wins, blue is floor it
- * loses, and a good team is not uniformly red — the shape of where it wins is
- * the scouting report.
+ * TWO VIEWS: what this team shoots, and what it lets you shoot. Both are
+ * coloured against the D-I rate AT THAT SPOT rather than a single league
+ * average, so a hex says "better than the field is from here" instead of
+ * "better than the field is on average", which at the rim are very different
+ * sentences.
  *
  * WHY HEXES FOR ACCURACY HERE, WHEN THE PLAYER PAGE USES ZONES. That card
  * abandoned hex-level accuracy for a good reason: a player's ~400 shots
@@ -61,7 +59,7 @@ const HEX_R = 22;
  */
 const SHRINK_K = 25;
 
-type Side = "off" | "def" | "edge";
+type Side = "off" | "def";
 type Metric = "volume" | "accuracy";
 
 type Filters = {
@@ -107,10 +105,8 @@ type Cell = {
   fg: number;
   /** League FG% at this spot, or null where the league has too little of it. */
   league: number | null;
-  /** Signed difference used for colour: vs league, or off−def in edge view. */
+  /** Shrunk rate minus the league rate at this spot, or null with no baseline. */
   diff: number | null;
-  /** Edge view only: the other side's shrunk rate at the same spot. */
-  other?: { att: number; made: number; fg: number };
 };
 
 /**
@@ -134,6 +130,10 @@ export function TeamShotChart({ team, season }: { team: string; season: number }
 
   useEffect(() => {
     let live = true;
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- the request
+       is the effect. Switching team or season has to put the card back into
+       loading before the fetch resolves, or it shows the previous team's
+       court under the new team's name for as long as the network takes. */
     setState("loading");
     Promise.all([
       fetch(dataUrl(`/data/team-shots/${season}/${teamSlug(team)}.json`)).then((r) => (r.ok ? r.json() : null)),
@@ -196,7 +196,7 @@ export function TeamShotChart({ team, season }: { team: string; season: number }
     // One attempt is not a shooting percentage. Drawing it invites the reader
     // to read a colour off a cell that has none.
     cells.filter((c) => c.att >= 2).map((c) => {
-      const fill = side === "edge" || metric === "accuracy"
+      const fill = metric === "accuracy"
         ? (c.diff === null ? "rgba(255,255,255,0.35)" : diffColor(c.diff))
         : volColor(c.att / volCap);
       /**
@@ -214,7 +214,7 @@ export function TeamShotChart({ team, season }: { team: string; season: number }
        * behind them. Colour still means exactly one thing.
        */
       const weight = Math.sqrt(Math.min(1, c.att / Math.max(4, maxAtt * 0.55)));
-      const opacity = side === "edge" || metric === "accuracy" ? 0.10 + 0.90 * weight : 1;
+      const opacity = metric === "accuracy" ? 0.10 + 0.90 * weight : 1;
       return (
         <path
           key={c.key}
@@ -228,7 +228,7 @@ export function TeamShotChart({ team, season }: { team: string; season: number }
         />
       );
     })
-  ), [cells, side, metric, volCap, maxAtt, hexPath]);
+  ), [cells, metric, volCap, maxAtt, hexPath]);
 
   const active = hover ? cells.find((c) => c.key === hover) ?? null : null;
   const totals = useMemo(() => summarize(offRows, defRows, side), [offRows, defRows, side]);
@@ -259,15 +259,13 @@ export function TeamShotChart({ team, season }: { team: string; season: number }
           <Seg
             value={side}
             onChange={(v) => setSide(v as Side)}
-            options={[["off", "Offence"], ["def", "Defence"], ["edge", "Edge"]]}
+            options={[["off", "Offence"], ["def", "Defence"]]}
           />
-          {side !== "edge" && (
-            <Seg
-              value={metric}
-              onChange={(v) => setMetric(v as Metric)}
-              options={[["accuracy", "Accuracy"], ["volume", "Volume"]]}
-            />
-          )}
+          <Seg
+            value={metric}
+            onChange={(v) => setMetric(v as Metric)}
+            options={[["accuracy", "Accuracy"], ["volume", "Volume"]]}
+          />
           {!isDefault(f) && (
             <button
               type="button"
@@ -309,10 +307,9 @@ export function TeamShotChart({ team, season }: { team: string; season: number }
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Headline team={team} side={side} totals={totals} count={shown.length} />
-          <Readout cell={active} side={side} />
-          <ZoneStrip off={offRows} def={defRows} side={side} />
-          <Diet off={offRows} def={defRows} side={side} />
+          <Headline side={side} totals={totals} count={shown.length} />
+          <Readout cell={active} />
+          <Diet off={offRows} def={defRows} />
         </div>
       </div>
     </Shell>
@@ -354,7 +351,6 @@ function buildCells(
   off: Row[], def: Row[], side: Side, base: Map<string, [number, number]> | null,
 ): Cell[] {
   const primary = bin(side === "def" ? def : off);
-  const secondary = side === "edge" ? bin(def) : null;
   const out: Cell[] = [];
 
   for (const [key, b] of primary) {
@@ -362,24 +358,9 @@ function buildCells(
     const prior = league ?? 0.45;
     const fg = shrink(b.made, b.att, prior);
 
-    let diff: number | null = null;
-    let other: Cell["other"];
+    const diff = league === null ? null : fg - league;
 
-    if (side === "edge") {
-      const o = secondary?.get(key);
-      // A cell only earns an edge if BOTH sides have been there. One-sided
-      // cells are not a small edge, they are an unanswered question, and
-      // painting them neutral would read as "even" rather than "unknown".
-      if (o && o.att >= 3 && b.att >= 3) {
-        const ofg = shrink(o.made, o.att, prior);
-        diff = fg - ofg;
-        other = { att: o.att, made: o.made, fg: ofg };
-      }
-    } else {
-      diff = league === null ? null : fg - league;
-    }
-
-    out.push({ key, x: b.x, y: b.y, att: b.att, made: b.made, fg, league, diff, other });
+    out.push({ key, x: b.x, y: b.y, att: b.att, made: b.made, fg, league, diff });
   }
   return out;
 }
@@ -508,35 +489,22 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
 const pct = (v: number) => (100 * v).toFixed(1) + "%";
 const signed = (v: number) => (v >= 0 ? "+" : "−") + Math.abs(100 * v).toFixed(1);
 
-function Headline({ team, side, totals, count }: {
-  team: string; side: Side; totals: ReturnType<typeof summarize>; count: number;
+function Headline({ side, totals, count }: {
+  side: Side; totals: ReturnType<typeof summarize>; count: number;
 }) {
   const t = side === "def" ? totals.def : totals.off;
   const label = side === "off" ? "Shots taken" : side === "def" ? "Shots allowed" : "Both sides";
-  const edge = totals.off.fg - totals.def.fg;
   return (
     <div className="rounded-lg border border-hairline bg-paper-deep/30 p-3">
       <p className="text-[0.55rem] uppercase tracking-[0.16em] font-bold text-ink-muted">{label}</p>
-      {side === "edge" ? (
-        <>
-          <p className="mt-1 text-2xl font-bold tabular leading-none text-ink">
-            {signed(edge)}<span className="text-sm font-semibold text-ink-muted"> pts</span>
-          </p>
-          <p className="mt-1.5 text-[0.68rem] text-ink-muted leading-snug">
-            {team} shoots {pct(totals.off.fg)} and allows {pct(totals.def.fg)} on{" "}
-            {totals.off.att.toLocaleString()} / {totals.def.att.toLocaleString()} located attempts.
-          </p>
-        </>
-      ) : (
-        <>
+      <>
           <p className="mt-1 text-2xl font-bold tabular leading-none text-ink">{pct(t.fg)}</p>
           <dl className="mt-2 grid grid-cols-3 gap-2 text-[0.68rem]">
             <Stat k="Attempts" v={count.toLocaleString()} />
             <Stat k="eFG%" v={pct(t.efg)} />
             <Stat k="3PA rate" v={pct(t.rate3)} />
           </dl>
-        </>
-      )}
+      </>
     </div>
   );
 }
@@ -552,7 +520,7 @@ function Stat({ k, v }: { k: string; v: string }) {
 
 /** The hovered cell, spelled out. Replaces a floating tooltip so it works the
  *  same under a finger as under a cursor. */
-function Readout({ cell, side }: { cell: Cell | null; side: Side }) {
+function Readout({ cell }: { cell: Cell | null }) {
   if (!cell) {
     return (
       <p className="rounded-lg border border-dashed border-hairline p-3 text-[0.7rem] text-ink-muted leading-snug">
@@ -571,21 +539,7 @@ function Readout({ cell, side }: { cell: Cell | null; side: Side }) {
       <p className="text-lg font-bold tabular leading-none text-ink">
         {cell.made}/{cell.att} <span className="text-sm text-ink-muted">({pct(cell.att ? cell.made / cell.att : 0)})</span>
       </p>
-      {side === "edge" ? (
-        cell.other && cell.diff !== null ? (
-          <p className="text-[0.7rem] text-ink-muted leading-snug">
-            Allows {cell.other.made}/{cell.other.att} here.{" "}
-            <span className="font-semibold" style={{ color: cell.diff >= 0 ? HOT_HEX : COLD_HEX }}>
-              {signed(cell.diff)} pts
-            </span>{" "}
-            of edge, after shrinkage.
-          </p>
-        ) : (
-          <p className="text-[0.7rem] text-ink-muted leading-snug">
-            Too few attempts on one side of this spot to compare.
-          </p>
-        )
-      ) : cell.diff !== null ? (
+      {cell.diff !== null ? (
         <p className="text-[0.7rem] text-ink-muted leading-snug">
           D-I shoots {pct(cell.league ?? 0)} from here.{" "}
           <span className="font-semibold" style={{ color: cell.diff >= 0 ? HOT_HEX : COLD_HEX }}>
@@ -600,66 +554,6 @@ function Readout({ cell, side }: { cell: Cell | null; side: Side }) {
   );
 }
 
-function ZoneStrip({ off, def, side }: { off: Row[]; def: Row[]; side: Side }) {
-  const rows = useMemo(() => {
-    const tally = (src: Row[]) => {
-      const m = new Map<string, { a: number; m: number }>();
-      for (const s of src) {
-        const z = zoneOf(s[CX]!, s[CY]!, s[IS3] === 1);
-        if (!z) continue;
-        const c = m.get(z) ?? { a: 0, m: 0 };
-        c.a++; c.m += s[MADE]!;
-        m.set(z, c);
-      }
-      return m;
-    };
-    const o = tally(off), d = tally(def);
-    const bands: Array<{ label: string; ids: string[] }> = [
-      { label: "At the rim", ids: ["close_l", "close_m", "close_r"] },
-      { label: "Mid-range", ids: ["mid_corner_l", "mid_wing_l", "mid_mid", "mid_wing_r", "mid_corner_r"] },
-      { label: "Three", ids: ["3_corner_l", "3_wing_l", "3_mid", "3_wing_r", "3_corner_r"] },
-    ];
-    return bands.map((b) => {
-      const sum = (m: Map<string, { a: number; m: number }>) =>
-        b.ids.reduce((acc, id) => { const c = m.get(id); return c ? { a: acc.a + c.a, m: acc.m + c.m } : acc; }, { a: 0, m: 0 });
-      return { label: b.label, o: sum(o), d: sum(d) };
-    });
-  }, [off, def]);
-
-  return (
-    <div className="rounded-lg border border-hairline overflow-hidden">
-      <table className="w-full text-[0.68rem] tabular">
-        <thead>
-          <tr className="text-[0.55rem] uppercase tracking-wider text-ink-muted border-b border-hairline">
-            <th className="text-left font-bold px-2.5 py-1.5">Band</th>
-            <th className="text-right font-bold px-2">{side === "def" ? "Allowed" : "Taken"}</th>
-            <th className="text-right font-bold px-2.5">{side === "edge" ? "Allowed" : "Share"}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
-            const primary = side === "def" ? r.d : r.o;
-            const totalPrimary = rows.reduce((n, x) => n + (side === "def" ? x.d.a : x.o.a), 0);
-            return (
-              <tr key={r.label} className="border-b border-hairline/60 last:border-b-0">
-                <td className="px-2.5 py-1.5 text-ink-soft">{r.label}</td>
-                <td className="px-2 text-right font-semibold text-ink">
-                  {primary.a ? pct(primary.m / primary.a) : "—"}
-                </td>
-                <td className="px-2.5 text-right text-ink-muted">
-                  {side === "edge"
-                    ? (r.d.a ? pct(r.d.m / r.d.a) : "—")
-                    : (totalPrimary ? pct(primary.a / totalPrimary) : "—")}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 /**
  * Shot diet as a stacked bar: what share of attempts come from each band.
  *
@@ -668,12 +562,12 @@ function ZoneStrip({ off, def, side }: { off: Row[]; def: Row[]; side: Side }) {
  * three more numbers because share is a part-of-whole, and a row of percentages
  * makes the reader add them up to see that.
  *
- * On defence and edge it draws both diets, which is where it earns its keep:
- * a team that takes 43% threes while allowing 30% is running a different game
- * at each end, and that shows up as two visibly different bars long before
- * anyone reads a number off them.
+ * It ALWAYS draws both diets, whichever view the court is showing. A team that
+ * takes 43% threes while allowing 30% is running a different game at each end,
+ * and that shows up as two visibly different bars long before anyone reads a
+ * number off them — so hiding one behind the view toggle would hide the point.
  */
-function Diet({ off, def, side }: { off: Row[]; def: Row[]; side: Side }) {
+function Diet({ off, def }: { off: Row[]; def: Row[] }) {
   const split = (rows: Row[]) => {
     let rim = 0, mid = 0, three = 0;
     for (const s of rows) {
@@ -685,9 +579,7 @@ function Diet({ off, def, side }: { off: Row[]; def: Row[]; side: Side }) {
     return [rim / n, mid / n, three / n] as const;
   };
   const bars: Array<[string, readonly [number, number, number]]> =
-    side === "off" ? [["Taken", split(off)]]
-    : side === "def" ? [["Allowed", split(def)]]
-    : [["Taken", split(off)], ["Allowed", split(def)]];
+    [["Taken", split(off)], ["Allowed", split(def)]];
 
   const BANDS = [
     { label: "Rim", fill: "#9c2f1d" },
@@ -733,15 +625,15 @@ function Diet({ off, def, side }: { off: Row[]; def: Row[]; side: Side }) {
 
 function Legend({ side, metric }: { side: Side; metric: Metric }) {
   const steps = 9;
-  if (side !== "edge" && metric === "volume") {
+  if (metric === "volume") {
     return (
       <LegendRow left="Fewer shots" right="More shots">
         {Array.from({ length: steps }, (_, i) => volColor(i / (steps - 1)))}
       </LegendRow>
     );
   }
-  const left = side === "edge" ? "Loses this floor" : side === "def" ? "Defends it well" : "Below D-I";
-  const right = side === "edge" ? "Wins this floor" : side === "def" ? "Gets scored on" : "Above D-I";
+  const left = side === "def" ? "Defends it well" : "Below D-I";
+  const right = side === "def" ? "Gets scored on" : "Above D-I";
   return (
     <LegendRow
       left={left}

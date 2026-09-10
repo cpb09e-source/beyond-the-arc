@@ -898,7 +898,16 @@ export function TeamPageView({
       {show.shooting && (
       <section id={TAB_ANCHORS.shooting} data-pane="shooting" className="mt-10 grid grid-cols-1 lg:grid-cols-2 gap-8 scroll-mt-20">
         {!preview && <TeamShotChart team={team.name} season={current.year} />}
-        <DistributionPanel title="Shooting" ranks={shootingRanks} blurBody={preview} />
+        {/* Shot Profile stacks under Shooting rather than sitting in a row of
+            its own further down: it is the same question at a finer grain —
+            the rates, then where the shots came from — and it fills a column
+            that was otherwise shorter than the court beside it. */}
+        <div className="space-y-8">
+          <DistributionPanel title="Shooting" ranks={shootingRanks} blurBody={preview} />
+          {shotProfileRanks && (
+            <DistributionPanel title="Shot Profile" ranks={shotProfileRanks} blurBody={preview} />
+          )}
+        </div>
       </section>
       )}
 
@@ -935,11 +944,8 @@ export function TeamPageView({
           season shows the rates and a dash for the rest.
 
           Omitted entirely, not dashed, when there is no play-by-play at all. */}
-      {show.shooting && (shotProfileRanks || shotDefenseRanks) && (
+      {show.shooting && shotDefenseRanks && (
         <section data-pane="shooting" className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {shotProfileRanks
-            ? <DistributionPanel title="Shot Profile" ranks={shotProfileRanks} blurBody={preview} />
-            : <div />}
           {shotDefenseRanks
             ? <DistributionPanel title="Shot Defense" ranks={shotDefenseRanks} blurBody={preview} />
             : <div />}
