@@ -56,6 +56,7 @@ import {
   type LineupTotals,
 } from "@/lib/lineup-stats";
 import { teamSlug } from "@/lib/team-slug";
+import { buildCanonMap, canonicalTeamName } from "@/lib/team-name-match";
 // @ts-expect-error — plain JS helper shared with the other CBBD builders.
 import { norm, buildPlayerIndex, resolvePlayer } from "./lib/cbbd-join.mjs";
 
@@ -65,6 +66,36 @@ const ONE = opt("season");
 const FROM = Number(ONE ?? opt("from") ?? 2024);
 const TO = Number(ONE ?? opt("to") ?? 2026);
 const ONLY_TEAM = opt("team");
+
+/**
+ * SOURCE NAMES ARE NOT OUR NAMES, and the filename is a slug of ours.
+ *
+ * The team on a stint comes from the player index, which carries the upstream
+ * spelling — "Iowa State", "Miami (FL)", "UConn". A team page asks for its own
+ * canonical name slugged, which for those three is iowa-st, miami-fl and
+ * connecticut. Every team whose two spellings differ therefore wrote a file
+ * nothing would ever read, and its page said "No lineup data for 25-26" while
+ * pointing at a play-by-play limitation that had nothing to do with it.
+ *
+ * Found 2026-09-10 on Iowa State, which had iowa-state-2026.json on disk and a
+ * page looking for iowa-st-2026.json.
+ *
+ * Folded through the same matcher the box score and the standings use, so
+ * there is one definition of "what we call this team" rather than three.
+ */
+const CANON = buildCanonMap(
+  (JSON.parse(fs.readFileSync(path.resolve("public/data/teams-all.json"), "utf8")) as
+    Array<{ name?: string; team_name?: string }>)
+    .map((t) => t.name ?? t.team_name ?? "")
+    .filter(Boolean),
+);
+/** Names the matcher could not fold onto one of ours, for the report below. */
+const UNRESOLVED = new Set<string>();
+const ourName = (raw: string) => {
+  const hit = canonicalTeamName(CANON, raw);
+  if (!hit) UNRESOLVED.add(raw);
+  return hit ?? raw;
+};
 
 const OUT_DIR = path.resolve("public/data/lineup-stats");
 
@@ -155,7 +186,7 @@ function main() {
         if (ids.length !== 5) continue;
         const teams = new Set(ids.map((i) => players.get(i)?.team).filter(Boolean));
         if (teams.size !== 1) continue;
-        const team = [...teams][0]!;
+        const team = ourName([...teams][0]!);
         if (ONLY_TEAM && team !== ONLY_TEAM) continue;
 
         const sorted = ids.slice().sort((a, b) => Number(a) - Number(b));
@@ -271,6 +302,21 @@ function main() {
       );
     }
 
+    /**
+     * CLEAR THE SEASON BEFORE WRITING IT. Without this a rerun only ever adds:
+     * when the naming changed from the upstream spelling to ours, every
+     * renamed team left its old file behind — iowa-state-2026.json sitting
+     * beside the iowa-st-2026.json that replaced it, invisible because nothing
+     * reads it and nothing reported it. They would still ship to R2.
+     *
+     * Scoped to this season's files so a single --season run cannot delete the
+     * others. benchmarks-<season>.json is rewritten further down in the same
+     * pass, so it is safe to take with them.
+     */
+    for (const f of fs.readdirSync(OUT_DIR)) {
+      if (f.endsWith(`-${season}.json`)) fs.rmSync(path.join(OUT_DIR, f), { force: true });
+    }
+
     for (const [team, teamMap] of byTeam) {
       const roster = new Map<string, string>();
       for (const acc of teamMap.values()) {
@@ -316,6 +362,14 @@ function main() {
       wroteLineups += lineups.length;
     }
     console.log(`  ${season}: ${byTeam.size} teams, ${qualifying.length.toLocaleString()} qualifying units, ${diffs.length.toLocaleString()} on/off players`);
+    if (UNRESOLVED.size) {
+      // These wrote a file under the upstream spelling, which is a filename no
+      // team page will ever ask for. Loud, because the failure is otherwise
+      // invisible until someone opens that team's Lineups tab.
+      console.warn(`  ⚠ ${UNRESOLVED.size} team name(s) did not fold onto one of ours:`);
+      for (const n of [...UNRESOLVED].sort()) console.warn(`      ${n}`);
+      UNRESOLVED.clear();
+    }
   }
 
   const pct = totalPlayers ? ((linkedPlayers / totalPlayers) * 100).toFixed(1) : "0";
