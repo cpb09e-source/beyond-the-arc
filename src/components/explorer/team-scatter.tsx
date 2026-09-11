@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { confDisplay } from "@/lib/conf-display";
 import { Select } from "@/components/select";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
@@ -12,6 +12,7 @@ import {
   METRICS, METRIC_BY_KEY, METRIC_GROUPS, METRIC_PRESETS,
   fmtMetric, fmtTick, niceTicks, tickCount, type Metric,
 } from "@/lib/team-scatter-metrics";
+import { buildZone, zoneAxes, zonePolygon, ZONE_X, ZONE_Y, type Zone } from "@/lib/trapezoid";
 
 /**
  * Any two team metrics against each other, with school crests as the marks.
@@ -63,6 +64,21 @@ export type ScatterTeam = {
 const MAX_TEAMS = 25;
 
 /**
+ * How much of the country the contender zone opens with.
+ *
+ * WIDER THAN THE HAND-PICK CAP ON PURPOSE. At twenty-five the shape sat in a
+ * near-empty frame with eleven teams inside it and fourteen just under the
+ * floor, which makes the zone look like a box drawn round whoever was already
+ * there. Seventy-five reaches down to about +11 net rating — the back of the
+ * at-large field — so the eye can see how much of the sport is nowhere near it,
+ * and the slants have teams beside them to cut past.
+ *
+ * Above a hundred the crests hit the 16px floor and the bottom of the plot turns
+ * into a grey mat, which costs the shape the contrast it lives on.
+ */
+const ZONE_FIELD = 75;
+
+/**
  * Crest size, from the room the plot actually has.
  *
  * 16 IS THE FLOOR, and it is a floor rather than a formula. Below it a crest
@@ -102,16 +118,49 @@ const ROW_H = 33;
 const HEAD_H = 45;
 const PANE_H = HEAD_H + PER_PAGE * ROW_H;
 
+/**
+ * The teams the contender zone opens on: the best N by net rating.
+ *
+ * NOT the best N by overall rank, even though the two lists mostly agree. The
+ * zone's floor is a net-rating rank, so selecting by anything else can leave a
+ * team above the floor off the chart — a shape with a hole in it, and no way for
+ * the reader to tell the hole from an empty region.
+ */
+function topByNet(teams: ScatterTeam[], n: number): string[] {
+  return [...teams]
+    .filter((t) => typeof t.m[ZONE_Y] === "number")
+    .sort((a, b) => (b.m[ZONE_Y] as number) - (a.m[ZONE_Y] as number))
+    .slice(0, n)
+    .map((t) => t.name);
+}
+
 export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
-  const [confs, setConfs] = useState<Set<string>>(() => new Set(["ACC"]));
-  const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  const [confs, setConfs] = useState<Set<string>>(() => new Set());
+  // THE PAGE OPENS ON THE CONTENDER ZONE. It used to open on the ACC against
+  // offence and defence, which is a demonstration that the axes work rather than
+  // a question anyone arrived with. The zone is the one view here that makes an
+  // argument, so it is what a first-time reader lands in — and ZONE_FIELD teams
+  // by net rating is the selection that shows both sides of its floor.
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(topByNet(teams, ZONE_FIELD)));
   const [hover, setHover] = useState<string | null>(null);
-  const [xKey, setXKey] = useState("adjoe");
-  const [yKey, setYKey] = useState("adjde");
+  const [xKey, setXKey] = useState(ZONE_X);
+  const [yKey, setYKey] = useState(ZONE_Y);
+  const [zoneOn, setZoneOn] = useState(true);
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "rank", dir: 1 });
   const [tableOpen, setTableOpen] = useState(false);
 
   const xM = METRIC_BY_KEY[xKey]!, yM = METRIC_BY_KEY[yKey]!;
+
+  // Built from every team, once — it is a claim about Division I, not about the
+  // selection. See the note in lib/trapezoid.ts.
+  const zone = useMemo(() => buildZone(teams), [teams]);
+  // THE SHAPE ONLY EXISTS ON ITS OWN AXES. Drawn over three-point rate against
+  // turnovers it would be a green quadrilateral asserting nothing, so changing
+  // either axis takes it off rather than leaving a decoration behind — the same
+  // rule the metric presets follow, for the same reason.
+  const zoneLive = zoneOn && zone != null && zoneAxes(xM, yM) ? zone : null;
+  const pickX = (k: string) => { setXKey(k); if (k !== ZONE_X) setZoneOn(false); };
+  const pickY = (k: string) => { setYKey(k); if (k !== ZONE_Y) setZoneOn(false); };
 
   const allConfs = useMemo(() => {
     const counts = new Map<string, number>();
@@ -168,8 +217,33 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
     [teams, picked],
   );
 
-  const preset = (kind: "power" | "mid" | "top25" | "clear") => {
-    if (kind === "clear") { setConfs(new Set()); setPicked(new Set()); return; }
+  /** Names inside the zone, among what is drawn. Empty when the zone is off. */
+  const inZone = useMemo(
+    () => new Set(
+      zoneLive
+        ? shown.filter((t) => zoneLive.contains(t.m[ZONE_X], t.m[ZONE_Y])).map((t) => t.name)
+        : [],
+    ),
+    [shown, zoneLive],
+  );
+
+  const preset = (kind: "power" | "mid" | "top25" | "zone" | "clear") => {
+    if (kind === "clear") { setConfs(new Set()); setPicked(new Set()); setZoneOn(false); return; }
+    // The zone button is a whole view, not a filter: it sets both axes, the
+    // selection and the shape in one press, because any one of the three on its
+    // own is broken — the shape over the wrong axes, or the right axes with the
+    // ACC on them, tell the reader nothing.
+    //
+    // OFF WHEN IT IS ALREADY ON, and it leaves the axes and the selection where
+    // they are. Otherwise there is no way back to a plain tempo-against-rating
+    // scatter without detouring through a different metric, and the button says
+    // aria-pressed — a control claiming to be a toggle has to toggle.
+    if (kind === "zone") {
+      if (zoneLive) { setZoneOn(false); return; }
+      setXKey(ZONE_X); setYKey(ZONE_Y); setZoneOn(true);
+      setConfs(new Set()); setPicked(new Set(topByNet(teams, ZONE_FIELD)));
+      return;
+    }
     if (kind === "top25") {
       setConfs(new Set());
       setPicked(new Set(teams.filter((t) => t.rank <= MAX_TEAMS).map((t) => t.name)));
@@ -198,10 +272,10 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
       <ScopeCollapse summary={summary}>
         <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
           <Field label="X axis">
-            <MetricSelect value={xKey} onChange={setXKey} label="X" />
+            <MetricSelect value={xKey} onChange={pickX} label="X" />
           </Field>
           <Field label="Y axis">
-            <MetricSelect value={yKey} onChange={setYKey} label="Y" />
+            <MetricSelect value={yKey} onChange={pickY} label="Y" />
           </Field>
           <Field label="Conference">
             <SearchableMultiSelect
@@ -219,7 +293,15 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
             <SearchableMultiSelect
               value={[...picked]}
               options={teamOptions}
-              onChange={(v) => setPicked(new Set(v.slice(0, MAX_TEAMS)))}
+              // THE CAP ONLY APPLIES TO GROWTH, and only up to whatever a
+              // preset has already put on screen. A flat slice(0, MAX_TEAMS)
+              // here was a live bug the moment the zone preset started seeding
+              // 75 teams: deselecting one of them sent a 74-name array through
+              // the cap and silently dropped 49 of the others.
+              onChange={(v) => setPicked((prev) =>
+                new Set(v.length > prev.size
+                  ? v.slice(0, Math.max(MAX_TEAMS, prev.size))
+                  : v))}
               placeholder="Type to filter…"
               emptyLabel="None"
               ariaLabel="Teams"
@@ -232,7 +314,8 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
           </Field>
 
           <div className="flex flex-wrap items-center gap-1.5">
-            <Btn onClick={() => { setXKey(yKey); setYKey(xKey); }} title="Swap the two axes">Flip</Btn>
+            {/* Flipping puts tempo on the wrong axis, so it drops the zone too. */}
+            <Btn onClick={() => { pickX(yKey); pickY(xKey); }} title="Swap the two axes">Flip</Btn>
             {/* Presets resolve to an X/Y pair and then clear themselves — the
                 control is a shortcut, not a mode, and one left selected after
                 the reader edits an axis by hand is a label that lies. */}
@@ -243,6 +326,15 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
               <option value="">Presets…</option>
               {METRIC_PRESETS.map((p) => <option key={p.label} value={p.label}>{p.label}</option>)}
             </Select>
+            {/* Sits with the league pills because it is the same kind of thing —
+                a view you press once — and first because it is the one the page
+                opens in. Pressing it while it is already on puts the reader back
+                where they started, which is what they want it to do after they
+                have wandered off through the axis pickers. */}
+            <Btn onClick={() => preset("zone")} active={zoneLive != null}
+              title="Ryan Hammer's contender profile: high net rating, tempo near the middle">
+              Trapezoid
+            </Btn>
             <Btn onClick={() => preset("power")}>Power 6</Btn>
             <Btn onClick={() => preset("mid")}>Mid Majors</Btn>
             <Btn onClick={() => preset("top25")}>Top {MAX_TEAMS}</Btn>
@@ -253,7 +345,16 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
 
       <div className="flex items-baseline justify-between gap-3 mb-2">
         <h2 className="text-base text-ink">
-          <span className="tabular font-semibold">{shown.length}</span> teams
+          {zoneLive ? (
+            <>
+              <span className="tabular font-semibold text-good">{inZone.size}</span>
+              {" of "}
+              <span className="tabular font-semibold">{shown.length}</span>
+              {" inside the trapezoid"}
+            </>
+          ) : (
+            <><span className="tabular font-semibold">{shown.length}</span> teams</>
+          )}
         </h2>
         {/* THE TABLE IS FOLDED ON A PHONE. It is 870px of column, and with it
             open above the chart a reader had to scroll past every row to reach
@@ -274,17 +375,50 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
         <div className={cn("w-full lg:w-auto order-2 lg:order-1", !tableOpen && "hidden lg:block")}>
           <TeamTable
             rows={sorted} xM={xM} yM={yM} sort={sort} onSort={sortBy}
-            hover={hover} setHover={setHover}
+            hover={hover} setHover={setHover} inZone={zoneLive ? inZone : null}
           />
         </div>
         <div className="flex-1 min-w-0 w-full order-1 lg:order-2">
           <Plot
             teams={teams} shown={shown} xM={xM} yM={yM}
-            hover={hover} setHover={setHover}
+            hover={hover} setHover={setHover} zone={zoneLive} inZone={inZone}
           />
+          {zoneLive && <ZoneNote zone={zoneLive} />}
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * What the shape is, whose idea it was, and how this one was drawn.
+ *
+ * ALL THREE, and the third is not optional. The concept is Hammer's and the
+ * numbers are ours, drawn off a different net rating on a different scale —
+ * a reader who assumes this is his chart will find teams on the wrong side of
+ * the line from where his has them and conclude one of us cannot add up. Saying
+ * where the edges came from is also the only way the shape is arguable rather
+ * than decorative: the floor and the widening are stated, so a reader who thinks
+ * twelve teams is too many knows exactly which number to disagree with.
+ */
+function ZoneNote({ zone }: { zone: Zone }) {
+  return (
+    <p className="mt-2 text-xs leading-relaxed text-ink-muted">
+      <span className="text-ink-soft font-semibold">Trapezoid of Excellence</span>
+      {" — the contender profile: elite net rating without living at either extreme of tempo, "}
+      {"because pace versatility survives six tournament games against six styles. "}
+      {"Concept by "}
+      <a href="https://x.com/ryanhammer09" target="_blank" rel="noopener noreferrer nofollow"
+        className="underline decoration-hairline underline-offset-2 hover:text-ink">
+        Ryan Hammer
+      </a>
+      {"; the zone here is drawn from our own numbers — floor at the 12th-best adjusted net "}
+      {"rating in Division I ("}
+      <span className="tabular">{zone.floor.toFixed(1)}</span>
+      {"), centred on average tempo ("}
+      <span className="tabular">{zone.centre.toFixed(1)}</span>
+      {"), opening 0.26 possessions per rating point above the floor."}
+    </p>
   );
 }
 
@@ -303,10 +437,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Btn({ onClick, title, children }: { onClick: () => void; title?: string; children: React.ReactNode }) {
+function Btn({ onClick, title, active, children }: {
+  onClick: () => void; title?: string; active?: boolean; children: React.ReactNode;
+}) {
   return (
-    <button type="button" onClick={onClick} title={title}
-      className="h-8 text-xs uppercase tracking-[0.08em] rounded-md border border-hairline px-2.5 whitespace-nowrap shrink-0 text-ink-soft hover:border-ink-muted hover:text-ink transition-colors">
+    <button type="button" onClick={onClick} title={title} aria-pressed={active}
+      className={cn(
+        "h-8 text-xs uppercase tracking-[0.08em] rounded-md border px-2.5 whitespace-nowrap shrink-0 transition-colors",
+        // Only the zone button is ever on — the rest fire and forget. It takes
+        // the good/green the zone is drawn in rather than the accent, so the
+        // control and the shape read as the same object.
+        active
+          ? "border-good/60 bg-good/10 text-good font-semibold"
+          : "border-hairline text-ink-soft hover:border-ink-muted hover:text-ink",
+      )}>
       {children}
     </button>
   );
@@ -334,11 +478,13 @@ function MetricSelect({ label, value, onChange }: {
 /* --------------------------------- table ---------------------------------- */
 
 function TeamTable({
-  rows, xM, yM, sort, onSort, hover, setHover,
+  rows, xM, yM, sort, onSort, hover, setHover, inZone,
 }: {
   rows: ScatterTeam[]; xM: Metric; yM: Metric;
   sort: { key: SortKey; dir: 1 | -1 }; onSort: (k: SortKey) => void;
   hover: string | null; setHover: (v: string | null) => void;
+  /** Null when the zone is off — the table then makes no claim either way. */
+  inZone: Set<string> | null;
 }) {
   const [page, setPage] = useState(0);
 
@@ -387,24 +533,42 @@ function TeamTable({
             </tr>
           </thead>
           <tbody>
-            {pageRows.map((t) => (
+            {pageRows.map((t) => {
+              // THE TABLE SAYS THE SAME THING THE PLOT DOES. A reader who can
+              // see the shape can still only answer "is Houston in?" by finding
+              // Houston among the crests; the rule on this page is that the two
+              // panes are one view, so the membership has to be readable in
+              // whichever of them the eye is already in. A green rule down the
+              // left, matching the shape's own edge.
+              const marked = inZone != null;
+              const on = marked && inZone.has(t.name);
+              return (
               <tr
                 key={t.name}
                 onPointerEnter={() => setHover(t.name)}
                 onPointerLeave={() => setHover(null)}
                 className={`border-b border-hairline/60 last:border-b-0 cursor-default ${
-                  hover === t.name ? "bg-coral/10" : "hover:bg-paper-deep/50"
+                  hover === t.name ? "bg-coral/10" : on ? "bg-good/[0.07]" : "hover:bg-paper-deep/50"
                 }`}
               >
-                <td className="px-2 py-1.5 text-right text-xs tabular text-ink-muted">{t.rank}</td>
+                <td className={cn(
+                  "px-2 py-1.5 text-right text-xs tabular text-ink-muted",
+                  // A transparent rule on every row rather than a border added
+                  // to some of them: a 2px edge appearing only on the marked
+                  // rows shifts their text two pixels and the column stops
+                  // lining up down the page.
+                  marked && "border-l-2",
+                  marked && (on ? "border-l-good" : "border-l-transparent"),
+                )}>{t.rank}</td>
                 <td className="px-2 py-1.5">
                   <span className="flex items-center gap-1.5 min-w-0">
                     {t.id != null && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={`/ttz-logos/${t.id}.png`} alt="" width={14} height={14}
-                        loading="lazy" className="object-contain shrink-0" style={{ width: 14, height: 14 }} />
+                        loading="lazy" className={cn("object-contain shrink-0", marked && !on && "opacity-70")}
+                        style={{ width: 14, height: 14 }} />
                     )}
-                    <span className="text-sm text-ink truncate">{t.name}</span>
+                    <span className={cn("text-sm truncate", marked && !on ? "text-ink-muted" : "text-ink")}>{t.name}</span>
                     <span className="text-[0.65rem] tabular text-ink-muted shrink-0 ml-auto">{t.record}</span>
                   </span>
                 </td>
@@ -415,7 +579,8 @@ function TeamTable({
                   {fmtMetric(yM, t.m[yM.key] ?? null)}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -452,12 +617,14 @@ function Pager({ onClick, disabled, label, children }: {
 /* ---------------------------------- plot ---------------------------------- */
 
 function Plot({
-  teams, shown, xM, yM, hover, setHover,
+  teams, shown, xM, yM, hover, setHover, zone, inZone,
 }: {
   teams: ScatterTeam[]; shown: ScatterTeam[]; xM: Metric; yM: Metric;
   hover: string | null; setHover: (v: string | null) => void;
+  zone: Zone | null; inZone: Set<string>;
 }) {
   const L = 52, R = 20, T = 16, B = 44;
+  const clipId = useId();
   /**
    * THE viewBox IS THE PIXEL BOX, measured rather than assumed.
    *
@@ -515,7 +682,28 @@ function Plot({
       const m = (hi - lo) * 0.07 || 1;
       return [lo - m, hi + m] as const;
     };
-    const [x0, x1] = pad(xs), [y0, y1] = pad(ys);
+    const [y0, y1] = pad(ys);
+
+    // THE ZONE IS PART OF THE EXTENT, and this is the one exception to fitting
+    // the frame to the teams. Its widest point is its top corners, which sit
+    // further from average tempo than any real team does — fit the axis to the
+    // crests alone and both slants run out through the SIDES of the plot, so the
+    // clip turns them vertical and the shape stops being a trapezoid at exactly
+    // the place its shape carries the argument. Y is padded first because the
+    // corners are a function of the top of the range.
+    //
+    // WIDENED TO THE CORNERS, NOT PADDED PAST THEM. Running the corners through
+    // pad() as if they were teams added another 7% of the span outside them and
+    // the shape sat in a visible margin on both sides — the whole frame had been
+    // stretched to make room for nothing. A quarter of a possession is about a
+    // dozen pixels here, which is the stroke plus enough to see it is not
+    // touching the edge.
+    let [x0, x1] = pad(xs);
+    if (zone) {
+      const h = zone.halfAt(y1) + 0.25;
+      x0 = Math.min(x0, zone.centre - h);
+      x1 = Math.max(x1, zone.centre + h);
+    }
 
     // INVERTED WHEN LOWER IS BETTER, so better is always right and always up.
     const X = (v: number) => {
@@ -528,7 +716,7 @@ function Plot({
       return T + (yM.lowerBetter ? t : 1 - t) * (H - T - B);
     };
     return { X, Y, x0, x1, y0, y1 };
-  }, [teams, shown, xM, yM, W, H]);
+  }, [teams, shown, xM, yM, W, H, zone]);
 
   const { X, Y } = geo;
   const size = crestSize(shown.length, W, H);
@@ -569,6 +757,27 @@ function Plot({
   // where its numbers put it.
   const hoveredMark = hover ? placed.find((m) => m.p.name === hover) ?? null : null;
 
+  /**
+   * The contender wedge, in pixels.
+   *
+   * IT IS A WEDGE, AND THE FRAME MAKES IT A TRAPEZOID. The shape has a floor and
+   * two slants and no top of its own — the claim is "above this rating, this far
+   * from average pace", which does not stop anywhere. So it is drawn up to the
+   * top of the visible range and clipped to the plot rect, which is also how the
+   * original reads: a flat bottom, two opening sides, and a top edge that is
+   * really just the edge of the picture.
+   *
+   * Clipping rather than fitting the axes around it, because the axes fit the
+   * selection on this page and always have. Widening them to contain the shape
+   * would squeeze every crest toward the middle to make room for a region with
+   * no teams in it.
+   */
+  const zonePath = useMemo(() => {
+    if (!zone) return null;
+    const pts = zonePolygon(zone, geo.y1);
+    return pts ? pts.map(([vx, vy]) => `${X(vx).toFixed(1)},${Y(vy).toFixed(1)}`).join(" ") : null;
+  }, [zone, geo, X, Y]);
+
   // Empty for a metric with no good direction — a "better" arrow on tempo or
   // three-point rate would be an editorial claim the data does not make.
   // Rendered as its own tspan rather than concatenated into the label, so it
@@ -583,6 +792,23 @@ function Plot({
     <div ref={boxRef} className="relative w-full" style={{ height: H }}>
       <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 w-full h-full" role="img"
         aria-label={`Teams by ${xM.label} against ${yM.label}`}>
+        {/* UNDER THE GRIDLINES, deliberately. A translucent region laid over the
+            grid makes the ticks inside it read as a different set from the ticks
+            outside, and the reader starts wondering whether the shape changed
+            the scale. Beneath them it is what it is — a marked-off part of the
+            same plot. */}
+        {zonePath && (
+          <>
+            <defs>
+              <clipPath id={clipId}>
+                <rect x={L} y={T} width={Math.max(0, W - L - R)} height={Math.max(0, H - T - B)} />
+              </clipPath>
+            </defs>
+            <polygon points={zonePath} clipPath={`url(#${clipId})`}
+              fill="color-mix(in oklab, var(--good) 10%, transparent)"
+              stroke="var(--good)" strokeWidth={1.75} strokeLinejoin="round" opacity={0.9} />
+          </>
+        )}
         {niceTicks(geo.x0, geo.x1, tickCount(W - L - R, "x")).map((v) => (
           <g key={`x${v}`}>
             <line x1={X(v)} y1={T} x2={X(v)} y2={H - B} stroke="var(--hairline)" />
@@ -648,21 +874,38 @@ function Plot({
       {[...placed].reverse().map(({ p, x, y }) => {
         const lit = hover === p.name;
         const pad = size <= 16 ? 3 : 2;
+        // PUSHED BACK, NOT HIDDEN. A team outside the zone is still part of the
+        // point — the shape means nothing without the very good teams sitting
+        // just beyond its edges, and Alabama at 72.8 possessions is the clearest
+        // thing on the chart. First pass took them to 0.32 opacity and 75%
+        // grey, which read as "these do not count" rather than "these are the
+        // background"; at 0.6 and a light desaturation every crest is still a
+        // school you can name and the inside group still steps forward, which is
+        // the whole job. Hovering one brings it all the way back.
+        const dim = zone != null && !lit && !inZone.has(p.name);
         return (
           <div
             key={p.name}
-            className="absolute cursor-pointer rounded-full"
+            className="absolute cursor-pointer rounded-full motion-safe:transition-[opacity,filter] duration-200"
             style={{
               left: `${(x / W) * 100}%`, top: `${(y / H) * 100}%`,
               transform: `translate(-50%,-50%) scale(${lit ? 1.5 : 1})`,
-              zIndex: lit ? 50 : 1,
+              zIndex: lit ? 50 : dim ? 1 : 2,
+              opacity: dim ? 0.6 : 1,
+              filter: dim ? "grayscale(0.35)" : undefined,
               // A paper disc behind every crest. Several schools' marks are
               // white or near-white and vanish into the page without it, and at
               // the dense sizes it also gives overlapping crests an edge so a
               // pile reads as many things rather than one smear.
               width: size + pad * 2, height: size + pad * 2,
               background: "color-mix(in oklab, var(--paper) 88%, transparent)",
-              boxShadow: lit ? "0 0 0 1.5px var(--coral)" : "0 0 0 0.5px var(--hairline)",
+              // A green ring on the ones inside, so the group reads as a group
+              // even where the shape's fill is hidden behind a crest.
+              boxShadow: lit
+                ? "0 0 0 1.5px var(--coral)"
+                : zone != null && !dim
+                  ? "0 0 0 1px color-mix(in oklab, var(--good) 55%, transparent)"
+                  : "0 0 0 0.5px var(--hairline)",
             }}
             onPointerEnter={() => setHover(p.name)}
             onPointerLeave={() => setHover(null)}
@@ -725,7 +968,19 @@ function Card({
       style={{ left: `${(x / W) * 100}%`, top: `${(y / H) * 100}%` }}>
       <div
         className="absolute rounded-lg border border-hairline bg-paper shadow-xl px-2.5 py-1.5 whitespace-nowrap"
-        style={{ [flipX ? "right" : "left"]: "1rem", [flipY ? "top" : "bottom"]: "0.85rem" }}
+        style={{
+          [flipX ? "right" : "left"]: "1rem", [flipY ? "top" : "bottom"]: "0.85rem",
+          // width:max-content IS LOAD-BEARING, and it is the same class of bug
+          // as min-w-0 on a flex child. An absolutely positioned box given only
+          // `left` is shrink-to-fit, and shrink-to-fit is min(max-content, the
+          // room left in the containing block) — so a card anchored to a crest
+          // near the right of the plot got clamped to the couple of inches left
+          // over, while whitespace-nowrap kept the text on one line. The line
+          // ran straight out of the panel: Gonzaga's "WCC" was printed past the
+          // card's own edge. max-content opts out of the clamp, and the flips
+          // below are what keep the card on screen.
+          width: "max-content",
+        }}
       >
         <div className="flex items-center gap-1.5">
           {team.id != null && (
