@@ -10,6 +10,7 @@
 
 import { midrankPercentiles } from "@/lib/percentile";
 import { EXPLORER_SEASONS, clampSeason } from "@/lib/seasons";
+import { cbbdAdjusted } from "@/lib/cbbd-rating-trust";
 
 export type StatSource = "trank" | "cbbd" | "derived";
 
@@ -701,8 +702,14 @@ function buildCohortRows(rawAll: RawTeamSeason[], years: number[]): TeamRow[] {
     const cbb = (Array.isArray(r.team_season_stats) || !r.team_season_stats ? null : r.team_season_stats) as Record<string, number | null> | null;
     const adjoe = (trank?.adjoe as number | null) ?? null;
     const adjde = (trank?.adjde as number | null) ?? null;
-    const cbbOAdj = cbb?.ortg_adj ?? null;
-    const cbbDAdj = cbb?.drtg_adj ?? null;
+    // GATED BY SEASON. Five seasons of CBBD's adjusted ratings do not describe
+    // the season that happened — 2020 correlates with every other measure at
+    // r = 0.22 — and BTA RTG z-scores these inside the year cohort, so feeding
+    // it a broken season does not produce a slightly worse number, it produces
+    // a confident wrong one. Null here drops BTA RTG to Bart alone for those
+    // years, which is what avgIfPresent is for. See lib/cbbd-rating-trust.ts.
+    const cbbOAdj = cbbdAdjusted(r.year, cbb?.ortg_adj);
+    const cbbDAdj = cbbdAdjusted(r.year, cbb?.drtg_adj);
     const bta_ortg = avgIfPresent([adjoe, cbbOAdj]);
     const bta_drtg = avgIfPresent([adjde, cbbDAdj]);
     // Opponent 3P% is now computed at build time from summed season counts
@@ -837,7 +844,7 @@ function buildCohortRows(rawAll: RawTeamSeason[], years: number[]): TeamRow[] {
       cbb_drtg: cbb?.drtg ?? null,
       cbb_ortg_adj: cbbOAdj,
       cbb_drtg_adj: cbbDAdj,
-      cbb_net_adj: cbb?.net_rtg_adj ?? null,
+      cbb_net_adj: cbbdAdjusted(r.year, cbb?.net_rtg_adj),
       cbb_pace: cbb?.pace ?? null,
       cbb_fbpts: cbb?.fbpts_pct ?? null,
       cbb_pitp: cbb?.pitp_pct ?? null,

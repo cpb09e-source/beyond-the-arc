@@ -37,6 +37,7 @@ const OUT = path.resolve("public/data");
 // export and the fast portal-only export apply the same rewrites (CBB and
 // Bart sometimes use different names for the same school).
 import { overrideTeamName } from "../src/lib/team-overrides.ts";
+import { cbbdAdjusted } from "../src/lib/cbbd-rating-trust.ts";
 // @ts-expect-error — plain .mjs helper shared with build-search-index.mjs
 // Data floor: 2013-14 season (year 2014) — first year with reliable
 // possession/efficiency data. Mirrors ALL_YEARS + clampYear in the app.
@@ -614,11 +615,21 @@ function attachBtaRtgToExport(rows: Row[]) {
     byYear.get(r.year)!.push(r);
   }
   for (const cohort of byYear.values()) {
+    // GATED INSIDE pick, not at the five call sites below. CBBD's adjusted
+    // ratings are unusable in five of our thirteen seasons — 2020 correlates
+    // with every other measure at r = 0.22 while looking entirely normal — and
+    // BTA RTG z-scores them within the year cohort, so a broken season does not
+    // shade the number, it replaces it with a confident wrong one. Doing it here
+    // means a sixth call site added later cannot forget. Dropping to null leaves
+    // Bart carrying those years alone, which is the behaviour the weights
+    // already handle. See src/lib/cbbd-rating-trust.ts for the measurement.
+    const CBBD_ADJ_COLS = new Set(["ortg_adj", "drtg_adj", "net_rtg_adj"]);
     const pick = (r: Row, src: "trank" | "cbb", col: string): number | null => {
       const t = Array.isArray(r.team_trank_stats) ? null : r.team_trank_stats as Record<string, number | null> | null;
       const c = Array.isArray(r.team_season_stats) || !r.team_season_stats ? null : r.team_season_stats as Record<string, number | null>;
       const v = src === "trank" ? t?.[col] : c?.[col];
-      return typeof v === "number" ? v : null;
+      if (typeof v !== "number") return null;
+      return src === "cbb" && CBBD_ADJ_COLS.has(col) ? cbbdAdjusted(r.year, v) : v;
     };
     const meanStd = (extract: (r: Row) => number | null) => {
       const vals = cohort.map(extract).filter((v): v is number => typeof v === "number" && Number.isFinite(v));

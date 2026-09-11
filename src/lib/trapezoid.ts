@@ -39,10 +39,13 @@
  * clips it at the frame, which is what makes it read as a trapezoid — the same
  * way the original does.
  *
- * 2023 IS NOT SAFE HERE. `net_rtg_adj` for that season is on some other scale
- * entirely (the whole league runs -5.3 to +8.8 where every other year runs past
- * ±30), so a zone built on it would be nonsense. The scatter is current-season
- * only today, so nothing hits it; anything that adds a season picker must.
+ * FIVE SEASONS CANNOT CARRY THIS SHAPE, and they take themselves off it. CBBD's
+ * adjusted ratings are broken for 2014, 2017, 2018, 2020 and 2023 — 2023 fits
+ * the whole league into seven points, 2020 looks normal and describes a season
+ * that did not happen — so extractMetrics nulls `net_rtg_adj` there. buildZone
+ * needs twelve finite values and will not find them, returns null, and the
+ * chart falls back to a plain scatter with no zone. Nothing special-cases a
+ * year. See lib/cbbd-rating-trust.ts.
  */
 
 import type { Metric } from "@/lib/team-scatter-metrics";

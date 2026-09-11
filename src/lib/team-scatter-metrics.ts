@@ -1,12 +1,18 @@
 /**
  * The columns the team scatter can plot, and how to read one off a season row.
  *
- * EVERY METRIC HERE HAS FULL COVERAGE. Checked against 2026: all 365 D-I teams
- * carry a finite value for all of these. That matters more on a scatter than in
- * a table — a table shows a dash and moves on, while a missing value silently
- * drops a team off the plot, and a reader has no way to tell an absent team
- * from one they did not select. Anything added here should be checked the same
- * way before it goes in.
+ * EVERY METRIC HERE HAS FULL COVERAGE IN 2026: all 365 D-I teams carry a finite
+ * value for all of them. That matters more on a scatter than in a table — a
+ * table shows a dash and moves on, while a missing value silently drops a team
+ * off the plot, and a reader has no way to tell an absent team from one they
+ * did not select. Anything added here should be checked the same way.
+ *
+ * COVERAGE IS PER SEASON, THOUGH, and one metric is empty in five of them:
+ * `net_rtg_adj` is withheld for 2014, 2017, 2018, 2020 and 2023, where CBBD's
+ * adjusted ratings do not describe the season that happened. That is a
+ * deliberate gap rather than missing data — see lib/cbbd-rating-trust.ts — and
+ * anything that lets a reader change season has to say so rather than draw an
+ * empty plot.
  *
  * DIRECTION IS PART OF THE DEFINITION, not a rendering choice. Adjusted
  * defensive rating is better when it is lower, turnover rate is better when it
@@ -15,6 +21,8 @@
  * way two arbitrary metrics can share a plot without the reader having to hold
  * which corner is good for each one separately.
  */
+
+import { cbbdAdjusted } from "@/lib/cbbd-rating-trust";
 
 export type MetricFormat = "num1" | "num2" | "num3" | "pct1";
 
@@ -95,6 +103,8 @@ export const METRIC_PRESETS: { label: string; x: string; y: string }[] = [
 ];
 
 type Nested = {
+  /** Needed to gate the CBBD adjusted ratings — see cbbdAdjusted below. */
+  year?: number | null;
   team_trank_stats?: Record<string, unknown> | null;
   team_season_stats?: Record<string, unknown> | null;
 };
@@ -117,6 +127,15 @@ export function extractMetrics(row: Nested): Record<string, number | null> {
     if (m.key === "margin") continue;
     out[m.key] = num(tr[m.key]) ?? num(ss[m.key]);
   }
+
+  // NET RATING IS NOT SAFE IN EVERY SEASON. CBBD's adjusted ratings are broken
+  // for five of the thirteen we carry — 2023 fits 357 teams into seven points,
+  // 2020 looks perfectly normal and correlates with reality at r = 0.22 — and a
+  // plausible-looking wrong number on an axis is worse than a gap, because a gap
+  // is visible. Nulling it here also takes the contender trapezoid off those
+  // seasons on its own: buildZone needs twelve finite values and will not find
+  // them. See lib/cbbd-rating-trust.ts for the measurement.
+  out.net_rtg_adj = cbbdAdjusted(row.year, out.net_rtg_adj);
 
   const oe = num(tr.adjoe), de = num(tr.adjde);
   out.margin = oe != null && de != null ? oe - de : null;
