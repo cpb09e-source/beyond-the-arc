@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { confDisplay } from "@/lib/conf-display";
 import { Select } from "@/components/select";
 import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-select";
@@ -13,6 +14,12 @@ import {
   fmtMetric, fmtTick, niceTicks, tickCount, type Metric,
 } from "@/lib/team-scatter-metrics";
 import { buildZone, zoneAxes, zonePolygon, ZONE_X, ZONE_Y, type Zone } from "@/lib/trapezoid";
+import { loadSeason, type SeasonDenial } from "@/lib/season-data";
+import { ALL_SEASONS, isFlaggedSeason, seasonFlagNote } from "@/lib/seasons";
+import {
+  metricCoverage, toScatterTeams,
+  type LogoIds, type ScatterSourceRow, type ScatterTeam,
+} from "@/lib/scatter-team";
 
 /**
  * Any two team metrics against each other, with school crests as the marks.
@@ -50,14 +57,10 @@ import { buildZone, zoneAxes, zonePolygon, ZONE_X, ZONE_Y, type Zone } from "@/l
  * as a button would advertise the one view this chart is worst at.
  */
 
-export type ScatterTeam = {
-  name: string;
-  conf: string;
-  rank: number;
-  id: number | null;
-  record: string;
-  m: Record<string, number | null>;
-};
+export type { ScatterTeam };
+
+/** "2025-26" from 2026 — the form every other season control on the site uses. */
+const seasonLabel = (y: number) => `${y - 1}-${String(y).slice(2)}`;
 
 /** Individually-picked teams, capped. Conference picks are not — that is how
  *  the mid-major preset is able to be the biggest selection of all. */
@@ -125,23 +128,70 @@ const PANE_H = HEAD_H + PER_PAGE * ROW_H;
  * zone's floor is a net-rating rank, so selecting by anything else can leave a
  * team above the floor off the chart — a shape with a hole in it, and no way for
  * the reader to tell the hole from an empty region.
+ *
+ * FALLS BACK TO RANK WHEN THE SEASON HAS NO NET RATING. Five seasons withhold
+ * it, and seeding off a column that is null for everybody selected nobody: the
+ * reader switched to 2022-23, moved the Y axis to something that season does
+ * have, and got a correctly-drawn chart of zero teams. The zone cannot exist in
+ * those years anyway, so ordering by Torvik rank loses nothing and keeps the
+ * page from opening empty.
  */
 function topByNet(teams: ScatterTeam[], n: number): string[] {
-  return [...teams]
-    .filter((t) => typeof t.m[ZONE_Y] === "number")
-    .sort((a, b) => (b.m[ZONE_Y] as number) - (a.m[ZONE_Y] as number))
+  const withNet = teams.filter((t) => typeof t.m[ZONE_Y] === "number");
+  const src = withNet.length >= n ? withNet : teams;
+  return (withNet.length >= n
+    ? [...src].sort((a, b) => (b.m[ZONE_Y] as number) - (a.m[ZONE_Y] as number))
+    : [...src].sort((a, b) => a.rank - b.rank))
     .slice(0, n)
     .map((t) => t.name);
 }
 
-export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
+const NO_TEAMS: ScatterTeam[] = [];
+
+export function TeamScatter({ teams: initialTeams, season, logos }: {
+  teams: ScatterTeam[]; season: number; logos: LogoIds;
+}) {
+  /**
+   * ONE SEASON AT A TIME, and the opening one arrives already rendered.
+   *
+   * The server hands over `season` in the RSC payload so the chart is on screen
+   * with no round trip; every other season is fetched through the same
+   * loadSeason the team explorer uses, which is what makes the archive gate
+   * apply here without this component knowing the gate exists. Seasons are kept
+   * once loaded — paging back and forth between two years is the obvious thing
+   * to do with this control and should not re-fetch.
+   */
+  const [year, setYear] = useState(season);
+  const [byYear, setByYear] = useState<Record<number, ScatterTeam[]>>(() => ({ [season]: initialTeams }));
+  const [denied, setDenied] = useState<Record<number, SeasonDenial>>({});
+
+  const teams = byYear[year] ?? NO_TEAMS;
+  // DERIVED, NOT STORED. A season is loading exactly when it is neither loaded
+  // nor refused — there is no third state, and a `loading` flag set inside the
+  // effect would be a second copy of that fact able to disagree with it.
+  const loading = !byYear[year] && !denied[year];
+
   const [confs, setConfs] = useState<Set<string>>(() => new Set());
   // THE PAGE OPENS ON THE CONTENDER ZONE. It used to open on the ACC against
   // offence and defence, which is a demonstration that the axes work rather than
   // a question anyone arrived with. The zone is the one view here that makes an
   // argument, so it is what a first-time reader lands in — and ZONE_FIELD teams
   // by net rating is the selection that shows both sides of its floor.
-  const [picked, setPicked] = useState<Set<string>>(() => new Set(topByNet(teams, ZONE_FIELD)));
+  /**
+   * The selection is DERIVED until the reader touches it.
+   *
+   * `null` means "whatever the contender view opens with", which is a function
+   * of the season — so changing season re-seeds by itself, with no effect
+   * synchronising two pieces of state that can disagree. The first pass did sync
+   * it, and the bug it invites is precise: carry 2026's top seventy-five into
+   * 2019 and you draw whichever of those programmes existed then, a selection
+   * that means nothing about the year, under a shape that means everything.
+   *
+   * Any hand edit writes a real Set and from then on the reader owns it. The
+   * Trapezoid button sets it back to null rather than to a fresh Set, which is
+   * what makes the button a way home from anywhere.
+   */
+  const [pickedOverride, setPickedOverride] = useState<Set<string> | null>(null);
   const [hover, setHover] = useState<string | null>(null);
   const [xKey, setXKey] = useState(ZONE_X);
   const [yKey, setYKey] = useState(ZONE_Y);
@@ -161,6 +211,44 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
   const zoneLive = zoneOn && zone != null && zoneAxes(xM, yM) ? zone : null;
   const pickX = (k: string) => { setXKey(k); if (k !== ZONE_X) setZoneOn(false); };
   const pickY = (k: string) => { setYKey(k); if (k !== ZONE_Y) setZoneOn(false); };
+
+  // FETCH ONCE PER SEASON, and treat a refusal as an answer. loadSeason resolves
+  // either way: a gated year comes back with a denial rather than throwing, so
+  // the chart can say "this is part of the Season Pass" instead of sitting in a
+  // loading state forever. Recording the denial also stops the effect retrying
+  // it on every render.
+  useEffect(() => {
+    if (byYear[year] || denied[year]) return;
+    let stale = false;
+    loadSeason<ScatterSourceRow[]>("teams", year).then((res) => {
+      if (stale) return;
+      if (res.ok) setByYear((prev) => ({ ...prev, [year]: toScatterTeams(res.data, logos) }));
+      else setDenied((prev) => ({ ...prev, [year]: res.denial }));
+    });
+    return () => { stale = true; };
+  }, [year, byYear, denied, logos]);
+
+  // The contender view's own selection, for whichever season is loaded. Kept
+  // even when the zone is switched off: turning the shape off should take away
+  // the shape, not the seventy-five teams it was drawn over.
+  const zoneSeed = useMemo(() => new Set(topByNet(teams, ZONE_FIELD)), [teams]);
+  const picked = pickedOverride ?? zoneSeed;
+
+  /**
+   * Whether the two chosen metrics exist at all in this season.
+   *
+   * NOT A DETAIL — it is the difference between a chart and a bug report. Three
+   * of these metrics come from play-by-play CBBD only half has before 2021, and
+   * adjusted net rating is withheld outright in five seasons, so an axis can
+   * legitimately have nothing on it. Drawn anyway that is an empty grid with
+   * working controls, which reads as broken software rather than absent data.
+   */
+  const covX = useMemo(() => metricCoverage(teams, xM.key), [teams, xM]);
+  const covY = useMemo(() => metricCoverage(teams, yM.key), [teams, yM]);
+  const emptyAxis = teams.length > 0 && (covX === 0 ? xM : covY === 0 ? yM : null);
+  const thin = teams.length > 0 && !emptyAxis
+    ? [[xM, covX] as const, [yM, covY] as const].filter(([, c]) => c < teams.length * 0.97)
+    : [];
 
   const allConfs = useMemo(() => {
     const counts = new Map<string, number>();
@@ -217,6 +305,21 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
     [teams, picked],
   );
 
+  /**
+   * How many of the selected teams actually reach the plot.
+   *
+   * THE NUMBER THE READER CAN SEE. Coverage stated as "295 of 353 in D-I" is
+   * true and answers a question nobody asked; what they are looking at is
+   * seventy-five teams chosen and thirty-four crests drawn, which without a word
+   * of explanation is a bug report. So the note leads with that and names the
+   * metric that caused it. A metric missing three teams in three hundred is not
+   * why, and saying so every time would bury the one that is.
+   */
+  const drawn = useMemo(
+    () => shown.filter((t) => typeof t.m[xM.key] === "number" && typeof t.m[yM.key] === "number").length,
+    [shown, xM, yM],
+  );
+
   /** Names inside the zone, among what is drawn. Empty when the zone is off. */
   const inZone = useMemo(
     () => new Set(
@@ -228,7 +331,7 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
   );
 
   const preset = (kind: "power" | "mid" | "top25" | "zone" | "clear") => {
-    if (kind === "clear") { setConfs(new Set()); setPicked(new Set()); setZoneOn(false); return; }
+    if (kind === "clear") { setConfs(new Set()); setPickedOverride(new Set()); setZoneOn(false); return; }
     // The zone button is a whole view, not a filter: it sets both axes, the
     // selection and the shape in one press, because any one of the three on its
     // own is broken — the shape over the wrong axes, or the right axes with the
@@ -241,24 +344,42 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
     if (kind === "zone") {
       if (zoneLive) { setZoneOn(false); return; }
       setXKey(ZONE_X); setYKey(ZONE_Y); setZoneOn(true);
-      setConfs(new Set()); setPicked(new Set(topByNet(teams, ZONE_FIELD)));
+      // null, not a fresh Set — back to the derived seed, so the view follows
+      // the season picker again from here.
+      setConfs(new Set()); setPickedOverride(null);
       return;
     }
     if (kind === "top25") {
       setConfs(new Set());
-      setPicked(new Set(teams.filter((t) => t.rank <= MAX_TEAMS).map((t) => t.name)));
+      setPickedOverride(new Set(teams.filter((t) => t.rank <= MAX_TEAMS).map((t) => t.name)));
       return;
     }
     setConfs(new Set(allConfs
       .filter(({ code }) => (kind === "power" ? POWER_CONFS.has(code) : !POWER_CONFS.has(code)))
       .map(({ code }) => code)));
-    setPicked(new Set());
+    setPickedOverride(new Set());
   };
 
   const sortBy = (key: SortKey) =>
     setSort((s) => (s.key === key ? { key, dir: (s.dir * -1) as 1 | -1 } : { key, dir: 1 }));
 
-  const summary = `${shown.length} of ${teams.length} teams · ${xM.short} vs ${yM.short}`;
+  const summary = `${seasonLabel(year)} · ${shown.length} of ${teams.length} teams · ${xM.short} vs ${yM.short}`;
+
+  /**
+   * One line for why this season has no chart, and the thing to do about it.
+   *
+   * Signed-out beats not-subscribed when both could apply: signing in is the
+   * cheaper action and may settle the other by itself. Same wording the team
+   * explorer uses, because it is the same gate and a reader who met it there
+   * should not have to work out that this is the same thing.
+   */
+  const notice = denied[year]
+    ? denied[year] === "signed-out"
+      ? { text: `${seasonLabel(year)} is part of the Season Pass.`, cta: "Sign in", href: "/account/login" }
+      : denied[year] === "not-subscribed"
+        ? { text: `${seasonLabel(year)} is part of the Season Pass.`, cta: "See plans", href: "/pricing" }
+        : { text: `${seasonLabel(year)} is unavailable right now.`, cta: null, href: null }
+    : null;
 
   return (
     <div>
@@ -271,6 +392,17 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
           phone and is always open from md. */}
       <ScopeCollapse summary={summary}>
         <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
+          {/* FIRST, because it scopes everything after it. Single-select: the
+              chart is one cloud of crests and two seasons of the same team on
+              it would be two logos a reader has no way to tell apart. */}
+          <Field label="Season">
+            <Select value={String(year)} onChange={(v) => setYear(Number(v))}
+              compact ariaLabel="Season" className="w-28">
+              {ALL_SEASONS.map((y) => (
+                <option key={y} value={y}>{seasonLabel(y)}{isFlaggedSeason(y) ? " *" : ""}</option>
+              ))}
+            </Select>
+          </Field>
           <Field label="X axis">
             <MetricSelect value={xKey} onChange={pickX} label="X" />
           </Field>
@@ -298,10 +430,8 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
               // here was a live bug the moment the zone preset started seeding
               // 75 teams: deselecting one of them sent a 74-name array through
               // the cap and silently dropped 49 of the others.
-              onChange={(v) => setPicked((prev) =>
-                new Set(v.length > prev.size
-                  ? v.slice(0, Math.max(MAX_TEAMS, prev.size))
-                  : v))}
+              onChange={(v) => setPickedOverride(new Set(
+                v.length > picked.size ? v.slice(0, Math.max(MAX_TEAMS, picked.size)) : v))}
               placeholder="Type to filter…"
               emptyLabel="None"
               ariaLabel="Teams"
@@ -343,7 +473,12 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
         </div>
       </ScopeCollapse>
 
-      <div className="flex items-baseline justify-between gap-3 mb-2">
+      {/* HIDDEN WHEN THERE IS NO CHART. It reported `shown.length`, which is
+          zero whenever a season is gated or an axis is empty — and "0 teams"
+          above a panel explaining that 2022-23's ratings are withheld reads as
+          a claim that the season had no teams in it. It had 359. */}
+      <div className={cn("flex items-baseline justify-between gap-3 mb-2",
+        (notice || loading || emptyAxis) && "hidden")}>
         <h2 className="text-base text-ink">
           {zoneLive ? (
             <>
@@ -359,33 +494,114 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
         {/* THE TABLE IS FOLDED ON A PHONE. It is 870px of column, and with it
             open above the chart a reader had to scroll past every row to reach
             the thing they came for. On lg it is simply always there. */}
-        <button
-          type="button"
-          onClick={() => setTableOpen((o) => !o)}
-          aria-expanded={tableOpen}
-          className="lg:hidden text-xs uppercase tracking-widest text-ink-muted hover:text-ink"
-        >
-          {tableOpen ? "Hide teams" : "Show teams"}
-        </button>
       </div>
 
-      {/* Plot first on a phone, where the table is the thing you open on
-          purpose. Side by side from lg, table fixed and plot elastic. */}
-      <div className="flex flex-col lg:flex-row gap-4 items-start">
-        <div className={cn("w-full lg:w-auto order-2 lg:order-1", !tableOpen && "hidden lg:block")}>
-          <TeamTable
-            rows={sorted} xM={xM} yM={yM} sort={sort} onSort={sortBy}
-            hover={hover} setHover={setHover} inZone={zoneLive ? inZone : null}
-          />
+      {/* A season that cannot be drawn says why, in the space the chart would
+          have taken. Same height as the panes so the page does not jump as the
+          reader moves along the picker. */}
+      {notice ? (
+        <Blocked>
+          <p className="text-sm text-ink-soft">{notice.text}</p>
+          {notice.cta && notice.href && (
+            <a href={notice.href}
+              className="mt-3 inline-block rounded-md border border-coral/50 px-3 py-1.5 text-xs uppercase tracking-[0.08em] text-coral hover:bg-coral/10 transition-colors">
+              {notice.cta}
+            </a>
+          )}
+        </Blocked>
+      ) : loading ? (
+        <Blocked><p className="text-sm text-ink-muted">Loading {seasonLabel(year)}…</p></Blocked>
+      ) : emptyAxis ? (
+        <Blocked>
+          <p className="text-sm text-ink-soft">
+            <span className="font-semibold text-ink">{emptyAxis.label}</span>
+            {" has no values for "}{seasonLabel(year)}.
+          </p>
+          <p className="mt-2 text-xs text-ink-muted max-w-md leading-relaxed">
+            {emptyAxis.key === ZONE_Y
+              ? "CBBD's adjusted ratings for this season do not describe the season that "
+                + "happened — they disagree with every other measure we hold — so the site "
+                + "withholds them rather than plot a number that looks reasonable and is not."
+              : "This metric is built from play-by-play, which CBBD does not have for "
+                + "this season."}
+          </p>
+          <p className="mt-3 text-xs text-ink-muted">Pick another metric, or another season.</p>
+        </Blocked>
+      ) : (
+        /* Plot first on a phone, where the table is the thing you open on
+           purpose. Side by side from lg, table fixed and plot elastic. */
+        <div className="flex flex-col lg:flex-row gap-4 items-start">
+          {/* A ROW OF ITS OWN ON A PHONE, not a link tucked against the count.
+              It is the header of the section it opens, so it takes the full
+              width, carries the row count, and turns its chevron — the same
+              shape every other collapsible on the site uses. Sharing a line with
+              the heading made it read as a caption on the number beside it.
+
+              AND THE TABLE OPENS ABOVE THE CHART. It used to sit below on a
+              phone, which meant pressing "show teams" scrolled nothing into
+              view: the thing you asked for appeared past 500px of plot. */}
+          <button
+            type="button"
+            onClick={() => setTableOpen((o) => !o)}
+            aria-expanded={tableOpen}
+            className="lg:hidden order-1 w-full flex items-center justify-between rounded-lg border border-hairline px-3 py-2.5 text-ink-soft hover:text-ink hover:border-ink-muted transition-colors"
+          >
+            <span className="text-xs uppercase tracking-widest font-medium">
+              Teams <span className="tabular text-ink-muted">({shown.length})</span>
+            </span>
+            <ChevronDown size={16} className={cn("shrink-0 transition-transform", tableOpen && "rotate-180")} />
+          </button>
+          <div className={cn("w-full lg:w-auto order-2 lg:order-1", !tableOpen && "hidden lg:block")}>
+            <TeamTable
+              rows={sorted} xM={xM} yM={yM} sort={sort} onSort={sortBy}
+              hover={hover} setHover={setHover} inZone={zoneLive ? inZone : null}
+            />
+          </div>
+          <div className="flex-1 min-w-0 w-full order-3 lg:order-2">
+            <Plot
+              teams={teams} shown={shown} xM={xM} yM={yM}
+              hover={hover} setHover={setHover} zone={zoneLive} inZone={inZone}
+            />
+            {/* A thin metric still draws a real chart — of part of the country.
+                Saying how much is the difference between a caveat and a lie of
+                omission. */}
+            {drawn < shown.length && (
+              <p className="mt-2 text-xs text-ink-muted">
+                <span className="tabular text-ink-soft">{drawn}</span>
+                {" of the "}<span className="tabular text-ink-soft">{shown.length}</span>
+                {" selected teams have both metrics for "}{seasonLabel(year)}
+                {thin.length > 0 && (
+                  <>
+                    {" — "}
+                    {thin.map(([m, c]) => `${m.label} is only tracked for ${c} of ${teams.length}`).join(", ")}
+                  </>
+                )}.
+              </p>
+            )}
+            {seasonFlagNote(year) && (
+              // A SINGLE-SEASON CHART DOES NOT POOL, so strictly this does not
+              // need the flag. It gets one anyway: the picker invites flipping
+              // between years, which is pooling done by hand a second apart, and
+              // the zone's floor is a rank in a season that was a third shorter.
+              <p className="mt-2 text-xs text-ink-muted">
+                <span className="text-ink-soft font-semibold">{seasonLabel(year)}</span>
+                {" — "}{seasonFlagNote(year)}
+              </p>
+            )}
+            {zoneLive && <ZoneNote zone={zoneLive} season={year} />}
+          </div>
         </div>
-        <div className="flex-1 min-w-0 w-full order-1 lg:order-2">
-          <Plot
-            teams={teams} shown={shown} xM={xM} yM={yM}
-            hover={hover} setHover={setHover} zone={zoneLive} inZone={inZone}
-          />
-          {zoneLive && <ZoneNote zone={zoneLive} />}
-        </div>
-      </div>
+      )}
+    </div>
+  );
+}
+
+/** A message where the chart would be, holding the chart's height. */
+function Blocked({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ minHeight: Math.round(PANE_H * 0.55) }}
+      className="flex flex-col items-center justify-center rounded-lg border border-hairline bg-paper-deep/30 px-6 py-10 text-center">
+      {children}
     </div>
   );
 }
@@ -401,7 +617,7 @@ export function TeamScatter({ teams }: { teams: ScatterTeam[] }) {
  * than decorative: the floor and the widening are stated, so a reader who thinks
  * twelve teams is too many knows exactly which number to disagree with.
  */
-function ZoneNote({ zone }: { zone: Zone }) {
+function ZoneNote({ zone, season }: { zone: Zone; season: number }) {
   return (
     <p className="mt-2 text-xs leading-relaxed text-ink-muted">
       <span className="text-ink-soft font-semibold">Trapezoid of Excellence</span>
@@ -412,8 +628,8 @@ function ZoneNote({ zone }: { zone: Zone }) {
         className="underline decoration-hairline underline-offset-2 hover:text-ink">
         Ryan Hammer
       </a>
-      {"; the zone here is drawn from our own numbers — floor at the 12th-best adjusted net "}
-      {"rating in Division I ("}
+      {`; the zone here is drawn from our own ${seasonLabel(season)} numbers — floor at the `}
+      {"12th-best adjusted net rating in Division I ("}
       <span className="tabular">{zone.floor.toFixed(1)}</span>
       {"), centred on average tempo ("}
       <span className="tabular">{zone.centre.toFixed(1)}</span>
