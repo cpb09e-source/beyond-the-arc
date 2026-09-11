@@ -7,8 +7,16 @@
 
 [build]
   # Production deploys are MANUAL from a local machine: run
-  # `node scripts/build-with-r2-stash.mjs` then
-  # `netlify deploy --prod --dir=out`. Netlify's hosted build runner
+  # `node scripts/build-with-r2-stash.mjs`, then
+  # `node scripts/sync-pages-to-r2.mjs`, then
+  # `netlify deploy --prod --dir=out --no-build`.
+  #
+  # --no-build IS REQUIRED, and was not always. CLI 27.0.1 with Next Runtime
+  # v5.15.13 runs build.command below before uploading, so the plain form
+  # re-runs the whole 40-minute build against an out/ that is already correct.
+  # On 2026-09-11 that attempt was refused outright by the build's own memory
+  # guard, which is the only reason it cost 39 seconds instead of an hour.
+  # Netlify's hosted build runner
   # times out on this project's ~23k static pages even after
   # optimization — local builds (no cap) are the only reliable path.
   #
@@ -231,7 +239,7 @@
 # site automatically. That fallback is shipped and working today; it is what
 # every player without a headshot already renders.
 #
-# RUNBOOK on a takedown notice: uncomment → `netlify deploy --prod --dir=out
+# RUNBOOK on a takedown notice: uncomment → `netlify deploy --prod --dir=out --no-build
 # --no-build` → confirm the deploy reaches `ready` → reply to the sender saying
 # it is done. Responding fast and in good faith is the single behaviour that
 # keeps a notice from becoming anything more than a notice.

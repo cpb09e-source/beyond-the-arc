@@ -30,6 +30,49 @@ lifted the push half on 2026-09-01 ("you can push"), then authorized one build
 and deploy that same day ("build and deploy go ahead"). That authorization was
 for THAT deploy. Ask again before the next one.
 
+### DEPLOY — 2026-09-11, and the command changed
+
+**`netlify deploy --prod --dir=out` NO LONGER WORKS. It needs `--no-build`.**
+
+CLI 27.0.1 with Next Runtime v5.15.13 runs `build.command` from netlify.toml
+before uploading, so the plain form kicks off the whole 40-minute build against
+an `out/` that is already finished and correct. On 2026-09-11 it was refused in
+39 seconds by the build's own memory guard — which is the only reason it cost
+nothing. The full sequence is now:
+
+```
+node scripts/build-with-r2-stash.mjs
+node scripts/sync-pages-to-r2.mjs          # BEFORE the deploy, always
+netlify deploy --prod --dir=out --no-build
+```
+
+**The CLI's exit code lied again, in a new way.** `netlify deploy` returned 1
+into a wrapper that reported success. Read the log; the string to look for is
+`Deploy is live!`.
+
+**MEMORY IS THE BINDING CONSTRAINT, and it costs more than a failed build.**
+The build ran with free RAM at 0.6 GB — it paged instead of dying, and
+prerendering still took its usual 4.8 min for 109,130 pages. The bill arrived
+at the next step: the R2 sync ran at **101/s against the 159/s measured on a
+quiet machine, turning 78 minutes into 123.** Before starting, stop OrangeSlice's
+dev server (`websites/orangeslice`, ~6.6 GB by itself) as well as this one. It
+came back up mid-run on 2026-09-11 and is what pushed free RAM to 4.0 GB and
+tripped the guard on the deploy attempt.
+
+**Last deploy: `6aa38e358a7e0f35149f18f4`, 2026-09-11, from `d6289d4cf2`.**
+Three legs: build ~35 min (109,130 pages, 319,441 RSC files flattened), sync
+**743,070 files / 7,387s / 0 failed / 0 head misses**, deploy hashed 361,207
+files, CDN requested 170,859, uploaded 340,286.
+
+Verified live: `/build-info.json` reports `d6289d4`; `/`, `/teams/scatter/`,
+`/teams/`, `/players/`, `/scoreboard/`, `/matchup/`, `/glossary/`, `/portal/`
+all 200; a 2026 game page through the R2 rewrite returns 200 at 40 KB;
+`/data/teams-by-year/` is 200 for 2026 and 2025 and 404 for 2024 and 2023, so
+the archive gate is intact; `/mock/*` is 404. The scatter renders its trapezoid
+with 11 of 75 inside and a 13-season picker.
+
+---
+
 **PRODUCTION STATE — check it, do not read it from here.** This block has been
 wrong twice and both times it was read out to Colin as the next thing to do.
 One command settles it:
