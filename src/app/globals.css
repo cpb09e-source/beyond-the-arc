@@ -541,6 +541,14 @@ body {
 [data-theme="dark"] .bta-logo-light { display: none; }
 [data-theme="dark"] .bta-logo-dark { display: block; }
 
+/* Conference marks on the dark ground. About a third of the league marks
+   (Big Ten, ACC and C-USA among them) are navy or black ink and all but vanish
+   on it. A faint light halo traces the edge without boxing the mark in; the
+   light theme needs nothing. */
+[data-theme="dark"] .conf-logo {
+  filter: drop-shadow(0 0 0.6px rgb(255 255 255 / 0.7)) drop-shadow(0 0 2px rgb(255 255 255 / 0.18));
+}
+
 /* Mobile legibility floor.
  *
  * The design leans on small tracked type, which reads fine on a desktop
@@ -1304,6 +1312,11 @@ body {
   --ma-fill: var(--ma-brand, var(--ma));
   --mb-fill: var(--mb-brand, var(--mb));
   --ma-wash: 20%;
+  /* What each half's wash is mixed against: the answer card's paper-deep/25
+     over the page, as one opaque color. Mixed against transparent instead,
+     the right half's wash tinted over the left team's full-width wash. The
+     paper tokens swap with the theme, so dark needs no override. */
+  --ma-ground: color-mix(in srgb, var(--paper-deep) 25%, var(--paper));
 }
 [data-theme="dark"] .matchup-root {
   --ma: var(--ma-dark, var(--coral));

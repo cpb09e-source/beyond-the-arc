@@ -11,7 +11,7 @@
 
 import { orebBaseline } from "./league-averages";
 import {
-  lineLabel, longDate, tipLabel,
+  isFinal, lineLabel, longDate, periodLabel, tipLabel,
   type BoxPlayer, type GameBundle, type GameHead, type Play,
 } from "../components/game/types";
 
@@ -55,7 +55,12 @@ const LEADER_CATS: {
   {
     label: "Assists",
     pick: (p) => p.assists,
-    detail: (p) => `${p.turnovers} TO, ${p.minutes} MIN`,
+    // Either count can be missing from the feed. A missing one is left out
+    // rather than printed as "null TO", and a line with neither is a dash.
+    detail: (p) => [
+      p.turnovers != null ? `${p.turnovers} TO` : null,
+      p.minutes != null ? `${p.minutes} MIN` : null,
+    ].filter(Boolean).join(", ") || "–",
   },
 ];
 
@@ -110,20 +115,36 @@ export function gameInfoRows(b: GameBundle): GameInfoRow[] {
   const tv = b.broadcasts.filter((x) => x.broadcastType === "TV").map((x) => x.broadcastName).join(", ");
   const line = lineLabel(b);
   const ou = (b.line.find((l) => l.provider === "Draft Kings") ?? b.line[0])?.overUnder ?? null;
-  const total = (g.home.points ?? 0) + (g.away.points ?? 0);
 
   const rows: Array<[GameInfoLabel, string | null]> = [
     ["Arena", g.venue],
     ["Location", [g.city, g.state].filter(Boolean).join(", ") || null],
-    ["Tip-off", tipLabel(g.startDate)],
+    // A fixture whose slot nobody has chosen has no tip time, only a placeholder hour.
+    ["Tip-off", g.tbd ? "TBD" : tipLabel(g.startDate)],
     ["Attendance", g.attendance ? g.attendance.toLocaleString() : null],
     ["Television", tv || null],
     ["Line", line],
-    ["Total", ou !== null ? `${ou} · ${total > ou ? "over" : "under"} at ${total}` : null],
+    ["Total", ou !== null ? totalLabel(g, ou) : null],
   ];
   return rows
     .filter((r): r is [GameInfoLabel, string] => Boolean(r[1]))
     .map(([label, value]) => ({ label, value }));
+}
+
+/**
+ * The Total row's value: the over/under, then where the game stands against it.
+ *
+ * ONLY A FINAL GAME IS CALLED. A running total is still moving, so a live game
+ * shows it beside the line with no verdict, and a game that has not started
+ * shows the line alone. A final total exactly on the number is a push, which
+ * is neither over nor under.
+ */
+function totalLabel(g: GameHead, ou: number): string {
+  if (!gameStarted(g)) return String(ou);
+  const total = (g.home.points ?? 0) + (g.away.points ?? 0);
+  if (!isFinal(g)) return `${ou} · ${total} so far`;
+  const call = total > ou ? "over" : total < ou ? "under" : "push";
+  return `${ou} · ${call} at ${total}`;
 }
 
 /* ------------------------------- team stats ------------------------------ */
@@ -365,11 +386,15 @@ function winsFactor(f: Factor, side: "a" | "h"): boolean {
 export type H2hTally = {
   /** Meetings the HOME team won. */
   wins: number;
-  /** Every other meeting on record: b.h2h.length - wins. */
+  /** Meetings the home team lost. A meeting with no recorded winner is neither. */
   losses: number;
   /** "Duke 3-2", from the home team's side; null when they have never met. */
   note: string | null;
-  /** Each meeting's winning school, parallel to b.h2h (oldest first). */
+  /**
+   * Each meeting's winning school, parallel to b.h2h (oldest first). "" for a
+   * meeting with no recorded winner: an empty string rather than null, so a
+   * caller reading this as a school name gets no name instead of a crash.
+   */
   winners: string[];
 };
 
@@ -382,12 +407,15 @@ export type H2hTally = {
  */
 export function h2hTally(b: GameBundle): H2hTally {
   const g = b.game;
-  const w = b.h2h.filter((r) => r.won).length;
+  // `won` is null where the feed has no result for a meeting. That is not a
+  // home loss, so it counts for neither side and names no winner.
+  const w = b.h2h.filter((r) => r.won === true).length;
+  const l = b.h2h.filter((r) => r.won === false).length;
   return {
     wins: w,
-    losses: b.h2h.length - w,
-    note: b.h2h.length ? `${g.home.team} ${w}-${b.h2h.length - w}` : null,
-    winners: b.h2h.map((r) => (r.won ? g.home.team : r.opponent)),
+    losses: l,
+    note: b.h2h.length ? `${g.home.team} ${w}-${l}` : null,
+    winners: b.h2h.map((r) => (r.won === true ? g.home.team : r.won === false ? r.opponent : "")),
   };
 }
 
@@ -472,6 +500,14 @@ export function groupPlaysByPeriod(plays: Play[]): Array<[number, Play[]]> {
     m.get(p.per)!.push(p);
   }
   return [...m.entries()].sort((a, c) => a[0] - c[0]);
+}
+
+/**
+ * A period's heading in the play log: "1st half", "2nd half", then "OT",
+ * "2OT". Overtimes are not halves, so they carry no "half".
+ */
+export function periodHeading(per: number): string {
+  return per <= 2 ? `${periodLabel(per)} half` : periodLabel(per);
 }
 
 /**

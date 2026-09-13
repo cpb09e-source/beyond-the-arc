@@ -9,7 +9,7 @@ import { TopHundredPill } from "@/components/portal/top-hundred-pill";
 import { PlayerPhoto } from "@/components/player-photo";
 import { confDisplay } from "@/lib/conf-display";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
-import { CLASS_MIN_STARS, classPlayerRatingTitle, type TCPlayer, type TransferClassRow } from "@/lib/portal";
+import { CLASS_MIN_STARS, classPlayerRatingTitle, type PortalEntry, type TCPlayer, type TransferClassRow } from "@/lib/portal";
 
 export type { TCPlayer, TransferClassRow } from "@/lib/portal";
 
@@ -217,7 +217,12 @@ function TransferClassSheet({
  * left and outgoing on the right, filtered to players with 2+ stars (drops
  * walk-ons and minimal-impact moves so the list reads cleanly).
  */
-export function TransferClassModal({ row, onClose }: { row: TransferClassRow; onClose: () => void }) {
+export function TransferClassModal({ row, onClose, returners }: {
+  row: TransferClassRow;
+  onClose: () => void;
+  /** Portal rows of the players rated on an earlier season, by cbba_player_id. See returnerRatingTitle. */
+  returners?: ReadonlyMap<number, PortalEntry>;
+}) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
     document.addEventListener("keydown", onKey);
@@ -274,9 +279,9 @@ export function TransferClassModal({ row, onClose }: { row: TransferClassRow; on
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] gap-0 overflow-y-auto flex-1">
-          <PlayerList kicker="Incoming" accent="text-good" players={inPlayers} />
+          <PlayerList kicker="Incoming" accent="text-good" players={inPlayers} returners={returners} />
           <div className="hidden md:block bg-hairline" />
-          <PlayerList kicker="Outgoing" accent="text-bad" players={outPlayers} />
+          <PlayerList kicker="Outgoing" accent="text-bad" players={outPlayers} returners={returners} />
         </div>
       </div>
     </div>
@@ -284,11 +289,12 @@ export function TransferClassModal({ row, onClose }: { row: TransferClassRow; on
 }
 
 function PlayerList({
-  kicker, accent, players,
+  kicker, accent, players, returners,
 }: {
   kicker: string;
   accent: string;
   players: TCPlayer[];
+  returners?: ReadonlyMap<number, PortalEntry>;
 }) {
   // Sums eWins, matching the card's net so the two agree on screen.
   const totalRating = players.reduce((s, p) => s + (p.rating ?? 0), 0);
@@ -336,7 +342,7 @@ function PlayerList({
               <span className="flex flex-col items-end">
                 <span
                   className={`font-medium tabular text-sm ${(p.rating ?? 0) >= 0 ? "text-ink" : "text-bad"}`}
-                  title={classPlayerRatingTitle(p)}
+                  title={classPlayerRatingTitle(p, returners?.get(p.cbba_player_id))}
                 >
                   {p.rating == null ? "—" : String(p.rating)}
                 </span>

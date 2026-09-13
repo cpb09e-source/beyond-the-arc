@@ -194,21 +194,20 @@ export type CalcResult<G extends GameLog = GameLog> = {
 };
 
 /**
- * The answer: every game in scope where every condition held, and the record
- * in them. `coachByTeamYear` resolves which games belong to a coach, since the
- * logs carry no coach of their own.
+ * Whether a game is in the question's scope: everything but the conditions.
+ * Shared by the answer and the gap count under it, so the two can never
+ * disagree about which games a question reaches.
  */
-export function runWinCalc<G extends GameLog>(
-  games: G[],
-  question: CalcScope & { filters: Filter[] },
+function inScope(
+  question: CalcScope,
   coachByTeamYear: Record<string, Record<number, string>>,
-): CalcResult<G> {
+): (g: GameLog) => boolean {
   const confSet = question.conferences.length === 0 ? null : new Set(question.conferences);
   const teamSet = question.teams.length === 0 ? null : new Set(question.teams);
   const coachSet = question.coaches.length === 0 ? null : new Set(question.coaches);
   const oppSet = question.opponents.length === 0 ? null : new Set(question.opponents);
   const quadSet = question.quads.length === 0 ? null : new Set(question.quads);
-  const matching = games.filter((g) => {
+  return (g) => {
     if (confSet && (g.team_conference == null || !confSet.has(g.team_conference))) return false;
     if (teamSet && !teamSet.has(g.team_name)) return false;
     if (oppSet && (g.opp_team_market == null || !oppSet.has(g.opp_team_market))) return false;
@@ -219,8 +218,22 @@ export function runWinCalc<G extends GameLog>(
       const coach = coachByTeamYear[g.team_name]?.[g.year];
       if (!coach || !coachSet.has(coach)) return false;
     }
-    return question.filters.every((f) => matches(g, f));
-  });
+    return true;
+  };
+}
+
+/**
+ * The answer: every game in scope where every condition held, and the record
+ * in them. `coachByTeamYear` resolves which games belong to a coach, since the
+ * logs carry no coach of their own.
+ */
+export function runWinCalc<G extends GameLog>(
+  games: G[],
+  question: CalcScope & { filters: Filter[] },
+  coachByTeamYear: Record<string, Record<number, string>>,
+): CalcResult<G> {
+  const scoped = inScope(question, coachByTeamYear);
+  const matching = games.filter((g) => scoped(g) && question.filters.every((f) => matches(g, f)));
   const wins = matching.filter((g) => g.won).length;
   const losses = matching.length - wins;
   // Average margin (signed). Positive => team typically won by X; negative
@@ -243,6 +256,49 @@ export function runWinCalc<G extends GameLog>(
     avgMargin,
     matching,
   };
+}
+
+/** A stat under a condition that some games in scope carry no value for. */
+export type ConditionGap = { key: string; missing: number; total: number };
+
+/**
+ * Below this share of the games in scope a gap is a stray box score, not worth
+ * a sentence. The same floor the desktop calculator uses.
+ */
+const GAP_FLOOR = 0.02;
+
+/**
+ * The stats under a condition that games in scope have no value for, once per
+ * stat, in condition order.
+ *
+ * A game with no value fails every condition on that stat whatever happened in
+ * it, so the answer silently comes from only the games that recorded it. Fast
+ * break, paint and second-chance points are missing from 30 to 55% of games
+ * before 2022-23, which the record alone never shows. Counted over the games in
+ * scope, before any condition, with the same test `matches` applies.
+ */
+export function conditionGaps(
+  games: GameLog[],
+  question: CalcScope & { filters: Filter[] },
+  coachByTeamYear: Record<string, Record<number, string>>,
+): ConditionGap[] {
+  const keys = [...new Set(question.filters.map((f) => String(f.stat)))];
+  if (keys.length === 0) return [];
+  const scoped = games.filter(inScope(question, coachByTeamYear));
+  const out: ConditionGap[] = [];
+  for (const key of keys) {
+    let missing = 0;
+    for (const g of scoped) if (typeof g[key] !== "number") missing++;
+    if (missing > 0 && missing / scoped.length >= GAP_FLOOR) out.push({ key, missing, total: scoped.length });
+  }
+  return out;
+}
+
+/** "93 of the 139 games in scope have no FB Pts Diff, so the answer covers the other 46." */
+export function conditionGapNote(g: ConditionGap): string {
+  const label = statLabel(g.key);
+  if (g.missing >= g.total) return `No game in scope has ${label}, so none can match.`;
+  return `${g.missing.toLocaleString()} of the ${g.total.toLocaleString()} games in scope ${g.missing === 1 ? "has" : "have"} no ${label}, so the answer covers the other ${(g.total - g.missing).toLocaleString()}.`;
 }
 
 /**

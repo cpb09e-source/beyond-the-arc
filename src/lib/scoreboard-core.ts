@@ -374,6 +374,15 @@ export function tickerLabel(slate: Slate): TickerLabel {
   return { kind: "scores", text: "Scores" };
 }
 
+/**
+ * A ticker cell's tip time, or "TBD" for a fixture whose time has not been
+ * set. CBBD dates those at midnight Eastern, and the cell is too narrow for
+ * gameStatusLabel's "Time TBD".
+ */
+export function tickerTipLabel(g: ScoreGame): string {
+  return g.tbd ? "TBD" : tipLabel(g.startDate);
+}
+
 /* ------------------------------ date picker ------------------------------- */
 
 // ---- date helpers, all UTC-noon anchored so DST can never shift a day ----

@@ -195,12 +195,16 @@ export function MatchupView({
           // second track belongs to the first team. The right team's wash is
           // a skewed layer inside its own half.
           //
+          // Both washes mix against the card's ground (--ma-ground), not
+          // against transparent. A translucent right wash sat on top of the
+          // left team's and showed a mix of the two; an opaque one covers it.
+          //
           // Columns only. On a phone .matchup-split ignores this and stacks
           // the halves at their natural height — see the rule in globals.css
           // for why the split does not rotate.
           style={{
             ["--ma-cols" as string]: `minmax(max(150px, 26%), ${Math.max(2, winA * 100)}fr) minmax(max(150px, 26%), ${Math.max(2, (1 - winA) * 100)}fr)`,
-            background: `color-mix(in srgb, ${fillA} var(--ma-wash), transparent)`,
+            background: `color-mix(in srgb, ${fillA} var(--ma-wash), var(--ma-ground))`,
           }}
         >
           <Half team={a} color={colorA} fill={fillA} season={pack.season} side="left" score={showA} win={winA} hosting={p.site === "home"} />
@@ -676,7 +680,7 @@ function Half({ team, color, fill, season, side, score, win, hosting, seam }: {
 }) {
   const right = side === "right";
   // The wash is the container's job on the left; see the grid above.
-  const wash = `color-mix(in srgb, ${fill} var(--ma-wash), transparent)`;
+  const wash = `color-mix(in srgb, ${fill} var(--ma-wash), var(--ma-ground))`;
   return (
     // Rows stretch (no items-end): shrink-wrapped rows let a long name spill
     // left past the padding and under the seam instead of wrapping.

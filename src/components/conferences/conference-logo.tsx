@@ -16,6 +16,9 @@ import { cn } from "@/lib/utils";
  * Falls back to NOTHING rather than to a monogram. A missing mark leaves the
  * name it sits beside, which already says which league this is; a gray circle
  * with two letters in it says only that something failed.
+ *
+ * `conf-logo` gives the mark a faint light halo on the dark theme (globals.css),
+ * where the navy and black marks otherwise disappear.
  */
 export function ConferenceLogo({
   conf,
@@ -40,7 +43,7 @@ export function ConferenceLogo({
       loading="lazy"
       decoding="async"
       onError={() => setFailed(true)}
-      className={cn("shrink-0 object-contain", className)}
+      className={cn("conf-logo shrink-0 object-contain", className)}
       style={{ width: size, height: size }}
     />
   );

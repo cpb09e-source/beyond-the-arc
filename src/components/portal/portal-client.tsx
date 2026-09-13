@@ -74,6 +74,12 @@ export function PortalClient({
   const [sortBy, setSortBy] = useState<SortKey>("board");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [openClass, setOpenClass] = useState<TransferClassRow | null>(null);
+  // The few players rated on an earlier season, so the class list's hover can
+  // name that season too. See returnerRatingTitle.
+  const returners = useMemo(
+    () => new Map(entries.filter((e) => e.rating_basis === "return").map((e) => [e.cbba_player_id, e] as const)),
+    [entries],
+  );
 
   const confsTo = useMemo(() => {
     const s = new Set<string>();
@@ -366,7 +372,7 @@ export function PortalClient({
       </div>
 
       {openClass && (
-        <TransferClassModal row={openClass} onClose={() => setOpenClass(null)} />
+        <TransferClassModal row={openClass} onClose={() => setOpenClass(null)} returners={returners} />
       )}
     </div>
   );

@@ -573,8 +573,12 @@ export function ConferencesClient() {
                             ) : (
                               <span className={v === null ? "text-ink-muted" : "text-ink"}>{fmtConfValue(v, c.fmt)}</span>
                             )}
+                            {/* Tempo has no better end. The rank still says
+                                how unusual a league's pace is, but the chip is
+                                neutral rather than good or bad, as on the team
+                                scatter. */}
                             {pct !== null
-                              ? <PercentileChip pct={pct} />
+                              ? <PercentileChip pct={pct} neutral={c.key === "adjt" || c.key === "cbb_pace"} />
                               : <span className="h-5" aria-hidden="true" />}
                           </span>
                         </td>

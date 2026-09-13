@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
-import { filterPlays, groupPlaysByPeriod, playActor } from "@/lib/game-stats";
-import { periodLabel, type GameBundle, type Play } from "./types";
+import { filterPlays, groupPlaysByPeriod, periodHeading, playActor } from "@/lib/game-stats";
+import { type GameBundle, type Play } from "./types";
 
 /**
  * Play by play, grouped by period.
@@ -76,7 +76,7 @@ export function PlaysTab({ b }: { b: GameBundle }) {
                     aria-expanded={!shut}
                     className="w-full flex items-center gap-2 px-4 py-2 text-left hover:bg-paper-deep transition-colors"
                   >
-                    <span className="text-[0.72rem] uppercase tracking-[0.14em] font-bold text-ink">{periodLabel(per)} half</span>
+                    <span className="text-[0.72rem] uppercase tracking-[0.14em] font-bold text-ink">{periodHeading(per)}</span>
                     <span className="text-[0.6rem] tabular text-ink-muted">{list.length}</span>
                     <svg viewBox="0 0 24 24" aria-hidden
                       className={cn("ml-auto w-3.5 h-3.5 text-ink-muted transition-transform", shut && "-rotate-90")}

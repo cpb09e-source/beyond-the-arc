@@ -616,7 +616,7 @@ function ResumeCell({
   const plain = tone === "neutral";
   return (
     <div
-      title={`${shortDate(r.date)} ${where} ${r.opponent} · ${won ? "W" : "L"} ${r.us}-${r.them}`}
+      title={`${shortDate(r.date)} ${where} ${r.opponent} · ${won === null ? "–" : won ? "W" : "L"} ${r.us}-${r.them}`}
       className={cn(
         "flex-1 min-w-0 flex flex-col items-center gap-1 rounded-lg px-1.5 pt-1.5 pb-1 ring-1",
         plain && "bg-paper-deep/50 ring-hairline",
@@ -626,7 +626,9 @@ function ResumeCell({
       )}
     >
       {plain ? (
-        <span className="text-[0.5rem] uppercase tracking-[0.1em] font-bold text-ink-muted leading-none">Won</span>
+        // A meeting with no recorded winner has no mark (see h2hTally): a dash
+        // and an empty slot, rather than the opponent's crest under "Won".
+        <span className="text-[0.5rem] uppercase tracking-[0.1em] font-bold text-ink-muted leading-none">{mark ? "Won" : "–"}</span>
       ) : (
         <span className={cn(
           "text-[0.55rem] uppercase tracking-[0.1em] font-bold leading-none",
@@ -635,7 +637,7 @@ function ResumeCell({
           {won === null ? "–" : won ? "W" : "L"}
         </span>
       )}
-      <TeamLogo name={mark} size={22} />
+      {mark ? <TeamLogo name={mark} size={22} /> : <span className="h-[22px]" aria-hidden />}
       <span className="text-[0.62rem] tabular font-semibold text-ink leading-none">{r.us}-{r.them}</span>
       <span className="text-[0.5rem] tabular text-ink-muted leading-none">
         {where === "at" ? "@" : ""}{shortDate(r.date)}

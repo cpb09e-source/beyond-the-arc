@@ -223,6 +223,7 @@ export function fmtPortalDate(s: string | null): string {
 
 /** The rating's arithmetic, spelled out, as the portal table's hover text reads. */
 export function portalRatingTitle(e: PortalEntry): string | undefined {
+  if (e.rating != null && e.rating_basis === "return") return returnerRatingTitle(e);
   return e.rating == null ? undefined
                         : `${e.value?.toFixed(2) ?? "—"} wins = ` +
                           `${e.ewins_proj?.toFixed(2) ?? "—"} eWins${(e.dev_bump ?? 0) > 0 ? " (incl. sophomore leap)" : ""}` +
@@ -233,13 +234,40 @@ export function portalRatingTitle(e: PortalEntry): string | undefined {
                           `${e.epm != null ? `  ·  EPM ${e.epm > 0 ? "+" : ""}${e.epm.toFixed(1)}` : ""}`;
 }
 
-/** The same arithmetic for a player inside a transfer class, as the class list's hover text reads. */
-export function classPlayerRatingTitle(p: TCPlayer): string | undefined {
+/**
+ * The same arithmetic for a player inside a transfer class, as the class list's
+ * hover text reads. `entry` is his portal row, when the caller has it: a class
+ * player carries no rating basis of his own, so only the row can say he is a
+ * returner rated on another season.
+ */
+export function classPlayerRatingTitle(p: TCPlayer, entry?: PortalEntry): string | undefined {
+  if (p.value !== null && entry?.rating_basis === "return") return returnerRatingTitle(entry);
   return p.value === null ? undefined
                     : `${p.ewins_proj?.toFixed(2) ?? "—"} eWins${(p.dev_bump ?? 0) > 0 ? " (incl. soph leap)" : ""}` +
                       `  ·  ${(p.pir_wins ?? 0) >= 0 ? "+" : ""}${(p.pir_wins ?? 0).toFixed(2)} from tiered PIR` +
                       `${p.pir_adj != null ? ` (PIR ${p.pir_adj.toFixed(1)} after conference tier)` : ""}` +
                       `${(p.onoff_pen ?? 0) < 0 ? `  ·  ${p.onoff_pen?.toFixed(2)} for an on/off of ${p.on_off?.toFixed(1)}` : ""}`;
+}
+
+/**
+ * A returner's hover text: the season his rating actually comes from.
+ *
+ * His rating is his last season at the school he is going back to
+ * (`rating_year`), while the eWins, PIR and on/off terms on his row are from
+ * the season he is leaving. Spelling out that sum would explain a number it
+ * did not produce, so this names the season, and what the other one rated.
+ */
+export function returnerRatingTitle(
+  e: Pick<PortalEntry, "rating_year" | "last_year" | "team_to" | "rating_last_season">,
+): string {
+  const span = (y: number) => `${y - 1}-${String(y).slice(-2)}`;
+  const rated = e.rating_year != null ? `his ${span(e.rating_year)} season` : "an earlier season";
+  const at = e.team_to ? ` at ${e.team_to}, the school he is going back to` : "";
+  const leaving = e.last_year != null ? `his ${span(e.last_year)} season` : "last season";
+  const why = e.rating_last_season == null
+    ? `${leaving} did not clear the baseline`
+    : `it rates higher than ${leaving} (${e.rating_last_season})`;
+  return `Rated on ${rated}${at}, because ${why}.`;
 }
 
 /** A transfer class lists moves of two stars and up: walk-ons and minimal-impact moves are left out. */

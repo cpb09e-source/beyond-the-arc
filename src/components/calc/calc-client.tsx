@@ -44,6 +44,8 @@ import {
   VENUE_OPTIONS,
   colsOf,
   conditionBounds,
+  conditionGapNote,
+  conditionGaps,
   formatStat,
   labelFor,
   mergeParsedQuery,
@@ -443,6 +445,12 @@ export function CalcClient({
   const results = useMemo(() => {
     if (!submitted || !allLoaded || games.length === 0) return null;
     return runWinCalc(games, submitted, coachByTeamYear);
+  }, [submitted, allLoaded, games, coachByTeamYear]);
+  // Conditions on a stat that games in scope never recorded. Those games cannot
+  // match, and the record alone hides it, so the answer says so underneath.
+  const gaps = useMemo(() => {
+    if (!submitted || !allLoaded || games.length === 0) return [];
+    return conditionGaps(games, submitted, coachByTeamYear);
   }, [submitted, allLoaded, games, coachByTeamYear]);
 
   // Year options derived from matching results — only show years that
@@ -1340,6 +1348,14 @@ export function CalcClient({
                   <span className="text-ink-muted">{results.losses.toLocaleString()} {results.losses === 1 ? "loss" : "losses"}</span>
                 </div>
               </div>
+            )}
+            {/* One quiet line per condition whose stat some games in scope
+                never recorded: the answer is drawn from the rest. See
+                conditionGaps. */}
+            {gaps.length > 0 && (
+              <ul className="px-4 sm:px-6 lg:px-8 pb-4 sm:pb-5 space-y-0.5 text-xs text-ink-muted">
+                {gaps.map((gap) => <li key={gap.key}>{conditionGapNote(gap)}</li>)}
+              </ul>
             )}
           </div>
 

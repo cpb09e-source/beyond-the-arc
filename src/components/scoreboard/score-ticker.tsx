@@ -6,9 +6,9 @@ import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
 import { useDragPan } from "@/lib/use-drag-pan";
 import {
-  EMPTY_SLATE, POLL_MS, fetchSlate, gameHref, isFinal, isLive, slateIsSettled, tipLabel,
+  EMPTY_SLATE, POLL_MS, fetchSlate, gameHref, isFinal, isLive, slateIsSettled,
   type ScoreGame, type Slate, isSeed,} from "@/lib/scoreboard";
-import { tickerLabel } from "@/lib/scoreboard-core";
+import { tickerLabel, tickerTipLabel } from "@/lib/scoreboard-core";
 
 /**
  * Site-wide score rail, directly under the nav.
@@ -177,7 +177,7 @@ function TickerGame({ g }: { g: ScoreGame }) {
         ) : final ? (
           <span className="text-ink-muted">Final</span>
         ) : (
-          <span className="text-ink-muted normal-case tracking-normal font-normal">{tipLabel(g.startDate)}</span>
+          <span className="text-ink-muted normal-case tracking-normal font-normal">{tickerTipLabel(g)}</span>
         )}
       </div>
     </Link>

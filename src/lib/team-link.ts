@@ -57,6 +57,35 @@ function load(): Promise<Map<string, string>> {
  * THIS game, so the team-season page for that year necessarily exists.
  */
 export function useTeamLinks(season: number | null | undefined): (team: string) => string | null {
+  const canon = useCanonMap();
+
+  return (team: string) => {
+    if (!canon || typeof season !== "number") return null;
+    const name = canonicalTeamName(canon, team);
+    return name ? `/teams/${teamSlug(name)}/${season}/` : null;
+  };
+}
+
+/**
+ * Returns `(cbbdTeamName) => href | null` for the team's own page, /teams/<slug>/.
+ *
+ * For the places that link a team with no season in hand: the scoreboard, and
+ * the game header on the live /game page. Both used to compose the slug from
+ * CBBD's spelling, which sent "Michigan State" to a page that is really
+ * "Michigan St." and 404'd. null means plain text, on the same terms as above.
+ */
+export function useTeamPageLinks(): (team: string) => string | null {
+  const canon = useCanonMap();
+
+  return (team: string) => {
+    if (!canon) return null;
+    const name = canonicalTeamName(canon, team);
+    return name ? `/teams/${teamSlug(name)}/` : null;
+  };
+}
+
+/** The folded-name map once it has loaded, null until then. */
+function useCanonMap(): Map<string, string> | null {
   const [canon, setCanon] = useState<Map<string, string> | null>(null);
 
   useEffect(() => {
@@ -65,9 +94,5 @@ export function useTeamLinks(season: number | null | undefined): (team: string) 
     return () => { live = false; };
   }, []);
 
-  return (team: string) => {
-    if (!canon || typeof season !== "number") return null;
-    const name = canonicalTeamName(canon, team);
-    return name ? `/teams/${teamSlug(name)}/${season}/` : null;
-  };
+  return canon;
 }

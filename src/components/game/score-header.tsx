@@ -5,6 +5,8 @@ import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
 import { gameEyebrow, gameStarted } from "@/lib/game-stats";
+import type { GameLinks } from "@/lib/game-team-links";
+import { useTeamPageLinks } from "@/lib/team-link";
 import {
   isFinal, isLive, periodHeadings, periodLabel, tipLabel,
   type GameBundle, type GameSide,
@@ -32,14 +34,23 @@ import {
  * Final shows everything, with the loser dimmed.
  */
 export function ScoreHeader({
-  b, records,
+  b, records, links,
 }: {
   b: GameBundle;
   records?: { home: string; away: string };
+  /** Team links resolved at build time by the static game page. */
+  links?: GameLinks;
 }) {
   const g = b.game;
   const final = isFinal(g);
   const started = gameStarted(g);
+  // A TEAM LINK IS A LOOKUP. CBBD writes "Michigan State" where our page is
+  // "Michigan St.", so a slug composed from the feed's spelling 404s. The
+  // static page resolved both sides at build time; the live /game page has no
+  // build, so it resolves them in the browser. No page here, no link.
+  const pageHref = useTeamPageLinks();
+  const hrefFor = (side: GameSide): string | null =>
+    links ? (side === g.home ? links.home : links.away).teamHref : pageHref(side.team);
 
   return (
     // paper-deep, not card. `--card` is pure #ffffff, and a full-width sheet of
@@ -72,7 +83,7 @@ export function ScoreHeader({
             .matchup-split, and a wrapper cannot lose that fight. */}
         <div className="max-sm:hidden">
           <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-5 lg:gap-8">
-            <TeamBlock side={g.away} record={records?.away} align="right" final={final} />
+            <TeamBlock side={g.away} record={records?.away} align="right" final={final} href={hrefFor(g.away)} />
 
             <div className="flex items-center gap-3 sm:gap-5 lg:gap-7">
               {started && <Num v={g.away.points} dim={final && g.away.winner === false} />}
@@ -83,12 +94,12 @@ export function ScoreHeader({
             </div>
 
             <TeamBlock side={g.home} record={records?.home} align="left" final={final}
-              at={!g.neutralSite} />
+              at={!g.neutralSite} href={hrefFor(g.home)} />
           </div>
         </div>
 
         <div className="sm:hidden">
-          <MobileScore b={b} records={records} final={final} started={started} />
+          <MobileScore b={b} records={records} final={final} started={started} hrefFor={hrefFor} />
         </div>
 
         {/* Desktop only — a phone gets these numbers inline on each team's
@@ -184,9 +195,10 @@ function Rank({ n }: { n: number }) {
  * the track widths are decided once.
  */
 function MobileScore({
-  b, records, final, started,
+  b, records, final, started, hrefFor,
 }: {
   b: GameBundle; records?: { home: string; away: string }; final: boolean; started: boolean;
+  hrefFor: (side: GameSide) => string | null;
 }) {
   const g = b.game;
   const cols = Math.max(g.home.periods.length, g.away.periods.length);
@@ -233,14 +245,14 @@ function MobileScore({
                 <div className="flex items-center gap-1.5">
                   {at && <span className="text-ink-muted text-xs shrink-0" aria-hidden>@</span>}
                   {side.rank != null && <Rank n={side.rank} />}
-                  <Link
-                    href={`/teams/${teamSlug(side.team)}/`}
+                  <TeamNameLink
+                    href={hrefFor(side)}
                     className={cn(
-                      "text-lg font-semibold tracking-tight leading-tight truncate hover:text-coral transition-colors",
+                      "text-lg font-semibold tracking-tight leading-tight truncate",
                       lost ? "text-ink-muted" : "text-ink",
-                    )} prefetch={false}>
+                    )}>
                     {side.team}
-                  </Link>
+                  </TeamNameLink>
                 </div>
                 <p className="mt-0.5 text-[0.68rem] tabular text-ink-muted truncate">
                   {record}
@@ -289,10 +301,12 @@ function MobileScore({
 }
 
 function TeamBlock({
-  side, record, align, final, at = false,
+  side, record, align, final, at = false, href,
 }: {
   side: GameSide; record?: string;
   align: "left" | "right"; final: boolean; at?: boolean;
+  /** The team's page, or null for a school with no page here. */
+  href: string | null;
 }) {
   const lost = final && side.winner === false;
   return (
@@ -307,16 +321,16 @@ function TeamBlock({
         <div className={cn("flex items-center gap-1.5 sm:gap-2", align === "right" && "justify-end")}>
           {at && <span className="text-ink-muted text-sm" aria-hidden>@</span>}
           {side.rank != null && <Rank n={side.rank} />}
-          <Link
-            href={`/teams/${teamSlug(side.team)}/`}
+          <TeamNameLink
+            href={href}
             className={cn(
               // Sans, like the numbers beside it. The display face was the odd
               // one out in a header that is otherwise all one voice.
-              "text-lg sm:text-2xl lg:text-3xl font-semibold tracking-tight leading-none truncate hover:text-coral transition-colors",
+              "text-lg sm:text-2xl lg:text-3xl font-semibold tracking-tight leading-none truncate",
               lost ? "text-ink-muted" : "text-ink",
-            )} prefetch={false}>
+            )}>
             {side.team}
-          </Link>
+          </TeamNameLink>
         </div>
         <p className="mt-1.5 text-[0.68rem] tabular text-ink-muted truncate">
           {record}
@@ -370,7 +384,18 @@ function LineScore({ b }: { b: GameBundle }) {
   );
 }
 
-function teamSlug(name: string): string {
-  return name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+/**
+ * A team's name: a link to its page when it has one here, plain text when it
+ * does not. The hover color belongs to the link alone.
+ */
+function TeamNameLink({ href, className, children }: {
+  href: string | null; className: string; children: React.ReactNode;
+}) {
+  return href ? (
+    <Link href={href} className={cn(className, "hover:text-coral transition-colors")} prefetch={false}>
+      {children}
+    </Link>
+  ) : (
+    <span className={className}>{children}</span>
+  );
 }

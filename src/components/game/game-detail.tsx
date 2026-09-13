@@ -85,7 +85,7 @@ export function GameDetail({ b, partial = false, detailFailed = false, links }: 
 
   return (
     <div className="pb-20">
-      <ScoreHeader b={b} records={records} />
+      <ScoreHeader b={b} records={records} links={links} />
 
       <div ref={tabsTopRef} aria-hidden className="h-0" />
       <nav className="sticky top-0 z-30 border-b border-hairline bg-paper/95 backdrop-blur">

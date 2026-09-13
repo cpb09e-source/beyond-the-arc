@@ -10,16 +10,13 @@ import { Select } from "@/components/select";
 import { isKnownDay, latestArchivedDay } from "@/lib/scoreboard-archive";
 import { periodHeadings } from "@/components/game/types";
 import { DatePicker } from "./date-picker";
+import { useTeamPageLinks } from "@/lib/team-link";
 import {
   EMPTY_SLATE, POLL_MS, dateLabel, fetchSlate, gameHref, isFinal, isLive, lineLabel, recordLabel, slateIsSettled,
   type ScoreGame, type Slate, isSeed,} from "@/lib/scoreboard";
 import {
   dayNum, dowLabel, gameStatusLabel, groupSlate, shiftDay, slateConferences, slateTournaments, todayEastern, weekDays,
 } from "@/lib/scoreboard-core";
-
-function teamSlug(name: string): string {
-  return name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
 
 /**
  * The day's slate — live from the function, or a prerendered day of a
@@ -58,6 +55,9 @@ export function ScoreboardClient({
   // does not hold. Archived days are their own pages and never come through here.
   const search = useUrlSearchParams();
   const router = useRouter();
+  // Team names link through the name matcher, not a slug of CBBD's spelling.
+  // See useTeamPageLinks.
+  const teamHref = useTeamPageLinks();
   const fromUrl = search.get("date");
   /**
    * WHICH DAY THIS PAGE IS, which is NOT the same question as whether it may
@@ -270,7 +270,7 @@ export function ScoreboardClient({
             <span className="text-coral/70 font-medium tabular">{ranked.length}</span>
           </h2>
           <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-            {ranked.map((g) => <GameCard key={`r-${g.id}`} g={g} />)}
+            {ranked.map((g) => <GameCard key={`r-${g.id}`} g={g} teamHref={teamHref} />)}
           </div>
         </section>
       )}
@@ -284,7 +284,7 @@ export function ScoreboardClient({
               <span className="text-ink-muted/70 font-medium tabular">{games.length}</span>
             </h2>
             <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-              {games.map((g) => <GameCard key={g.id} g={g} />)}
+              {games.map((g) => <GameCard key={g.id} g={g} teamHref={teamHref} />)}
             </div>
           </section>
         ))}
@@ -365,7 +365,7 @@ function StripArrow({ label, onClick, children }: { label: string; onClick: () =
   );
 }
 
-function GameCard({ g }: { g: ScoreGame }) {
+function GameCard({ g, teamHref }: { g: ScoreGame; teamHref: (team: string) => string | null }) {
   const live = isLive(g);
   const final = isFinal(g);
   const line = lineLabel(g);
@@ -421,8 +421,8 @@ function GameCard({ g }: { g: ScoreGame }) {
         {/* A hairline between the two rows rather than around them: the pair is
             one result, and a divider inside reads as the scoreline it is. */}
         <div className="divide-y divide-hairline/60">
-          <TeamRow t={g.away} final={final} halves={halves} at={false} />
-          <TeamRow t={g.home} final={final} halves={halves} at={!g.neutralSite} />
+          <TeamRow t={g.away} final={final} halves={halves} at={false} href={teamHref(g.away.team)} />
+          <TeamRow t={g.home} final={final} halves={halves} at={!g.neutralSite} href={teamHref(g.home.team)} />
         </div>
       </div>
 
@@ -440,7 +440,7 @@ function GameCard({ g }: { g: ScoreGame }) {
   );
 }
 
-function TeamRow({ t, final, halves, at }: { t: ScoreGame["home"]; final: boolean; halves: number; at: boolean }) {
+function TeamRow({ t, final, halves, at, href }: { t: ScoreGame["home"]; final: boolean; halves: number; at: boolean; href: string | null }) {
   const won = final && t.winner === true;
   const rec = recordLabel(t);
   return (
@@ -457,11 +457,18 @@ function TeamRow({ t, final, halves, at }: { t: ScoreGame["home"]; final: boolea
       {t.rank != null ? <RankBadge rank={t.rank} /> : isSeed(t.seed) ? (
         <span className="text-[0.6rem] text-ink-muted tabular">{t.seed}</span>
       ) : null}
-      <Link
-        href={`/teams/${teamSlug(t.team)}`}
-        className={cn("relative z-2 min-w-0 truncate text-sm hover:text-coral transition-colors", won ? "text-ink font-semibold" : "text-ink-soft")} prefetch={false}>
-        {t.team}
-      </Link>
+      {/* Plain text for a school with no page here, and until the name map
+          has loaded. Left under the card's overlay, so a click on it opens
+          the game. */}
+      {href ? (
+        <Link
+          href={href}
+          className={cn("relative z-2 min-w-0 truncate text-sm hover:text-coral transition-colors", won ? "text-ink font-semibold" : "text-ink-soft")} prefetch={false}>
+          {t.team}
+        </Link>
+      ) : (
+        <span className={cn("min-w-0 truncate text-sm", won ? "text-ink font-semibold" : "text-ink-soft")}>{t.team}</span>
+      )}
       {rec && <span className="shrink-0 text-[0.6rem] text-ink-muted tabular">({rec})</span>}
 
       <span className="ml-auto flex items-center">
