@@ -30,6 +30,12 @@
   --ink-muted: #6b7280;
   --hairline: #e7e2d5;
   --accent: #0c6bd6;
+  /* The site's name for the accent, which shared site code still reaches for
+     (the fallback side color). Resolves per theme, since --accent does. */
+  --coral: var(--accent);
+  /* The lightness band a team color is held inside when it is text (teamInk). */
+  --team-l-min: 0.36;
+  --team-l-max: 0.54;
   --good: #16a34a;
   --bad: #e03131;
   --chrome: #f3efe7;
@@ -83,6 +89,8 @@
   --ink-muted: #8f8a81;
   --hairline: #333331;
   --accent: #4d9bff;
+  --team-l-min: 0.7;
+  --team-l-max: 0.84;
   --good: #3ddc84;
   --bad: #ff6b6b;
   --chrome: #171717;
@@ -429,4 +437,29 @@ html {
     animation: none;
     opacity: 0.8;
   }
+}
+
+/* A game in progress: a dot beside its clock that rings outward, slowly. */
+.live-dot {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: live-ring 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes live-ring {
+  75%, 100% { transform: scale(2.6); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-dot::after { animation: none; }
 }

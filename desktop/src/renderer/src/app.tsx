@@ -338,7 +338,10 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       if (mod || e.altKey || typing) return;
       if (e.key === "?") take(() => setShortcutsOpen(true));
       else if (e.key === "/") take(focusFilter);
-      else if (e.key === "[" || e.key === "]") take(() => dispatch({ type: "step-year", to: e.key === "[" ? "older" : "newer" }));
+      // A seasonless view picks its own seasons, and may use [ ] for steps of its own (the Scoreboard's nights).
+      else if ((e.key === "[" || e.key === "]") && !viewById(tab.viewId).seasonless) {
+        take(() => dispatch({ type: "step-year", to: e.key === "[" ? "older" : "newer" }));
+      }
     };
     // The mouse's own back and forward buttons walk the tab's history too.
     const onMouse = (e: MouseEvent) => {

@@ -102,6 +102,13 @@ export function FavoritesSection({
                         <TeamLogo id={f.record.logoId} name={f.record.name} size={15} />
                       ) : f.record?.kind === "player" ? (
                         <PlayerPhoto bartId={f.record.bartId} hasPhoto={f.record.hasPhoto} name={f.record.name} size={16} />
+                      ) : f.record?.kind === "game" ? (
+                        <span className="flex items-center">
+                          <TeamLogo id={f.record.awayLogo} name={f.record.away} size={12} />
+                          <span className="-ml-1">
+                            <TeamLogo id={f.record.homeLogo} name={f.record.home} size={12} />
+                          </span>
+                        </span>
                       ) : (
                         <Icon size={15} strokeWidth={2} className={active ? "text-ink-soft" : "text-ink-muted"} />
                       )}

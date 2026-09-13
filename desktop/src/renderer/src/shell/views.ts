@@ -1,6 +1,8 @@
 import {
   ArrowLeftRight,
   Calculator,
+  ClipboardList,
+  LayoutGrid,
   CalendarClock,
   CalendarDays,
   ChartScatter,
@@ -25,6 +27,8 @@ import { PlayersView } from "~/views/players/players-view";
 import { TeamGamesView } from "~/views/team-games/team-games-view";
 import { TeamProfileView } from "~/views/team-profile/team-profile-view";
 import { TeamScatterView } from "~/views/team-scatter/team-scatter-view";
+import { GameView } from "~/views/game/game-view";
+import { ScoreboardView } from "~/views/scoreboard/scoreboard-view";
 import { TeamsView } from "~/views/teams/teams-view";
 import { WinCalcView } from "~/views/win-calc/calc-view";
 
@@ -57,7 +61,22 @@ export type FocusRequest = FocusTarget & { nonce: number };
  */
 export type RecordRef =
   | { kind: "team"; name: string; logoId: number | null }
-  | { kind: "player"; bartId: number; name: string; hasPhoto: boolean };
+  | { kind: "player"; bartId: number; name: string; hasPhoto: boolean }
+  /**
+   * One game of one season, by CBBD id. `name` is how its tab reads ("Duke at
+   * North Carolina"); `away` and `home` are CBBD's spellings, and both crests
+   * ride along so the tab strip can draw them before the box score loads.
+   */
+  | {
+      kind: "game";
+      season: number;
+      id: number;
+      name: string;
+      away: string;
+      home: string;
+      awayLogo: number | null;
+      homeLogo: number | null;
+    };
 
 export type ViewProps = {
   year: number;
@@ -74,7 +93,7 @@ export type ViewProps = {
 export type ViewDef = {
   id: string;
   label: string;
-  section: "Teams" | "Players" | "Tools";
+  section: "Teams" | "Players" | "Games" | "Tools";
   icon: LucideIcon;
   filterPlaceholder: string;
   Component: ComponentType<ViewProps>;
@@ -164,6 +183,15 @@ export const VIEWS: ViewDef[] = [
     season: SEASON_CEIL,
   },
   {
+    id: "scoreboard",
+    label: "Scoreboard",
+    section: "Games",
+    icon: LayoutGrid,
+    filterPlaceholder: "Filter teams",
+    Component: ScoreboardView,
+    seasonless: true,
+  },
+  {
     id: "win-calc",
     seasonless: true,
     label: "Win Calculator",
@@ -199,6 +227,15 @@ export const VIEWS: ViewDef[] = [
     Component: PlayerProfileView,
     profile: "player",
   },
+  {
+    id: "game",
+    label: "Game",
+    section: "Games",
+    icon: ClipboardList,
+    filterPlaceholder: "",
+    Component: GameView,
+    profile: "game",
+  },
 ];
 
 /** What the sidebar and the palette's "Go to" list: every view but the profiles. */
@@ -206,7 +243,8 @@ export const NAV_VIEWS: ViewDef[] = VIEWS.filter((v) => !v.profile);
 
 export const viewById = (id: string | null | undefined): ViewDef => VIEWS.find((v) => v.id === id) ?? VIEWS[0]!;
 
-export const profileViewFor = (kind: RecordRef["kind"]): string => (kind === "team" ? "team-profile" : "player-profile");
+export const profileViewFor = (kind: RecordRef["kind"]): string =>
+  kind === "team" ? "team-profile" : kind === "player" ? "player-profile" : "game";
 
 export function isRecordRef(r: unknown): r is RecordRef {
   if (typeof r !== "object" || r === null) return false;
@@ -215,6 +253,17 @@ export function isRecordRef(r: unknown): r is RecordRef {
   if (o.kind === "player") {
     return typeof o.bartId === "number" && typeof o.name === "string" && typeof o.hasPhoto === "boolean";
   }
+  if (o.kind === "game") {
+    return (
+      typeof o.season === "number" &&
+      typeof o.id === "number" &&
+      typeof o.name === "string" &&
+      typeof o.away === "string" &&
+      typeof o.home === "string" &&
+      (o.awayLogo === null || typeof o.awayLogo === "number") &&
+      (o.homeLogo === null || typeof o.homeLogo === "number")
+    );
+  }
   return false;
 }
 
@@ -222,5 +271,6 @@ export function sameRecord(a: RecordRef | undefined, b: RecordRef | undefined): 
   if (!a || !b) return a === b;
   if (a.kind === "team" && b.kind === "team") return a.name === b.name;
   if (a.kind === "player" && b.kind === "player") return a.bartId === b.bartId;
+  if (a.kind === "game" && b.kind === "game") return a.season === b.season && a.id === b.id;
   return false;
 }

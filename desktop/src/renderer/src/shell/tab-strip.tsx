@@ -136,6 +136,13 @@ export function TabStrip({
               <TeamLogo id={tab.record.logoId} name={tab.record.name} size={15} />
             ) : tab.record?.kind === "player" ? (
               <PlayerPhoto bartId={tab.record.bartId} hasPhoto={tab.record.hasPhoto} name={tab.record.name} size={16} />
+            ) : tab.record?.kind === "game" ? (
+              <span className="flex shrink-0 items-center">
+                <TeamLogo id={tab.record.awayLogo} name={tab.record.away} size={14} />
+                <span className="-ml-1">
+                  <TeamLogo id={tab.record.homeLogo} name={tab.record.home} size={14} />
+                </span>
+              </span>
             ) : (
               <Icon size={14} strokeWidth={2} className={`shrink-0 ${isActive ? "text-ink-soft" : "text-ink-muted"}`} />
             )}
