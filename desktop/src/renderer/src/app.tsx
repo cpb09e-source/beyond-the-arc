@@ -58,6 +58,9 @@ import { useWorkspaces } from "~/shell/workspaces";
 import { recordVisit, useRecents } from "~/shell/recents";
 import { isSnappable, type SnapObj } from "~/snapshot/snapshot-cards";
 import { SnapshotSheet, snapshotView } from "~/snapshot/snapshot-sheet";
+import { EchoProvider, SelectionProvider, useSelection } from "~/selection/selection";
+import { selectionPaletteItems } from "~/selection/selection-actions";
+import { SelectionBar } from "~/selection/selection-bar";
 import { seasonLabel } from "~/ui/format";
 import { Kbd } from "~/ui/kbd";
 import { NamePrompt } from "~/ui/name-prompt";
@@ -74,6 +77,8 @@ const THEME_KEY = "bta.theme";
  * so the first look is short enough to read.
  */
 const PALETTE_GROUPS: PaletteGroup[] = [
+  // Only there while teams are picked, and then first: what to do with them.
+  { id: "selection", heading: "Selection", limit: 8, showWhenEmpty: true },
   { id: "favorites", heading: "Favorites", limit: 6, showWhenEmpty: true },
   { id: "recent", heading: "Recent", limit: 5, showWhenEmpty: true },
   { id: "tabs", heading: "Open tabs", limit: 5, showWhenEmpty: false },
@@ -92,7 +97,11 @@ export function App() {
       <ToastProvider>
         <ContextMenuProvider>
           <CompareProvider>
-            <Frame />
+            <SelectionProvider>
+              <EchoProvider>
+                <Frame />
+              </EchoProvider>
+            </SelectionProvider>
           </CompareProvider>
         </ContextMenuProvider>
       </ToastProvider>
@@ -154,6 +163,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
   const [snapping, setSnapping] = useState<SnapObj | null>(null);
   const { auth, update } = useAccount();
   const compare = useCompare();
+  const selection = useSelection();
   const [favorites, setFavorites] = usePersisted<Favorite[]>("bta.favorites", [], isFavoriteList);
 
   const current = ws.tabs.find((t) => t.id === ws.active) ?? ws.tabs[0]!;
@@ -634,6 +644,8 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     // What can be done with the page in front, from the object registry (~/objects/actions.tsx). On
     // Michigan's page, "compare" means comparing Michigan, and "link" means its link, not a player named Link.
     if (current.record) items.push(...paletteItemsFor(objFromRecord(current.record, current.year), env, "context"));
+    // With teams picked, the selection's actions lead: "compare" then means those teams.
+    if (selection.selection) items.push(...selectionPaletteItems(selection.selection, env, selection.clear));
     action({
       id: "action:snapshot-view",
       title: "Copy a snapshot of this view",
@@ -818,7 +830,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     );
 
     return items;
-  }, [view, current, ws.tabs, ws.closed, recents, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite, splitShown, toggleSplit, go, compare.add, workspaces, env, snapView]);
+  }, [view, current, ws.tabs, ws.closed, recents, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite, splitShown, toggleSplit, go, compare.add, workspaces, env, snapView, selection.selection, selection.clear]);
 
   const allItems = useMemo(() => [...paletteItems, ...objects, ...coaches], [paletteItems, objects, coaches]);
 
@@ -971,7 +983,9 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
               />
             )}
             <BesideDropZone onDrop={(o) => actionById("open-side")?.run(o, env, { newTab: false, side: true }, {})} />
+            <SelectionBar />
             <CompareDock
+              lift={!!selection.selection}
               hidden={current.viewId === "compare" && current.query === compareQuery(compare.items)}
               onOpen={(items, newTab) => openView("compare", { query: compareQuery(items), newTab })}
             />

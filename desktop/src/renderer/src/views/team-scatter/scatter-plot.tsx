@@ -1,10 +1,10 @@
-import type { MouseEvent as ReactMouseEvent } from "react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { PercentileChip } from "@/components/percentile-chip";
 import { confDisplay } from "@/lib/conf-display";
 import type { ScatterTeam } from "@/lib/scatter-team";
 import { fmtMetric, fmtTick, niceTicks, tickCount, type Metric } from "@/lib/team-scatter-metrics";
 import { zonePolygon, type Zone } from "@/lib/trapezoid";
+import type { SelectMode } from "~/selection/selection";
 import { TeamLogo } from "~/ui/logo";
 
 /**
@@ -18,6 +18,12 @@ import { TeamLogo } from "~/ui/logo";
  * last so they sit on top; teams outside the zone step back rather than vanish.
  * What changes is the box: here it is the whole remaining window, measured, so
  * the crests grow with it.
+ *
+ * THE LASSO. Drag across the empty chart and a loop follows the pointer; letting
+ * go picks every crest inside it (Shift adds to the selection, Alt takes away).
+ * A press that does not drag lets go of the selection. The loop is drawn by
+ * writing its path straight to the DOM, not through React, so a long drag over
+ * three hundred crests never re-renders them.
  */
 
 const L = 58;
@@ -25,12 +31,35 @@ const R = 22;
 const T = 18;
 const B = 46;
 
+type Pt = [number, number];
+
 /** Crest size from the room each mark gets, floored at 16 and capped at 30 (the site's rule). */
 function crestSize(n: number, w: number, h: number): number {
   return Math.max(16, Math.min(30, Math.round(Math.sqrt((w * h) / Math.max(1, n)) * 0.4)));
 }
 
 const isNum = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v);
+
+/** Inside a closed loop, by the even-odd rule: count the edges a ray to the right crosses. */
+function inside([x, y]: Pt, loop: Pt[]): boolean {
+  let hit = false;
+  for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
+    const [xi, yi] = loop[i]!;
+    const [xj, yj] = loop[j]!;
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
+  }
+  return hit;
+}
+
+const areaOf = (loop: Pt[]): number =>
+  Math.abs(
+    loop.reduce((sum, [x, y], i) => {
+      const [nx, ny] = loop[(i + 1) % loop.length]!;
+      return sum + x * ny - nx * y;
+    }, 0),
+  ) / 2;
+
+const pathOf = (loop: Pt[]): string => `M${loop.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join("L")}Z`;
 
 export function ScatterPlot({
   teams,
@@ -44,6 +73,11 @@ export function ScatterPlot({
   onOpen,
   onMenu,
   pct,
+  selected,
+  echo,
+  onLasso,
+  onToggle,
+  onClearSelection,
 }: {
   teams: ScatterTeam[];
   shown: ScatterTeam[];
@@ -57,10 +91,21 @@ export function ScatterPlot({
   /** Right-click on a crest: the team's own menu. */
   onMenu?: (e: ReactMouseEvent, team: ScatterTeam) => void;
   pct: (key: string, name: string) => number | null;
+  /** The shared selection's names in this season (~/selection/selection.tsx). */
+  selected: ReadonlySet<string>;
+  /** A team another view is pointing at: ringed, without the hover card. */
+  echo: string | null;
+  onLasso: (names: string[], mode: SelectMode) => void;
+  /** Shift-click on a crest. */
+  onToggle: (name: string) => void;
+  onClearSelection: () => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ W: 900, H: 640 });
   const clipId = useId();
+  const loopRef = useRef<SVGPathElement>(null);
+  const drawing = useRef<{ pts: Pt[]; mode: SelectMode } | null>(null);
+  const [lassoing, setLassoing] = useState<SelectMode | null>(null);
 
   useEffect(() => {
     const el = boxRef.current;
@@ -145,11 +190,65 @@ export function ScatterPlot({
     return pts ? pts.map(([vx, vy]) => `${X(vx).toFixed(1)},${Y(vy).toFixed(1)}`).join(" ") : null;
   }, [zone, geo, X, Y]);
 
-  const hovered = hover ? (placed.find((m) => m.p.name === hover) ?? null) : null;
+  const hovered = hover && !lassoing ? (placed.find((m) => m.p.name === hover) ?? null) : null;
   const directed = (m: Metric) => !m.neutral;
+  const anyPicked = selected.size > 0;
+
+  const at = (e: ReactPointerEvent<HTMLDivElement>): Pt => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return [e.clientX - r.left, e.clientY - r.top];
+  };
+  const startLasso = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest("[data-crest]")) return;
+    const mode: SelectMode = e.shiftKey ? "add" : e.altKey ? "remove" : "replace";
+    drawing.current = { pts: [at(e)], mode };
+    // Capture keeps the loop drawing when the pointer leaves the chart; a press with no live pointer behind it can't be captured.
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* the loop still draws while the pointer stays over the chart */
+    }
+    setHover(null);
+    setLassoing(mode);
+  };
+  const extendLasso = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const d = drawing.current;
+    if (!d) return;
+    const p = at(e);
+    const last = d.pts[d.pts.length - 1]!;
+    if (Math.hypot(p[0] - last[0], p[1] - last[1]) < 3) return;
+    d.pts.push(p);
+    loopRef.current?.setAttribute("d", pathOf(d.pts));
+  };
+  const endLasso = (commit: boolean) => {
+    const d = drawing.current;
+    if (!d) return;
+    drawing.current = null;
+    setLassoing(null);
+    if (!commit) return;
+    // A press without a real loop is a click on the empty chart: it lets go of the selection.
+    if (d.pts.length < 4 || areaOf(d.pts) < 80) {
+      if (d.mode === "replace") onClearSelection();
+      return;
+    }
+    onLasso(
+      placed.filter(({ x, y }) => inside([x, y], d.pts)).map(({ p }) => p.name),
+      d.mode,
+    );
+  };
 
   return (
-    <div ref={boxRef} className="relative h-full w-full select-none" onPointerLeave={() => setHover(null)}>
+    <div
+      ref={boxRef}
+      className="relative h-full w-full cursor-crosshair select-none"
+      onPointerLeave={() => {
+        if (!drawing.current) setHover(null);
+      }}
+      onPointerDown={startLasso}
+      onPointerMove={extendLasso}
+      onPointerUp={() => endLasso(true)}
+      onPointerCancel={() => endLasso(false)}
+    >
       <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="absolute inset-0" role="img" aria-label={`Teams by ${xM.label} against ${yM.label}`}>
         <defs>
           <clipPath id={clipId}>
@@ -166,7 +265,7 @@ export function ScatterPlot({
             stroke="var(--good)"
             strokeWidth={1.75}
             strokeLinejoin="round"
-            opacity={0.9}
+            opacity={anyPicked ? 0.5 : 0.9}
           />
         )}
 
@@ -238,17 +337,23 @@ export function ScatterPlot({
 
       {/* Painted worst first, so the best teams sit on top of a crowd. */}
       {[...placed].reverse().map(({ p, x, y }) => {
-        const lit = hover === p.name;
+        const lit = hover === p.name || echo === p.name;
+        const picked = selected.has(p.name);
         const pad = size <= 16 ? 3 : 2;
-        const dim = zone != null && !lit && !inZone.has(p.name);
+        // With a selection, what is not in it steps back; without one, what is outside the zone does.
+        const dim = !lit && (anyPicked ? !picked : zone != null && !inZone.has(p.name));
         return (
           <div
             key={p.name}
+            data-crest
             role="button"
+            aria-pressed={anyPicked ? picked : undefined}
             aria-label={`${p.name}, ${fmtMetric(xM, p.m[xM.key] ?? null)} ${xM.short}, ${fmtMetric(yM, p.m[yM.key] ?? null)} ${yM.short}`}
-            onPointerEnter={() => setHover(p.name)}
+            onPointerEnter={() => {
+              if (!drawing.current) setHover(p.name);
+            }}
             onMouseDown={(e) => e.preventDefault()}
-            onClick={(e) => onOpen(p, e.ctrlKey || e.metaKey)}
+            onClick={(e) => (e.shiftKey ? onToggle(p.name) : onOpen(p, e.ctrlKey || e.metaKey))}
             onContextMenu={onMenu ? (e) => onMenu(e, p) : undefined}
             className="absolute grid cursor-pointer place-items-center rounded-full motion-safe:transition-[opacity,filter,transform] motion-safe:duration-150"
             style={{
@@ -256,16 +361,18 @@ export function ScatterPlot({
               top: y,
               width: size + pad * 2,
               height: size + pad * 2,
-              transform: `translate(-50%, -50%) scale(${lit ? 1.45 : 1})`,
-              zIndex: lit ? 50 : dim ? 1 : 2,
-              opacity: dim ? 0.6 : 1,
-              filter: dim ? "grayscale(0.35)" : undefined,
-              background: "color-mix(in oklab, var(--paper) 88%, transparent)",
+              transform: `translate(-50%, -50%) scale(${hover === p.name ? 1.45 : echo === p.name ? 1.3 : 1})`,
+              zIndex: lit ? 50 : picked ? 3 : dim ? 1 : 2,
+              opacity: dim ? (anyPicked ? 0.3 : 0.6) : 1,
+              filter: dim ? "grayscale(0.5)" : undefined,
+              background: picked ? "color-mix(in oklab, var(--accent) 16%, var(--paper))" : "color-mix(in oklab, var(--paper) 88%, transparent)",
               boxShadow: lit
                 ? "0 0 0 1.5px var(--accent)"
-                : zone != null && !dim
-                  ? "0 0 0 1px color-mix(in oklab, var(--good) 55%, transparent)"
-                  : "0 0 0 0.5px var(--hairline)",
+                : picked
+                  ? "0 0 0 2px var(--accent)"
+                  : zone != null && !dim
+                    ? "0 0 0 1px color-mix(in oklab, var(--good) 55%, transparent)"
+                    : "0 0 0 0.5px var(--hairline)",
             }}
           >
             <TeamLogo id={p.id} name={p.name} size={size} />
@@ -273,7 +380,20 @@ export function ScatterPlot({
         );
       })}
 
-      {hovered && <Card mark={hovered} W={W} H={H} xM={xM} yM={yM} inZone={inZone.has(hovered.p.name)} pct={pct} />}
+      {lassoing && (
+        <svg width={W} height={H} aria-hidden className="pointer-events-none absolute inset-0 z-[55]">
+          <path
+            ref={loopRef}
+            fill={lassoing === "remove" ? "color-mix(in oklab, var(--bad) 8%, transparent)" : "color-mix(in oklab, var(--accent) 9%, transparent)"}
+            stroke={lassoing === "remove" ? "var(--bad)" : "var(--accent)"}
+            strokeWidth={1.5}
+            strokeDasharray="5 4"
+            strokeLinejoin="round"
+          />
+        </svg>
+      )}
+
+      {hovered && <Card mark={hovered} W={W} H={H} xM={xM} yM={yM} inZone={inZone.has(hovered.p.name)} pct={pct} picked={selected.has(hovered.p.name)} />}
     </div>
   );
 }
@@ -287,6 +407,7 @@ function Card({
   yM,
   inZone,
   pct,
+  picked,
 }: {
   mark: { p: ScatterTeam; x: number; y: number };
   W: number;
@@ -295,6 +416,7 @@ function Card({
   yM: Metric;
   inZone: boolean;
   pct: (key: string, name: string) => number | null;
+  picked: boolean;
 }) {
   const { p, x, y } = mark;
   const flipX = x / W > 0.58;
@@ -328,7 +450,7 @@ function Card({
           {row(yM)}
         </div>
         {inZone && <div className="mt-1.5 text-[11.5px] font-medium text-good">Inside the contender zone</div>}
-        <div className="mt-1 text-[11px] text-ink-muted">Click to open the team</div>
+        <div className="mt-1 text-[11px] text-ink-muted">{picked ? "Selected · Shift-click to remove" : "Click to open · Shift-click to select"}</div>
       </div>
     </div>
   );

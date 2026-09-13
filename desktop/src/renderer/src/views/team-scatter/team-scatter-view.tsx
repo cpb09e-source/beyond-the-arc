@@ -12,6 +12,7 @@ import { SOURCE_LABEL, useCorpus } from "~/data/use-corpus";
 import { beginDrag } from "~/objects/drag";
 import { objectDrag, type Obj } from "~/objects/object";
 import { useObjectMenu } from "~/objects/use-object-actions";
+import { useEcho, useSelection } from "~/selection/selection";
 import { useIsActive } from "~/shell/active";
 import { Picker } from "~/shell/picker";
 import { useShell } from "~/shell/shell-context";
@@ -35,6 +36,10 @@ import { ScatterPlot } from "./scatter-plot";
  * THE LIST BESIDE THE PLOT IS THE SAME TEAMS, in rank order, hover-linked both
  * ways; ↑ ↓ walk it and Enter opens the team, so the chart is as reachable from
  * the keyboard as a table.
+ *
+ * A LASSO PICKS TEAMS INTO THE SHARED SELECTION (~/selection/selection.tsx), so
+ * the Team Explorer in the other pane tints the same rows, the selection bar
+ * averages them, and "Selected teams" plots a selection made anywhere else.
  */
 
 const LOGOS = logoIdMap(cbbTeams as Record<string, { id: number }>);
@@ -57,13 +62,27 @@ export function TeamScatterView({ year, setYear, query }: ViewProps) {
   const menu = useObjectMenu();
   const listRef = useRef<HTMLUListElement>(null);
   const teamObj = (t: ScatterTeam): Obj => ({ kind: "team", name: t.name, logoId: t.id, year, conf: t.conf });
+  const { namesIn, select, clear } = useSelection();
+  const picked = namesIn(year);
+  const { nameIn: echoIn, publish } = useEcho();
+  const echoName = echoIn(year);
 
-  // Arriving from "Show on Team Scatter": team= lights that team, field= picks the field (a conference).
+  /** The team under the pointer or the cursor, told to every other view as well. */
+  const hoverTo = useCallback(
+    (name: string | null) => {
+      setHover(name);
+      publish(year, name);
+    },
+    [publish, year],
+  );
+
+  // Arriving from "Show on Team Scatter": team= lights that team, field= picks the field
+  // (a conference, or "selected" for the shared selection).
   const asked = useMemo(() => new URLSearchParams(query), [query]);
   const askedTeam = asked.get("team");
   const askedField = asked.get("field");
   useEffect(() => {
-    if (askedField) setField(askedField);
+    if (askedField) setField(askedField === "selected" ? "field:selected" : askedField);
   }, [askedField]);
 
   const season = state.status === "ready" ? state.value : null;
@@ -78,12 +97,18 @@ export function TeamScatterView({ year, setYear, query }: ViewProps) {
   const zone = useMemo(() => buildZone(teams), [teams]);
   const zoneLive = zone && zoneAxes(xM, yM) ? zone : null;
 
+  // A "Selected teams" field with nothing selected any more falls back to the opening field.
+  useEffect(() => {
+    if (field === "field:selected" && picked.size === 0 && teams.length > 0) setField("field:top75");
+  }, [field, picked.size, teams.length]);
+
   const shown = useMemo(() => {
     if (field === "field:all") return teams;
+    if (field === "field:selected") return picked.size > 0 ? teams.filter((t) => picked.has(t.name)) : teams;
     if (field.startsWith("conf:")) return teams.filter((t) => t.conf === field.slice(5));
     const names = new Set(topByNet(teams, field === "field:top25" ? 25 : 75));
     return teams.filter((t) => names.has(t.name));
-  }, [teams, field]);
+  }, [teams, field, picked]);
 
   const inZone = useMemo(
     () => new Set(zoneLive ? shown.filter((t) => zoneLive.contains(t.m[ZONE_X], t.m[ZONE_Y])).map((t) => t.name) : []),
@@ -121,25 +146,36 @@ export function TeamScatterView({ year, setYear, query }: ViewProps) {
     [openRecord, year],
   );
 
-  // ↑ ↓ walk the list (and light the crest), Enter opens the team.
+  // ↑ ↓ walk the list (and light the crest), Enter opens the team; X picks it, Ctrl+A picks every team
+  // on the chart, Esc lets the selection go.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!active || e.altKey) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      const mod = e.ctrlKey || e.metaKey;
+      if (mod && !e.shiftKey && e.code === "KeyA") {
+        e.preventDefault();
+        select(year, shown.map((x) => x.name), "replace");
+      } else if (e.key === "Escape" && picked.size > 0) {
+        e.preventDefault();
+        clear();
+      } else if (!mod && e.key.toLowerCase() === "x" && list[at]) {
+        e.preventDefault();
+        select(year, [list[at].name], "toggle");
+      } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         const next = Math.max(0, Math.min(list.length - 1, at + (e.key === "ArrowDown" ? 1 : -1)));
         setCursor(next);
-        setHover(list[next]?.name ?? null);
+        hoverTo(list[next]?.name ?? null);
       } else if (e.key === "Enter" && list[at]) {
         e.preventDefault();
-        open(list[at], e.ctrlKey || e.metaKey);
+        open(list[at], mod);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, list, at, open]);
+  }, [active, list, at, open, select, clear, shown, picked.size, year, hoverTo]);
 
   useEffect(() => {
     if (state.status === "ready") setStatus(`${SOURCE_LABEL[state.source]} in ${state.ms} ms`);
@@ -167,7 +203,7 @@ export function TeamScatterView({ year, setYear, query }: ViewProps) {
     if (key === "zone") {
       setXKey(ZONE_X);
       setYKey(ZONE_Y);
-      setField("field:top75");
+      if (field !== "field:selected") setField("field:top75");
       return;
     }
     const p = METRIC_PRESETS[Number(key.slice(7))];
@@ -188,6 +224,9 @@ export function TeamScatterView({ year, setYear, query }: ViewProps) {
       return pa - pb || confDisplay(a[0]).localeCompare(confDisplay(b[0]));
     });
     return [
+      ...(picked.size > 0
+        ? [{ key: "field:selected", label: `Selected teams (${picked.size})`, desc: "The shared selection, from a lasso here or picks in any team view." }]
+        : []),
       { key: "field:top75", label: `Top 75 by ${by}`, desc: "The field the contender zone is read against." },
       { key: "field:top25", label: `Top 25 by ${by}`, desc: "The very top of the sport." },
       { key: "field:all", label: "Every team", desc: `All ${teams.length} Division I teams.` },
@@ -197,7 +236,7 @@ export function TeamScatterView({ year, setYear, query }: ViewProps) {
         desc: `${n} teams · ${POWER_CONFS.has(code) ? "Power conference" : "Mid-major"}`,
       })),
     ];
-  }, [teams]);
+  }, [teams, picked.size]);
 
   const covX = useMemo(() => metricCoverage(teams, xM.key), [teams, xM]);
   const covY = useMemo(() => metricCoverage(teams, yM.key), [teams, yM]);
@@ -205,7 +244,7 @@ export function TeamScatterView({ year, setYear, query }: ViewProps) {
   const thin = teams.length > 0 && !emptyAxis ? [xM, yM].filter((m, i) => [covX, covY][i]! < teams.length * 0.97) : [];
 
   const meta = season
-    ? `${shown.length} teams${zoneLive ? ` · ${inZone.size} in the zone` : ""}${thin.length ? ` · ${thin.map((m) => m.short).join(", ")} partial` : ""}`
+    ? `${shown.length} teams${picked.size > 0 ? ` · ${picked.size} selected` : zoneLive ? ` · ${inZone.size} in the zone` : ""}${thin.length ? ` · ${thin.map((m) => m.short).join(", ")} partial` : ""}`
     : undefined;
 
   const presetOpts = presetValue === "custom" ? [...presetOptions, { key: "custom", label: "Custom", desc: "Your own two metrics." }] : presetOptions;
@@ -225,7 +264,7 @@ export function TeamScatterView({ year, setYear, query }: ViewProps) {
           </>
         }
       />
-      <div className="flex shrink-0 items-center gap-2 px-5 pb-2.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 px-5 pb-2.5">
         <Picker label="Across" value={xKey} options={METRIC_OPTIONS} onChange={setXKey} />
         <Picker label="Up" value={yKey} options={METRIC_OPTIONS} onChange={setYKey} />
         {zoneLive ? (
@@ -236,6 +275,15 @@ export function TeamScatterView({ year, setYear, query }: ViewProps) {
         ) : zoneAxes(xM, yM) && season ? (
           <span className="ml-1 text-[12px] text-ink-muted">No contender zone in {seasonLabel(year)}: adjusted net rating is withheld.</span>
         ) : null}
+        <span className="ml-auto text-[12px] text-ink-muted">
+          {picked.size > 0 ? (
+            <>
+              <span className="text-ink">{picked.size} selected</span> · Shift-click adds or removes · Esc clears
+            </>
+          ) : (
+            "Drag across the chart to lasso teams · Shift adds · Alt removes"
+          )}
+        </span>
       </div>
 
       <div className="flex min-h-0 flex-1 border-t border-hairline">
@@ -264,15 +312,23 @@ export function TeamScatterView({ year, setYear, query }: ViewProps) {
               zone={zoneLive}
               inZone={inZone}
               hover={hover}
-              setHover={setHover}
+              setHover={hoverTo}
               onOpen={open}
               onMenu={(e, t) => menu(e, teamObj(t))}
               pct={pct}
+              selected={picked}
+              echo={echoName}
+              onLasso={(names, mode) => select(year, names, mode)}
+              onToggle={(name) => select(year, [name], "toggle")}
+              onClearSelection={() => {
+                if (picked.size > 0) clear();
+              }}
             />
           )}
         </div>
 
-        <aside aria-label="Teams on the chart" className="flex w-[320px] shrink-0 flex-col border-l border-hairline bg-paper">
+        {/* In a narrow pane (split view) the chart keeps the room; ↑ ↓ and Enter still walk the teams. */}
+        <aside aria-label="Teams on the chart" className="hidden w-[320px] shrink-0 flex-col border-l border-hairline bg-paper @3xl:flex">
           <div className="grid h-[32px] shrink-0 grid-cols-[26px_minmax(0,1fr)_44px_44px_8px] items-center gap-2 border-b border-hairline px-3 text-[10.5px] font-semibold uppercase tracking-[0.07em] text-ink-muted">
             <span className="text-right">#</span>
             <span>Team</span>
@@ -286,24 +342,27 @@ export function TeamScatterView({ year, setYear, query }: ViewProps) {
           </div>
           <ul ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
             {list.map((t, i) => {
-              const lit = hover === t.name || i === at;
+              const lit = hover === t.name || echoName === t.name || i === at;
+              const isPicked = picked.has(t.name);
               return (
                 <li key={t.name}>
                   <button
                     type="button"
+                    aria-pressed={picked.size > 0 ? isPicked : undefined}
                     onMouseDown={(e) => e.preventDefault()}
                     onPointerEnter={() => {
-                      setHover(t.name);
+                      hoverTo(t.name);
                       setCursor(i);
                     }}
-                    onClick={(e) => open(t, e.ctrlKey || e.metaKey)}
+                    onClick={(e) => (e.shiftKey ? select(year, [t.name], "toggle") : open(t, e.ctrlKey || e.metaKey))}
                     onContextMenu={(e) => menu(e, teamObj(t))}
                     draggable
                     onDragStart={(e) => beginDrag(e, objectDrag(teamObj(t)))}
                     data-scatter-row={t.name}
                     className={`grid h-[34px] w-full grid-cols-[26px_minmax(0,1fr)_44px_44px_8px] items-center gap-2 px-3 text-left text-[12.5px] ${
-                      lit ? "bg-[var(--row-focus)]" : "hover:bg-[var(--row-hover)]"
+                      isPicked ? "" : lit ? "bg-[var(--row-focus)]" : "hover:bg-[var(--row-hover)]"
                     }`}
+                    style={isPicked ? { background: `color-mix(in oklab, var(--accent) ${lit ? 22 : 14}%, var(--paper))` } : undefined}
                   >
                     <span className="text-right text-ink-muted tabular">{t.rank < 999 ? t.rank : "–"}</span>
                     <span className="flex min-w-0 items-center gap-2">

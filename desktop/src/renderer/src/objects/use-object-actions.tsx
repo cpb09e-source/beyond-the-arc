@@ -1,4 +1,8 @@
+import { ListChecks } from "lucide-react";
 import { createContext, useCallback, useContext, useEffect, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { useSelection } from "~/selection/selection";
+import { selectionMenuEntries } from "~/selection/selection-actions";
+import type { MenuEntry } from "~/ui/menu";
 import { useContextMenu } from "~/ui/context-menu";
 import { menuFor, runAction, type ActionEnv, type How, type Local } from "./actions";
 import { carriesObject, objTitle, type Obj } from "./object";
@@ -39,6 +43,7 @@ type At = { x: number; y: number } | ReactMouseEvent;
 export function useObjectMenu(): (at: At, o: Obj, local?: Local) => void {
   const env = useActionEnv();
   const openMenu = useContextMenu();
+  const sel = useSelection();
   return useCallback(
     (at, o, local = {}) => {
       let x: number;
@@ -51,9 +56,25 @@ export function useObjectMenu(): (at: At, o: Obj, local?: Local) => void {
       } else {
         ({ x, y } = at);
       }
-      openMenu({ x, y, label: `${objTitle(o)} actions`, entries: menuFor(o, env, local) });
+      let entries: MenuEntry[] = menuFor(o, env, local);
+      // A team inside a selection of several offers the selection's actions first.
+      const picked = sel.selection;
+      if (picked && picked.names.length > 1 && o.kind === "team" && o.year === picked.year && picked.names.includes(o.name)) {
+        entries = [
+          {
+            kind: "item",
+            id: "sub:selection",
+            label: `${picked.names.length} selected teams`,
+            icon: <ListChecks size={14} strokeWidth={2} />,
+            submenu: selectionMenuEntries(picked, env, sel.clear),
+          },
+          { kind: "separator", id: "sep:selection" },
+          ...entries,
+        ];
+      }
+      openMenu({ x, y, label: `${objTitle(o)} actions`, entries });
     },
-    [env, openMenu],
+    [env, openMenu, sel],
   );
 }
 

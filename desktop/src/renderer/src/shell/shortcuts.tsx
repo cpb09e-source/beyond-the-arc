@@ -84,6 +84,17 @@ const GROUPS: Array<{ title: string; items: Shortcut[] }> = [
     ],
   },
   {
+    title: "Selection",
+    items: [
+      { label: "Lasso teams on Team Scatter", keys: [["Drag across the chart"]] },
+      { label: "Add to or take from the lasso", keys: [["Shift", "Drag"], ["Alt", "Drag"]] },
+      { label: "Pick a row or crest", keys: [["X"], ["Ctrl", "Click"], ["Shift", "Click crest"]] },
+      { label: "Pick a range of rows", keys: [["Shift", "Click"], ["Shift", "↓"]] },
+      { label: "Pick every row or crest shown", keys: [["Ctrl", "A"]] },
+      { label: "Let the selection go", keys: [["Esc"]] },
+    ],
+  },
+  {
     title: "Search",
     items: [
       { label: "Open the highlighted result", keys: [["Enter"]] },

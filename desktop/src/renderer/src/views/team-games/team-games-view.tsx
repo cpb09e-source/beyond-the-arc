@@ -11,7 +11,7 @@ import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-pa
 import type { ViewProps } from "~/shell/views";
 import { DataTable, type Column } from "~/table/data-table";
 import { TeamLogo } from "~/ui/logo";
-import { parseScoped, sameName } from "~/ui/scoped-query";
+import { parseScoped, sameName, scopedNames } from "~/ui/scoped-query";
 import { normalizeText } from "~/ui/text";
 import { statColumns } from "./game-columns";
 import { GamePeekBody } from "./game-peek";
@@ -143,11 +143,14 @@ export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
     if (!season) return [];
     const scoped = parseScoped(query);
     const words = scoped ? [] : normalizeText(query).split(" ").filter(Boolean);
+    const named = new Set(scoped?.scope === "teams" ? scopedNames(scoped.value).map(normalizeText) : []);
     const inScope = (g: TeamGame): boolean =>
       !scoped ||
       (scoped.scope === "team"
         ? sameName(g.team, scoped.value)
-        : scoped.scope === "opponents"
+        : scoped.scope === "teams"
+          ? named.has(normalizeText(g.team))
+          : scoped.scope === "opponents"
           ? sameName(g.opp, scoped.value)
           : scoped.scope === "conf" && (sameName(g.confLabel, scoped.value) || sameName(g.conf, scoped.value)));
     return season.games.filter(

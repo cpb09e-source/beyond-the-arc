@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { ListChecks } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { StaticTeamSeasonRow } from "@/lib/static-data";
 import { loadTeamGameSeason } from "~/data/team-game-model";
 import { shapeSeason, type Season, type Team } from "~/data/team-model";
 import { loadOnce, SOURCE_LABEL, useCorpus } from "~/data/use-corpus";
 import type { Obj } from "~/objects/object";
+import { useEcho, useSelection, type SelectMode } from "~/selection/selection";
 import { useTabTitle } from "~/shell/tab-title";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
@@ -12,8 +14,8 @@ import { DataTable, type Column } from "~/table/data-table";
 import { StatCell } from "~/table/stat-cell";
 import { num1, pct1, seasonLabel, signed1 } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
-import { parseScoped, sameName } from "~/ui/scoped-query";
-import { matchesQuery } from "~/ui/text";
+import { parseScoped, sameName, scopedNames } from "~/ui/scoped-query";
+import { matchesQuery, normalizeText } from "~/ui/text";
 import { TeamPeekBody } from "./team-peek";
 
 /**
@@ -22,7 +24,12 @@ import { TeamPeekBody } from "./team-peek";
  *
  * A ROW IS A TEAM OBJECT, so its menu, C, F, drag and Enter are the registry's
  * (~/objects/actions.tsx). The filter also takes the registry's exact forms:
- * "conf: Big Ten", "opponents: Michigan", "team: Duke".
+ * "conf: Big Ten", "opponents: Michigan", "team: Duke", "teams: Duke, Houston".
+ *
+ * LINKED TO EVERY OTHER TEAM VIEW. Its picked rows are the shared selection
+ * (~/selection/selection.tsx), so a lasso on Team Scatter tints them here and
+ * Ctrl-click here rings the crests there; the row under the pointer is echoed
+ * to the chart the same way.
  */
 
 const ROW_H = 42;
@@ -136,6 +143,10 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
   const [state, retry] = useCorpus("teams", year, shapeTeams);
   const setStatus = useSetStatus();
   useTabTitle(query.trim() ? `Teams: ${query.trim()}` : null);
+  const { namesIn, select, clear } = useSelection();
+  const picked = namesIn(year);
+  const [onlyPicked, setOnlyPicked] = useState(false);
+  const { nameIn: echoIn, publish } = useEcho();
 
   const season = state.status === "ready" ? state.value : null;
   const scoped = parseScoped(query);
@@ -145,21 +156,39 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
   const landing = target && season ? season.teams.find((t) => t.name === target.name) : undefined;
   const rows = useMemo(() => {
     if (!season) return [];
-    if (!scoped) return season.teams.filter((t) => matchesQuery(query, t.name, t.confLabel, t.conf));
+    const base = onlyPicked && picked.size > 0 ? season.teams.filter((t) => picked.has(t.name)) : season.teams;
+    if (!scoped) return base.filter((t) => matchesQuery(query, t.name, t.confLabel, t.conf));
     const v = scoped.value;
-    if (scoped.scope === "conf") return season.teams.filter((t) => sameName(t.confLabel, v) || sameName(t.conf, v));
-    if (scoped.scope === "team") return season.teams.filter((t) => sameName(t.name, v));
-    if (scoped.scope === "opponents") return opponents ? season.teams.filter((t) => opponents.has(t.name)) : [];
+    if (scoped.scope === "conf") return base.filter((t) => sameName(t.confLabel, v) || sameName(t.conf, v));
+    if (scoped.scope === "team") return base.filter((t) => sameName(t.name, v));
+    if (scoped.scope === "teams") {
+      const names = new Set(scopedNames(v).map(normalizeText));
+      return base.filter((t) => names.has(normalizeText(t.name)));
+    }
+    if (scoped.scope === "opponents") return opponents ? base.filter((t) => opponents.has(t.name)) : [];
     return [];
     // `scoped` is read from `query`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [season, query, opponents]);
+  }, [season, query, opponents, onlyPicked, picked]);
 
   useEffect(() => {
     if (state.status === "ready") setStatus(`${SOURCE_LABEL[state.source]} in ${state.ms} ms`);
     else if (state.status === "loading") setStatus("Loading…");
     else setStatus("Not loaded");
   }, [state, setStatus]);
+
+  const selection = useMemo(
+    () => ({
+      isSelected: (t: Team) => picked.has(t.name),
+      change: (list: Team[], mode: SelectMode) => select(year, list.map((t) => t.name), mode),
+      clear,
+      size: picked.size,
+    }),
+    [picked, select, clear, year],
+  );
+  const onFocusRow = useCallback((t: Team | undefined) => publish(year, t?.name ?? null), [publish, year]);
+  const echoName = echoIn(year);
+  const echoKey = echoName && season ? (season.teams.find((t) => t.name === echoName)?.id ?? null) : null;
 
   const total = season?.teams.length ?? 0;
   const meta = !season
@@ -170,7 +199,7 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
         ? opponents
           ? `${rows.length} opponents of ${scoped.value}`
           : "Finding opponents…"
-        : `${query.trim() && rows.length !== total ? `${rows.length} of ${total}` : total} teams · Final`;
+        : `${rows.length !== total ? `${rows.length} of ${total}` : total} teams${picked.size > 0 ? ` · ${picked.size} selected` : ""} · Final`;
 
   const object = (t: Team): Obj => ({ kind: "team", name: t.name, logoId: t.logoId, year, conf: t.conf });
 
@@ -182,6 +211,26 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
         year={year}
         setYear={setYear}
         meta={meta}
+        controls={
+          picked.size > 0 ? (
+            <button
+              type="button"
+              aria-pressed={onlyPicked}
+              title="Show only the selected teams"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setOnlyPicked((v) => !v)}
+              className={`inline-flex h-[26px] items-center gap-1.5 rounded-md border px-2 text-[12.5px] transition-colors ${
+                onlyPicked
+                  ? "border-[color-mix(in_oklab,var(--accent)_45%,var(--hairline))] bg-[var(--accent-wash)] text-ink"
+                  : "border-hairline bg-card text-ink-soft hover:border-ink-muted hover:text-ink"
+              }`}
+            >
+              <ListChecks size={13} strokeWidth={2} />
+              Selected only
+              <span className="text-ink-muted tabular">{picked.size}</span>
+            </button>
+          ) : undefined
+        }
         filter={{ value: query, onChange: setQuery, placeholder: "Filter teams" }}
       />
       <div className="relative min-h-0 flex-1 border-t border-hairline">
@@ -196,11 +245,20 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
             defaultSort={{ key: "rank", dir: 1 }}
             tieBreak={byBtaRank}
             ariaLabel="Teams"
-            empty={<NoMatches query={query} noun="team or conference" />}
+            empty={
+              onlyPicked && picked.size > 0 ? (
+                <p className="px-5 py-10 text-[13px] text-ink-muted">None of the selected teams match the filter.</p>
+              ) : (
+                <NoMatches query={query} noun="team or conference" />
+              )
+            }
             peek={{ label: (t) => t.name, body: (t) => <TeamPeekBody season={state.value} team={t} /> }}
             landOn={landing && target ? { key: landing.id, nonce: target.nonce } : undefined}
             onLanded={onLanded}
             object={object}
+            selection={selection}
+            echo={echoKey}
+            onFocusRow={onFocusRow}
           />
         ) : state.status === "loading" ? (
           <TableSkeleton rowHeight={ROW_H} label="Loading teams" />

@@ -20,6 +20,7 @@ import { useIsActive } from "~/shell/active";
 import { signalOnboarding } from "~/shell/onboarding";
 import { useShell } from "~/shell/shell-context";
 import { useContextMenu } from "~/ui/context-menu";
+import type { SelectMode } from "~/selection/selection";
 import type { MenuEntry } from "~/ui/menu";
 import { usePersisted } from "~/ui/persisted";
 import { PeekPanel } from "./peek-panel";
@@ -127,6 +128,21 @@ type Props<R> = {
    * `side` with Shift, for split view. Absent, the row's object opens.
    */
   onOpen?: (row: R, how: { newTab: boolean; side?: boolean }) => void;
+  /**
+   * Rows picked together, usually the shared selection (~/selection/selection.tsx):
+   * Ctrl-click toggles, Shift-click takes a range, X toggles the focused row,
+   * Shift with the arrows carries it along, Ctrl+A takes every row, Esc lets go.
+   */
+  selection?: {
+    isSelected: (row: R) => boolean;
+    change: (rows: R[], mode: SelectMode) => void;
+    clear: () => void;
+    size: number;
+  };
+  /** The key of a row another view is pointing at (the linked hover): outlined, not focused. */
+  echo?: string | number | null;
+  /** Told when the reader moves to a row (pointer or keys), and undefined when the pointer leaves. */
+  onFocusRow?: (row: R | undefined) => void;
 };
 
 const HEAD_H = 32;
@@ -167,6 +183,9 @@ export function DataTable<R>({
   landOn,
   onLanded,
   onOpen,
+  selection,
+  echo,
+  onFocusRow,
 }: Props<R>) {
   const [sort, setSort] = useState(defaultSort);
   // A table in a tab that is not in front keeps its state but not the keyboard.
@@ -236,6 +255,8 @@ export function DataTable<R>({
   const found = focusKey == null ? undefined : indexByKey.get(focusKey);
   const index = found ?? (sorted.length > 0 ? 0 : -1);
   const focused = index >= 0 ? sorted[index] : undefined;
+  // Where a Shift-click range starts: the row last picked or clicked.
+  const anchor = useRef<string | number | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLDivElement>(null);
@@ -302,13 +323,16 @@ export function DataTable<R>({
   }, []);
 
   const move = useCallback(
-    (to: number) => {
-      if (sorted.length === 0) return;
+    (to: number): R | undefined => {
+      if (sorted.length === 0) return undefined;
       const i = Math.max(0, Math.min(sorted.length - 1, to));
-      setFocusKey(rowKey(sorted[i]!));
+      const row = sorted[i]!;
+      setFocusKey(rowKey(row));
       virtual.scrollToIndex(i, { align: "auto" });
+      onFocusRow?.(row);
+      return row;
     },
-    [sorted, rowKey, virtual],
+    [sorted, rowKey, virtual, onFocusRow],
   );
 
   useEffect(() => {
@@ -326,10 +350,29 @@ export function DataTable<R>({
         openRow(row, { newTab: e.ctrlKey || e.metaKey, side: e.shiftKey });
         return;
       }
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
       const inField = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
+      // Every row the table shows, as Ctrl+A takes everything in a list.
+      if (selection && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.code === "KeyA" && !inField) {
+        e.preventDefault();
+        selection.change(sorted, "replace");
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const row = index >= 0 ? sorted[index] : undefined;
+      // Esc lets the selection go, once any Peek is closed.
+      if (selection && !inField && e.key === "Escape" && selection.size > 0 && !peekState.open) {
+        e.preventDefault();
+        selection.clear();
+        return;
+      }
+      // X picks the focused row, as Linear's lists do.
+      if (selection && !inField && row && !e.shiftKey && e.key.toLowerCase() === "x") {
+        e.preventDefault();
+        selection.change([row], "toggle");
+        anchor.current = rowKey(row);
+        return;
+      }
 
       // The row's menu from the keyboard: . as Superhuman and Linear offer, and Windows' own two.
       if (!inField && row && object && (e.key === "." || e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) {
@@ -378,11 +421,13 @@ export function DataTable<R>({
       }
       if (to == null) return;
       e.preventDefault();
-      move(to);
+      const next = move(to);
+      // Shift with the arrows carries the selection along from the row the move started on.
+      if (selection && e.shiftKey && row && next && (e.key === "ArrowDown" || e.key === "ArrowUp")) selection.change([row, next], "add");
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, index, move, sorted, viewH, rowHeight, openRow, keys, filterRef, object, env, local, objectMenu, layout.pinnedWidth]);
+  }, [active, index, move, sorted, viewH, rowHeight, openRow, keys, filterRef, object, env, local, objectMenu, layout.pinnedWidth, selection, peekState.open, rowKey]);
 
   // THE POINTER MOVES FOCUS, but only when the pointer itself moves. Chromium
   // sends synthetic mouse moves when content scrolls under a still cursor, and
@@ -393,7 +438,10 @@ export function DataTable<R>({
     lastPointer.current = { x: e.clientX, y: e.clientY };
     const i = Math.floor((e.clientY - e.currentTarget.getBoundingClientRect().top) / rowHeight);
     const row = sorted[i];
-    if (row && (focused === undefined || rowKey(row) !== rowKey(focused))) setFocusKey(rowKey(row));
+    if (row && (focused === undefined || rowKey(row) !== rowKey(focused))) {
+      setFocusKey(rowKey(row));
+      onFocusRow?.(row);
+    }
   };
 
   useEffect(() => {
@@ -580,20 +628,43 @@ export function DataTable<R>({
         ) : (
           <div
             onPointerMove={onPointerMove}
+            onPointerLeave={onFocusRow ? () => onFocusRow(undefined) : undefined}
             className="relative"
             style={{ height: virtual.getTotalSize(), width: layout.totalWidth, minWidth: "100%" }}
           >
             {virtual.getVirtualItems().map((item) => {
               const row = sorted[item.index]!;
               const isFocus = item.index === index;
-              const background = isFocus ? "var(--row-focus)" : "var(--paper)";
+              const picked = selection?.isSelected(row) ?? false;
+              // Picked rows carry the accent more strongly than focus alone, so a selection reads at a glance.
+              const background = picked
+                ? `color-mix(in oklab, var(--accent) ${isFocus ? 22 : 14}%, var(--paper))`
+                : isFocus
+                  ? "var(--row-focus)"
+                  : "var(--paper)";
+              const echoed = echo != null && rowKey(row) === echo;
               return (
                 <div
                   key={rowKey(row)}
                   role="row"
-                  aria-selected={isFocus}
+                  aria-selected={selection ? picked : isFocus}
                   onMouseDown={(e) => {
-                    if (e.button === 0) setFocusKey(rowKey(row));
+                    if (e.button !== 0) return;
+                    const key = rowKey(row);
+                    if (selection && (e.ctrlKey || e.metaKey)) {
+                      e.preventDefault();
+                      selection.change([row], "toggle");
+                      anchor.current = key;
+                    } else if (selection && e.shiftKey) {
+                      // A range from the row last picked or clicked (or the focused one) to this one.
+                      e.preventDefault();
+                      const from = indexByKey.get(anchor.current ?? focusKey ?? key) ?? item.index;
+                      const [lo, hi] = from < item.index ? [from, item.index] : [item.index, from];
+                      selection.change(sorted.slice(lo, hi + 1), "add");
+                    } else {
+                      anchor.current = key;
+                    }
+                    setFocusKey(key);
                   }}
                   onDoubleClick={openRow ? (e) => openRow(row, { newTab: e.ctrlKey || e.metaKey, side: e.shiftKey }) : undefined}
                   onContextMenu={
@@ -614,6 +685,9 @@ export function DataTable<R>({
                     height: rowHeight,
                     transform: `translateY(${item.start}px)`,
                     background,
+                    // Drawn over the pinned cells, which paint their own opaque ground.
+                    outline: echoed ? "1.5px solid var(--accent)" : undefined,
+                    outlineOffset: echoed ? "-1.5px" : undefined,
                   }}
                 >
                   {columns.map((c, i) => (

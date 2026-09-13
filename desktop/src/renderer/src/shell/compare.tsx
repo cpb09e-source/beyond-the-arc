@@ -140,8 +140,11 @@ export function CompareProvider({ children }: { children: ReactNode }) {
  */
 export function CompareDock({
   hidden = false,
+  lift = false,
   onOpen,
 }: {
+  /** The selection bar has the bottom edge: the tray sits above it. */
+  lift?: boolean;
   /** The tab in front already shows this tray's comparison. A drag still brings the tray back. */
   hidden?: boolean;
   onOpen: (items: CompareItem[], newTab: boolean) => void;
@@ -173,7 +176,7 @@ export function CompareDock({
   const noun = items[0]?.kind === "player" ? "players" : "teams";
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-4">
+    <div className={`pointer-events-none absolute inset-x-0 z-30 flex justify-center px-4 ${lift ? "bottom-[64px]" : "bottom-4"}`}>
       <div
         role="region"
         aria-label="Compare tray"
