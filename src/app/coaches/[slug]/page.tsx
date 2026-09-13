@@ -341,6 +341,7 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
           <h2 className="font-display text-2xl text-ink mb-5">March Madness</h2>
           <TournamentSuccess
             seasons={profile.by_year}
+            record={{ wins: profile.tourney_wins, losses: profile.tourney_losses }}
             gamesByTeamYear={gamesForSeason}
             tourneyWinsRank={tourneyRank.rank > 0 ? `${ordinal(tourneyRank.rank)} of ${tourneyRank.total}` : undefined}
           />

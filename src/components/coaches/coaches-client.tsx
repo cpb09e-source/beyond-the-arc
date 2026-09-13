@@ -35,8 +35,9 @@ function teamSlug(name: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
-// Slug helper inlined (mirror of coachSlug in src/lib/coaches.ts). Pulling it
-// from coaches.ts breaks the client/server boundary — that file uses node:fs.
+// Slug helper inlined (mirror of coachSlug in src/lib/coach-slug.ts, which
+// lib/coaches-core.ts re-exports). Never pull it from lib/coaches.ts: that file
+// uses node:fs and breaks the client/server boundary.
 const coachSlug = teamSlug;
 
 function fmtPct(pct: number | null): string {

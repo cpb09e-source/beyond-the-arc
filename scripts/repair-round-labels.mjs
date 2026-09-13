@@ -38,7 +38,7 @@ const YEARS = new Set(["2013", "2014", "2015"]);
 
 const norm = (s) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "");
 
-// Mirrors BART_TO_SR_ALIAS in src/lib/coaches.ts.
+// Mirrors BART_TO_SR_ALIAS in src/lib/coaches-core.ts.
 const ALIAS = {
   "Connecticut": "UConn", "North Carolina": "UNC", "Pittsburgh": "Pitt", "Mississippi": "Ole Miss",
   "Massachusetts": "UMass", "East Tennessee St.": "ETSU", "N.C. State": "NC State", "McNeese St.": "McNeese",

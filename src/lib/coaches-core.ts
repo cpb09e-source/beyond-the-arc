@@ -111,7 +111,7 @@ export type CoachSeason = {
   adj_de_pct?: number | null;         // adj_de percentile within the year (lower=better)
   adj_net?: number | null;            // adj_oe - adj_de
   adj_net_pct?: number | null;        // net percentile within the year (higher=better)
-  /** Play-style rates for the team this season. Null before 2014 / in 2021. */
+  /** Play-style rates for the team this season. Null before 2014, and for Eastern Washington 2017. */
   style?: CoachStyle | null;
 };
 
@@ -728,14 +728,17 @@ function profilesFromSeasons(seasons: SeasonWithCoach[], _raw: RawSourceData): C
     const is_active = current.year === LATEST_YEAR;
 
     // The conference of the LAST SEASON THAT KNOWS ONE, not simply the last
-    // season. The corpus has `conference: null` on the window's edge years —
-    // 2013 and 2021 — so a coach whose final season is one of those had no
+    // season. When this was written the corpus had `conference: null` on 2013
+    // and 2021, so a coach whose final season was one of those had no
     // conference at all: Roy Williams finished at North Carolina in 2021 and
     // came out with current_conference null, as did Lon Kruger at Oklahoma.
     // That is not a small display nit. The Tier filter reads
     // `POWER_CONFS.has(current_conference)`, so a null read as "not power" and
     // dropped 68 coaches — Williams, Kruger, Wojciechowski, Leitao — into Mid
     // Major. Their own earlier seasons say ACC, B12, BE.
+    // 2021 has since been filled in. 2013 is still all null, but it is the
+    // window's first season, so nobody has an earlier one to fall back to and
+    // this currently changes no coach. It stays as the guard.
     const current_conference =
       current.conference ?? (list.find((s) => s.conference != null)?.conference ?? null);
 
@@ -971,7 +974,7 @@ function isExpectedTier(s: CoachSeason): boolean {
  *   - Mid-major upset bonus (per game): min(seedDiff × 0.4, 4)
  *
  * Penalties:
- *   - Power miss-tournament: blueblood −2.5 / default −0.5 / low-expectation 0
+ *   - Power miss-tournament: blueblood −3.5 / default −0.5 / low-expectation 0
  *   - Power R64 first-round exit: −1
  *
  * Returns the raw composite (sum of season scores). Rounded to 1 decimal.

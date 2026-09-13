@@ -326,8 +326,12 @@ export function sortCoachRows<T extends CoachIndexRow>(
   const key = (r: T) => coachSortValue(r, effectiveSort);
   return [...filtered].sort((a, b) => {
     const av = key(a), bv = key(b);
-    if (av === null || av === undefined) return 1;
-    if (bv === null || bv === undefined) return -1;
+    // Missing values go last whichever way the column runs. Two missing values
+    // compare equal: returning 1 for both claimed a > b and b > a at once,
+    // which is not a comparator Array.sort promises to handle.
+    const aMissing = av === null || av === undefined;
+    const bMissing = bv === null || bv === undefined;
+    if (aMissing || bMissing) return aMissing === bMissing ? 0 : aMissing ? 1 : -1;
     if (av < bv) return -1 * dir;
     if (av > bv) return 1 * dir;
     // Stable secondary sort by last name
@@ -383,15 +387,9 @@ export function coachStatPercentiles(
 ): Map<string, Map<string, number>> {
   const out = new Map<string, Map<string, number>>();
   for (const c of statCols) {
-    const vals = rows
-      .map((r) => [r.slug, coachStatValue(r, c.key)] as const)
-      .filter((e): e is readonly [string, number] => typeof e[1] === "number")
-      .sort((a, b) => a[1] - b[1]);
-    const m = new Map<string, number>();
-    if (vals.length >= 2) {
-      vals.forEach(([slug], i) => m.set(slug, Math.round((i / (vals.length - 1)) * 100)));
-    }
-    out.set(c.key, m);
+    // Midrank, as coachPercentiles does, so tied coaches share a chip. A stat
+    // with fewer than two coaches holding a value gets an empty map.
+    out.set(c.key, midrankPercentileMap(rows.map((r) => [r.slug, coachStatValue(r, c.key)] as const)));
   }
   return out;
 }
@@ -610,22 +608,34 @@ export type TourneySummary = {
 };
 
 /**
- * The March Madness section's summary, off the seasons alone. With no seeded
- * season `tourneys` is empty and the section renders its empty state instead.
+ * The March Madness section's summary. With no seeded season `tourneys` is
+ * empty and the section renders its empty state instead.
+ *
+ * Pass `record` whenever the profile is at hand: profile.tourney_wins and
+ * profile.tourney_losses, counted off the bracket by attachTournamentRecord in
+ * lib/coaches-core.ts. That is the record the tourney-wins rank and the
+ * explorer's NCAA column use. Without it the record is inferred from round
+ * labels, which cannot tell a game won from a round skipped: Oregon's 2021
+ * no-contest against VCU put Dana Altman's profile at 17-9 beside a 16-9
+ * index row.
  */
-export function tourneySummary(seasons: readonly CoachSeason[]): TourneySummary {
+export function tourneySummary(
+  seasons: readonly CoachSeason[],
+  record?: { wins: number; losses: number },
+): TourneySummary {
   // "Tournament appearance" = we have a seed assigned.
   const tourneys = seasons.filter((s) => s.seed !== null).sort((a, b) => b.year - a.year);
 
   // Summary stats
   const appearances = tourneys.length;
-  const tourneyWins = tourneys.reduce(
+  // The label fallback: each appearance's round implies its wins, and every
+  // appearance ends with a loss except for years won.
+  const champions = tourneys.filter((s) => s.round === "Champion").length;
+  const tourneyWins = record?.wins ?? tourneys.reduce(
     (sum, s) => sum + (s.round ? TOURNEY_ROUND_WINS[s.round] : 0),
     0,
   );
-  // Tournament losses: each appearance ends with a loss except for years won.
-  const champions = tourneys.filter((s) => s.round === "Champion").length;
-  const tourneyLosses = appearances - champions;
+  const tourneyLosses = record?.losses ?? appearances - champions;
   const highestSeed = Math.min(...tourneys.map((s) => s.seed ?? 99));
   return { tourneys, appearances, tourneyWins, tourneyLosses, highestSeed };
 }
@@ -749,7 +759,8 @@ export type SeasonSortDir = "asc" | "desc";
 /**
  * The season table's order for a column and direction, as a sorted copy.
  *
- * Numeric columns: numeric compare. String columns: locale compare.
+ * Numeric columns: numeric compare. String columns: locale compare. A season
+ * missing the value sorts last in either direction.
  */
 export function sortCoachSeasons(
   seasons: readonly CoachSeason[],
@@ -766,16 +777,14 @@ export function sortCoachSeasons(
         case "conf": return s.conference ?? "";
         case "record":
           // Sort by wins primarily; null records sort last.
-          if (s.wins == null) return -Infinity;
-          return s.wins;
+          return s.wins ?? null;
         case "bta_rtg":
-          // We display BTA rank (lower = better); for sort purposes we use
-          // the rank value but flip the comparator below so "asc" on this
-          // column = best-ranked first.
-          return s.bta_rank ?? Infinity;
-        case "adj_net": return s.adj_net ?? -Infinity;
-        case "adj_oe": return s.adj_oe ?? -Infinity;
-        case "adj_de": return s.adj_de ?? Infinity;
+          // We display BTA rank (lower = better) and sort on the rank value,
+          // so "asc" on this column = best-ranked first.
+          return s.bta_rank ?? null;
+        case "adj_net": return s.adj_net ?? null;
+        case "adj_oe": return s.adj_oe ?? null;
+        case "adj_de": return s.adj_de ?? null;
         case "awards":
           return awardsRank(s);
         default: return 0;
@@ -783,6 +792,10 @@ export function sortCoachSeasons(
     };
     const av = get(a);
     const bv = get(b);
+    // Missing values last, and two missing values tie. The ±Infinity stand-ins
+    // this replaces only put them last in each column's default direction, and
+    // two of them made the comparator NaN (Infinity - Infinity).
+    if (av === null || bv === null) return av === bv ? 0 : av === null ? 1 : -1;
     if (typeof av === "string" && typeof bv === "string") return av.localeCompare(bv) * dir;
     const an = typeof av === "number" ? av : 0;
     const bn = typeof bv === "number" ? bv : 0;

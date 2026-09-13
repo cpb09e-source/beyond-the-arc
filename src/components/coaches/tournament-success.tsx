@@ -31,16 +31,23 @@ function seasonLabel(y: number): string {
  */
 export function TournamentSuccess({
   seasons,
+  record,
   gamesByTeamYear,
   tourneyWinsRank,
 }: {
   seasons: CoachSeason[];
+  /**
+   * The career record counted off the bracket: profile.tourney_wins and
+   * profile.tourney_losses. The same numbers the rank beside the tile and the
+   * explorer's NCAA column use; tourneySummary says why not the round labels.
+   */
+  record: { wins: number; losses: number };
   gamesByTeamYear?: (team: string, year: number) => TourneyGame[];
   /** Pre-formatted rank (e.g. "3rd of 264"), or undefined. */
   tourneyWinsRank?: string;
 }) {
   // "Tournament appearance" = we have a seed assigned — see tourneySummary.
-  const { tourneys, appearances, tourneyWins, tourneyLosses, highestSeed } = tourneySummary(seasons);
+  const { tourneys, appearances, tourneyWins, tourneyLosses, highestSeed } = tourneySummary(seasons, record);
 
   if (tourneys.length === 0) {
     return (

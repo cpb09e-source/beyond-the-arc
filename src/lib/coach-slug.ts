@@ -9,7 +9,7 @@
  * item errored" rather than anything that names the real problem. The season
  * grid needed nothing but this six-line transform.
  *
- * lib/coaches.ts re-exports this rather than keeping its own copy, so the
+ * lib/coaches-core.ts re-exports this rather than keeping its own copy, so the
  * slugs the routes are generated from and the slugs links are built from are
  * the same function, not two functions that agree today.
  */

@@ -30,7 +30,7 @@
  *         public/images/coaches/<slug>-sm.webp  240x174, q78  (~6 KB)
  *         src/data/coach-photos.json            slug -> public path
  *
- * Filenames ARE the key: <slug> must be coachSlug(name) from src/lib/coaches.ts
+ * Filenames ARE the key: <slug> must be coachSlug(name) from src/lib/coach-slug.ts
  * — lowercase, accents stripped, non-alphanumeric to hyphen. All 804 coach
  * names in the window produce distinct slugs, so there is nothing to collide.
  *

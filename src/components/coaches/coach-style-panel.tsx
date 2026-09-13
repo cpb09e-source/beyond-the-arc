@@ -42,8 +42,10 @@ export function CoachStylePanel({
   styleAvg: CoachStyle | null | undefined;
   stylePct: CoachStyle | null | undefined;
 }) {
-  // 30 of 804 coaches have no style at all — too few joined team-seasons.
-  // They get nothing rather than a panel of dashes.
+  // 291 of 804 coaches have no style_pct, so no panel: 29 have no style data
+  // at all, and 262 have fewer than the four style seasons that
+  // attachStylePercentiles (lib/coaches-core.ts) requires before ranking a
+  // career. They get nothing rather than a panel of dashes.
   if (!styleAvg || !stylePct || typeof styleAvg.pace !== "number") return null;
 
 

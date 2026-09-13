@@ -53,7 +53,7 @@ function candidates(team: string): string[] {
   return out;
 }
 
-/** Wins the round label implies, mirroring ROUND_WINS_LOOKUP in coaches.ts. */
+/** Wins the round label implies, mirroring ROUND_WINS_LOOKUP in coaches-core.ts. */
 const ROUND_WINS: Record<string, number> = {
   "First Four": 0, "R64": 0, "R32": 1, "Sweet 16": 2,
   "Elite Eight": 3, "Final Four": 4, "Runner-up": 5, "Champion": 6,

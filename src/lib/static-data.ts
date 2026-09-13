@@ -710,7 +710,7 @@ export type GameLog = {
   ft_pct?: number | null;
   // Optional round label, attached only when the GameLog is being rendered
   // inside a tournament-themed ticker (e.g. March Madness resume). One of
-  // "R1" "R2" "S16" "E8" "F4" "NC" — see SHORT_ROUND in coach page.
+  // "R1" "R2" "S16" "E8" "F4" "NC" — see SHORT_ROUND in lib/coach-views.ts.
   tournamentRound?: string | null;
 };
 const _gameLogsCache = new Map<number, GameLog[]>();
@@ -786,7 +786,8 @@ export const MANUAL_PROFILE_IDS: readonly number[] = [
 ];
 
 // Newest season we'll scan for the freshman pass. Mirrors LATEST_YEAR in
-// coaches.ts; duplicated here to avoid a circular import.
+// lib/coaches-core.ts. Duplicated from when it lived in lib/coaches.ts, which
+// imports this file and so could not be imported back.
 const LATEST_PLAYER_YEAR = 2026;
 
 /**
