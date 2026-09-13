@@ -268,6 +268,40 @@ export function confViewsFor(split: string): ConfView[] {
 }
 
 /**
+ * The game splits, in the order the control offers them.
+ *
+ * READ THE CONFERENCE SPLIT WITH ITS THUMB ON THE SCALE. In league games the
+ * conference is mostly playing itself, so its margin collapses towards zero —
+ * one team's points scored are another's allowed. It does not land ON zero,
+ * and the gap is informative: the rows are the league minus its worst two,
+ * and those two are exactly who the rest beat in league play. Pace, shooting
+ * and the rate stats are unaffected and say real things.
+ */
+export const CONF_SPLITS = [
+  { key: "full", label: "Full Season" },
+  { key: "conf", label: "All Conference Games" },
+  { key: "nonconf", label: "All Non-Conference Games" },
+] as const;
+
+/**
+ * A conference stat in its column's format. Small and local on purpose: the
+ * team explorer's formatters are entangled with its row type; this takes a
+ * number and a format name and nothing else.
+ */
+export function fmtConfValue(v: number | null, fmt: ConfCol["fmt"]): string {
+  if (v === null) return "—";
+  switch (fmt) {
+    case "pct1": return `${(v * 100).toFixed(1)}%`;
+    case "num2": return v.toFixed(2);
+    case "int": return Math.round(v).toLocaleString();
+    // A margin has to carry its sign, including when it is positive — that is
+    // the whole information in the column.
+    case "signed": return `${v > 0 ? "+" : ""}${v.toFixed(1)}`;
+    default: return v.toFixed(1);
+  }
+}
+
+/**
  * Dev-time check that every key in every view resolves. A view naming a stat
  * nothing can render would otherwise show up as a silently narrower table.
  */

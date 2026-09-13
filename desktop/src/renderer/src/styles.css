@@ -366,6 +366,16 @@ html {
   width: 3px;
 }
 
+/*
+ * CONFERENCE MARKS ON THE DARK GROUND. The files are the leagues' own art, and
+ * about a third of them are navy or black ink (the Big Ten, the ACC, C-USA)
+ * that all but vanishes on #1c1c1c. A faint light halo traces the mark without
+ * repainting it; the light theme needs nothing.
+ */
+[data-theme="dark"] .conf-logo {
+  filter: drop-shadow(0 0 0.6px rgb(255 255 255 / 0.7)) drop-shadow(0 0 2px rgb(255 255 255 / 0.18));
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

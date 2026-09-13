@@ -56,6 +56,11 @@ function logosDir(): string {
   return app.isPackaged ? join(process.resourcesPath, "logos") : resolve(app.getAppPath(), "../public/ttz-logos");
 }
 
+/** Conference marks: the site's 32 files (public/images/conf), shipped beside the crests. */
+function confDir(): string {
+  return app.isPackaged ? join(process.resourcesPath, "conf") : resolve(app.getAppPath(), "../public/images/conf");
+}
+
 function createWindow(): void {
   const c = chrome();
   win = new BrowserWindow({
@@ -187,6 +192,12 @@ function serveAssets(): void {
       // Digits only: the id becomes a filename, and nothing else may.
       const m = /^\/(\d{1,9})\.png$/.exec(url.pathname);
       const file = m ? join(logosDir(), `${m[1]}.png`) : null;
+      if (file && existsSync(file)) return net.fetch(pathToFileURL(file).toString());
+    }
+    if (url.hostname === "conf") {
+      // A conference code as the site spells it ("B10", "SEC"): letters and digits, nothing else.
+      const m = /^\/([A-Za-z0-9]{1,8})\.png$/.exec(url.pathname);
+      const file = m ? join(confDir(), `${m[1]}.png`) : null;
       if (file && existsSync(file)) return net.fetch(pathToFileURL(file).toString());
     }
     if (url.hostname === "player") {

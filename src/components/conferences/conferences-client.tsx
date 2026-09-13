@@ -24,7 +24,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Select } from "@/components/select";
-import { midrankPercentileMap } from "@/lib/percentile";
 import { PercentileChip } from "@/components/percentile-chip";
 import { SortableTh } from "@/components/explorer/sortable-th";
 import { MultiYearSelect } from "@/components/explorer/multi-year-select";
@@ -40,10 +39,10 @@ import { ConferenceLogo } from "@/components/conferences/conference-logo";
 import { TeamLogo } from "@/components/team-logo";
 import Link from "next/link";
 import {
-  CONF_VIEWS, confCol, confViewByKey, confViewCols, confViewBands, confViewsFor, type ConfCol,
+  CONF_SPLITS, CONF_VIEWS, confCol, confViewByKey, confViewCols, confViewBands, confViewsFor, fmtConfValue, type ConfCol,
 } from "@/lib/conference-views";
 import {
-  confValue, loadConferenceRankings, loadConferenceSplits, splitValue,
+  confPercentiles, confReader, loadConferenceRankings, loadConferenceSplits,
   type ConfPack, type ConfRow, type ConfSplitPack,
 } from "@/lib/conference-rankings";
 
@@ -52,43 +51,8 @@ const ROW_HOVER = "group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card
 /** The season the page opens on. */
 const DEFAULT_YEAR = 2026;
 
-/**
- * The game splits, in the order the control offers them.
- *
- * READ THE CONFERENCE SPLIT WITH ITS THUMB ON THE SCALE. In league games the
- * conference is mostly playing itself, so its margin collapses towards zero —
- * one team's points scored are another's allowed. It does not land ON zero,
- * and the gap is informative: the rows are the league minus its worst two,
- * and those two are exactly who the rest beat in league play. Pace, shooting
- * and the rate stats are unaffected and say real things.
- */
-const SPLITS = [
-  { key: "full", label: "Full Season" },
-  { key: "conf", label: "All Conference Games" },
-  { key: "nonconf", label: "All Non-Conference Games" },
-] as const;
-
 function seasonLabel(y: number): string {
   return `${(y - 1).toString().slice(-2)}-${y.toString().slice(-2)}`;
-}
-
-// ---------------------------------------------------------------------------
-// Number formatting
-// ---------------------------------------------------------------------------
-// Deliberately small and local. The team explorer's formatters are entangled
-// with its row type; these take a number and a format name and nothing else.
-
-function fmtValue(v: number | null, fmt: ConfCol["fmt"]): string {
-  if (v === null) return "—";
-  switch (fmt) {
-    case "pct1": return `${(v * 100).toFixed(1)}%`;
-    case "num2": return v.toFixed(2);
-    case "int": return Math.round(v).toLocaleString();
-    // A margin has to carry its sign, including when it is positive — that is
-    // the whole information in the column.
-    case "signed": return `${v > 0 ? "+" : ""}${v.toFixed(1)}`;
-    default: return v.toFixed(1);
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -111,7 +75,7 @@ function parseConfSpec(params: URLSearchParams, pack: ConfPack | null): ConfSpec
     .map((s) => Number(s.trim()))
     .filter((n) => Number.isFinite(n) && (known.size === 0 || known.has(n)));
   const splitInUrl = params.get("split") ?? "full";
-  const split = SPLITS.some((s) => s.key === splitInUrl) ? splitInUrl : "full";
+  const split = CONF_SPLITS.some((s) => s.key === splitInUrl) ? splitInUrl : "full";
   // A view the split cannot fill falls back to the first one it can, so a
   // bookmarked Record & Outcomes URL plus a split is a table rather than a
   // row of dashes.
@@ -191,13 +155,7 @@ export function ConferencesClient() {
   );
 
   /** One row's numbers under the active split — the row itself on Full. */
-  const readValue = useCallback((r: ConfRow, key: string): number | null => {
-    // The season is a property of the row, not of a split of its games.
-    if (key === "year") return r.year;
-    if (spec.split === "full") return confValue(r, key);
-    const block = splitPack?.rows[`${r.year}|${r.conf}`]?.[spec.split];
-    return splitValue(block, key);
-  }, [spec.split, splitPack]);
+  const readValue = useMemo(() => confReader(spec.split, splitPack), [spec.split, splitPack]);
 
   /** Write the URL. Sorting goes through SortableTh's own links, not this. */
   const update = useCallback((next: Partial<ConfSpec>) => {
@@ -250,36 +208,7 @@ export function ConferencesClient() {
     return pack.rows.filter((r) => years.has(r.year));
   }, [pack, spec.years]);
 
-  /**
-   * Percentiles per stat, computed WITHIN EACH SEASON and then merged.
-   *
-   * Same rule the team explorer uses for teams: a conference is compared to the
-   * conferences it actually played that year. Pooling twelve seasons would let
-   * scoring inflation decide the colors — every 2026 league would outrank
-   * every 2015 one on points per game, which is a fact about the era.
-   */
-  const pcts = useMemo(() => {
-    const out = new Map<string, Map<string, number>>();
-    const byYear = new Map<number, ConfRow[]>();
-    for (const r of cohort) {
-      const arr = byYear.get(r.year) ?? [];
-      arr.push(r);
-      byYear.set(r.year, arr);
-    }
-    for (const c of cols) {
-      if (c.noPct) continue;
-      const merged = new Map<string, number>();
-      for (const rows of byYear.values()) {
-        const m = midrankPercentileMap(
-          rows.map((r) => [`${r.year}|${r.conf}`, readValue(r, c.key)] as const),
-          !c.lowerBetter,
-        );
-        for (const [k, v] of m) merged.set(k, v);
-      }
-      out.set(c.key, merged);
-    }
-    return out;
-  }, [cohort, cols, readValue]);
+  const pcts = useMemo(() => confPercentiles(cohort, cols, readValue), [cohort, cols, readValue]);
 
   const rows = useMemo(() => {
     const keep = new Set(spec.confs);
@@ -365,7 +294,7 @@ export function ConferencesClient() {
     seasons: spec.years.length === 1 ? seasonLabel(spec.years[0]!) : `${spec.years.length} seasons`,
     conference: spec.confs.length ? spec.confs.join(", ") : "All conferences",
     teams: `Each conference minus its bottom 2 by NET`,
-    filters: [SPLITS.find((sp) => sp.key === spec.split)?.label ?? "Full Season"],
+    filters: [CONF_SPLITS.find((sp) => sp.key === spec.split)?.label ?? "Full Season"],
     sort: `${confCol(sortBy)?.label ?? sortBy} — ${spec.sortDir === "desc" ? "high to low" : "low to high"}`,
     search: "",
     url: typeof window === "undefined" ? "" : window.location.href,
@@ -462,7 +391,7 @@ export function ConferencesClient() {
             ariaLabel="Stat split"
             className="w-52"
           >
-            {SPLITS.map((sp) => (
+            {CONF_SPLITS.map((sp) => (
               <option key={sp.key} value={sp.key}>{sp.label}</option>
             ))}
           </Select>
@@ -642,7 +571,7 @@ export function ConferencesClient() {
                                 // a column is noise around the one that did.
                                 : <span className="text-ink-muted">—</span>
                             ) : (
-                              <span className={v === null ? "text-ink-muted" : "text-ink"}>{fmtValue(v, c.fmt)}</span>
+                              <span className={v === null ? "text-ink-muted" : "text-ink"}>{fmtConfValue(v, c.fmt)}</span>
                             )}
                             {pct !== null
                               ? <PercentileChip pct={pct} />

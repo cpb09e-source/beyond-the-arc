@@ -23,12 +23,17 @@ files:
   - out/**
   - package.json
 
-# The site's team crests travel with the app (logosDir() in src/main/index.ts
-# reads resources/logos when packaged). Player headshots do not: 344 MB is not
+# The site's team crests and conference marks travel with the app (logosDir()
+# and confDir() in src/main/index.ts read resources/logos and resources/conf
+# when packaged). Player headshots do not: 344 MB is not
 # an installer, and the app fetches the one it needs.
 extraResources:
   - from: ../public/ttz-logos
     to: logos
+    filter:
+      - "*.png"
+  - from: ../public/images/conf
+    to: conf
     filter:
       - "*.png"
 

@@ -1,6 +1,18 @@
-import { CalendarClock, CalendarDays, ChartScatter, Shield, Swords, Table2, UserRound, UsersRound, type LucideIcon } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarDays,
+  ChartScatter,
+  Shield,
+  Swords,
+  Table2,
+  Trophy,
+  UserRound,
+  UsersRound,
+  type LucideIcon,
+} from "lucide-react";
 import type { ComponentType } from "react";
 import { SEASON_CEIL } from "@/lib/seasons";
+import { ConferencesView } from "~/views/conferences/conferences-view";
 import { MatchupView } from "~/views/matchup/matchup-view";
 import { PlayerGamesView } from "~/views/player-games/player-games-view";
 import { PlayerProfileView } from "~/views/player-profile/player-profile-view";
@@ -93,6 +105,14 @@ export const VIEWS: ViewDef[] = [
     icon: ChartScatter,
     filterPlaceholder: "",
     Component: TeamScatterView,
+  },
+  {
+    id: "conferences",
+    label: "Conference Power Rankings",
+    section: "Teams",
+    icon: Trophy,
+    filterPlaceholder: "Filter conferences",
+    Component: ConferencesView,
   },
   {
     id: "matchup",

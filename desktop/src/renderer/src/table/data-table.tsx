@@ -34,6 +34,11 @@ import { PeekPanel } from "./peek-panel";
  * They must lead the column list. Their backgrounds are opaque, because a
  * translucent sticky cell shows the columns scrolling underneath it; the site
  * hit exactly that twice.
+ *
+ * BANDS, when columns carry them, caption groups of columns in a row above the
+ * headers ("Four Factors" over four columns), the site's two-tier header. Each
+ * band's first column draws a rule down the table, so the groups hold together
+ * as the rows scroll.
  */
 
 export type Align = "left" | "right" | "center";
@@ -53,6 +58,10 @@ export type Column<R> = {
   sortValue?: (row: R) => number | string | null;
   /** `index` is the row's position in the current sort, from 0. */
   cell: (row: R, index: number) => ReactNode;
+  /** The group this column is captioned under. Consecutive columns with one band share a caption. */
+  band?: string;
+  /** Captions the band in the accent: the group a view is really about. */
+  bandAccent?: boolean;
 };
 
 export type PeekSpec<R> = {
@@ -87,6 +96,7 @@ type Props<R> = {
 };
 
 const HEAD_H = 32;
+const BAND_H = 22;
 
 const ALIGN: Record<Align, string> = {
   left: "justify-start text-left",
@@ -135,14 +145,24 @@ export function DataTable<R>({
       x += c.width;
       return left;
     });
+    const bands: Array<{ label: string; start: number; span: number; accent: boolean }> = [];
+    columns.forEach((c, i) => {
+      if (!c.band) return;
+      const last = bands[bands.length - 1];
+      if (last && last.label === c.band && last.start + last.span === i) last.span += 1;
+      else bands.push({ label: c.band, start: i, span: 1, accent: !!c.bandAccent });
+    });
     return {
       // A trailing flexible track, so a row's tint runs to the edge on wide windows.
       template: `${columns.map((c) => `${c.width}px`).join(" ")} minmax(0, 1fr)`,
       totalWidth: columns.reduce((sum, c) => sum + c.width, 0),
       pinLeft,
       lastPin: columns.reduce((last, c, i) => (c.pin ? i : last), -1),
+      bands,
+      bandStarts: new Set(bands.map((b) => b.start)),
     };
   }, [columns]);
+  const headH = HEAD_H + (layout.bands.length > 0 ? BAND_H : 0);
 
   // FOCUS IS A ROW'S KEY, NOT ITS POSITION. Sorting and filtering move rows;
   // a position would silently hand the focus to whatever now sits there.
@@ -279,9 +299,9 @@ export function DataTable<R>({
   }, [landed]);
   // Beside its row, clamped inside the visible table so a row near the bottom
   // never pushes the panel off screen.
-  const rowTop = HEAD_H + index * rowHeight - scrollTop;
-  const maxTop = Math.max(HEAD_H + 8, HEAD_H + viewH - peekH - 12);
-  const peekTop = Math.min(Math.max(rowTop - 6, HEAD_H + 8), maxTop);
+  const rowTop = headH + index * rowHeight - scrollTop;
+  const maxTop = Math.max(headH + 8, headH + viewH - peekH - 12);
+  const peekTop = Math.min(Math.max(rowTop - 6, headH + 8), maxTop);
 
   const sortBy = (col: Column<R>) =>
     col.sortValue &&
@@ -293,34 +313,66 @@ export function DataTable<R>({
     if (left == null) return undefined;
     return { position: "sticky", left, zIndex: 1, background, boxShadow: edge(i) };
   };
+  // With bands the header is two grid rows; the column labels take the second.
+  const headRow = layout.bands.length > 0 ? 2 : undefined;
 
   return (
     <div className="absolute inset-0 flex flex-col">
-      <div className="shrink-0 overflow-hidden border-b border-hairline bg-paper" style={{ height: HEAD_H }}>
+      <div className="shrink-0 overflow-hidden border-b border-hairline bg-paper" style={{ height: headH }}>
         <div
           ref={headRef}
           role="row"
           className="grid h-full"
           style={{
             gridTemplateColumns: layout.template,
+            gridTemplateRows: headRow ? `${BAND_H}px ${HEAD_H}px` : undefined,
             width: layout.totalWidth,
             minWidth: "100%",
             transform: "translateX(calc(-1 * var(--sl, 0px)))",
           }}
         >
+          {layout.bands.length > 0 && layout.lastPin >= 0 && (
+            <div
+              aria-hidden
+              style={{
+                gridRow: 1,
+                gridColumn: `1 / span ${layout.lastPin + 1}`,
+                position: "relative",
+                zIndex: 2,
+                transform: "translateX(var(--sl, 0px))",
+                background: "var(--paper)",
+              }}
+            />
+          )}
+          {layout.bands.map((b) => (
+            <div
+              key={`${b.label}:${b.start}`}
+              role="presentation"
+              title={b.label}
+              className={`flex min-w-0 items-end border-l border-hairline px-2.5 pb-px text-[10px] font-semibold uppercase tracking-[0.08em] ${
+                b.accent ? "text-accent" : "text-ink-muted"
+              }`}
+              style={{ gridRow: 1, gridColumn: `${b.start + 1} / span ${b.span}` }}
+            >
+              <span className="truncate">{b.label}</span>
+            </div>
+          ))}
           {columns.map((c, i) => {
             const active = sort.key === c.key;
             const pinned = layout.pinLeft[i] != null;
-            const className = `flex min-w-0 items-center gap-1 px-2.5 text-[10.5px] font-semibold uppercase tracking-[0.07em] transition-colors ${ALIGN[c.align]}`;
-            const style: CSSProperties | undefined = pinned
+            const className = `flex min-w-0 items-center gap-1 px-2.5 text-[10.5px] font-semibold uppercase tracking-[0.07em] transition-colors ${ALIGN[c.align]} ${
+              layout.bandStarts.has(i) ? "border-l border-hairline" : ""
+            }`;
+            const style: CSSProperties = pinned
               ? {
                   position: "relative",
                   zIndex: 2,
                   transform: "translateX(var(--sl, 0px))",
                   background: "var(--paper)",
                   boxShadow: edge(i),
+                  gridRow: headRow,
                 }
-              : undefined;
+              : { gridRow: headRow };
             // A column with nothing to sort by is a label, not a control.
             if (!c.sortValue) {
               return (
@@ -396,7 +448,9 @@ export function DataTable<R>({
                     <div
                       key={c.key}
                       role="gridcell"
-                      className={`flex h-full min-w-0 items-center px-2.5 text-[13px] ${ALIGN[c.align]}`}
+                      className={`flex h-full min-w-0 items-center px-2.5 text-[13px] ${ALIGN[c.align]} ${
+                        layout.bandStarts.has(i) ? "border-l border-hairline/60" : ""
+                      }`}
                       style={pinnedCell(i, background)}
                     >
                       {c.cell(row, item.index)}

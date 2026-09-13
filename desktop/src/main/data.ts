@@ -43,6 +43,8 @@ export type Corpus =
   | "team-games"
   | "player-games"
   | "matchup"
+  | "conference-rankings"
+  | "conference-splits"
   | "teams-index"
   | "players-index"
   | "search-index";
@@ -92,6 +94,9 @@ const CORPORA: Record<Corpus, CorpusSpec> = {
   "teams-index": { path: () => "teams-index.json", r2: false, crossSeason: true },
   "players-index": { path: () => "players-index.json", r2: false, crossSeason: true },
   "search-index": { path: () => "search-index.json", r2: false, crossSeason: true },
+  // Conference Power Rankings: one file for every season, and its game splits.
+  "conference-rankings": { path: () => "conference-rankings.json", r2: false, crossSeason: true },
+  "conference-splits": { path: () => "conference-splits.json", r2: false, crossSeason: true },
 };
 
 const SITE_DATA = "https://btacbb.xyz/data";

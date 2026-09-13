@@ -13,6 +13,7 @@
  * year would buy nothing and cost a fetch every time the picker moves.
  */
 import { dataUrl } from "@/lib/data-url";
+import { midrankPercentileMap } from "@/lib/percentile";
 
 /** A conference-season. Stat keys are the team explorer's own. */
 export type ConfRow = {
@@ -93,4 +94,56 @@ export function splitValue(
 ): number | null {
   const v = block?.[key];
   return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+/**
+ * How one row's value for a stat is read under a game split: the row itself on
+ * the full season, the split file's block otherwise. The season is a property
+ * of the row, not of a split of its games.
+ */
+export function confReader(
+  split: string,
+  splitPack: ConfSplitPack | null,
+): (r: ConfRow, key: string) => number | null {
+  return (r, key) => {
+    if (key === "year") return r.year;
+    if (split === "full") return confValue(r, key);
+    const block = splitPack?.rows[`${r.year}|${r.conf}`]?.[split];
+    return splitValue(block, key);
+  };
+}
+
+/**
+ * Percentiles per stat, computed WITHIN EACH SEASON and then merged.
+ *
+ * Same rule the team explorer uses for teams: a conference is compared to the
+ * conferences it actually played that year. Pooling twelve seasons would let
+ * scoring inflation decide the colors — every 2026 league would outrank
+ * every 2015 one on points per game, which is a fact about the era.
+ */
+export function confPercentiles(
+  cohort: readonly ConfRow[],
+  cols: ReadonlyArray<{ key: string; lowerBetter: boolean; noPct?: boolean }>,
+  read: (r: ConfRow, key: string) => number | null,
+): Map<string, Map<string, number>> {
+  const out = new Map<string, Map<string, number>>();
+  const byYear = new Map<number, ConfRow[]>();
+  for (const r of cohort) {
+    const arr = byYear.get(r.year) ?? [];
+    arr.push(r);
+    byYear.set(r.year, arr);
+  }
+  for (const c of cols) {
+    if (c.noPct) continue;
+    const merged = new Map<string, number>();
+    for (const rows of byYear.values()) {
+      const m = midrankPercentileMap(
+        rows.map((r) => [`${r.year}|${r.conf}`, read(r, c.key)] as const),
+        !c.lowerBetter,
+      );
+      for (const [k, v] of m) merged.set(k, v);
+    }
+    out.set(c.key, merged);
+  }
+  return out;
 }

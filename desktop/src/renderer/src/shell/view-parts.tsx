@@ -44,7 +44,9 @@ export function ViewHeader({
       <div className="flex min-w-0 items-center gap-1.5">
         <span className="shrink-0 text-[13px] text-ink-muted">{kicker}</span>
         <ChevronRight size={13} strokeWidth={2} className="shrink-0 text-ink-muted" />
-        <h1 className="truncate text-[14px] font-semibold tracking-[-0.005em] text-ink">{title}</h1>
+        <h1 title={title} className="truncate text-[14px] font-semibold tracking-[-0.005em] text-ink">
+          {title}
+        </h1>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {setYear ? (
