@@ -2,15 +2,29 @@
 
 Working log from the overnight build-out. Nothing was deployed, nothing was
 written to the live Supabase project, nothing was purchased, and no network data
-pulls ran. Every change below is committed on `main`. The last six commits
-(`548bc9d9be` onward: game links, the details rail, the coach libs, pinned tabs,
-Coaches, Win Calculator links, plus these notes) are not pushed, because a push
-can start a Netlify build and tonight was local testing only;
-`git log origin/main..main` lists them.
+pulls ran. Every change below is committed on `main` and pushed as a backup
+(pushes do not deploy: `netlify.toml` has `ignore = "exit 0"`). The only live
+change is the paywall fix, which is storage, not a deploy.
 
-## Needs your attention first
+## Done on 2026-09-13, after your answers
 
-### 1. Paywall hole on the live site (found, not fixed)
+- **Test accounts, on the live Supabase project, both verified by signing in:**
+  - Admin: `cpb09e+bta-admin@gmail.com` (role admin, Season Pass). Paid seasons 200, admin overview 200.
+  - Premium: `cpb09e+bta-premium@gmail.com` (Season Pass, not admin). Paid seasons 200, admin overview 404.
+  - Passwords were given to you in chat and are not written anywhere in the repo. Gmail `+` aliases, so a password reset lands in your own inbox.
+  - `test@test.com` is retired: random password, role free, subscription inactive. It was an admin with a four-character password on a domain whose mail someone else controls. Delete it before launch.
+- **Paywall hole closed.** The 22 paid seasons of `game-index/` and `team-game-index/` (2014-2024) are deleted from the public R2 bucket. Before deleting, each one was checked byte for byte against its copy in the private bucket and the local file in `public/data/`, so any of them can be put back. Paid public URLs now 404, free seasons still 200, and `/api/data-url` signs paid seasons for subscribers (200) and refuses signed-out readers (401). This change is live; nothing else below is until you deploy.
+- **Desktop app open to Season Pass holders:** `DESKTOP_ACCESS = "paid"` (`d62e631959`).
+- **`/api/parse-query` rate limited:** 10 requests a minute per IP at Netlify's edge (`d62e631959`). Anonymous asks still work, so /calc is unchanged for a person.
+- **Account button, bottom left** of the desktop sidebar: name, plan, account and billing, admin dashboard for admins, theme, shortcuts, updates, sign in and out. Workspaces keep the top (`12b2b29d72`).
+- **Records never wrap** in any table cell (`8fa91531f1`).
+- **Coach page bugs on the site** (the Altman record, tied chips, sort comparators, stale comments) are being fixed in a separate pass; see its commit when it lands.
+- **Record panes (question 1):** the app keeps to data that is already public or already gated. Publishing `teams-all.json` and the other build-only files to the public bucket would reopen the paywall for the team explorer, so richer record panes wait on a gated endpoint for them.
+- **Coach data (question 4):** stays bundled. The data freeze runs to 2026-10-01, so nothing in it changes before then; move it to published data when the freeze lifts.
+
+## Was open overnight (now handled above)
+
+### 1. Paywall hole on the live site (fixed 2026-09-13)
 
 The public R2 bucket still serves **paid game-log seasons**:
 
@@ -27,7 +41,7 @@ a destructive change to live storage, so it is yours to approve and run. The
 desktop app needs no change when you do: it already falls back to signed URLs
 when the public copy is gone.
 
-### 2. `/api/parse-query` is open to anyone
+### 2. `/api/parse-query` is open to anyone (rate limited 2026-09-13, not yet deployed)
 
 The Win Calculator's plain-English endpoint has no sign-in requirement and no
 rate limit of its own, and each call spends Anthropic tokens (up to two model
@@ -225,19 +239,24 @@ Beyond the Arc.
   720 px palette with 46 px rows; ours are 30 px and 640 px with 36 px. Left as
   they are until you have seen them side by side.
 
+## What still has to happen
+
+**To put the desktop app in people's hands (in order):**
+1. Apply `supabase/migrations/012_desktop_auth.sql` to the live project.
+2. Deploy the site: desktop sign-in functions, `/desktop/connect`, the parse-query rate limit, Season Pass access, and the coach fixes.
+3. Sign in from the app with both test accounts; confirm the premium one sees everything but admin.
+4. Code signing (Azure Trusted Signing), so SmartScreen stops warning.
+5. `npm run dist`, upload the installer and `latest.yml` to R2 `desktop/`, and open the site's download button to Season Pass holders (it is behind the admin gate today).
+
+**Still to build:**
+- **Admin dashboard in the app** (you asked for it later): subscribers and trials, webhook heartbeat, data checks, the site banner, hand-confirmed transfers, and who is on which app version. The site's /admin has most of this; the app would read the same `admin-config` function.
+- **Richer record panes** once their data has a gated endpoint.
+- **Menu and palette sizing** to Linear's (32 px menu rows, 720 px palette), after you compare them.
+- **Site issues listed above**, each a small fix, none urgent.
+- **Before promotion:** the sources and attribution page with a terms review (docs/TODO-legal-sources.md).
+
 ## Questions
 
-1. The team and player record pages on the site read files that are never
-   deployed (`teams-all.json`, `team-splits/`, `players-by-year/`,
-   `lineup-stats/`, `team-seasons/`, `assist-network.json`). An installed app
-   cannot reach them. Publish them to R2 for the app, or should the app's record
-   panes use only what is already public?
-2. Apply the paywall fix above?
-3. Open the desktop app to Season Pass holders now, or keep it admin-only?
-4. Coaches: `coach-history.json`, `team-coaches.json` and `tournament-games.json`
-   (1.6 MB together) are bundled into the app, so a coaching change needs an app
-   update. Publish them with the site's data instead?
-5. Put a sign-in requirement or a rate limit on `/api/parse-query`?
-6. Fix the coach-page oddities listed above on the site (the Altman record, tied
-   chips, the -2.5 comment), or leave them?
-7. Push the unpushed commits? Say the word when a Netlify build is fine.
+1. Deploy when you are ready? Everything above except the paywall fix waits on it, and it is a shared-component change, so expect the long upload.
+2. Apply migration 012 to the live project (needed for desktop sign-in)?
+3. Delete `test@test.com` now, or keep it retired until launch?
