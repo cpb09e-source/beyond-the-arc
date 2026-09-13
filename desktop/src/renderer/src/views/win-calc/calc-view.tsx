@@ -11,6 +11,7 @@ import {
   runWinCalc,
   teamNamesIn,
 } from "@/lib/win-calc";
+import { useOpenGame } from "~/data/game-link";
 import { compareDrag, useCompare } from "~/shell/compare";
 import { useShell } from "~/shell/shell-context";
 import { useSetStatus } from "~/shell/status";
@@ -203,6 +204,7 @@ export function WinCalcView({ query, setQuery }: ViewProps) {
   useTabTitle(title);
 
   const { openRecord } = useShell();
+  const openGame = useOpenGame();
   const { add } = useCompare();
 
   const meta = result
@@ -268,10 +270,12 @@ export function WinCalcView({ query, setQuery }: ViewProps) {
               drag={(g) => compareDrag({ kind: "team", name: g.team_name, logoId: crestOf(g.team_name), year: g.year })}
               keys={{ c: (g) => add({ kind: "team", name: g.team_name, logoId: crestOf(g.team_name), year: g.year }) }}
               onOpen={(g, how) =>
-                openRecord(
-                  { kind: "team", name: g.team_name, logoId: crestOf(g.team_name) },
-                  { newTab: how.newTab, side: how.side, year: g.year },
-                )
+                // The game itself when that night's slate has it; the team, as before, when not.
+                g.game_date && g.opp_team_market
+                  ? openGame({ date: g.game_date, team: g.team_name, opp: g.opp_team_market }, how, () =>
+                      openRecord({ kind: "team", name: g.team_name, logoId: crestOf(g.team_name) }, { newTab: how.newTab, side: how.side, year: g.year }),
+                    )
+                  : openRecord({ kind: "team", name: g.team_name, logoId: crestOf(g.team_name) }, { newTab: how.newTab, side: how.side, year: g.year })
               }
               ariaLabel="Matching games"
               empty={
