@@ -30,6 +30,43 @@ rate limit of its own, and each call spends Anthropic tokens (up to two model
 calls, ~60 s). Anyone can script it. Worth at least a per-IP rate limit, or
 requiring a signed-in user.
 
+## Built tonight
+
+Each one driven end to end over CDP in both themes with no console errors, and
+each one reuses the site's logic: where that logic was trapped in a component it
+moved to `src/lib`, the site imports it from there, and the site's output was
+proven unchanged by rendering the component to static HTML before and after.
+
+| View | Commit | Shared out of the site |
+| --- | --- | --- |
+| Team Scatter | `d62a23e2ce` | `topByNet` into `lib/scatter-team.ts` |
+| Matchup Predictor | `532754707c` | `lib/matchup-inks.ts`, `lib/use-tween.ts`, counterfactuals, ledger, URL state and moves into `lib/matchup.ts` |
+| Conference Power Rankings | `2885efa4c7` | splits, formatting, split reader, per-season percentiles |
+| Transfer Portal | (this push) | `lib/portal.ts`: types, baseline, board order, rating text |
+
+Shell changes that came with them: history carries each tab's query (Alt+Left
+restores a filter or a matchup), views can be pinned to one season, `openView`
+opens any view with a starting query (a team page's Matchup button), table
+column bands and a pinned-first group, and conference marks through `bta://conf`.
+
+## Site issues found while porting (not changed on the site)
+
+- **Matchup card, light theme.** The right half's wash is painted over the left
+  team's full-width wash, so the right team shows as a mix of both colors
+  (Michigan against Duke draws Duke's half olive). The app mixes each wash
+  against the card instead. Same two-line fix would apply to
+  `matchup-view.tsx`.
+- **Conference marks on the dark theme.** About a third of the league marks are
+  navy or black ink and nearly vanish (Big Ten, ACC, C-USA, CAA). The app adds a
+  faint light halo in dark mode only.
+- **Conference pace chips.** The site paints Pace good-to-bad, while the chip's
+  own guidance (and the Team Explorer) treats tempo as having no better end. The
+  app paints them neutral.
+- **Portal returners.** Four players' ratings come from an earlier season at the
+  school they are returning to (`rating_basis: "return"`), but the site's
+  hover text still spells out last season's terms, which do not add up to the
+  rating. The app's Peek says which season the rating is from instead.
+
 ## Decisions I made that you may want to overrule
 
 - **Chips on the Player Game Log.** The site's page deliberately shows none. You

@@ -9,62 +9,9 @@ import { TopHundredPill } from "@/components/portal/top-hundred-pill";
 import { PlayerPhoto } from "@/components/player-photo";
 import { confDisplay } from "@/lib/conf-display";
 import { useBodyScrollLock } from "@/lib/use-body-scroll-lock";
+import { CLASS_MIN_STARS, classPlayerRatingTitle, type TCPlayer, type TransferClassRow } from "@/lib/portal";
 
-export type TCPlayer = {
-  cbba_player_id: number;
-  bart_player_id: number | null;
-  name: string;
-  // Portal Value Score — EPM scaled by role. Tiers the player (the stars);
-  // NOT what the class total is built from. See scripts/rescore-portal.mjs.
-  pvs: number | null;
-  epm: number | null;
-  /** Wins over an average player, as measured last season. */
-  ewins: number | null;
-  /** eWins plus the measured freshman development bump. */
-  ewins_proj: number | null;
-  /** EPM added by the sophomore leap; 0 for everyone who is not a freshman. */
-  dev_bump?: number;
-  /** PIR after the conference-tier multiplier. */
-  pir_adj?: number | null;
-  /** The tiered-PIR term converted to wins, centered so average = 0. */
-  pir_wins?: number;
-  /** Team net rating on-floor minus off-floor, and the charge for a negative one. */
-  on_off?: number | null;
-  onoff_pen?: number;
-  /**
-   * eWins + development bump + tiered-PIR term − on/off penalty, in wins. The
-   * quantity behind the Rating; the class card sums the Rating itself.
-   */
-  value: number | null;
-  /** The player's Rating. Class scores are these, summed. */
-  rating?: number | null;
-  stars: 0 | 1 | 2 | 3 | 4 | 5;
-  /** Overall board position when inside the top 100, else null. */
-  t100?: number | null;
-  counter_team: string | null;   // OUT: where they went. IN: where they came from.
-  counter_conf: string | null;
-};
-export type TransferClassRow = {
-  school: string;
-  conference: string | null;
-  /**
-   * Sum of incoming player Ratings minus the sum of outgoing — a straight
-   * ledger, both sides at full weight, so the two columns in the modal
-   * subtract to the number on the card.
-   */
-  net: number;
-  /** The same class expressed in wins, for the modal's secondary line. */
-  net_wins?: number;
-  /**
-   * The rating sum, rounded. Runs in the hundreds because a class is seven or
-   * eight players and one can be worth 97 alone.
-   */
-  score: number;
-  in_count: number;
-  out_count: number;
-  in_players: TCPlayer[];
-  out_players: TCPlayer[];
-};
+export type { TCPlayer, TransferClassRow } from "@/lib/portal";
 
 function slugFor(name: string): string {
   return name
@@ -278,8 +225,8 @@ export function TransferClassModal({ row, onClose }: { row: TransferClassRow; on
   }, [onClose]);
   useBodyScrollLock(true);
 
-  const inPlayers = row.in_players.filter((p) => p.stars >= 2);
-  const outPlayers = row.out_players.filter((p) => p.stars >= 2);
+  const inPlayers = row.in_players.filter((p) => p.stars >= CLASS_MIN_STARS);
+  const outPlayers = row.out_players.filter((p) => p.stars >= CLASS_MIN_STARS);
 
   return (
     <div
@@ -389,11 +336,7 @@ function PlayerList({
               <span className="flex flex-col items-end">
                 <span
                   className={`font-medium tabular text-sm ${(p.rating ?? 0) >= 0 ? "text-ink" : "text-bad"}`}
-                  title={p.value === null ? undefined
-                    : `${p.ewins_proj?.toFixed(2) ?? "—"} eWins${(p.dev_bump ?? 0) > 0 ? " (incl. soph leap)" : ""}` +
-                      `  ·  ${(p.pir_wins ?? 0) >= 0 ? "+" : ""}${(p.pir_wins ?? 0).toFixed(2)} from tiered PIR` +
-                      `${p.pir_adj != null ? ` (PIR ${p.pir_adj.toFixed(1)} after conference tier)` : ""}` +
-                      `${(p.onoff_pen ?? 0) < 0 ? `  ·  ${p.onoff_pen?.toFixed(2)} for an on/off of ${p.on_off?.toFixed(1)}` : ""}`}
+                  title={classPlayerRatingTitle(p)}
                 >
                   {p.rating == null ? "—" : String(p.rating)}
                 </span>

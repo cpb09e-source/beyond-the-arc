@@ -1,4 +1,5 @@
 import {
+  ArrowLeftRight,
   CalendarClock,
   CalendarDays,
   ChartScatter,
@@ -15,6 +16,7 @@ import { SEASON_CEIL } from "@/lib/seasons";
 import { ConferencesView } from "~/views/conferences/conferences-view";
 import { MatchupView } from "~/views/matchup/matchup-view";
 import { PlayerGamesView } from "~/views/player-games/player-games-view";
+import { PortalView } from "~/views/portal/portal-view";
 import { PlayerProfileView } from "~/views/player-profile/player-profile-view";
 import { PlayersView } from "~/views/players/players-view";
 import { TeamGamesView } from "~/views/team-games/team-games-view";
@@ -140,6 +142,16 @@ export const VIEWS: ViewDef[] = [
     icon: CalendarClock,
     filterPlaceholder: "Filter games",
     Component: PlayerGamesView,
+  },
+  {
+    id: "portal",
+    label: "Transfer Portal",
+    section: "Players",
+    icon: ArrowLeftRight,
+    filterPlaceholder: "Filter players or schools",
+    Component: PortalView,
+    // One file for the cycle that follows the latest completed season.
+    season: SEASON_CEIL,
   },
   {
     id: "team-profile",

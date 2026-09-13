@@ -15,85 +15,17 @@ import {
   TransferClassModal,
   type TransferClassRow,
 } from "@/components/portal/transfer-classes";
+import {
+  boardBlock,
+  boardCompare,
+  committedAt,
+  fmtPortalDate,
+  passesPortalBaseline,
+  portalRatingTitle,
+  type PortalEntry,
+} from "@/lib/portal";
 
-export type PortalEntry = {
-  cbba_player_id: number;
-  bart_player_id: number | null;
-  name: string;
-  eligibility: string;
-  status: string;
-  division: number | null;
-  division_from: number | null;
-  division_to: number | null;
-  date_entered: string | null;
-  date_updated: string | null;
-  team_from: string | null;
-  conf_from: string | null;
-  team_to: string | null;
-  conf_to: string | null;
-  last_year: number | null;
-  /**
-   * Position on the overall EPM board for his last season, when inside the
-   * top hundred. Absent for everybody else.
-   *
-   * The same number the top-100 seal draws on the player's own page, baked
-   * in by rescore-portal.mjs. It pins the default order and it is why the
-   * five-star tier means exactly "top-100 player".
-   */
-  t100?: number;
-  last_team: string | null;
-  last_conf: string | null;
-  gp: number | null;
-  mpg: number | null;
-  ppg: number | null;
-  rpg: number | null;
-  apg: number | null;
-  spg: number | null;
-  bpg: number | null;
-  pir: number | null;
-  // Baked into portal.json by scripts/rescore-portal.mjs — real play-by-play
-  // fit first, box estimate as fallback for EPM.
-  epm: number | null;
-  /**
-   * Whether each end of the move is a D-I team, resolved against our own
-   * archive rather than taken from the feed. On3's division fields are wrong
-   * whenever it sends a school in registrar form ("Gonzaga University"), which
-   * reported Massamba Diop's Arizona State -> Gonzaga move as D-II on both ends
-   * and hid him — and 50 others — from this table entirely.
-   */
-  d1_from?: boolean;
-  d1_to?: boolean;
-  /**
-   * Wins added over an average player across the possessions he actually
-   * played. Null for the handful with only a box estimate: eWins comes solely
-   * from the play-by-play fit, and inventing one would put a fabricated zero
-   * next to a real number.
-   */
-  ewins: number | null;
-  /** eWins plus the measured freshman development bump. */
-  ewins_proj?: number | null;
-  /** PIR after the conference-tier multiplier, and that term converted to wins. */
-  pir_adj?: number | null;
-  pir_wins?: number;
-  /** Team net rating on-floor minus off-floor, and the charge for a negative one. */
-  on_off?: number | null;
-  onoff_pen?: number;
-  /** 10% off the finished number for a non-power-conference season. */
-  mm_penalty?: number;
-  /** eWins + freshman development bump + tiered-PIR term, in wins. */
-  value?: number | null;
-  /**
-   * THE TRANSFER RATING shown in the table: `value` on a readable 0-100 scale
-   * at 30 points per win, where 0 is an average player and the best transfer in
-   * this cycle lands at 97. Negative for players who cost their team more than
-   * an average one would have. Drives the star tiers, so the number and the
-   * chip beside it can never disagree.
-   */
-  rating?: number | null;
-  /** EPM added by the sophomore leap; 0 for everyone who is not a freshman. */
-  dev_bump?: number;
-  stars: 0 | 1 | 2 | 3 | 4 | 5;
-};
+export type { PortalEntry } from "@/lib/portal";
 
 type SortKey =
   | "board" | "name" | "stars" | "date" | "committed" | "from" | "to"
@@ -153,17 +85,7 @@ export function PortalClient({
     const q = query.trim().toLowerCase();
     const sq = schoolQuery.trim().toLowerCase();
     return entries.filter((e) => {
-      // Display baseline: hide bench-level production. Players need to have
-      // GP ≥ 10, MPG ≥ 12, AND PPG ≥ 4 to be worth showing in the portal table.
-      if ((e.gp ?? 0) < 10) return false;
-      if ((e.mpg ?? 0) < 12) return false;
-      if ((e.ppg ?? 0) < 4) return false;
-      // D-I only — kept as a hard-coded baseline since we dropped the dropdown.
-      // Prefers the flags rescore-portal.mjs derives from our own team archive;
-      // falls back to the feed's division fields when they are absent.
-      const fromD1 = e.d1_from ?? (e.division_from === 1);
-      const toD1 = e.d1_to ?? (e.division_to === 1);
-      if (!fromD1 && !toD1) return false;
+      if (!passesPortalBaseline(e)) return false;
       if (confTo !== "All" && e.conf_to !== confTo) return false;
       if (q && !e.name.toLowerCase().includes(q)) return false;
       if (sq) {
@@ -187,7 +109,7 @@ export function PortalClient({
         // Uncommitted players have no commit date — return null so the
         // comparator's nulls-last rule parks them at the bottom in BOTH
         // directions (instead of a wall of "—" floating to the top in asc).
-        case "committed":    return e.team_to ? (e.date_updated ?? null) : null;
+        case "committed":    return committedAt(e);
         case "from":         return e.team_from ?? "";
         case "to":           return e.team_to ?? "zzz_uncommitted";
         case "mpg":          return e.mpg;
@@ -201,21 +123,9 @@ export function PortalClient({
       // THE BOARD IS THE FIRST KEY OF EVERY SORT. One block of top-100
       // players, one block of everyone else; the column you picked orders
       // each block internally.
-      const aBoard = a.t100 ? 0 : 1, bBoard = b.t100 ? 0 : 1;
-      if (aBoard !== bBoard) return aBoard - bBoard;
-      if (sortBy === "board") {
-        // Inside the hundred, board order; outside it, commit date newest
-        // first with the uncommitted parked at the bottom exactly as they
-        // are under the plain commit-date sort.
-        const ar = a.t100 ?? Infinity, br = b.t100 ?? Infinity;
-        if (ar !== br) return ar - br;
-        const ad = a.team_to ? (a.date_updated ?? null) : null;
-        const bd = b.team_to ? (b.date_updated ?? null) : null;
-        if (ad === null && bd === null) return 0;
-        if (ad === null) return 1;
-        if (bd === null) return -1;
-        return ad < bd ? 1 : ad > bd ? -1 : 0;
-      }
+      const block = boardBlock(a) - boardBlock(b);
+      if (block !== 0) return block;
+      if (sortBy === "board") return boardCompare(a, b);
       const av = get(a), bv = get(b);
       if (av === null || av === undefined) return 1;
       if (bv === null || bv === undefined) return -1;
@@ -409,18 +319,11 @@ export function PortalClient({
                         </span>
                       )}
                     </Td>
-                    <Td className="text-ink-muted tabular text-xs whitespace-nowrap">{fmtDate(e.date_entered)}</Td>
-                    <Td className="text-ink-muted tabular text-xs whitespace-nowrap">{e.team_to ? fmtDate(e.date_updated) : "—"}</Td>
+                    <Td className="text-ink-muted tabular text-xs whitespace-nowrap">{fmtPortalDate(e.date_entered)}</Td>
+                    <Td className="text-ink-muted tabular text-xs whitespace-nowrap">{e.team_to ? fmtPortalDate(e.date_updated) : "—"}</Td>
                     <Td
                       className="text-right tabular font-medium"
-                      title={e.rating == null ? undefined
-                        : `${e.value?.toFixed(2) ?? "—"} wins = ` +
-                          `${e.ewins_proj?.toFixed(2) ?? "—"} eWins${(e.dev_bump ?? 0) > 0 ? " (incl. sophomore leap)" : ""}` +
-                          `  ·  ${(e.pir_wins ?? 0) >= 0 ? "+" : ""}${(e.pir_wins ?? 0).toFixed(2)} from conference-tiered PIR` +
-                          `${e.pir_adj != null ? ` (PIR ${e.pir_adj.toFixed(1)} after tier)` : ""}` +
-                          `${(e.onoff_pen ?? 0) < 0 ? `  ·  ${e.onoff_pen?.toFixed(2)} for an on/off of ${e.on_off?.toFixed(1)}` : ""}` +
-                          `${(e.mm_penalty ?? 0) < 0 ? `  ·  ${e.mm_penalty?.toFixed(2)} mid-major discount` : ""}` +
-                          `${e.epm != null ? `  ·  EPM ${e.epm > 0 ? "+" : ""}${e.epm.toFixed(1)}` : ""}`}
+                      title={portalRatingTitle(e)}
                     >
                       {/* No leading "+". The rating reads as a score out of a
                           hundred, and a plus sign on it made it look like a
@@ -472,12 +375,6 @@ export function PortalClient({
 function fmt1(v: number | null): string {
   if (v === null || v === undefined) return "—";
   return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-}
-function fmtDate(s: string | null): string {
-  if (!s) return "—";
-  // Accept "2026-03-25 01:27:44+00:00" or "2026-03-25T..."
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return m ? `${m[2]}/${m[3]}` : s.slice(0, 10);
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

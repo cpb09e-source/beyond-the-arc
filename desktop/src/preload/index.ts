@@ -17,6 +17,7 @@ export type Corpus =
   | "matchup"
   | "conference-rankings"
   | "conference-splits"
+  | "portal"
   | "teams-index"
   | "players-index"
   | "search-index";

@@ -78,6 +78,12 @@ type Props<R> = {
   defaultSort: { key: string; dir: Dir };
   /** Orders rows the chosen column calls equal. Also stable and module-level. */
   tieBreak?: (a: R, b: R) => number;
+  /**
+   * Blocks that lead every sort, lowest first: the top-100 players ahead of
+   * everyone else on the portal, whatever column is picked. The chosen sort
+   * runs inside each block. Stable and module-level.
+   */
+  group?: (row: R) => number;
   ariaLabel: string;
   empty: ReactNode;
   peek?: PeekSpec<R>;
@@ -120,6 +126,7 @@ export function DataTable<R>({
   rowHeight = 42,
   defaultSort,
   tieBreak,
+  group,
   ariaLabel,
   empty,
   peek,
@@ -133,9 +140,14 @@ export function DataTable<R>({
 
   const sorted = useMemo(() => {
     const value = columns.find((c) => c.key === sort.key)?.sortValue;
-    if (!value) return tieBreak ? [...rows].sort(tieBreak) : rows;
-    return [...rows].sort((a, b) => compare(value(a), value(b), sort.dir) || (tieBreak?.(a, b) ?? 0));
-  }, [rows, columns, sort, tieBreak]);
+    if (!value && !group) return tieBreak ? [...rows].sort(tieBreak) : rows;
+    return [...rows].sort(
+      (a, b) =>
+        (group ? group(a) - group(b) : 0) ||
+        (value ? compare(value(a), value(b), sort.dir) : 0) ||
+        (tieBreak?.(a, b) ?? 0),
+    );
+  }, [rows, columns, sort, tieBreak, group]);
 
   const layout = useMemo(() => {
     let x = 0;
