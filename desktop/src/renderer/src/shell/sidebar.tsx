@@ -1,6 +1,9 @@
 import {
   ChevronDown,
+  ChevronsUpDown,
+  CircleUserRound,
   Download,
+  ExternalLink,
   Keyboard,
   LogIn,
   LogOut,
@@ -9,6 +12,7 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  ShieldCheck,
   Search,
   Sun,
   Trash2,
@@ -95,14 +99,7 @@ export function Sidebar({
   return (
     <nav aria-label="Workspace" className="relative flex min-h-0 shrink-0 flex-col border-r border-hairline bg-chrome" style={{ width }}>
       <div className="px-2 pt-2">
-        <AccountButton
-          theme={theme}
-          setTheme={setTheme}
-          onOpenShortcuts={onOpenShortcuts}
-          workspaces={workspaces}
-          onNewWorkspace={onNewWorkspace}
-          onRenameWorkspace={onRenameWorkspace}
-        />
+        <WorkspaceButton workspaces={workspaces} onNewWorkspace={onNewWorkspace} onRenameWorkspace={onRenameWorkspace} />
       </div>
 
       <div className="px-2 pb-1 pt-1.5">
@@ -209,18 +206,18 @@ export function Sidebar({
             Downloading {update.version} · {update.percent}%
           </p>
         )}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1">
+          <AccountButton theme={theme} setTheme={setTheme} onOpenShortcuts={onOpenShortcuts} version={version} />
           <button
             type="button"
+            aria-label="Keyboard shortcuts"
             onMouseDown={(e) => e.preventDefault()}
             onClick={onOpenShortcuts}
             title="Keyboard shortcuts  ?"
-            className="flex h-[26px] items-center gap-1.5 rounded-md px-2 text-[12px] text-ink-muted transition-colors hover:bg-[var(--row-hover)] hover:text-ink"
+            className="grid size-[30px] shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-[var(--row-hover)] hover:text-ink"
           >
-            <Keyboard size={14} strokeWidth={2} />
-            Shortcuts
+            <Keyboard size={15} strokeWidth={2} />
           </button>
-          {version && <span className="pr-2 text-[11px] text-ink-muted tabular">v{version}</span>}
         </div>
       </div>
 
@@ -229,44 +226,23 @@ export function Sidebar({
   );
 }
 
-function AccountButton({
-  theme,
-  setTheme,
-  onOpenShortcuts,
+/**
+ * Top of the sidebar: which set of tabs this is, and the others. The mark and
+ * name change when you switch, the way Linear and Notion head their sidebars.
+ */
+function WorkspaceButton({
   workspaces,
   onNewWorkspace,
   onRenameWorkspace,
 }: {
-  theme: ThemeMode;
-  setTheme: (m: ThemeMode) => void;
-  onOpenShortcuts: () => void;
   workspaces: Workspaces;
   onNewWorkspace: () => void;
   onRenameWorkspace: () => void;
 }) {
-  const { auth, update } = useAccount();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const signedIn = auth.status === "signedIn";
-  const email = signedIn ? auth.user.email : null;
 
   const entries: MenuEntry[] = [
-    {
-      kind: "custom",
-      id: "who",
-      node: (
-        <div className="flex items-center gap-2.5 px-2 pb-2 pt-1.5">
-          <Avatar initials={accountInitials(auth)} size={30} />
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-medium text-ink">{email ?? "Not signed in"}</p>
-            <p className="text-[11.5px] text-ink-muted">
-              {signedIn ? (auth.user.role === "admin" ? "Administrator" : "Season Pass") : "Free seasons only"}
-            </p>
-          </div>
-        </div>
-      ),
-    },
-    { kind: "separator", id: "s0" },
     { kind: "heading", id: "workspaces", label: "Workspaces" },
     ...workspaces.list.map((w) =>
       item({
@@ -277,6 +253,7 @@ function AccountButton({
         onSelect: () => workspaces.switchTo(w.id),
       }),
     ),
+    { kind: "separator", id: "s0" },
     item({ id: "ws-new", label: "New workspace…", icon: <Plus size={14} />, onSelect: onNewWorkspace }),
     item({ id: "ws-rename", label: `Rename ${workspaces.current.name}…`, icon: <Pencil size={14} />, onSelect: onRenameWorkspace }),
     ...(workspaces.list.length > 1
@@ -290,31 +267,6 @@ function AccountButton({
           }),
         ]
       : []),
-    { kind: "separator", id: "s0b" },
-    { kind: "heading", id: "theme", label: "Theme" },
-    item({ id: "theme-system", label: "Match system", icon: <Monitor size={14} />, checked: theme === "system", onSelect: () => setTheme("system") }),
-    item({ id: "theme-light", label: "Light", icon: <Sun size={14} />, checked: theme === "light", onSelect: () => setTheme("light") }),
-    item({ id: "theme-dark", label: "Dark", icon: <Moon size={14} />, checked: theme === "dark", onSelect: () => setTheme("dark") }),
-    { kind: "separator", id: "s1" },
-    item({ id: "shortcuts", label: "Keyboard shortcuts", icon: <Keyboard size={14} />, hint: <Kbd>?</Kbd>, onSelect: onOpenShortcuts }),
-    update.status === "ready"
-      ? item({
-          id: "update",
-          label: `Restart to update to ${update.version}`,
-          icon: <Download size={14} />,
-          onSelect: () => void window.bta.update.install(),
-        })
-      : item({
-          id: "update",
-          label: update.status === "checking" ? "Checking for updates…" : "Check for updates",
-          icon: <RefreshCw size={14} />,
-          disabled: update.status === "checking",
-          onSelect: () => void window.bta.update.check(),
-        }),
-    { kind: "separator", id: "s2" },
-    signedIn
-      ? item({ id: "sign-out", label: "Sign out", icon: <LogOut size={14} />, onSelect: () => void window.bta.auth.signOut() })
-      : item({ id: "sign-in", label: "Sign in with browser", icon: <LogIn size={14} />, onSelect: () => void window.bta.auth.signIn() }),
   ];
 
   return (
@@ -328,18 +280,131 @@ function AccountButton({
         onClick={() => setOpen((o) => !o)}
         className={`flex h-[34px] w-full items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-[var(--row-hover)] ${open ? "bg-[var(--row-hover)]" : ""}`}
       >
-        {/* With more than one workspace, the button names the one open: the thing that
-            changes when you switch, the way Linear and Notion head their sidebars. */}
-        {workspaces.list.length > 1 ? (
-          <WorkspaceMark name={workspaces.current.name} size={22} />
-        ) : (
-          <Avatar initials={accountInitials(auth)} size={22} />
-        )}
-        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
-          {workspaces.list.length > 1 ? workspaces.current.name : email ? email.split("@")[0] : "Beyond the Arc"}
-        </span>
-        {auth.status === "waiting" && <span className="text-[11px] text-ink-muted">Signing in…</span>}
+        <WorkspaceMark name={workspaces.current.name} size={22} />
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{workspaces.current.name}</span>
         <ChevronDown size={13} strokeWidth={2.25} className="shrink-0 text-ink-muted" />
+      </button>
+      {open && (
+        <Menu
+          label="Workspaces"
+          entries={entries}
+          triggerRef={triggerRef}
+          onClose={() => setOpen(false)}
+          className="absolute left-0 top-[calc(100%+4px)] w-[268px]"
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Bottom left: who is reading, on what plan, and everything about the account
+ * and the app itself (theme, shortcuts, updates, signing in and out). Slack,
+ * Discord and Notion's desktop apps keep the person here; the menu opens upward.
+ */
+function AccountButton({
+  theme,
+  setTheme,
+  onOpenShortcuts,
+  version,
+}: {
+  theme: ThemeMode;
+  setTheme: (m: ThemeMode) => void;
+  onOpenShortcuts: () => void;
+  version: string | null;
+}) {
+  const { auth, update } = useAccount();
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const signedIn = auth.status === "signedIn";
+  const email = signedIn ? auth.user.email : null;
+  const isAdmin = signedIn && auth.user.role === "admin";
+  const name = email ? email.split("@")[0]! : "Not signed in";
+  const plan = signedIn ? (isAdmin ? "Administrator" : "Season Pass") : auth.status === "waiting" ? "Signing in…" : "Free seasons only";
+
+  const entries: MenuEntry[] = [
+    {
+      kind: "custom",
+      id: "who",
+      node: (
+        <div className="flex items-center gap-2.5 px-2 pb-2 pt-1.5">
+          <Avatar initials={accountInitials(auth)} size={30} />
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-medium text-ink">{email ?? "Not signed in"}</p>
+            <p className="text-[11.5px] text-ink-muted">{plan}</p>
+          </div>
+        </div>
+      ),
+    },
+    { kind: "separator", id: "s0" },
+    ...(signedIn
+      ? [
+          item({
+            id: "account",
+            label: "Account and billing",
+            icon: <CircleUserRound size={14} />,
+            hint: <ExternalLink size={12} />,
+            onSelect: () => void window.open("https://btacbb.xyz/account/"),
+          }),
+        ]
+      : []),
+    ...(isAdmin
+      ? [
+          item({
+            id: "admin",
+            label: "Admin dashboard",
+            icon: <ShieldCheck size={14} />,
+            hint: <ExternalLink size={12} />,
+            onSelect: () => void window.open("https://btacbb.xyz/admin/"),
+          }),
+        ]
+      : []),
+    ...(signedIn ? [{ kind: "separator", id: "s1" } as MenuEntry] : []),
+    { kind: "heading", id: "theme", label: "Theme" },
+    item({ id: "theme-system", label: "Match system", icon: <Monitor size={14} />, checked: theme === "system", onSelect: () => setTheme("system") }),
+    item({ id: "theme-light", label: "Light", icon: <Sun size={14} />, checked: theme === "light", onSelect: () => setTheme("light") }),
+    item({ id: "theme-dark", label: "Dark", icon: <Moon size={14} />, checked: theme === "dark", onSelect: () => setTheme("dark") }),
+    { kind: "separator", id: "s2" },
+    item({ id: "shortcuts", label: "Keyboard shortcuts", icon: <Keyboard size={14} />, hint: <Kbd>?</Kbd>, onSelect: onOpenShortcuts }),
+    update.status === "ready"
+      ? item({
+          id: "update",
+          label: `Restart to update to ${update.version}`,
+          icon: <Download size={14} />,
+          onSelect: () => void window.bta.update.install(),
+        })
+      : item({
+          id: "update",
+          label: update.status === "checking" ? "Checking for updates…" : "Check for updates",
+          icon: <RefreshCw size={14} />,
+          hint: version ? <span className="tabular">v{version}</span> : undefined,
+          disabled: update.status === "checking",
+          onSelect: () => void window.bta.update.check(),
+        }),
+    { kind: "separator", id: "s3" },
+    signedIn
+      ? item({ id: "sign-out", label: "Sign out", icon: <LogOut size={14} />, onSelect: () => void window.bta.auth.signOut() })
+      : item({ id: "sign-in", label: "Sign in with browser", icon: <LogIn size={14} />, onSelect: () => void window.bta.auth.signIn() }),
+  ];
+
+  return (
+    <div className="relative min-w-0 flex-1">
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label="Account"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => setOpen((o) => !o)}
+        className={`flex h-[40px] w-full items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-[var(--row-hover)] ${open ? "bg-[var(--row-hover)]" : ""}`}
+      >
+        <Avatar initials={accountInitials(auth)} size={26} />
+        <span className="min-w-0 flex-1 leading-tight">
+          <span className="block truncate text-[12.5px] font-medium text-ink">{name}</span>
+          <span className={`block truncate text-[11px] ${isAdmin ? "text-accent" : "text-ink-muted"}`}>{plan}</span>
+        </span>
+        <ChevronsUpDown size={13} strokeWidth={2.25} className="shrink-0 text-ink-muted" />
       </button>
       {open && (
         <Menu
@@ -347,7 +412,7 @@ function AccountButton({
           entries={entries}
           triggerRef={triggerRef}
           onClose={() => setOpen(false)}
-          className="absolute left-0 top-[calc(100%+4px)] w-[268px]"
+          className="absolute bottom-[calc(100%+6px)] left-0 w-[268px]"
         />
       )}
     </div>
