@@ -1,5 +1,6 @@
-import { CalendarDays, Table2, UsersRound, type LucideIcon } from "lucide-react";
+import { CalendarClock, CalendarDays, Table2, UsersRound, type LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
+import { PlayerGamesView } from "~/views/player-games/player-games-view";
 import { PlayersView } from "~/views/players/players-view";
 import { TeamGamesView } from "~/views/team-games/team-games-view";
 import { TeamsView } from "~/views/teams/teams-view";
@@ -65,6 +66,14 @@ export const VIEWS: ViewDef[] = [
     icon: UsersRound,
     filterPlaceholder: "Filter players, teams, classes or hometowns",
     Component: PlayersView,
+  },
+  {
+    id: "player-game-log",
+    label: "Player Game Log",
+    section: "Players",
+    icon: CalendarClock,
+    filterPlaceholder: "Filter players, teams, opponents or conferences",
+    Component: PlayerGamesView,
   },
 ];
 

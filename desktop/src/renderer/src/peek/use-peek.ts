@@ -74,7 +74,10 @@ export function usePeek(): View & { close: () => void; pin: () => void } {
         close();
         return;
       }
-      downAt.current = performance.now();
+      // MEASURED FROM THE EVENTS OWN TIMESTAMPS, not from when they are handled.
+      // A tap that lands while the page is busy (a Peek ranking a stat for the
+      // first time) arrives late, and must still read as a tap, not a hold.
+      downAt.current = e.timeStamp;
       apply({ open: true, pinned: false });
     };
 
@@ -88,7 +91,7 @@ export function usePeek(): View & { close: () => void; pin: () => void } {
       const started = downAt.current;
       if (started == null) return;
       downAt.current = null;
-      if (performance.now() - started < TAP_MS) apply({ open: true, pinned: true });
+      if (e.timeStamp - started < TAP_MS) apply({ open: true, pinned: true });
       else close();
     };
 

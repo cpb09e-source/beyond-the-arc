@@ -3,6 +3,7 @@ import { T, TEAM_GAME_PRESETS, TEAM_GAME_VIEWS, passesTeamFilters, teamGameViewB
 import { loadTeamGameSeason, type TeamGame } from "~/data/team-game-model";
 import { SOURCE_LABEL, useLoaded } from "~/data/use-corpus";
 import { Picker } from "~/shell/picker";
+import { ShortcutBar } from "~/shell/shortcut-bar";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
@@ -166,39 +167,7 @@ export function TeamGamesView({ year, setYear, query }: ViewProps) {
         controls={<Picker label="View" value={view.key} options={VIEW_OPTIONS} onChange={pickView} />}
       />
 
-      <div role="group" aria-label="Shortcuts" className="flex shrink-0 flex-wrap items-center gap-1.5 px-5 pb-2.5">
-        {TEAM_GAME_PRESETS.map((p) => {
-          const active = on.includes(p.key);
-          return (
-            <button
-              key={p.key}
-              type="button"
-              title={p.desc}
-              aria-pressed={active}
-              // A shortcut must not take focus, or the next Space presses it instead of opening Peek.
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => setOn((s) => (active ? s.filter((k) => k !== p.key) : [...s, p.key]))}
-              className={`h-[24px] rounded-md border px-2 text-[12px] transition-colors ${
-                active
-                  ? "border-accent bg-[var(--accent-wash)] text-ink"
-                  : "border-hairline text-ink-soft hover:border-ink-muted hover:text-ink"
-              }`}
-            >
-              {p.label}
-            </button>
-          );
-        })}
-        {on.length > 0 && (
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => setOn([])}
-            className="ml-1 h-[24px] px-1.5 text-[12px] text-ink-muted transition-colors hover:text-ink"
-          >
-            Clear
-          </button>
-        )}
-      </div>
+      <ShortcutBar presets={TEAM_GAME_PRESETS} on={on} onChange={setOn} />
 
       <div className="relative min-h-0 flex-1 border-t border-hairline">
         {state.status === "ready" ? (

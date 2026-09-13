@@ -57,7 +57,14 @@ forward.
    efficiency, four factors offense against defense, shooting). The whole-season percentile
    function moved from the explorer component into `src/lib/team-game-index.ts`, and the two
    web-only modules it imports get desktop stand-ins through Vite aliases
-   (`desktop/src/renderer/src/stand-ins`). **Player Game Log next.**
+   (`desktop/src/renderer/src/stand-ins`). **Player Game Log built:** every player-game of a
+   season on the table (118,533 in 2025-26, where the site shows its top 500), the five column
+   views, eight shortcuts, a Peek with the line, shooting as makes and attempts, and the rates.
+   The site page has no chips; the app ranks each stat against every player-game of the
+   season, with no chip on the five stats that are zero in most games (blocks 77%, made threes
+   58%, steals 57%, offensive rebounds 51%, made free throws 51%) and neutral chips on minutes,
+   attempts and usage. The midrank is counted rather than sorted (`data/midrank-by-value.ts`),
+   checked equal to the site function on 18.1 million values across three seasons.
 5. Win Calculator. Plain-English questions go through the site's /api/parse-query, because the
    Anthropic key must never ship inside a desktop app.
 6. Team Scatter with the trapezoid.

@@ -2,6 +2,7 @@ import { PercentileChip } from "@/components/percentile-chip";
 import { seasonPercentiles, teamGameStat } from "@/lib/team-game-index";
 import { longDate, type TeamGame, type TeamGameSeason } from "~/data/team-game-model";
 import { TeamLogo } from "~/ui/logo";
+import { Cells, type Read } from "~/ui/peek-cells";
 import { fmtStat, NEUTRAL_PCT } from "./game-columns";
 
 /**
@@ -28,8 +29,6 @@ const BOX = [
   ["BLK", "blk"],
   ["TOV", "tov"],
 ] as const;
-
-type Read = { label: string; text: string; pct: number | null; neutral: boolean };
 
 export function GamePeekBody({ season, game }: { season: TeamGameSeason; game: TeamGame }) {
   const read = (key: string): Read => {
@@ -114,23 +113,6 @@ export function GamePeekBody({ season, game }: { season: TeamGameSeason; game: T
         ))}
       </div>
     </>
-  );
-}
-
-function Cells({ title, cells }: { title: string; cells: Read[] }) {
-  return (
-    <section className="border-t border-hairline px-4 py-2.5">
-      <h3 className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-ink-muted">{title}</h3>
-      <div className="grid grid-cols-4 gap-2">
-        {cells.map((c) => (
-          <div key={c.label} className="flex flex-col items-start gap-1">
-            <span className="text-[10.5px] text-ink-muted">{c.label}</span>
-            <span className="text-[15px] leading-none text-ink tabular">{c.text}</span>
-            <PercentileChip pct={c.pct} neutral={c.neutral} className="min-w-[26px] px-1 py-[2px] text-[10.5px]" />
-          </div>
-        ))}
-      </div>
-    </section>
   );
 }
 
