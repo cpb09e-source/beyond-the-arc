@@ -131,9 +131,12 @@ export function Sidebar({
           />
         )}
         {sections.map(([section, views]) => {
-          const isFolded = folded.includes(section);
+          // Home stands alone at the top, with no heading to fold it under.
+          const headless = section === "Home";
+          const isFolded = !headless && folded.includes(section);
           return (
             <div key={section} className="mb-2">
+              {!headless && (
               <button
                 type="button"
                 aria-expanded={!isFolded}
@@ -148,6 +151,7 @@ export function Sidebar({
                   className={`opacity-0 transition-[opacity,rotate] group-hover:opacity-100 ${isFolded ? "-rotate-90" : ""}`}
                 />
               </button>
+              )}
               {!isFolded && (
                 <ul className="grid gap-px">
                   {views.map((v) => {

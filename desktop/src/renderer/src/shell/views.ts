@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CalendarDays,
   ChartScatter,
+  House,
   GitCompareArrows,
   Shield,
   Swords,
@@ -28,6 +29,7 @@ import { TeamGamesView } from "~/views/team-games/team-games-view";
 import { TeamProfileView } from "~/views/team-profile/team-profile-view";
 import { TeamScatterView } from "~/views/team-scatter/team-scatter-view";
 import { GameView } from "~/views/game/game-view";
+import { HomeView } from "~/views/home/home-view";
 import { ScoreboardView } from "~/views/scoreboard/scoreboard-view";
 import { TeamsView } from "~/views/teams/teams-view";
 import { WinCalcView } from "~/views/win-calc/calc-view";
@@ -93,7 +95,7 @@ export type ViewProps = {
 export type ViewDef = {
   id: string;
   label: string;
-  section: "Teams" | "Players" | "Games" | "Tools";
+  section: "Home" | "Teams" | "Players" | "Games" | "Tools";
   icon: LucideIcon;
   filterPlaceholder: string;
   Component: ComponentType<ViewProps>;
@@ -113,6 +115,15 @@ export type ViewDef = {
 };
 
 export const VIEWS: ViewDef[] = [
+  {
+    id: "home",
+    label: "Home",
+    section: "Home",
+    icon: House,
+    filterPlaceholder: "",
+    Component: HomeView,
+    seasonless: true,
+  },
   {
     id: "team-explorer",
     label: "Team Explorer",

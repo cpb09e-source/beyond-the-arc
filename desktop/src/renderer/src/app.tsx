@@ -51,6 +51,7 @@ import { NAV_VIEWS, profileViewFor, viewById, type FocusRequest, type FocusTarge
 import { Welcome } from "~/shell/welcome";
 import { useWorkspace, type Tab } from "~/shell/workspace";
 import { useWorkspaces } from "~/shell/workspaces";
+import { recordVisit } from "~/shell/recents";
 import { seasonLabel } from "~/ui/format";
 import { Kbd } from "~/ui/kbd";
 import { NamePrompt } from "~/ui/name-prompt";
@@ -151,6 +152,18 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
   useEffect(() => {
     currentRef.current = current;
   }, [current]);
+
+  // Home's "Jump back in": every place the tab in front settles on, Home itself aside.
+  useEffect(() => {
+    if (current.viewId === "home") return;
+    recordVisit({
+      viewId: current.viewId,
+      year: current.year,
+      query: current.query,
+      record: current.record,
+      title: current.title ?? current.record?.name ?? viewById(current.viewId).label,
+    });
+  }, [current.viewId, current.year, current.query, current.record, current.title]);
 
   const trayRef = useRef(compare.items);
   useEffect(() => {
