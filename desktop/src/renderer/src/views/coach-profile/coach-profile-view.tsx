@@ -62,7 +62,7 @@ const SEASON_COLUMNS: Column<CoachSeason>[] = [
     ),
   },
   {
-    key: "conf", label: "Conf", width: 92, align: "left", first: 1,
+    key: "conf", label: "Conf", width: 108, align: "left", first: 1,
     sortValue: (s) => (s.conference ? confDisplay(s.conference) : null),
     cell: (s) => <span className="block truncate text-ink-soft">{s.conference ? confDisplay(s.conference) : "–"}</span>,
   },
@@ -72,7 +72,7 @@ const SEASON_COLUMNS: Column<CoachSeason>[] = [
     cell: (s) => <span className="whitespace-nowrap text-ink tabular">{`${s.wins ?? "–"}-${s.losses ?? "–"}`}</span>,
   },
   {
-    key: "confRecord", label: "Conf W-L", title: "Conference record", width: 76, align: "right", first: -1,
+    key: "confRecord", label: "Conf W-L", title: "Conference record", width: 88, align: "right", first: -1,
     sortValue: (s) => winShare(s.conf_wins, s.conf_losses),
     cell: (s) => <span className="whitespace-nowrap text-ink-soft tabular">{s.conf_wins != null ? `${s.conf_wins}-${s.conf_losses ?? 0}` : "–"}</span>,
   },
@@ -105,7 +105,7 @@ const SEASON_COLUMNS: Column<CoachSeason>[] = [
     },
   },
   {
-    key: "champ", label: "Conf title", title: "Regular-season conference champion", width: 76, align: "center", first: -1,
+    key: "champ", label: "Conf title", title: "Regular-season conference champion", width: 92, align: "center", first: -1,
     sortValue: (s) => (s.reg_season_conf_champ ? 1 : 0),
     cell: (s) =>
       s.reg_season_conf_champ ? <span role="img" aria-label="Regular-season champion" className="inline-block size-[7px] rounded-full bg-good" /> : null,

@@ -185,11 +185,11 @@ export function CommandPalette({
         role="dialog"
         aria-modal="true"
         aria-label="Search"
-        className="palette-in relative mx-auto mt-[11vh] w-[min(640px,calc(100vw-48px))] overflow-hidden rounded-xl border border-hairline bg-card"
+        className="palette-in relative mx-auto mt-[13vh] w-[min(720px,calc(100vw-48px))] overflow-hidden rounded-xl border border-hairline bg-card"
         style={{ boxShadow: "var(--overlay-shadow)" }}
       >
         <Command label="Search" shouldFilter={false} loop value={current} onValueChange={setActive}>
-          <div className="flex h-[52px] items-center gap-3 border-b border-hairline px-4">
+          <div className="flex h-[54px] items-center gap-3 border-b border-hairline px-[18px]">
             <Search size={17} strokeWidth={2} className="shrink-0 text-ink-muted" />
             <Command.Input
               autoFocus
@@ -206,7 +206,7 @@ export function CommandPalette({
             <Kbd>Esc</Kbd>
           </div>
 
-          <Command.List className="max-h-[min(440px,calc(100vh-260px))] scroll-py-2 overflow-y-auto overscroll-contain p-1.5">
+          <Command.List className="max-h-[min(500px,calc(100vh-300px))] scroll-py-2 overflow-y-auto overscroll-contain p-1.5">
             {results.length === 0 ? (
               <p className="px-3 py-9 text-center text-[13px] text-ink-muted">
                 Nothing matches &ldquo;{query.trim()}&rdquo;.
@@ -223,7 +223,7 @@ export function CommandPalette({
                       key={item.id}
                       value={item.id}
                       onSelect={() => pick(item)}
-                      className="flex h-[36px] cursor-default items-center gap-3 rounded-md px-2.5 text-[13px] text-ink-soft data-[selected=true]:bg-[var(--menu-active)] data-[selected=true]:text-ink"
+                      className="flex h-[40px] cursor-default items-center gap-3 rounded-lg px-3 text-[13px] text-ink-soft data-[selected=true]:bg-[var(--menu-active)] data-[selected=true]:text-ink"
                     >
                       <span className="flex w-5 shrink-0 items-center justify-center text-ink-muted">{item.leading}</span>
                       <span className="min-w-0 flex-1 truncate">

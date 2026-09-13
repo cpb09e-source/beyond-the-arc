@@ -306,15 +306,16 @@ html {
   }
 }
 
-/* Menus and popovers open with a short drop, never a bounce. */
+/* Menus and popovers open with a short drop and a hair of scale, never a bounce. */
 .menu-in {
-  animation: menu-in 120ms cubic-bezier(0.25, 1, 0.5, 1);
+  animation: menu-in 140ms cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 @keyframes menu-in {
   from {
     opacity: 0;
     translate: 0 -4px;
+    scale: 0.98;
   }
   to {
     opacity: 1;

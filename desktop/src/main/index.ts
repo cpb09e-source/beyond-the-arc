@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeTheme, net, protocol, shell } from "electron";
+import { app, BrowserWindow, clipboard, ipcMain, Menu, nativeTheme, net, protocol, shell } from "electron";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -9,7 +9,10 @@ import {
   cancelSignIn,
   handleDeepLink,
   onAuthChange,
+  pendingLink,
+  previewAuthState,
   restoreSession,
+  settledAuthState,
   SCHEME,
   signIn,
   signOut,
@@ -160,7 +163,14 @@ function registerIpc(): void {
     if (process.platform !== "darwin") win.setTitleBarOverlay({ color: c.bar, symbolColor: c.symbol });
   });
 
-  ipcMain.handle("auth:state", () => authState());
+  ipcMain.handle("auth:state", () => settledAuthState());
+  // Copied here rather than by the page: the system clipboard takes it whether or not the window has focus.
+  ipcMain.handle("auth:copy-link", () => {
+    const link = pendingLink();
+    if (link) clipboard.writeText(link);
+    return link !== null;
+  });
+  ipcMain.handle("auth:preview", (_event, status: unknown) => previewAuthState(status));
   ipcMain.handle("auth:sign-in", () => signIn());
   ipcMain.handle("auth:cancel", () => cancelSignIn());
   ipcMain.handle("auth:sign-out", () => signOut());

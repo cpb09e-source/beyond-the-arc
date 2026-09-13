@@ -41,7 +41,9 @@ const PENDING_TTL_MS = 10 * 60_000;
 
 let current: AuthState = { status: "signedOut" };
 let saved: Saved | null = null;
-let pending: { verifier: string; state: string; startedAt: number } | null = null;
+let pending: { verifier: string; state: string; startedAt: number; url: string } | null = null;
+/** Settles once the stored session has been read, so the first answer to the window is the real one. */
+let restored: Promise<void> = Promise.resolve();
 let refreshTimer: NodeJS.Timeout | null = null;
 const listeners = new Set<(s: AuthState) => void>();
 
@@ -53,6 +55,19 @@ function publish(next: AuthState): void {
 }
 
 export const authState = (): AuthState => current;
+
+/**
+ * The state as the window should first see it: after the stored session is
+ * read. Asked before that, a signed-in reader would see the sign-in screen for a
+ * frame on every launch.
+ */
+export const settledAuthState = async (): Promise<AuthState> => {
+  await restored;
+  return current;
+};
+
+/** The page the waiting sign-in opened, for a reader whose browser opened it somewhere they cannot see. */
+export const pendingLink = (): string | null => pending?.url ?? null;
 
 export function onAuthChange(fn: (s: AuthState) => void): () => void {
   listeners.add(fn);
@@ -154,10 +169,26 @@ async function refresh(): Promise<void> {
 
 /** At launch: the stored session, shown at once, then confirmed with the site. */
 export async function restoreSession(): Promise<void> {
-  saved = await load();
-  if (!saved) return;
-  publish({ status: "signedIn", user: saved.user });
-  await refresh();
+  restored = (async () => {
+    saved = await load();
+    if (saved) publish({ status: "signedIn", user: saved.user });
+  })();
+  await restored;
+  if (saved) await refresh();
+}
+
+/**
+ * Development only: show the sign-in screen in a given state without a browser
+ * round trip, so each state can be looked at. A packaged build ignores it.
+ */
+export function previewAuthState(status: unknown): void {
+  if (app.isPackaged) return;
+  if (status === "signedOut") publish({ status: "signedOut" });
+  else if (status === "waiting") {
+    pending = { verifier: "preview", state: "preview", startedAt: Date.now(), url: `${SITE}/desktop/connect?challenge=preview&state=preview` };
+    publish({ status: "waiting" });
+  } else if (status === "refused") publish({ status: "refused", message: "The desktop app comes with Season Pass." });
+  else if (status === "error") publish({ status: "error", message: "That sign-in did not go through. Try again." });
 }
 
 /** Opens the connect page in the reader's browser and waits for btacbb://auth. */
@@ -165,9 +196,10 @@ export async function signIn(): Promise<void> {
   const verifier = randomBytes(48).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
   const state = randomBytes(24).toString("base64url");
-  pending = { verifier, state, startedAt: Date.now() };
+  const url = `${SITE}/desktop/connect?${new URLSearchParams({ challenge, state }).toString()}`;
+  pending = { verifier, state, startedAt: Date.now(), url };
   publish({ status: "waiting" });
-  await shell.openExternal(`${SITE}/desktop/connect?${new URLSearchParams({ challenge, state }).toString()}`);
+  await shell.openExternal(url);
 }
 
 export function cancelSignIn(): void {

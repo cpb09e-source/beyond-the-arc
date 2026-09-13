@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type R
 /**
  * One menu for every dropdown, and later every right-click.
  *
- * THE SAME ROW, THE SAME KEYBOARD, THE SAME WAY OUT everywhere: 30px rows,
+ * THE SAME ROW, THE SAME KEYBOARD, THE SAME WAY OUT everywhere: 32px rows (Linear's),
  * ↑ ↓ to move (skipping headings, separators and disabled rows), Enter or Space
  * to choose, Esc or a click outside to close. A menu that behaves slightly
  * differently in each place is a menu nobody trusts with their keyboard.
@@ -126,7 +126,7 @@ export function Menu({
             onMouseEnter={() => !entry.disabled && setActive(entry.id)}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => !entry.disabled && choose(entry)}
-            className={`flex h-[30px] cursor-default items-center gap-2.5 rounded-md px-2 text-[13px] ${
+            className={`flex h-[32px] cursor-default items-center gap-2.5 rounded-md px-2 text-[13px] ${
               entry.disabled
                 ? "text-ink-muted/60"
                 : isActive

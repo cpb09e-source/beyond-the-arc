@@ -77,6 +77,10 @@ const api = {
     state: (): Promise<AuthState> => ipcRenderer.invoke("auth:state"),
     signIn: (): Promise<void> => ipcRenderer.invoke("auth:sign-in"),
     cancel: (): Promise<void> => ipcRenderer.invoke("auth:cancel"),
+    /** Copy the browser page a waiting sign-in opened, for when the browser opened it out of sight. */
+    copyLink: (): Promise<boolean> => ipcRenderer.invoke("auth:copy-link"),
+    /** Development only; a packaged build ignores it. */
+    preview: (status: AuthState["status"]): Promise<void> => ipcRenderer.invoke("auth:preview", status),
     signOut: (): Promise<void> => ipcRenderer.invoke("auth:sign-out"),
     onChange: (fn: (s: AuthState) => void): (() => void) => listen("auth:changed", fn),
   },

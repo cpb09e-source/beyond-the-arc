@@ -119,7 +119,7 @@ export function calcColumns(cols: string[], show: { conf: boolean; coach: boolea
       cell: (g) => <span className="text-ink-muted">{g.is_neutral ? "N" : g.is_home ? "vs" : "@"}</span>,
     },
     {
-      key: "opp", label: "Opponent", width: 236, align: "left", first: 1,
+      key: "opp", label: "Opponent", width: 312, align: "left", first: 1,
       sortValue: (g) => g.opp_team_market ?? "",
       cell: (g) => {
         const post = postseasonTag(g);

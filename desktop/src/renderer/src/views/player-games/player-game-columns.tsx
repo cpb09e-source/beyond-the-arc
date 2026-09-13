@@ -137,7 +137,7 @@ export function statColumns(season: PlayerGameSeason, keys: string[]): Column<Pl
       key: st.key,
       label: st.label,
       title: st.title,
-      width: Math.max(58, Math.round(st.label.length * 7.7) + 34),
+      width: Math.max(60, Math.round(st.label.length * 7.7) + 40),
       align: "right",
       first: st.lowerBetter ? 1 : -1,
       sortValue: (g) => {

@@ -75,7 +75,7 @@ function columns(book: CoachBook): Column<CoachIndexRow>[] {
         ) : null,
     },
     {
-      key: "conf", label: "Conf", width: 92, align: "left", first: 1,
+      key: "conf", label: "Conf", width: 108, align: "left", first: 1,
       sortValue: (r) => (r.current_conference ? confDisplay(r.current_conference) : null),
       cell: (r) => <span className="block truncate text-ink-soft">{r.current_conference ? confDisplay(r.current_conference) : "–"}</span>,
     },
@@ -131,7 +131,7 @@ function columns(book: CoachBook): Column<CoachIndexRow>[] {
     },
     { key: "s16", label: "S16", title: "Sweet 16s", width: 48, align: "right", first: -1, sortValue: (r) => r.sweet_sixteens, cell: (r) => count(r.sweet_sixteens) },
     { key: "f4", label: "F4", title: "Final Fours", width: 44, align: "right", first: -1, sortValue: (r) => r.final_fours, cell: (r) => count(r.final_fours) },
-    { key: "titles", label: "Titles", title: "National championships", width: 54, align: "right", first: -1, sortValue: (r) => r.ncaa_titles, cell: (r) => count(r.ncaa_titles) },
+    { key: "titles", label: "Titles", title: "National championships", width: 64, align: "right", first: -1, sortValue: (r) => r.ncaa_titles, cell: (r) => count(r.ncaa_titles) },
     {
       key: "best", label: "Best finish", title: "Furthest NCAA round reached", width: 124, align: "left", first: -1,
       sortValue: (r) => r.tourney_rank_key ?? 0,
