@@ -413,7 +413,12 @@ function FormCell({ cell, names, neutral }: { cell: Cell; names: TeamNames | nul
           {r.won === null ? "–" : r.won ? "W" : "L"}
         </span>
       )}
-      <TeamLogo id={sideOf(names, mark).logoId} name={mark} size={20} />
+      {/* A meeting with no recorded result names no winner, so it wears no crest. */}
+      {mark ? (
+        <TeamLogo id={sideOf(names, mark).logoId} name={mark} size={20} />
+      ) : (
+        <span aria-label="No result" className="grid size-[20px] place-items-center text-ink-muted">–</span>
+      )}
       <span className="text-[11.5px] font-medium text-ink tabular">
         {r.us}–{r.them}
       </span>
