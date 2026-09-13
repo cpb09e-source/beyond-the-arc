@@ -52,7 +52,8 @@ const STATS = [
 // drift here costs a bad suggestion, never a bad result.
 const SEASON_FLOOR = 2014;
 const SEASON_CEIL = 2026;
-const EXCLUDED_SEASONS = [2021];
+// 2020-21 is kept now (flagged, not excluded, in src/lib/seasons.ts), so nothing is.
+const EXCLUDED_SEASONS: number[] = [];
 
 const SCHEMA = {
   type: "object",
