@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePeek } from "~/peek/use-peek";
+import { useIsActive } from "~/shell/active";
 import { PeekPanel } from "./peek-panel";
 
 /**
@@ -111,6 +112,8 @@ export function DataTable<R>({
   onLanded,
 }: Props<R>) {
   const [sort, setSort] = useState(defaultSort);
+  // A table in a tab that is not in front keeps its state but not the keyboard.
+  const active = useIsActive();
 
   const sorted = useMemo(() => {
     const value = columns.find((c) => c.key === sort.key)?.sortValue;
@@ -205,7 +208,7 @@ export function DataTable<R>({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!active || e.ctrlKey || e.metaKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
       const inField = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
       const page = Math.max(1, Math.floor(viewH / rowHeight) - 1);
@@ -227,7 +230,7 @@ export function DataTable<R>({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [index, move, sorted.length, viewH, rowHeight]);
+  }, [active, index, move, sorted.length, viewH, rowHeight]);
 
   // THE POINTER MOVES FOCUS, but only when the pointer itself moves. Chromium
   // sends synthetic mouse moves when content scrolls under a still cursor, and
@@ -241,7 +244,7 @@ export function DataTable<R>({
     if (row && (focused === undefined || rowKey(row) !== rowKey(focused))) setFocusKey(rowKey(row));
   };
 
-  const peekState = usePeek();
+  const peekState = usePeek(active);
 
   // The parts of a landing that reach outside render: the scroll and the Peek.
   const { pin } = peekState;
@@ -390,7 +393,14 @@ export function DataTable<R>({
       </div>
 
       {peek && peekState.open && focused && (
-        <PeekPanel label={peek.label(focused)} pinned={peekState.pinned} top={peekTop} onHeight={setPeekH}>
+        <PeekPanel
+          label={peek.label(focused)}
+          pinned={peekState.pinned}
+          top={peekTop}
+          onHeight={setPeekH}
+          position={index + 1}
+          total={sorted.length}
+        >
           {peek.body(focused)}
         </PeekPanel>
       )}

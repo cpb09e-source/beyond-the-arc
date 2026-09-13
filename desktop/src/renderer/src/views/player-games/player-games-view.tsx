@@ -44,7 +44,7 @@ function readView(): string {
   }
 }
 
-export function PlayerGamesView({ year, setYear, query }: ViewProps) {
+export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
   const [state, retry] = useLoaded(`player-games|${year}`, () => loadPlayerGameSeason(year));
   const setStatus = useSetStatus();
   const [viewKey, setViewKey] = useState(readView);
@@ -120,6 +120,7 @@ export function PlayerGamesView({ year, setYear, query }: ViewProps) {
         setYear={setYear}
         meta={meta}
         controls={<Picker label="View" value={view.key} options={VIEW_OPTIONS} onChange={pickView} />}
+        filter={{ value: query, onChange: setQuery, placeholder: "Filter games" }}
       />
       <ShortcutBar presets={GAME_PRESETS} on={on} onChange={setOn} />
 

@@ -54,6 +54,7 @@ function listen<T>(channel: string, fn: (value: T) => void): () => void {
 const api = {
   platform: process.platform,
   version: (): Promise<string> => ipcRenderer.invoke("app:version"),
+  requiresAccount: (): Promise<boolean> => ipcRenderer.invoke("app:requires-account"),
   data: (corpus: Corpus, year: number): Promise<DataPayload> => ipcRenderer.invoke("data:get", corpus, year),
   setTheme: (mode: ThemeMode): void => ipcRenderer.send("theme:set", mode),
   auth: {

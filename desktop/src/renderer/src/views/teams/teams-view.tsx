@@ -112,7 +112,7 @@ const COLUMNS: Column<Team>[] = [
   },
 ];
 
-export function TeamsView({ year, setYear, query, focus, onLanded }: ViewProps) {
+export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: ViewProps) {
   const [state, retry] = useCorpus("teams", year, shapeTeams);
   const setStatus = useSetStatus();
 
@@ -140,7 +140,14 @@ export function TeamsView({ year, setYear, query, focus, onLanded }: ViewProps) 
 
   return (
     <>
-      <ViewHeader kicker="Teams" title="Team Explorer" year={year} setYear={setYear} meta={meta} />
+      <ViewHeader
+        kicker="Teams"
+        title="Team Explorer"
+        year={year}
+        setYear={setYear}
+        meta={meta}
+        filter={{ value: query, onChange: setQuery, placeholder: "Filter teams" }}
+      />
       <div className="relative min-h-0 flex-1 border-t border-hairline">
         {state.status === "ready" ? (
           <DataTable

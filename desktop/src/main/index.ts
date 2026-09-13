@@ -126,6 +126,10 @@ function bringToFront(): void {
 
 function registerIpc(): void {
   ipcMain.handle("app:version", () => app.getVersion());
+  // An installed copy opens nothing until an entitled account signs in. A run
+  // from the repo opens straight in, unless BTA_REQUIRE_ACCOUNT=1 asks to try
+  // the welcome screen.
+  ipcMain.handle("app:requires-account", () => app.isPackaged || process.env.BTA_REQUIRE_ACCOUNT === "1");
 
   ipcMain.handle("data:get", (_event, corpus: unknown, year: unknown) => {
     // Validated here, not trusted from the renderer: both values become part

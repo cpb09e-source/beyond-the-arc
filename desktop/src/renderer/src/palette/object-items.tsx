@@ -23,7 +23,7 @@ const seasonWords = (y: number): string[] => [String(y), `${String(y - 1).slice(
  * players the bigger season wins, measured in minutes actually played, so
  * "flagg" is Cooper Flagg before a namesake with half the floor time.
  */
-export function objectItems(data: SearchData, go: (target: FocusTarget) => void): PaletteItem[] {
+export function objectItems(data: SearchData, go: (target: FocusTarget, newTab: boolean) => void): PaletteItem[] {
   const items: PaletteItem[] = [];
 
   for (const t of data.teams) {
@@ -36,7 +36,7 @@ export function objectItems(data: SearchData, go: (target: FocusTarget) => void)
       collapse: `team:${t.name}`,
       weight: 30 + t.year / 100 - t.name.length / 10,
       leading: <TeamLogo id={t.logoId} name={t.name} size={18} />,
-      run: () => go({ kind: "team", name: t.name, year: t.year }),
+      run: (how) => go({ kind: "team", name: t.name, year: t.year }, how.newTab),
     };
     item.prepared = prepare(item);
     items.push(item);
@@ -53,7 +53,7 @@ export function objectItems(data: SearchData, go: (target: FocusTarget) => void)
       // Season minutes, games times minutes a game: about 1,200 for a starter.
       weight: 20 + p.year / 100 + ((p.games ?? 0) * (p.minutes ?? 0)) / 1200,
       leading: <PlayerPhoto bartId={p.bartId} hasPhoto={p.hasPhoto} name={p.name} size={22} />,
-      run: () => go({ kind: "player", bartId: p.bartId, name: p.name, year: p.year }),
+      run: (how) => go({ kind: "player", bartId: p.bartId, name: p.name, year: p.year }, how.newTab),
     };
     item.prepared = prepare(item);
     items.push(item);

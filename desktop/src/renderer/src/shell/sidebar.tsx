@@ -1,0 +1,325 @@
+import {
+  ChevronDown,
+  Download,
+  Keyboard,
+  LogIn,
+  LogOut,
+  Monitor,
+  Moon,
+  RefreshCw,
+  Search,
+  Sun,
+} from "lucide-react";
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import type { ThemeMode } from "../../../preload";
+import { Kbd } from "~/ui/kbd";
+import { Menu, type MenuEntry, type MenuItem } from "~/ui/menu";
+import { usePersisted } from "~/ui/persisted";
+import { accountInitials, useAccount } from "./account";
+import { VIEWS, type ViewDef } from "./views";
+
+/**
+ * The sidebar: who you are, how to find anything, and where the views are.
+ *
+ * DIMMER THAN THE CONTENT, on purpose (Linear's 2026 refresh made the same
+ * call): it sits on the chrome ground, its rows are the secondary ink, and only
+ * the view in front gets full ink and a quiet fill. The table is what the
+ * reader came for.
+ *
+ * RESIZABLE AND COLLAPSIBLE. Drag the right edge (double-click resets it) or
+ * press Ctrl+\ to hide it entirely. Sections fold, and all of it is remembered.
+ */
+
+export const SIDEBAR_DEFAULT = 232;
+export const SIDEBAR_MIN = 200;
+export const SIDEBAR_MAX = 340;
+
+const item = (e: Omit<MenuItem, "kind">): MenuEntry => ({ kind: "item", ...e });
+
+export function Sidebar({
+  width,
+  onResize,
+  currentViewId,
+  onNavigate,
+  onOpenSearch,
+  onOpenShortcuts,
+  theme,
+  setTheme,
+}: {
+  width: number;
+  onResize: (w: number) => void;
+  currentViewId: string;
+  onNavigate: (viewId: string, newTab: boolean) => void;
+  onOpenSearch: () => void;
+  onOpenShortcuts: () => void;
+  theme: ThemeMode;
+  setTheme: (m: ThemeMode) => void;
+}) {
+  const { update, version } = useAccount();
+  const [folded, setFolded] = usePersisted<string[]>(
+    "bta.sidebar.folded",
+    [],
+    (v): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string"),
+  );
+
+  const sections: Array<[string, ViewDef[]]> = [];
+  for (const v of VIEWS) {
+    const group = sections.find(([s]) => s === v.section);
+    if (group) group[1].push(v);
+    else sections.push([v.section, [v]]);
+  }
+
+  return (
+    <nav aria-label="Workspace" className="relative flex min-h-0 shrink-0 flex-col border-r border-hairline bg-chrome" style={{ width }}>
+      <div className="px-2 pt-2">
+        <AccountButton theme={theme} setTheme={setTheme} onOpenShortcuts={onOpenShortcuts} />
+      </div>
+
+      <div className="px-2 pb-1 pt-1.5">
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onOpenSearch}
+          className="flex h-[30px] w-full items-center gap-2 rounded-md border border-hairline bg-paper px-2 text-[12.5px] text-ink-muted transition-colors hover:border-[color-mix(in_oklab,var(--ink-muted)_45%,var(--hairline))] hover:text-ink-soft"
+        >
+          <Search size={14} strokeWidth={2} />
+          <span className="flex-1 text-left">Search</span>
+          <Kbd>Ctrl K</Kbd>
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-2">
+        {sections.map(([section, views]) => {
+          const isFolded = folded.includes(section);
+          return (
+            <div key={section} className="mb-2">
+              <button
+                type="button"
+                aria-expanded={!isFolded}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setFolded((f) => (isFolded ? f.filter((s) => s !== section) : [...f, section]))}
+                className="group flex h-[26px] w-full items-center gap-1 rounded-md px-2 text-[12px] font-medium text-ink-muted transition-colors hover:text-ink-soft"
+              >
+                {section}
+                <ChevronDown
+                  size={12}
+                  strokeWidth={2.25}
+                  className={`opacity-0 transition-[opacity,rotate] group-hover:opacity-100 ${isFolded ? "-rotate-90" : ""}`}
+                />
+              </button>
+              {!isFolded && (
+                <ul className="grid gap-px">
+                  {views.map((v) => {
+                    const active = v.id === currentViewId;
+                    const Icon = v.icon;
+                    return (
+                      <li key={v.id}>
+                        <button
+                          type="button"
+                          aria-current={active ? "page" : undefined}
+                          title={`${v.label}  ·  Ctrl-click for a new tab`}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                          }}
+                          onClick={(e) => onNavigate(v.id, e.ctrlKey || e.metaKey)}
+                          onAuxClick={(e) => {
+                            if (e.button === 1) onNavigate(v.id, true);
+                          }}
+                          className={`flex h-[28px] w-full items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors ${
+                            active
+                              ? "bg-[var(--nav-active)] font-[520] text-ink"
+                              : "text-ink-soft hover:bg-[var(--row-hover)] hover:text-ink"
+                          }`}
+                        >
+                          <Icon size={15} strokeWidth={2} className={active ? "text-ink-soft" : "text-ink-muted"} />
+                          <span className="truncate">{v.label}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="border-t border-hairline px-2 pb-2 pt-1.5">
+        {update.status === "ready" && (
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => void window.bta.update.install()}
+            className="mb-1.5 flex h-[30px] w-full items-center gap-2 rounded-md bg-[var(--accent-wash)] px-2 text-[12.5px] font-medium text-accent transition-[filter] hover:brightness-105"
+          >
+            <Download size={14} strokeWidth={2} />
+            <span className="flex-1 text-left">Restart to update</span>
+            <span className="text-[11px] font-normal tabular">{update.version}</span>
+          </button>
+        )}
+        {update.status === "available" && (
+          <p className="mb-1.5 px-2 text-[11.5px] text-ink-muted tabular">
+            Downloading {update.version} · {update.percent}%
+          </p>
+        )}
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={onOpenShortcuts}
+            title="Keyboard shortcuts  ?"
+            className="flex h-[26px] items-center gap-1.5 rounded-md px-2 text-[12px] text-ink-muted transition-colors hover:bg-[var(--row-hover)] hover:text-ink"
+          >
+            <Keyboard size={14} strokeWidth={2} />
+            Shortcuts
+          </button>
+          {version && <span className="pr-2 text-[11px] text-ink-muted tabular">v{version}</span>}
+        </div>
+      </div>
+
+      <ResizeHandle width={width} onResize={onResize} />
+    </nav>
+  );
+}
+
+function AccountButton({
+  theme,
+  setTheme,
+  onOpenShortcuts,
+}: {
+  theme: ThemeMode;
+  setTheme: (m: ThemeMode) => void;
+  onOpenShortcuts: () => void;
+}) {
+  const { auth, update } = useAccount();
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const signedIn = auth.status === "signedIn";
+  const email = signedIn ? auth.user.email : null;
+
+  const entries: MenuEntry[] = [
+    {
+      kind: "custom",
+      id: "who",
+      node: (
+        <div className="flex items-center gap-2.5 px-2 pb-2 pt-1.5">
+          <Avatar initials={accountInitials(auth)} size={30} />
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-medium text-ink">{email ?? "Not signed in"}</p>
+            <p className="text-[11.5px] text-ink-muted">
+              {signedIn ? (auth.user.role === "admin" ? "Administrator" : "Season Pass") : "Free seasons only"}
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    { kind: "separator", id: "s0" },
+    { kind: "heading", id: "theme", label: "Theme" },
+    item({ id: "theme-system", label: "Match system", icon: <Monitor size={14} />, checked: theme === "system", onSelect: () => setTheme("system") }),
+    item({ id: "theme-light", label: "Light", icon: <Sun size={14} />, checked: theme === "light", onSelect: () => setTheme("light") }),
+    item({ id: "theme-dark", label: "Dark", icon: <Moon size={14} />, checked: theme === "dark", onSelect: () => setTheme("dark") }),
+    { kind: "separator", id: "s1" },
+    item({ id: "shortcuts", label: "Keyboard shortcuts", icon: <Keyboard size={14} />, hint: <Kbd>?</Kbd>, onSelect: onOpenShortcuts }),
+    update.status === "ready"
+      ? item({
+          id: "update",
+          label: `Restart to update to ${update.version}`,
+          icon: <Download size={14} />,
+          onSelect: () => void window.bta.update.install(),
+        })
+      : item({
+          id: "update",
+          label: update.status === "checking" ? "Checking for updates…" : "Check for updates",
+          icon: <RefreshCw size={14} />,
+          disabled: update.status === "checking",
+          onSelect: () => void window.bta.update.check(),
+        }),
+    { kind: "separator", id: "s2" },
+    signedIn
+      ? item({ id: "sign-out", label: "Sign out", icon: <LogOut size={14} />, onSelect: () => void window.bta.auth.signOut() })
+      : item({ id: "sign-in", label: "Sign in with browser", icon: <LogIn size={14} />, onSelect: () => void window.bta.auth.signIn() }),
+  ];
+
+  return (
+    <div className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => setOpen((o) => !o)}
+        className={`flex h-[34px] w-full items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-[var(--row-hover)] ${open ? "bg-[var(--row-hover)]" : ""}`}
+      >
+        <Avatar initials={accountInitials(auth)} size={22} />
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
+          {email ? email.split("@")[0] : "Beyond the Arc"}
+        </span>
+        {auth.status === "waiting" && <span className="text-[11px] text-ink-muted">Signing in…</span>}
+        <ChevronDown size={13} strokeWidth={2.25} className="shrink-0 text-ink-muted" />
+      </button>
+      {open && (
+        <Menu
+          label="Account"
+          entries={entries}
+          triggerRef={triggerRef}
+          onClose={() => setOpen(false)}
+          className="absolute left-0 top-[calc(100%+4px)] w-[268px]"
+        />
+      )}
+    </div>
+  );
+}
+
+function Avatar({ initials, size }: { initials: string; size: number }) {
+  return (
+    <span
+      aria-hidden
+      className="grid shrink-0 place-items-center rounded-full bg-[var(--accent-wash)] font-semibold text-accent"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
+    >
+      {initials}
+    </span>
+  );
+}
+
+function ResizeHandle({ width, onResize }: { width: number; onResize: (w: number) => void }) {
+  const start = useRef<{ x: number; width: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const down = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    start.current = { x: e.clientX, width };
+    setDragging(true);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const move = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const s = start.current;
+    if (!s) return;
+    onResize(Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, s.width + e.clientX - s.x))));
+  };
+  const up = () => {
+    start.current = null;
+    setDragging(false);
+  };
+
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize sidebar"
+      onPointerDown={down}
+      onPointerMove={move}
+      onPointerUp={up}
+      onPointerCancel={up}
+      onDoubleClick={() => onResize(SIDEBAR_DEFAULT)}
+      className="group absolute -right-[3px] top-0 z-20 h-full w-[6px] cursor-col-resize"
+    >
+      <span
+        className={`absolute left-[2px] top-0 h-full w-[2px] transition-colors ${
+          dragging ? "bg-accent" : "bg-transparent group-hover:bg-[color-mix(in_oklab,var(--accent)_55%,transparent)]"
+        }`}
+      />
+    </div>
+  );
+}

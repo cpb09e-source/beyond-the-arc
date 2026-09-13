@@ -10,11 +10,16 @@ export function PeekPanel({
   label,
   pinned,
   top,
+  position,
+  total,
   onHeight,
   children,
 }: {
   label: string;
   pinned: boolean;
+  /** Where the row sits in the table as sorted and filtered now: "8 of 364". */
+  position: number;
+  total: number;
   top: number;
   onHeight: (px: number) => void;
   children: ReactNode;
@@ -50,8 +55,11 @@ export function PeekPanel({
           <Kbd>↓</Kbd>
           next
         </span>
+        <span className="ml-auto tabular">
+          {position.toLocaleString()} of {total.toLocaleString()}
+        </span>
         {pinned && (
-          <span className="ml-auto flex items-center gap-1.5">
+          <span className="flex items-center gap-1.5">
             <Kbd>Esc</Kbd>
           </span>
         )}

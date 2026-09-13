@@ -72,7 +72,7 @@ const COLUMNS: Column<Player>[] = [...IDENTITY, ...statColumns()];
 /** For seasons without eWins. Module-level, so the table sees a stable list. */
 const COLUMNS_NO_EWINS: Column<Player>[] = COLUMNS.filter((c) => c.key !== "ewins");
 
-export function PlayersView({ year, setYear, query, focus, onLanded }: ViewProps) {
+export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }: ViewProps) {
   const [state, retry] = useLoaded(`player-season|${year}`, () => loadPlayerSeason(year));
   const setStatus = useSetStatus();
 
@@ -106,7 +106,14 @@ export function PlayersView({ year, setYear, query, focus, onLanded }: ViewProps
 
   return (
     <>
-      <ViewHeader kicker="Players" title="Player Explorer" year={year} setYear={setYear} meta={meta} />
+      <ViewHeader
+        kicker="Players"
+        title="Player Explorer"
+        year={year}
+        setYear={setYear}
+        meta={meta}
+        filter={{ value: query, onChange: setQuery, placeholder: "Filter players" }}
+      />
       <div className="relative min-h-0 flex-1 border-t border-hairline">
         {state.status === "ready" ? (
           <DataTable

@@ -109,7 +109,7 @@ const IDENTITY: Column<TeamGame>[] = [
   },
 ];
 
-export function TeamGamesView({ year, setYear, query }: ViewProps) {
+export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
   const [state, retry] = useLoaded(`team-games|${year}`, () => loadTeamGameSeason(year));
   const setStatus = useSetStatus();
   const [viewKey, setViewKey] = useState(readView);
@@ -165,6 +165,7 @@ export function TeamGamesView({ year, setYear, query }: ViewProps) {
         setYear={setYear}
         meta={meta}
         controls={<Picker label="View" value={view.key} options={VIEW_OPTIONS} onChange={pickView} />}
+        filter={{ value: query, onChange: setQuery, placeholder: "Filter games" }}
       />
 
       <ShortcutBar presets={TEAM_GAME_PRESETS} on={on} onChange={setOn} />

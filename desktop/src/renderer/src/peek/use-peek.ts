@@ -32,13 +32,18 @@ function isTyping(target: EventTarget | null): boolean {
   );
 }
 
-export function usePeek(): View & { close: () => void; pin: () => void } {
+export function usePeek(enabled = true): View & { close: () => void; pin: () => void } {
   const [view, setView] = useState<View>(CLOSED);
   // The window listeners outlive any one render and need the CURRENT state, so
   // it lives in a ref as well; `apply` is the only writer and keeps both equal.
   const live = useRef<View>(CLOSED);
   const downAt = useRef<number | null>(null);
   const swallowNextUp = useRef(false);
+  // A Peek in a tab that is not in front does not answer Space.
+  const enabledRef = useRef(enabled);
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
 
   const apply = useCallback((next: View) => {
     live.current = next;
@@ -58,6 +63,7 @@ export function usePeek(): View & { close: () => void; pin: () => void } {
 
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
+      if (!enabledRef.current) return;
       if (e.key === "Escape" && live.current.open) {
         e.preventDefault();
         close();
@@ -82,7 +88,7 @@ export function usePeek(): View & { close: () => void; pin: () => void } {
     };
 
     const onUp = (e: KeyboardEvent) => {
-      if (e.code !== "Space") return;
+      if (!enabledRef.current || e.code !== "Space") return;
       e.preventDefault();
       if (swallowNextUp.current) {
         swallowNextUp.current = false;

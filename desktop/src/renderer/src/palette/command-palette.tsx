@@ -38,7 +38,8 @@ export type PaletteItem = {
   collapse?: string;
   /** Folded ahead of time by lists too long to fold on every open. */
   prepared?: Prepared;
-  run: () => void;
+  /** `newTab` is true for Ctrl+Enter: open the result beside this tab instead of in it. */
+  run: (how: { newTab: boolean }) => void;
 };
 
 export type PaletteGroup = {
@@ -127,14 +128,24 @@ export function CommandPalette({
   const flat = results.flatMap((r) => r.rows);
   const current = flat.some((r) => r.id === active) ? active : (flat[0]?.id ?? "");
 
-  const pick = (item: PaletteItem) => {
+  const pick = (item: PaletteItem, newTab = false) => {
     onClose();
-    item.run();
+    item.run({ newTab });
   };
 
   return (
     <div
       className="fixed inset-0 z-50"
+      onKeyDownCapture={(e) => {
+        // Ctrl+Enter opens the highlighted result in a new tab. Caught on the way
+        // down, before cmdk, which would otherwise take it as an ordinary Enter.
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          e.stopPropagation();
+          const item = flat.find((r) => r.id === current);
+          if (item) pick(item, true);
+        }
+      }}
       onKeyDown={(e) => {
         e.stopPropagation();
         if (e.key === "Escape") {
@@ -219,6 +230,10 @@ export function CommandPalette({
             <span className="flex items-center gap-1.5">
               <Kbd>Enter</Kbd>
               open
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Kbd>Ctrl Enter</Kbd>
+              new tab
             </span>
             <span className="ml-auto flex items-center gap-1.5">
               <Kbd>Ctrl K</Kbd>

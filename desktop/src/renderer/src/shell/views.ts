@@ -28,6 +28,7 @@ export type ViewProps = {
   year: number;
   setYear: (y: number) => void;
   query: string;
+  setQuery: (q: string) => void;
   /** A pending landing. Each view acts on the kind it shows, in the season named. */
   focus: FocusRequest | null;
   onLanded: (nonce: number) => void;
