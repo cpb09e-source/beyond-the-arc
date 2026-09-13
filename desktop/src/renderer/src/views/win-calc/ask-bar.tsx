@@ -1,5 +1,5 @@
 import { Sparkles, X } from "lucide-react";
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import type { ParsedCondition, ParsedQuery, ResolvedQuery } from "@/lib/query-parse";
 import { CALC_STAT_KEYS, mergeParsedQuery, resolveCalcQuery, statLabel } from "@/lib/win-calc";
 import { Kbd } from "~/ui/kbd";
@@ -72,10 +72,15 @@ export function AskBar({
   update,
   seasons,
   inputRef,
+  pending,
+  onPendingTaken,
 }: {
   update: (fn: (s: CalcState) => CalcState) => void;
   seasons: CalcSeasons;
   inputRef?: RefObject<HTMLInputElement | null>;
+  /** A question handed over in the tab's query (asked from Ctrl K), to ask once. */
+  pending?: string | null;
+  onPendingTaken?: () => void;
 }) {
   const [text, setText] = useState("");
   const [phase, setPhase] = useState<"idle" | "parsing" | "loading">("idle");
@@ -95,8 +100,8 @@ export function AskBar({
     if (phase === "loading" && seasons.complete) setPhase("idle");
   }, [phase, seasons.complete]);
 
-  const ask = async () => {
-    const q = text.trim();
+  const ask = async (question?: string) => {
+    const q = (question ?? text).trim();
     if (q.length < 3 || phase === "parsing") return;
     setPhase("parsing");
     setError(null);
@@ -126,6 +131,19 @@ export function AskBar({
     setAnswer(resolved);
     setPhase("loading");
   };
+
+  // A question asked from Ctrl K arrives in the query: shown in the box, asked,
+  // and taken out of the query so a reload or a favorite does not ask it again.
+  // The ref keeps a development double-mount from asking twice.
+  const taken = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pending || taken.current === pending) return;
+    taken.current = pending;
+    setText(pending);
+    onPendingTaken?.();
+    void ask(pending);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending]);
 
   const busy = phase === "parsing" || (phase === "loading" && !seasons.complete);
   let beat = BEATS[0]!;

@@ -103,6 +103,8 @@ export function WinCalcView({ query, setQuery }: ViewProps) {
   );
 
   const seasons = useCalcSeasons(state.years);
+  /** A question asked from Ctrl K, carried in as ask=, for the Ask bar to take. */
+  const pendingAsk = useMemo(() => new URLSearchParams(query).get("ask"), [query]);
   const { coachByTeamYear } = coachLookup();
   const asked = useDeferredValue(state);
   const filters = useMemo(() => rowsToFilters(asked.rows), [asked.rows]);
@@ -219,7 +221,12 @@ export function WinCalcView({ query, setQuery }: ViewProps) {
         meta={meta}
         filter={{ value: text, onChange: setText, placeholder: "Filter games" }}
       />
-      <AskBar update={update} seasons={seasons} />
+      <AskBar
+        update={update}
+        seasons={seasons}
+        pending={pendingAsk}
+        onPendingTaken={() => setQuery(serializeCalc(latest.current))}
+      />
       <FilterBar
         state={state}
         update={update}

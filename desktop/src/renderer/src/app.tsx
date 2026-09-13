@@ -33,6 +33,7 @@ import { loadSearchData } from "~/data/search-model";
 import { useLoaded } from "~/data/use-corpus";
 import { CommandPalette, type PaletteGroup, type PaletteItem } from "~/palette/command-palette";
 import { objectItems } from "~/palette/object-items";
+import { coachItems, typedItems } from "~/palette/typed-items";
 import { AccountProvider, useAccount } from "~/shell/account";
 import { CompareDock, CompareProvider, compareQuery, useCompare } from "~/shell/compare";
 import { favoriteOf, isFavoriteList, samePlace, type Favorite } from "~/shell/favorites";
@@ -65,6 +66,7 @@ const PALETTE_GROUPS: PaletteGroup[] = [
   { id: "actions", heading: "Actions", limit: 8, showWhenEmpty: true },
   { id: "teams", heading: "Teams", limit: 5, showWhenEmpty: false },
   { id: "players", heading: "Players", limit: 6, showWhenEmpty: false },
+  { id: "coaches", heading: "Coaches", limit: 4, showWhenEmpty: false },
   { id: "seasons", heading: "Seasons", limit: 5, showWhenEmpty: false },
   { id: "settings", heading: "Settings", limit: 5, showWhenEmpty: false },
 ];
@@ -296,6 +298,8 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
   const [searchState] = useLoaded("search", loadSearchData);
   const search = searchState.status === "ready" ? searchState.value : null;
   const objects = useMemo(() => (search ? objectItems(search, openRecord) : []), [search, openRecord]);
+  // Every coach in the site's coach history, folded once like the objects above.
+  const coaches = useMemo(() => coachItems(openView), [openView]);
 
   const focusFilter = useCallback(() => {
     filterRef.current?.focus();
@@ -685,9 +689,12 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     return items;
   }, [view, current, ws.closed, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite, splitShown, toggleSplit, go, copyLink, compare.add]);
 
-  const allItems = useMemo(
-    () => (objects.length > 0 ? [...paletteItems, ...objects] : paletteItems),
-    [paletteItems, objects],
+  const allItems = useMemo(() => [...paletteItems, ...objects, ...coaches], [paletteItems, objects, coaches]);
+
+  // Rows from the words themselves: a question to ask, a night to see, two schools to predict.
+  const typed = useCallback(
+    (q: string) => typedItems(q, { openView, search, current: { viewId: current.viewId, query: current.query } }),
+    [openView, search, current.viewId, current.query],
   );
 
   // One stable setter per tab, so a view's title effect does not rerun on every render.
@@ -829,8 +836,9 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
           <CommandPalette
             groups={PALETTE_GROUPS}
             items={allItems}
-            placeholder={search ? "Search teams, players, views and seasons" : "Search views, seasons and settings"}
+            placeholder={search ? "Search teams, players, coaches and views, or ask a question" : "Search views, coaches and settings, or ask a question"}
             onClose={() => setPaletteOpen(false)}
+            extra={typed}
           />
         )}
         {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}

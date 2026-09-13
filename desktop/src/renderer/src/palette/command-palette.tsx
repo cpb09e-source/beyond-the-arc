@@ -51,16 +51,26 @@ export type PaletteGroup = {
   showWhenEmpty: boolean;
 };
 
+/** Rows made from the words themselves rather than found in a list. */
+const TYPED_GROUP: PaletteGroup = { id: "typed", heading: "Suggestions", limit: 5, showWhenEmpty: false };
+
 export function CommandPalette({
   groups,
   items,
   placeholder,
   onClose,
+  extra,
 }: {
   groups: PaletteGroup[];
   items: PaletteItem[];
   placeholder: string;
   onClose: () => void;
+  /**
+   * Rows built from what is typed: a question for the Win Calculator, a night
+   * on the Scoreboard, two schools to predict. Not scored against the query;
+   * each one only exists because the query asked for it.
+   */
+  extra?: (query: string) => PaletteItem[];
 }) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState("");
@@ -120,8 +130,16 @@ export function CommandPalette({
       out.push({ group, rows, best: scored[0]!.s, order });
     });
     if (words.length > 0) out.sort((a, b) => b.best - a.best || a.order - b.order);
+    const typed = extra ? extra(query) : [];
+    if (typed.length > 0) {
+      const entry = { group: TYPED_GROUP, rows: typed, best: Number.POSITIVE_INFINITY, order: -1 };
+      // Four words or more read as a sentence, and what the sentence asks for
+      // leads. Shorter, a name is likelier, and the names lead.
+      if (words.length >= 4) out.unshift(entry);
+      else out.push(entry);
+    }
     return out;
-  }, [byGroup, groups, query]);
+  }, [byGroup, groups, query, extra]);
 
   // The highlight stays on the row it was on while that row is still listed,
   // and falls to the first row otherwise.
