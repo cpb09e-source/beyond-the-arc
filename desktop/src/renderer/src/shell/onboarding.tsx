@@ -1,4 +1,4 @@
-import { Check, X } from "lucide-react";
+import { Check, Moon, Sun, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ThemeMode } from "../../../preload";
 import { Kbd } from "~/ui/kbd";
@@ -83,7 +83,7 @@ export function GetStarted({
   const all = n === STEPS.length;
 
   return (
-    <section aria-label="Get started" className="mx-2 mb-2 rounded-lg border border-hairline bg-paper px-3 pb-2 pt-2.5">
+    <section aria-label="Get started" className="mx-2 mb-2 min-w-0 overflow-hidden rounded-lg border border-hairline bg-paper px-3 pb-2 pt-2.5">
       <div className="flex items-center gap-2">
         <h2 className="text-[12.5px] font-medium text-ink">{all ? "You’re set" : "Get started"}</h2>
         <span className="text-[11.5px] text-ink-muted tabular">
@@ -108,7 +108,7 @@ export function GetStarted({
           That is the tour. Press <Kbd>?</Kbd> for every shortcut whenever you want them.
         </p>
       ) : (
-        <ul className="mt-1.5 grid">
+        <ul className="mt-1.5 grid grid-cols-[minmax(0,1fr)]">
           {STEPS.map((s) => {
             const done = state.done.includes(s.id);
             return (
@@ -142,15 +142,17 @@ export function GetStarted({
                       <button
                         key={m}
                         type="button"
+                        aria-label={m === "light" ? "Light" : "Dark"}
+                        title={m === "light" ? "Light" : "Dark"}
                         aria-pressed={theme === m}
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {
                           setTheme(m);
                           signalOnboarding("theme");
                         }}
-                        className="h-[18px] rounded-[4px] border border-hairline px-1.5 text-[10.5px] capitalize text-ink-soft transition-colors hover:border-ink-muted hover:text-ink"
+                        className="grid size-[20px] place-items-center rounded-[5px] border border-hairline text-ink-soft transition-colors hover:border-ink-muted hover:text-ink"
                       >
-                        {m}
+                        {m === "light" ? <Sun size={11} strokeWidth={2} /> : <Moon size={11} strokeWidth={2} />}
                       </button>
                     ))}
                   </span>
