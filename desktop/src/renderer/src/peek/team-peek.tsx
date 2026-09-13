@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
+import { PercentileChip } from "@/components/percentile-chip";
 import type { RankedStat } from "@/lib/static-data";
 import { ranksFor, type Season, type Team } from "~/data/team-model";
 import { fmtRanked, seasonLabel } from "~/ui/format";
@@ -67,8 +68,8 @@ export function TeamPeek({
 
       {ranks ? (
         <>
-          <RankList title="Best nationally" stats={ranks.top} tone="good" />
-          <RankList title="Weakest nationally" stats={ranks.bottom.slice(0, 3)} tone="weak" />
+          <RankList title="Best nationally" stats={ranks.top} />
+          <RankList title="Weakest nationally" stats={ranks.bottom.slice(0, 3)} />
         </>
       ) : (
         <p className="border-t border-hairline px-4 py-2.5 text-[12px] text-ink-muted">
@@ -98,34 +99,30 @@ export function TeamPeek({
   );
 }
 
-function RankList({ title, stats, tone }: { title: string; stats: RankedStat[]; tone: "good" | "weak" }) {
+/**
+ * A national rank, painted in the site's percentile ramp.
+ *
+ * The rank is the fact and stays the label; its position in the field picks
+ * the band, through the same chip the explorer uses. So #1 is the ramp's
+ * deepest green, #285 of 365 lands in its orange, and a middling #169 sits in
+ * the near-neutral middle band instead of being called weak just because it
+ * happens to be one of this team's lower ranks.
+ */
+function RankList({ title, stats }: { title: string; stats: RankedStat[] }) {
   return (
     <section className="border-t border-hairline px-4 py-2.5">
       <h3 className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-ink-muted">{title}</h3>
       <ul className="grid gap-[5px]">
         {stats.map((s) => {
-          // Where the rank sits in the field, 1.0 = first. The bar is the
-          // comparability cue; the number beside it is the fact.
-          const standing = s.total > 1 ? 1 - (s.rank - 1) / (s.total - 1) : 1;
+          const pct = s.total > 1 ? Math.round((100 * (s.total - s.rank)) / (s.total - 1)) : 100;
           return (
-            <li key={s.key} className="grid grid-cols-[minmax(0,1fr)_auto_64px] items-center gap-3 text-[12.5px]">
+            <li key={s.key} className="grid grid-cols-[minmax(0,1fr)_auto_46px] items-center gap-3 text-[12.5px]">
               <span className="truncate text-ink-soft">{s.label}</span>
               <span className="text-ink tabular">{fmtRanked(s)}</span>
-              <span className="flex items-center justify-end gap-2">
-                <span className="relative h-[3px] w-[22px] overflow-hidden rounded-full bg-hairline">
-                  <span
-                    className={`absolute inset-y-0 left-0 rounded-full ${tone === "good" ? "bg-good" : "bg-bad"}`}
-                    style={{ width: `${Math.max(8, standing * 100)}%` }}
-                  />
-                </span>
-                <span
-                  className={`w-[34px] text-right font-mono text-[11px] font-semibold tabular ${
-                    tone === "good" ? "text-good" : "text-ink-muted"
-                  }`}
-                  title={`${s.rank} of ${s.total}`}
-                >
+              <span className="flex justify-end">
+                <PercentileChip pct={pct} ariaLabel={`Ranked ${s.rank} of ${s.total}`} className="min-w-[40px] text-[11px]">
                   #{s.rank}
-                </span>
+                </PercentileChip>
               </span>
             </li>
           );

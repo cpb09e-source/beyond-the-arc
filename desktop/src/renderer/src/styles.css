@@ -4,6 +4,10 @@
 @import "@fontsource/ibm-plex-mono/500.css";
 @import "@fontsource/ibm-plex-mono/600.css";
 
+/* The site's percentile chip is imported, not copied, and Tailwind only
+   generates classes for files it scans, so scan that one file too. */
+@source "../../../../src/components/percentile-chip.tsx";
+
 /*
  * TOKENS, COPIED FROM src/app/globals.css, which stays the source of truth.
  * Same paper, ink and azure as the site, so the app reads as Beyond the Arc
@@ -35,6 +39,16 @@
   --row-hover: color-mix(in oklab, var(--ink) 4%, var(--chrome));
   --accent-wash: color-mix(in oklab, var(--accent) 12%, var(--card));
   --overlay-shadow: 0 24px 60px -24px rgb(26 34 56 / 0.34), 0 2px 8px rgb(26 34 56 / 0.08);
+  /* The percentile ramp: seven bands, worst to best, exactly as globals.css
+     defines them for src/components/percentile-chip.tsx. Band 4 is the
+     near-neutral middle, so average recedes instead of shouting. */
+  --pct-bg-1: #ff9c91; --pct-fg-1: #7d231f;
+  --pct-bg-2: #ffc1a2; --pct-fg-2: #8d3a0c;
+  --pct-bg-3: #fce1c3; --pct-fg-3: #814600;
+  --pct-bg-4: #f4f1e7; --pct-fg-4: #6d5400;
+  --pct-bg-5: #dfecc8; --pct-fg-5: #486100;
+  --pct-bg-6: #b4e3a9; --pct-fg-6: #2a661b;
+  --pct-bg-7: #7dd591; --pct-fg-7: #00591e;
   color-scheme: light;
 }
 
@@ -51,6 +65,15 @@
   --bad: #ff6b6b;
   --chrome: #171717;
   --overlay-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.75), 0 2px 8px rgb(0 0 0 / 0.45);
+  /* The dark ramp: deep fills and light type, re-baked rather than inverted,
+     because the light pastels read as headlights on a dark ground. */
+  --pct-bg-1: #772b26; --pct-fg-1: #ffc5ba;
+  --pct-bg-2: #6c351e; --pct-fg-2: #ffc9a9;
+  --pct-bg-3: #5a3f24; --pct-fg-3: #ffd098;
+  --pct-bg-4: #484439; --pct-fg-4: #e2ded3;
+  --pct-bg-5: #434723; --pct-fg-5: #dee698;
+  --pct-bg-6: #304c1b; --pct-fg-6: #c3eda9;
+  --pct-bg-7: #085023; --pct-fg-7: #aef1bb;
   color-scheme: dark;
 }
 

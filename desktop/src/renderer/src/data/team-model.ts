@@ -38,6 +38,13 @@ export type Team = {
   sos: number | null;
   /** null when the season cannot draw the zone at all (net rating withheld). */
   inZone: boolean | null;
+  /**
+   * Percentile within this season, per stat key, from the explorer's own
+   * computation: same keys, same direction handling, same midrank ties. A stat
+   * with no entry gets no chip, which is how the explorer says "this number is
+   * not a judgment".
+   */
+  pct: Record<string, number | null>;
   row: StaticTeamSeasonRow;
 };
 
@@ -56,7 +63,7 @@ export function shapeSeason(year: number, rows: StaticTeamSeasonRow[]): Season {
   const scatter = toScatterTeams(rows as unknown as ScatterSourceRow[], LOGOS);
   const zone = buildZone(scatter);
   const byName = new Map(scatter.map((t) => [t.name, t]));
-  const btaRank = liveBtaRanks(year, rows);
+  const live = liveScores(year, rows);
 
   const teams: Team[] = [];
   for (const row of rows) {
@@ -76,7 +83,8 @@ export function shapeSeason(year: number, rows: StaticTeamSeasonRow[]): Season {
       confLabel: confDisplay(conf),
       wins: num(tr.wins) ?? 0,
       losses: num(tr.losses) ?? 0,
-      btaRank: btaRank.get(Number(r.id)) ?? null,
+      btaRank: live.rank.get(Number(r.id)) ?? null,
+      pct: live.pct.get(Number(r.id)) ?? {},
       logoId: s?.id ?? null,
       adjO: num(ss.a_ortg),
       adjD: num(ss.a_drtg),
@@ -107,7 +115,10 @@ export function shapeSeason(year: number, rows: StaticTeamSeasonRow[]): Season {
  * and it is exactly what the explorer on the site shows, so the app agrees with
  * the explorer instead of a stale file. All 365 teams in about 10 ms.
  */
-function liveBtaRanks(year: number, rows: StaticTeamSeasonRow[]): Map<number, number> {
+function liveScores(
+  year: number,
+  rows: StaticTeamSeasonRow[],
+): { rank: Map<number, number>; pct: Map<number, Record<string, number | null>> } {
   const { rows: scored } = processTeams(rows as unknown as RawTeamSeason[], {
     ...DEFAULT_SPEC,
     years: [year],
@@ -116,7 +127,12 @@ function liveBtaRanks(year: number, rows: StaticTeamSeasonRow[]): Map<number, nu
   const ranked = scored
     .filter((r) => typeof r.bta_rtg === "number")
     .sort((a, b) => (b.bta_rtg as number) - (a.bta_rtg as number));
-  return new Map(ranked.map((r, i) => [Number(r.team_id), i + 1]));
+  return {
+    rank: new Map(ranked.map((r, i) => [Number(r.team_id), i + 1])),
+    // The same pass that ranks also carries the explorer's percentiles, so the
+    // colors in the table can never disagree with the colors on the site.
+    pct: new Map(scored.map((r) => [Number(r.team_id), r.pct as Record<string, number | null>])),
+  };
 }
 
 type Ranks = { top: RankedStat[]; bottom: RankedStat[] } | null;

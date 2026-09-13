@@ -8,6 +8,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { PercentileChip } from "@/components/percentile-chip";
 import type { Season, Team } from "~/data/team-model";
 import { TeamPeek } from "~/peek/team-peek";
 import { usePeek } from "~/peek/use-peek";
@@ -15,18 +16,24 @@ import { num1, pct1, signed1 } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 
 /**
- * The team table: every team in a season, sorted, filtered, keyboard-driven.
+ * The team table: every team in a season, sorted, filtered, keyboard-driven,
+ * and every stat carrying its percentile in the site's ramp.
  *
  * FIXED ROW HEIGHT, on purpose. Peek anchors to a row, the pointer maps to a row
  * by arithmetic, and the virtualizer never has to measure: all three depend on
  * a row being exactly ROW_H tall. A cell that wraps is a bug, not a variant.
+ *
+ * 42px, NOT 34, BECAUSE OF THE CHIPS. Each stat stacks its value over its
+ * percentile chip, the way the explorer does. Side by side would need about 94px
+ * a column and push a 1440 window into horizontal scroll; stacked, the columns
+ * keep their width and the table gives up three rows of height instead.
  *
  * THE HEADER SITS OUTSIDE THE SCROLL AREA and follows horizontal scroll by
  * transform. Keeping it out of the scroller means the virtualizer's offsets
  * start at the first row with no sticky-header correction to get wrong.
  */
 
-const ROW_H = 34;
+const ROW_H = 42;
 const HEAD_H = 32;
 
 type SortKey =
@@ -47,7 +54,32 @@ type Col = {
   cell: (t: Team) => ReactNode;
 };
 
-const quiet = (s: string) => <span className="text-ink-soft tabular">{s}</span>;
+/**
+ * A number over its percentile chip.
+ *
+ * The chip is the site's own component and the percentile is the explorer's own
+ * (direction handled there: a low Adj D is green). `pctKey` is the explorer's key
+ * for the stat. A missing entry draws no chip rather than a gray one, which is
+ * how the explorer says "this number is not a judgment".
+ */
+function Stat({
+  value,
+  pct,
+  strong = false,
+  neutral = false,
+}: {
+  value: string;
+  pct: number | null | undefined;
+  strong?: boolean;
+  neutral?: boolean;
+}) {
+  return (
+    <span className="inline-flex flex-col items-end gap-[3px] leading-none">
+      <span className={strong ? "font-semibold text-ink tabular" : "text-ink-soft tabular"}>{value}</span>
+      <PercentileChip pct={pct ?? null} neutral={neutral} className="min-w-[26px] px-1 py-[2px] text-[10.5px]" />
+    </span>
+  );
+}
 
 const COLS: Col[] = [
   {
@@ -60,7 +92,7 @@ const COLS: Col[] = [
     value: (t) => t.name,
     cell: (t) => (
       <span className="flex min-w-0 items-center gap-2">
-        <TeamLogo id={t.logoId} name={t.name} size={18} />
+        <TeamLogo id={t.logoId} name={t.name} size={20} />
         <span className="truncate font-medium text-ink">{t.name}</span>
       </span>
     ),
@@ -73,48 +105,60 @@ const COLS: Col[] = [
   {
     key: "record", label: "W-L", width: 64, align: "right", first: -1,
     value: (t) => t.wins - t.losses,
-    cell: (t) => quiet(`${t.wins}-${t.losses}`),
+    cell: (t) => <Stat value={`${t.wins}-${t.losses}`} pct={t.pct.win_pct} />,
   },
   {
     key: "adjO", label: "Adj O", title: "Adjusted offensive rating", width: 64, align: "right", first: -1,
-    value: (t) => t.adjO, cell: (t) => quiet(num1(t.adjO)),
+    value: (t) => t.adjO,
+    cell: (t) => <Stat value={num1(t.adjO)} pct={t.pct.a_ortg} />,
   },
   {
     key: "adjD", label: "Adj D", title: "Adjusted defensive rating (lower is better)", width: 64, align: "right", first: 1,
-    value: (t) => t.adjD, cell: (t) => quiet(num1(t.adjD)),
+    value: (t) => t.adjD,
+    cell: (t) => <Stat value={num1(t.adjD)} pct={t.pct.a_drtg} />,
   },
   {
     key: "adjNet", label: "Net", title: "Adjusted net rating", width: 64, align: "right", first: -1,
     value: (t) => t.adjNet,
-    cell: (t) => <span className="font-medium text-ink tabular">{signed1(t.adjNet)}</span>,
+    cell: (t) => <Stat value={signed1(t.adjNet)} pct={t.pct.a_net} strong />,
   },
   {
+    // NEUTRAL, deliberately. Pace has no good end, so the chip still says how
+    // unusual a team is but is painted in the ramp's middle band instead of
+    // calling a fast team green, as percentile-chip.tsx prescribes.
     key: "tempo", label: "Tempo", title: "Adjusted tempo", width: 64, align: "right", first: -1,
-    value: (t) => t.tempo, cell: (t) => quiet(num1(t.tempo)),
+    value: (t) => t.tempo,
+    cell: (t) => <Stat value={num1(t.tempo)} pct={t.pct.adjt} neutral />,
   },
   {
     key: "efg", label: "eFG%", title: "Effective field goal %", width: 62, align: "right", first: -1,
-    value: (t) => t.efg, cell: (t) => quiet(pct1(t.efg)),
+    value: (t) => t.efg,
+    cell: (t) => <Stat value={pct1(t.efg)} pct={t.pct.cbb_efg} />,
   },
   {
     key: "efgDef", label: "Opp eFG%", title: "Opponent effective field goal % (lower is better)", width: 80, align: "right", first: 1,
-    value: (t) => t.efgDef, cell: (t) => quiet(pct1(t.efgDef)),
+    value: (t) => t.efgDef,
+    cell: (t) => <Stat value={pct1(t.efgDef)} pct={t.pct.cbb_efg_def} />,
   },
   {
     key: "tov", label: "TOV%", title: "Turnover rate (lower is better)", width: 62, align: "right", first: 1,
-    value: (t) => t.tov, cell: (t) => quiet(pct1(t.tov)),
+    value: (t) => t.tov,
+    cell: (t) => <Stat value={pct1(t.tov)} pct={t.pct.cbb_tov} />,
   },
   {
     key: "orb", label: "OREB%", title: "Offensive rebound rate", width: 68, align: "right", first: -1,
-    value: (t) => t.orb, cell: (t) => quiet(pct1(t.orb)),
+    value: (t) => t.orb,
+    cell: (t) => <Stat value={pct1(t.orb)} pct={t.pct.cbb_orb} />,
   },
   {
     key: "fg3", label: "3P%", title: "Three-point %", width: 60, align: "right", first: -1,
-    value: (t) => t.fg3, cell: (t) => quiet(pct1(t.fg3)),
+    value: (t) => t.fg3,
+    cell: (t) => <Stat value={pct1(t.fg3)} pct={t.pct.cbb_fg3} />,
   },
   {
     key: "sos", label: "SOS", title: "Strength of schedule", width: 60, align: "right", first: -1,
-    value: (t) => t.sos, cell: (t) => quiet(num1(t.sos)),
+    value: (t) => t.sos,
+    cell: (t) => <Stat value={num1(t.sos)} pct={t.pct.adj_sos} />,
   },
   {
     key: "zone", label: "Zone", title: "Inside the contender trapezoid", width: 60, align: "center", first: -1,
@@ -181,7 +225,7 @@ export function TeamTable({
   const [sort, setSort] = useState<{ key: SortKey; dir: Dir }>({ key: "rank", dir: 1 });
 
   const rows = useMemo(() => {
-    const q = normalize(query.trim());
+    const q = normalize(query);
     const list = q
       ? season.teams.filter((t) => normalize(t.name).includes(q) || normalize(t.confLabel).includes(q))
       : season.teams;
@@ -206,7 +250,7 @@ export function TeamTable({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_H,
-    overscan: 16,
+    overscan: 14,
   });
 
   const [scrollTop, setScrollTop] = useState(0);
@@ -288,7 +332,7 @@ export function TeamTable({
   // never pushes the panel off screen.
   const rowTop = HEAD_H + index * ROW_H - scrollTop;
   const maxTop = Math.max(HEAD_H + 8, HEAD_H + viewH - peekH - 12);
-  const peekTop = Math.min(Math.max(rowTop - 10, HEAD_H + 8), maxTop);
+  const peekTop = Math.min(Math.max(rowTop - 6, HEAD_H + 8), maxTop);
 
   const sortBy = (col: Col) =>
     setSort((s) => (s.key === col.key ? { key: col.key, dir: (s.dir * -1) as Dir } : { key: col.key, dir: col.first }));

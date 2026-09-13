@@ -237,7 +237,7 @@ function TableSkeleton() {
     <div aria-busy="true" aria-label="Loading teams" className="absolute inset-0 overflow-hidden">
       <div className="h-8 border-b border-hairline" />
       {Array.from({ length: 20 }, (_, i) => (
-        <div key={i} className="flex h-[34px] items-center gap-4 border-b border-hairline/50 px-3">
+        <div key={i} className="flex h-[42px] items-center gap-4 border-b border-hairline/50 px-3">
           <span className="skeleton h-[8px] w-[22px] rounded" />
           <span className="skeleton h-[18px] w-[18px] rounded" />
           <span className="skeleton h-[8px] rounded" style={{ width: 90 + ((i * 37) % 70) }} />
