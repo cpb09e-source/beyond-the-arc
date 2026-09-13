@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { OPS, type Filter, type Op, type StatOption } from "@/lib/game-filters";
+import { FLAG_KEYS, cleanLabel, conditionGroups, isPctKey } from "@/lib/condition-stats";
 
 /**
  * The condition sheet — every stat laid out as a compact tile row, grouped and
@@ -18,13 +19,10 @@ import { OPS, type Filter, type Op, type StatOption } from "@/lib/game-filters";
  * The caller owns the filter array. This only reports intent.
  */
 
-/** 0/1 flags — rendered as a Yes/No toggle, not a slider + comparator. */
-export const FLAG_KEYS = new Set(["conf_game", "tourney", "postseason"]);
-
-/** Rate-shaped keys (0–1 decimals shown as %). `_pct` also catches efg_pct_def. */
-export function isPctKey(key: string): boolean {
-  return key.includes("_pct") || key.startsWith("ff_");
-}
+// Which stats are flags or rates, their labels and their sections live in
+// src/lib/condition-stats.ts, shared with the desktop app; re-exported here for
+// the calculator and the "Find a game" modal.
+export { FLAG_KEYS, cleanLabel, conditionGroups, isPctKey };
 
 /**
  * ONE ACCENT FOR EVERY GROUP — the site's own azure.
@@ -53,47 +51,6 @@ const GROUP_HUES: Record<string, string> = {
   "Pace":          GROUP_ACCENT,
   "Opponent":      GROUP_ACCENT,
 };
-
-/**
- * The sheet's own grouping — a display concern, deliberately NOT the shared
- * `group` strings in game-filters/game-box (those still feed the team/coach
- * "Find a game" modal). The rate-stat groups are dissolved into the
- * sections each stat actually belongs to, and offensive shooting lives under
- * Scoring; the defensive rates get a section of their own.
- */
-const GROUP_ORDER = [
-  "Context", "Scoring", "Differentials", "Defense",
-  "Efficiency", "Box", "Game Shape", "Pace", "Opponent",
-] as const;
-
-function displayGroup(o: StatOption): string {
-  const byKey: Record<string, string> = {
-    ff_efg: "Scoring", ff_ftr: "Scoring",
-    ff_tov: "Efficiency", ff_orb: "Efficiency",
-    ff_efg_def: "Defense", ff_ftr_def: "Defense", ff_tov_def: "Defense", ff_orb_def: "Defense",
-  };
-  const key = o.key as string;
-  if (byKey[key]) return byKey[key];
-  if (o.group === "Shooting (off)") return "Scoring";
-  if (o.group === "Shooting (def)") return "Defense";
-  return o.group;
-}
-
-/**
- * Group a caller's stat list for display. Derived from the options passed in
- * rather than a module constant, because /calc runs on CALC_STAT_OPTIONS while
- * the team / coach "Find a game" modal runs on the smaller STAT_OPTIONS.
- */
-export function conditionGroups(options: StatOption[]): Array<[string, StatOption[]]> {
-  const seen = new Map<string, StatOption[]>();
-  for (const o of options) {
-    const g = displayGroup(o);
-    const arr = seen.get(g);
-    if (arr) arr.push(o);
-    else seen.set(g, [o]);
-  }
-  return GROUP_ORDER.filter((g) => seen.has(g)).map((g) => [g, seen.get(g)!] as [string, StatOption[]]);
-}
 
 /**
  * Slider bounds per stat. These are DISPLAY ranges tuned to where real games
@@ -141,10 +98,6 @@ export function defaultValueFor(key: string): number {
   return PICK_DEFAULTS[key] ?? 0;
 }
 
-/** Strip the "(1=yes)" hack from flag labels — the toggle says it better. */
-export function cleanLabel(label: string): string {
-  return label.replace(/\s*\(1=yes\)/, "");
-}
 
 
 function StatTile({

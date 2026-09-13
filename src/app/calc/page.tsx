@@ -3,43 +3,13 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { CalcClient } from "@/components/calc/calc-client";
 import { PageHeading } from "@/components/page-heading";
+import { buildCoachLookup, type CoachHistoryRaw } from "@/lib/win-calc";
 
-// Mirror src/lib/coaches.ts TEAM_NAME_OVERRIDES so the (team, year) coach
-// lookup keys match the team_name strings that appear in game logs.
-const TEAM_NAME_OVERRIDES: Record<string, string> = {
-  "Southern California": "USC",
-};
-function overrideTeam(n: string): string { return TEAM_NAME_OVERRIDES[n] ?? n; }
-
-type CoachHistoryRaw = Record<string, Record<string, { name: string }>>;
-
-async function loadCoachLookup(): Promise<{
-  coachByTeamYear: Record<string, Record<number, string>>;
-  allCoaches: string[];
-}> {
+/** The (team, year) → coach lookup and the coach list, from src/data/coach-history.json. */
+async function loadCoachLookup(): Promise<ReturnType<typeof buildCoachLookup>> {
   const file = path.resolve("src/data/coach-history.json");
   if (!existsSync(file)) return { coachByTeamYear: {}, allCoaches: [] };
-  const raw = JSON.parse(await fs.readFile(file, "utf8")) as CoachHistoryRaw;
-  const coachByTeamYear: Record<string, Record<number, string>> = {};
-  const coachSet = new Set<string>();
-  for (const [bartName, byYear] of Object.entries(raw)) {
-    const team = overrideTeam(bartName);
-    coachByTeamYear[team] = coachByTeamYear[team] ?? {};
-    for (const [yearStr, s] of Object.entries(byYear)) {
-      const y = Number(yearStr);
-      if (!Number.isFinite(y)) continue;
-      coachByTeamYear[team]![y] = s.name;
-      coachSet.add(s.name);
-    }
-  }
-  const allCoaches = [...coachSet].sort((a, b) => {
-    // Sort by last name then first — matches how /coaches index sorts on ties.
-    const la = (a.split(" ").pop() ?? a).toLowerCase();
-    const lb = (b.split(" ").pop() ?? b).toLowerCase();
-    if (la !== lb) return la.localeCompare(lb);
-    return a.localeCompare(b);
-  });
-  return { coachByTeamYear, allCoaches };
+  return buildCoachLookup(JSON.parse(await fs.readFile(file, "utf8")) as CoachHistoryRaw);
 }
 
 export default async function CalcPage() {

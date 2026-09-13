@@ -20,53 +20,43 @@ import { SearchableMultiSelect } from "@/components/explorer/searchable-multi-se
 import { DownloadMenu } from "@/components/explorer/download-menu";
 import { EXPORT_ORIGIN, type ExportCol, type ExportEntity, type ExportInput } from "@/lib/table-export";
 import { teamSlug } from "@/lib/team-slug";
-import { POWER_CONFS } from "@/lib/conf-tiers";
 import { Select } from "@/components/select";
-import {
-  FLAG_KEYS,
-  isPctKey,
-  cleanLabel,
-  conditionGroups,
-} from "@/components/filters/condition-sheet";
+import { FLAG_KEYS, isPctKey, cleanLabel, conditionGroups } from "@/lib/condition-stats";
 import { StatPicker, type PickOption } from "@/components/filters/stat-picker";
 import { CalcConditionRow, type ConditionRow } from "@/components/calc/condition-row";
-import { confDisplay, CONF_DISPLAY } from "@/lib/conf-display";
+import { confDisplay } from "@/lib/conf-display";
 // Single source of truth for the game-log shape + filter catalog. This file
 // used to carry its own copy, which had already drifted from the shared one
 // (it listed ft_att_diff, the shared list didn't). Both /calc and the team /
 // coach "Find a game" modal now read the same STAT_OPTIONS.
+import { CALC_STAT_OPTIONS, type GameLog, type Filter } from "@/lib/game-filters";
+import { ALL_SEASONS, SEASON_CEIL } from "@/lib/seasons";
+import { searchKeysFor, normName, type ParsedQuery, type ResolvedQuery } from "@/lib/query-parse";
+import type { GameBoxFile } from "@/lib/game-box";
+import type { TeamRatingsFile } from "@/lib/quad";
+// The calculator's rules — which games a season holds, how a row becomes a
+// filter, how a parsed question lands in the form, and the record — shared
+// with the desktop app's Win Calculator.
 import {
-  CALC_STAT_OPTIONS,
-  OPS,
-  matches,
-  type GameLog,
-  type Filter,
-} from "@/lib/game-filters";
-import { isExhibitionGame, ALL_SEASONS, SEASON_CEIL } from "@/lib/seasons";
-import { resolveQuery, searchKeysFor, normName, type ParsedQuery, type ResolvedQuery } from "@/lib/query-parse";
-import { attachGameBox, type GameBoxFile } from "@/lib/game-box";
-import {
-  quadFor,
-  ratingKey,
-  normTeamKey,
-  gameKey,
-  type TeamRatingsFile,
-} from "@/lib/quad";
-
-// Venue buckets. A neutral-site game appears twice in the logs (once per
-// team) with is_neutral true on both rows, so neutral must be tested BEFORE
-// is_home — otherwise half of every neutral game counts as "home".
-type Venue = "all" | "home" | "away" | "neutral";
-function venueOf(g: GameLog): Exclude<Venue, "all"> {
-  if (g.is_neutral) return "neutral";
-  return g.is_home ? "home" : "away";
-}
-const VENUE_OPTIONS: Array<{ value: Venue; label: string }> = [
-  { value: "all",     label: "All venues" },
-  { value: "home",    label: "Home" },
-  { value: "away",    label: "Away" },
-  { value: "neutral", label: "Neutral" },
-];
+  CALC_CONFERENCES,
+  CONF_GROUP_LABELS,
+  MAX_CONDITIONS,
+  VENUE_OPTIONS,
+  colsOf,
+  conditionBounds,
+  formatStat,
+  labelFor,
+  mergeParsedQuery,
+  newRow as newCalcRow,
+  opponentNamesIn,
+  prepareSeason,
+  resolveCalcQuery,
+  rowsToFilters,
+  runWinCalc,
+  statLabel,
+  teamNamesIn,
+  type Venue,
+} from "@/lib/win-calc";
 
 const QUAD_OPTIONS: SearchableOption[] = [
   { value: "1", label: "Quad 1" },
@@ -75,20 +65,8 @@ const QUAD_OPTIONS: SearchableOption[] = [
   { value: "4", label: "Quad 4" },
 ];
 
-/**
- * Static conference list, grouped and ordered exactly as the front page's
- * picker has it — power conferences first, alphabetical within each group.
- *
- * Static rather than derived from loaded games, which made the list change
- * as season files streamed in. CONF_DISPLAY is the app's master code list;
- * GWC is dropped because it folded before our 2014 data floor, so it could
- * only ever be a dead option.
- */
-const CONF_GROUP_LABELS = { power: "Power Conferences", midmajor: "Mid-Majors" } as const;
-const CONFERENCE_OPTIONS: SearchableOption[] = Object.keys(CONF_DISPLAY)
-  .filter((c) => c !== "GWC")
-  .map((c) => ({ value: c, label: confDisplay(c), group: POWER_CONFS.has(c) ? "power" : "midmajor" }))
-  .sort((a, b) => (a.group !== b.group ? (a.group === "power" ? -1 : 1) : a.label.localeCompare(b.label)));
+/** The front page's conference picker: power conferences first, then alphabetical. */
+const CONFERENCE_OPTIONS: SearchableOption[] = CALC_CONFERENCES;
 
 /* ------------------------------------------------------------------
  * Conditions — the front page's "Add a Filter" / "Add Columns" pair, over
@@ -111,8 +89,6 @@ const GROUP_LABEL: Record<string, string> = Object.fromEntries(
 const PICKER_LIST_ID = "calc-conditions-picker";
 /** Layout effects are a no-op during the export's server pass. */
 const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
-/** Ceiling on rows. Each one is a column in the results table. */
-const MAX_CONDITIONS = 12;
 /**
  * Seeded from the clock, not from 1. Fast Refresh re-runs this module and
  * resets a module-level counter while the rows already in state keep their
@@ -122,78 +98,8 @@ const MAX_CONDITIONS = 12;
  */
 let nextRowId = Date.now();
 
-const statLabel = (key: string): string =>
-  cleanLabel(CALC_STAT_OPTIONS.find((s) => s.key === key)?.label ?? key);
-
-/** Rows → the filters the calculator runs. A blank numeric row filters nothing. */
-function rowsToFilters(rows: ConditionRow[]): Filter[] {
-  const out: Filter[] = [];
-  for (const r of rows) {
-    if (FLAG_KEYS.has(r.stat)) {
-      out.push({ id: String(r.id), stat: r.stat, op: "eq", value: r.value === "0" ? 0 : 1 });
-      continue;
-    }
-    const raw = r.value.trim();
-    const n = Number(raw);
-    if (raw === "" || !Number.isFinite(n)) continue;
-    out.push({ id: String(r.id), stat: r.stat, op: r.op, value: isPctKey(r.stat) ? n / 100 : n });
-  }
-  return out;
-}
-/** Every stat with a row, once, in row order — the results table's columns. */
-const colsOf = (rows: ConditionRow[]): string[] => [...new Set(rows.map((r) => r.stat))];
-/** A parsed condition's value the way a reader would have typed it. */
-function rowValue(stat: string, v: number): string {
-  if (FLAG_KEYS.has(stat)) return v === 0 ? "0" : "1";
-  return String(isPctKey(stat) ? Math.round(v * 1000) / 10 : v);
-}
 /** A fresh row for a stat: flags start at Yes, everything else blank. */
-function newRow(stat: string): ConditionRow {
-  const def = CALC_STAT_OPTIONS.find((s) => s.key === stat);
-  return {
-    id: nextRowId++,
-    stat,
-    op: FLAG_KEYS.has(stat) ? "eq" : def?.defaultDir === "lt" ? "lte" : "gte",
-    value: FLAG_KEYS.has(stat) ? "1" : "",
-  };
-}
-
-/** Format a value the way the stat reads: 40% / +5 / 72.5. */
-function fmtCondValue(key: string, v: number): string {
-  if (isPctKey(key)) return `${Math.round(v * 1000) / 10}%`;
-  if (key.endsWith("_diff") || key.endsWith("_margin")) return v > 0 ? `+${v}` : String(v);
-  return String(Math.round(v * 10) / 10);
-}
-
-/**
- * Attach opponent rank + quadrant to one season's rows.
- *
- * The opponent is found by pairing rows on the shared numeric prefix of
- * game_id rather than by matching opp_team_market, which is a third name
- * space. A game with no paired row is a non-D1 opponent (~5% of rows) and gets
- * a null rank, which quadFor() maps to Q4 — matching how the committee treats
- * non-D1 games.
- */
-function enrichWithQuad(rows: GameLog[], ratings: TeamRatingsFile | null): GameLog[] {
-  const rankByTeam = new Map<string, number>();
-  if (ratings) for (const t of ratings.teams) rankByTeam.set(normTeamKey(t.team), t.rank_net);
-
-  const byGame = new Map<string, GameLog[]>();
-  for (const r of rows) {
-    const k = gameKey(r.game_id);
-    const arr = byGame.get(k);
-    if (arr) arr.push(r);
-    else byGame.set(k, [r]);
-  }
-
-  return rows.map((r) => {
-    const pair = byGame.get(gameKey(r.game_id));
-    const opp = pair && pair.length > 1 ? pair.find((x) => x !== r) : undefined;
-    const oppRank = opp ? rankByTeam.get(ratingKey(opp.team_name)) ?? null : null;
-    // No paired row means the opponent isn't a D1 team in our data.
-    return { ...r, opp_rank: oppRank, quad: quadFor(oppRank, venueOf(r)), non_d1: !opp };
-  });
-}
+const newRow = (stat: string): ConditionRow => newCalcRow(stat, nextRowId++);
 
 export function CalcClient({
   coachByTeamYear,
@@ -351,12 +257,8 @@ export function CalcClient({
             .catch(() => null),
         ]).then(([arr, ratings, box]) => ({
           y,
-          // Preseason exhibitions are not real results — drop before enrichment so
-          // they can't reach the record, win%, or quadrant math.
-          arr: attachGameBox(
-            enrichWithQuad(arr.filter((g) => !isExhibitionGame(g.game_date, y)), ratings),
-            box,
-          ),
+          // Exhibitions dropped, opponents ranked into quadrants, the box merged.
+          arr: prepareSeason(y, arr, ratings, box),
         }))
       )
     )
@@ -394,15 +296,7 @@ export function CalcClient({
   // Team list derived from loaded games — same shape as conferences.
   // Filtered by the conference picker so the team list narrows as the user
   // commits to a conference (typical "Big 12 teams only" flow).
-  const allTeams = useMemo(() => {
-    const confSet = conferences.length === 0 ? null : new Set(conferences);
-    const s = new Set<string>();
-    for (const g of games) {
-      if (confSet && (!g.team_conference || !confSet.has(g.team_conference))) continue;
-      s.add(g.team_name);
-    }
-    return [...s].sort();
-  }, [games, conferences]);
+  const allTeams = useMemo(() => teamNamesIn(games, conferences), [games, conferences]);
   const teamOptions = useMemo<SearchableOption[]>(
     () => allTeams.map((t) => ({ value: t, label: t })),
     [allTeams],
@@ -412,11 +306,10 @@ export function CalcClient({
   // Non-D1 opponents are excluded from the PICKER (rows where the game has no
   // paired D1 row, ~400 names of noise); the games themselves stay in results
   // whenever the D-I only toggle is off.
-  const opponentOptions = useMemo<SearchableOption[]>(() => {
-    const s = new Set<string>();
-    for (const g of games) if (g.opp_team_market && !g.non_d1) s.add(g.opp_team_market);
-    return [...s].sort().map((t) => ({ value: t, label: t }));
-  }, [games]);
+  const opponentOptions = useMemo<SearchableOption[]>(
+    () => opponentNamesIn(games).map((t) => ({ value: t, label: t })),
+    [games],
+  );
 
   // Coach options — list every coach (alphabetical last name) regardless of
   // current filter selection. Narrowing this by year would hide active
@@ -460,80 +353,30 @@ export function CalcClient({
       }
       if (!res.ok) throw new Error(body?.error || `Parser error (${res.status})`);
 
-      const resolved = resolveQuery(body as ParsedQuery, {
+      const resolved = resolveCalcQuery(body as ParsedQuery, {
         coaches: allCoaches,
         teams: allTeams,
         opponents: opponentOptions.map((o) => o.value),
-        conferences: conferenceOptions.map((o) => ({ value: o.value, label: o.label })),
-        validStats: new Set(CALC_STAT_OPTIONS.map((o) => o.key as string)),
-        validSeasons: [...ALL_SEASONS],
       });
 
-      // Seasons are the one dimension we must NOT leave alone when the question
-      // didn't name one. The parser documents an empty list as "all seasons",
-      // but the form defaults to the current season, so "what's Roy Williams'
-      // record on the road" silently answered "...in 2025-26" — and he retired
-      // in 2021. That renders as a confident 0-0, which reads as "never
-      // happened" rather than "wrong years selected".
-      //
-      // So an unspecified season means every season, matching what the parser
-      // already promises. This is deliberately universal rather than a
-      // coach-shaped special case: a coach, a team, a conference or no subject
-      // at all each get the full history unless the question names a year, and
-      // a named year always wins.
-      // Every dimension is resolved to its NEXT value first, then used for both
-      // the form state and the auto-submit below. Reading the state variables
-      // back after setX() would submit the PREVIOUS question's values — React
-      // hasn't applied them yet at this point in the handler.
-      const nextYears = resolved.seasons.length
-        ? [...resolved.seasons].sort((a, b) => b - a)
-        : [...ALL_SEASONS].sort((a, b) => b - a);
-      // A QUESTION THAT NAMES A SUBJECT STARTS OVER. Anything it doesn't
-      // mention is cleared rather than inherited.
-      //
-      // Dimensions the question didn't speak to used to keep their current
-      // value unconditionally, so a follow-up ("...and only at home") could
-      // refine instead of resetting. That is right for a follow-up and wrong
-      // for a new question, and nothing told the two apart: asking about Bill
-      // Self and then asking about Purdue kept Bill Self, so the second answer
-      // was Purdue games coached by Bill Self — a coach who has never coached
-      // there. Nought games, 0.0%, no error. The venue rode along the same way.
-      //
-      // Naming a team, coach, conference or opponent is the signal that the
-      // subject has changed and the previous question is over. Ask something
-      // with no subject at all ("...and only in Quad 1") and every carry-over
-      // still applies, so refining a question keeps working.
-      //
-      // Same disease the seasons rule above already treats, and the same cure:
-      // trust what the parser resolved rather than quietly widening it. The
-      // cost is that "what about Purdue" drops the conditions from the previous
-      // question — visible in the chips, and recoverable, where inheriting a
-      // stale coach was neither.
-      const namesSubject =
-        resolved.resolved.teams.length > 0 ||
-        resolved.resolved.coaches.length > 0 ||
-        resolved.resolved.conferences.length > 0 ||
-        resolved.resolved.opponents.length > 0;
-      /** The parser's value, else the current one — unless the subject changed. */
-      const keep = <T,>(next: T[], current: T[]): T[] =>
-        next.length ? next : namesSubject ? [] : current;
-
-      const nextConferences = keep(resolved.resolved.conferences, conferences);
-      const nextTeams = keep(resolved.resolved.teams, teams);
-      const nextCoaches = keep(resolved.resolved.coaches, coaches);
-      const nextOpponents = keep(resolved.resolved.opponents, opponents);
-      const nextQuads = keep(resolved.quads.map(String), quads);
-      const nextVenue = resolved.venue !== "all" ? resolved.venue : namesSubject ? "all" : venue;
-      const nextRows: ConditionRow[] = resolved.conditions.length
-        ? resolved.conditions.slice(0, MAX_CONDITIONS).map((c) => ({
-            id: nextRowId++,
-            stat: String(c.stat),
-            op: c.op,
-            value: rowValue(String(c.stat), c.value),
-          }))
-        : namesSubject
-        ? []
-        : rows;
+      // Where the answer lands: every season unless the question names one, and a
+      // question that names a subject starts over (mergeParsedQuery says why).
+      // Resolved to NEXT values first and used for both the form and the
+      // auto-submit below; reading state back after setX() would submit the
+      // previous question's values.
+      const next = mergeParsedQuery(
+        resolved,
+        { years, conferences, teams, coaches, opponents, quads, venue, rows },
+        () => nextRowId++,
+      );
+      const nextYears = next.years;
+      const nextConferences = next.conferences;
+      const nextTeams = next.teams;
+      const nextCoaches = next.coaches;
+      const nextOpponents = next.opponents;
+      const nextQuads = next.quads;
+      const nextVenue = next.venue;
+      const nextRows: ConditionRow[] = next.rows;
       const nextFilters = rowsToFilters(nextRows);
 
       setYears(nextYears);
@@ -599,46 +442,7 @@ export function CalcClient({
 
   const results = useMemo(() => {
     if (!submitted || !allLoaded || games.length === 0) return null;
-    const confSet = submitted.conferences.length === 0 ? null : new Set(submitted.conferences);
-    const teamSet = submitted.teams.length === 0 ? null : new Set(submitted.teams);
-    const coachSet = submitted.coaches.length === 0 ? null : new Set(submitted.coaches);
-    const oppSet = submitted.opponents.length === 0 ? null : new Set(submitted.opponents);
-    const quadSet = submitted.quads.length === 0 ? null : new Set(submitted.quads);
-    const matching = games.filter((g) => {
-      if (confSet && (g.team_conference == null || !confSet.has(g.team_conference))) return false;
-      if (teamSet && !teamSet.has(g.team_name)) return false;
-      if (oppSet && (g.opp_team_market == null || !oppSet.has(g.opp_team_market))) return false;
-      if (submitted.venue !== "all" && venueOf(g) !== submitted.venue) return false;
-      if (quadSet && !quadSet.has(String(g.quad ?? 4))) return false;
-      if (submitted.d1Only && g.non_d1) return false;
-      if (coachSet) {
-        const coach = coachByTeamYear[g.team_name]?.[g.year];
-        if (!coach || !coachSet.has(coach)) return false;
-      }
-      return submitted.filters.every((f) => matches(g, f));
-    });
-    const wins = matching.filter((g) => g.won).length;
-    const losses = matching.length - wins;
-    // Average margin (signed). Positive => team typically won by X; negative
-    // => team typically lost by X. Skips rows with null pts_diff so missing
-    // data doesn't drag the mean toward zero.
-    let marginSum = 0;
-    let marginCount = 0;
-    for (const g of matching) {
-      if (typeof g.pts_diff === "number") {
-        marginSum += g.pts_diff;
-        marginCount++;
-      }
-    }
-    const avgMargin = marginCount > 0 ? marginSum / marginCount : null;
-    return {
-      total: matching.length,
-      wins,
-      losses,
-      winPct: matching.length === 0 ? 0 : wins / matching.length,
-      avgMargin,
-      matching,
-    };
+    return runWinCalc(games, submitted, coachByTeamYear);
   }, [submitted, allLoaded, games, coachByTeamYear]);
 
   // Year options derived from matching results — only show years that
@@ -928,29 +732,7 @@ export function CalcClient({
    * low and 22 is high before typing anything. One pass over the games for
    * every column at once, redone only when the columns or the data change.
    */
-  const bounds = useMemo(() => {
-    const out = new Map<string, [number, number]>();
-    if (cols.length === 0) return out;
-    const lists = new Map<string, number[]>(cols.map((k) => [k, []]));
-    for (const g of games) {
-      for (const [k, xs] of lists) {
-        const v = g[k];
-        if (typeof v === "number") xs.push(v);
-      }
-    }
-    for (const [k, xs] of lists) {
-      if (xs.length < 50) continue;
-      // A typed array sorts numerically without a comparator, and in a
-      // fraction of the time — this runs over up to 150,000 games.
-      const a = Float64Array.from(xs).sort();
-      const scale = isPctKey(k) ? 100 : 1;
-      out.set(k, [
-        Math.round(a[Math.floor(a.length * 0.05)]! * scale),
-        Math.round(a[Math.floor(a.length * 0.95)]! * scale),
-      ]);
-    }
-    return out;
-  }, [games, cols]);
+  const bounds = useMemo(() => conditionBounds(games, cols), [games, cols]);
 
   // ── Export ───────────────────────────────────────────────────────────────
   /**
@@ -1857,27 +1639,6 @@ export function CalcClient({
 
     </div>
   );
-}
-
-/** One player's line as shipped by scripts/export-game-players-json.mjs. */
-
-// Format a game-log stat value for display. Flags → Yes/No, percentages →
-// "55.5%", diff stats → signed integers ("+8" / "-5"), everything else → 1 dp.
-function formatStat(v: number | string | boolean | null, key: string): string {
-  if (typeof v !== "number") return "—";
-  if (FLAG_KEYS.has(key)) return v === 1 ? "Yes" : v === 0 ? "No" : "—";
-  if (isPctKey(key)) return (v * 100).toLocaleString("en-US", { maximumFractionDigits: 1 }) + "%";
-  if (key.endsWith("_diff")) return v > 0 ? `+${v}` : String(v);
-  if (key === "poss" || key === "pace") return v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  return v.toLocaleString("en-US", { maximumFractionDigits: 1 });
-}
-
-function labelFor(f: Filter): string {
-  const key = String(f.stat);
-  const stat = cleanLabel(CALC_STAT_OPTIONS.find((s) => s.key === f.stat)?.label ?? key);
-  if (FLAG_KEYS.has(key)) return `${stat}: ${f.value === 1 ? "Yes" : "No"}`;
-  const op = OPS.find((o) => o.value === f.op)?.label ?? f.op;
-  return `${stat} ${op} ${fmtCondValue(key, f.value)}`;
 }
 
 function ConditionChip({ children }: { children: React.ReactNode }) {
