@@ -1,8 +1,10 @@
+import { Info } from "lucide-react";
 import { useMemo } from "react";
 import type { GameLog } from "@/lib/game-filters";
-import type { CalcResult } from "@/lib/win-calc";
+import { ALL_SEASONS } from "@/lib/seasons";
+import { statLabel, type CalcResult } from "@/lib/win-calc";
 import { seasonLabel } from "~/ui/format";
-import type { CalcSeasons } from "./calc-model";
+import type { CalcSeasons, DataGap } from "./calc-model";
 import { withIds, type CalcState } from "./calc-state";
 
 /**
@@ -41,6 +43,7 @@ export function CalcSummary({
   picked,
   onPick,
   onStarter,
+  gaps,
 }: {
   state: CalcState;
   result: CalcResult | null;
@@ -49,12 +52,14 @@ export function CalcSummary({
   picked: number | null;
   onPick: (year: number | null) => void;
   onStarter: (apply: (s: CalcState) => CalcState) => void;
+  /** Conditions on a stat some of the chosen seasons never recorded. */
+  gaps: DataGap[];
 }) {
   if (seasons.error) return null;
   if (!seasons.complete) return <LoadingBand ready={seasons.ready} total={seasons.total} />;
   if (!result) return null;
   if (!asking) return <StartBand years={state.years} total={result.total} onStarter={onStarter} />;
-  return <AnswerBand result={result} years={state.years} picked={picked} onPick={onPick} />;
+  return <AnswerBand result={result} years={state.years} picked={picked} onPick={onPick} gaps={gaps} />;
 }
 
 function LoadingBand({ ready, total }: { ready: number; total: number }) {
@@ -105,11 +110,13 @@ function AnswerBand({
   years,
   picked,
   onPick,
+  gaps,
 }: {
   result: CalcResult<GameLog>;
   years: number[];
   picked: number | null;
   onPick: (year: number | null) => void;
+  gaps: DataGap[];
 }) {
   const bars = useMemo(() => {
     const m = new Map<number, { w: number; l: number }>();
@@ -161,8 +168,37 @@ function AnswerBand({
           </div>
         </div>
       )}
+      {gaps.length > 0 && (
+        <ul className="mt-2.5 grid gap-1">
+          {gaps.map((g) => (
+            <li key={g.key} className="flex items-start gap-1.5 text-[12px] leading-snug text-ink-muted">
+              <Info size={13} strokeWidth={2} className="mt-[2px] shrink-0" aria-hidden />
+              {gapText(g)}
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
+}
+
+/**
+ * "41 of the 104 games in scope have no FB Pts Diff, so they cannot match. Most
+ * are from 2013-14 through 2021-22."
+ */
+function gapText(g: DataGap): string {
+  const lead = `${g.missing.toLocaleString()} of the ${g.total.toLocaleString()} games in scope have no ${statLabel(g.key)}, so they cannot match.`;
+  const ys = g.years;
+  if (ys.length === 0) return lead;
+  const asc = [...ALL_SEASONS].sort((a, b) => a - b);
+  const contiguous = ys.every((y, i) => i === 0 || asc.indexOf(y) === asc.indexOf(ys[i - 1]!) + 1);
+  const span =
+    ys.length === 1
+      ? seasonLabel(ys[0]!)
+      : contiguous
+        ? `${seasonLabel(ys[0]!)} through ${seasonLabel(ys[ys.length - 1]!)}`
+        : `${ys.length} seasons`;
+  return `${lead} Most are from ${span}.`;
 }
 
 function Figure({ label, value, big = false }: { label: string; value: string; big?: boolean }) {

@@ -23,7 +23,7 @@ import type { ListItem } from "~/ui/search-list";
 import { normalizeText } from "~/ui/text";
 import { AskBar } from "./ask-bar";
 import { calcColumns, ROW_H } from "./calc-columns";
-import { coachLookup, crestOf, useCalcSeasons } from "./calc-model";
+import { coachLookup, crestOf, dataGaps, useCalcSeasons } from "./calc-model";
 import { CalcPeekBody } from "./calc-peek";
 import { columnsOf, isAsking, parseCalc, scopeOf, serializeCalc, type CalcState } from "./calc-state";
 import { CalcSummary } from "./calc-summary";
@@ -111,6 +111,14 @@ export function WinCalcView({ query, setQuery }: ViewProps) {
     [seasons.complete, seasons.games, asked, filters, coachByTeamYear],
   );
   const asking = isAsking(asked);
+  // Games with no value for a condition's stat can never match it. The answer
+  // says how many of the games in scope that is, so a count drawn from part of
+  // the history does not pass for all of it.
+  const gaps = useMemo(() => {
+    if (!seasons.complete || filters.length === 0) return [];
+    const scoped = runWinCalc(seasons.games, { ...scopeOf(asked), filters: [] }, coachByTeamYear).matching;
+    return dataGaps(scoped, filters.map((f) => String(f.stat)));
+  }, [seasons.complete, seasons.games, asked, filters, coachByTeamYear]);
   // Worked out once the seasons are all in, not again for each one that lands.
   const bounds = useMemo(
     () => (seasons.complete ? conditionBounds(seasons.games, ALL_KEYS) : NO_BOUNDS),
@@ -230,6 +238,7 @@ export function WinCalcView({ query, setQuery }: ViewProps) {
           picked={pickedYear}
           onPick={setPicked}
           onStarter={update}
+          gaps={gaps}
         />
         <div className="relative min-h-0 flex-1 border-t border-hairline">
           {seasons.error ? (

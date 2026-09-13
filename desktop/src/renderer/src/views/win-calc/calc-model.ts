@@ -41,9 +41,11 @@ async function loadSeason(year: number): Promise<GameLog[]> {
       JSON.parse(ratings.json) as TeamRatingsFile | null,
       JSON.parse(box.json) as GameBoxFile | null,
     );
-    value.forEach((g, i) => place.set(g, i));
     return { value, source: logs.source };
   });
+  // Recorded here rather than inside the load, so a season already in the shared
+  // cache (opened earlier by another tab) is placed too.
+  if (games.length && !place.has(games[0]!)) games.forEach((g, i) => place.set(g, i));
   loaded.set(year, games);
   return games;
 }
@@ -129,6 +131,46 @@ let coaches: ReturnType<typeof buildCoachLookup> | null = null;
 export function coachLookup(): ReturnType<typeof buildCoachLookup> {
   coaches ??= buildCoachLookup(coachHistory as CoachHistoryRaw);
   return coaches;
+}
+
+// ─── Missing values ─────────────────────────────────────────────────────────
+
+export type DataGap = { key: string; missing: number; total: number; years: number[] };
+
+/**
+ * Conditions on a stat that some games in scope have no value for.
+ *
+ * A game with no value fails every condition on that stat, whatever happened in
+ * it, so the answer is drawn only from the games that recorded it. Several
+ * stats are only partly recorded in older seasons (fast break points in about
+ * three games of five before 2022-23; second-chance points not at all in
+ * 2020-21), which a count on its own would never show. This says how many games
+ * the question could not see, and the seasons where most of them sit.
+ *
+ * `scoped` is every game the question reaches before its conditions.
+ */
+export function dataGaps(scoped: GameLog[], keys: string[]): DataGap[] {
+  const out: DataGap[] = [];
+  for (const key of new Set(keys)) {
+    let missing = 0;
+    const bySeason = new Map<number, { n: number; m: number }>();
+    for (const g of scoped) {
+      const has = typeof g[key] === "number";
+      if (!has) missing++;
+      const b = bySeason.get(g.year) ?? { n: 0, m: 0 };
+      b.n++;
+      if (!has) b.m++;
+      bySeason.set(g.year, b);
+    }
+    // A stray missing box score is not worth a sentence.
+    if (missing === 0 || missing / scoped.length < 0.02) continue;
+    const years = [...bySeason.entries()]
+      .filter(([, b]) => b.m / b.n > 0.5)
+      .map(([y]) => y)
+      .sort((a, b) => a - b);
+    out.push({ key, missing, total: scoped.length, years });
+  }
+  return out;
 }
 
 // ─── Percentiles ─────────────────────────────────────────────────────────────
