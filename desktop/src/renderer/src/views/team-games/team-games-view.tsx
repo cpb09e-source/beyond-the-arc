@@ -182,7 +182,7 @@ export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
             rowHeight={ROW_H}
             defaultSort={{ key: sortKey, dir: -1 }}
             tieBreak={latestFirst}
-            onOpen={(g, how) => openRecord({ kind: "team", name: g.team, logoId: g.teamLogoId }, { newTab: how.newTab, year })}
+            onOpen={(g, how) => openRecord({ kind: "team", name: g.team, logoId: g.teamLogoId }, { newTab: how.newTab, side: how.side, year })}
             ariaLabel="Team games"
             empty={
               query.trim() ? (

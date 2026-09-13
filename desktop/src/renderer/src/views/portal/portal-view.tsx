@@ -257,7 +257,7 @@ export function PortalView({ year, query, setQuery }: ViewProps) {
               peek={{ label: (e) => e.name, body: (e) => <PortalPeekBody entry={e} /> }}
               onOpen={(e, how) => {
                 const record = playerRecord(e);
-                if (record) openRecord(record, { newTab: how.newTab, year: e.last_year ?? SEASON_CEIL });
+                if (record) openRecord(record, { newTab: how.newTab, side: how.side, year: e.last_year ?? SEASON_CEIL });
               }}
             />
           )}

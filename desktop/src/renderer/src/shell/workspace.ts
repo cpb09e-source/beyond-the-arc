@@ -22,6 +22,11 @@ import { isRecordRef, sameRecord, viewById, VIEWS, type RecordRef } from "./view
  * for the latest season only, so a tab holding it keeps that season and the
  * season keys leave it alone.
  *
+ * SPLIT VIEW holds two tabs side by side. The pair is shown while either of
+ * them is in front; the one in front has the keyboard, and opening "to the
+ * side" from it (Shift+Enter) lands in the other pane, so a table on the left
+ * can drive a page on the right without losing its place.
+ *
  * The tabs persist, so the app reopens with what it closed with. The stack of
  * closed tabs behind Ctrl+Shift+T lasts for the session.
  */
@@ -40,7 +45,10 @@ export type Tab = {
   forward: Snapshot[];
 };
 
-export type Workspace = { tabs: Tab[]; active: string; closed: Tab[] };
+/** Two tabs side by side: `a` on the left, `b` on the right, `ratio` of the width to `a`. */
+export type Split = { a: string; b: string; ratio: number };
+
+export type Workspace = { tabs: Tab[]; active: string; closed: Tab[]; split: Split | null };
 
 export type WorkspaceAction =
   | { type: "navigate"; viewId: string; year?: number; record?: RecordRef; query?: string }
@@ -58,7 +66,12 @@ export type WorkspaceAction =
   | { type: "close-others"; id: string }
   | { type: "back" }
   | { type: "forward" }
-  | { type: "move"; id: string; to: number };
+  | { type: "move"; id: string; to: number }
+  | { type: "open-side"; viewId: string; year: number; record?: RecordRef; query?: string }
+  | { type: "split-with"; id: string }
+  | { type: "unsplit" }
+  | { type: "split-ratio"; ratio: number }
+  | { type: "focus-other-pane" };
 
 const KEY = "bta.workspace";
 const HISTORY_CAP = 50;
@@ -101,7 +114,7 @@ function init(): Workspace {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as { tabs?: unknown; active?: unknown };
+      const parsed = JSON.parse(raw) as { tabs?: unknown; active?: unknown; split?: unknown };
       const tabs = Array.isArray(parsed.tabs)
         ? parsed.tabs.flatMap((t): Tab[] => {
             const o = t as Partial<Tab>;
@@ -122,19 +135,33 @@ function init(): Workspace {
         : [];
       if (tabs.length > 0) {
         const at = typeof parsed.active === "number" ? Math.min(Math.max(0, parsed.active), tabs.length - 1) : 0;
-        return { tabs, active: tabs[at]!.id, closed: [] };
+        return { tabs, active: tabs[at]!.id, closed: [], split: restoreSplit(parsed.split, tabs) };
       }
     }
     // The one view and season the app remembered before it had tabs.
     const view: unknown = JSON.parse(localStorage.getItem("bta.view") ?? "null");
     const season: unknown = JSON.parse(localStorage.getItem("bta.season") ?? "null");
     const tab = makeTab(isPlace(view, undefined) && !viewById(view).profile ? view : VIEWS[0]!.id, isSeason(season) ? season : SEASON_CEIL);
-    return { tabs: [tab], active: tab.id, closed: [] };
+    return { tabs: [tab], active: tab.id, closed: [], split: null };
   } catch {
     const tab = makeTab(VIEWS[0]!.id, SEASON_CEIL);
-    return { tabs: [tab], active: tab.id, closed: [] };
+    return { tabs: [tab], active: tab.id, closed: [], split: null };
   }
 }
+
+/** A persisted split names its tabs by position, since tab ids are made fresh each launch. */
+function restoreSplit(v: unknown, tabs: Tab[]): Split | null {
+  if (typeof v !== "object" || v === null) return null;
+  const o = v as { a?: unknown; b?: unknown; ratio?: unknown };
+  if (typeof o.a !== "number" || typeof o.b !== "number" || o.a === o.b) return null;
+  const a = tabs[o.a];
+  const b = tabs[o.b];
+  if (!a || !b) return null;
+  const ratio = typeof o.ratio === "number" ? Math.min(0.75, Math.max(0.25, o.ratio)) : 0.5;
+  return { a: a.id, b: b.id, ratio };
+}
+
+const inSplit = (ws: Workspace, id: string): boolean => !!ws.split && (ws.split.a === id || ws.split.b === id);
 
 function updateTab(ws: Workspace, id: string, fn: (t: Tab) => Tab): Workspace {
   return { ...ws, tabs: ws.tabs.map((t) => (t.id === id ? fn(t) : t)) };
@@ -189,17 +216,19 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
       if (ws.tabs.length === 1) {
         // The last tab never closes into nothing; it starts over, in the same season.
         const fresh = makeTab(VIEWS[0]!.id, ws.tabs[0]!.year);
-        return { tabs: [fresh], active: fresh.id, closed };
+        return { tabs: [fresh], active: fresh.id, closed, split: null };
       }
       const tabs = ws.tabs.filter((t) => t.id !== a.id);
-      const active = ws.active === a.id ? tabs[Math.min(at, tabs.length - 1)]!.id : ws.active;
-      return { tabs, active, closed };
+      // Closing one pane of a split hands the front to the other pane, and ends the split.
+      const partner = ws.split && inSplit(ws, a.id) ? (ws.split.a === a.id ? ws.split.b : ws.split.a) : null;
+      const active = ws.active === a.id ? (partner ?? tabs[Math.min(at, tabs.length - 1)]!.id) : ws.active;
+      return { tabs, active, closed, split: partner ? null : ws.split };
     }
     case "reopen": {
       const last = ws.closed[ws.closed.length - 1];
       if (!last) return ws;
       const tab = { ...last, id: newId() };
-      return { tabs: [...ws.tabs, tab], active: tab.id, closed: ws.closed.slice(0, -1) };
+      return { tabs: [...ws.tabs, tab], active: tab.id, closed: ws.closed.slice(0, -1), split: ws.split };
     }
     case "activate":
       return ws.tabs.some((t) => t.id === a.id) ? { ...ws, active: a.id } : ws;
@@ -234,7 +263,7 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
     case "close-others": {
       const keep = ws.tabs.find((t) => t.id === a.id);
       if (!keep || ws.tabs.length === 1) return ws;
-      return { tabs: [keep], active: keep.id, closed: [...ws.closed, ...ws.tabs.filter((t) => t.id !== a.id)].slice(-CLOSED_CAP) };
+      return { tabs: [keep], active: keep.id, closed: [...ws.closed, ...ws.tabs.filter((t) => t.id !== a.id)].slice(-CLOSED_CAP), split: null };
     }
     case "back": {
       const prev = current.back[current.back.length - 1];
@@ -263,6 +292,38 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
       tabs.splice(to, 0, tab!);
       return { ...ws, tabs };
     }
+    case "open-side": {
+      const place: Snapshot = { viewId: a.viewId, year: seasonFor(a.viewId, a.year), record: a.record, query: a.query };
+      // Already split with this tab: the other pane goes there, and the keyboard stays here.
+      if (ws.split && inSplit(ws, current.id)) {
+        const otherId = ws.split.a === current.id ? ws.split.b : ws.split.a;
+        return updateTab(ws, otherId, (t) =>
+          t.viewId === place.viewId && t.year === place.year && sameRecord(t.record, place.record) && (place.query ?? t.query) === t.query
+            ? t
+            : { ...arrive(t, place), back: [...t.back, snapshotOf(t)].slice(-HISTORY_CAP), forward: [] },
+        );
+      }
+      const tab = makeTab(a.viewId, a.year, a.record, a.query);
+      const at = ws.tabs.findIndex((t) => t.id === current.id);
+      return {
+        ...ws,
+        tabs: [...ws.tabs.slice(0, at + 1), tab, ...ws.tabs.slice(at + 1)],
+        active: current.id,
+        split: { a: current.id, b: tab.id, ratio: ws.split?.ratio ?? 0.5 },
+      };
+    }
+    case "split-with": {
+      if (a.id === current.id || !ws.tabs.some((t) => t.id === a.id)) return ws;
+      return { ...ws, split: { a: current.id, b: a.id, ratio: ws.split?.ratio ?? 0.5 } };
+    }
+    case "unsplit":
+      return ws.split ? { ...ws, split: null } : ws;
+    case "split-ratio":
+      return ws.split ? { ...ws, split: { ...ws.split, ratio: Math.min(0.75, Math.max(0.25, a.ratio)) } } : ws;
+    case "focus-other-pane": {
+      if (!ws.split || !inSplit(ws, current.id)) return ws;
+      return { ...ws, active: ws.split.a === current.id ? ws.split.b : ws.split.a };
+    }
   }
 }
 
@@ -283,11 +344,18 @@ export function useWorkspace() {
             forward: t.forward.slice(0, 20),
           })),
           active: ws.tabs.findIndex((t) => t.id === ws.active),
+          split: ws.split
+            ? {
+                a: ws.tabs.findIndex((t) => t.id === ws.split!.a),
+                b: ws.tabs.findIndex((t) => t.id === ws.split!.b),
+                ratio: ws.split.ratio,
+              }
+            : null,
         }),
       );
     } catch {
       /* not persisted; the tabs still work for this session */
     }
-  }, [ws.tabs, ws.active]);
+  }, [ws.tabs, ws.active, ws.split]);
   return [ws, dispatch] as const;
 }

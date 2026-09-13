@@ -25,7 +25,7 @@ const seasonWords = (y: number): string[] => [String(y), `${String(y - 1).slice(
  */
 export function objectItems(
   data: SearchData,
-  open: (record: RecordRef, how: { newTab?: boolean; year?: number }) => void,
+  open: (record: RecordRef, how: { newTab?: boolean; side?: boolean; year?: number }) => void,
 ): PaletteItem[] {
   const items: PaletteItem[] = [];
 
@@ -39,7 +39,7 @@ export function objectItems(
       collapse: `team:${t.name}`,
       weight: 30 + t.year / 100 - t.name.length / 10,
       leading: <TeamLogo id={t.logoId} name={t.name} size={18} />,
-      run: (how) => open({ kind: "team", name: t.name, logoId: t.logoId }, { newTab: how.newTab, year: t.year }),
+      run: (how) => open({ kind: "team", name: t.name, logoId: t.logoId }, { newTab: how.newTab, side: how.side, year: t.year }),
     };
     item.prepared = prepare(item);
     items.push(item);
@@ -56,7 +56,7 @@ export function objectItems(
       // Season minutes, games times minutes a game: about 1,200 for a starter.
       weight: 20 + p.year / 100 + ((p.games ?? 0) * (p.minutes ?? 0)) / 1200,
       leading: <PlayerPhoto bartId={p.bartId} hasPhoto={p.hasPhoto} name={p.name} size={22} />,
-      run: (how) => open({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, year: p.year }),
+      run: (how) => open({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, side: how.side, year: p.year }),
     };
     item.prepared = prepare(item);
     items.push(item);

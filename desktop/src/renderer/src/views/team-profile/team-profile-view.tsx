@@ -248,7 +248,7 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
               peek={{ label: (p) => p.name, body: (p) => <PlayerPeekBody season={playerSeason} player={p} /> }}
               onOpen={(p, how) => {
                 if (p.bartId != null) {
-                  openRecord({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, year });
+                  openRecord({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, side: how.side, year });
                 }
               }}
             />

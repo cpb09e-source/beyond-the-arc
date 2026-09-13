@@ -1,6 +1,7 @@
 import {
   CalendarRange,
   Check,
+  Columns2,
   ChevronLeft,
   ChevronRight,
   GitCompareArrows,
@@ -11,6 +12,7 @@ import {
   Monitor,
   Moon,
   PanelLeft,
+  PanelRightClose,
   Plus,
   RotateCcw,
   Star,
@@ -34,6 +36,7 @@ import { ActiveContext } from "~/shell/active";
 import { ShellContext } from "~/shell/shell-context";
 import { ShortcutsOverlay } from "~/shell/shortcuts";
 import { SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN, Sidebar } from "~/shell/sidebar";
+import { SplitDivider } from "~/shell/split-divider";
 import { TabStrip } from "~/shell/tab-strip";
 import { TabTitleContext } from "~/shell/tab-title";
 import { NAV_VIEWS, profileViewFor, viewById, type FocusRequest, type FocusTarget, type RecordRef } from "~/shell/views";
@@ -169,25 +172,33 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
   );
   const landed = useCallback((n: number) => setFocus((f) => (f?.nonce === n ? null : f)), []);
 
-  /** Open a team or player profile, here (history remembers the way back) or in a new tab. */
+  /** Open a team or player profile: here (history remembers the way back), in a new tab, or to the side. */
   const openRecord = useCallback(
-    (record: RecordRef, how: { newTab?: boolean; year?: number } = {}) => {
+    (record: RecordRef, how: { newTab?: boolean; side?: boolean; year?: number } = {}) => {
       const tab = currentRef.current;
       const viewId = profileViewFor(record.kind);
       const year = how.year ?? tab.year;
-      dispatch(how.newTab ? { type: "open", viewId, year, record } : { type: "navigate", viewId, year, record });
+      dispatch(
+        how.side
+          ? { type: "open-side", viewId, year, record }
+          : how.newTab
+            ? { type: "open", viewId, year, record }
+            : { type: "navigate", viewId, year, record },
+      );
     },
     [dispatch],
   );
 
   /** Open a view with a starting query: the predictor on the team a page is about, say. */
   const openView = useCallback(
-    (viewId: string, how: { newTab?: boolean; query?: string; year?: number } = {}) => {
+    (viewId: string, how: { newTab?: boolean; side?: boolean; query?: string; year?: number } = {}) => {
       const year = how.year ?? currentRef.current.year;
       dispatch(
-        how.newTab
-          ? { type: "open", viewId, year, query: how.query }
-          : { type: "navigate", viewId, year, query: how.query },
+        how.side
+          ? { type: "open-side", viewId, year, query: how.query }
+          : how.newTab
+            ? { type: "open", viewId, year, query: how.query }
+            : { type: "navigate", viewId, year, query: how.query },
       );
     },
     [dispatch],
@@ -237,6 +248,29 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     [dispatch],
   );
 
+  const split = ws.split;
+  const splitShown =
+    !!split &&
+    (ws.active === split.a || ws.active === split.b) &&
+    ws.tabs.some((t) => t.id === split.a) &&
+    ws.tabs.some((t) => t.id === split.b);
+
+  /**
+   * Split view on or off. On, the tab in front is paired with its neighbor to the
+   * right (or left), or with a copy of itself when it is the only tab.
+   */
+  const toggleSplit = useCallback(() => {
+    const tab = currentRef.current;
+    if (ws.split && (ws.split.a === tab.id || ws.split.b === tab.id)) {
+      dispatch({ type: "unsplit" });
+      return;
+    }
+    const at = ws.tabs.findIndex((t) => t.id === tab.id);
+    const partner = ws.tabs[at + 1] ?? ws.tabs[at - 1];
+    if (partner) dispatch({ type: "split-with", id: partner.id });
+    else dispatch({ type: "open-side", viewId: tab.viewId, year: tab.year, record: tab.record, query: tab.query });
+  }, [ws.split, ws.tabs, dispatch]);
+
   const shell = useMemo(() => ({ filterRef, openRecord, openView, showInExplorer: go }), [openRecord, openView, go]);
 
   // The site's search indexes, loaded in the background at launch so the first
@@ -276,7 +310,10 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       if (mod && /^Digit[1-9]$/.test(e.code)) {
         return take(() => dispatch({ type: "activate-index", index: Number(e.code.slice(5)) - 1 }));
       }
+      if (mod && e.shiftKey && e.code === "Backslash") return take(toggleSplit);
       if (mod && e.code === "Backslash") return take(() => setCollapsed((c) => !c));
+      // F6 moves between panes, as it does in most Windows apps with more than one.
+      if (e.key === "F6" && !mod && !e.altKey) return take(() => dispatch({ type: "focus-other-pane" }));
       if (e.altKey && !mod && (e.code === "ArrowLeft" || e.code === "ArrowRight")) {
         return take(() => dispatch({ type: e.code === "ArrowLeft" ? "back" : "forward" }));
       }
@@ -296,7 +333,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("mouseup", onMouse);
     };
-  }, [dispatch, focusFilter, newTab, setCollapsed, toggleFavorite]);
+  }, [dispatch, focusFilter, newTab, setCollapsed, toggleFavorite, toggleSplit]);
 
   // Say once when a sign-in finishes, and once when an update is ready.
   const lastAuth = useRef(auth.status);
@@ -387,7 +424,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
         subtitle: compare.items.map((it) => it.name).join(", "),
         keywords: ["compare", "side by side", "versus", "vs", "tray"],
         leading: <GitCompareArrows size={15} strokeWidth={2} />,
-        run: (how) => openView("compare", { query: compareQuery(compare.items), newTab: how.newTab }),
+        run: (how) => openView("compare", { query: compareQuery(compare.items), newTab: how.newTab, side: how.side }),
       });
     }
     const starred = favorites.find((f) => samePlace(f, current));
@@ -439,6 +476,34 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
         leading: <RotateCcw size={15} strokeWidth={2} />,
         trailing: <Kbd>Ctrl Shift T</Kbd>,
         run: () => dispatch({ type: "reopen" }),
+      });
+    }
+    if (splitShown) {
+      action({
+        id: "action:unsplit",
+        title: "Close split view",
+        keywords: ["split", "side by side", "pane", "unsplit"],
+        leading: <PanelRightClose size={15} strokeWidth={2} />,
+        trailing: <Kbd>Ctrl Shift \</Kbd>,
+        run: () => dispatch({ type: "unsplit" }),
+      });
+      action({
+        id: "action:other-pane",
+        title: "Move to the other pane",
+        keywords: ["split", "pane", "focus", "switch"],
+        leading: <Columns2 size={15} strokeWidth={2} />,
+        trailing: <Kbd>F6</Kbd>,
+        run: () => dispatch({ type: "focus-other-pane" }),
+      });
+    } else {
+      action({
+        id: "action:split",
+        title: "Split view",
+        subtitle: "Two tabs side by side",
+        keywords: ["split", "side by side", "pane", "two"],
+        leading: <Columns2 size={15} strokeWidth={2} />,
+        trailing: <Kbd>Ctrl Shift \</Kbd>,
+        run: () => toggleSplit(),
       });
     }
     action({
@@ -518,7 +583,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     );
 
     return items;
-  }, [view, current, ws.closed, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite]);
+  }, [view, current, ws.closed, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite, splitShown, toggleSplit]);
 
   const allItems = useMemo(
     () => (objects.length > 0 ? [...paletteItems, ...objects] : paletteItems),
@@ -578,6 +643,9 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
             onFavorite={(id) => toggleFavorite(id)}
             onDuplicate={(id) => dispatch({ type: "duplicate", id })}
             onCloseOthers={(id) => dispatch({ type: "close-others", id })}
+            split={splitShown ? split : null}
+            onSplitWith={(id) => (id === ws.active ? toggleSplit() : dispatch({ type: "split-with", id }))}
+            onUnsplit={() => dispatch({ type: "unsplit" })}
           />
         </header>
 
@@ -602,14 +670,31 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
             />
           )}
 
-          <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-paper">
+          <main className="relative flex min-h-0 min-w-0 flex-1 bg-paper">
             {ws.tabs.map((tab) => {
               const View = viewById(tab.viewId).Component;
               const active = tab.id === ws.active;
+              const pane = splitShown && split ? (tab.id === split.a ? "a" : tab.id === split.b ? "b" : null) : null;
+              const shown = splitShown ? pane !== null : active;
               return (
                 <ActiveContext.Provider key={`${tab.id}:${tab.viewId}`} value={active}>
                   <TabTitleContext.Provider value={titleSetter(tab.id)}>
-                  <section hidden={!active} className="flex min-h-0 flex-1 flex-col">
+                  <section
+                    hidden={!shown}
+                    // A press anywhere in the other pane hands it the keyboard, then goes on to what was pressed.
+                    onPointerDownCapture={pane && !active ? () => dispatch({ type: "activate", id: tab.id }) : undefined}
+                    className="relative flex min-h-0 min-w-0 flex-col"
+                    style={{
+                      order: pane === "b" ? 3 : 1,
+                      flex: pane && split ? `${pane === "a" ? split.ratio : 1 - split.ratio} 1 0%` : "1 1 0%",
+                    }}
+                  >
+                    {pane && (
+                      <span
+                        aria-hidden
+                        className={`pointer-events-none absolute inset-x-0 top-0 z-40 h-[2px] transition-colors ${active ? "bg-accent" : "bg-transparent"}`}
+                      />
+                    )}
                     <View
                       year={tab.year}
                       setYear={(y) => dispatch({ type: "set-year", id: tab.id, year: y })}
@@ -624,6 +709,13 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
                 </ActiveContext.Provider>
               );
             })}
+            {splitShown && split && (
+              <SplitDivider
+                ratio={split.ratio}
+                onRatio={(ratio) => dispatch({ type: "split-ratio", ratio })}
+                onClose={() => dispatch({ type: "unsplit" })}
+              />
+            )}
             <CompareDock
               hidden={current.viewId === "compare" && current.query === compareQuery(compare.items)}
               onOpen={(items, newTab) => openView("compare", { query: compareQuery(items), newTab })}

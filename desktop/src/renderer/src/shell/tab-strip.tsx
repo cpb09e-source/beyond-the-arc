@@ -1,4 +1,4 @@
-import { Copy, Plus, Star, StarOff, X } from "lucide-react";
+import { Columns2, Copy, PanelRightClose, Plus, Star, StarOff, X } from "lucide-react";
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { seasonLabel } from "~/ui/format";
@@ -36,6 +36,9 @@ export function TabStrip({
   onFavorite,
   onDuplicate,
   onCloseOthers,
+  split,
+  onSplitWith,
+  onUnsplit,
 }: {
   tabs: Tab[];
   active: string;
@@ -47,6 +50,10 @@ export function TabStrip({
   onFavorite: (id: string) => void;
   onDuplicate: (id: string) => void;
   onCloseOthers: (id: string) => void;
+  /** The pair on screen in split view, if any. */
+  split: { a: string; b: string } | null;
+  onSplitWith: (id: string) => void;
+  onUnsplit: () => void;
 }) {
   const stripRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; x: number; moved: boolean } | null>(null);
@@ -117,7 +124,6 @@ export function TabStrip({
             }}
             onContextMenu={(e) => {
               e.preventDefault();
-              onActivate(tab.id);
               setMenu({ id: tab.id, x: e.clientX, y: e.clientY });
             }}
             className={`no-drag group relative flex h-[28px] min-w-[112px] max-w-[220px] flex-1 cursor-default select-none items-center gap-2 rounded-[7px] pl-2.5 pr-1 text-[12.5px] transition-colors ${
@@ -134,6 +140,10 @@ export function TabStrip({
               <Icon size={14} strokeWidth={2} className={`shrink-0 ${isActive ? "text-ink-soft" : "text-ink-muted"}`} />
             )}
             <span className="min-w-0 truncate">{label}</span>
+            {split && (split.a === tab.id || split.b === tab.id) && (
+              // The two tabs on screen together share an underline, as a pair.
+              <span aria-hidden className="pointer-events-none absolute inset-x-2 -bottom-[6px] h-[2px] rounded-full bg-[color-mix(in_oklab,var(--accent)_70%,transparent)]" />
+            )}
             <span className="shrink-0 text-[11px] text-ink-muted tabular">{seasonLabel(tab.year).slice(2)}</span>
             <button
               type="button"
@@ -187,6 +197,17 @@ export function TabStrip({
         onSelect: () => onFavorite(id),
       },
       { kind: "item", id: "duplicate", label: "Duplicate tab", icon: <Copy size={14} />, onSelect: () => onDuplicate(id) },
+      split && (split.a === id || split.b === id)
+        ? { kind: "item", id: "unsplit", label: "Close split view", icon: <PanelRightClose size={14} />, hint: <Kbd>Ctrl Shift \</Kbd>, onSelect: onUnsplit }
+        : {
+            kind: "item",
+            id: "split",
+            label: id === active ? "Split view" : "Show beside the current tab",
+            icon: <Columns2 size={14} />,
+            hint: id === active ? <Kbd>Ctrl Shift \</Kbd> : undefined,
+            disabled: tabs.length < 2 && id !== active,
+            onSelect: () => onSplitWith(id),
+          },
       { kind: "separator", id: "s1" },
       { kind: "item", id: "close", label: "Close tab", icon: <X size={14} />, hint: <Kbd>Ctrl W</Kbd>, onSelect: () => onClose(id) },
       {

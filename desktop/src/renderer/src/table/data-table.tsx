@@ -104,9 +104,10 @@ type Props<R> = {
   onLanded?: (nonce: number) => void;
   /**
    * Opens the row's own page: Enter (from the table or its filter box), a
-   * double-click, or Enter while Peeking. `newTab` is true with Ctrl held.
+   * double-click, or Enter while Peeking. `newTab` is true with Ctrl held;
+   * `side` with Shift, for split view.
    */
-  onOpen?: (row: R, how: { newTab: boolean }) => void;
+  onOpen?: (row: R, how: { newTab: boolean; side?: boolean }) => void;
 };
 
 const HEAD_H = 32;
@@ -288,13 +289,13 @@ export function DataTable<R>({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!active) return;
-      if (e.key === "Enter" && onOpen && !e.altKey && !e.shiftKey) {
+      if (e.key === "Enter" && onOpen && !e.altKey) {
         const t = e.target as HTMLElement | null;
         if (t && (t.tagName === "TEXTAREA" || t.tagName === "BUTTON" || t.isContentEditable)) return;
         const row = index >= 0 ? sorted[index] : undefined;
         if (!row) return;
         e.preventDefault();
-        onOpen(row, { newTab: e.ctrlKey || e.metaKey });
+        onOpen(row, { newTab: e.ctrlKey || e.metaKey, side: e.shiftKey });
         return;
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -498,7 +499,7 @@ export function DataTable<R>({
                   onMouseDown={(e) => {
                     if (e.button === 0) setFocusKey(rowKey(row));
                   }}
-                  onDoubleClick={onOpen ? (e) => onOpen(row, { newTab: e.ctrlKey || e.metaKey }) : undefined}
+                  onDoubleClick={onOpen ? (e) => onOpen(row, { newTab: e.ctrlKey || e.metaKey, side: e.shiftKey }) : undefined}
                   draggable={drag ? true : undefined}
                   onDragStart={drag ? (e) => startDrag(e, drag(row)) : undefined}
                   className="absolute left-0 top-0 grid w-full items-center border-b border-hairline/50"

@@ -145,7 +145,7 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }:
             }}
             onOpen={(p, how) => {
               if (p.bartId != null) {
-                openRecord({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, year });
+                openRecord({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, side: how.side, year });
               }
             }}
           />

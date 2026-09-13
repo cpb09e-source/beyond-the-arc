@@ -171,7 +171,7 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
             onLanded={onLanded}
             drag={(t) => compareDrag({ kind: "team", name: t.name, logoId: t.logoId, year })}
             keys={{ c: (t) => add({ kind: "team", name: t.name, logoId: t.logoId, year }) }}
-            onOpen={(t, how) => openRecord({ kind: "team", name: t.name, logoId: t.logoId }, { newTab: how.newTab, year })}
+            onOpen={(t, how) => openRecord({ kind: "team", name: t.name, logoId: t.logoId }, { newTab: how.newTab, side: how.side, year })}
           />
         ) : state.status === "loading" ? (
           <TableSkeleton rowHeight={ROW_H} label="Loading teams" />

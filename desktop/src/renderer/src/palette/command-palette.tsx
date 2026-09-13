@@ -38,8 +38,8 @@ export type PaletteItem = {
   collapse?: string;
   /** Folded ahead of time by lists too long to fold on every open. */
   prepared?: Prepared;
-  /** `newTab` is true for Ctrl+Enter: open the result beside this tab instead of in it. */
-  run: (how: { newTab: boolean }) => void;
+  /** `newTab` is true for Ctrl+Enter: open the result beside this tab instead of in it; `side` for Shift+Enter. */
+  run: (how: { newTab: boolean; side?: boolean }) => void;
 };
 
 export type PaletteGroup = {
@@ -128,9 +128,9 @@ export function CommandPalette({
   const flat = results.flatMap((r) => r.rows);
   const current = flat.some((r) => r.id === active) ? active : (flat[0]?.id ?? "");
 
-  const pick = (item: PaletteItem, newTab = false) => {
+  const pick = (item: PaletteItem, how: { newTab: boolean; side?: boolean } = { newTab: false }) => {
     onClose();
-    item.run({ newTab });
+    item.run(how);
   };
 
   return (
@@ -139,11 +139,12 @@ export function CommandPalette({
       onKeyDownCapture={(e) => {
         // Ctrl+Enter opens the highlighted result in a new tab. Caught on the way
         // down, before cmdk, which would otherwise take it as an ordinary Enter.
-        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        // Shift+Enter opens it to the side, in split view.
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey || e.shiftKey)) {
           e.preventDefault();
           e.stopPropagation();
           const item = flat.find((r) => r.id === current);
-          if (item) pick(item, true);
+          if (item) pick(item, e.shiftKey && !(e.ctrlKey || e.metaKey) ? { newTab: false, side: true } : { newTab: true });
         }
       }}
       onKeyDown={(e) => {
@@ -234,6 +235,10 @@ export function CommandPalette({
             <span className="flex items-center gap-1.5">
               <Kbd>Ctrl Enter</Kbd>
               new tab
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Kbd>Shift Enter</Kbd>
+              to the side
             </span>
             <span className="ml-auto flex items-center gap-1.5">
               <Kbd>Ctrl K</Kbd>

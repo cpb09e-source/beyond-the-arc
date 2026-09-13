@@ -282,7 +282,7 @@ export function ConferencesView({ year, setYear, query, setQuery }: ViewProps) {
               label: (r) => `${confName(r)} ${seasonLabel(r.year)}`,
               body: (r) => <ConferencePeekBody row={r} highlights={highlightsFor(r)} />,
             }}
-            onOpen={(r, how) => openView("team-explorer", { newTab: how.newTab, year: r.year, query: confName(r) })}
+            onOpen={(r, how) => openView("team-explorer", { newTab: how.newTab, side: how.side, year: r.year, query: confName(r) })}
           />
         )}
       </div>

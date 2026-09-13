@@ -19,8 +19,8 @@ import type { FocusTarget, RecordRef } from "./views";
  */
 export type Shell = {
   filterRef: RefObject<HTMLInputElement | null>;
-  openRecord: (record: RecordRef, how?: { newTab?: boolean; year?: number }) => void;
-  openView: (viewId: string, how?: { newTab?: boolean; query?: string; year?: number }) => void;
+  openRecord: (record: RecordRef, how?: { newTab?: boolean; side?: boolean; year?: number }) => void;
+  openView: (viewId: string, how?: { newTab?: boolean; side?: boolean; query?: string; year?: number }) => void;
   showInExplorer: (target: FocusTarget, newTab?: boolean) => void;
 };
 

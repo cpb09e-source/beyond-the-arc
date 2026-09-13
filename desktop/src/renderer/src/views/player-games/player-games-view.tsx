@@ -138,7 +138,7 @@ export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
             tieBreak={latestFirst}
             onOpen={(g, how) => {
               const p = state.value.players[g.row[F.p]!]!;
-              openRecord({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, year });
+              openRecord({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, side: how.side, year });
             }}
             ariaLabel="Player games"
             empty={

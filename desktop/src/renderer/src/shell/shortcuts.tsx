@@ -41,7 +41,10 @@ const GROUPS: Array<{ title: string; items: Shortcut[] }> = [
       { label: "Back", keys: [["Alt", "←"]] },
       { label: "Forward", keys: [["Alt", "→"]] },
       { label: "Open in a new tab", keys: [["Ctrl", "Click"], ["Middle click"]] },
-      { label: "Tab menu: favorite, duplicate, close others", keys: [["Right click"]] },
+      { label: "Tab menu: favorite, duplicate, split, close others", keys: [["Right click"]] },
+      { label: "Open to the side, in split view", keys: [["Shift", "Enter"], ["Shift", "Double-click"]] },
+      { label: "Split view on or off", keys: [["Ctrl", "Shift", "\\"]] },
+      { label: "Move between the two panes", keys: [["F6"]] },
     ],
   },
   {
