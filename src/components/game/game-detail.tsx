@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { sideColors } from "@/components/box/game-box-modal";
 import { cn } from "@/lib/utils";
+import { gameNotStarted, recordsFromStandings } from "@/lib/game-stats";
 import { longDate } from "./types";
 import { ScoreHeader } from "./score-header";
 import { OverviewTab } from "./overview-tab";
@@ -75,26 +76,12 @@ export function GameDetail({ b, partial = false, detailFailed = false, links }: 
     [b.game.home.team, b.game.away.team],
   );
 
-  // Season records entering the game, read off the standings tables. Taken
-  // from there rather than counted from `form`, which only holds five games —
-  // a "5-0" beside a team that is 21-1 is worse than no record at all.
-  /**
-   * Nothing has happened yet. `status` is what the feed says; the points
-   * check catches a stale "scheduled" on a game that has plainly started.
-   */
-  const notStarted = b.game.status === "scheduled"
-    && b.game.home.points === null && b.game.away.points === null;
+  /** Nothing has happened yet — see gameNotStarted. */
+  const notStarted = gameNotStarted(b.game);
 
-  const records = useMemo(() => {
-    const find = (team: string) => {
-      for (const rows of Object.values(b.standings)) {
-        const hit = rows.find((r) => r.team === team);
-        if (hit) return `${hit.w}-${hit.l}`;
-      }
-      return "";
-    };
-    return { home: find(b.game.home.team), away: find(b.game.away.team) };
-  }, [b.standings, b.game.home.team, b.game.away.team]);
+  // Season records entering the game, read off the standings tables rather
+  // than counted from `form` — see recordsFromStandings.
+  const records = useMemo(() => recordsFromStandings(b), [b]);
 
   return (
     <div className="pb-20">

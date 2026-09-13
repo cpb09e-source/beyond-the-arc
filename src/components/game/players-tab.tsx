@@ -6,7 +6,8 @@ import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
 import { loadPhotoIndex, lookupId, type PhotoIndex } from "@/lib/player-photo-index";
 import type { GameLinks, SideLinks } from "@/lib/game-team-links";
-import type { BoxPlayer, GameBundle, GameSide, Play, TeamStats } from "./types";
+import { playerPlusMinus, plusMinus, sortBoxPlayers, type BoxSortKey as SortKey } from "@/lib/game-stats";
+import type { BoxPlayer, GameBundle, GameSide, TeamStats } from "./types";
 
 /**
  * Full player box, both sides.
@@ -25,28 +26,6 @@ import type { BoxPlayer, GameBundle, GameSide, Play, TeamStats } from "./types";
  * floor, so each basket is credited to the five who were actually out there.
  */
 
-type SortKey = "min" | "pts" | "reb" | "ast" | "ts" | "usg" | "pm";
-
-/**
- * athleteId → plus-minus, in HOME terms (home margin gained while on court).
- * The away side negates it.
- *
- * Returns an empty map when the feed carries no on-floor data, which is how
- * the column knows to render an em dash rather than a wrong zero.
- */
-function plusMinus(plays: Play[]): Map<number, number> {
-  const out = new Map<number, number>();
-  let prevH = 0, prevA = 0;
-  for (const p of plays) {
-    if (!p.sc) continue;
-    const swing = (p.hs - prevH) - (p.as - prevA);
-    prevH = p.hs; prevA = p.as;
-    if (!p.on?.length || swing === 0) continue;
-    for (const id of p.on) out.set(id, (out.get(id) ?? 0) + swing);
-  }
-  return out;
-}
-
 export function PlayersTab({ b, hc, ac, links }: {
   b: GameBundle; hc: string; ac: string;
   /**
@@ -57,7 +36,6 @@ export function PlayersTab({ b, hc, ac, links }: {
   links?: GameLinks;
 }) {
   const pm = useMemo(() => plusMinus(b.plays), [b.plays]);
-  const hasPm = pm.size > 0;
 
   /**
    * Box-score names → our player ids, so a name can link to its profile.
@@ -79,39 +57,26 @@ export function PlayersTab({ b, hc, ac, links }: {
   return (
     <div className="space-y-6">
       <TeamBox side={b.game.away} players={b.players.away} stats={b.teamStats.away}
-        color={ac} pm={pm} pmSign={-1} hasPm={hasPm} photos={photos} links={links?.away} />
+        color={ac} pm={pm} pmSign={-1} photos={photos} links={links?.away} />
       <TeamBox side={b.game.home} players={b.players.home} stats={b.teamStats.home}
-        color={hc} pm={pm} pmSign={1} hasPm={hasPm} photos={photos} links={links?.home} />
+        color={hc} pm={pm} pmSign={1} photos={photos} links={links?.home} />
     </div>
   );
 }
 
 function TeamBox({
-  side, players, stats, color, pm, pmSign, hasPm, photos, links,
+  side, players, stats, color, pm, pmSign, photos, links,
 }: {
   side: GameSide; players: BoxPlayer[]; stats: TeamStats | null; color: string;
-  pm: Map<number, number>; pmSign: 1 | -1; hasPm: boolean;
+  pm: Map<number, number>; pmSign: 1 | -1;
   photos: PhotoIndex; links?: SideLinks;
 }) {
   const [sort, setSort] = useState<SortKey>("min");
 
-  // A player who appeared but was never on the floor for a scoring play really
-  // is 0, so a missing id is only unknown when the whole feed is missing.
-  const pmOf = (p: BoxPlayer): number | null =>
-    !hasPm ? null : (pm.get(p.athleteId) ?? 0) * pmSign;
+  // Null when the feed carries no on-floor data at all — see playerPlusMinus.
+  const pmOf = (p: BoxPlayer): number | null => playerPlusMinus(p, pm, pmSign);
 
-  const val = (p: BoxPlayer, k: SortKey): number => {
-    switch (k) {
-      case "min": return p.minutes ?? -1;
-      case "pts": return p.points ?? -1;
-      case "reb": return p.rebounds.total ?? -1;
-      case "ast": return p.assists ?? -1;
-      case "ts": return p.trueShootingPct ?? -1;
-      case "usg": return p.usage ?? -1;
-      case "pm": return pmOf(p) ?? -999;
-    }
-  };
-  const rows = [...players].sort((a, c) => val(c, sort) - val(a, sort));
+  const rows = sortBoxPlayers(players, sort, pm, pmSign);
 
   return (
     /*

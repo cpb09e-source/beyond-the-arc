@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { monthCells, monthLabel, prettyDate, shiftMonth, todayEastern } from "@/lib/scoreboard-core";
 
 /**
  * Month calendar in the site's own styling.
@@ -49,7 +50,7 @@ export function DatePicker({ value, onChange }: { value: string; onChange: (d: s
   }, [open]);
 
   const cells = monthCells(cursor);
-  const today = todayET();
+  const today = todayEastern();
 
   return (
     <div ref={wrapRef} className="relative">
@@ -169,41 +170,4 @@ function CalendarGlyph() {
       <path d="M3 10h18M8 3v4M16 3v4" strokeLinecap="round" />
     </svg>
   );
-}
-
-// ---- date helpers, all UTC-noon anchored so DST can never shift a day ----
-
-const ET = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" });
-function todayET(): string {
-  return ET.format(new Date());
-}
-
-const MONTH = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "long", year: "numeric" });
-function monthLabel(ym: string): string {
-  return MONTH.format(new Date(`${ym}-01T12:00:00Z`));
-}
-
-const PRETTY = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
-function prettyDate(d: string): string {
-  return PRETTY.format(new Date(`${d}T12:00:00Z`));
-}
-
-function shiftMonth(ym: string, by: number): string {
-  const y = Number(ym.slice(0, 4));
-  const m = Number(ym.slice(5, 7)) - 1 + by;
-  const d = new Date(Date.UTC(y, m, 1, 12));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
-/** Leading blanks then each day of the month, as ISO strings. */
-function monthCells(ym: string): Array<string | null> {
-  const y = Number(ym.slice(0, 4));
-  const m = Number(ym.slice(5, 7)) - 1;
-  const first = new Date(Date.UTC(y, m, 1, 12));
-  const days = new Date(Date.UTC(y, m + 1, 0, 12)).getUTCDate();
-  const out: Array<string | null> = Array(first.getUTCDay()).fill(null);
-  for (let d = 1; d <= days; d++) {
-    out.push(`${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
-  }
-  return out;
 }

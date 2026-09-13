@@ -4,8 +4,9 @@ import { Fragment } from "react";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
+import { gameEyebrow, gameStarted } from "@/lib/game-stats";
 import {
-  isFinal, isLive, longDate, periodHeadings, periodLabel, tipLabel,
+  isFinal, isLive, periodHeadings, periodLabel, tipLabel,
   type GameBundle, type GameSide,
 } from "./types";
 
@@ -38,7 +39,7 @@ export function ScoreHeader({
 }) {
   const g = b.game;
   const final = isFinal(g);
-  const started = g.away.points != null || g.home.points != null;
+  const started = gameStarted(g);
 
   return (
     // paper-deep, not card. `--card` is pure #ffffff, and a full-width sheet of
@@ -48,11 +49,7 @@ export function ScoreHeader({
     <header className="border-b border-hairline bg-paper-deep/70">
       <div className="mx-auto max-w-[var(--page-narrow)] px-5 lg:px-10 pt-5 pb-6">
         <p className="text-center text-[0.6rem] uppercase tracking-[0.22em] font-bold text-ink-muted">
-          {g.conferenceGame && g.home.conference
-            ? g.home.conference
-            : g.neutralSite ? "Neutral site" : "Non-conference"}
-          {" · "}
-          {longDate(g.startDate)}
+          {gameEyebrow(g)}
         </p>
 
         {/* TWO LAYOUTS, BECAUSE THE OPEN-OUTWARD ONE CANNOT SURVIVE A PHONE.

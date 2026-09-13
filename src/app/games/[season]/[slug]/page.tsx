@@ -4,6 +4,7 @@ import { GameClient } from "@/components/game/game-client";
 import { gameSlug, idFromSlug, isArchivedSeason, knownSeasons } from "@/lib/scoreboard-archive";
 import { minimalBundle, readArchiveIndex, shortDate, type ArchiveGame } from "@/lib/game-archive";
 import { gameTeamLinks } from "@/lib/game-team-links";
+import { halvesLine, resultLine } from "@/lib/game-stats";
 
 /**
  * /games/<season>/<id>-<away>-vs-<home>/ — one game, played or scheduled.
@@ -47,14 +48,6 @@ async function lookup(season: string, slug: string): Promise<ArchiveGame | null>
   return idx?.byId.get(id) ?? null;
 }
 
-/** "North Carolina 71, Duke 68" — winner first, the way a result is spoken. */
-function resultLine(g: ArchiveGame): string {
-  const h = g.home, a = g.away;
-  if (h.pts === null || a.pts === null) return `${a.team} at ${h.team}`;
-  const [w, l] = h.winner ? [h, a] : [a, h];
-  return `${w.team} ${w.pts}, ${l.team} ${l.pts}`;
-}
-
 export async function generateMetadata({ params }: { params: Promise<{ season: string; slug: string }> }): Promise<Metadata> {
   const { season, slug } = await params;
   const g = await lookup(season, slug);
@@ -74,9 +67,7 @@ export async function generateMetadata({ params }: { params: Promise<{ season: s
       alternates: { canonical: `/games/${season}/${slug}/` },
     };
   }
-  const halves = g.home.periods.length >= 2 && g.away.periods.length >= 2
-    ? ` Halves: ${g.away.periods.map((p, i) => `${p}-${g.home.periods[i]}`).join(", ")}.`
-    : "";
+  const halves = halvesLine(g);
   return {
     title: `${g.away.team} vs ${g.home.team} — ${resultLine(g)} · ${when}`,
     description:

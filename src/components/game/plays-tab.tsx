@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
+import { filterPlays, groupPlaysByPeriod, playActor } from "@/lib/game-stats";
 import { periodLabel, type GameBundle, type Play } from "./types";
 
 /**
@@ -24,27 +25,12 @@ export function PlaysTab({ b }: { b: GameBundle }) {
   const [collapsed, setCollapsed] = useState<Set<number>>(() => new Set());
 
   const rows = useMemo(
-    () =>
-      b.plays.filter((p) => {
-        if (side === "home" && !p.h) return false;
-        if (side === "away" && p.h) return false;
-        if (kind === "scoring") return p.sc;
-        if (kind === "shots") return p.sh;
-        if (kind === "turnovers") return /turnover|steal/i.test(p.t);
-        return true;
-      }),
+    () => filterPlays(b.plays, side, kind),
     [b.plays, side, kind],
   );
 
   // Periods in play order, each with its own rows.
-  const groups = useMemo(() => {
-    const m = new Map<number, Play[]>();
-    for (const p of rows) {
-      if (!m.has(p.per)) m.set(p.per, []);
-      m.get(p.per)!.push(p);
-    }
-    return [...m.entries()].sort((a, c) => a[0] - c[0]);
-  }, [rows]);
+  const groups = useMemo(() => groupPlaysByPeriod(rows), [rows]);
 
   const toggle = (per: number) =>
     setCollapsed((s) => {
@@ -122,15 +108,14 @@ export function PlaysTab({ b }: { b: GameBundle }) {
  * column still lines up.
  */
 function PlayRow({ p, home, away }: { p: Play; home: string; away: string }) {
-  const team = p.tm || (p.h ? home : away);
-  const neutral = /end period|end game|official|tv timeout/i.test(p.t);
+  const team = playActor(p, home, away);
   return (
     <li className={cn(
       "grid grid-cols-[1.75rem_3rem_1fr_2.25rem_2.25rem] gap-x-3 items-center px-4 py-2",
       p.sc && "bg-paper-deep/20",
     )}>
       <span className="flex justify-center">
-        {neutral || !team ? null : <TeamLogo name={team} size={18} />}
+        {team === null ? null : <TeamLogo name={team} size={18} />}
       </span>
       <span className="text-[0.68rem] tabular text-ink-muted">{p.clk}</span>
       <span className={cn("text-[0.8rem] leading-snug min-w-0", p.sc ? "text-ink font-medium" : "text-ink-soft")}>

@@ -5,29 +5,20 @@ import { useRouter } from "next/navigation";
 import { useUrlSearchParams } from "@/lib/use-url-search-params";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
-import { confDisplay } from "@/lib/conf-display";
-import { isPowerConference } from "@/lib/conf-tiers";
 import { cn } from "@/lib/utils";
 import { Select } from "@/components/select";
 import { isKnownDay, latestArchivedDay } from "@/lib/scoreboard-archive";
+import { periodHeadings } from "@/components/game/types";
 import { DatePicker } from "./date-picker";
 import {
-  EMPTY_SLATE, POLL_MS, dateLabel, fetchSlate, gameHref, isFinal, isLive, isRanked, lineLabel, recordLabel, slateIsSettled, tipLabel,
+  EMPTY_SLATE, POLL_MS, dateLabel, fetchSlate, gameHref, isFinal, isLive, lineLabel, recordLabel, slateIsSettled,
   type ScoreGame, type Slate, isSeed,} from "@/lib/scoreboard";
+import {
+  dayNum, dowLabel, gameStatusLabel, groupSlate, shiftDay, slateConferences, slateTournaments, todayEastern, weekDays,
+} from "@/lib/scoreboard-core";
 
 function teamSlug(name: string): string {
   return name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
-
-/** Yesterday/today in US Eastern — the day the sport dates its schedule by. */
-const ET_DATE = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" });
-function shiftDay(d: string, days: number): string {
-  return ET_DATE.format(new Date(Date.parse(`${d}T12:00:00Z`) + days * 86_400_000));
-}
-
-/** Today in US Eastern. The fallback anchor when the feed has no slate at all. */
-function todayEastern(): string {
-  return ET_DATE.format(new Date());
 }
 
 /**
@@ -147,111 +138,18 @@ export function ScoreboardClient({
   // non-conference bucket; "" means show everything.
   const [conf, setConf] = useState("");
 
-  /**
-   * Tournaments actually being played on this date.
-   *
-   * Offered ONLY when the slate has them, which for most of the year is never
-   * — a permanent "NCAA Tournament" entry in a December dropdown is a filter
-   * that can only ever return nothing. In March it is the first question
-   * anybody asks of a slate, so it leads the list.
-   *
-   * NCAA and NIT are pinned in that order because they are the two everyone
-   * means; conference tournaments follow alphabetically.
-   */
-  const tourneyOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const g of slate.games) if (g.tournament) set.add(g.tournament);
-    const rank = (t: string) => (t === "NCAA" ? 0 : t === "NIT" ? 1 : 2);
-    return [...set].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
-  }, [slate.games]);
-  const confOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const g of slate.games) {
-      if (g.home.conference) set.add(confDisplay(g.home.conference));
-      if (g.away.conference) set.add(confDisplay(g.away.conference));
-    }
-    return [...set].sort((a, b) => a.localeCompare(b));
-  }, [slate.games]);
+  // Tournaments actually being played on this date (offered ONLY when the slate
+  // has them), and every conference on it — see slateTournaments and
+  // slateConferences.
+  const tourneyOptions = useMemo(() => slateTournaments(slate.games), [slate.games]);
+  const confOptions = useMemo(() => slateConferences(slate.games), [slate.games]);
 
-  /**
-   * The filter takes a GROUP token or a single conference's display name.
-   *
-   * Tokens are prefixed so they can never collide with a real conference name.
-   * A night's slate is thirty-odd leagues deep and the question a reader
-   * actually arrives with is nearly always one of four — everything, the
-   * ranked games, the high-major games, or everyone else — and answering that
-   * used to mean knowing which of thirty entries to pick.
-   *
-   * POWER AND MID ARE A PARTITION, not two overlapping filters. Power is any
-   * game with a high-major team on either side; mid is every game with none.
-   * Together they are the whole slate and nothing appears twice, so a reader
-   * flipping between them sees each game exactly once. Defining mid as "any
-   * game involving a mid-major" instead would put Duke at Vermont in both,
-   * which reads as a bug.
-   *
-   * isPowerConference, NOT POWER_CONFS directly. The scoreboard feed spells
-   * conferences its own way — "Big Ten", "Big 12", "Big East" — while
-   * POWER_CONFS holds Bart's codes. Only ACC and SEC collide, so a direct
-   * lookup half-worked and put Arizona under Mid Majors. See the long note in
-   * conf-tiers.ts.
-   */
-  const isPowerGame = (g: ScoreGame) =>
-    isPowerConference(g.home.conference) || isPowerConference(g.away.conference);
-
-  // Matches on EITHER side for a named conference, so picking the Big Ten keeps
-  // a Big Ten team's non-conference game — the thing a reader following that
-  // league wants.
-  const inConf = (g: ScoreGame) => {
-    if (!conf) return true;
-    if (conf.startsWith("@t:")) return g.tournament === conf.slice(3);
-    if (conf === "@top25") return isRanked(g);
-    if (conf === "@power") return isPowerGame(g);
-    if (conf === "@mid") return !isPowerGame(g);
-    return Boolean(
-      (g.home.conference && confDisplay(g.home.conference) === conf) ||
-      (g.away.conference && confDisplay(g.away.conference) === conf),
-    );
-  };
-
-  // Conference games group under their own conference; everything else is
-  // non-conference. Sorted by tip so the page reads down the evening.
-  //
-  // Ranked games are EXCLUDED here, because they already lead the page under
-  // Top 25 and printing them twice made the ACC read as if Duke played North
-  // Carolina in two different buildings. Top 25 is filtered by the same
-  // conference selection, so choosing the ACC still shows its ranked games —
-  // just once, at the top, where they belong.
-  const groups = useMemo(() => {
-    const m = new Map<string, ScoreGame[]>();
-    for (const g of slate.games) {
-      if (!inConf(g) || isRanked(g)) continue;
-      // TOURNAMENT FIRST. An NIT or NCAA game is not a conference game, so it
-      // used to fall through to "Non-conference" — which is technically true
-      // and reads as nonsense next to a bracket. CBBD tags the tournament and
-      // it has been carried through normalize() and the baked slates since
-      // 2026-09-09; this is the first thing to use it for grouping.
-      const key = g.tournament
-        ? g.tournament
-        : g.conferenceGame && g.home.conference
-        ? confDisplay(g.home.conference)
-        : "Non-conference";
-      if (!m.has(key)) m.set(key, []);
-      m.get(key)!.push(g);
-    }
-    for (const list of m.values()) list.sort((a, b) => a.startDate.localeCompare(b.startDate));
-    // Tournaments lead (NCAA, then NIT, then anything else CBBD labels),
-    // conferences in the middle alphabetically, non-conference last.
-    const tours = new Set(slate.games.map((g) => g.tournament).filter(Boolean) as string[]);
-    const bucket = (k: string) =>
-      k === "Non-conference" ? 3 : !tours.has(k) ? 2 : k === "NCAA" ? 0 : k === "NIT" ? 1 : 1.5;
-    return [...m.entries()].sort((a, b) => bucket(a[0]) - bucket(b[0]) || a[0].localeCompare(b[0]));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slate.games, conf]);
-
-  // Games with an AP Top 25 side, in the order the function ranked them (best
-  // matchup first). These are the ONLY place a ranked game appears; the
-  // conference groups below skip them.
-  const ranked = useMemo(() => slate.games.filter(isRanked), [slate.games]);
+  // The filter takes a GROUP token or a single conference's display name — see
+  // matchesSlateFilter. Games with an AP Top 25 side lead the page and are the
+  // ONLY place a ranked game appears; everything else groups under its
+  // tournament, its conference or "Non-conference", sorted by tip — see
+  // groupSlate.
+  const { groups, ranked } = useMemo(() => groupSlate(slate.games, conf), [slate.games, conf]);
 
 
   const liveCount = slate.games.filter(isLive).length;
@@ -340,7 +238,7 @@ export function ScoreboardClient({
             {/* A distinct value, not "" — the Select keys options by value and
                 reusing "" collided with All, which React reports as two
                 children with the same key. Disabled, so it can never be
-                chosen; unreachable in inConf either way. */}
+                chosen; unreachable in matchesSlateFilter either way. */}
             {confOptions.length > 0 && (
               <option value="@divider" disabled>──────────</option>
             )}
@@ -364,15 +262,15 @@ export function ScoreboardClient({
         </div>
       )}
 
-      {ranked.filter(inConf).length > 0 && (
+      {ranked.length > 0 && (
         <section className="mb-8">
           <h2 className="text-[0.62rem] uppercase tracking-[0.16em] font-bold text-coral mb-2.5 flex items-center gap-2">
             Top 25
             <span className="h-px flex-1 bg-coral/25" />
-            <span className="text-coral/70 font-medium tabular">{ranked.filter(inConf).length}</span>
+            <span className="text-coral/70 font-medium tabular">{ranked.length}</span>
           </h2>
           <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-            {ranked.filter(inConf).map((g) => <GameCard key={`r-${g.id}`} g={g} />)}
+            {ranked.map((g) => <GameCard key={`r-${g.id}`} g={g} />)}
           </div>
         </section>
       )}
@@ -418,7 +316,7 @@ function WeekStrip({ shown, onPick }: { shown: string; onPick: (d: string) => vo
     setAnchor(shown);
   }
 
-  const days = [-3, -2, -1, 0, 1, 2, 3].map((n) => shiftDay(anchor, n));
+  const days = weekDays(anchor);
   const today = todayEastern();
   return (
     <div className="flex items-stretch gap-1 mb-6">
@@ -467,14 +365,6 @@ function StripArrow({ label, onClick, children }: { label: string; onClick: () =
   );
 }
 
-const DOW = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", weekday: "short" });
-function dowLabel(d: string): string {
-  return DOW.format(new Date(`${d}T12:00:00Z`));
-}
-function dayNum(d: string): string {
-  return String(Number(d.slice(8, 10)));
-}
-
 function GameCard({ g }: { g: ScoreGame }) {
   const live = isLive(g);
   const final = isFinal(g);
@@ -482,7 +372,7 @@ function GameCard({ g }: { g: ScoreGame }) {
   // Halves only once they exist. A scheduled game has none, and a live first
   // half has one — an empty "2H" column would read as a zero.
   const halves = Math.max(g.home.periods.length, g.away.periods.length);
-  const labels = periodLabels(halves);
+  const labels = periodHeadings(halves);
   return (
     <div className={cn(
       "relative bg-card border rounded-xl shadow-sm overflow-hidden transition-colors",
@@ -515,13 +405,8 @@ function GameCard({ g }: { g: ScoreGame }) {
           "shrink-0 text-[0.58rem] uppercase tracking-[0.12em] font-bold tabular",
           live ? "text-coral" : "text-ink-muted",
         )}>
-          {live ? `${g.clock ?? "Live"}${g.period != null ? ` · ${ordinalPeriod(g.period)}` : ""}`
-            : final ? "Final"
-            // A fixture whose time nobody has set yet. Saying "TBD" is the
-            // whole truth; printing the placeholder midnight would be a
-            // confident wrong answer.
-            : g.tbd ? "Time TBD"
-            : tipLabel(g.startDate)}
+          {/* Live clock, Final, Time TBD or the tip time — see gameStatusLabel. */}
+          {gameStatusLabel(g)}
         </span>
       </div>
 
@@ -553,11 +438,6 @@ function GameCard({ g }: { g: ScoreGame }) {
       )}
     </div>
   );
-}
-
-/** ["1H","2H","OT","2OT"] for however many periods were played. */
-function periodLabels(n: number): string[] {
-  return Array.from({ length: n }, (_, i) => (i === 0 ? "1H" : i === 1 ? "2H" : i === 2 ? "OT" : `${i - 1}OT`));
 }
 
 function TeamRow({ t, final, halves, at }: { t: ScoreGame["home"]; final: boolean; halves: number; at: boolean }) {
@@ -613,11 +493,4 @@ function RankBadge({ rank }: { rank: number }) {
       {rank}
     </span>
   );
-}
-
-/** "2nd" / "OT" / "2OT" — college basketball plays two halves, then overtimes. */
-function ordinalPeriod(p: number): string {
-  if (p <= 1) return "1st";
-  if (p === 2) return "2nd";
-  return p === 3 ? "OT" : `${p - 2}OT`;
 }

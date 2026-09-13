@@ -6,8 +6,9 @@ import { TeamLogo } from "@/components/team-logo";
 import { cn } from "@/lib/utils";
 import { useDragPan } from "@/lib/use-drag-pan";
 import {
-  EMPTY_SLATE, POLL_MS, fetchSlate, gameHref, isFinal, isLive, shortDateLabel, slateIsSettled, tipLabel, todayEastern,
+  EMPTY_SLATE, POLL_MS, fetchSlate, gameHref, isFinal, isLive, slateIsSettled, tipLabel,
   type ScoreGame, type Slate, isSeed,} from "@/lib/scoreboard";
+import { tickerLabel } from "@/lib/scoreboard-core";
 
 /**
  * Site-wide score rail, directly under the nav.
@@ -97,7 +98,7 @@ export function ScoreTicker() {
   }
   if (slate.games.length === 0) return null;
 
-  const liveCount = slate.games.filter(isLive).length;
+  const label = tickerLabel(slate);
 
   return (
     <div className="border-b border-hairline bg-paper-deep/40">
@@ -107,27 +108,20 @@ export function ScoreTicker() {
         <Link
           href="/scoreboard"
           className="shrink-0 z-10 flex items-center gap-1.5 pl-4 lg:pl-6 pr-3 bg-paper-deep/40 backdrop-blur-sm border-r border-hairline text-[0.6rem] uppercase tracking-[0.14em] font-bold text-ink-muted hover:text-coral transition-colors" prefetch={false}>
-          {liveCount > 0 ? (
+          {label.kind === "live" ? (
             <>
               <span className="relative flex h-1.5 w-1.5" aria-hidden>
                 <span className="absolute inline-flex h-full w-full rounded-full bg-coral opacity-75 motion-safe:animate-ping" />
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-coral" />
               </span>
-              <span className="text-coral">{liveCount} live</span>
+              <span className="text-coral">{label.text}</span>
             </>
-          ) : slate.source === "upcoming" ? (
-            // Out of season the rail carries a fixture list, not results, and
-            // "Scores" over a row of tip times is a small lie. Naming the day
-            // is also the answer to the only question anyone has in July.
-            <span className="whitespace-nowrap">{shortDateLabel(slate.date)}</span>
-          ) : slate.date && slate.date < todayEastern() ? (
-            // NAME THE DAY WHENEVER IT IS NOT TODAY. Out of season the rail
-            // carries the last night the sport played, and a row of real
-            // scores under the bare word "Scores" reads as tonight's — the one
-            // thing a scoreboard must never be wrong about.
-            <span className="whitespace-nowrap">{shortDateLabel(slate.date)}</span>
+          ) : label.kind === "date" ? (
+            // A named day: a fixture list out of season, or any night that is
+            // not tonight — see tickerLabel.
+            <span className="whitespace-nowrap">{label.text}</span>
           ) : (
-            <span>Scores</span>
+            <span>{label.text}</span>
           )}
         </Link>
 

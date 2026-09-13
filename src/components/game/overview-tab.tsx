@@ -8,11 +8,15 @@ import { PlayerPhoto } from "@/components/player-photo";
 import { loadPhotoIndex, lookupId, type PhotoIndex } from "@/lib/player-photo-index";
 import { useTeamLinks } from "@/lib/team-link";
 import { readableInk } from "@/lib/team-colors";
-import { orebBaseline, FACTOR_WIN_RATE, seasonLabel } from "@/lib/league-averages";
+import { FACTOR_WIN_RATE, seasonLabel } from "@/lib/league-averages";
+import {
+  fourFactors, gameInfoRows, gameLeaders, h2hTally, n1, paceDelta, statSplit, teamStatRows,
+  type FactorLine, type GameInfoLabel, type LeaderLine, type StatRow,
+} from "@/lib/game-stats";
 import { cn } from "@/lib/utils";
 import {
-  shortDate, tipLabel, lineLabel,
-  type BoxPlayer, type GameBundle, type GameSide, type ScheduleRow, type StandingRow,
+  shortDate,
+  type GameBundle, type GameSide, type ScheduleRow, type StandingRow,
 } from "./types";
 
 /**
@@ -156,48 +160,7 @@ function Panel({
   );
 }
 
-const n1 = (v: number | null | undefined) =>
-  typeof v === "number" && Number.isFinite(v) ? (Math.round(v * 10) / 10).toString() : "—";
-
 /* -------------------------------- leaders -------------------------------- */
-
-/**
- * Points, rebounds and assists leaders. Ties break on minutes played, so the
- * name shown is the one who did it in fewer minutes rather than whichever the
- * source happened to list first.
- */
-function best(players: BoxPlayer[], pick: (p: BoxPlayer) => number | null): BoxPlayer | null {
-  let top: BoxPlayer | null = null;
-  let topV = -1;
-  for (const p of players) {
-    const v = pick(p);
-    if (typeof v !== "number" || !Number.isFinite(v)) continue;
-    if (v > topV || (v === topV && top && (p.minutes ?? 0) < (top.minutes ?? 0))) { top = p; topV = v; }
-  }
-  return topV <= 0 ? null : top;
-}
-
-const LEADER_CATS: {
-  label: string;
-  pick: (p: BoxPlayer) => number | null;
-  detail: (p: BoxPlayer) => string;
-}[] = [
-  {
-    label: "Points",
-    pick: (p) => p.points,
-    detail: (p) => `${p.fieldGoals.made}/${p.fieldGoals.attempted} FG, ${p.freeThrows.made}/${p.freeThrows.attempted} FT`,
-  },
-  {
-    label: "Rebounds",
-    pick: (p) => p.rebounds.total,
-    detail: (p) => `${p.rebounds.defensive} DREB, ${p.rebounds.offensive} OREB`,
-  },
-  {
-    label: "Assists",
-    pick: (p) => p.assists,
-    detail: (p) => `${p.turnovers} TO, ${p.minutes} MIN`,
-  },
-];
 
 /**
  * Game leaders as a ledger: six rows, read top to bottom, grouped under a stat
@@ -223,21 +186,15 @@ function Leaders({
   return (
     <Panel title="Game leaders" flush>
       <div>
-        {LEADER_CATS.map((c) => {
-          const a = best(b.players.away, c.pick);
-          const h = best(b.players.home, c.pick);
-          const av = a ? c.pick(a) ?? 0 : 0;
-          const hv = h ? c.pick(h) ?? 0 : 0;
+        {gameLeaders(b).map((c) => {
           return (
             <div key={c.label}>
               <p className="px-4 pt-3 pb-1 text-[0.6rem] uppercase tracking-widest font-bold text-ink">
                 {c.label}
               </p>
-              {/* A tie tints BOTH rows: 11 rebounds each is two players who led
-                  the game, and picking one of them on a tiebreak would be
-                  inventing a result the game didn't produce. */}
-              <LeaderRow p={a} c={c} team={b.game.away.team} color={ac} photos={photos} won={av >= hv} />
-              <LeaderRow p={h} c={c} team={b.game.home.team} color={hc} photos={photos} won={hv >= av} />
+              {/* A tie tints BOTH rows — see gameLeaders. */}
+              <LeaderRow line={c.away} team={b.game.away.team} color={ac} photos={photos} />
+              <LeaderRow line={c.home} team={b.game.home.team} color={hc} photos={photos} />
             </div>
           );
         })}
@@ -266,16 +223,15 @@ function Leaders({
  * PlayerPhoto already draws, so a player we cannot resolve degrades quietly.
  */
 function LeaderRow({
-  p, c, team, color, photos, won,
+  line, team, color, photos,
 }: {
-  p: BoxPlayer | null;
-  c: (typeof LEADER_CATS)[number];
+  line: LeaderLine | null;
   team: string;
   color: string;
   photos: PhotoIndex;
-  won: boolean;
 }) {
-  if (!p) return null;
+  if (!line) return null;
+  const { player: p, won } = line;
   return (
     <div
       className="flex items-center gap-3 px-4 py-2 border-t border-hairline/50"
@@ -288,14 +244,14 @@ function LeaderRow({
           {p.name}
           {p.position && <span className="text-ink-muted font-normal ml-1.5 text-[0.7rem]">{p.position}</span>}
         </p>
-        <p className="text-[0.65rem] tabular text-ink-muted leading-tight">{c.detail(p)}</p>
+        <p className="text-[0.65rem] tabular text-ink-muted leading-tight">{line.detail}</p>
       </div>
       {/* Ink for the category leader, muted for the other — the same pair the
           scoreline and the box panels use. It was the team's color, which meant
           six numbers in two hues down one short panel, each of them restating
           what the tinted row and the crest beside it already say. */}
       <span className={cn("text-2xl font-bold tabular leading-none shrink-0", won ? "text-ink" : "text-ink-muted")}>
-        {c.pick(p)}
+        {line.value}
       </span>
     </div>
   );
@@ -303,39 +259,38 @@ function LeaderRow({
 
 /* ------------------------------- game info ------------------------------- */
 
-function GameInfo({ b }: { b: GameBundle }) {
-  const g = b.game;
-  const tv = b.broadcasts.filter((x) => x.broadcastType === "TV").map((x) => x.broadcastName).join(", ");
-  const line = lineLabel(b);
-  const ou = (b.line.find((l) => l.provider === "Draft Kings") ?? b.line[0])?.overUnder ?? null;
-  const total = (g.home.points ?? 0) + (g.away.points ?? 0);
+// Every row carries an icon rather than only some of them: a two-column grid
+// with half its cells indented and half not reads as a rendering fault.
+const INFO_ICONS: Record<GameInfoLabel, typeof Landmark> = {
+  Arena: Landmark,
+  Location: MapPin,
+  "Tip-off": Clock,
+  Attendance: Users,
+  Television: Tv,
+  Line: CircleDollarSign,
+  // Over/under is literally a direction, which is what the glyph says.
+  Total: ArrowUpDown,
+};
 
-  // Every row carries an icon rather than only some of them: a two-column grid
-  // with half its cells indented and half not reads as a rendering fault.
-  const rows: Array<[string, string | null, typeof Landmark]> = [
-    ["Arena", g.venue, Landmark],
-    ["Location", [g.city, g.state].filter(Boolean).join(", ") || null, MapPin],
-    ["Tip-off", tipLabel(g.startDate), Clock],
-    ["Attendance", g.attendance ? g.attendance.toLocaleString() : null, Users],
-    ["Television", tv || null, Tv],
-    ["Line", line, CircleDollarSign],
-    // Over/under is literally a direction, which is what the glyph says.
-    ["Total", ou !== null ? `${ou} · ${total > ou ? "over" : "under"} at ${total}` : null, ArrowUpDown],
-  ];
+function GameInfo({ b }: { b: GameBundle }) {
+  const rows = gameInfoRows(b);
   // Two per row in a column: a single full-width strip left most of the line
   // empty here, and a label/value table wasted half the width on labels.
   return (
     <Panel title="Game info">
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
-        {rows.filter(([, v]) => v).map(([k, v, Icon]) => (
-          <div key={k} className="min-w-0 flex gap-2">
-            <Icon className="w-3.5 h-3.5 mt-0.5 shrink-0 text-ink-muted" aria-hidden strokeWidth={1.75} />
-            <div className="min-w-0">
-              <dt className="text-[0.55rem] uppercase tracking-[0.14em] font-bold text-ink-muted">{k}</dt>
-              <dd className="text-[0.8rem] text-ink-soft leading-snug mt-0.5">{v}</dd>
+        {rows.map(({ label: k, value: v }) => {
+          const Icon = INFO_ICONS[k];
+          return (
+            <div key={k} className="min-w-0 flex gap-2">
+              <Icon className="w-3.5 h-3.5 mt-0.5 shrink-0 text-ink-muted" aria-hidden strokeWidth={1.75} />
+              <div className="min-w-0">
+                <dt className="text-[0.55rem] uppercase tracking-[0.14em] font-bold text-ink-muted">{k}</dt>
+                <dd className="text-[0.8rem] text-ink-soft leading-snug mt-0.5">{v}</dd>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </dl>
     </Panel>
   );
@@ -353,48 +308,9 @@ function GameInfo({ b }: { b: GameBundle }) {
  * pair, so a row where the teams are close reads as close.
  */
 function TeamStatsPanel({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
-  const h = b.teamStats.home, a = b.teamStats.away;
-  if (!h || !a) return null;
-
-  const led = percentLed(b);
-
-  const rows: StatRow[] = [
-    // Efficiency leads. Everything below it is the how; these two are the what,
-    // and they are the pair that actually decides who was better per
-    // possession once pace is taken out.
-    { label: "Offensive Rating", a: a.rating, h: h.rating },
-    { label: "Defensive Rating", a: h.rating, h: a.rating, lowerIsBetter: true },
-    { label: "Field Goal %", a: a.fieldGoals.pct, h: h.fieldGoals.pct, unit: "%",
-      aNote: `${a.fieldGoals.made}-${a.fieldGoals.attempted}`, hNote: `${h.fieldGoals.made}-${h.fieldGoals.attempted}` },
-    { label: "Three Point %", a: a.threePointFieldGoals.pct, h: h.threePointFieldGoals.pct, unit: "%",
-      aNote: `${a.threePointFieldGoals.made}-${a.threePointFieldGoals.attempted}`, hNote: `${h.threePointFieldGoals.made}-${h.threePointFieldGoals.attempted}` },
-    { label: "Free Throw %", a: a.freeThrows.pct, h: h.freeThrows.pct, unit: "%",
-      aNote: `${a.freeThrows.made}-${a.freeThrows.attempted}`, hNote: `${h.freeThrows.made}-${h.freeThrows.attempted}` },
-    { label: "Rebounds", a: a.rebounds.total, h: h.rebounds.total },
-    { label: "Offensive Rebounds", a: a.rebounds.offensive, h: h.rebounds.offensive },
-    { label: "Assists", a: a.assists, h: h.assists },
-    { label: "Turnovers", a: a.turnovers.total, h: h.turnovers.total, lowerIsBetter: true },
-    { label: "Points in the Paint", a: a.points.inPaint, h: h.points.inPaint },
-    { label: "Fast-break Points", a: a.points.fastBreak, h: h.points.fastBreak },
-    { label: "Effective FG%", a: a.fourFactors.effectiveFieldGoalPct, h: h.fourFactors.effectiveFieldGoalPct, unit: "%" },
-    // Rate stats, both denominated in field-goal attempts, which is what makes
-    // them comparable between teams that played at different speeds.
-    //
-    // SPELLED OUT, like every other row here. "3PAR" and "FTAR" were the only
-    // acronyms in a list that otherwise reads "Points in the Paint" and
-    // "Fast-break Points", and they are the two rows a reader is least likely
-    // to already know.
-    //
-    // Both say ATTEMPT RATE, which is what the R in each acronym stands for
-    // and what the stat actually is: attempts over field-goal attempts, not a
-    // make rate. Naming them in parallel is also the point — they are the same
-    // measurement pointed at two different shots.
-    { label: "3-Point Attempt Rate", a: rate(a.threePointFieldGoals.attempted, a.fieldGoals.attempted),
-      h: rate(h.threePointFieldGoals.attempted, h.fieldGoals.attempted), unit: "%" },
-    { label: "Free Throw Attempt Rate", a: a.fourFactors.freeThrowRate, h: h.fourFactors.freeThrowRate, unit: "%" },
-    { label: "Largest Lead", a: a.points.largestLead, h: h.points.largestLead },
-  ];
-  if (led) rows.push({ label: "Percent Led", a: led.away, h: led.home, unit: "%" });
+  // Null when either side's team stats are missing — see teamStatRows.
+  const rows = teamStatRows(b);
+  if (!rows) return null;
 
   return (
     <Panel title="Team stats" flush>
@@ -444,7 +360,7 @@ function SeasonPace({
   value, game, color, align,
 }: { value: number | null; game: number; color: string; align: "left" | "right" }) {
   if (value === null) return <span />;
-  const delta = Math.round((game - value) * 10) / 10;
+  const delta = paceDelta(game, value);
   return (
     <div className={align === "right" ? "text-right" : ""}>
       <p className="text-sm tabular font-semibold" style={{ color: readableInk(color) }}>{n1(value)}</p>
@@ -457,13 +373,6 @@ function SeasonPace({
     </div>
   );
 }
-
-type StatRow = {
-  label: string; a: number; h: number; unit?: string;
-  aNote?: string; hNote?: string;
-  /** Turnovers and defensive rating are won by the SMALLER number. */
-  lowerIsBetter?: boolean;
-};
 
 /**
  * Marks the side that took a category.
@@ -484,11 +393,6 @@ function Won({ on, children }: { on: boolean; children: React.ReactNode }) {
   );
 }
 
-/** A percentage of attempts, e.g. 3PA rate. Guards the zero-attempt game. */
-function rate(part: number, whole: number): number {
-  return whole > 0 ? (part / whole) * 100 : 0;
-}
-
 /**
  * One stat, both sides, as a SINGLE track split at a moving seam.
  *
@@ -502,27 +406,14 @@ function rate(part: number, whole: number): number {
  * number.
  *
  * THE SEAM ALWAYS LEANS TOWARD THE BETTER TEAM, which is not the same as
- * leaning toward the bigger number. Turnovers and defensive rating are won by
- * the SMALLER figure, and a plain share-of-total split put the longer segment
- * under the side that turned it over more while the +N underneath credited the
- * other — the bar and the verdict pointing opposite ways in the same row. Those
- * rows invert, so one rule holds down the whole column: further from center
- * toward a team means that team did better. The figures themselves are printed
- * either side, so nothing is hidden by the flip.
+ * leaning toward the bigger number — see statSplit. The figures themselves are
+ * printed either side, so nothing is hidden by the flip.
  *
  * The green winner chip is gone with the mirrored bars. It was a third color
  * system laid over two team colors to say what the seam now says by shape.
  */
 function StatRowView({ r, hc, ac }: { r: StatRow; hc: string; ac: string }) {
-  const better = r.lowerIsBetter ? (x: number, y: number) => x < y : (x: number, y: number) => x > y;
-  const lead = r.a === r.h ? null : better(r.a, r.h) ? "a" : "h";
-
-  // Share of the pair, inverted for the lower-is-better rows so the seam and
-  // the verdict never disagree. A 0-0 row (a game with no free throws) has no
-  // ratio at all and sits dead center rather than dividing by zero.
-  const tot = Math.abs(r.a) + Math.abs(r.h);
-  const raw = tot > 0 ? (Math.abs(r.a) / tot) * 100 : 50;
-  const aw = r.lowerIsBetter ? 100 - raw : raw;
+  const { lead, awayShare: aw } = statSplit(r);
 
   return (
     <div className="px-4 py-2.5 border-t border-hairline/50">
@@ -566,84 +457,17 @@ function StatRowView({ r, hc, ac }: { r: StatRow; hc: string; ac: string }) {
   );
 }
 
-/**
- * Share of game clock each side spent in front, as whole percents.
- *
- * Derived from the play-by-play rather than reported: it is the stat that says
- * whether a three-point win was a lead held all night or a rescue in the last
- * minute, and the two read identically in every other number on this panel.
- * Time tied belongs to neither side, so the two figures need not sum to 100.
- */
-function percentLed(b: GameBundle): { home: number; away: number } | null {
-  const plays = b.plays;
-  if (plays.length < 2) return null;
-  const elapsed = (p: (typeof plays)[number]) => {
-    const before = p.per <= 2 ? (p.per - 1) * 1200 : 2400 + (p.per - 3) * 300;
-    const len = p.per <= 2 ? 1200 : 300;
-    return before + (len - p.sec);
-  };
-  let home = 0, away = 0, total = 0;
-  for (let i = 1; i < plays.length; i++) {
-    const prev = plays[i - 1]!, cur = plays[i]!;
-    const dt = elapsed(cur) - elapsed(prev);
-    if (dt <= 0) continue;
-    total += dt;
-    // The score BEFORE the gap is who was ahead during it.
-    if (prev.hs > prev.as) home += dt;
-    else if (prev.as > prev.hs) away += dt;
-  }
-  if (total <= 0) return null;
-  return { home: Math.round((home / total) * 100), away: Math.round((away / total) * 100) };
-}
-
 /* ------------------------------ four factors ------------------------------ */
 
 /**
- * The four factors, as this site defines them — the same set the team pages
- * rank against D-I: rebound differential, offensive rebound rate, fast-break
- * differential, and three-point differential. NOT Dean Oliver's four; ours are
- * the ones our own model leans on.
- *
- * THREE OF THEM ARE DIFFERENTIALS, so one team's figure is the negative of the
- * other's and each is won outright. Offensive rebound rate is the exception:
- * both teams have their own, and a 34% and a 33% night is two teams crashing
- * the glass, not one winning a category. It is scored against the D-I season
- * average instead, so BOTH sides can take it or neither can.
- *
- * That means the tallies are not complementary — 3-2 and 1-1 are both possible
- * — and the panel counts each team out of four rather than splitting four.
- *
- * THE TIEBREAK. Level on the four and the game goes to FTA rate, which is
- * deliberately not one of them. Getting to the line is the closest thing to a
- * fifth factor, and leaving a draw unresolved would waste the verdict.
+ * The four factors panel. Which four (this site's, not Dean Oliver's), why
+ * OREB % is scored against the D-I average so the tallies are not
+ * complementary, and the FTA-rate tiebreak are all in fourFactors.
  */
 function FourFactors({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
-  const h = b.teamStats.home, a = b.teamStats.away;
-  if (!h || !a) return null;
-
-  const rebDiff = a.rebounds.total - h.rebounds.total;
-  const fbpDiff = a.points.fastBreak - h.points.fastBreak;
-  const tpmDiff = a.threePointFieldGoals.made - h.threePointFieldGoals.made;
-  const base = orebBaseline(b.game.season);
-
-  const factors: Factor[] = [
-    { key: "reb", label: "REB Diff", sub: "total rebounds vs allowed", a: rebDiff, h: -rebDiff, diff: true },
-    { key: "orb", label: "OREB %", sub: `offensive rebound rate vs ${n1(base)}% D-I average`,
-      a: a.fourFactors.offensiveReboundPct, h: h.fourFactors.offensiveReboundPct, unit: "%", baseline: base },
-    { key: "fbp", label: "FBP Diff", sub: "fast-break points vs allowed", a: fbpDiff, h: -fbpDiff, diff: true },
-    { key: "tpm", label: "3PM Diff", sub: "3-pointers made vs allowed", a: tpmDiff, h: -tpmDiff, diff: true },
-  ];
-
-  const aWins = factors.filter((f) => winsFactor(f, "a")).length;
-  const hWins = factors.filter((f) => winsFactor(f, "h")).length;
-  const ftaA = a.fourFactors.freeThrowRate, ftaH = h.fourFactors.freeThrowRate;
-  const level = aWins === hWins;
-  const winner = !level
-    ? (aWins > hWins ? "a" : "h")
-    : ftaA === ftaH ? null : ftaA > ftaH ? "a" : "h";
-
-  const name = winner === "a" ? b.game.away.team : winner === "h" ? b.game.home.team : null;
-  const won = winner === "a" ? b.game.away.winner : winner === "h" ? b.game.home.winner : null;
+  const ff = fourFactors(b);
+  if (!ff) return null;
+  const { factors, aWins, hWins, ftaA, ftaH, level, winner, name, won } = ff;
 
   return (
     // CLOSED BY DEFAULT. The four factors are an argument about WHY a game went
@@ -694,25 +518,10 @@ function FourFactors({ b, hc, ac }: { b: GameBundle; hc: string; ac: string }) {
   );
 }
 
-type Factor = {
-  key: string; label: string; sub: string;
-  a: number; h: number; unit?: string;
-  /** A differential: one side's figure is the negative of the other's. */
-  diff?: boolean;
-  /** Scored against this league value instead of against the opponent. */
-  baseline?: number;
-};
-
-/** Did this side take the factor? Against the baseline where there is one,
- *  against the opponent otherwise. */
-function winsFactor(f: Factor, side: "a" | "h"): boolean {
-  const mine = side === "a" ? f.a : f.h;
-  const theirs = side === "a" ? f.h : f.a;
-  return f.baseline !== undefined ? mine > f.baseline : mine > theirs;
-}
-
-function FactorRow({ f, b, hc, ac }: { f: Factor; b: GameBundle; hc: string; ac: string }) {
-  const aWon = winsFactor(f, "a"), hWon = winsFactor(f, "h");
+function FactorRow({ f, b, hc, ac }: { f: FactorLine; b: GameBundle; hc: string; ac: string }) {
+  // Against the baseline where there is one, against the opponent otherwise —
+  // see fourFactors.
+  const aWon = f.aWon, hWon = f.hWon;
   const show = (v: number) => (f.diff && v > 0 ? `+${n1(v)}` : `${n1(v)}${f.unit ?? ""}`);
   return (
     // The definition rides on the row's title rather than under every label:
@@ -844,10 +653,9 @@ function Form({ side, rows }: { side: GameSide; rows: ScheduleRow[] }) {
 }
 
 function HeadToHead({ b }: { b: GameBundle }) {
-  const g = b.game;
-  const w = b.h2h.filter((r) => r.won).length;
+  const tally = h2hTally(b);
   return (
-    <Strip title="Head to head" note={b.h2h.length ? `${g.home.team} ${w}-${b.h2h.length - w}` : undefined}>
+    <Strip title="Head to head" note={tally.note ?? undefined}>
       {/* Each cell wears the WINNER's mark and nothing else — no green/red
           wash and no W/L letter. Both were stated from the home team's side,
           which made a red cell under the visiting school's badge ambiguous
@@ -855,7 +663,7 @@ function HeadToHead({ b }: { b: GameBundle }) {
       <ResumeStrip
         rows={b.h2h}
         emptyLabel="First meeting in our records."
-        markFor={(r) => (r.won ? g.home.team : r.opponent)}
+        markFor={(r) => tally.winners[b.h2h.indexOf(r)]!}
         tone="neutral"
       />
     </Strip>
