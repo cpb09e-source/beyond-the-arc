@@ -6,14 +6,14 @@ import { contextBridge, ipcRenderer } from "electron";
  * everything that comes through it.
  */
 
-export type SeasonSource = "memory" | "repo" | "cache" | "network";
-export type SeasonPayload = { json: string; source: SeasonSource };
+export type Corpus = "teams" | "players" | "team-games" | "player-games";
+export type DataSource = "memory" | "repo" | "cache" | "network";
+export type DataPayload = { json: string; source: DataSource };
 export type ThemeMode = "system" | "light" | "dark";
 
 const api = {
   platform: process.platform,
-  season: (kind: "teams", year: number): Promise<SeasonPayload> =>
-    ipcRenderer.invoke("season:get", kind, year),
+  data: (corpus: Corpus, year: number): Promise<DataPayload> => ipcRenderer.invoke("data:get", corpus, year),
   setTheme: (mode: ThemeMode): void => ipcRenderer.send("theme:set", mode),
 };
 

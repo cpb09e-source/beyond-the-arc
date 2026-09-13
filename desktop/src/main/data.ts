@@ -4,7 +4,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
 /**
- * Season files for the renderer, from wherever the nearest copy is.
+ * Data files for the renderer, from wherever the nearest copy is.
  *
  * EVERY SEASON THROUGH 2025-26 IS FROZEN, and will never change again. So once
  * a copy exists on this machine it is trusted forever: no revalidation, no
@@ -13,21 +13,40 @@ import { dirname, join, resolve } from "node:path";
  * version check in P3. Until then nothing this file serves is live.
  *
  * NEAREST FIRST:
- *   1. memory, for flicking back to a season already opened this session
+ *   1. memory, for returning to a file already opened this session
  *   2. the site's own public/data, when running from the repo in development
  *   3. the disk cache under userData
- *   4. btacbb.xyz, written into the disk cache on the way back
+ *   4. the network, written into the disk cache on the way back
  *
- * The renderer receives TEXT rather than an object. Parsing 1.3 MB of JSON on
- * the renderer side is faster than structured-cloning the same object graph
- * across the IPC boundary.
+ * The renderer receives TEXT rather than an object. Parsing JSON on the
+ * renderer side is faster than structured-cloning the same object graph across
+ * the IPC boundary, and the biggest file here is a 7 MB game log.
  */
 
-export type SeasonKind = "teams";
-export type SeasonSource = "memory" | "repo" | "cache" | "network";
+export type Corpus = "teams" | "players" | "team-games" | "player-games";
+export type DataSource = "memory" | "repo" | "cache" | "network";
 
-const CORPUS: Record<SeasonKind, string> = { teams: "teams-by-year" };
-const ORIGIN = "https://btacbb.xyz";
+/**
+ * Every file the renderer may ask for, as a fixed map.
+ *
+ * AN ALLOW-LIST, NOT A PATH JOIN. The corpus name and the year both end up in a
+ * filesystem path and a URL, so the name is matched against this table and the
+ * year is validated as four digits; nothing the renderer sends is interpolated.
+ *
+ * `r2` marks the corpora the site serves from its R2 bucket instead of from
+ * btacbb.xyz, mirroring R2_DIRS in src/lib/data-url.ts. Paid seasons of those
+ * live in a private bucket behind a signing function, which the app reaches
+ * once it can sign in (P3).
+ */
+const CORPORA: Record<Corpus, { path: (year: number) => string; r2: boolean }> = {
+  teams: { path: (y) => `teams-by-year/${y}.json`, r2: false },
+  players: { path: (y) => `players-explorer/${y}.json`, r2: false },
+  "team-games": { path: (y) => `team-game-index/${y}.json`, r2: true },
+  "player-games": { path: (y) => `game-index/${y}.json`, r2: true },
+};
+
+const SITE_DATA = "https://btacbb.xyz/data";
+const R2_PUBLIC = "https://pub-86f242cc47a6490a8a66813d2650b86d.r2.dev";
 
 const memory = new Map<string, string>();
 
@@ -36,8 +55,8 @@ export function isValidYear(y: unknown): y is number {
   return typeof y === "number" && Number.isInteger(y) && y >= 2008 && y <= 2100;
 }
 
-export function isSeasonKind(k: unknown): k is SeasonKind {
-  return typeof k === "string" && Object.hasOwn(CORPUS, k);
+export function isCorpus(k: unknown): k is Corpus {
+  return typeof k === "string" && Object.hasOwn(CORPORA, k);
 }
 
 /** The site's public/data when this is a development run from the repo. */
@@ -48,11 +67,12 @@ function repoDataDir(): string | null {
   return existsSync(dir) ? dir : null;
 }
 
-export async function loadSeason(
-  kind: SeasonKind,
+export async function loadCorpus(
+  corpus: Corpus,
   year: number,
-): Promise<{ json: string; source: SeasonSource }> {
-  const rel = join(CORPUS[kind], `${year}.json`);
+): Promise<{ json: string; source: DataSource }> {
+  const spec = CORPORA[corpus];
+  const rel = spec.path(year);
 
   const hit = memory.get(rel);
   if (hit) return { json: hit, source: "memory" };
@@ -74,12 +94,13 @@ export async function loadSeason(
     return { json, source: "cache" };
   }
 
-  const res = await fetch(`${ORIGIN}/data/${CORPUS[kind]}/${year}.json`);
+  const url = spec.r2 ? `${R2_PUBLIC}/${rel}` : `${SITE_DATA}/${rel}`;
+  const res = await fetch(url);
   if (!res.ok) {
-    // A 404 on a paid season is the archive gate, not a missing file: those
-    // seasons are deliberately absent from the public site. Signing in to the
-    // app arrives in P3; until then the renderer says so plainly.
-    throw new Error(res.status === 404 ? "season-gated" : `http-${res.status}`);
+    // A 403 or 404 on a paid season is the archive gate, not a missing file:
+    // those seasons are deliberately absent from the public copies. Signing in
+    // to the app arrives in P3; until then the renderer says so plainly.
+    throw new Error(res.status === 404 || res.status === 403 ? "season-gated" : `http-${res.status}`);
   }
   const json = await res.text();
   // Refuse to cache anything that is not JSON. A frozen season is trusted

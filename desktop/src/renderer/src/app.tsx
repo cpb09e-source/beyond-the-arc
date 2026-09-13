@@ -1,47 +1,64 @@
-import { useEffect, useRef, useState } from "react";
-import { ALL_SEASONS, isFlaggedSeason, SEASON_CEIL, seasonFlagNote } from "@/lib/seasons";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { ALL_SEASONS, SEASON_CEIL } from "@/lib/seasons";
 import logoOnLight from "@public/images/btalogo_final-01.svg";
 import logoOnDark from "@public/images/newbtalogo-white-01.svg";
-import type { SeasonSource, ThemeMode } from "../../preload";
-import { useSeason, type SeasonState } from "~/data/use-season";
-import { seasonLabel } from "~/ui/format";
+import type { ThemeMode } from "../../preload";
+import { StatusContext } from "~/shell/status";
+import { VIEWS, viewById, type ViewDef } from "~/shell/views";
 import { Kbd } from "~/ui/kbd";
-import { TeamTable } from "~/views/team-table";
-
-/** Where the open season's file came from, in the words a person would use. */
-const SOURCE: Record<SeasonSource, string> = {
-  memory: "Already open",
-  repo: "Read from the site's data folder",
-  cache: "Read from this computer",
-  network: "Downloaded from btacbb.xyz",
-};
 
 const THEME_KEY = "bta.theme";
+const VIEW_KEY = "bta.view";
+const SEASON_KEY = "bta.season";
 
+/**
+ * The frame: title bar, sidebar, the current view, status bar.
+ *
+ * THE SEASON BELONGS TO THE WORKSPACE, not to a view. Moving from Team Explorer
+ * to a game log keeps you in 2022-23, because the question you were asking was
+ * about 2022-23. And the app reopens where you left it, view and season both.
+ */
 export function App() {
-  const [year, setYear] = useState<number>(SEASON_CEIL);
-  const [query, setQuery] = useState("");
-  const [count, setCount] = useState<number | null>(null);
+  const [viewId, setViewId] = usePersisted<string>(VIEW_KEY, VIEWS[0]!.id, (v): v is string => typeof v === "string");
+  const [year, setYear] = usePersisted<number>(
+    SEASON_KEY,
+    SEASON_CEIL,
+    (v): v is number => typeof v === "number" && ALL_SEASONS.includes(v),
+  );
+  const [queries, setQueries] = useState<Record<string, string>>({});
+  const [status, setStatus] = useState("");
   const [theme, setTheme] = useThemeMode();
-  const [state, retry] = useSeason(year);
   const filterRef = useRef<HTMLInputElement>(null);
 
-  // Ctrl K focuses the filter for now. The command palette takes this key over
-  // in P1, and the filter becomes one of the things it can do.
+  const view = viewById(viewId);
+  const query = queries[view.id] ?? "";
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Ctrl K focuses the filter for now; the action palette takes it over later.
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         filterRef.current?.focus();
         filterRef.current?.select();
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      // [ older season, ] newer. ALL_SEASONS runs newest first.
+      if (e.key === "[" || e.key === "]") {
+        e.preventDefault();
+        setYear((y) => {
+          const i = ALL_SEASONS.indexOf(y);
+          return (e.key === "[" ? ALL_SEASONS[i + 1] : ALL_SEASONS[i - 1]) ?? y;
+        });
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [setYear]);
 
-  const total = state.status === "ready" ? state.season.teams.length : null;
-  const filtered = total != null && count != null && query.trim() !== "" && count !== total;
+  const Current = view.Component;
 
   return (
     <div className="grid h-full grid-cols-[216px_minmax(0,1fr)] grid-rows-[40px_minmax(0,1fr)_28px]">
@@ -61,15 +78,15 @@ export function App() {
           <input
             ref={filterRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => setQueries((q) => ({ ...q, [view.id]: e.target.value }))}
             onKeyDown={(e) => {
               if (e.key !== "Escape") return;
               e.preventDefault();
-              if (query) setQuery("");
+              if (query) setQueries((q) => ({ ...q, [view.id]: "" }));
               else e.currentTarget.blur();
             }}
-            placeholder="Filter teams or conferences"
-            aria-label="Filter teams or conferences"
+            placeholder={view.filterPlaceholder}
+            aria-label={view.filterPlaceholder}
             spellCheck={false}
             className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-muted"
           />
@@ -77,79 +94,77 @@ export function App() {
         </label>
       </header>
 
-      <nav aria-label="Seasons" className="flex min-h-0 flex-col border-r border-hairline bg-chrome">
-        <div className="px-4 pb-1.5 pt-4 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
-          Teams
-        </div>
-        <ul className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
-          {ALL_SEASONS.map((y) => {
-            const active = y === year;
-            return (
-              <li key={y}>
-                <button
-                  type="button"
-                  aria-current={active ? "true" : undefined}
-                  title={seasonFlagNote(y) ?? undefined}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => {
-                    setYear(y);
-                    setCount(null);
-                  }}
-                  className={`flex h-[28px] w-full items-center justify-between rounded-md px-2 text-[13px] transition-colors ${
-                    active ? "bg-[var(--row-focus)] font-medium text-ink" : "text-ink-soft hover:bg-[var(--row-hover)] hover:text-ink"
-                  }`}
-                >
-                  <span className="tabular">{seasonLabel(y)}</span>
-                  {isFlaggedSeason(y) && (
-                    <span className="text-[9.5px] font-semibold uppercase tracking-[0.08em] text-ink-muted">Covid</span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <ThemeSwitch value={theme} onChange={setTheme} />
-      </nav>
+      <Sidebar current={view} onPick={setViewId} theme={theme} setTheme={setTheme} />
 
       <main className="flex min-h-0 min-w-0 flex-col bg-paper">
-        <div className="flex shrink-0 items-end justify-between gap-4 px-5 pb-3 pt-4">
-          <div className="min-w-0">
-            <div className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-accent">Teams</div>
-            <h1 className="mt-1 text-[21px] font-semibold leading-none tracking-[-0.015em] text-ink tabular">
-              {seasonLabel(year)}
-            </h1>
-          </div>
-          {total != null && (
-            <div className="pb-0.5 text-[12px] text-ink-muted tabular" title="Completed seasons never change">
-              {filtered ? `${count} of ${total} teams` : `${total} teams`} · Final
-            </div>
-          )}
-        </div>
-        <div className="relative min-h-0 flex-1 border-t border-hairline">
-          {state.status === "ready" ? (
-            <TeamTable key={year} season={state.season} query={query} onCount={setCount} />
-          ) : state.status === "loading" ? (
-            <TableSkeleton />
-          ) : (
-            <LoadError state={state} onRetry={retry} />
-          )}
-        </div>
+        <StatusContext.Provider value={setStatus}>
+          <Current key={view.id} year={year} setYear={setYear} query={query} />
+        </StatusContext.Provider>
       </main>
 
       <footer className="col-span-2 flex items-center gap-5 border-t border-hairline bg-chrome px-4 text-[11.5px] text-ink-muted">
-        <span className="tabular">
-          {state.status === "ready"
-            ? `${SOURCE[state.source]} in ${state.ms} ms`
-            : state.status === "loading"
-              ? "Loading…"
-              : "Not loaded"}
-        </span>
+        <span className="tabular">{status}</span>
         <span className="flex-1" />
         <Hint keys={["↑", "↓"]} label="move" />
         <Hint keys={["Space"]} label="peek" />
+        <Hint keys={["[", "]"]} label="season" />
         <Hint keys={["Ctrl K"]} label="filter" />
       </footer>
     </div>
+  );
+}
+
+function Sidebar({
+  current,
+  onPick,
+  theme,
+  setTheme,
+}: {
+  current: ViewDef;
+  onPick: (id: string) => void;
+  theme: ThemeMode;
+  setTheme: (m: ThemeMode) => void;
+}) {
+  const sections: Array<[string, ViewDef[]]> = [];
+  for (const v of VIEWS) {
+    const group = sections.find(([s]) => s === v.section);
+    if (group) group[1].push(v);
+    else sections.push([v.section, [v]]);
+  }
+
+  return (
+    <nav aria-label="Workspace" className="flex min-h-0 flex-col border-r border-hairline bg-chrome">
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 pt-3">
+        {sections.map(([section, views]) => (
+          <div key={section} className="mb-4">
+            <div className="px-2 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink-muted">{section}</div>
+            <ul className="grid gap-px">
+              {views.map((v) => {
+                const active = v.id === current.id;
+                const Icon = v.icon;
+                return (
+                  <li key={v.id}>
+                    <button
+                      type="button"
+                      aria-current={active ? "page" : undefined}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => onPick(v.id)}
+                      className={`flex h-[28px] w-full items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors ${
+                        active ? "bg-[var(--row-focus)] font-medium text-ink" : "text-ink-soft hover:bg-[var(--row-hover)] hover:text-ink"
+                      }`}
+                    >
+                      <Icon size={15} strokeWidth={2} className={active ? "text-accent" : "text-ink-muted"} />
+                      <span className="truncate">{v.label}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <ThemeSwitch value={theme} onChange={setTheme} />
+    </nav>
   );
 }
 
@@ -191,6 +206,30 @@ function ThemeSwitch({ value, onChange }: { value: ThemeMode; onChange: (m: Them
   );
 }
 
+/** State that survives a relaunch, validated on the way back in. */
+function usePersisted<T>(key: string, fallback: T, valid: (v: unknown) => v is T): [T, Dispatch<SetStateAction<T>>] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw != null) {
+        const parsed: unknown = JSON.parse(raw);
+        if (valid(parsed)) return parsed;
+      }
+    } catch {
+      /* unreadable: fall back */
+    }
+    return fallback;
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      /* not persisted; still applies for this session */
+    }
+  }, [key, value]);
+  return [value, setValue];
+}
+
 /**
  * The theme choice lives in the renderer; nativeTheme follows it.
  *
@@ -229,54 +268,4 @@ function useThemeMode(): [ThemeMode, (m: ThemeMode) => void] {
   }, []);
 
   return [mode, setMode];
-}
-
-/** Rows shaped like the table's, so the switch from loading to loaded does not jump. */
-function TableSkeleton() {
-  return (
-    <div aria-busy="true" aria-label="Loading teams" className="absolute inset-0 overflow-hidden">
-      <div className="h-8 border-b border-hairline" />
-      {Array.from({ length: 20 }, (_, i) => (
-        <div key={i} className="flex h-[42px] items-center gap-4 border-b border-hairline/50 px-3">
-          <span className="skeleton h-[8px] w-[22px] rounded" />
-          <span className="skeleton h-[18px] w-[18px] rounded" />
-          <span className="skeleton h-[8px] rounded" style={{ width: 90 + ((i * 37) % 70) }} />
-          <span className="skeleton ml-auto h-[8px] w-[46%] rounded" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function LoadError({
-  state,
-  onRetry,
-}: {
-  state: Extract<SeasonState, { status: "error" }>;
-  onRetry: () => void;
-}) {
-  return (
-    <div className="grid h-full place-content-center gap-2.5 px-6 text-center">
-      {state.reason === "gated" ? (
-        <>
-          <p className="text-[14px] font-medium text-ink">{seasonLabel(state.year)} is part of the Season Pass.</p>
-          <p className="mx-auto max-w-[46ch] text-[12.5px] text-ink-muted">
-            Signing in to the desktop app is not available yet, so this season only opens when running from the repo.
-          </p>
-        </>
-      ) : (
-        <>
-          <p className="text-[14px] font-medium text-ink">{seasonLabel(state.year)} did not load.</p>
-          <p className="mx-auto max-w-[46ch] text-[12.5px] text-ink-muted">{state.message}</p>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="mx-auto mt-1 h-7 rounded-md border border-hairline px-3 text-[12px] text-ink transition-colors hover:border-ink-muted"
-          >
-            Try again
-          </button>
-        </>
-      )}
-    </div>
-  );
 }

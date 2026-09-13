@@ -38,7 +38,13 @@
   --row-focus: color-mix(in oklab, var(--accent) 9%, var(--paper));
   --row-hover: color-mix(in oklab, var(--ink) 4%, var(--chrome));
   --accent-wash: color-mix(in oklab, var(--accent) 12%, var(--card));
+  /* The active row inside a menu. Mixed against the MENU's surface, not the
+     page: in dark mode the page is darker than a menu, so a page-based tint
+     turned the highlight into a faint dark band. */
+  --menu-active: color-mix(in oklab, var(--accent) 16%, var(--card));
   --overlay-shadow: 0 24px 60px -24px rgb(26 34 56 / 0.34), 0 2px 8px rgb(26 34 56 / 0.08);
+  /* The soft edge on the last pinned column once content scrolls beneath it. */
+  --pin-edge: 8px 0 12px -8px rgb(26 34 56 / 0.2);
   /* The percentile ramp: seven bands, worst to best, exactly as globals.css
      defines them for src/components/percentile-chip.tsx. Band 4 is the
      near-neutral middle, so average recedes instead of shouting. */
@@ -65,6 +71,7 @@
   --bad: #ff6b6b;
   --chrome: #171717;
   --overlay-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.75), 0 2px 8px rgb(0 0 0 / 0.45);
+  --pin-edge: 8px 0 14px -8px rgb(0 0 0 / 0.7);
   /* The dark ramp: deep fills and light type, re-baked rather than inverted,
      because the light pastels read as headlights on a dark ground. */
   --pct-bg-1: #772b26; --pct-fg-1: #ffc5ba;
@@ -145,9 +152,17 @@ textarea {
   -webkit-app-region: no-drag;
 }
 
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+/*
+ * In the base layer, deliberately. Written unlayered it outranked every Tailwind
+ * utility regardless of specificity, so a component that said outline-none (a
+ * listbox whose active row already shows where focus is) still drew a heavy
+ * ring around itself.
+ */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
 }
 
 ::selection {
@@ -175,6 +190,22 @@ textarea {
   to {
     opacity: 1;
     scale: 1;
+  }
+}
+
+/* Menus and popovers open with a short drop, never a bounce. */
+.menu-in {
+  animation: menu-in 120ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    translate: 0 -4px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
   }
 }
 

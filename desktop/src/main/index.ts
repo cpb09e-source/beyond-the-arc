@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, Menu, nativeTheme, net, protocol, shell } 
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { isSeasonKind, isValidYear, loadSeason } from "./data";
+import { isCorpus, isValidYear, loadCorpus } from "./data";
 
 /**
  * bta:// is the app's own asset protocol. Registered before the app is ready,
@@ -105,11 +105,11 @@ function createWindow(): void {
 }
 
 function registerIpc(): void {
-  ipcMain.handle("season:get", (_event, kind: unknown, year: unknown) => {
+  ipcMain.handle("data:get", (_event, corpus: unknown, year: unknown) => {
     // Validated here, not trusted from the renderer: both values become part
     // of a filesystem path and a URL.
-    if (!isSeasonKind(kind) || !isValidYear(year)) throw new Error("bad-request");
-    return loadSeason(kind, year);
+    if (!isCorpus(corpus) || !isValidYear(year)) throw new Error("bad-request");
+    return loadCorpus(corpus, year);
   });
 
   // The renderer owns the choice; the OS-level pieces (caption buttons, window
