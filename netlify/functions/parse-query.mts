@@ -52,8 +52,6 @@ const STATS = [
 // drift here costs a bad suggestion, never a bad result.
 const SEASON_FLOOR = 2014;
 const SEASON_CEIL = 2026;
-// 2020-21 is kept now (flagged, not excluded, in src/lib/seasons.ts), so nothing is.
-const EXCLUDED_SEASONS: number[] = [];
 
 const SCHEMA = {
   type: "object",
@@ -74,7 +72,7 @@ const SCHEMA = {
     // No minimum/maximum here — structured outputs reject numeric bounds on
     // integer. The range lives in the description, and the client drops any
     // season outside its own window anyway (resolveQuery -> validSeasons).
-    seasons: { type: "array", items: { type: "integer" }, description: `Season END years (2015-16 season = 2016), between ${SEASON_FLOOR} and ${SEASON_CEIL}. An open-ended range such as "since 2022" runs through ${SEASON_CEIL}. Never include ${EXCLUDED_SEASONS.join(", ")} (absent from the data). Empty means all seasons.` },
+    seasons: { type: "array", items: { type: "integer" }, description: `Season END years (2015-16 season = 2016), between ${SEASON_FLOOR} and ${SEASON_CEIL}. An open-ended range such as "since 2022" runs through ${SEASON_CEIL}. Empty means all seasons.` },
     venue: { type: "string", enum: ["all", "home", "away", "neutral"] },
     quads: { type: "array", items: { type: "integer", enum: [1, 2, 3, 4] }, description: "NCAA quadrants. Empty means all." },
     conditions: {
@@ -119,7 +117,7 @@ RULES
 - Turnovers, fouls, points allowed and opponent shooting are all BETTER when LOWER. "Protected the ball" / "won the turnover battle" = tov_diff < 0.
 - "shot more threes" is ambiguous — prefer fg3_att_diff (attempts) and say so in notes. "MADE more threes" is fg3_made_diff.
 - Percentages are decimals: "shot over 40% from three" = fg3_pct > 0.4.
-- Seasons are END years. "2015-16" and "the 2016 season" are both 2016. Data covers ${SEASON_FLOOR}-${SEASON_CEIL}; ${SEASON_CEIL} is the most recent season. An open-ended range like "since 2020" means every season from 2020 through ${SEASON_CEIL} inclusive — do not stop early. ${EXCLUDED_SEASONS.join(", ")} is missing from the data, so never emit it, and silently skip it inside a range.
+- Seasons are END years. "2015-16" and "the 2016 season" are both 2016. Data covers ${SEASON_FLOOR}-${SEASON_CEIL}; ${SEASON_CEIL} is the most recent season. An open-ended range like "since 2020" means every season from 2020 through ${SEASON_CEIL} inclusive — do not stop early.
 - Return names as the user wrote them (fixing obvious typos). Do NOT try to guess an official name — the caller resolves names against the real list.
 - If the user names a school as the subject ("Duke games where..."), that is teams. If they name who was PLAYED ("against Duke"), that is opponents.
 - The subject can be a group rather than one school — "ACC teams", "Big Ten teams", "any team". Put the conference in conferences, leave teams empty, and still emit every per-game condition exactly as you would for a single school.
