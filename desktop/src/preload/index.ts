@@ -14,6 +14,7 @@ export type Corpus =
   | "player-shooting"
   | "team-games"
   | "player-games"
+  | "matchup"
   | "teams-index"
   | "players-index"
   | "search-index";

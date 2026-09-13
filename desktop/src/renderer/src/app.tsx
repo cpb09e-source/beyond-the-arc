@@ -160,7 +160,20 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     [dispatch],
   );
 
-  const shell = useMemo(() => ({ filterRef, openRecord, showInExplorer: go }), [openRecord, go]);
+  /** Open a view with a starting query: the predictor on the team a page is about, say. */
+  const openView = useCallback(
+    (viewId: string, how: { newTab?: boolean; query?: string; year?: number } = {}) => {
+      const year = how.year ?? currentRef.current.year;
+      dispatch(
+        how.newTab
+          ? { type: "open", viewId, year, query: how.query }
+          : { type: "navigate", viewId, year, query: how.query },
+      );
+    },
+    [dispatch],
+  );
+
+  const shell = useMemo(() => ({ filterRef, openRecord, openView, showInExplorer: go }), [openRecord, openView, go]);
 
   // The site's search indexes, loaded in the background at launch so the first
   // Ctrl+K already reaches every team and player.

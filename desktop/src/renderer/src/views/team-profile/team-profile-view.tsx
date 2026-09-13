@@ -1,7 +1,8 @@
-import { Table2 } from "lucide-react";
+import { Swords, Table2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PercentileChip } from "@/components/percentile-chip";
 import type { RankedStat, StaticTeamSeasonRow } from "@/lib/static-data";
+import { teamSlug } from "@/lib/team-slug";
 import { T, TEAM_GAME_VIEWS } from "@/lib/team-game-index";
 import { loadPlayerSeason, type Player } from "~/data/player-model";
 import { loadTeamGameSeason, type TeamGame } from "~/data/team-game-model";
@@ -70,7 +71,7 @@ const ROSTER_IDENTITY: Column<Player>[] = [
 ];
 
 export function TeamProfileView({ year, setYear, record }: ViewProps) {
-  const { openRecord, showInExplorer } = useShell();
+  const { openRecord, openView, showInExplorer } = useShell();
   const name = record?.kind === "team" ? record.name : "";
   const [tab, setTab] = useState<TabKey>("overview");
 
@@ -148,6 +149,13 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
               >
                 <Table2 size={14} strokeWidth={2} />
                 Team Explorer
+              </HeaderButton>
+              <HeaderButton
+                title="Predict a game against any team  ·  Ctrl-click for a new tab"
+                onClick={(e) => openView("matchup", { newTab: e.ctrlKey || e.metaKey, query: `a=${teamSlug(name)}` })}
+              >
+                <Swords size={14} strokeWidth={2} />
+                Matchup
               </HeaderButton>
             </>
           }

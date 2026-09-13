@@ -21,6 +21,7 @@ export function ViewHeader({
   title,
   year,
   setYear,
+  seasonNote,
   meta,
   controls,
   filter,
@@ -29,7 +30,10 @@ export function ViewHeader({
   kicker: string;
   title: string;
   year: number;
-  setYear: (y: number) => void;
+  /** Absent for a view pinned to one season: the season shows, and does not switch. */
+  setYear?: (y: number) => void;
+  /** Why the season is fixed, on hover, when it is. */
+  seasonNote?: string;
   meta?: ReactNode;
   /** Beside the season: a view's own pickers, in the same row. */
   controls?: ReactNode;
@@ -43,7 +47,16 @@ export function ViewHeader({
         <h1 className="truncate text-[14px] font-semibold tracking-[-0.005em] text-ink">{title}</h1>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <SeasonSwitcher year={year} onChange={setYear} />
+        {setYear ? (
+          <SeasonSwitcher year={year} onChange={setYear} />
+        ) : (
+          <span
+            title={seasonNote}
+            className="inline-flex h-[26px] cursor-default items-center rounded-md border border-dashed border-hairline px-2 text-[12.5px] font-medium text-ink-soft tabular"
+          >
+            {seasonLabel(year)}
+          </span>
+        )}
         {controls}
       </div>
       <div className="min-w-0 flex-1" />

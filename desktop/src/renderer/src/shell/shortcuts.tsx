@@ -50,6 +50,16 @@ const GROUPS: Array<{ title: string; items: Shortcut[] }> = [
     ],
   },
   {
+    title: "Matchup Predictor",
+    items: [
+      { label: "Change the left team", keys: [["A"]] },
+      { label: "Change the right team", keys: [["B"]] },
+      { label: "Swap the teams", keys: [["S"]] },
+      { label: "Move the game to the next floor", keys: [["F"]] },
+      { label: "Draw a new matchup", keys: [["R"]] },
+    ],
+  },
+  {
     title: "Tables",
     items: [
       { label: "Move up and down", keys: [["↑"], ["↓"], ["J"], ["K"]] },

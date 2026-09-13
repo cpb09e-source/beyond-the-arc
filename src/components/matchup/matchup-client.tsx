@@ -6,7 +6,16 @@ import type { SearchableOption } from "@/components/explorer/searchable-select";
 import { dataUrl } from "@/lib/data-url";
 import { CONF_DISPLAY } from "@/lib/conf-display";
 import { isLiveSeason } from "@/lib/seasons";
-import { outIndexes, pickOpeningPair, project, type MatchupPack, type MatchupTeam, type Site } from "@/lib/matchup";
+import {
+  applyMatchupChange,
+  matchupMoves,
+  pickOpeningPair,
+  pickerOrder,
+  project,
+  readMatchup,
+  type MatchupChange,
+  type MatchupPack,
+} from "@/lib/matchup";
 import { MatchupView, type MatchupHandlers } from "@/components/matchup/matchup-view";
 
 /**
@@ -24,6 +33,9 @@ import { MatchupView, type MatchupHandlers } from "@/components/matchup/matchup-
  * file (~70 KB gzipped, every team and rotation) is fetched on mount, and
  * until it lands the view is pixel-identical: the pickers simply have one
  * option each.
+ *
+ * Reading the URL and what each control changes live in lib/matchup.ts
+ * (readMatchup, matchupMoves), shared with the desktop app's predictor.
  */
 export function MatchupClient({
   initialPack,
@@ -66,34 +78,10 @@ export function MatchupClient({
 
   const bySlug = useMemo(() => new Map(pack.teams.map((t) => [t.s, t])), [pack]);
 
-  /**
-   * ── Read the URL, tolerating anything ──────────────────────────────────
-   *
-   * PLAYER IDS, NOT ROSTER POSITIONS. `oa=0,1` meant "the first two names in
-   * the rotation", which is only stable until the next rebuild reorders it —
-   * at which point a link someone shared benches two different players and
-   * says nothing. Ids survive a rebuild and a season roll-over, and an id that
-   * no longer exists resolves to nobody rather than to somebody else.
-   */
-  const readOut = (key: string, team: MatchupTeam | undefined): number[] => {
-    const raw = sp.get(key);
-    if (!raw || !team) return [];
-    return outIndexes(team, raw.split(",").filter(Boolean));
-  };
-  const idsOf = (team: MatchupTeam, idx: readonly number[]) =>
-    idx.map((i) => team.r[i]?.[4]).filter((x): x is string => !!x);
+  // ── Read the URL, tolerating anything ────────────────────────────────────
   const urlA = sp.get("a"), urlB = sp.get("b");
-  let a = bySlug.get(urlA ?? "") ?? bySlug.get(defaultA)!;
-  let b = bySlug.get(urlB ?? "") ?? bySlug.get(defaultB)!;
-  if (a === b) b = bySlug.get(defaultB === a.s ? defaultA : defaultB)!;
-  const siteRaw = sp.get("site");
-  const site: Site = siteRaw === "home" || siteRaw === "away" ? siteRaw : "neutral";
-  const outA = readOut("oa", a), outB = readOut("ob", b);
-
-  // The slim pack cannot show a team the URL asks for until the full one
-  // arrives; in that window fall back to the defaults rather than crash.
-  if (!a) a = bySlug.get(defaultA)!;
-  if (!b) b = bySlug.get(defaultB)!;
+  const state = readMatchup((k) => sp.get(k), bySlug, defaultA, defaultB);
+  const { a, b, site, outA, outB } = state;
 
   const projection = useMemo(
     () => project({ pack, a, b, site, outA, outB }),
@@ -101,14 +89,9 @@ export function MatchupClient({
   );
 
   // ── Write the URL ────────────────────────────────────────────────────────
-  const write = useCallback((next: { a?: string; b?: string; site?: Site; oa?: string[]; ob?: string[] }) => {
+  const write = useCallback((next: MatchupChange) => {
     const q = new URLSearchParams(sp.toString());
-    const set = (k: string, v: string | undefined) => { if (v) q.set(k, v); else q.delete(k); };
-    if (next.a !== undefined) set("a", next.a);
-    if (next.b !== undefined) set("b", next.b);
-    if (next.site !== undefined) set("site", next.site === "neutral" ? undefined : next.site);
-    if (next.oa !== undefined) set("oa", next.oa.length ? next.oa.join(",") : undefined);
-    if (next.ob !== undefined) set("ob", next.ob.length ? next.ob.join(",") : undefined);
+    applyMatchupChange(q, next);
     const qs = q.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [router, pathname, sp]);
@@ -141,19 +124,14 @@ export function MatchupClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const toggle = (team: MatchupTeam, list: number[], i: number) =>
-    idsOf(team, list.includes(i) ? list.filter((x) => x !== i) : [...list, i].sort((x, y) => x - y));
-
   const handlers: MatchupHandlers = {
-    // Changing a team clears its absences: the ids belong to the old roster.
-    onTeamA: (slug) => write({ a: slug, oa: [], ...(slug === b.s ? { b: a.s, ob: [] } : {}) }),
-    onTeamB: (slug) => write({ b: slug, ob: [], ...(slug === a.s ? { a: b.s, oa: [] } : {}) }),
-    onSite: (s) => write({ site: s }),
-    // Swapping carries each side's absences with its team, not with its slot.
-    onSwap: () => write({ a: b.s, b: a.s, oa: idsOf(b, outB), ob: idsOf(a, outA), site: site === "home" ? "away" : site === "away" ? "home" : "neutral" }),
-    onToggleA: (i) => write({ oa: toggle(a, outA, i) }),
-    onToggleB: (i) => write({ ob: toggle(b, outB, i) }),
-    onClearOut: () => write({ oa: [], ob: [] }),
+    onTeamA: (slug) => write(matchupMoves.teamA(state, slug)),
+    onTeamB: (slug) => write(matchupMoves.teamB(state, slug)),
+    onSite: (s) => write(matchupMoves.site(state, s)),
+    onSwap: () => write(matchupMoves.swap(state)),
+    onToggleA: (i) => write(matchupMoves.toggleA(state, i)),
+    onToggleB: (i) => write(matchupMoves.toggleB(state, i)),
+    onClearOut: () => write(matchupMoves.clearOut(state)),
     // Only offered once something has actually been changed.
     ...(sp.toString() ? { onReset: () => router.replace(pathname, { scroll: false }) } : {}),
   };
@@ -161,18 +139,8 @@ export function MatchupClient({
   // ── Picker options, grouped by conference, strongest league first ────────
   const { options, groupLabels } = useMemo(() => {
     if (loading && pack.teams.length <= 2) return { options: undefined, groupLabels: undefined };
-    const confRank = new Map<string, number>();
-    for (const t of pack.teams) {
-      const c = t.c ?? "Other";
-      confRank.set(c, Math.min(confRank.get(c) ?? Infinity, t.rk));
-    }
-    const sorted = [...pack.teams].sort((x, y) => {
-      const cx = x.c ?? "Other", cy = y.c ?? "Other";
-      if (cx !== cy) return (confRank.get(cx)! - confRank.get(cy)!) || cx.localeCompare(cy);
-      return x.rk - y.rk;
-    });
     const labels: Record<string, string> = {};
-    const options: SearchableOption[] = sorted.map((t) => {
+    const options: SearchableOption[] = pickerOrder(pack.teams).map((t) => {
       const c = t.c ?? "Other";
       labels[c] = CONF_DISPLAY[c] ?? c;
       // BTA rank, not the model's ordering — `rk` sorts this list, but the

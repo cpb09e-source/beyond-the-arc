@@ -329,6 +329,43 @@ html {
   }
 }
 
+/*
+ * THE MATCHUP CARD'S TWO COLORS, as globals.css sets them for the site's
+ * .matchup-root. Inline variables carry each team's light ink, dark ink and
+ * brand color (lib/matchup-inks.ts); these rules pick per theme. Fills are not
+ * text: on light paper a wash or a bar takes the brand color as printed, on
+ * the dark ground the lifted ink is already the vivid one.
+ */
+.matchup-root {
+  --ma: var(--ma-light, var(--accent));
+  --mb: var(--mb-light, var(--accent));
+  --ma-fill: var(--ma-brand, var(--ma));
+  --mb-fill: var(--mb-brand, var(--mb));
+  --ma-wash: 20%;
+}
+[data-theme="dark"] .matchup-root {
+  --ma: var(--ma-dark, var(--accent));
+  --mb: var(--mb-dark, var(--accent));
+  --ma-fill: var(--ma);
+  --mb-fill: var(--mb);
+  --ma-wash: 12%;
+}
+
+/* The cut and the wash behind the second half lean together: one skew, from
+   the bottom of the boundary, so the line and the color edge agree. */
+.matchup-seam,
+.matchup-wash {
+  transform: skewX(-5deg);
+  transform-origin: bottom left;
+}
+.matchup-seam {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -8,19 +8,19 @@ import { TeamLogo } from "@/components/team-logo";
 import { TeamName } from "@/components/team-name";
 import { teamShortName } from "@/lib/team-names";
 import { SearchableSelect, type SearchableOption } from "@/components/explorer/searchable-select";
-import { getTeamColors, readableInk, readableOnPaper } from "@/lib/team-colors";
+import { pairInks } from "@/lib/matchup-inks";
+import { useTween } from "@/lib/use-tween";
 import {
-  HCA,
   SIGMA,
-  TOTAL_ADJ,
+  counterfactuals,
   fmt1,
   fmtWin,
   displayScores,
+  matchupLedger,
   OUT_SHARE_WARN,
   fmtSigned,
   outShare,
   playerCost,
-  project,
   type MatchupPack,
   type MatchupTeam,
   type Projection,
@@ -327,39 +327,6 @@ export function MatchupView({
 // ── Pieces ─────────────────────────────────────────────────────────────────
 
 /**
- * Ease a number toward its target over a few frames, so a toggled player
- * moves the score rather than replacing it. The eye reads the DIRECTION of a
- * change far more easily than it reads two numbers, and direction is the
- * whole point of a control that says "what if he's out".
- *
- * Off under prefers-reduced-motion, and it always lands exactly on target.
- */
-function useTween(target: number, ms = 320): number {
-  const [v, setV] = useState(target);
-  // Where the value actually is, frame by frame — so a change that lands
-  // mid-tween continues from the current position rather than jumping back.
-  const at = useRef(target);
-  useEffect(() => {
-    let raf = 0;
-    const start = performance.now(), from = at.current, d = target - from;
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-    // Every state update happens inside the frame callback, never in the
-    // effect body itself: the first frame does the reduced-motion snap too.
-    const tick = (now: number) => {
-      const t = reduce || Math.abs(d) < 1e-6 ? 1 : Math.min(1, (now - start) / ms);
-      const e = 1 - Math.pow(1 - t, 3);
-      const cur = t >= 1 ? target : from + d * e;
-      at.current = cur;
-      setV(cur);
-      if (t < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, ms]);
-  return v;
-}
-
-/**
  * The margin's distribution, to scale.
  *
  * ONE BELL, MOVED. σ is a constant in the model, so the shape never changes —
@@ -443,32 +410,14 @@ function MarginCurve({ margin, colorA, colorB, a, b }: { margin: number; colorA:
 function Counterfactuals({ pack, p, handlers, colorA, colorB }: {
   pack: MatchupPack; p: Projection; handlers?: MatchupHandlers; colorA: string; colorB: string;
 }) {
-  const { a, b, site, outA, outB } = p;
-  const chips: Array<{ key: string; label: string; win: number; color: string; apply?: () => void }> = [];
-  const base = { pack, a, b, outA, outB };
-  const short = (t: MatchupTeam) => teamShortName(t.b);
-
-  for (const s of ["home", "neutral", "away"] as const) {
-    if (s === site) continue;
-    const win = project({ ...base, site: s }).winA;
-    chips.push({
-      key: `site-${s}`,
-      label: s === "neutral" ? "On a neutral floor" : s === "home" ? `At ${short(a)}` : `At ${short(b)}`,
-      win, color: colorA, apply: handlers && (() => handlers.onSite(s)),
-    });
-  }
-  const bestA = a.best >= 0 && !outA.includes(a.best) ? a.r[a.best] : null;
-  const bestB = b.best >= 0 && !outB.includes(b.best) ? b.r[b.best] : null;
-  if (bestA) chips.push({
-    key: "outA", label: `${short(a)} without ${bestA[0].split(" ").pop()}`,
-    win: project({ ...base, site, outA: [...outA, a.best] }).winA, color: colorA,
-    apply: handlers && (() => handlers.onToggleA(a.best)),
-  });
-  if (bestB) chips.push({
-    key: "outB", label: `${short(b)} without ${bestB[0].split(" ").pop()}`,
-    win: project({ ...base, site, outB: [...outB, b.best] }).winA, color: colorA,
-    apply: handlers && (() => handlers.onToggleB(b.best)),
-  });
+  const chips = counterfactuals(pack, p).map((c) => ({
+    ...c,
+    apply: handlers && (() => {
+      if ("site" in c.change) handlers.onSite(c.change.site);
+      else if ("outA" in c.change) handlers.onToggleA(c.change.outA);
+      else handlers.onToggleB(c.change.outB);
+    }),
+  }));
 
   return (
     // DESKTOP ONLY. These chips are a browsing device — six alternate
@@ -540,98 +489,6 @@ function ShareButton({ disabled }: { disabled?: boolean }) {
       {state === "done" ? "Copied" : state === "failed" ? "Use the address bar" : "Share"}
     </button>
   );
-}
-
-type Ink = { light: string; dark: string; brand: string };
-
-function inkOf(hex: string | undefined): Ink {
-  if (!hex) return { light: "var(--coral)", dark: "var(--coral)", brand: "var(--coral)" };
-  // Light: the site's contrast-targeted clamp against the cream paper. Dark:
-  // the same hue lifted into a lightness band that clears 4.5:1 on #1C1C1C.
-  // Brand: the color as printed, for fills that nobody has to read.
-  return { light: readableOnPaper(hex), dark: readableInk(hex, { min: 0.6, max: 0.78 }), brand: hex };
-}
-
-/** Hue in degrees, or null for a color with no hue to speak of. */
-function hueOf(hex: string): number | null {
-  const s = hex.replace("#", "");
-  if (s.length !== 6) return null;
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(s.slice(i, i + 2), 16) / 255) as [number, number, number];
-  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
-  if (d < 0.08) return null;                       // effectively gray
-  const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
-  return (h * 60 + 360) % 360;
-}
-
-/** Shortest distance around the hue circle. */
-const hueDist = (a: number, b: number) => { const d = Math.abs(a - b); return Math.min(d, 360 - d); };
-
-/**
- * Would these two read as the same color?
- *
- * Two grays do. A gray against a real color does not — that pair is already
- * as separated as it needs to be. Otherwise it is a question of hue.
- */
-function collides(x: string, y: string): boolean {
-  const a = hueOf(x), b = hueOf(y);
-  if (a == null && b == null) return true;
-  if (a == null || b == null) return false;
-  return hueDist(a, b) < 22;
-}
-
-/**
- * A COLOR FOR EACH SIDE THAT CAN BE TOLD APART.
- *
- * The whole card is two washes meeting at a seam, which only works if the two
- * washes are different colors. Across the 365 teams on offer, 19% of possible
- * pairings have primary hues within 20° of each other — Illinois and Wake
- * Forest are 2° apart, Iowa and Northern Iowa are both gold — and those
- * matchups drew as one continuous block with a line through it.
- *
- * The left team always keeps its primary; it is the one the reader picked
- * first. The right team gives way, in order: its own secondary when that has
- * a real hue and separates, otherwise a neutral chosen to sit as far from the
- * left team's hue as the small set allows. The neutrals belong to no school,
- * so nobody is given a color they do not own, and the logo and the name still
- * say who it is.
- *
- * The neutral has to be PICKED, not fixed. A single slate is itself a navy,
- * so Duke against New Hampshire — two navies, whose only other color is a
- * light gray that cannot carry text on cream — would have swapped one
- * collision for another.
- */
-const NEUTRALS = ["#8a6a4a", "#5b6472", "#6b4a6b"];
-
-function neutralAgainst(pa: string): string {
-  const ha = hueOf(pa);
-  if (ha == null) return NEUTRALS[1]!;
-  let best = NEUTRALS[0]!, bestD = -1;
-  for (const f of NEUTRALS) {
-    const hf = hueOf(f);
-    const d = hf == null ? 0 : hueDist(ha, hf);
-    if (d > bestD) { bestD = d; best = f; }
-  }
-  return best;
-}
-
-function pairInks(aName: string, bName: string): { a: Ink; b: Ink } {
-  const ca = getTeamColors(aName), cb = getTeamColors(bName);
-  const pa = ca?.primary, pb = cb?.primary;
-  if (!pa || !pb) return { a: inkOf(pa), b: inkOf(pb) };
-  if (!collides(pa, pb)) return { a: inkOf(pa), b: inkOf(pb) };
-  // A gray secondary is not a substitute: readableOnPaper has no hue to
-  // rebuild from and falls back to near-black, which is not a team color at
-  // all and reads as broken next to a real one.
-  const usable = (c?: string) => !!c && hueOf(c) != null;
-  const sb = cb?.secondary, sa = ca?.secondary;
-  if (usable(sb) && !collides(pa, sb!)) return { a: inkOf(pa), b: inkOf(sb) };
-  // TRY THE LEFT TEAM'S SECONDARY BEFORE GIVING ANYONE A NEUTRAL. Iowa and
-  // Northern Iowa are both gold; Iowa's other color is black, which is not
-  // usable, but Northern Iowa's is purple. Moving the team that HAS a second
-  // color keeps two real ones on the card, and it stops the result depending
-  // on which side of the swap button you happen to be looking at.
-  if (usable(sa) && !collides(sa!, pb)) return { a: inkOf(sa), b: inkOf(pb) };
-  return { a: inkOf(pa), b: inkOf(neutralAgainst(pa)) };
 }
 
 function Picker({
@@ -944,68 +801,44 @@ function Card({ title, note, aside, children, className }: { title: string; note
 
 /** The projection, one line per step, so the number can be argued with. */
 function Ledger({ p, pack }: { p: Projection; pack: MatchupPack }) {
-  const M = pack.league.eff, L = pack.league.tempo;
-  const loc = p.site === "neutral" ? 0 : p.site === "home" ? 1 : -1;
-  const a = p.a, b = p.b;
-  const hcaA = loc * HCA, hcaB = -loc * HCA;
-  const rows: Array<[string, number, string?]> = [
-    [p.site === "neutral" ? "Home floor (neutral)" : p.sameConf ? "Home floor — conference game" : "Home floor — non-conference", p.parts.homeFloor],
-    ...(p.parts.powerHost !== 0 ? [["Power conference hosting a non-power team", p.parts.powerHost] as [string, number]] : []),
-    ["Offensive rebounding edge", p.parts.orb],
-    ["Turnover edge", p.parts.tov],
-    ["3PA share edge", p.parts.t3r],
-    ["3P% edge (fade the hot shooters)", p.parts.t3p],
-    ["Both teams strong", p.parts.qual],
-    ["Availability", p.parts.availability],
-    ["Roster continuity", p.parts.continuity],
-  ];
+  const l = matchupLedger(p, pack);
   return (
     <div className="text-xs tabular">
-      <Step n="1" label="Efficiency, against this opponent">
-        <Line k={a.b} v={`${fmt1(a.o)} + (${fmt1(b.d)} − ${fmt1(M)})${hcaA ? ` ${hcaA > 0 ? "+" : "−"} ${fmt1(Math.abs(hcaA))}` : ""} = ${fmt1(p.effA)}`} />
-        <Line k={b.b} v={`${fmt1(b.o)} + (${fmt1(a.d)} − ${fmt1(M)})${hcaB ? ` ${hcaB > 0 ? "+" : "−"} ${fmt1(Math.abs(hcaB))}` : ""} = ${fmt1(p.effB)}`} />
-      </Step>
-      <Step n="2" label="Pace">
-        <Line k="Projected" v={`${fmt1(L)} − 0.75 + 0.83 × (${fmt1(a.t)} + ${fmt1(b.t)} − 2 × ${fmt1(L)}) = ${fmt1(p.pace)}`} />
-      </Step>
-      <Step n="3" label="Base projection">
-        <Line k={a.b} v={`${fmt1(p.effA)} × ${fmt1(p.pace)} / 100 = ${fmt1(p.baseA)}`} />
-        <Line k={b.b} v={`${fmt1(p.effB)} × ${fmt1(p.pace)} / 100 = ${fmt1(p.baseB)}`} />
-        <Line k="Margin" v={fmtSigned(p.baseMargin)} strong />
-        {/* Without this line the two numbers above do not add up to the total
-            on the card, and the whole point of printing the arithmetic is
-            that it can be checked. The adjustment is overtime plus a low pace
-            intercept — see TOTAL_ADJ. */}
-        <Line k="Total" v={`${fmt1(p.baseA)} + ${fmt1(p.baseB)} + ${fmt1(TOTAL_ADJ)} = ${fmt1(p.total)}`} />
-      </Step>
+      {l.steps.map((s, i) => (
+        <Step key={s.label} n={String(i + 1)} label={s.label}>
+          {s.lines.map((line) => (
+            <Line key={line.k} k={line.k} v={line.v} strong={line.strong} />
+          ))}
+        </Step>
+      ))}
       <Step n="4" label="Matchup corrections" last>
-        {rows.map(([k, v]) => (
-          <div key={k} className="flex justify-between gap-3 py-0.5">
-            <span className={cn("text-ink-soft", k.startsWith("3P%") && "text-coral")}>{k}</span>
-            <span className={cn("font-medium", Math.abs(v) < 0.005 ? "text-ink-muted" : "text-ink")}>{fmtSigned(v, 2)}</span>
+        {l.corrections.map(({ key, label, value }) => (
+          <div key={label} className="flex justify-between gap-3 py-0.5">
+            <span className={cn("text-ink-soft", key === "t3p" && "text-coral")}>{label}</span>
+            <span className={cn("font-medium", Math.abs(value) < 0.005 ? "text-ink-muted" : "text-ink")}>{fmtSigned(value, 2)}</span>
           </div>
         ))}
         {/* The stretch is a separate printed step, not folded into the sum:
             without it a reader adds the column, gets one number, and the card
             shows another. It only appears when it is big enough to change the
             printed figure — early in a season it is 11%, by March 1.5%. */}
-        {Math.abs(p.scale - 1) * Math.abs(p.preScale) >= 0.05 ? (
+        {l.stretch ? (
           <>
             <div className="flex justify-between gap-3 mt-1.5 pt-1.5 border-t border-hairline text-ink">
               <span className="text-ink-soft">Before the young-ratings stretch</span>
-              <span>{fmtSigned(p.baseMargin)} {p.correction >= 0 ? "+" : "−"} {fmt1(Math.abs(p.correction))} = {fmtSigned(p.preScale)}</span>
+              <span>{l.stretch.before}</span>
             </div>
             <div className="flex justify-between gap-3 py-0.5 font-semibold text-ink">
               <span>Projected margin</span>
               <span title="Shrunk ratings project too narrow a spread; the stretch fades as games accumulate." className="cursor-help">
-                {fmtSigned(p.preScale)} × {p.scale.toFixed(3)} = {fmtSigned(p.margin)}
+                {l.stretch.after}
               </span>
             </div>
           </>
         ) : (
           <div className="flex justify-between gap-3 mt-1.5 pt-1.5 border-t border-hairline font-semibold text-ink">
             <span>Projected margin</span>
-            <span>{fmtSigned(p.baseMargin)} {p.correction >= 0 ? "+" : "−"} {fmt1(Math.abs(p.correction))} = {fmtSigned(p.margin)}</span>
+            <span>{l.sum}</span>
           </div>
         )}
       </Step>

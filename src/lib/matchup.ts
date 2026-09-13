@@ -25,6 +25,8 @@
  *     the win probability does not.
  */
 
+import { teamShortName } from "@/lib/team-names";
+
 // ── The data file ──────────────────────────────────────────────────────────
 
 /** One of the six adjusted style dimensions, in the order of MatchupPack.dims. */
@@ -581,3 +583,208 @@ export const fmtSigned = (x: number, digits = 1): string => {
   const v = x.toFixed(digits);
   return x > 0 ? `+${v}` : x < 0 ? `−${v.slice(1)}` : v;
 };
+
+// ── What would it take, the arithmetic, and the page's state ───────────────
+
+/** One thing changed, and the change that makes it the page. */
+export type Counterfactual = {
+  key: string;
+  label: string;
+  /** The left team's win probability with the change. */
+  win: number;
+  change: { site: Site } | { outA: number } | { outB: number };
+};
+
+/**
+ * What would it take? Each entry is a full projection with one thing changed:
+ * another floor, or one team's best player ruled out. Cheap because the model
+ * is closed form, and useful because the answer to "how much does the floor
+ * matter" is a number, not an adjective.
+ */
+export function counterfactuals(pack: MatchupPack, p: Projection): Counterfactual[] {
+  const { a, b, site, outA, outB } = p;
+  const out: Counterfactual[] = [];
+  const base = { pack, a, b, outA, outB };
+  const short = (t: MatchupTeam) => teamShortName(t.b);
+
+  for (const s of ["home", "neutral", "away"] as const) {
+    if (s === site) continue;
+    out.push({
+      key: `site-${s}`,
+      label: s === "neutral" ? "On a neutral floor" : s === "home" ? `At ${short(a)}` : `At ${short(b)}`,
+      win: project({ ...base, site: s }).winA,
+      change: { site: s },
+    });
+  }
+  const bestA = a.best >= 0 && !outA.includes(a.best) ? a.r[a.best] : null;
+  const bestB = b.best >= 0 && !outB.includes(b.best) ? b.r[b.best] : null;
+  if (bestA) out.push({
+    key: "outA", label: `${short(a)} without ${bestA[0].split(" ").pop()}`,
+    win: project({ ...base, site, outA: [...outA, a.best] }).winA,
+    change: { outA: a.best },
+  });
+  if (bestB) out.push({
+    key: "outB", label: `${short(b)} without ${bestB[0].split(" ").pop()}`,
+    win: project({ ...base, site, outB: [...outB, b.best] }).winA,
+    change: { outB: b.best },
+  });
+  return out;
+}
+
+export type LedgerLine = { k: string; v: string; strong?: boolean };
+export type LedgerCorrection = { key: keyof Projection["parts"]; label: string; value: number };
+export type MatchupLedger = {
+  /** Efficiency, pace and the base projection, each line arithmetic that can be checked. */
+  steps: Array<{ label: string; lines: LedgerLine[] }>;
+  /** Every correction term in points, positive toward the left team. */
+  corrections: LedgerCorrection[];
+  /**
+   * The young-ratings stretch as its own printed step, when it is big enough to
+   * change the printed figure. Without it a reader adds the column, gets one
+   * number, and the card shows another. Early in a season it is 11%, by March
+   * 1.5%.
+   */
+  stretch: { before: string; after: string } | null;
+  /** The last line when there is no stretch. */
+  sum: string;
+};
+
+/** The projection, one line per step, so the number can be argued with. */
+export function matchupLedger(p: Projection, pack: MatchupPack): MatchupLedger {
+  const M = pack.league.eff, L = pack.league.tempo;
+  const loc = p.site === "neutral" ? 0 : p.site === "home" ? 1 : -1;
+  const a = p.a, b = p.b;
+  const hcaA = loc * HCA, hcaB = -loc * HCA;
+  const corrections: LedgerCorrection[] = [
+    { key: "homeFloor", label: p.site === "neutral" ? "Home floor (neutral)" : p.sameConf ? "Home floor — conference game" : "Home floor — non-conference", value: p.parts.homeFloor },
+    ...(p.parts.powerHost !== 0 ? [{ key: "powerHost" as const, label: "Power conference hosting a non-power team", value: p.parts.powerHost }] : []),
+    { key: "orb", label: "Offensive rebounding edge", value: p.parts.orb },
+    { key: "tov", label: "Turnover edge", value: p.parts.tov },
+    { key: "t3r", label: "3PA share edge", value: p.parts.t3r },
+    { key: "t3p", label: "3P% edge (fade the hot shooters)", value: p.parts.t3p },
+    { key: "qual", label: "Both teams strong", value: p.parts.qual },
+    { key: "availability", label: "Availability", value: p.parts.availability },
+    { key: "continuity", label: "Roster continuity", value: p.parts.continuity },
+  ];
+  const summed = `${fmtSigned(p.baseMargin)} ${p.correction >= 0 ? "+" : "−"} ${fmt1(Math.abs(p.correction))}`;
+  return {
+    steps: [
+      {
+        label: "Efficiency, against this opponent",
+        lines: [
+          { k: a.b, v: `${fmt1(a.o)} + (${fmt1(b.d)} − ${fmt1(M)})${hcaA ? ` ${hcaA > 0 ? "+" : "−"} ${fmt1(Math.abs(hcaA))}` : ""} = ${fmt1(p.effA)}` },
+          { k: b.b, v: `${fmt1(b.o)} + (${fmt1(a.d)} − ${fmt1(M)})${hcaB ? ` ${hcaB > 0 ? "+" : "−"} ${fmt1(Math.abs(hcaB))}` : ""} = ${fmt1(p.effB)}` },
+        ],
+      },
+      {
+        label: "Pace",
+        lines: [{ k: "Projected", v: `${fmt1(L)} − 0.75 + 0.83 × (${fmt1(a.t)} + ${fmt1(b.t)} − 2 × ${fmt1(L)}) = ${fmt1(p.pace)}` }],
+      },
+      {
+        label: "Base projection",
+        lines: [
+          { k: a.b, v: `${fmt1(p.effA)} × ${fmt1(p.pace)} / 100 = ${fmt1(p.baseA)}` },
+          { k: b.b, v: `${fmt1(p.effB)} × ${fmt1(p.pace)} / 100 = ${fmt1(p.baseB)}` },
+          { k: "Margin", v: fmtSigned(p.baseMargin), strong: true },
+          // Without this line the two numbers above do not add up to the total
+          // on the card, and the whole point of printing the arithmetic is that
+          // it can be checked. The adjustment is overtime plus a low pace
+          // intercept; see TOTAL_ADJ.
+          { k: "Total", v: `${fmt1(p.baseA)} + ${fmt1(p.baseB)} + ${fmt1(TOTAL_ADJ)} = ${fmt1(p.total)}` },
+        ],
+      },
+    ],
+    corrections,
+    stretch: Math.abs(p.scale - 1) * Math.abs(p.preScale) >= 0.05
+      ? { before: `${summed} = ${fmtSigned(p.preScale)}`, after: `${fmtSigned(p.preScale)} × ${p.scale.toFixed(3)} = ${fmtSigned(p.margin)}` }
+      : null,
+    sum: `${summed} = ${fmtSigned(p.margin)}`,
+  };
+}
+
+/** The pairing on screen: two teams, the floor, and who is ruled out on each side. */
+export type MatchupState = { a: MatchupTeam; b: MatchupTeam; site: Site; outA: number[]; outB: number[] };
+
+/** A change to that state, in the form a URL carries it. Absent keys are left alone. */
+export type MatchupChange = { a?: string; b?: string; site?: Site; oa?: string[]; ob?: string[] };
+
+/** Stable player ids for indexes into `team.r`. */
+export function playerIds(team: MatchupTeam, idx: readonly number[]): string[] {
+  return idx.map((i) => team.r[i]?.[4]).filter((x): x is string => !!x);
+}
+
+/**
+ * Read a matchup out of query parameters, tolerating anything.
+ *
+ * PLAYER IDS, NOT ROSTER POSITIONS. `oa=0,1` meant "the first two names in the
+ * rotation", which is only stable until the next rebuild reorders it, at which
+ * point a link someone shared benches two different players and says nothing.
+ * Ids survive a rebuild and a season roll-over, and an id that no longer exists
+ * resolves to nobody rather than to somebody else.
+ */
+export function readMatchup(
+  get: (key: string) => string | null,
+  bySlug: ReadonlyMap<string, MatchupTeam>,
+  defaultA: string,
+  defaultB: string,
+): MatchupState {
+  const readOut = (key: string, team: MatchupTeam | undefined): number[] => {
+    const raw = get(key);
+    if (!raw || !team) return [];
+    return outIndexes(team, raw.split(",").filter(Boolean));
+  };
+  let a = bySlug.get(get("a") ?? "") ?? bySlug.get(defaultA)!;
+  let b = bySlug.get(get("b") ?? "") ?? bySlug.get(defaultB)!;
+  if (a === b) b = bySlug.get(defaultB === a.s ? defaultA : defaultB)!;
+  const siteRaw = get("site");
+  const site: Site = siteRaw === "home" || siteRaw === "away" ? siteRaw : "neutral";
+  const outA = readOut("oa", a), outB = readOut("ob", b);
+  // A slim pack cannot show a team the URL asks for until the full one arrives;
+  // in that window fall back to the defaults rather than crash.
+  if (!a) a = bySlug.get(defaultA)!;
+  if (!b) b = bySlug.get(defaultB)!;
+  return { a, b, site, outA, outB };
+}
+
+const toggled = (team: MatchupTeam, list: readonly number[], i: number): string[] =>
+  playerIds(team, list.includes(i) ? list.filter((x) => x !== i) : [...list, i].sort((x, y) => x - y));
+
+/** Every control on the page, as the change it makes. */
+export const matchupMoves = {
+  // Changing a team clears its absences: the ids belong to the old roster.
+  teamA: (s: MatchupState, slug: string): MatchupChange => ({ a: slug, oa: [], ...(slug === s.b.s ? { b: s.a.s, ob: [] } : {}) }),
+  teamB: (s: MatchupState, slug: string): MatchupChange => ({ b: slug, ob: [], ...(slug === s.a.s ? { a: s.b.s, oa: [] } : {}) }),
+  site: (_s: MatchupState, site: Site): MatchupChange => ({ site }),
+  // Swapping carries each side's absences with its team, not with its slot.
+  swap: (s: MatchupState): MatchupChange => ({
+    a: s.b.s, b: s.a.s, oa: playerIds(s.b, s.outB), ob: playerIds(s.a, s.outA),
+    site: s.site === "home" ? "away" : s.site === "away" ? "home" : "neutral",
+  }),
+  toggleA: (s: MatchupState, i: number): MatchupChange => ({ oa: toggled(s.a, s.outA, i) }),
+  toggleB: (s: MatchupState, i: number): MatchupChange => ({ ob: toggled(s.b, s.outB, i) }),
+  clearOut: (_s: MatchupState): MatchupChange => ({ oa: [], ob: [] }),
+};
+
+/** Write a change into query parameters. A neutral floor and an empty list leave the URL. */
+export function applyMatchupChange(q: URLSearchParams, next: MatchupChange): void {
+  const set = (k: string, v: string | undefined) => { if (v) q.set(k, v); else q.delete(k); };
+  if (next.a !== undefined) set("a", next.a);
+  if (next.b !== undefined) set("b", next.b);
+  if (next.site !== undefined) set("site", next.site === "neutral" ? undefined : next.site);
+  if (next.oa !== undefined) set("oa", next.oa.length ? next.oa.join(",") : undefined);
+  if (next.ob !== undefined) set("ob", next.ob.length ? next.ob.join(",") : undefined);
+}
+
+/** The teams in picker order: grouped by conference, strongest league first, then by the model's rank. */
+export function pickerOrder(teams: readonly MatchupTeam[]): MatchupTeam[] {
+  const confRank = new Map<string, number>();
+  for (const t of teams) {
+    const c = t.c ?? "Other";
+    confRank.set(c, Math.min(confRank.get(c) ?? Infinity, t.rk));
+  }
+  return [...teams].sort((x, y) => {
+    const cx = x.c ?? "Other", cy = y.c ?? "Other";
+    if (cx !== cy) return (confRank.get(cx)! - confRank.get(cy)!) || cx.localeCompare(cy);
+    return x.rk - y.rk;
+  });
+}

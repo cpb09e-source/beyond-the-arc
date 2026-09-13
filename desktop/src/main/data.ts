@@ -42,6 +42,7 @@ export type Corpus =
   | "player-shooting"
   | "team-games"
   | "player-games"
+  | "matchup"
   | "teams-index"
   | "players-index"
   | "search-index";
@@ -50,7 +51,7 @@ export type DataSource = "memory" | "repo" | "cache" | "network";
 type CorpusSpec = {
   path: (year: number) => string;
   /** Served from the site's R2 bucket rather than btacbb.xyz (R2_DIRS in src/lib/data-url.ts). */
-  r2: boolean;
+  r2: boolean | ((year: number) => boolean);
   /**
    * The file legitimately does not exist for some seasons: the real impact fit
    * starts in 2024, for instance. A miss resolves to JSON `null` instead of an
@@ -78,6 +79,14 @@ const CORPORA: Record<Corpus, CorpusSpec> = {
   "player-shooting": { path: (y) => `shooting-${y}.json`, r2: false, optional: true },
   "team-games": { path: (y) => `team-game-index/${y}.json`, r2: true, gated: { via: "signed", kind: "team-games" } },
   "player-games": { path: (y) => `game-index/${y}.json`, r2: true, gated: { via: "signed", kind: "games" } },
+  // The Matchup Predictor's ratings, one season. While a season is live the
+  // nightly job writes it to R2 as live/matchup.json, which is where the site
+  // reads it from too (src/components/matchup/matchup-client.tsx).
+  matchup: {
+    path: (y) => (y === LIVE_SEASON ? "live/matchup.json" : `matchup/${y}.json`),
+    r2: (y) => y === LIVE_SEASON,
+    optional: true,
+  },
   // CROSS-SEASON FILES, the site's search indexes. The path takes no year; the
   // caller passes the newest season they cover.
   "teams-index": { path: () => "teams-index.json", r2: false, crossSeason: true },
@@ -217,7 +226,8 @@ export async function loadCorpus(corpus: Corpus, year: number): Promise<{ json: 
     return { json, source: "cache" };
   }
 
-  const url = spec.r2 ? `${R2_PUBLIC}/${rel}` : `${SITE_DATA}/${rel}`;
+  const onR2 = typeof spec.r2 === "function" ? spec.r2(year) : spec.r2;
+  const url = onR2 ? `${R2_PUBLIC}/${rel}` : `${SITE_DATA}/${rel}`;
   let res: Response;
   try {
     const etag = live && existsSync(etagFile) ? (await readFile(etagFile, "utf8")).trim() : null;

@@ -1,5 +1,7 @@
-import { CalendarClock, CalendarDays, ChartScatter, Shield, Table2, UserRound, UsersRound, type LucideIcon } from "lucide-react";
+import { CalendarClock, CalendarDays, ChartScatter, Shield, Swords, Table2, UserRound, UsersRound, type LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
+import { SEASON_CEIL } from "@/lib/seasons";
+import { MatchupView } from "~/views/matchup/matchup-view";
 import { PlayerGamesView } from "~/views/player-games/player-games-view";
 import { PlayerProfileView } from "~/views/player-profile/player-profile-view";
 import { PlayersView } from "~/views/players/players-view";
@@ -60,6 +62,11 @@ export type ViewDef = {
   Component: ComponentType<ViewProps>;
   /** Set on a profile: the kind of record it opens. Profiles stay out of navigation. */
   profile?: RecordRef["kind"];
+  /**
+   * Set on a view that exists for one season only. A tab holding it takes that
+   * season, and the season switcher and [ ] leave it alone.
+   */
+  season?: number;
 };
 
 export const VIEWS: ViewDef[] = [
@@ -86,6 +93,17 @@ export const VIEWS: ViewDef[] = [
     icon: ChartScatter,
     filterPlaceholder: "",
     Component: TeamScatterView,
+  },
+  {
+    id: "matchup",
+    label: "Matchup Predictor",
+    section: "Teams",
+    icon: Swords,
+    filterPlaceholder: "",
+    Component: MatchupView,
+    // The site publishes the predictor for its latest completed season only
+    // (src/app/matchup/page.tsx).
+    season: SEASON_CEIL,
   },
   {
     id: "player-explorer",

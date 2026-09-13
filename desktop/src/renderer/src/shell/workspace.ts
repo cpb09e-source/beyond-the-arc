@@ -12,13 +12,21 @@ import { isRecordRef, sameRecord, viewById, VIEWS, type RecordRef } from "./view
  *
  * HISTORY IS PER TAB, as in Linear's desktop app: Alt+Left walks back through
  * where this tab has been, never through another tab's past. Opening a player
- * from the explorer and pressing Alt+Left returns to the explorer.
+ * from the explorer and pressing Alt+Left returns to the explorer, with the
+ * filter it had.
+ *
+ * THE QUERY TRAVELS WITH THE PLACE. For a table it is the filter; for the
+ * Matchup Predictor it is the whole matchup. Going back restores it.
+ *
+ * A VIEW CAN BE PINNED TO ONE SEASON (ViewDef.season): the predictor exists
+ * for the latest season only, so a tab holding it keeps that season and the
+ * season keys leave it alone.
  *
  * The tabs persist, so the app reopens with what it closed with. The stack of
  * closed tabs behind Ctrl+Shift+T lasts for the session.
  */
 
-export type Snapshot = { viewId: string; year: number; record?: RecordRef };
+export type Snapshot = { viewId: string; year: number; record?: RecordRef; query?: string };
 
 export type Tab = {
   id: string;
@@ -33,8 +41,8 @@ export type Tab = {
 export type Workspace = { tabs: Tab[]; active: string; closed: Tab[] };
 
 export type WorkspaceAction =
-  | { type: "navigate"; viewId: string; year?: number; record?: RecordRef }
-  | { type: "open"; viewId: string; year: number; record?: RecordRef }
+  | { type: "navigate"; viewId: string; year?: number; record?: RecordRef; query?: string }
+  | { type: "open"; viewId: string; year: number; record?: RecordRef; query?: string }
   | { type: "close"; id: string }
   | { type: "reopen" }
   | { type: "activate"; id: string }
@@ -53,6 +61,9 @@ const CLOSED_CAP = 10;
 
 const isSeason = (y: unknown): y is number => typeof y === "number" && ALL_SEASONS.includes(y);
 
+/** The season a view holds: its own when it is pinned to one, otherwise the one asked for. */
+const seasonFor = (viewId: string, year: number): number => viewById(viewId).season ?? year;
+
 /** A view id that exists, with the record a profile needs and nothing a table does not. */
 function isPlace(viewId: unknown, record: unknown): viewId is string {
   if (typeof viewId !== "string" || !VIEWS.some((v) => v.id === viewId)) return false;
@@ -63,22 +74,23 @@ const isSnapshot = (s: unknown): s is Snapshot =>
   typeof s === "object" &&
   s !== null &&
   isPlace((s as Snapshot).viewId, (s as Snapshot).record) &&
-  isSeason((s as Snapshot).year);
+  isSeason((s as Snapshot).year) &&
+  ((s as Snapshot).query === undefined || typeof (s as Snapshot).query === "string");
 
 let seq = 0;
 const newId = (): string => `t${Date.now().toString(36)}${(seq++).toString(36)}`;
 
-const makeTab = (viewId: string, year: number, record?: RecordRef): Tab => ({
+const makeTab = (viewId: string, year: number, record?: RecordRef, query = ""): Tab => ({
   id: newId(),
   viewId,
-  year,
-  query: "",
+  year: seasonFor(viewId, year),
+  query,
   record,
   back: [],
   forward: [],
 });
 
-const snapshotOf = (t: Tab): Snapshot => ({ viewId: t.viewId, year: t.year, record: t.record });
+const snapshotOf = (t: Tab): Snapshot => ({ viewId: t.viewId, year: t.year, record: t.record, query: t.query });
 
 function init(): Workspace {
   try {
@@ -93,7 +105,7 @@ function init(): Workspace {
               {
                 id: newId(),
                 viewId: o.viewId,
-                year: o.year,
+                year: seasonFor(o.viewId, o.year),
                 query: typeof o.query === "string" ? o.query : "",
                 record: isRecordRef(o.record) ? o.record : undefined,
                 back: Array.isArray(o.back) ? o.back.filter(isSnapshot) : [],
@@ -122,14 +134,19 @@ function updateTab(ws: Workspace, id: string, fn: (t: Tab) => Tab): Workspace {
   return { ...ws, tabs: ws.tabs.map((t) => (t.id === id ? fn(t) : t)) };
 }
 
-/** Moves a tab to a place, keeping the filter only when the table stays the same. */
+/**
+ * Moves a tab to a place. A place that carries a query gets it (going back, or
+ * a matchup opened from a team page); otherwise the filter stays only when the
+ * table does.
+ */
 function arrive(t: Tab, place: Snapshot): Tab {
+  const same = place.viewId === t.viewId && sameRecord(place.record, t.record);
   return {
     ...t,
     viewId: place.viewId,
-    year: place.year,
+    year: seasonFor(place.viewId, place.year),
     record: place.record,
-    query: place.viewId === t.viewId && sameRecord(place.record, t.record) ? t.query : "",
+    query: place.query ?? (same ? t.query : ""),
   };
 }
 
@@ -137,9 +154,12 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
   const current = ws.tabs.find((t) => t.id === ws.active) ?? ws.tabs[0]!;
   switch (a.type) {
     case "navigate": {
-      const place: Snapshot = { viewId: a.viewId, year: a.year ?? current.year, record: a.record };
+      const place: Snapshot = { viewId: a.viewId, year: seasonFor(a.viewId, a.year ?? current.year), record: a.record, query: a.query };
       if (place.viewId === current.viewId && place.year === current.year && sameRecord(place.record, current.record)) {
-        return ws;
+        // Already here: only a new query changes anything, and it is not a new place in history.
+        return a.query === undefined || a.query === current.query
+          ? ws
+          : updateTab(ws, current.id, (t) => ({ ...t, query: a.query! }));
       }
       return updateTab(ws, current.id, (t) => ({
         ...arrive(t, place),
@@ -148,7 +168,7 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
       }));
     }
     case "open": {
-      const tab = makeTab(a.viewId, a.year, a.record);
+      const tab = makeTab(a.viewId, a.year, a.record, a.query);
       const at = ws.tabs.findIndex((t) => t.id === current.id);
       // Beside the tab it came from, as a browser places it.
       return { ...ws, tabs: [...ws.tabs.slice(0, at + 1), tab, ...ws.tabs.slice(at + 1)], active: tab.id };
@@ -184,8 +204,9 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
       return tab ? { ...ws, active: tab.id } : ws;
     }
     case "set-year":
-      return updateTab(ws, a.id, (t) => (t.year === a.year ? t : { ...t, year: a.year }));
+      return updateTab(ws, a.id, (t) => (t.year === a.year || viewById(t.viewId).season != null ? t : { ...t, year: a.year }));
     case "step-year": {
+      if (viewById(current.viewId).season != null) return ws;
       const i = ALL_SEASONS.indexOf(current.year);
       const year = (a.to === "older" ? ALL_SEASONS[i + 1] : ALL_SEASONS[i - 1]) ?? current.year;
       return year === current.year ? ws : updateTab(ws, current.id, (t) => ({ ...t, year }));

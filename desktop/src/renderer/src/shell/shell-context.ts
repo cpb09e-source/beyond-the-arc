@@ -11,18 +11,23 @@ import type { FocusTarget, RecordRef } from "./views";
  * `openRecord` opens a team or player profile, in this tab (history remembers
  * where it came from) or a new one, in the season given or the tab's own.
  *
+ * `openView` opens any view with a starting query, here or in a new tab: the
+ * Matchup Predictor on the team a page is about.
+ *
  * `showInExplorer` goes the other way: from a profile to that object's row in
  * its explorer, focused, Peek pinned.
  */
 export type Shell = {
   filterRef: RefObject<HTMLInputElement | null>;
   openRecord: (record: RecordRef, how?: { newTab?: boolean; year?: number }) => void;
+  openView: (viewId: string, how?: { newTab?: boolean; query?: string; year?: number }) => void;
   showInExplorer: (target: FocusTarget, newTab?: boolean) => void;
 };
 
 export const ShellContext = createContext<Shell>({
   filterRef: createRef<HTMLInputElement>(),
   openRecord: () => {},
+  openView: () => {},
   showInExplorer: () => {},
 });
 
