@@ -103,16 +103,6 @@ const COLUMNS: Column<Team>[] = [
     sortValue: (t) => t.sos,
     cell: (t) => <StatCell value={num1(t.sos)} pct={t.pct.adj_sos} />,
   },
-  {
-    key: "zone", label: "Zone", title: "Inside the contender trapezoid", width: 60, align: "center", first: -1,
-    sortValue: (t) => (t.inZone == null ? null : t.inZone ? 1 : 0),
-    cell: (t) =>
-      t.inZone == null ? null : t.inZone ? (
-        <span role="img" aria-label="Inside the trapezoid" className="inline-block h-[7px] w-[7px] rounded-full bg-good" />
-      ) : (
-        <span role="img" aria-label="Outside the trapezoid" className="inline-block h-[5px] w-[5px] rounded-full bg-hairline" />
-      ),
-  },
 ];
 
 export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: ViewProps) {
