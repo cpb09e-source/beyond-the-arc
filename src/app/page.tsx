@@ -1,7 +1,8 @@
 import { ExplorerClient } from "@/components/explorer/explorer-client";
 import { PREVIEW_SEASON } from "@/lib/seasons";
 import { readAllTeams, readConfRecordsByTeam } from "@/lib/static-data";
-import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches";
+import { loadTournamentGames } from "@/lib/coaches";
+import { buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches-core";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { PageHeading } from "@/components/page-heading";

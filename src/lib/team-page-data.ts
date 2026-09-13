@@ -41,7 +41,8 @@ import {
   PREVIEW_SEASON_YEAR,
 } from "@/components/teams/team-page-view";
 import { buildShootingRanks, buildFourFactorRanks, buildShotProfileRanks, buildShotDefenseRanks, ranksAreEmpty } from "@/components/teams/distribution-panel";
-import { loadTournamentGames, buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches";
+import { loadTournamentGames } from "@/lib/coaches";
+import { buildGamesByTeamYear, gamesForTeamYear } from "@/lib/coaches-core";
 
 // Same SHORT_ROUND mapping the coach page uses for tournament-round badges,
 // so a March-Madness game in the schedule ticker reads as "R1 / R2 / S16…"

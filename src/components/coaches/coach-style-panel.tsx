@@ -1,4 +1,4 @@
-import { STYLE_DIMENSIONS, type CoachStyle } from "@/lib/coaches";
+import { STYLE_DIMENSIONS, type CoachStyle } from "@/lib/coaches-core";
 import { PercentileChip, pctColor, pctBg } from "@/components/percentile-chip";
 
 /**

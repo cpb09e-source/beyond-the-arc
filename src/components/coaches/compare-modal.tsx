@@ -11,6 +11,10 @@ import { confDisplay } from "@/lib/conf-display";
 import type { CoachRow } from "@/app/coaches/page";
 import * as htmlToImage from "html-to-image";
 import { useMounted } from "@/lib/use-mounted";
+import {
+  COMPARE_ROWS as ROWS, compositeRankLookup, compareCellDisplay, compareRowExtremes,
+  type CompareRow as Row,
+} from "@/lib/coach-views";
 
 /**
  * Head-to-head compare modal — pick 2-4 coaches and see them side by side.
@@ -19,65 +23,6 @@ import { useMounted } from "@/lib/use-mounted";
  * seasons, schools), and quality (composite score). Best value per row gets
  * a green tint; worst gets a coral tint; ties get neither.
  */
-
-
-type Direction = "higher" | "lower" | "depth" | "none";
-
-const ROUND_DEPTH: Record<string, number> = {
-  "First Four": 0, "R64": 1, "R32": 2, "Sweet 16": 3, "Elite Eight": 4, "Final Four": 5, "Runner-up": 6, "Champion": 7,
-};
-
-// Friendly short labels for best_finish display.
-const FINISH_LABEL: Record<string, string> = {
-  "First Four": "First Four",
-  "R64": "Round of 64",
-  "R32": "Round of 32",
-  "Sweet 16": "Sweet 16",
-  "Elite Eight": "Elite Eight",
-  "Final Four": "Final Four",
-  "Runner-up": "Title game",
-  "Champion": "National title",
-};
-
-type Row = {
-  key: string;
-  label: string;
-  /** Per-coach raw value (used for max/min comparison). Null = "—". */
-  value: (c: CoachRow) => number | string | null;
-  /** What value is "best": higher number, lower number, deeper bracket round, or no comparison. */
-  dir: Direction;
-  /** Formatter for display. Default: stringify. */
-  format?: (v: number | string | null) => string;
-};
-
-function fmtPct(v: number | null): string {
-  if (v === null) return "—";
-  return (v * 100).toFixed(1) + "%";
-}
-function fmtRec(c: CoachRow): string {
-  return `${c.career_wins}-${c.career_losses}`;
-}
-
-const ROWS: Row[] = [
-  { key: "titles", label: "National titles", value: (c) => c.ncaa_titles, dir: "higher" },
-  { key: "f4", label: "Final Fours", value: (c) => c.final_fours, dir: "higher" },
-  { key: "s16", label: "Sweet 16+ trips", value: (c) => c.sweet_sixteens, dir: "higher" },
-  { key: "ncaa", label: "NCAA Tournament trips", value: (c) => c.ncaa_appearances, dir: "higher" },
-  { key: "best", label: "Deepest run", value: (c) => c.best_finish, dir: "depth",
-    format: (v) => (v == null || typeof v !== "string") ? "—" : (FINISH_LABEL[v] ?? v) },
-  { key: "powerch", label: "Power reg-season titles", value: (c) => c.power_reg_champs, dir: "higher" },
-  { key: "regch", label: "Reg-season conf titles", value: (c) => c.reg_season_champs, dir: "higher" },
-  { key: "20w", label: "20+ win seasons", value: (c) => c.twenty_win_seasons, dir: "higher" },
-  { key: "30w", label: "30+ win seasons", value: (c) => c.thirty_win_seasons, dir: "higher" },
-  { key: "wins", label: "Career wins", value: (c) => c.career_wins, dir: "higher" },
-  { key: "rec", label: "Career W-L", value: (c) => fmtRec(c), dir: "none" },
-  { key: "winpct", label: "Career win %", value: (c) => c.career_win_pct, dir: "higher",
-    format: (v) => fmtPct(typeof v === "number" ? v : null) },
-  { key: "seas", label: "Seasons coached", value: (c) => c.seasons_count, dir: "higher" },
-  // Composite score row — has special formatter in render that appends a (#rank)
-  // suffix from the global ranking across allCoaches.
-  { key: "comp", label: "Composite score", value: (c) => c.composite_score ?? null, dir: "higher" },
-];
 
 export function CompareModal({
   open,
@@ -138,14 +83,7 @@ export function CompareModal({
 
   // Composite rank lookup — coaches sorted desc by composite_score, position
   // becomes the rank. Used to render "270.4 (#1)" in the Composite Score row.
-  const compositeRankBySlug = useMemo(() => {
-    const m = new Map<string, number>();
-    const ranked = allCoaches
-      .filter((c) => c.composite_score != null)
-      .sort((a, b) => (b.composite_score ?? 0) - (a.composite_score ?? 0));
-    ranked.forEach((c, i) => m.set(c.slug, i + 1));
-    return m;
-  }, [allCoaches]);
+  const compositeRankBySlug = useMemo(() => compositeRankLookup(allCoaches), [allCoaches]);
 
   const filledCoaches = slots
     .map((s) => (s ? coachBySlug.get(s) ?? null : null))
@@ -279,20 +217,9 @@ export function CompareModal({
   }
 
   // Per-row best/worst lookup for highlighting.
-  /**
-   * One cell's text. Extracted because the phone and desktop bodies are two
-   * different layouts over the same numbers, and the composite row's "(#12)"
-   * suffix is exactly the sort of thing that goes stale in one copy.
-   */
+  /** One cell's text — compareCellDisplay, with this modal's composite ranks. */
   function displayFor(row: Row, c: CoachRow): string {
-    const raw = row.value(c);
-    if (row.key === "comp") {
-      if (typeof raw !== "number") return "—";
-      const rank = compositeRankBySlug.get(c.slug);
-      return rank != null ? `${raw.toFixed(1)} (#${rank})` : raw.toFixed(1);
-    }
-    if (row.format) return row.format(raw);
-    return raw == null ? "—" : String(raw);
+    return compareCellDisplay(row, c, compositeRankBySlug);
   }
 
   /** The comparison flattened for the share card — same ROWS, same
@@ -318,30 +245,7 @@ export function CompareModal({
   }
 
   function rowExtremes(row: Row): { bestKey: string | null; worstKey: string | null } {
-    if (row.dir === "none") return { bestKey: null, worstKey: null };
-    const entries = filledCoaches.map((c) => ({ slug: c.slug, raw: row.value(c) }));
-    if (entries.length < 2) return { bestKey: null, worstKey: null };
-
-    if (row.dir === "depth") {
-      const numbered = entries.map((e) => ({ slug: e.slug, n: typeof e.raw === "string" ? (ROUND_DEPTH[e.raw] ?? -1) : -1 }));
-      const max = Math.max(...numbered.map((x) => x.n));
-      const min = Math.min(...numbered.map((x) => x.n));
-      if (max === min) return { bestKey: null, worstKey: null };
-      const bestSlugs = numbered.filter((x) => x.n === max).map((x) => x.slug);
-      const worstSlugs = numbered.filter((x) => x.n === min).map((x) => x.slug);
-      return { bestKey: bestSlugs.length === 1 ? bestSlugs[0]! : null, worstKey: worstSlugs.length === 1 ? worstSlugs[0]! : null };
-    }
-    const nums = entries.map((e) => ({ slug: e.slug, n: typeof e.raw === "number" ? e.raw : NaN }));
-    const valid = nums.filter((x) => Number.isFinite(x.n));
-    if (valid.length < 2) return { bestKey: null, worstKey: null };
-    const max = Math.max(...valid.map((x) => x.n));
-    const min = Math.min(...valid.map((x) => x.n));
-    if (max === min) return { bestKey: null, worstKey: null };
-    const bestN = row.dir === "higher" ? max : min;
-    const worstN = row.dir === "higher" ? min : max;
-    const bestSlugs = valid.filter((x) => x.n === bestN).map((x) => x.slug);
-    const worstSlugs = valid.filter((x) => x.n === worstN).map((x) => x.slug);
-    return { bestKey: bestSlugs.length === 1 ? bestSlugs[0]! : null, worstKey: worstSlugs.length === 1 ? worstSlugs[0]! : null };
+    return compareRowExtremes(row, filledCoaches);
   }
 
   if (!open || !mounted) return null;

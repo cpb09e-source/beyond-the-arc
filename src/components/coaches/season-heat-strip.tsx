@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import type { CoachSeason, TourneyRound } from "@/lib/coaches";
+import type { CoachSeason, TourneyRound } from "@/lib/coaches-core";
 
 /**
  * Career-at-a-glance strip — one cell per season, sized equally across the

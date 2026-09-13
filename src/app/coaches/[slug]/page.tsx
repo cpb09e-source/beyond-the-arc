@@ -8,11 +8,16 @@ import {
   loadAllCoachProfiles,
   loadCoachProfile,
   loadTournamentGames,
-  buildGamesByTeamYear,
-  gamesForTeamYear,
-  tournamentWinsRank,
-  LATEST_YEAR,
 } from "@/lib/coaches";
+import { buildGamesByTeamYear, gamesForTeamYear, LATEST_YEAR } from "@/lib/coaches-core";
+import {
+  resolveCoachTeamYears,
+  resumeSeasons,
+  resumeGamesForSeason,
+  coachProfileStats,
+  coachProfileRanks,
+  ordinal,
+} from "@/lib/coach-views";
 import { readAllTeams, readGameLogsForYear, type GameLog } from "@/lib/static-data";
 import { ScheduleTicker } from "@/components/teams/schedule-ticker";
 import { CoachStylePanel } from "@/components/coaches/coach-style-panel";
@@ -20,20 +25,6 @@ import { CoachSeasonPick } from "@/components/coaches/coach-season-pick";
 import { CoachFindGameTrigger } from "@/components/coaches/coach-find-game-trigger";
 import { confDisplay } from "@/lib/conf-display";
 import { getTeamColors } from "@/lib/team-colors";
-
-// Compact label per TourneyRound. R64/R32 → R1/R2 to match conventional
-// fan parlance; Champion + Runner-up both label as NC since the W/L pill on
-// the game cell already disambiguates winner vs loser of the title game.
-const SHORT_ROUND: Record<string, string> = {
-  "First Four": "FF",
-  "R64": "R1",
-  "R32": "R2",
-  "Sweet 16": "S16",
-  "Elite Eight": "E8",
-  "Final Four": "F4",
-  "Runner-up": "NC",
-  "Champion": "NC",
-};
 
 function teamSlug(name: string): string {
   return name
@@ -85,19 +76,7 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
   // coach-scoped Find-a-Game modal (to filter games to just this coach's
   // tenure). One sweep through readAllTeams handles both.
   const allTeams = await readAllTeams();
-  // No teamId here on purpose. It used to carry teams-all's bart id, which
-  // nothing downstream can join against — game_logs is keyed by CBBD's ids —
-  // and keeping a dead id around is how the modal came to match on it.
-  const coachTeamYears: Array<{ team: string; teamSlug: string; year: number }> = [];
-  for (const s of profile.by_year) {
-    const teamRow = allTeams.find((t) => t.name === s.team && t.year === s.year);
-    if (!teamRow) continue;
-    coachTeamYears.push({
-      team: s.team,
-      teamSlug: teamRow.name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
-      year: s.year,
-    });
-  }
+  const coachTeamYears = resolveCoachTeamYears(profile.by_year, allTeams);
 
   // D-I mean per season for each style dimension — the baseline the career
   // lines in the play-style panel are drawn against.
@@ -108,82 +87,24 @@ export default async function CoachProfilePage({ params }: { params: Promise<{ s
   // game_id for the box score) rather than the slimmer TourneyGame shape.
   const marchGames: GameLog[] = [];
   {
-    // Newest season leftmost — the coach's most recent tournament run reads
-    // first, with their earlier appearances trailing off to the right. Within
-    // each season we keep games in chronological round order (R1 → NC) so the
-    // arc inside a single cluster still reads left-to-right naturally.
-    const seededSeasons = [...profile.by_year]
-      .filter((s) => s.seed !== null)
-      .sort((a, b) => b.year - a.year);
+    // Newest season first, games in round order within it — see resumeSeasons.
+    const seededSeasons = resumeSeasons(profile.by_year);
     if (seededSeasons.length > 0) {
       for (const season of seededSeasons) {
         const tGames = gamesForSeason(season.team, season.year);
         if (tGames.length === 0) continue;
         const yearGameLogs = await readGameLogsForYear(season.year);
-        for (const tg of tGames) {
-          if (!tg.date) continue;
-          // Match on team name, not id: game_logs.team_id is CBBD's id space
-          // and teams-all carries the bart id, so an id join finds nothing and
-          // the resume ticker just renders empty. Names agree exactly across
-          // both exports.
-          const match = yearGameLogs.find(
-            (gl) => gl.team_name === season.team && gl.game_date === tg.date,
-          );
-          if (match) {
-            marchGames.push({
-              ...match,
-              tournamentRound: SHORT_ROUND[tg.round] ?? tg.round,
-            });
-          }
-        }
+        marchGames.push(...resumeGamesForSeason(season, tGames, yearGameLogs));
       }
     }
   }
 
-  const totalGames = profile.career_wins + profile.career_losses;
-  const ncaaAppearances = profile.by_year.filter((s) => s.seed !== null).length;
-  const avgWinsPerSeason = profile.seasons_count > 0 ? (profile.career_wins / profile.seasons_count) : 0;
-  // 20+ win seasons — the rough threshold for an NCAA-tournament-caliber team in our window.
-  const twentyWinSeasons = profile.by_year.filter((s) => (s.wins ?? 0) >= 20).length;
-  // Distinct conferences coached in (when known). Sourced from each season's
-  // conference field which is only populated for the current year — but still
-  // worth showing the current-team's conference at minimum.
-  const conferences = Array.from(new Set(profile.by_year.map((s) => s.conference).filter((c): c is string => !!c)));
+  const { totalGames, ncaaAppearances, avgWinsPerSeason, twentyWinSeasons, conferences } = coachProfileStats(profile);
 
-  // Career rank — where does this coach stand vs all others in our data
-  // window? Wins rank uses raw totals; win-% rank requires a minimum sample
-  // size (3 seasons) so single-season flukes don't dominate.
-  const sortedByWins = [...allProfiles].sort((a, b) => b.career_wins - a.career_wins);
-  const winsRank = sortedByWins.findIndex((p) => p.slug === profile.slug) + 1;
-
-  // Composite résumé rank — where this coach stands across the full pool by
-  // the multi-component score (see computeCompositeScore in lib/coaches.ts).
-  const sortedByComposite = [...allProfiles].sort(
-    (a, b) => (b.composite_score ?? 0) - (a.composite_score ?? 0),
-  );
-  const compositeRank = sortedByComposite.findIndex((p) => p.slug === profile.slug) + 1;
-  const compositeRankTotal = sortedByComposite.length;
-  const eligibleForPctRank = allProfiles.filter((p) => p.seasons_count >= 3 && p.career_win_pct !== null);
-  eligibleForPctRank.sort((a, b) => (b.career_win_pct ?? 0) - (a.career_win_pct ?? 0));
-  const pctRank = eligibleForPctRank.findIndex((p) => p.slug === profile.slug) + 1;
-  const pctRankTotal = eligibleForPctRank.length;
-  const pctRankEligible = profile.seasons_count >= 3 && profile.career_win_pct !== null && pctRank > 0;
-
-  // Tournament-wins rank — only meaningful for coaches with at least one
-  // appearance; for everyone else, the Tournament Success section shows
-  // "no appearances" so the rank doesn't render either way.
-  const tourneyRank = tournamentWinsRank(allProfiles, profile);
-  // Ordinal helper.
-  const ordinal = (n: number): string => {
-    const v = n % 100;
-    if (v >= 11 && v <= 13) return `${n}th`;
-    switch (n % 10) {
-      case 1: return `${n}st`;
-      case 2: return `${n}nd`;
-      case 3: return `${n}rd`;
-      default: return `${n}th`;
-    }
-  };
+  // Where this coach stands against every other one — career wins, composite,
+  // win % (3+ seasons) and tournament wins. See coachProfileRanks.
+  const { winsRank, compositeRank, compositeRankTotal, pctRank, pctRankTotal, pctRankEligible, tourneyRank } =
+    coachProfileRanks(allProfiles, profile);
 
   return (
     <>

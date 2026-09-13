@@ -12,31 +12,20 @@ import type { SearchableOption } from "@/components/explorer/searchable-select";
 import { CompareModal } from "@/components/coaches/compare-modal";
 import { Trophy, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { midrankPercentileMap } from "@/lib/percentile";
 import { confDisplay } from "@/lib/conf-display";
-import { POWER_CONFS } from "@/lib/conf-tiers";
 import { PercentileChip } from "@/components/percentile-chip";
 import { ScopeCollapse, scopeSummary } from "@/components/filters/scope-collapse";
+import { CoachStatFilters, COACH_DRAWER_SLOT_ID, coachFilterChips } from "@/components/coaches/coach-filters";
 import {
-  CoachStatFilters, COACH_DRAWER_SLOT_ID, passesCoachFilters, coachFilterChips,
-  activeCoachStatColumns, coachStatValue, formatCoachStat,
-} from "@/components/coaches/coach-filters";
+  passesCoachFilters, activeCoachStatColumns, coachStatValue, formatCoachStat,
+  coachScope, passesCoachScope, effectiveCoachSort, sortCoachRows,
+  coachPercentiles, coachStatPercentiles,
+  COACH_STATUS_OPTIONS as STATUS_OPTIONS, COACH_TIER_OPTIONS as TIER_OPTIONS,
+  type CoachSortKey as SortKey, type CoachStatusFilter as StatusFilter, type CoachTierFilter as TierFilter,
+} from "@/lib/coach-views";
 import { StatChipStrip } from "@/components/filters/stat-chips";
 import type { RangeState } from "@/components/filters/range-row";
 import type { CoachRow } from "@/app/coaches/page";
-
-/**
- * Fixed columns, plus `stat:<key>` for the columns a stat filter adds. The
- * tagged form keeps the two kinds apart without a second piece of state, and
- * lets a stat column be sorted the same way any other column is.
- */
-type SortKey = "name" | "team" | "conference" | "active" | "career_wins" | "career_winpct" | "seasons" | "schools" | "composite"
-  | "composite_per_season" | "conf_winpct" | "adj_net" | "tourney" | "tourney_rec" | `stat:${string}`;
-type StatusFilter = "All" | "Active" | "Inactive";
-type TierFilter = "All" | "Power" | "Mid Major";
-
-const STATUS_OPTIONS: StatusFilter[] = ["All", "Active", "Inactive"];
-const TIER_OPTIONS: TierFilter[] = ["All", "Power", "Mid Major"];
 
 function teamSlug(name: string): string {
   return name
@@ -177,25 +166,10 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
    * handful of numeric comparisons.
    */
   const previewCoachCount = useCallback((candidate: RangeState) => {
-    const q = query.trim().toLowerCase();
-    const confSet = confFilter.length === 0 ? null : new Set(confFilter);
-    const teamSet = teamFilter.length === 0 ? null : new Set(teamFilter);
+    const scope = coachScope({ query, confs: confFilter, teams: teamFilter, tier, status });
     let n = 0;
     for (const r of rows) {
-      if (status === "Active" && !r.is_active) continue;
-      if (status === "Inactive" && r.is_active) continue;
-      if (teamSet && !(r.all_teams ?? []).some((t) => teamSet.has(t))) continue;
-      if (confSet && (!r.current_conference || !confSet.has(r.current_conference))) continue;
-      if (tier !== "All") {
-        // Unknown is unknown. `Mid Major` used to mean "not power", which
-        // quietly asserted mid-major status for anyone we had no conference
-        // for; a coach we cannot place belongs in neither tier.
-        if (!r.current_conference) continue;
-        const isPower = POWER_CONFS.has(r.current_conference);
-        if (tier === "Power" && !isPower) continue;
-        if (tier === "Mid Major" && isPower) continue;
-      }
-      if (q && !r.name.toLowerCase().includes(q) && !(r.current_team ?? "").toLowerCase().includes(q)) continue;
+      if (!passesCoachScope(r, scope)) continue;
       if (!passesCoachFilters(r, candidate)) continue;
       n++;
     }
@@ -203,85 +177,19 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
   }, [rows, query, confFilter, teamFilter, tier, status]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const confSet = confFilter.length === 0 ? null : new Set(confFilter);
-    const teamSet = teamFilter.length === 0 ? null : new Set(teamFilter);
-    return rows.filter((r) => {
-      if (status === "Active" && !r.is_active) return false;
-      if (status === "Inactive" && r.is_active) return false;
-      // Match against any team the coach has been at in our window, not
-       // just their current team. So picking "Abilene Christian" shows every
-       // coach who's coached there since 2013.
-      if (teamSet) {
-        let hit = false;
-        for (const t of r.all_teams ?? []) if (teamSet.has(t)) { hit = true; break; }
-        if (!hit) return false;
-      }
-      if (confSet && (!r.current_conference || !confSet.has(r.current_conference))) return false;
-      if (tier !== "All") {
-        // See the note on the count above: no conference means neither tier.
-        if (!r.current_conference) return false;
-        const isPower = POWER_CONFS.has(r.current_conference);
-        if (tier === "Power" && !isPower) return false;
-        if (tier === "Mid Major" && isPower) return false;
-      }
-      if (q && !r.name.toLowerCase().includes(q) && !(r.current_team ?? "").toLowerCase().includes(q)) return false;
-      if (!passesCoachFilters(r, statFilters)) return false;
-      return true;
-    });
+    const scope = coachScope({ query, confs: confFilter, teams: teamFilter, tier, status });
+    return rows.filter((r) => passesCoachScope(r, scope) && passesCoachFilters(r, statFilters));
   }, [rows, query, confFilter, teamFilter, tier, status, statFilters]);
 
   /**
    * The columns the committed stat filters add, and the sort key that is
-   * actually in force.
-   *
-   * `effectiveSort` exists because clearing a filter takes its column away.
-   * Deriving the fallback here rather than resetting `sortBy` in an effect
-   * keeps the table sorted by something real on the very first render after
-   * the column goes, with no extra pass.
+   * actually in force — effectiveCoachSort says why the latter is derived.
    */
   const statCols = useMemo(() => activeCoachStatColumns(statFilters), [statFilters]);
   const statColKeys = useMemo(() => new Set(statCols.map((c) => c.key)), [statCols]);
-  const effectiveSort: SortKey =
-    sortBy.startsWith("stat:") && !statColKeys.has(sortBy.slice(5)) ? "composite" : sortBy;
+  const effectiveSort: SortKey = effectiveCoachSort(sortBy, statColKeys);
 
-  const sorted = useMemo(() => {
-    const dir = sortDir === "asc" ? 1 : -1;
-    function key(r: CoachRow): string | number | boolean | null {
-      if (effectiveSort.startsWith("stat:")) return coachStatValue(r, effectiveSort.slice(5));
-      switch (effectiveSort) {
-        case "name":           return (r.name.split(" ").pop() ?? r.name).toLowerCase();
-        case "team":           return (r.current_team ?? "zzz").toLowerCase();
-        case "conference":     return r.current_conference ? confDisplay(r.current_conference).toLowerCase() : "zzz";
-        case "active":         return r.is_active ? 1 : 0;
-        case "career_wins":    return r.career_wins;
-        case "career_winpct":  return r.career_win_pct;
-        case "seasons":        return r.seasons_count;
-        case "schools":        return r.schools_count;
-        case "composite":      return r.composite_score ?? null;
-        case "composite_per_season": return r.composite_per_season ?? null;
-        case "conf_winpct":    return r.conf_win_pct ?? null;
-        case "adj_net":        return r.adj_net_avg ?? null;
-        case "tourney":        return r.tourney_rank_key ?? null;
-        // Wins first, then fewest losses. 20-6 outranks 20-14, and a coach who
-        // has never been leaves the column unranked rather than sorting as 0-0
-        // ahead of someone who went once and lost.
-        case "tourney_rec":    return r.ncaa_appearances > 0 ? r.tourney_wins * 100 - r.tourney_losses : null;
-        default:               return null;
-      }
-    }
-    return [...filtered].sort((a, b) => {
-      const av = key(a), bv = key(b);
-      if (av === null || av === undefined) return 1;
-      if (bv === null || bv === undefined) return -1;
-      if (av < bv) return -1 * dir;
-      if (av > bv) return 1 * dir;
-      // Stable secondary sort by last name
-      const al = (a.name.split(" ").pop() ?? a.name).toLowerCase();
-      const bl = (b.name.split(" ").pop() ?? b.name).toLowerCase();
-      return al.localeCompare(bl);
-    });
-  }, [filtered, effectiveSort, sortDir]);
+  const sorted = useMemo(() => sortCoachRows(filtered, effectiveSort, sortDir), [filtered, effectiveSort, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -301,53 +209,12 @@ export function CoachesClient({ rows }: { rows: CoachRow[] }) {
 
   const activeCount = rows.filter((r) => r.is_active).length;
 
-  /**
-   * Percentiles for the chipped columns.
-   *
-   * Ranked over the WHOLE coach set, not the filtered view: a chip should mean
-   * "against every coach we hold", so filtering to the Big 12 doesn't silently
-   * turn a national 60th percentile into a 95th. Same rule the players and
-   * teams grids follow. Coaches missing a value are left out rather than
-   * ranked last — no adjusted rating is not a bad one.
-   */
-  const pcts = useMemo(() => {
-    // Ties share a percentile — see src/lib/percentile.ts. Ranking by sorted
-    // position gave two coaches with identical records different chips.
-    const rank = (get: (r: CoachRow) => number | null | undefined) =>
-      midrankPercentileMap(rows.map((r) => [r.slug, get(r)] as const));
-    return {
-      composite: rank((r) => r.composite_score),
-      perSeason: rank((r) => r.composite_per_season),
-      conf: rank((r) => r.conf_win_pct),
-      adjNet: rank((r) => r.adj_net_avg),
-      // Only among coaches who have been. A 0-0 chipped at the 30th percentile
-      // would read as a tournament result, and never qualifying is not one.
-      tourneyWins: rank((r) => (r.ncaa_appearances > 0 ? r.tourney_wins : null)),
-    };
-  }, [rows]);
+  // Percentiles for the chipped columns, ranked over the WHOLE coach set rather
+  // than the filtered view — coachPercentiles has the reasoning.
+  const pcts = useMemo(() => coachPercentiles(rows), [rows]);
 
-  /**
-   * Percentiles for the filter-added columns, on the same national basis.
-   *
-   * Keyed by stat so a column added and removed and added again costs one
-   * ranking pass, not one per render. Nothing is computed for a stat that has
-   * no column.
-   */
-  const statPcts = useMemo(() => {
-    const out = new Map<string, Map<string, number>>();
-    for (const c of statCols) {
-      const vals = rows
-        .map((r) => [r.slug, coachStatValue(r, c.key)] as const)
-        .filter((e): e is readonly [string, number] => typeof e[1] === "number")
-        .sort((a, b) => a[1] - b[1]);
-      const m = new Map<string, number>();
-      if (vals.length >= 2) {
-        vals.forEach(([slug], i) => m.set(slug, Math.round((i / (vals.length - 1)) * 100)));
-      }
-      out.set(c.key, m);
-    }
-    return out;
-  }, [rows, statCols]);
+  // Percentiles for the filter-added columns, on the same national basis.
+  const statPcts = useMemo(() => coachStatPercentiles(rows, statCols), [rows, statCols]);
 
   // Collapsed-state read of the scope, same shape as /teams and /players.
   const scopeText = scopeSummary([

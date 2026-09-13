@@ -10,7 +10,7 @@ import {
 } from "@/components/filters/range-row";
 import { StatChipStrip, buildStatChips, type StatChip } from "@/components/filters/stat-chips";
 import { FilterGroup } from "@/components/filters/filter-group";
-import type { CoachRow } from "@/app/coaches/page";
+import { COACH_STAT_GROUPS as GROUPS, COACH_STATS as ALL_STATS } from "@/lib/coach-views";
 import { useMounted } from "@/lib/use-mounted";
 
 /**
@@ -24,156 +24,16 @@ import { useMounted } from "@/lib/use-mounted";
  * find the six coaches in the country who play fast AND crash the offensive
  * glass, which no amount of sorting a single column will tell you.
  *
- * Bounds below are set from the observed spread across ~800 coaches, rounded
- * outward, so a slider spends its travel where coaches actually differ rather
- * than on values nobody posts.
+ * The sliders themselves, and everything a coach row is tested or formatted
+ * with, live in lib/coach-views.ts, where something other than this drawer can
+ * apply the same filters.
  */
 
-type Group = { label: string; stats: RangeStat[] };
-
-const GROUPS: Group[] = [
-  {
-    label: "Play style",
-    stats: [
-      { key: "pace",      label: "Pace",            min: 55, max: 80, step: 0.5 },
-      { key: "fg3a_rate", label: "3PAR",            min: 20, max: 55, step: 0.5 },
-      { key: "fta_rate",  label: "FTAR",            min: 20, max: 50, step: 0.5 },
-      { key: "orb_pct",   label: "OREB Rate",       min: 15, max: 45, step: 0.5 },
-      { key: "tov_pct",   label: "Turnover Rate",   min: 10, max: 25, step: 0.5 },
-      { key: "ast_pct",   label: "Assist Rate",     min: 40, max: 70, step: 0.5 },
-    ],
-  },
-  {
-    label: "Defensive identity",
-    stats: [
-      { key: "efg_def",   label: "Opp eFG",         min: 40, max: 58, step: 0.5 },
-      { key: "tov_def",   label: "Opp Turnover Rate", min: 12, max: 28, step: 0.5 },
-      { key: "orb_def",   label: "Opp OREB Rate",   min: 20, max: 40, step: 0.5 },
-    ],
-  },
-  {
-    label: "Résumé",
-    stats: [
-      { key: "composite",     label: "Composite",     min: -75, max: 285, step: 5 },
-      { key: "per_season",    label: "Per Season",    min: -20, max: 40,  step: 0.5 },
-      { key: "career_win_pct", label: "Career Win %",  min: 0,   max: 100, step: 1 },
-      { key: "conf_win_pct",  label: "Conf Win %",    min: 0,   max: 100, step: 1 },
-      { key: "adj_net_avg",   label: "Adj Net",       min: -25, max: 32,  step: 0.5 },
-      { key: "seasons",       label: "Seasons",       min: 1,   max: 14,  step: 1 },
-    ],
-  },
-  {
-    label: "March",
-    stats: [
-      { key: "ncaa_rate",       label: "NCAA Rate",       min: 0, max: 100, step: 5 },
-      { key: "s16_rate",        label: "Sweet 16 Rate",   min: 0, max: 100, step: 5 },
-      { key: "ncaa_appearances", label: "Appearances",    min: 0, max: 14,  step: 1 },
-      { key: "sweet_sixteens",  label: "Sweet 16s",       min: 0, max: 12,  step: 1 },
-      { key: "final_fours",     label: "Final Fours",     min: 0, max: 6,   step: 1 },
-      { key: "ncaa_titles",     label: "Titles",          min: 0, max: 3,   step: 1 },
-      { key: "top25_seasons",   label: "Top-25 Seasons",  min: 0, max: 14,  step: 1 },
-    ],
-  },
-];
-
-const ALL_STATS: RangeStat[] = GROUPS.flatMap((g) => g.stats);
 const BY_KEY = new Map(ALL_STATS.map((s) => [s.key, s]));
 const ORDER = ALL_STATS.map((s) => s.key);
 
-/** Pull the comparable number for a stat off a coach row. */
-export function coachStatValue(r: CoachRow, key: string): number | null {
-  const st = r.style_avg;
-  switch (key) {
-    case "pace":      return st?.pace ?? null;
-    case "fg3a_rate": return st?.fg3a_rate ?? null;
-    case "fta_rate":  return st?.fta_rate ?? null;
-    case "orb_pct":   return st?.orb_pct ?? null;
-    case "tov_pct":   return st?.tov_pct ?? null;
-    case "ast_pct":   return st?.ast_pct ?? null;
-    case "efg_def":   return st?.efg_def ?? null;
-    case "tov_def":   return st?.tov_def ?? null;
-    case "orb_def":   return st?.orb_def ?? null;
-    case "composite":       return r.composite_score ?? null;
-    case "per_season":      return r.composite_per_season ?? null;
-    case "career_win_pct":  return r.career_win_pct != null ? r.career_win_pct * 100 : null;
-    case "conf_win_pct":    return r.conf_win_pct != null ? r.conf_win_pct * 100 : null;
-    case "adj_net_avg":     return r.adj_net_avg ?? null;
-    case "seasons":         return r.seasons_count;
-    case "ncaa_rate":       return r.ncaa_rate != null ? r.ncaa_rate * 100 : null;
-    case "s16_rate":        return r.s16_rate != null ? r.s16_rate * 100 : null;
-    case "ncaa_appearances": return r.ncaa_appearances;
-    case "sweet_sixteens":  return r.sweet_sixteens;
-    case "final_fours":     return r.final_fours;
-    case "ncaa_titles":     return r.ncaa_titles;
-    case "top25_seasons":   return r.top25_seasons ?? null;
-    default: return null;
-  }
-}
-
-/**
- * Does a coach clear every active bound?
- *
- * A coach with no value for a bounded stat is EXCLUDED. Filtering on pace and
- * keeping the coaches whose pace we don't know would quietly pad the result
- * with rows that cannot be checked against the thing you asked for.
- */
-export function passesCoachFilters(r: CoachRow, state: RangeState): boolean {
-  for (const st of ALL_STATS) {
-    const b = state[st.key];
-    if (!b || (b.lo === null && b.hi === null)) continue;
-    const v = coachStatValue(r, st.key);
-    if (v === null) return false;
-    if (b.lo !== null && v < b.lo) return false;
-    if (b.hi !== null && v > b.hi) return false;
-  }
-  return true;
-}
-
 export function coachFilterChips(state: RangeState): StatChip[] {
   return buildStatChips([], state, ORDER, (k) => BY_KEY.get(k)?.label ?? k);
-}
-
-/**
- * Stats the table already shows in a column of their own. Filtering on Adj Net
- * should not produce a second Adj Net column beside the first.
- *
- * The March counts are deliberately NOT here: the March cell renders them as a
- * tick strip, which is a shape rather than a sortable number, so a coach who
- * filters on Final Fours still has nowhere to read or order the actual count.
- */
-const ALREADY_COLUMNED = new Set([
-  "composite", "per_season", "career_win_pct", "conf_win_pct", "adj_net_avg", "seasons",
-]);
-
-export type CoachStatColumn = { key: string; label: string };
-
-/**
- * Bounded stats that deserve a column, in drawer order. Filtering on something
- * you cannot then see is the gap this closes — you narrow to coaches who play
- * fast and crash the glass, and the two numbers you chose them for come with
- * them instead of staying behind in the drawer.
- */
-export function activeCoachStatColumns(state: RangeState): CoachStatColumn[] {
-  return ALL_STATS
-    .filter((s) => isBoundActive(state[s.key]) && !ALREADY_COLUMNED.has(s.key))
-    .map((s) => ({ key: s.key, label: s.label }));
-}
-
-/** Rates that read as percentages; `pace` is possessions, so it stays bare. */
-const PCT_STATS = new Set([
-  "fg3a_rate", "fta_rate", "orb_pct", "tov_pct", "ast_pct",
-  "efg_def", "tov_def", "orb_def",
-  "career_win_pct", "conf_win_pct", "ncaa_rate", "s16_rate",
-]);
-const COUNT_STATS = new Set([
-  "seasons", "ncaa_appearances", "sweet_sixteens", "final_fours", "ncaa_titles", "top25_seasons",
-]);
-
-export function formatCoachStat(key: string, v: number | null): string {
-  if (v === null) return "—";
-  if (COUNT_STATS.has(key)) return String(v);
-  if (key === "adj_net_avg") return (v > 0 ? "+" : "") + v.toFixed(1);
-  return v.toFixed(1) + (PCT_STATS.has(key) ? "%" : "");
 }
 
 export const COACH_DRAWER_SLOT_ID = "coach-filters-slot";

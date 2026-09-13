@@ -7,20 +7,11 @@ import { TeamLogo } from "@/components/team-logo";
 import { TeamName } from "@/components/team-name";
 import { SeedChip } from "@/components/coaches/seed-chip";
 import { confDisplay } from "@/lib/conf-display";
-import type { CoachSeason, TourneyRound } from "@/lib/coaches";
-
-type SortKey =
-  | "year"
-  | "school"
-  | "conf"
-  | "record"
-  | "bta_rtg"
-  | "adj_net"
-  | "adj_oe"
-  | "adj_de"
-  | "awards";
-
-type SortDir = "asc" | "desc";
+import type { CoachSeason, TourneyRound } from "@/lib/coaches-core";
+import {
+  sortCoachSeasons, defaultSeasonSortDir, seasonAwards,
+  type SeasonSortKey as SortKey, type SeasonSortDir as SortDir,
+} from "@/lib/coach-views";
 
 function teamSlug(name: string): string {
   return name
@@ -47,41 +38,7 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
   const [sortBy, setSortBy] = useState<SortKey>("year");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  const sorted = useMemo(() => {
-    const arr = [...seasons];
-    const dir = sortDir === "asc" ? 1 : -1;
-    arr.sort((a, b) => {
-      const get = (s: CoachSeason): number | string | null => {
-        switch (sortBy) {
-          case "year": return s.year;
-          case "school": return s.team;
-          case "conf": return s.conference ?? "";
-          case "record":
-            // Sort by wins primarily; null records sort last.
-            if (s.wins == null) return -Infinity;
-            return s.wins;
-          case "bta_rtg":
-            // We display BTA rank (lower = better); for sort purposes we use
-            // the rank value but flip the comparator below so "asc" on this
-            // column = best-ranked first.
-            return s.bta_rank ?? Infinity;
-          case "adj_net": return s.adj_net ?? -Infinity;
-          case "adj_oe": return s.adj_oe ?? -Infinity;
-          case "adj_de": return s.adj_de ?? Infinity;
-          case "awards":
-            return awardsRank(s);
-          default: return 0;
-        }
-      };
-      const av = get(a);
-      const bv = get(b);
-      if (typeof av === "string" && typeof bv === "string") return av.localeCompare(bv) * dir;
-      const an = typeof av === "number" ? av : 0;
-      const bn = typeof bv === "number" ? bv : 0;
-      return (an - bn) * dir;
-    });
-    return arr;
-  }, [seasons, sortBy, sortDir]);
+  const sorted = useMemo(() => sortCoachSeasons(seasons, sortBy, sortDir), [seasons, sortBy, sortDir]);
 
   function clickHeader(key: SortKey) {
     if (sortBy === key) {
@@ -89,14 +46,8 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
       return;
     }
     setSortBy(key);
-    // Sensible default direction per column.
-    if (key === "year" || key === "adj_net" || key === "adj_oe" || key === "record" || key === "awards") {
-      setSortDir("desc"); // higher = first
-    } else if (key === "bta_rtg" || key === "adj_de") {
-      setSortDir("asc"); // lower-is-better: BTA rank #1 first, lowest DRTG first
-    } else {
-      setSortDir("asc"); // alphabetical
-    }
+    // Sensible default direction per column — see defaultSeasonSortDir.
+    setSortDir(defaultSeasonSortDir(key));
   }
 
   return (
@@ -177,20 +128,6 @@ export function SeasonBySeasonTable({ seasons }: { seasons: CoachSeason[] }) {
   );
 }
 
-function awardsRank(s: CoachSeason): number {
-  // Higher value = more impressive achievement, so descending puts these on top.
-  if (s.round === "Champion") return 10;
-  if (s.round === "Runner-up") return 9;
-  if (s.round === "Final Four") return 8;
-  if (s.round === "Elite Eight") return 7;
-  if (s.round === "Sweet 16") return 6;
-  if (s.round === "R32") return 5;
-  if (s.round === "R64") return 4;
-  if (s.seed != null) return 3;
-  if (s.reg_season_conf_champ) return 2;
-  return 0;
-}
-
 function SortHeader({
   label, k, active, dir, onClick, align = "left", className = "",
 }: {
@@ -250,23 +187,7 @@ function RatingCell({ value, pct, coral, rankFormat }: { value: number | null | 
 }
 
 function SeasonAwards({ season }: { season: CoachSeason }) {
-  const awards: { label: string; tone: "coral" | "muted" }[] = [];
-  if (season.reg_season_conf_champ) {
-    awards.push({ label: "Reg. season champ", tone: "coral" });
-  }
-  if (season.seed !== null) {
-    const roundLabel =
-      season.round === "Champion" ? "NCAA Champion"
-      : season.round === "Runner-up" ? "NCAA Title runner-up"
-      : season.round === "Final Four" ? "NCAA Final Four"
-      : season.round === "Elite Eight" ? "NCAA Elite Eight"
-      : season.round === "Sweet 16" ? "NCAA Sweet 16"
-      : season.round === "R32" ? "NCAA Second Round"
-      : season.round === "R64" ? "NCAA First Round"
-      : season.round === "First Four" ? "NCAA First Four"
-      : "NCAA Tournament";
-    awards.push({ label: roundLabel, tone: "coral" });
-  }
+  const awards = seasonAwards(season);
   if (awards.length === 0) return <span className="text-ink-muted/40">—</span>;
   return (
     <span className="flex gap-1.5 whitespace-nowrap">

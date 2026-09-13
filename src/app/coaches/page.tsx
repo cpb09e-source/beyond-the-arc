@@ -1,24 +1,16 @@
 import { Suspense } from "react";
 import { CoachesClient } from "@/components/coaches/coaches-client";
 import { loadCoachIndex, type CoachIndexRow } from "@/lib/coaches";
+import { sortCoachesDefault } from "@/lib/coach-views";
 import { PageHeading } from "@/components/page-heading";
 
 export type CoachRow = CoachIndexRow;
 
 async function loadCoaches(): Promise<CoachRow[]> {
   const rows = await loadCoachIndex();
-  // Default sort: composite résumé score, descending. Coaches without a
-  // composite (rare — only no-data entries) sort last; ties break by last
-  // name alphabetical so the order is stable.
-  rows.sort((a, b) => {
-    const av = a.composite_score ?? -Infinity;
-    const bv = b.composite_score ?? -Infinity;
-    if (av !== bv) return bv - av;
-    const al = (a.name.split(" ").pop() ?? a.name).toLowerCase();
-    const bl = (b.name.split(" ").pop() ?? b.name).toLowerCase();
-    return al.localeCompare(bl);
-  });
-  return rows;
+  // Default sort: composite résumé score, descending, ties by last name — see
+  // sortCoachesDefault.
+  return sortCoachesDefault(rows);
 }
 
 export default async function CoachesPage() {

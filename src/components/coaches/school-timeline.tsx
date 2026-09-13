@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
-import type { CoachSchoolStint } from "@/lib/coaches";
+import type { CoachSchoolStint } from "@/lib/coaches-core";
 
 function teamSlug(name: string): string {
   return name
