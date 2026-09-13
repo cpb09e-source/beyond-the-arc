@@ -26,6 +26,10 @@ const eslintConfig = defineConfig([
     // Playwright MCP scratch: page snapshots and console logs from a browser
     // check, written into the repo root and gitignored.
     ".playwright-mcp/**",
+    // The desktop app is its own package with its own toolchain (Electron +
+    // Vite), not a Next route. It imports pure modules from src/lib, which this
+    // config still lints where they live.
+    "desktop/**",
   ]),
   {
     rules: {

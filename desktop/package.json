@@ -1,0 +1,35 @@
+{
+  "name": "bta-desktop",
+  "productName": "Beyond the Arc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Beyond the Arc desktop workspace",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "node scripts/electron-vite.mjs dev",
+    "build": "node scripts/electron-vite.mjs build",
+    "preview": "node scripts/electron-vite.mjs preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@fontsource-variable/schibsted-grotesk": "5.3.0",
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@tailwindcss/vite": "4.3.3",
+    "@tanstack/react-virtual": "3.14.12",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "5.2.0",
+    "cmdk": "1.1.1",
+    "electron": "44.3.0",
+    "electron-vite": "5.0.0",
+    "lucide-react": "^1.16.0",
+    "motion": "12.38.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-resizable-panels": "4.12.4",
+    "tailwindcss": "4.3.3",
+    "typescript": "^5",
+    "vite": "7.3.6"
+  }
+}

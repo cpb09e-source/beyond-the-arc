@@ -1,0 +1,180 @@
+@import "tailwindcss";
+@import "@fontsource-variable/schibsted-grotesk";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
+
+/*
+ * TOKENS, COPIED FROM src/app/globals.css, which stays the source of truth.
+ * Same paper, ink and azure as the site, so the app reads as Beyond the Arc
+ * rather than as another Linear clone: the interaction model is borrowed, the
+ * identity is not.
+ *
+ * Fonts are self-hosted through @fontsource. A desktop app that waits on
+ * Google Fonts is an app that renders in Segoe UI on a plane.
+ *
+ * ONE ADDITION: --chrome, a second neutral layer for the title bar, sidebar and
+ * status bar. Slightly deeper than the content ground in both themes, so the
+ * frame recedes and the data sits forward.
+ */
+:root {
+  --paper: #faf7f2;
+  --paper-deep: #f1ece2;
+  --card: #fdfbf6;
+  --ink: #1a2238;
+  --ink-soft: #3a425c;
+  --ink-muted: #6b7280;
+  --hairline: #e7e2d5;
+  --accent: #0c6bd6;
+  --good: #16a34a;
+  --bad: #e03131;
+  --chrome: #f3efe7;
+  /* Opaque mixes, never alpha: a translucent row tint lets a sticky cell show
+     the columns scrolling underneath it. The site hit that twice. */
+  --row-focus: color-mix(in oklab, var(--accent) 9%, var(--paper));
+  --row-hover: color-mix(in oklab, var(--ink) 4%, var(--chrome));
+  --accent-wash: color-mix(in oklab, var(--accent) 12%, var(--card));
+  --overlay-shadow: 0 24px 60px -24px rgb(26 34 56 / 0.34), 0 2px 8px rgb(26 34 56 / 0.08);
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --paper: #1c1c1c;
+  --paper-deep: #242424;
+  --card: #262626;
+  --ink: #ece8e0;
+  --ink-soft: #a6a29a;
+  --ink-muted: #8f8a81;
+  --hairline: #333331;
+  --accent: #4d9bff;
+  --good: #3ddc84;
+  --bad: #ff6b6b;
+  --chrome: #171717;
+  --overlay-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.75), 0 2px 8px rgb(0 0 0 / 0.45);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: "Schibsted Grotesk Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --color-paper: var(--paper);
+  --color-paper-deep: var(--paper-deep);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-muted: var(--ink-muted);
+  --color-hairline: var(--hairline);
+  --color-accent: var(--accent);
+  --color-good: var(--good);
+  --color-bad: var(--bad);
+  --color-chrome: var(--chrome);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  /* An app, not a page: dragging across the table should not paint a text
+     selection. Inputs opt back in below. */
+  user-select: none;
+}
+
+input,
+textarea {
+  user-select: text;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The site's wordmark, two files swapped by theme: the same rule as
+ * src/components/site-logo.tsx. Each file has its ink baked into the artwork,
+ * so an <img> of one cannot be recolored for the other ground.
+ */
+.bta-logo-dark {
+  display: none;
+}
+[data-theme="dark"] .bta-logo-light {
+  display: none;
+}
+[data-theme="dark"] .bta-logo-dark {
+  display: block;
+}
+
+.drag {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--accent) 28%, transparent);
+}
+
+/*
+ * PEEK. Position moves by transform (never top), so arrowing down the table
+ * glides the panel along with the focus instead of re-laying out the page.
+ * The entrance animates `scale` and `opacity`, which are separate properties
+ * from `transform`, so it cannot fight the inline position.
+ */
+.peek-panel {
+  box-shadow: var(--overlay-shadow);
+  transition: transform 130ms cubic-bezier(0.25, 1, 0.5, 1);
+  animation: peek-in 140ms cubic-bezier(0.25, 1, 0.5, 1);
+  will-change: transform;
+}
+
+@keyframes peek-in {
+  from {
+    opacity: 0;
+    scale: 0.985;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--paper-deep) 0%, var(--hairline) 50%, var(--paper-deep) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+  }
+}
