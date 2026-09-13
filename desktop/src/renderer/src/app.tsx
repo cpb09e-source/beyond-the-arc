@@ -16,6 +16,8 @@ import {
   PanelLeft,
   PanelRightClose,
   Pencil,
+  Pin,
+  PinOff,
   Plus,
   RotateCcw,
   Star,
@@ -47,14 +49,15 @@ import { signalOnboarding } from "~/shell/onboarding";
 import { SplitDivider } from "~/shell/split-divider";
 import { TabStrip } from "~/shell/tab-strip";
 import { TabTitleContext } from "~/shell/tab-title";
-import { NAV_VIEWS, profileViewFor, viewById, type FocusRequest, type FocusTarget, type RecordRef } from "~/shell/views";
+import { NAV_VIEWS, profileViewFor, sameRecord, viewById, type FocusRequest, type FocusTarget, type RecordRef } from "~/shell/views";
 import { Welcome } from "~/shell/welcome";
 import { useWorkspace, type Tab } from "~/shell/workspace";
 import { useWorkspaces } from "~/shell/workspaces";
-import { recordVisit } from "~/shell/recents";
+import { recordVisit, useRecents } from "~/shell/recents";
 import { seasonLabel } from "~/ui/format";
 import { Kbd } from "~/ui/kbd";
 import { NamePrompt } from "~/ui/name-prompt";
+import { PlaceMark } from "~/ui/place-mark";
 import { usePersisted } from "~/ui/persisted";
 import { ToastProvider, useToast } from "~/ui/toast";
 
@@ -67,6 +70,8 @@ const THEME_KEY = "bta.theme";
  */
 const PALETTE_GROUPS: PaletteGroup[] = [
   { id: "favorites", heading: "Favorites", limit: 6, showWhenEmpty: true },
+  { id: "recent", heading: "Recent", limit: 5, showWhenEmpty: true },
+  { id: "tabs", heading: "Open tabs", limit: 5, showWhenEmpty: false },
   { id: "views", heading: "Go to", limit: 8, showWhenEmpty: true },
   { id: "actions", heading: "Actions", limit: 8, showWhenEmpty: true },
   { id: "teams", heading: "Teams", limit: 5, showWhenEmpty: false },
@@ -424,6 +429,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
    * Everything the palette can do right now. Rebuilt when the tab, view, season
    * or theme changes, because rows mark what is current and name what "here" is.
    */
+  const recents = useRecents();
   const paletteItems = useMemo<PaletteItem[]>(() => {
     const currentMark = <Check size={14} strokeWidth={2.25} className="text-accent" />;
     const items: PaletteItem[] = [];
@@ -515,6 +521,47 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
         run: (how) => openFavorite(f, how.newTab),
       });
     }
+    // Where the reader has just been, first thing before a word is typed, as Notion's search opens.
+    const here = (p: { viewId: string; record?: RecordRef }) => p.viewId === current.viewId && sameRecord(p.record, current.record);
+    recents
+      .filter((v) => !here(v))
+      .slice(0, 5)
+      .forEach((v, i) => {
+        const rv = viewById(v.viewId);
+        items.push({
+          id: `recent:${i}`,
+          group: "recent",
+          title: v.title,
+          subtitle: rv.seasonless ? rv.label : `${rv.label} · ${seasonLabel(v.year)}`,
+          keywords: ["recent", "history", rv.label],
+          weight: 44,
+          leading: <PlaceMark viewId={v.viewId} record={v.record} />,
+          run: (how) =>
+            dispatch(
+              how.side
+                ? { type: "open-side", viewId: v.viewId, year: v.year, record: v.record, query: v.query }
+                : how.newTab
+                  ? { type: "open", viewId: v.viewId, year: v.year, record: v.record, query: v.query }
+                  : { type: "navigate", viewId: v.viewId, year: v.year, record: v.record, query: v.query },
+            ),
+        });
+      });
+    // Every other open tab by name, so a tab is found by typing rather than hunting the strip.
+    ws.tabs.forEach((t, i) => {
+      if (t.id === current.id) return;
+      const tv = viewById(t.viewId);
+      items.push({
+        id: `tab:${t.id}`,
+        group: "tabs",
+        title: t.title ?? t.record?.name ?? tv.label,
+        subtitle: tv.seasonless ? tv.label : `${tv.label} · ${seasonLabel(t.year)}`,
+        keywords: ["tab", "open", "switch", tv.label],
+        weight: 46,
+        leading: <PlaceMark viewId={t.viewId} record={t.record} />,
+        trailing: i < 8 ? <Kbd>{`Ctrl ${i + 1}`}</Kbd> : undefined,
+        run: () => dispatch({ type: "activate", id: t.id }),
+      });
+    });
     // What can be done with the page in front: the team or the player it is about.
     const rec = current.record;
     // Above views and objects that merely share a word, and verb first: on Michigan's page,
@@ -621,6 +668,14 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       leading: <X size={15} strokeWidth={2} />,
       trailing: <Kbd>Ctrl W</Kbd>,
       run: () => dispatch({ type: "close", id: current.id }),
+    });
+    action({
+      id: "action:pin-tab",
+      title: current.pinned ? "Unpin tab" : "Pin tab",
+      subtitle: current.title ?? current.record?.name ?? view.label,
+      keywords: ["tab", "pin", "keep"],
+      leading: current.pinned ? <PinOff size={15} strokeWidth={2} /> : <Pin size={15} strokeWidth={2} />,
+      run: () => dispatch({ type: "pin", id: current.id, pinned: !current.pinned }),
     });
     if (ws.closed.length > 0) {
       action({
@@ -738,7 +793,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     );
 
     return items;
-  }, [view, current, ws.closed, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite, splitShown, toggleSplit, go, copyLink, compare.add, workspaces]);
+  }, [view, current, ws.tabs, ws.closed, recents, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite, splitShown, toggleSplit, go, copyLink, compare.add, workspaces]);
 
   const allItems = useMemo(() => [...paletteItems, ...objects, ...coaches], [paletteItems, objects, coaches]);
 
@@ -804,6 +859,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
             split={splitShown ? split : null}
             onSplitWith={(id) => (id === ws.active ? toggleSplit() : dispatch({ type: "split-with", id }))}
             onUnsplit={() => dispatch({ type: "unsplit" })}
+            onPin={(id, pinned) => dispatch({ type: "pin", id, pinned })}
           />
         </header>
 

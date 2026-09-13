@@ -1,11 +1,10 @@
-import { Columns2, Copy, PanelRightClose, Plus, Star, StarOff, X } from "lucide-react";
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { Columns2, Copy, PanelRightClose, Pin, PinOff, Plus, Star, StarOff, X } from "lucide-react";
+import { Fragment, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { seasonLabel } from "~/ui/format";
 import { Kbd } from "~/ui/kbd";
-import { TeamLogo } from "~/ui/logo";
 import { Menu, type MenuEntry } from "~/ui/menu";
-import { PlayerPhoto } from "~/ui/player-photo";
+import { PlaceMark } from "~/ui/place-mark";
 import { viewById } from "./views";
 import type { Tab } from "./workspace";
 
@@ -39,6 +38,7 @@ export function TabStrip({
   split,
   onSplitWith,
   onUnsplit,
+  onPin,
 }: {
   tabs: Tab[];
   active: string;
@@ -54,6 +54,7 @@ export function TabStrip({
   split: { a: string; b: string } | null;
   onSplitWith: (id: string) => void;
   onUnsplit: () => void;
+  onPin: (id: string, pinned: boolean) => void;
 }) {
   const stripRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; x: number; moved: boolean } | null>(null);
@@ -99,17 +100,17 @@ export function TabStrip({
       className="flex h-full min-w-0 flex-1 items-center gap-1 overflow-hidden px-1.5"
       style={{ paddingRight: "calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 8px)" }}
     >
-      {tabs.map((tab) => {
+      {tabs.map((tab, i) => {
         const view = viewById(tab.viewId);
-        const Icon = view.icon;
         const label = tab.title ?? tab.record?.name ?? view.label;
         const isActive = tab.id === active;
         return (
+          <Fragment key={tab.id}>
           <div
-            key={tab.id}
             data-tab-id={tab.id}
             role="tab"
             aria-selected={isActive}
+            aria-label={tab.pinned ? label : undefined}
             title={view.seasonless ? label : `${label} · ${seasonLabel(tab.year)}`}
             onPointerDown={(e) => onPointerDown(e, tab.id)}
             onPointerMove={onPointerMove}
@@ -126,47 +127,40 @@ export function TabStrip({
               e.preventDefault();
               setMenu({ id: tab.id, x: e.clientX, y: e.clientY });
             }}
-            className={`no-drag group relative flex h-[28px] min-w-[112px] max-w-[220px] flex-1 cursor-default select-none items-center gap-2 rounded-[7px] pl-2.5 pr-1 text-[12.5px] transition-colors ${
+            className={`no-drag group relative flex h-[28px] cursor-default select-none items-center gap-2 rounded-[7px] text-[12.5px] transition-colors ${
+              tab.pinned ? "w-[34px] shrink-0 justify-center" : "min-w-[112px] max-w-[220px] flex-1 pl-2.5 pr-1"
+            } ${
               isActive
                 ? "bg-paper text-ink shadow-[0_0_0_1px_var(--hairline),0_1px_2px_rgb(0_0_0/0.05)]"
                 : "text-ink-muted hover:bg-[var(--row-hover)] hover:text-ink-soft"
             } ${dragging === tab.id ? "z-10 opacity-90" : ""}`}
           >
-            {tab.record?.kind === "team" ? (
-              <TeamLogo id={tab.record.logoId} name={tab.record.name} size={15} />
-            ) : tab.record?.kind === "player" ? (
-              <PlayerPhoto bartId={tab.record.bartId} hasPhoto={tab.record.hasPhoto} name={tab.record.name} size={16} />
-            ) : tab.record?.kind === "game" ? (
-              <span className="flex shrink-0 items-center">
-                <TeamLogo id={tab.record.awayLogo} name={tab.record.away} size={14} />
-                <span className="-ml-1">
-                  <TeamLogo id={tab.record.homeLogo} name={tab.record.home} size={14} />
-                </span>
-              </span>
-            ) : (
-              <Icon size={14} strokeWidth={2} className={`shrink-0 ${isActive ? "text-ink-soft" : "text-ink-muted"}`} />
-            )}
-            <span className="min-w-0 truncate">{label}</span>
+            <PlaceMark viewId={tab.viewId} record={tab.record} muted={!isActive} />
+            {!tab.pinned && <span className="min-w-0 truncate">{label}</span>}
             {split && (split.a === tab.id || split.b === tab.id) && (
               // The two tabs on screen together share an underline, as a pair.
               <span aria-hidden className="pointer-events-none absolute inset-x-2 -bottom-[6px] h-[2px] rounded-full bg-[color-mix(in_oklab,var(--accent)_70%,transparent)]" />
             )}
-            {!view.seasonless && (
+            {!view.seasonless && !tab.pinned && (
               <span className="shrink-0 text-[11px] text-ink-muted tabular">{seasonLabel(tab.year).slice(2)}</span>
             )}
-            <button
-              type="button"
-              aria-label={`Close ${label}`}
-              onPointerDown={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => onClose(tab.id)}
-              className={`ml-auto grid size-[18px] shrink-0 place-items-center rounded-[4px] text-ink-muted transition-colors hover:bg-[var(--row-hover)] hover:text-ink ${
-                isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-              }`}
-            >
-              <X size={12} strokeWidth={2.25} />
-            </button>
+            {!tab.pinned && (
+              <button
+                type="button"
+                aria-label={`Close ${label}`}
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => onClose(tab.id)}
+                className={`ml-auto grid size-[18px] shrink-0 place-items-center rounded-[4px] text-ink-muted transition-colors hover:bg-[var(--row-hover)] hover:text-ink ${
+                  isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                }`}
+              >
+                <X size={12} strokeWidth={2.25} />
+              </button>
+            )}
           </div>
+          {tab.pinned && tabs[i + 1] && !tabs[i + 1]!.pinned && <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-hairline" />}
+          </Fragment>
         );
       })}
       <button
@@ -196,7 +190,15 @@ export function TabStrip({
   // Rebuilt each time it opens, so it names the tab's current state.
   function tabMenu(id: string): MenuEntry[] {
     const starred = isFavorite(id);
+    const pinned = !!tabs.find((t) => t.id === id)?.pinned;
     return [
+      {
+        kind: "item",
+        id: "pin",
+        label: pinned ? "Unpin tab" : "Pin tab",
+        icon: pinned ? <PinOff size={14} /> : <Pin size={14} />,
+        onSelect: () => onPin(id, !pinned),
+      },
       {
         kind: "item",
         id: "favorite",

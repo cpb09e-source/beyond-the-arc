@@ -41,6 +41,8 @@ export type Tab = {
   record?: RecordRef;
   /** What the view says it is showing ("Duke vs Michigan"); absent, the view's own name. */
   title?: string;
+  /** Kept at the left as its mark alone, and never replaced by somewhere else: Linear's pinned tabs. */
+  pinned?: boolean;
   back: Snapshot[];
   forward: Snapshot[];
 };
@@ -72,6 +74,7 @@ export type WorkspaceAction =
   | { type: "unsplit" }
   | { type: "split-ratio"; ratio: number }
   | { type: "focus-other-pane" }
+  | { type: "pin"; id: string; pinned: boolean }
   /** Another workspace's tabs, in place of these (see ./workspaces.ts). */
   | { type: "load"; ws: Workspace };
 
@@ -112,6 +115,15 @@ const makeTab = (viewId: string, year: number, record?: RecordRef, query = ""): 
 
 const snapshotOf = (t: Tab): Snapshot => ({ viewId: t.viewId, year: t.year, record: t.record, query: t.query });
 
+/** Pinned tabs are always the first ones; this is where they end. */
+const pinnedCount = (tabs: Tab[]): number => tabs.filter((t) => t.pinned).length;
+
+/** A new tab beside the one in front, as a browser places it, but never among the pinned ones. */
+function insertTab(ws: Workspace, tab: Tab): Workspace {
+  const at = Math.max(ws.tabs.findIndex((t) => t.id === ws.active) + 1, pinnedCount(ws.tabs));
+  return { ...ws, tabs: [...ws.tabs.slice(0, at), tab, ...ws.tabs.slice(at)], active: tab.id };
+}
+
 /** Tabs as persistableWorkspace saved them, checked field by field; null when none is usable. */
 export function restoreWorkspace(saved: unknown): Workspace | null {
   if (typeof saved !== "object" || saved === null) return null;
@@ -128,6 +140,7 @@ export function restoreWorkspace(saved: unknown): Workspace | null {
             query: typeof o.query === "string" ? o.query : "",
             title: typeof o.title === "string" ? o.title : undefined,
             record: isRecordRef(o.record) ? o.record : undefined,
+            pinned: o.pinned === true ? true : undefined,
             back: Array.isArray(o.back) ? o.back.filter(isSnapshot) : [],
             forward: Array.isArray(o.forward) ? o.forward.filter(isSnapshot) : [],
           },
@@ -211,18 +224,18 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
           ? ws
           : updateTab(ws, current.id, (t) => ({ ...t, query: a.query! }));
       }
+      // A pinned tab keeps its place: somewhere else opens in a tab of its own.
+      if (current.pinned && (place.viewId !== current.viewId || !sameRecord(place.record, current.record))) {
+        return insertTab(ws, makeTab(place.viewId, place.year, place.record, place.query));
+      }
       return updateTab(ws, current.id, (t) => ({
         ...arrive(t, place),
         back: [...t.back, snapshotOf(t)].slice(-HISTORY_CAP),
         forward: [],
       }));
     }
-    case "open": {
-      const tab = makeTab(a.viewId, a.year, a.record, a.query);
-      const at = ws.tabs.findIndex((t) => t.id === current.id);
-      // Beside the tab it came from, as a browser places it.
-      return { ...ws, tabs: [...ws.tabs.slice(0, at + 1), tab, ...ws.tabs.slice(at + 1)], active: tab.id };
-    }
+    case "open":
+      return insertTab(ws, makeTab(a.viewId, a.year, a.record, a.query));
     case "close": {
       const at = ws.tabs.findIndex((t) => t.id === a.id);
       if (at < 0) return ws;
@@ -242,7 +255,9 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
       const last = ws.closed[ws.closed.length - 1];
       if (!last) return ws;
       const tab = { ...last, id: newId() };
-      return { tabs: [...ws.tabs, tab], active: tab.id, closed: ws.closed.slice(0, -1), split: ws.split };
+      // A pinned tab comes back among the pinned; any other at the end.
+      const at = tab.pinned ? pinnedCount(ws.tabs) : ws.tabs.length;
+      return { tabs: [...ws.tabs.slice(0, at), tab, ...ws.tabs.slice(at)], active: tab.id, closed: ws.closed.slice(0, -1), split: ws.split };
     }
     case "activate":
       return ws.tabs.some((t) => t.id === a.id) ? { ...ws, active: a.id } : ws;
@@ -271,13 +286,16 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
       const at = ws.tabs.findIndex((t) => t.id === a.id);
       if (at < 0) return ws;
       const src = ws.tabs[at]!;
-      const tab: Tab = { ...src, id: newId(), back: [...src.back], forward: [...src.forward] };
-      return { ...ws, tabs: [...ws.tabs.slice(0, at + 1), tab, ...ws.tabs.slice(at + 1)], active: tab.id };
+      const tab: Tab = { ...src, id: newId(), pinned: undefined, back: [...src.back], forward: [...src.forward] };
+      const pos = Math.max(at + 1, pinnedCount(ws.tabs));
+      return { ...ws, tabs: [...ws.tabs.slice(0, pos), tab, ...ws.tabs.slice(pos)], active: tab.id };
     }
     case "close-others": {
       const keep = ws.tabs.find((t) => t.id === a.id);
-      if (!keep || ws.tabs.length === 1) return ws;
-      return { tabs: [keep], active: keep.id, closed: [...ws.closed, ...ws.tabs.filter((t) => t.id !== a.id)].slice(-CLOSED_CAP), split: null };
+      // Pinned tabs stay, as a browser keeps them.
+      const kept = ws.tabs.filter((t) => t.pinned || t.id === a.id);
+      if (!keep || kept.length === ws.tabs.length) return ws;
+      return { tabs: kept, active: keep.id, closed: [...ws.closed, ...ws.tabs.filter((t) => !kept.includes(t))].slice(-CLOSED_CAP), split: null };
     }
     case "back": {
       const prev = current.back[current.back.length - 1];
@@ -299,7 +317,10 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
     }
     case "move": {
       const from = ws.tabs.findIndex((t) => t.id === a.id);
-      const to = Math.max(0, Math.min(ws.tabs.length - 1, a.to));
+      // Pinned tabs move among the pinned, the rest among the rest.
+      const n = pinnedCount(ws.tabs);
+      const pinned = !!ws.tabs[from]?.pinned;
+      const to = Math.max(pinned ? 0 : n, Math.min(pinned ? n - 1 : ws.tabs.length - 1, a.to));
       if (from < 0 || from === to) return ws;
       const tabs = [...ws.tabs];
       const [tab] = tabs.splice(from, 1);
@@ -318,10 +339,10 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
         );
       }
       const tab = makeTab(a.viewId, a.year, a.record, a.query);
-      const at = ws.tabs.findIndex((t) => t.id === current.id);
+      const at = Math.max(ws.tabs.findIndex((t) => t.id === current.id) + 1, pinnedCount(ws.tabs));
       return {
         ...ws,
-        tabs: [...ws.tabs.slice(0, at + 1), tab, ...ws.tabs.slice(at + 1)],
+        tabs: [...ws.tabs.slice(0, at), tab, ...ws.tabs.slice(at)],
         active: current.id,
         split: { a: current.id, b: tab.id, ratio: ws.split?.ratio ?? 0.5 },
       };
@@ -337,6 +358,14 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
     case "focus-other-pane": {
       if (!ws.split || !inSplit(ws, current.id)) return ws;
       return { ...ws, active: ws.split.a === current.id ? ws.split.b : ws.split.a };
+    }
+    case "pin": {
+      const tab = ws.tabs.find((t) => t.id === a.id);
+      if (!tab || !!tab.pinned === a.pinned) return ws;
+      const rest = ws.tabs.filter((t) => t.id !== a.id);
+      const n = pinnedCount(rest);
+      // Either way it lands on the seam: last of the pinned, or first of the rest.
+      return { ...ws, tabs: [...rest.slice(0, n), { ...tab, pinned: a.pinned || undefined }, ...rest.slice(n)] };
     }
     case "load":
       return a.ws;
@@ -355,6 +384,7 @@ export function persistableWorkspace(ws: Workspace): unknown {
       query: t.query,
       record: t.record,
       title: t.title,
+      pinned: t.pinned,
       back: t.back.slice(-20),
       forward: t.forward.slice(0, 20),
     })),
