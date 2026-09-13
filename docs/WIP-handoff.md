@@ -30,6 +30,38 @@ lifted the push half on 2026-09-01 ("you can push"), then authorized one build
 and deploy that same day ("build and deploy go ahead"). That authorization was
 for THAT deploy. Ask again before the next one.
 
+### BAKED BTA RANKS ARE WRONG ON THE LIVE SITE — found 2026-09-12, NOT FIXED
+
+`bta_rtg` and `bta_rank` on every teams-by-year row were written by
+`scripts/export-static-data.mts` BEFORE the rating-trust gate (2b19bf0181), from
+CBBD adjusted ratings that are broken in 2014, 2017, 2018, 2020 and 2023. The
+team explorer recomputes BTA RTG live in `src/lib/team-filters.ts`, which is
+gated, so the explorer is correct. Two surfaces read the baked field and are not:
+
+- the season-history table on team pages (`src/components/teams/sortable-seasons-table.tsx`)
+- the season-by-season table on coach pages (`src/components/coaches/season-by-season-table.tsx`, fed by `src/lib/coaches.ts`)
+
+Measured with processTeams against the baked field:
+
+| season | baked top 3 | live top 3 (what the explorer shows) | largest rank move |
+|---|---|---|---|
+| 2013-14 | Siena, Louisville, Arizona | Arizona, Louisville, Duke | 273 |
+| 2019-20 | Gonzaga, Kansas, Baylor | Kansas, Baylor, Gonzaga | 188 |
+| 2022-23 | Northwestern, UConn, Houston | UConn, Alabama, Houston | 287 |
+
+So today Siena's team page, and its coach's page, call 2013-14 Siena the
+number-one team in the country.
+
+**A SECOND PROBLEM, separate from the gate.** The two BTA RTG implementations
+(the export's and team-filters') have drifted: healthy seasons disagree by up to
+48 places (2018-19), 38 (2015-16) and 35 (2014-15), while 2023-24 through
+2025-26 agree to within about 10. Re-running the export after the data freeze
+lifts would fix the gate half only. The real fix is one implementation read by
+all three surfaces. Needs Colin's call, and a build and deploy to ship.
+
+The desktop app already ranks live through `processTeams`, so it matches the
+explorer rather than the baked field.
+
 ### DEPLOY — 2026-09-11, and the command changed
 
 **`netlify deploy --prod --dir=out` NO LONGER WORKS. It needs `--no-build`.**

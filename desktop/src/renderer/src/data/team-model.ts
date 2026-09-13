@@ -2,6 +2,7 @@ import { confDisplay } from "@/lib/conf-display";
 import { nationalRanksForTeam } from "@/lib/national-ranks";
 import { logoIdMap, toScatterTeams, type ScatterSourceRow } from "@/lib/scatter-team";
 import type { RankedStat, StaticTeamSeasonRow } from "@/lib/static-data";
+import { DEFAULT_SPEC, processTeams, type RawTeamSeason } from "@/lib/team-filters";
 import { buildZone, type Zone } from "@/lib/trapezoid";
 import cbbTeams from "@/data/cbb-team-ids.json";
 
@@ -55,6 +56,7 @@ export function shapeSeason(year: number, rows: StaticTeamSeasonRow[]): Season {
   const scatter = toScatterTeams(rows as unknown as ScatterSourceRow[], LOGOS);
   const zone = buildZone(scatter);
   const byName = new Map(scatter.map((t) => [t.name, t]));
+  const btaRank = liveBtaRanks(year, rows);
 
   const teams: Team[] = [];
   for (const row of rows) {
@@ -74,7 +76,7 @@ export function shapeSeason(year: number, rows: StaticTeamSeasonRow[]): Season {
       confLabel: confDisplay(conf),
       wins: num(tr.wins) ?? 0,
       losses: num(tr.losses) ?? 0,
-      btaRank: num(r.bta_rank),
+      btaRank: btaRank.get(Number(r.id)) ?? null,
       logoId: s?.id ?? null,
       adjO: num(ss.a_ortg),
       adjD: num(ss.a_drtg),
@@ -92,6 +94,29 @@ export function shapeSeason(year: number, rows: StaticTeamSeasonRow[]): Season {
   }
 
   return { year, teams, zone, cohort: rows };
+}
+
+/**
+ * BTA rank as the site's explorer computes it, never read off the row.
+ *
+ * THE BAKED `bta_rank` IS WRONG IN THE BROKEN SEASONS. It was written by an
+ * export that ran before the rating-trust gate existed, on CBBD adjusted ratings
+ * that do not describe those seasons, and it ranks 2013-14 Siena and 2022-23
+ * Northwestern first in the country. processTeams recomputes BTA RTG from the
+ * gated inputs (Arizona and UConn respectively, matching Torvik's top three),
+ * and it is exactly what the explorer on the site shows, so the app agrees with
+ * the explorer instead of a stale file. All 365 teams in about 10 ms.
+ */
+function liveBtaRanks(year: number, rows: StaticTeamSeasonRow[]): Map<number, number> {
+  const { rows: scored } = processTeams(rows as unknown as RawTeamSeason[], {
+    ...DEFAULT_SPEC,
+    years: [year],
+    limit: -1,
+  });
+  const ranked = scored
+    .filter((r) => typeof r.bta_rtg === "number")
+    .sort((a, b) => (b.bta_rtg as number) - (a.bta_rtg as number));
+  return new Map(ranked.map((r, i) => [Number(r.team_id), i + 1]));
 }
 
 type Ranks = { top: RankedStat[]; bottom: RankedStat[] } | null;
