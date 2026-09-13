@@ -74,8 +74,14 @@ export function Picker({
           onKeyDown={(e) => {
             const i = keys.indexOf(active);
             let handled = true;
-            if (e.key === "ArrowDown") setActive(keys[Math.min(keys.length - 1, i + 1)] ?? active);
-            else if (e.key === "ArrowUp") setActive(keys[Math.max(0, i - 1)] ?? active);
+            const move = (to: string | undefined) => {
+              if (!to) return;
+              setActive(to);
+              // A long list keeps the active option in view as the keyboard moves it.
+              document.getElementById(`${id}-${to}`)?.scrollIntoView({ block: "nearest" });
+            };
+            if (e.key === "ArrowDown") move(keys[Math.min(keys.length - 1, i + 1)]);
+            else if (e.key === "ArrowUp") move(keys[Math.max(0, i - 1)]);
             else if (e.key === "Enter" || e.key === " ") choose(active);
             else if (e.key === "Escape") setOpen(false);
             else handled = false;
@@ -84,7 +90,7 @@ export function Picker({
               e.stopPropagation();
             }
           }}
-          className="menu-in absolute left-0 top-[calc(100%+6px)] z-30 w-[288px] rounded-lg border border-hairline bg-card p-1 outline-none"
+          className="menu-in absolute left-0 top-[calc(100%+6px)] z-30 max-h-[min(460px,65vh)] w-[288px] overflow-y-auto overscroll-contain rounded-lg border border-hairline bg-card p-1 outline-none"
           style={{ boxShadow: "var(--overlay-shadow)" }}
         >
           {options.map((o) => (

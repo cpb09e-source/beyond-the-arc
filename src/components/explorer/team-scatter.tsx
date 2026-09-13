@@ -16,10 +16,7 @@ import {
 import { buildZone, zoneAxes, zonePolygon, ZONE_X, ZONE_Y, type Zone } from "@/lib/trapezoid";
 import { loadSeason, type SeasonDenial } from "@/lib/season-data";
 import { ALL_SEASONS, isFlaggedSeason, seasonFlagNote } from "@/lib/seasons";
-import {
-  metricCoverage, toScatterTeams,
-  type LogoIds, type ScatterSourceRow, type ScatterTeam,
-} from "@/lib/scatter-team";
+import { metricCoverage, toScatterTeams, type LogoIds, type ScatterSourceRow, type ScatterTeam, topByNet } from "@/lib/scatter-team";
 
 /**
  * Any two team metrics against each other, with school crests as the marks.
@@ -121,30 +118,6 @@ const ROW_H = 33;
 const HEAD_H = 45;
 const PANE_H = HEAD_H + PER_PAGE * ROW_H;
 
-/**
- * The teams the contender zone opens on: the best N by net rating.
- *
- * NOT the best N by overall rank, even though the two lists mostly agree. The
- * zone's floor is a net-rating rank, so selecting by anything else can leave a
- * team above the floor off the chart — a shape with a hole in it, and no way for
- * the reader to tell the hole from an empty region.
- *
- * FALLS BACK TO RANK WHEN THE SEASON HAS NO NET RATING. Five seasons withhold
- * it, and seeding off a column that is null for everybody selected nobody: the
- * reader switched to 2022-23, moved the Y axis to something that season does
- * have, and got a correctly-drawn chart of zero teams. The zone cannot exist in
- * those years anyway, so ordering by Torvik rank loses nothing and keeps the
- * page from opening empty.
- */
-function topByNet(teams: ScatterTeam[], n: number): string[] {
-  const withNet = teams.filter((t) => typeof t.m[ZONE_Y] === "number");
-  const src = withNet.length >= n ? withNet : teams;
-  return (withNet.length >= n
-    ? [...src].sort((a, b) => (b.m[ZONE_Y] as number) - (a.m[ZONE_Y] as number))
-    : [...src].sort((a, b) => a.rank - b.rank))
-    .slice(0, n)
-    .map((t) => t.name);
-}
 
 const NO_TEAMS: ScatterTeam[] = [];
 

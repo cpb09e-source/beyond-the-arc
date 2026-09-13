@@ -1,10 +1,11 @@
-import { CalendarClock, CalendarDays, Shield, Table2, UserRound, UsersRound, type LucideIcon } from "lucide-react";
+import { CalendarClock, CalendarDays, ChartScatter, Shield, Table2, UserRound, UsersRound, type LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import { PlayerGamesView } from "~/views/player-games/player-games-view";
 import { PlayerProfileView } from "~/views/player-profile/player-profile-view";
 import { PlayersView } from "~/views/players/players-view";
 import { TeamGamesView } from "~/views/team-games/team-games-view";
 import { TeamProfileView } from "~/views/team-profile/team-profile-view";
+import { TeamScatterView } from "~/views/team-scatter/team-scatter-view";
 import { TeamsView } from "~/views/teams/teams-view";
 
 /**
@@ -77,6 +78,14 @@ export const VIEWS: ViewDef[] = [
     icon: CalendarDays,
     filterPlaceholder: "Filter games",
     Component: TeamGamesView,
+  },
+  {
+    id: "team-scatter",
+    label: "Team Scatter",
+    section: "Teams",
+    icon: ChartScatter,
+    filterPlaceholder: "",
+    Component: TeamScatterView,
   },
   {
     id: "player-explorer",

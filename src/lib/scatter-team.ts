@@ -15,6 +15,7 @@
  */
 
 import { extractMetrics } from "@/lib/team-scatter-metrics";
+import { ZONE_Y } from "@/lib/trapezoid";
 
 export type ScatterTeam = {
   name: string;
@@ -98,4 +99,29 @@ export function metricCoverage(teams: ScatterTeam[], key: string): number {
   let n = 0;
   for (const t of teams) if (typeof t.m[key] === "number") n++;
   return n;
+}
+
+/**
+ * The teams the contender zone opens on: the best N by net rating.
+ *
+ * NOT the best N by overall rank, even though the two lists mostly agree. The
+ * zone's floor is a net-rating rank, so selecting by anything else can leave a
+ * team above the floor off the chart — a shape with a hole in it, and no way for
+ * the reader to tell the hole from an empty region.
+ *
+ * FALLS BACK TO RANK WHEN THE SEASON HAS NO NET RATING. Five seasons withhold
+ * it, and seeding off a column that is null for everybody selected nobody: the
+ * reader switched to 2022-23, moved the Y axis to something that season does
+ * have, and got a correctly-drawn chart of zero teams. The zone cannot exist in
+ * those years anyway, so ordering by Torvik rank loses nothing and keeps the
+ * page from opening empty.
+ */
+export function topByNet(teams: ScatterTeam[], n: number): string[] {
+  const withNet = teams.filter((t) => typeof t.m[ZONE_Y] === "number");
+  const src = withNet.length >= n ? withNet : teams;
+  return (withNet.length >= n
+    ? [...src].sort((a, b) => (b.m[ZONE_Y] as number) - (a.m[ZONE_Y] as number))
+    : [...src].sort((a, b) => a.rank - b.rank))
+    .slice(0, n)
+    .map((t) => t.name);
 }
