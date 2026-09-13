@@ -5,6 +5,33 @@ first). This file is the source of truth across sessions; the readable version w
 published as the "BTA Desktop Blueprint" artifact. Update this file as decisions
 land, and delete sections once they are built and self-documenting in code.
 
+## Status
+
+**P0 shipped 2026-09-12** (416931d9ab, 9c3b937f98, 1fbc2fe01c). Windows, development mode only.
+
+Run it: `cd desktop && npm install && npm run dev`. If it reports a missing Electron
+binary, run `node node_modules/electron/install.js` once; Electron 44 no longer fetches
+it reliably during install.
+
+What is in it: a frameless window with the site wordmark in both inks; thirteen seasons
+in the sidebar, 2025-26 opening; a virtualized team table with the site's percentile chip
+on every stat (the explorer's percentiles, tempo in the neutral band); BTA rank computed
+live through `processTeams`, never the baked `bta_rank`; Peek (hold, tap to pin,
+arrows, Esc) with national ranks as ramp chips and the contender zone; Ctrl K focusing
+the filter, where number words fold to digits so "big ten" finds Big 10; system, light
+and dark themes.
+
+Gotchas already paid for:
+- VS Code exports `ELECTRON_RUN_AS_NODE=1` into its terminal. `npm run dev` goes through
+  `desktop/scripts/electron-vite.mjs`, which strips it. `npx electron-vite dev` run
+  directly from a VS Code terminal dies on the first line of main.
+- A running dev server keeps the `electron.vite.config.ts` it started with. After a
+  config change, restart it; a reload reports "Failed to resolve import".
+- Scripted checks: `BTA_CDP_PORT=9223 npm run dev` opens Chromium's debugging port
+  (development only) and shows the window without taking focus.
+
+Next: P1, the action registry and the Ctrl K palette.
+
 ## What it is
 
 An analytics workspace where every team, player, game, coach, conference and
