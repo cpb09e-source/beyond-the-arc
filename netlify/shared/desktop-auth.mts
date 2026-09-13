@@ -18,7 +18,7 @@ import { ACTIVE_STATUSES } from "./billing.mts";
  * sign-in and every refresh asks desktopEntitled, so the rule is enforced at
  * the moment of use rather than baked into an installer.
  */
-export const DESKTOP_ACCESS: "admin" | "paid" = "admin";
+export const DESKTOP_ACCESS: "admin" | "paid" = "paid";
 
 export type DesktopProfile = { role: string | null; subscription_status: string | null };
 

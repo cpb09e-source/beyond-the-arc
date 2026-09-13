@@ -299,4 +299,14 @@ export default async (req: Request, _context: Context) => {
   }
 };
 
-export const config = { path: "/api/parse-query" };
+/**
+ * RATE LIMITED AT THE EDGE, per IP. Every call spends model tokens and the
+ * endpoint needs no account, so a script could run up the bill. Ten questions
+ * a minute is several times what a person asking in earnest manages (a parse
+ * takes seconds), and a request past it gets Netlify's 429 before this code or
+ * the model runs at all.
+ */
+export const config = {
+  path: "/api/parse-query",
+  rateLimit: { windowLimit: 10, windowSize: 60, aggregateBy: ["ip", "domain"] },
+};
