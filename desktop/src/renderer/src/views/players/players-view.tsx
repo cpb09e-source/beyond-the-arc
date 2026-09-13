@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { TopHundredPill } from "@/components/portal/top-hundred-pill";
 import { loadPlayerSeason, type Player, type PlayerSeason } from "~/data/player-model";
 import { SOURCE_LABEL, useLoaded } from "~/data/use-corpus";
+import { compareDrag, useCompare } from "~/shell/compare";
 import { useShell } from "~/shell/shell-context";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
@@ -77,6 +78,7 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }:
   const [state, retry] = useLoaded(`player-season|${year}`, () => loadPlayerSeason(year));
   const setStatus = useSetStatus();
   const { openRecord } = useShell();
+  const { add } = useCompare();
 
   const season: PlayerSeason | null = state.status === "ready" ? state.value : null;
   // A Ctrl K result for a player in this season. The index can name a player the
@@ -131,6 +133,14 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }:
             peek={{ label: (p) => p.name, body: (p) => <PlayerPeekBody season={state.value} player={p} /> }}
             landOn={landing && target ? { key: landing.id, nonce: target.nonce } : undefined}
             onLanded={onLanded}
+            drag={(p) =>
+              p.bartId == null ? null : compareDrag({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto, year })
+            }
+            keys={{
+              c: (p) => {
+                if (p.bartId != null) add({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto, year });
+              },
+            }}
             onOpen={(p, how) => {
               if (p.bartId != null) {
                 openRecord({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, year });

@@ -22,6 +22,7 @@ export function ViewHeader({
   year,
   setYear,
   seasonNote,
+  season = true,
   meta,
   controls,
   filter,
@@ -34,6 +35,8 @@ export function ViewHeader({
   setYear?: (y: number) => void;
   /** Why the season is fixed, on hover, when it is. */
   seasonNote?: string;
+  /** False for a view about no one season (Compare), which shows none. */
+  season?: boolean;
   meta?: ReactNode;
   /** Beside the season: a view's own pickers, in the same row. */
   controls?: ReactNode;
@@ -49,7 +52,7 @@ export function ViewHeader({
         </h1>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        {setYear ? (
+        {!season ? null : setYear ? (
           <SeasonSwitcher year={year} onChange={setYear} />
         ) : (
           <span

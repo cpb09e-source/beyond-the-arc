@@ -3,6 +3,7 @@ import {
   CalendarClock,
   CalendarDays,
   ChartScatter,
+  GitCompareArrows,
   Shield,
   Swords,
   Table2,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { SEASON_CEIL } from "@/lib/seasons";
+import { CompareView } from "~/views/compare/compare-view";
 import { ConferencesView } from "~/views/conferences/conferences-view";
 import { MatchupView } from "~/views/matchup/matchup-view";
 import { PlayerGamesView } from "~/views/player-games/player-games-view";
@@ -152,6 +154,14 @@ export const VIEWS: ViewDef[] = [
     Component: PortalView,
     // One file for the cycle that follows the latest completed season.
     season: SEASON_CEIL,
+  },
+  {
+    id: "compare",
+    label: "Compare",
+    section: "Tools",
+    icon: GitCompareArrows,
+    filterPlaceholder: "",
+    Component: CompareView,
   },
   {
     id: "team-profile",

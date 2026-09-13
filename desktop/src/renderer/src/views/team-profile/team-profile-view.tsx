@@ -1,4 +1,4 @@
-import { Swords, Table2 } from "lucide-react";
+import { GitCompareArrows, Swords, Table2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PercentileChip } from "@/components/percentile-chip";
 import type { RankedStat, StaticTeamSeasonRow } from "@/lib/static-data";
@@ -9,6 +9,7 @@ import { loadTeamGameSeason, type TeamGame } from "~/data/team-game-model";
 import { ranksFor, shapeSeason, type Season, type Team } from "~/data/team-model";
 import { useCorpus, useLoaded } from "~/data/use-corpus";
 import { SeasonSwitcher } from "~/shell/season-switcher";
+import { useCompare } from "~/shell/compare";
 import { useShell } from "~/shell/shell-context";
 import { LoadError, TableSkeleton } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
@@ -72,6 +73,7 @@ const ROSTER_IDENTITY: Column<Player>[] = [
 
 export function TeamProfileView({ year, setYear, record }: ViewProps) {
   const { openRecord, openView, showInExplorer } = useShell();
+  const { add } = useCompare();
   const name = record?.kind === "team" ? record.name : "";
   const [tab, setTab] = useState<TabKey>("overview");
 
@@ -156,6 +158,10 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
               >
                 <Swords size={14} strokeWidth={2} />
                 Matchup
+              </HeaderButton>
+              <HeaderButton title="Add to the compare tray" onClick={() => add({ kind: "team", name, logoId, year })}>
+                <GitCompareArrows size={14} strokeWidth={2} />
+                Compare
               </HeaderButton>
             </>
           }

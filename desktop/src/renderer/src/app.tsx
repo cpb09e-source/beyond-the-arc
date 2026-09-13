@@ -3,6 +3,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  GitCompareArrows,
   Keyboard,
   ListFilter,
   LogIn,
@@ -25,6 +26,7 @@ import { useLoaded } from "~/data/use-corpus";
 import { CommandPalette, type PaletteGroup, type PaletteItem } from "~/palette/command-palette";
 import { objectItems } from "~/palette/object-items";
 import { AccountProvider, useAccount } from "~/shell/account";
+import { CompareDock, CompareProvider, compareQuery, useCompare } from "~/shell/compare";
 import { ActiveContext } from "~/shell/active";
 import { ShellContext } from "~/shell/shell-context";
 import { ShortcutsOverlay } from "~/shell/shortcuts";
@@ -58,7 +60,9 @@ export function App() {
   return (
     <AccountProvider>
       <ToastProvider>
-        <Frame />
+        <CompareProvider>
+          <Frame />
+        </CompareProvider>
       </ToastProvider>
     </AccountProvider>
   );
@@ -109,6 +113,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
   const filterRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const { auth, update } = useAccount();
+  const compare = useCompare();
 
   const current = ws.tabs.find((t) => t.id === ws.active) ?? ws.tabs[0]!;
   const view = viewById(current.viewId);
@@ -120,10 +125,19 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     currentRef.current = current;
   }, [current]);
 
+  const trayRef = useRef(compare.items);
+  useEffect(() => {
+    trayRef.current = compare.items;
+  }, [compare.items]);
+
   const navigate = useCallback(
     (viewId: string, newTab: boolean) => {
       const tab = currentRef.current;
-      dispatch(newTab ? { type: "open", viewId, year: tab.year } : { type: "navigate", viewId });
+      // Going to Compare with a full tray means comparing the tray; an empty
+      // Compare tab would only tell the reader how to fill it.
+      const tray = trayRef.current;
+      const query = viewId === "compare" && tray.length > 1 && tab.viewId !== "compare" ? compareQuery(tray) : undefined;
+      dispatch(newTab ? { type: "open", viewId, year: tab.year, query } : { type: "navigate", viewId, query });
     },
     [dispatch],
   );
@@ -314,6 +328,17 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
         run: () => dispatch({ type: "step-year", to: "newer" }),
       });
     }
+    if (compare.items.length > 0) {
+      const n = compare.items.length;
+      action({
+        id: "action:compare",
+        title: n > 1 ? `Compare ${n} ${compare.items[0]!.kind === "team" ? "teams" : "players"}` : "Open Compare",
+        subtitle: compare.items.map((it) => it.name).join(", "),
+        keywords: ["compare", "side by side", "versus", "vs", "tray"],
+        leading: <GitCompareArrows size={15} strokeWidth={2} />,
+        run: (how) => openView("compare", { query: compareQuery(compare.items), newTab: how.newTab }),
+      });
+    }
     action({
       id: "action:new-tab",
       title: "New tab",
@@ -418,7 +443,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     );
 
     return items;
-  }, [view, current, ws.closed, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme]);
+  }, [view, current, ws.closed, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView]);
 
   const allItems = useMemo(
     () => (objects.length > 0 ? [...paletteItems, ...objects] : paletteItems),
@@ -497,6 +522,10 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
                 </ActiveContext.Provider>
               );
             })}
+            <CompareDock
+              hidden={current.viewId === "compare" && current.query === compareQuery(compare.items)}
+              onOpen={(items, newTab) => openView("compare", { query: compareQuery(items), newTab })}
+            />
           </main>
         </div>
 

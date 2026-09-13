@@ -67,6 +67,8 @@ const GROUPS: Array<{ title: string; items: Shortcut[] }> = [
       { label: "First and last row", keys: [["Home"], ["End"]] },
       { label: "Peek at the row (hold to glance, tap to pin)", keys: [["Space"]] },
       { label: "Close Peek", keys: [["Esc"]] },
+      { label: "Add the row to the compare tray", keys: [["C"]] },
+      { label: "Add a row by dragging it to the tray", keys: [["Drag"]] },
       { label: "Sort by a column", keys: [["Click header"]] },
     ],
   },

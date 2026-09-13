@@ -1,4 +1,4 @@
-import { UsersRound } from "lucide-react";
+import { GitCompareArrows, UsersRound } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PercentileChip } from "@/components/percentile-chip";
 import { TopHundredPill } from "@/components/portal/top-hundred-pill";
@@ -19,6 +19,7 @@ import { loadPlayerSeason, type Player, type PlayerSeason } from "~/data/player-
 import { loadSearchData } from "~/data/search-model";
 import { useLoaded } from "~/data/use-corpus";
 import { SeasonSwitcher } from "~/shell/season-switcher";
+import { useCompare } from "~/shell/compare";
 import { useShell } from "~/shell/shell-context";
 import { LoadError, TableSkeleton } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
@@ -63,6 +64,7 @@ const OVERVIEW_GAME_KEYS = GAME_VIEWS[0]!.keys;
 
 export function PlayerProfileView({ year, setYear, record }: ViewProps) {
   const { openRecord, showInExplorer } = useShell();
+  const { add } = useCompare();
   const ref = record?.kind === "player" ? record : null;
   const bartId = ref?.bartId ?? -1;
   const [tab, setTab] = useState<TabKey>("overview");
@@ -163,6 +165,15 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
                 >
                   <UsersRound size={14} strokeWidth={2} />
                   Player Explorer
+                </HeaderButton>
+              )}
+              {ref && (
+                <HeaderButton
+                  title="Add to the compare tray"
+                  onClick={() => add({ kind: "player", bartId: ref.bartId, name, hasPhoto: player?.hasPhoto ?? ref.hasPhoto, year })}
+                >
+                  <GitCompareArrows size={14} strokeWidth={2} />
+                  Compare
                 </HeaderButton>
               )}
             </>

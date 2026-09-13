@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
@@ -64,6 +65,9 @@ export type Column<R> = {
   bandAccent?: boolean;
 };
 
+/** What a dragged row carries: a type a drop target recognizes, its data, and a label to show. */
+export type DragSpec = { type: string; data: string; label: string };
+
 export type PeekSpec<R> = {
   label: (row: R) => string;
   body: (row: R) => ReactNode;
@@ -84,6 +88,10 @@ type Props<R> = {
    * runs inside each block. Stable and module-level.
    */
   group?: (row: R) => number;
+  /** What dragging a row carries to a drop target elsewhere (the compare tray). Null: not draggable. */
+  drag?: (row: R) => DragSpec | null;
+  /** Single-key commands on the focused row while nothing is being typed: C adds it to compare. */
+  keys?: Record<string, (row: R) => void>;
   ariaLabel: string;
   empty: ReactNode;
   peek?: PeekSpec<R>;
@@ -119,6 +127,37 @@ function compare(a: number | string | null, b: number | string | null, dir: Dir)
   return dir * (a - b);
 }
 
+/**
+ * A row picked up. The pointer carries a small label rather than a picture of
+ * the whole row, which at thirty columns wide would cover the drop target.
+ */
+function startDrag(e: ReactDragEvent<HTMLDivElement>, spec: DragSpec | null): void {
+  if (!spec) {
+    e.preventDefault();
+    return;
+  }
+  e.dataTransfer.setData(spec.type, spec.data);
+  e.dataTransfer.setData("text/plain", spec.label);
+  e.dataTransfer.effectAllowed = "copy";
+  const ghost = document.createElement("div");
+  ghost.textContent = spec.label;
+  Object.assign(ghost.style, {
+    position: "fixed",
+    top: "-200px",
+    left: "0",
+    padding: "5px 10px",
+    borderRadius: "7px",
+    font: "500 12.5px \"Schibsted Grotesk Variable\", system-ui, sans-serif",
+    background: "var(--card)",
+    color: "var(--ink)",
+    border: "1px solid var(--hairline)",
+    whiteSpace: "nowrap",
+  });
+  document.body.appendChild(ghost);
+  e.dataTransfer.setDragImage(ghost, 14, 14);
+  requestAnimationFrame(() => ghost.remove());
+}
+
 export function DataTable<R>({
   rows,
   columns,
@@ -127,6 +166,8 @@ export function DataTable<R>({
   defaultSort,
   tieBreak,
   group,
+  drag,
+  keys,
   ariaLabel,
   empty,
   peek,
@@ -259,6 +300,16 @@ export function DataTable<R>({
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
       const inField = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
+      // The view's own single-key commands, on the focused row.
+      if (!inField && keys && !e.shiftKey && e.key.length === 1) {
+        const run = keys[e.key.toLowerCase()];
+        const row = index >= 0 ? sorted[index] : undefined;
+        if (run && row) {
+          e.preventDefault();
+          run(row);
+          return;
+        }
+      }
       const page = Math.max(1, Math.floor(viewH / rowHeight) - 1);
       let to: number | null = null;
       // Arrows work from the filter box too, so filtering and moving is one motion.
@@ -278,7 +329,7 @@ export function DataTable<R>({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, index, move, sorted, viewH, rowHeight, onOpen]);
+  }, [active, index, move, sorted, viewH, rowHeight, onOpen, keys]);
 
   // THE POINTER MOVES FOCUS, but only when the pointer itself moves. Chromium
   // sends synthetic mouse moves when content scrolls under a still cursor, and
@@ -448,6 +499,8 @@ export function DataTable<R>({
                     if (e.button === 0) setFocusKey(rowKey(row));
                   }}
                   onDoubleClick={onOpen ? (e) => onOpen(row, { newTab: e.ctrlKey || e.metaKey }) : undefined}
+                  draggable={drag ? true : undefined}
+                  onDragStart={drag ? (e) => startDrag(e, drag(row)) : undefined}
                   className="absolute left-0 top-0 grid w-full items-center border-b border-hairline/50"
                   style={{
                     gridTemplateColumns: layout.template,

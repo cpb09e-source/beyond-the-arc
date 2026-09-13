@@ -84,6 +84,19 @@ export function useCorpus<T>(
   });
 }
 
+/**
+ * The same cache, for a caller that needs several keys at once: Compare, with a
+ * season per card. Shares entries with useLoaded and useCorpus under the same keys.
+ */
+export async function loadOnce<T>(key: string, load: () => Promise<{ value: T; source: DataSource }>): Promise<T> {
+  const hit = loaded.get(key);
+  if (hit) return hit.value as T;
+  const started = performance.now();
+  const { value, source } = await load();
+  loaded.set(key, { value, source, ms: Math.round(performance.now() - started) });
+  return value;
+}
+
 /** Where a file came from, in the words a person would use. */
 export const SOURCE_LABEL: Record<DataSource, string> = {
   memory: "Already open",
