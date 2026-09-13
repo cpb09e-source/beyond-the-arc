@@ -18,6 +18,7 @@ import { usePersisted } from "~/ui/persisted";
 import { accountInitials, useAccount } from "./account";
 import type { Favorite } from "./favorites";
 import { FavoritesSection } from "./favorites-section";
+import { GetStarted } from "./onboarding";
 import { NAV_VIEWS, type ViewDef } from "./views";
 
 /**
@@ -166,6 +167,8 @@ export function Sidebar({
           );
         })}
       </div>
+
+      <GetStarted theme={theme} setTheme={setTheme} onOpenSearch={onOpenSearch} />
 
       <div className="border-t border-hairline px-2 pb-2 pt-1.5">
         {update.status === "ready" && (

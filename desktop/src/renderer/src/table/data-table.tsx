@@ -12,6 +12,7 @@ import {
 } from "react";
 import { usePeek } from "~/peek/use-peek";
 import { useIsActive } from "~/shell/active";
+import { signalOnboarding } from "~/shell/onboarding";
 import { PeekPanel } from "./peek-panel";
 
 /**
@@ -345,6 +346,9 @@ export function DataTable<R>({
   };
 
   const peekState = usePeek(active);
+  useEffect(() => {
+    if (peekState.open) signalOnboarding("peek");
+  }, [peekState.open]);
 
   // The parts of a landing that reach outside render: the scroll and the Peek.
   const { pin } = peekState;

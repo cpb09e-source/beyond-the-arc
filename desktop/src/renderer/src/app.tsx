@@ -40,6 +40,7 @@ import { ActiveContext } from "~/shell/active";
 import { ShellContext } from "~/shell/shell-context";
 import { ShortcutsOverlay } from "~/shell/shortcuts";
 import { SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN, Sidebar } from "~/shell/sidebar";
+import { signalOnboarding } from "~/shell/onboarding";
 import { SplitDivider } from "~/shell/split-divider";
 import { TabStrip } from "~/shell/tab-strip";
 import { TabTitleContext } from "~/shell/tab-title";
@@ -351,6 +352,21 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       window.removeEventListener("mouseup", onMouse);
     };
   }, [dispatch, focusFilter, newTab, setCollapsed, toggleFavorite, toggleSplit]);
+
+  // Get started ticks itself off as the reader finds each thing, wherever they find it.
+  useEffect(() => {
+    if (paletteOpen) signalOnboarding("palette");
+  }, [paletteOpen]);
+  useEffect(() => {
+    if (favorites.length > 0) signalOnboarding("favorite");
+  }, [favorites.length]);
+  useEffect(() => {
+    if (splitShown) signalOnboarding("split");
+  }, [splitShown]);
+  const firstTheme = useRef(theme);
+  useEffect(() => {
+    if (theme !== firstTheme.current) signalOnboarding("theme");
+  }, [theme]);
 
   // Say once when a sign-in finishes, and once when an update is ready.
   const lastAuth = useRef(auth.status);
