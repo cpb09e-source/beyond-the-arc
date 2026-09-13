@@ -69,6 +69,18 @@ const api = {
   /** A corpus-season, and for a per-day or per-game corpus, which day or game. */
   data: (corpus: Corpus, year: number, key?: string): Promise<DataPayload> => ipcRenderer.invoke("data:get", corpus, year, key),
   setTheme: (mode: ThemeMode): void => ipcRenderer.send("theme:set", mode),
+  /** Written by the main process, so a copy lands whether or not the window has focus. */
+  clipboard: {
+    writeText: (text: string): Promise<boolean> => ipcRenderer.invoke("clipboard:write-text", text),
+  },
+  /** Snapshot cards: the window's own pixels inside a rectangle of the page, then to the clipboard or a PNG. */
+  snapshot: {
+    grab: (rect: { x: number; y: number; width: number; height: number }): Promise<string | null> => ipcRenderer.invoke("snapshot:grab", rect),
+    deliver: (
+      dataUrl: string,
+      how: { action: "copy" | "save"; name: string; width: number; height: number },
+    ): Promise<{ ok: boolean; path?: string }> => ipcRenderer.invoke("snapshot:deliver", dataUrl, how),
+  },
   /** Ask the Win Calculator: the site's parser turns a question into filters. */
   calc: {
     parse: (query: string): Promise<{ status: number; body: unknown }> => ipcRenderer.invoke("calc:parse", query),

@@ -18,6 +18,7 @@ import { seasonLabel } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 import { logoIdOf } from "~/ui/logo-id";
 import { usePersisted } from "~/ui/persisted";
+import { scopedQuery } from "~/ui/scoped-query";
 import { matchesQuery } from "~/ui/text";
 import { ConferencePeekBody, type ConfHighlight } from "./conference-peek";
 
@@ -282,7 +283,9 @@ export function ConferencesView({ year, setYear, query, setQuery }: ViewProps) {
               label: (r) => `${confName(r)} ${seasonLabel(r.year)}`,
               body: (r) => <ConferencePeekBody row={r} highlights={highlightsFor(r)} />,
             }}
-            onOpen={(r, how) => openView("team-explorer", { newTab: how.newTab, side: how.side, year: r.year, query: confName(r) })}
+            id="conferences"
+            object={(r) => ({ kind: "conference", conf: r.conf, label: confName(r), year: r.year })}
+            onOpen={(r, how) => openView("team-explorer", { newTab: how.newTab, side: how.side, year: r.year, query: scopedQuery("conf", confName(r)) })}
           />
         )}
       </div>

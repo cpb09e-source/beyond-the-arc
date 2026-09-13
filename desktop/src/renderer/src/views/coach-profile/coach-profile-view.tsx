@@ -1,4 +1,3 @@
-import { Calculator } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PercentileChip } from "@/components/percentile-chip";
 import { coachProfileRanks, tourneySummary, TOURNEY_ROUND_DEPTH, TOURNEY_ROUND_LABEL, type CoachProfileRanks } from "@/lib/coach-views";
@@ -7,6 +6,7 @@ import { confDisplay } from "@/lib/conf-display";
 import { ALL_SEASONS, SEASON_CEIL, SEASON_FLOOR } from "@/lib/seasons";
 import { rankPct, useCoachBook, yearsSpan, type CoachBook } from "~/data/coach-model";
 import { coachSeasons } from "~/data/team-history";
+import { ObjectLink, RailActions, RecordActions } from "~/objects/object-surfaces";
 import { useShell } from "~/shell/shell-context";
 import { LoadError, TableSkeleton } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
@@ -167,17 +167,14 @@ export function CoachProfileView({ record }: ViewProps) {
               profile
                 ? [
                     profile.current_team && (
-                      <button
+                      <ObjectLink
                         key="team"
-                        type="button"
-                        title="Open the school  ·  Ctrl-click for a new tab"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={(e) => openTeam(profile.current_team!, profile.current_year ?? SEASON_CEIL, howOf(e))}
+                        obj={{ kind: "team", name: profile.current_team, logoId: logoIdOf(profile.current_team), year: pageYear(profile.current_year ?? SEASON_CEIL) }}
                         className="flex items-center gap-1.5 text-ink-soft underline-offset-2 hover:text-ink hover:underline"
                       >
                         <TeamLogo id={logoIdOf(profile.current_team)} name={profile.current_team} size={16} />
                         {profile.current_team}
-                      </button>
+                      </ObjectLink>
                     ),
                     profile.current_conference && confDisplay(profile.current_conference),
                     first != null && last != null && (
@@ -189,10 +186,7 @@ export function CoachProfileView({ record }: ViewProps) {
             }
             actions={
               <>
-                <HeaderButton title="Every game this coach's teams played, in the Win Calculator  ·  Ctrl-click for a new tab" onClick={(e) => openCalc(howOf(e))}>
-                  <Calculator size={14} strokeWidth={2} />
-                  Win Calculator
-                </HeaderButton>
+                <RecordActions obj={ref ? { kind: "coach", slug: ref.slug, name, team: profile?.current_team ?? ref.team } : null} primary={["win-calc", "snapshot"]} />
                 <DetailsToggle open={detailsOpen} onToggle={toggleDetails} />
               </>
             }
@@ -238,6 +232,7 @@ export function CoachProfileView({ record }: ViewProps) {
               ariaLabel={`${name} seasons`}
               empty={<ProfileNote>No seasons on record.</ProfileNote>}
               onOpen={(s, how) => openTeam(s.team, s.year, how)}
+              object={(s) => ({ kind: "team", name: s.team, logoId: logoIdOf(s.team), year: pageYear(s.year), conf: s.conference ?? undefined })}
             />
           </div>
         )}
@@ -433,7 +428,11 @@ function CoachDetails({
         </DetailRow>
         {profile.current_team && (
           <DetailRow label={profile.is_active ? "School" : "Last school"}>
-            <DetailLink title="Open the school  ·  Ctrl-click for a new tab" onOpen={(how) => onTeam(profile.current_team!, profile.current_year ?? SEASON_CEIL, how)}>
+            <DetailLink
+              title="Open the school  ·  Ctrl-click for a new tab"
+              object={{ kind: "team", name: profile.current_team, logoId: logoIdOf(profile.current_team), year: pageYear(profile.current_year ?? SEASON_CEIL) }}
+              onOpen={(how) => onTeam(profile.current_team!, profile.current_year ?? SEASON_CEIL, how)}
+            >
               <TeamLogo id={logoIdOf(profile.current_team)} name={profile.current_team} size={16} />
               <span className="truncate">{profile.current_team}</span>
             </DetailLink>
@@ -458,11 +457,11 @@ function CoachDetails({
       </DetailSection>
 
       <DetailSection title="Go to">
-        <DetailAction icon={<Calculator size={14} strokeWidth={2} />} label="Every game coached" hint="Win Calculator" onOpen={onCalc} />
+        <RailActions obj={{ kind: "coach", slug: profile.slug, name: profile.name, team: profile.current_team }} groups={["goto"]} />
       </DetailSection>
 
       <DetailSection title="Share">
-        <SiteLinks url={`https://btacbb.xyz/coaches/${profile.slug}/`} />
+        <RailActions obj={{ kind: "coach", slug: profile.slug, name: profile.name, team: profile.current_team }} groups={["share"]} />
       </DetailSection>
     </DetailsRail>
   );

@@ -1,3 +1,4 @@
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { PercentileChip } from "@/components/percentile-chip";
 import { confDisplay } from "@/lib/conf-display";
@@ -41,6 +42,7 @@ export function ScatterPlot({
   hover,
   setHover,
   onOpen,
+  onMenu,
   pct,
 }: {
   teams: ScatterTeam[];
@@ -52,6 +54,8 @@ export function ScatterPlot({
   hover: string | null;
   setHover: (name: string | null) => void;
   onOpen: (team: ScatterTeam, newTab: boolean) => void;
+  /** Right-click on a crest: the team's own menu. */
+  onMenu?: (e: ReactMouseEvent, team: ScatterTeam) => void;
   pct: (key: string, name: string) => number | null;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
@@ -245,6 +249,7 @@ export function ScatterPlot({
             onPointerEnter={() => setHover(p.name)}
             onMouseDown={(e) => e.preventDefault()}
             onClick={(e) => onOpen(p, e.ctrlKey || e.metaKey)}
+            onContextMenu={onMenu ? (e) => onMenu(e, p) : undefined}
             className="absolute grid cursor-pointer place-items-center rounded-full motion-safe:transition-[opacity,filter,transform] motion-safe:duration-150"
             style={{
               left: x,

@@ -1,9 +1,9 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { StaticTeamSeasonRow } from "@/lib/static-data";
+import { loadTeamGameSeason } from "~/data/team-game-model";
 import { shapeSeason, type Season, type Team } from "~/data/team-model";
-import { SOURCE_LABEL, useCorpus } from "~/data/use-corpus";
-import { compareDrag, useCompare } from "~/shell/compare";
-import { useShell } from "~/shell/shell-context";
+import { loadOnce, SOURCE_LABEL, useCorpus } from "~/data/use-corpus";
+import type { Obj } from "~/objects/object";
 import { useTabTitle } from "~/shell/tab-title";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
@@ -12,12 +12,17 @@ import { DataTable, type Column } from "~/table/data-table";
 import { StatCell } from "~/table/stat-cell";
 import { num1, pct1, seasonLabel, signed1 } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
+import { parseScoped, sameName } from "~/ui/scoped-query";
 import { matchesQuery } from "~/ui/text";
 import { TeamPeekBody } from "./team-peek";
 
 /**
  * Team Explorer: every team in a season, with the site's percentile chip on
  * every stat and a Peek on every row.
+ *
+ * A ROW IS A TEAM OBJECT, so its menu, C, F, drag and Enter are the registry's
+ * (~/objects/actions.tsx). The filter also takes the registry's exact forms:
+ * "conf: Big Ten", "opponents: Michigan", "team: Duke".
  */
 
 const ROW_H = 42;
@@ -105,21 +110,50 @@ const COLUMNS: Column<Team>[] = [
   },
 ];
 
+/** Who a team played in a season, read off the Team Game Log's file when a filter asks. */
+function useOpponents(year: number, team: string | null): Set<string> | null {
+  const [found, setFound] = useState<{ key: string; set: Set<string> } | null>(null);
+  const key = `${year}|${team ?? ""}`;
+  useEffect(() => {
+    if (!team) return;
+    let stale = false;
+    loadOnce(`team-games|${year}`, () => loadTeamGameSeason(year)).then(
+      (s) => {
+        if (!stale) setFound({ key, set: new Set(s.games.filter((g) => sameName(g.team, team)).map((g) => g.opp)) });
+      },
+      () => {
+        if (!stale) setFound({ key, set: new Set() });
+      },
+    );
+    return () => {
+      stale = true;
+    };
+  }, [year, team, key]);
+  return team && found?.key === key ? found.set : null;
+}
+
 export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: ViewProps) {
   const [state, retry] = useCorpus("teams", year, shapeTeams);
   const setStatus = useSetStatus();
-  const { openRecord } = useShell();
-  const { add } = useCompare();
   useTabTitle(query.trim() ? `Teams: ${query.trim()}` : null);
 
   const season = state.status === "ready" ? state.value : null;
+  const scoped = parseScoped(query);
+  const opponents = useOpponents(year, scoped?.scope === "opponents" ? scoped.value : null);
   // A Ctrl K result for a team in this season, and its row if the season has one.
   const target = focus?.kind === "team" && focus.year === year ? focus : null;
   const landing = target && season ? season.teams.find((t) => t.name === target.name) : undefined;
-  const rows = useMemo(
-    () => (season ? season.teams.filter((t) => matchesQuery(query, t.name, t.confLabel, t.conf)) : []),
-    [season, query],
-  );
+  const rows = useMemo(() => {
+    if (!season) return [];
+    if (!scoped) return season.teams.filter((t) => matchesQuery(query, t.name, t.confLabel, t.conf));
+    const v = scoped.value;
+    if (scoped.scope === "conf") return season.teams.filter((t) => sameName(t.confLabel, v) || sameName(t.conf, v));
+    if (scoped.scope === "team") return season.teams.filter((t) => sameName(t.name, v));
+    if (scoped.scope === "opponents") return opponents ? season.teams.filter((t) => opponents.has(t.name)) : [];
+    return [];
+    // `scoped` is read from `query`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [season, query, opponents]);
 
   useEffect(() => {
     if (state.status === "ready") setStatus(`${SOURCE_LABEL[state.source]} in ${state.ms} ms`);
@@ -132,7 +166,13 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
     ? undefined
     : target && !landing
       ? `${target.name} has no row in ${seasonLabel(year)}`
-      : `${query.trim() && rows.length !== total ? `${rows.length} of ${total}` : total} teams · Final`;
+      : scoped?.scope === "opponents"
+        ? opponents
+          ? `${rows.length} opponents of ${scoped.value}`
+          : "Finding opponents…"
+        : `${query.trim() && rows.length !== total ? `${rows.length} of ${total}` : total} teams · Final`;
+
+  const object = (t: Team): Obj => ({ kind: "team", name: t.name, logoId: t.logoId, year, conf: t.conf });
 
   return (
     <>
@@ -148,6 +188,7 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
         {state.status === "ready" ? (
           <DataTable
             key={year}
+            id="team-explorer"
             rows={rows}
             columns={COLUMNS}
             rowKey={teamKey}
@@ -159,9 +200,7 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
             peek={{ label: (t) => t.name, body: (t) => <TeamPeekBody season={state.value} team={t} /> }}
             landOn={landing && target ? { key: landing.id, nonce: target.nonce } : undefined}
             onLanded={onLanded}
-            drag={(t) => compareDrag({ kind: "team", name: t.name, logoId: t.logoId, year })}
-            keys={{ c: (t) => add({ kind: "team", name: t.name, logoId: t.logoId, year }) }}
-            onOpen={(t, how) => openRecord({ kind: "team", name: t.name, logoId: t.logoId }, { newTab: how.newTab, side: how.side, year })}
+            object={object}
           />
         ) : state.status === "loading" ? (
           <TableSkeleton rowHeight={ROW_H} label="Loading teams" />

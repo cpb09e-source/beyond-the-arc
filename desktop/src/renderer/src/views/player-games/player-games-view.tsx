@@ -7,16 +7,18 @@ import {
   statPercentiles,
   statValues,
   type PlayerGame,
+  type PlayerGameSeason,
 } from "~/data/player-game-model";
-import { logDate, useOpenGame } from "~/data/game-link";
+import { logDate } from "~/data/game-link";
+import type { Obj } from "~/objects/object";
 import { SOURCE_LABEL, useLoaded } from "~/data/use-corpus";
 import { Picker } from "~/shell/picker";
 import { ShortcutBar } from "~/shell/shortcut-bar";
-import { useShell } from "~/shell/shell-context";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
 import { DataTable } from "~/table/data-table";
+import { parseScoped, sameName, type Scoped } from "~/ui/scoped-query";
 import { identityColumns, NO_CHIP, statColumns } from "./player-game-columns";
 import { PEEK_KEYS, PlayerGamePeekBody } from "./player-game-peek";
 
@@ -46,11 +48,42 @@ function readView(): string {
   }
 }
 
+/** "player: Cooper Flagg", "team: Duke", "conf: SEC", "opponents: Duke" as a test per row. */
+function scopedMatcher(season: PlayerGameSeason, s: Scoped): (g: PlayerGame) => boolean {
+  if (s.scope === "opponents") {
+    const opps = Uint8Array.from(season.opps, (o) => (sameName(o.name, s.value) ? 1 : 0));
+    return (g) => opps[g.row[F.o]!] === 1;
+  }
+  const players = Uint8Array.from(season.players, (p) =>
+    (s.scope === "player" ? sameName(p.name, s.value) : s.scope === "team" ? sameName(p.team, s.value) : sameName(p.confLabel, s.value) || sameName(p.conf, s.value))
+      ? 1
+      : 0,
+  );
+  return (g) => players[g.row[F.p]!] === 1;
+}
+
+/** A row as the object it is: one player's game, found on its night's slate when it is opened. */
+export function playerLogObject(season: PlayerGameSeason, g: PlayerGame): Obj {
+  const p = season.players[g.row[F.p]!]!;
+  const o = season.opps[g.row[F.o]!]!;
+  const site = siteOf(g.row);
+  return {
+    kind: "log-game",
+    year: season.year,
+    date: logDate(season.pack.epochMs, g.row[F.d]!),
+    team: p.team,
+    teamLogoId: p.teamLogoId,
+    opp: o.name,
+    oppLogoId: o.logoId,
+    site,
+    player: { bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto },
+    summary: `${p.name}: ${g.row[F.pts]} pts, ${g.row[F.reb]} reb, ${g.row[F.ast]} ast ${site === "away" ? "at" : "vs"} ${o.name}`,
+  };
+}
+
 export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
   const [state, retry] = useLoaded(`player-games|${year}`, () => loadPlayerGameSeason(year));
   const setStatus = useSetStatus();
-  const { openRecord } = useShell();
-  const openGame = useOpenGame();
   const [viewKey, setViewKey] = useState(readView);
   const [on, setOn] = useState<string[]>([]);
 
@@ -64,7 +97,8 @@ export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
   const filters = useMemo(() => GAME_PRESETS.filter((p) => on.includes(p.key)).flatMap((p) => p.filters), [on]);
   const rows = useMemo(() => {
     if (!season) return [];
-    const match = gameMatcher(season, query);
+    const scoped = parseScoped(query);
+    const match = scoped ? scopedMatcher(season, scoped) : gameMatcher(season, query);
     // Nothing to narrow: the season's own array, so the table's sort memo holds.
     if (!match && filters.length === 0) return season.games;
     return season.games.filter(
@@ -138,13 +172,8 @@ export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
             rowHeight={ROW_H}
             defaultSort={{ key: sortKey, dir: -1 }}
             tieBreak={latestFirst}
-            onOpen={(g, how) => {
-              const p = state.value.players[g.row[F.p]!]!;
-              const o = state.value.opps[g.row[F.o]!]!;
-              openGame({ date: logDate(state.value.pack.epochMs, g.row[F.d]!), team: p.team, opp: o.name }, how, () =>
-                openRecord({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, side: how.side, year }),
-              );
-            }}
+            id="player-game-log"
+            object={(g) => playerLogObject(state.value, g)}
             ariaLabel="Player games"
             empty={
               query.trim() ? (

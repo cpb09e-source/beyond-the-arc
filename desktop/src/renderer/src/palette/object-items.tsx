@@ -36,6 +36,7 @@ export function objectItems(
       title: t.name,
       subtitle: `${t.confLabel} · ${seasonLabel(t.year)}`,
       keywords: [t.conf, t.aliases, ...seasonWords(t.year)],
+      object: { kind: "team", name: t.name, logoId: t.logoId, year: t.year, conf: t.conf },
       collapse: `team:${t.name}`,
       weight: 30 + t.year / 100 - t.name.length / 10,
       leading: <TeamLogo id={t.logoId} name={t.name} size={18} />,
@@ -52,6 +53,7 @@ export function objectItems(
       title: p.name,
       subtitle: [p.team, p.cls, seasonLabel(p.year)].filter(Boolean).join(" · "),
       keywords: [p.conf, ...seasonWords(p.year)],
+      object: { kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto, year: p.year, team: p.team, teamLogoId: p.teamLogoId, conf: p.conf },
       collapse: `player:${p.bartId}`,
       // Season minutes, games times minutes a game: about 1,200 for a starter.
       weight: 20 + p.year / 100 + ((p.games ?? 0) * (p.minutes ?? 0)) / 1200,

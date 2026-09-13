@@ -1,5 +1,8 @@
 import { periodHeadings } from "@/components/game/types";
 import { gameStatusLabel, isFinal, isLive, isSeed, lineLabel, recordLabel, type ScoreGame, type ScoreTeam } from "@/lib/scoreboard-core";
+import type { MouseEvent as ReactMouseEvent } from "react";
+import { beginDrag } from "~/objects/drag";
+import type { DragSpec } from "~/objects/object";
 import { TeamLogo } from "~/ui/logo";
 import { sideOf, type TeamNames } from "./board-model";
 
@@ -25,12 +28,18 @@ export function GameCard({
   focused,
   onFocus,
   onOpen,
+  onMenu,
+  drag,
 }: {
   g: ScoreGame;
   names: TeamNames | null;
   focused: boolean;
   onFocus: () => void;
   onOpen: (how: { newTab: boolean; side: boolean }) => void;
+  /** Right-click: the game's own menu (~/objects/actions.tsx). */
+  onMenu?: (e: ReactMouseEvent) => void;
+  /** What the card carries when dragged: the game, to the tabs or the other pane. */
+  drag?: DragSpec;
 }) {
   const live = isLive(g);
   const final = isFinal(g);
@@ -47,6 +56,9 @@ export function GameCard({
       tabIndex={focused ? 0 : -1}
       aria-label={`${g.away.team} ${g.neutralSite ? "versus" : "at"} ${g.home.team}, ${gameStatusLabel(g)}`}
       onFocus={onFocus}
+      onContextMenu={onMenu}
+      draggable={drag ? true : undefined}
+      onDragStart={drag ? (e) => beginDrag(e, drag) : undefined}
       onClick={(e) => onOpen({ newTab: e.ctrlKey || e.metaKey, side: e.shiftKey })}
       onKeyDown={(e) => {
         if (e.key !== "Enter") return;

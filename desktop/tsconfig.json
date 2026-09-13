@@ -15,7 +15,8 @@
     "types": ["node"],
     "paths": {
       "@/*": ["../src/*"],
-      "~/*": ["./src/renderer/src/*"]
+      "~/*": ["./src/renderer/src/*"],
+      "@public/*": ["../public/*"]
     }
   },
   "include": ["electron.vite.config.ts", "src/**/*"]

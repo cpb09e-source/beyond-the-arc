@@ -1,5 +1,6 @@
-import { app, BrowserWindow, clipboard, ipcMain, Menu, nativeTheme, net, protocol, shell } from "electron";
+import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, protocol, shell } from "electron";
 import { existsSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { AuthState } from "../preload";
@@ -163,6 +164,47 @@ function registerIpc(): void {
     if (process.platform !== "darwin") win.setTitleBarOverlay({ color: c.bar, symbolColor: c.symbol });
   });
 
+  // Copy link, Copy stats: text only, and nothing the size of a file.
+  ipcMain.handle("clipboard:write-text", async (_event, text: unknown) => {
+    if (typeof text !== "string" || text.length > 200_000) return false;
+    await clipboard.writeText(text);
+    return true;
+  });
+
+  // Snapshot cards. The page names a rectangle of itself; the pixels leave only as
+  // the clipboard image or the file the reader asked for.
+  const inRange = (v: unknown, max: number): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max;
+  ipcMain.handle("snapshot:grab", async (_event, rect: unknown) => {
+    const r = (rect ?? {}) as Record<string, unknown>;
+    if (!win || !inRange(r.x, 20000) || !inRange(r.y, 20000) || !inRange(r.width, 20000) || !inRange(r.height, 20000)) return null;
+    if (r.width < 1 || r.height < 1) return null;
+    const image = await win.webContents.capturePage({ x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) });
+    return image.isEmpty() ? null : image.toDataURL();
+  });
+  ipcMain.handle("snapshot:deliver", async (_event, dataUrl: unknown, how: unknown) => {
+    const h = (how ?? {}) as Record<string, unknown>;
+    if (!win || typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/png;base64,") || dataUrl.length > 150_000_000) return { ok: false };
+    if ((h.action !== "copy" && h.action !== "save") || typeof h.name !== "string" || !inRange(h.width, 20000) || !inRange(h.height, 20000)) return { ok: false };
+    let image = nativeImage.createFromDataURL(dataUrl);
+    if (image.isEmpty()) return { ok: false };
+    // A preview zoomed to fit a small window captures smaller than the card: bring it back to the card's size.
+    if (image.getSize().width < h.width) image = image.resize({ width: Math.round(h.width), height: Math.round(h.height), quality: "best" });
+    if (h.action === "copy") {
+      // Electron 44's clipboard is the W3C shape: an image is a PNG blob in a ClipboardItem.
+      await clipboard.write([new ClipboardItem({ "image/png": new Blob([new Uint8Array(image.toPNG())], { type: "image/png" }) })]);
+      return { ok: true };
+    }
+    const safe = h.name.replace(/[^\w.-]+/g, "-").replace(/^-+/, "").slice(0, 100) || "beyond-the-arc.png";
+    const { canceled, filePath } = await dialog.showSaveDialog(win, {
+      title: "Save snapshot",
+      defaultPath: join(app.getPath("pictures"), safe.endsWith(".png") ? safe : `${safe}.png`),
+      filters: [{ name: "PNG image", extensions: ["png"] }],
+    });
+    if (canceled || !filePath) return { ok: false };
+    await writeFile(filePath, image.toPNG());
+    return { ok: true, path: filePath };
+  });
+
   ipcMain.handle("auth:state", () => settledAuthState());
   // Copied here rather than by the page: the system clipboard takes it whether or not the window has focus.
   ipcMain.handle("auth:copy-link", () => {
@@ -228,6 +270,12 @@ function serveAssets(): void {
         // cache keeps it after the first view.
         return net.fetch(`https://btacbb.xyz/images/players/${name}`);
       }
+    }
+    if (url.hostname === "nba") {
+      // An NBA franchise mark for a draft badge, by ESPN's slug ("dal", "gs"). Fetched here
+      // because the page does not reach other hosts; Chromium's cache keeps it after.
+      const m = /^\/([a-z]{2,4})\.png$/.exec(url.pathname);
+      if (m) return net.fetch(`https://a.espncdn.com/i/teamlogos/nba/500/${m[1]}.png`);
     }
     return new Response(null, { status: 404 });
   });

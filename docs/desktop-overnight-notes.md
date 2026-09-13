@@ -39,6 +39,25 @@ change is the paywall fix, which is storage, not a deploy.
 - **Coach page fixes committed** (Altman's record, tied chips, sort order, stale comments).
 - **In progress, then the deploy:** the small site fixes from the notes, and the sources, terms and privacy pages.
 
+## Done on 2026-09-13, evening
+
+- **One action registry** (`desktop/src/renderer/src/objects/`). Every team, player, coach, game, game log row and conference is an object with one list of actions: open, open in a new tab, open beside, Peek, compare (C), favorite (F), Go to (Team Explorer, Team Scatter, game log, Matchup, Win Calculator), the related team, coach or opponent, Filter (conference, opponents, roster), Snapshot card, Copy stats, Copy link, Open on btacbb.xyz. The same list drives:
+  - right-click on every table row, scoreboard card, scatter crest and linked name, with Go to, Filter and Share folded to the side;
+  - `.` or Shift+F10 on the focused row, and C and F on it;
+  - Peek's new buttons (Open, Beside, Compare, ⋯);
+  - Ctrl K: the page's own actions, and Tab on any result for everything that result can do;
+  - record page headers (buttons, then ⋯) and the details rail's Go to and Share;
+  - a tab's right-click menu, which now starts with the page's own actions;
+  - drag: a row, card, crest or name drops on the compare tray, the tab strip (new tab), the right of the pane (open beside) or the sidebar (favorite).
+- **Column headers right-click:** sort either way, reset, hide a column (remembered per table), bring hidden columns back.
+- **Exact filters, in words:** `team: Michigan`, `conf: Big 10`, `opponents: Michigan`, `player: Cooper Flagg`. The Filter and Game log actions write them into the filter box, where they can be read, changed or cleared with Esc. A filter set this way is a step in the tab's history, so Alt+Left returns to the whole table.
+- **Copy stats:** a few lines of the object's numbers with their percentiles and the page's link.
+- **Snapshot cards** (`desktop/src/renderer/src/snapshot/`): team, player, coach and game, Wide 1200 × 675 or Square 1080 × 1080, previewed at size, then Copy image or Save PNG. Captured from the window's own pixels, so crests draw exactly as they do on screen. Ctrl+Shift+S copies the whole view as an image with a foot naming it. Player cards follow your notes: PPG, RPG, APG over FG%, 3P%, FT%; position and class badges and the Drafted badge with the NBA mark in place of Bart's "Stretch 4"; an Impact ledger (EPM, offense, defense, eWins, TS%, USG%) in place of the bars.
+- **NBA marks** load through the app's own asset protocol (`bta://nba/`): the page itself does not reach ESPN, the main process does.
+- **Contender zone removed** from team pages, the team Peek and team cards, at your request. Team Scatter keeps its trapezoid chart, which is what that view is.
+- **Electron 44's clipboard** is the W3C shape now (`clipboard.write([ClipboardItem])`, and `writeText` returns a promise); `writeImage` is gone.
+- **Site deploy:** built and checked locally (overtime headings, the push line, TBD tip times, the conference logo halo in dark, the matchup wash). Every game page changed, so all 743,070 are uploading to R2 before `netlify deploy`.
+
 ## Was open overnight (now handled above)
 
 ### 1. Paywall hole on the live site (fixed 2026-09-13)

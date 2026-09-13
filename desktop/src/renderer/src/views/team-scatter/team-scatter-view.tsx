@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { midrankPercentileMap } from "@/lib/percentile";
@@ -9,6 +9,9 @@ import { ZONE_X, ZONE_Y, buildZone, zoneAxes } from "@/lib/trapezoid";
 import cbbTeams from "@/data/cbb-team-ids.json";
 import { shapeSeason, type Season } from "~/data/team-model";
 import { SOURCE_LABEL, useCorpus } from "~/data/use-corpus";
+import { beginDrag } from "~/objects/drag";
+import { objectDrag, type Obj } from "~/objects/object";
+import { useObjectMenu } from "~/objects/use-object-actions";
 import { useIsActive } from "~/shell/active";
 import { Picker } from "~/shell/picker";
 import { useShell } from "~/shell/shell-context";
@@ -41,7 +44,7 @@ const METRIC_OPTIONS = METRICS.map((m) => ({ key: m.key, label: m.label, desc: m
 
 type Field = string;
 
-export function TeamScatterView({ year, setYear }: ViewProps) {
+export function TeamScatterView({ year, setYear, query }: ViewProps) {
   const { openRecord } = useShell();
   const setStatus = useSetStatus();
   const active = useIsActive();
@@ -51,6 +54,17 @@ export function TeamScatterView({ year, setYear }: ViewProps) {
   const [yKey, setYKey] = useState<string>(ZONE_Y);
   const [hover, setHover] = useState<string | null>(null);
   const [cursor, setCursor] = useState(0);
+  const menu = useObjectMenu();
+  const listRef = useRef<HTMLUListElement>(null);
+  const teamObj = (t: ScatterTeam): Obj => ({ kind: "team", name: t.name, logoId: t.id, year, conf: t.conf });
+
+  // Arriving from "Show on Team Scatter": team= lights that team, field= picks the field (a conference).
+  const asked = useMemo(() => new URLSearchParams(query), [query]);
+  const askedTeam = asked.get("team");
+  const askedField = asked.get("field");
+  useEffect(() => {
+    if (askedField) setField(askedField);
+  }, [askedField]);
 
   const season = state.status === "ready" ? state.value : null;
   const teams = useMemo<ScatterTeam[]>(
@@ -85,6 +99,22 @@ export function TeamScatterView({ year, setYear }: ViewProps) {
 
   const list = useMemo(() => [...shown].sort((a, b) => a.rank - b.rank), [shown]);
   const at = Math.min(cursor, Math.max(0, list.length - 1));
+
+  useEffect(() => {
+    if (!askedTeam || teams.length === 0) return;
+    // A team outside the opening field widens the field until it is on the chart.
+    if (!shown.some((t) => t.name === askedTeam)) {
+      if (teams.some((t) => t.name === askedTeam)) setField("field:all");
+      return;
+    }
+    const i = list.findIndex((t) => t.name === askedTeam);
+    if (i < 0) return;
+    setCursor(i);
+    setHover(askedTeam);
+    listRef.current?.querySelector(`[data-scatter-row="${CSS.escape(askedTeam)}"]`)?.scrollIntoView({ block: "center" });
+    // Once per arrival, and again when the field has grown to include the team.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askedTeam, teams.length, shown.length]);
 
   const open = useCallback(
     (t: ScatterTeam, newTab: boolean) => openRecord({ kind: "team", name: t.name, logoId: t.id }, { newTab, year }),
@@ -236,6 +266,7 @@ export function TeamScatterView({ year, setYear }: ViewProps) {
               hover={hover}
               setHover={setHover}
               onOpen={open}
+              onMenu={(e, t) => menu(e, teamObj(t))}
               pct={pct}
             />
           )}
@@ -253,7 +284,7 @@ export function TeamScatterView({ year, setYear }: ViewProps) {
             </span>
             <span />
           </div>
-          <ul className="min-h-0 flex-1 overflow-y-auto">
+          <ul ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
             {list.map((t, i) => {
               const lit = hover === t.name || i === at;
               return (
@@ -266,6 +297,10 @@ export function TeamScatterView({ year, setYear }: ViewProps) {
                       setCursor(i);
                     }}
                     onClick={(e) => open(t, e.ctrlKey || e.metaKey)}
+                    onContextMenu={(e) => menu(e, teamObj(t))}
+                    draggable
+                    onDragStart={(e) => beginDrag(e, objectDrag(teamObj(t)))}
+                    data-scatter-row={t.name}
                     className={`grid h-[34px] w-full grid-cols-[26px_minmax(0,1fr)_44px_44px_8px] items-center gap-2 px-3 text-left text-[12.5px] ${
                       lit ? "bg-[var(--row-focus)]" : "hover:bg-[var(--row-hover)]"
                     }`}

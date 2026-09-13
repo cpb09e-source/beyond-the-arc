@@ -1,4 +1,3 @@
-import { GitCompareArrows, UsersRound } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PercentileChip } from "@/components/percentile-chip";
 import { TopHundredPill } from "@/components/portal/top-hundred-pill";
@@ -22,18 +21,19 @@ import { loadSearchData } from "~/data/search-model";
 import { ncaaLabel, teamHistory } from "~/data/team-history";
 import { useLoaded } from "~/data/use-corpus";
 import { SeasonSwitcher } from "~/shell/season-switcher";
-import { useCompare } from "~/shell/compare";
+import { coachObj, type Obj } from "~/objects/object";
+import { ObjectLink, RailActions, RecordActions } from "~/objects/object-surfaces";
+import { playerLogObject } from "~/views/player-games/player-games-view";
 import { useShell } from "~/shell/shell-context";
 import { LoadError, TableSkeleton } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
 import { DataTable, type Column } from "~/table/data-table";
 import { ConfLogo } from "~/ui/conf-logo";
-import { DetailLink, DetailRow, DetailSection, DetailsRail, DetailsToggle, SiteLinks, useDetailsRail, type OpenHow } from "~/ui/details";
+import { DetailLink, DetailRow, DetailSection, DetailsRail, DetailsToggle, useDetailsRail, type OpenHow } from "~/ui/details";
 import { seasonLabel } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 import { ClassBadge, PlayerPhoto } from "~/ui/player-photo";
 import {
-  HeaderButton,
   HighlightRow,
   PercentileBar,
   ProfileHeader,
@@ -68,8 +68,7 @@ const OVERVIEW_BANDS = playerViewByKey("overview").bands;
 const OVERVIEW_GAME_KEYS = GAME_VIEWS[0]!.keys;
 
 export function PlayerProfileView({ year, setYear, record }: ViewProps) {
-  const { openRecord, showInExplorer } = useShell();
-  const { add } = useCompare();
+  const { openRecord } = useShell();
   const ref = record?.kind === "player" ? record : null;
   const bartId = ref?.bartId ?? -1;
   const [tab, setTab] = useState<TabKey>("overview");
@@ -96,6 +95,9 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
   );
 
   const name = player?.name ?? ref?.name ?? "";
+  const playerObj: Obj | null = ref
+    ? { kind: "player", bartId: ref.bartId, name, hasPhoto: player?.hasPhoto ?? ref.hasPhoto, year, team: player?.team, teamLogoId: player?.teamLogoId, conf: player?.conf }
+    : null;
   const openTeam = (team: string, logoId: number | null, newTab: boolean) =>
     openRecord({ kind: "team", name: team, logoId }, { newTab, year });
 
@@ -154,17 +156,14 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
             facts={
               player
                 ? [
-                    <button
+                    <ObjectLink
                       key="team"
-                      type="button"
-                      title="Ctrl-click for a new tab"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={(e) => openTeam(player.team, player.teamLogoId, e.ctrlKey || e.metaKey)}
+                      obj={{ kind: "team", name: player.team, logoId: player.teamLogoId, year, conf: player.conf }}
                       className="flex items-center gap-1.5 text-ink-soft underline-offset-2 hover:text-ink hover:underline"
                     >
                       <TeamLogo id={player.teamLogoId} name={player.team} size={15} />
                       {player.team}
-                    </button>,
+                    </ObjectLink>,
                     player.position,
                     player.height,
                     player.hometown,
@@ -174,24 +173,7 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
             actions={
               <>
                 <SeasonSwitcher year={year} onChange={setYear} />
-                {ref && (
-                  <HeaderButton
-                    title="Ctrl-click for a new tab"
-                    onClick={(e) => showInExplorer({ kind: "player", bartId: ref.bartId, name, year }, e.ctrlKey || e.metaKey)}
-                  >
-                    <UsersRound size={14} strokeWidth={2} />
-                    Player Explorer
-                  </HeaderButton>
-                )}
-                {ref && (
-                  <HeaderButton
-                    title="Add to the compare tray"
-                    onClick={() => add({ kind: "player", bartId: ref.bartId, name, hasPhoto: player?.hasPhoto ?? ref.hasPhoto, year })}
-                  >
-                    <GitCompareArrows size={14} strokeWidth={2} />
-                    Compare
-                  </HeaderButton>
-                )}
+                <RecordActions obj={playerObj} primary={["explorer", "compare", "snapshot"]} />
                 <DetailsToggle open={detailsOpen} onToggle={toggleDetails} />
               </>
             }
@@ -256,7 +238,7 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
                   },
                   body: (g) => <PlayerGamePeekBody season={gameSeason} game={g} />,
                 }}
-                onOpen={openLogGame}
+                object={(g) => playerLogObject(gameSeason, g)}
               />
             ) : gamesState.status === "error" ? (
               <LoadError year={year} reason={gamesState.reason} message={gamesState.message} what="Player games" onRetry={() => {}} />
@@ -499,7 +481,11 @@ function PlayerDetails({
         {player ? (
           <>
             <DetailRow label="Team">
-              <DetailLink title="Open the team  ·  Ctrl-click for a new tab" onOpen={(how) => onTeam(player.team, player.teamLogoId, how)}>
+              <DetailLink
+                title="Open the team  ·  Ctrl-click for a new tab"
+                object={{ kind: "team", name: player.team, logoId: player.teamLogoId, year, conf: player.conf }}
+                onOpen={(how) => onTeam(player.team, player.teamLogoId, how)}
+              >
                 <TeamLogo id={player.teamLogoId} name={player.team} size={16} />
                 <span className="truncate">{player.team}</span>
               </DetailLink>
@@ -510,7 +496,7 @@ function PlayerDetails({
             </DetailRow>
             <DetailRow label="Coach">
               {now ? (
-                <DetailLink title={`Open ${now.coach}'s page  ·  Ctrl-click for a new tab`} onOpen={(how) => openCoach(now.coach, how)}>
+                <DetailLink title={`Open ${now.coach}'s page  ·  Ctrl-click for a new tab`} object={coachObj(now.coach, player.team)} onOpen={(how) => openCoach(now.coach, how)}>
                   <span className="truncate">{now.coach}</span>
                 </DetailLink>
               ) : (
@@ -563,9 +549,20 @@ function PlayerDetails({
       )}
 
       {bartId != null && (
-        <DetailSection title="Share">
-          <SiteLinks url={`https://btacbb.xyz/players/${bartId}/`} />
-        </DetailSection>
+        <>
+          <DetailSection title="Go to">
+            <RailActions
+              obj={{ kind: "player", bartId, name, hasPhoto: player?.hasPhoto ?? false, year, team: player?.team, teamLogoId: player?.teamLogoId, conf: player?.conf }}
+              groups={["goto", "filter"]}
+            />
+          </DetailSection>
+          <DetailSection title="Share">
+            <RailActions
+              obj={{ kind: "player", bartId, name, hasPhoto: player?.hasPhoto ?? false, year, team: player?.team, teamLogoId: player?.teamLogoId, conf: player?.conf }}
+              groups={["share"]}
+            />
+          </DetailSection>
+        </>
       )}
     </DetailsRail>
   );

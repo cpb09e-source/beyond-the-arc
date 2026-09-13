@@ -4,6 +4,7 @@ import { isFinal, isLive, longDate, periodHeadings, periodLabel, tipLabel, type 
 import { gameEyebrow, gameNotStarted, gameStarted, recordsFromStandings } from "@/lib/game-stats";
 import { lookupId } from "@/lib/player-photo-index";
 import { sideColors } from "@/lib/side-colors";
+import { RecordActions } from "~/objects/object-surfaces";
 import { useCompare } from "~/shell/compare";
 import { useShell } from "~/shell/shell-context";
 import { useSetStatus } from "~/shell/status";
@@ -91,6 +92,7 @@ export function GameView({ record }: ViewProps) {
       <div className="shrink-0 px-6 pt-4">
         <div className="flex min-h-[26px] flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <p className="truncate text-[12.5px] text-ink-muted">{b ? gameEyebrow(b.game) : `${seasonLabel(season)} season`}</p>
+          <div className="flex items-center gap-2">
           {b && bothOurs && (
             <HeaderButton
               title="Add both teams to the compare tray"
@@ -103,6 +105,8 @@ export function GameView({ record }: ViewProps) {
               Compare teams
             </HeaderButton>
           )}
+          <RecordActions obj={rec} primary={["snapshot"]} />
+          </div>
         </div>
 
         {b ? <Scoreline b={b} names={names} links={links} /> : <PendingScoreline rec={rec} />}

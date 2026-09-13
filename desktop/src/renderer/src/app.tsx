@@ -1,5 +1,6 @@
 import {
   CalendarRange,
+  Camera,
   Check,
   Columns2,
   ChevronLeft,
@@ -7,7 +8,6 @@ import {
   GitCompareArrows,
   Keyboard,
   Layers,
-  Link2,
   ListFilter,
   LogIn,
   LogOut,
@@ -23,18 +23,20 @@ import {
   Star,
   StarOff,
   Sun,
-  Swords,
-  Table2,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ALL_SEASONS, isFlaggedSeason } from "@/lib/seasons";
-import { teamSlug } from "@/lib/team-slug";
 import logoOnLight from "@public/images/btalogo_final-01.svg";
 import logoOnDark from "@public/images/newbtalogo-white-01.svg";
 import type { ThemeMode } from "../../preload";
 import { loadSearchData } from "~/data/search-model";
+import { findGame } from "~/data/game-link";
 import { useLoaded } from "~/data/use-corpus";
+import { actionById, menuFor, paletteItemsFor, placeOf, type ActionEnv, type Place } from "~/objects/actions";
+import { objFromRecord, objTitle } from "~/objects/object";
+import { BesideDropZone } from "~/objects/object-surfaces";
+import { ObjectActionsProvider } from "~/objects/use-object-actions";
 import { CommandPalette, type PaletteGroup, type PaletteItem } from "~/palette/command-palette";
 import { objectItems } from "~/palette/object-items";
 import { coachItems, typedItems } from "~/palette/typed-items";
@@ -54,11 +56,14 @@ import { Welcome } from "~/shell/welcome";
 import { useWorkspace, type Tab } from "~/shell/workspace";
 import { useWorkspaces } from "~/shell/workspaces";
 import { recordVisit, useRecents } from "~/shell/recents";
+import { isSnappable, type SnapObj } from "~/snapshot/snapshot-cards";
+import { SnapshotSheet, snapshotView } from "~/snapshot/snapshot-sheet";
 import { seasonLabel } from "~/ui/format";
 import { Kbd } from "~/ui/kbd";
 import { NamePrompt } from "~/ui/name-prompt";
 import { PlaceMark } from "~/ui/place-mark";
 import { usePersisted } from "~/ui/persisted";
+import { ContextMenuProvider } from "~/ui/context-menu";
 import { ToastProvider, useToast } from "~/ui/toast";
 
 const THEME_KEY = "bta.theme";
@@ -85,9 +90,11 @@ export function App() {
   return (
     <AccountProvider>
       <ToastProvider>
-        <CompareProvider>
-          <Frame />
-        </CompareProvider>
+        <ContextMenuProvider>
+          <CompareProvider>
+            <Frame />
+          </CompareProvider>
+        </ContextMenuProvider>
       </ToastProvider>
     </AccountProvider>
   );
@@ -144,6 +151,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
   );
   const workspaces = useWorkspaces(ws, dispatch, onWorkspaceRemoved);
   const [namePrompt, setNamePrompt] = useState<"new" | "rename" | null>(null);
+  const [snapping, setSnapping] = useState<SnapObj | null>(null);
   const { auth, update } = useAccount();
   const compare = useCompare();
   const [favorites, setFavorites] = usePersisted<Favorite[]>("bta.favorites", [], isFavoriteList);
@@ -240,11 +248,10 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     [dispatch],
   );
 
-  /** Star or unstar a tab's place: Ctrl+D, as a browser bookmarks a page. */
-  const toggleFavorite = useCallback(
-    (tabId?: string) => {
-      const tab = ws.tabs.find((t) => t.id === (tabId ?? currentRef.current.id)) ?? currentRef.current;
-      const hit = favorites.find((f) => samePlace(f, tab));
+  /** Star or unstar a place: a tab's with Ctrl+D, as a browser bookmarks a page, or any object's page with F. */
+  const toggleFavoritePlace = useCallback(
+    (place: Place, label: string) => {
+      const hit = favorites.find((f) => samePlace(f, place));
       if (hit) {
         setFavorites((list) => list.filter((f) => f.id !== hit.id));
         toast({
@@ -252,12 +259,19 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
           action: { label: "Undo", run: () => setFavorites((list) => [...list, hit]) },
         });
       } else {
-        const fav = favoriteOf(tab, tab.title ?? tab.record?.name ?? viewById(tab.viewId).label);
+        const fav = favoriteOf(place, label);
         setFavorites((list) => [...list, fav]);
         toast({ title: `Added ${fav.label} to favorites` });
       }
     },
-    [ws.tabs, favorites, setFavorites, toast],
+    [favorites, setFavorites, toast],
+  );
+  const toggleFavorite = useCallback(
+    (tabId?: string) => {
+      const tab = ws.tabs.find((t) => t.id === (tabId ?? currentRef.current.id)) ?? currentRef.current;
+      toggleFavoritePlace(tab, tab.title ?? tab.record?.name ?? viewById(tab.viewId).label);
+    },
+    [ws.tabs, toggleFavoritePlace],
   );
 
   /** Removed from the sidebar: the same Undo as unstarring a tab. */
@@ -284,15 +298,45 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     [dispatch],
   );
 
-  /** A link to the same page on btacbb.xyz, for sharing with someone without the app. */
-  const copyLink = useCallback(
-    async (url: string) => {
-      try {
-        await navigator.clipboard.writeText(url);
-        toast({ title: "Link copied", body: url });
-      } catch {
-        toast({ title: "The link could not be copied", body: url });
-      }
+  /** Copy link, Copy stats: written by the main process, so a copy lands whether or not the window has focus. */
+  const copyText = useCallback(
+    (text: string, done: string) => {
+      const first = text.split("\n")[0] ?? "";
+      void window.bta.clipboard.writeText(text).then(
+        (ok) => toast(ok ? { title: done, body: first.length > 120 ? `${first.slice(0, 120)}…` : first } : { title: "That could not be copied" }),
+        () => toast({ title: "That could not be copied" }),
+      );
+    },
+    [toast],
+  );
+
+  /** A game log row's game, found on its night's slate, or the fallback with a word about why. */
+  const openGame = useCallback<ActionEnv["openGame"]>(
+    (row, how, fallback) => {
+      void findGame(row.date, row.team, row.opp).then((record) => {
+        if (record) {
+          openRecord(record, { newTab: how.newTab, side: how.side });
+          return;
+        }
+        fallback();
+        toast({ title: "No box score for this game", body: `The archive's slate for that night does not list ${row.team} against ${row.opp}.` });
+      });
+    },
+    [openRecord, toast],
+  );
+
+  /** The tab in front as an image, with a foot naming it and the site: Ctrl+Shift+S. */
+  const snapView = useCallback(
+    (action: "copy" | "save") => {
+      const tab = currentRef.current;
+      const v = viewById(tab.viewId);
+      const label = `${tab.title ?? tab.record?.name ?? v.label}${v.seasonless ? "" : ` · ${seasonLabel(tab.year)}`}`;
+      void snapshotView(label, action).then(
+        (res) => {
+          if (res.ok) toast(action === "copy" ? { title: "Snapshot copied", body: `${label}. Paste it into a post or a message.` } : { title: "Snapshot saved", body: res.path });
+        },
+        () => toast({ title: "The snapshot could not be made" }),
+      );
     },
     [toast],
   );
@@ -321,6 +365,27 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
   }, [ws.split, ws.tabs, dispatch]);
 
   const shell = useMemo(() => ({ filterRef, openRecord, openView, showInExplorer: go }), [openRecord, openView, go]);
+
+  // What every object's actions can reach. Ctrl K, right-click, Peek, record pages, drag and the row keys all
+  // read the registry (~/objects/actions.tsx) through this.
+  const env = useMemo<ActionEnv>(
+    () => ({
+      openRecord,
+      openView,
+      showInExplorer: go,
+      openGame,
+      addToCompare: compare.add,
+      isFavorite: (place) => favorites.some((f) => samePlace(f, place)),
+      toggleFavorite: toggleFavoritePlace,
+      copyText,
+      toast,
+      snapshot: (o) => {
+        if (isSnappable(o)) setSnapping(o);
+      },
+      here: { viewId: current.viewId, year: current.year, query: current.query, record: current.record },
+    }),
+    [openRecord, openView, go, openGame, compare.add, favorites, toggleFavoritePlace, copyText, toast, current.viewId, current.year, current.query, current.record],
+  );
 
   // The site's search indexes, loaded in the background at launch so the first
   // Ctrl+K already reaches every team and player.
@@ -355,6 +420,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       if (mod && !e.shiftKey && e.code === "KeyK") return take(() => setPaletteOpen(true));
       if (mod && !e.shiftKey && e.code === "KeyF") return take(focusFilter);
       if (mod && !e.shiftKey && e.code === "KeyD") return take(() => toggleFavorite());
+      if (mod && e.shiftKey && e.code === "KeyS") return take(() => snapView("copy"));
       if (mod && e.code === "KeyT") return take(() => (e.shiftKey ? dispatch({ type: "reopen" }) : newTab()));
       if (mod && !e.shiftKey && e.code === "KeyW") return take(() => dispatch({ type: "close", id: tab.id }));
       if (mod && e.code === "Tab") return take(() => dispatch({ type: "cycle", by: e.shiftKey ? -1 : 1 }));
@@ -387,7 +453,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("mouseup", onMouse);
     };
-  }, [dispatch, focusFilter, newTab, setCollapsed, toggleFavorite, toggleSplit]);
+  }, [dispatch, focusFilter, newTab, setCollapsed, toggleFavorite, toggleSplit, snapView]);
 
   // Get started ticks itself off as the reader finds each thing, wherever they find it.
   useEffect(() => {
@@ -518,6 +584,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
         keywords: ["favorite", fv.label],
         weight: 45,
         leading: <FavIcon size={15} strokeWidth={2} />,
+        object: f.record ? objFromRecord(f.record, f.year) : undefined,
         run: (how) => openFavorite(f, how.newTab),
       });
     }
@@ -536,6 +603,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
           keywords: ["recent", "history", rv.label],
           weight: 44,
           leading: <PlaceMark viewId={v.viewId} record={v.record} />,
+          object: v.record ? objFromRecord(v.record, v.year) : undefined,
           run: (how) =>
             dispatch(
               how.side
@@ -558,83 +626,31 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
         keywords: ["tab", "open", "switch", tv.label],
         weight: 46,
         leading: <PlaceMark viewId={t.viewId} record={t.record} />,
+        object: t.record ? objFromRecord(t.record, t.year) : undefined,
         trailing: i < 8 ? <Kbd>{`Ctrl ${i + 1}`}</Kbd> : undefined,
         run: () => dispatch({ type: "activate", id: t.id }),
       });
     });
-    // What can be done with the page in front: the team or the player it is about.
-    const rec = current.record;
-    // Above views and objects that merely share a word, and verb first: on Michigan's page,
-    // "compare" means comparing Michigan, and "link" means its link, not a player named Link.
-    const contextAction = (entry: Omit<PaletteItem, "group" | "weight">) => items.push({ ...entry, group: "actions", weight: 350 });
-    if (rec?.kind === "team") {
-      contextAction({
-        id: "action:record-compare",
-        title: `Compare ${rec.name}`,
-        subtitle: `Add to the compare tray · ${seasonLabel(current.year)}`,
-        keywords: ["compare", "tray", "side by side"],
-        leading: <GitCompareArrows size={15} strokeWidth={2} />,
-        run: () => compare.add({ kind: "team", name: rec.name, logoId: rec.logoId, year: current.year }),
-      });
-      contextAction({
-        id: "action:record-matchup",
-        title: `Predict a ${rec.name} game`,
-        subtitle: "Matchup Predictor",
-        keywords: ["matchup", "predict", "game", "odds", "versus"],
-        leading: <Swords size={15} strokeWidth={2} />,
-        run: (how) => openView("matchup", { query: `a=${teamSlug(rec.name)}`, newTab: how.newTab, side: how.side }),
-      });
-      contextAction({
-        id: "action:record-explorer",
-        title: `Show ${rec.name} in the Team Explorer`,
-        subtitle: seasonLabel(current.year),
-        keywords: ["explorer", "table", "row"],
-        leading: <Table2 size={15} strokeWidth={2} />,
-        run: (how) => go({ kind: "team", name: rec.name, year: current.year }, how.newTab),
-      });
-      contextAction({
-        id: "action:record-link",
-        title: `Copy the link to ${rec.name}`,
-        subtitle: "btacbb.xyz",
-        keywords: ["link", "url", "share", "copy", "website"],
-        leading: <Link2 size={15} strokeWidth={2} />,
-        run: () => void copyLink(`https://btacbb.xyz/teams/${teamSlug(rec.name)}/${current.year}/`),
-      });
-    } else if (rec?.kind === "player") {
-      contextAction({
-        id: "action:record-compare",
-        title: `Compare ${rec.name}`,
-        subtitle: `Add to the compare tray · ${seasonLabel(current.year)}`,
-        keywords: ["compare", "tray", "side by side"],
-        leading: <GitCompareArrows size={15} strokeWidth={2} />,
-        run: () => compare.add({ kind: "player", bartId: rec.bartId, name: rec.name, hasPhoto: rec.hasPhoto, year: current.year }),
-      });
-      contextAction({
-        id: "action:record-explorer",
-        title: `Show ${rec.name} in the Player Explorer`,
-        subtitle: seasonLabel(current.year),
-        keywords: ["explorer", "table", "row"],
-        leading: <Table2 size={15} strokeWidth={2} />,
-        run: (how) => go({ kind: "player", bartId: rec.bartId, name: rec.name, year: current.year }, how.newTab),
-      });
-      contextAction({
-        id: "action:record-link",
-        title: `Copy the link to ${rec.name}`,
-        subtitle: "btacbb.xyz",
-        keywords: ["link", "url", "share", "copy", "website"],
-        leading: <Link2 size={15} strokeWidth={2} />,
-        run: () => void copyLink(`https://btacbb.xyz/players/${rec.bartId}/`),
-      });
-    } else if (rec?.kind === "coach") {
-      contextAction({
-        id: "action:record-link",
-        title: `Copy the link to ${rec.name}`,
-        subtitle: "btacbb.xyz",
-        keywords: ["link", "url", "share", "copy", "website"],
-        leading: <Link2 size={15} strokeWidth={2} />,
-        run: () => void copyLink(`https://btacbb.xyz/coaches/${rec.slug}/`),
-      });
-    }
+    // What can be done with the page in front, from the object registry (~/objects/actions.tsx). On
+    // Michigan's page, "compare" means comparing Michigan, and "link" means its link, not a player named Link.
+    if (current.record) items.push(...paletteItemsFor(objFromRecord(current.record, current.year), env, "context"));
+    action({
+      id: "action:snapshot-view",
+      title: "Copy a snapshot of this view",
+      subtitle: "The tab as an image, with its name and btacbb.xyz",
+      keywords: ["snapshot", "image", "screenshot", "picture", "share", "copy", "png"],
+      leading: <Camera size={15} strokeWidth={2} />,
+      trailing: <Kbd>Ctrl Shift S</Kbd>,
+      // After the palette has gone, or it would be in the picture.
+      run: () => window.setTimeout(() => snapView("copy"), 180),
+    });
+    action({
+      id: "action:snapshot-view-save",
+      title: "Save a snapshot of this view",
+      keywords: ["snapshot", "image", "screenshot", "picture", "save", "png", "file"],
+      leading: <Camera size={15} strokeWidth={2} />,
+      run: () => window.setTimeout(() => snapView("save"), 180),
+    });
     for (const w of workspaces.list) {
       if (w.id === workspaces.current.id) continue;
       action({
@@ -802,7 +818,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     );
 
     return items;
-  }, [view, current, ws.tabs, ws.closed, recents, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite, splitShown, toggleSplit, go, copyLink, compare.add, workspaces]);
+  }, [view, current, ws.tabs, ws.closed, recents, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite, splitShown, toggleSplit, go, compare.add, workspaces, env, snapView]);
 
   const allItems = useMemo(() => [...paletteItems, ...objects, ...coaches], [paletteItems, objects, coaches]);
 
@@ -825,6 +841,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
 
   return (
     <ShellContext.Provider value={shell}>
+      <ObjectActionsProvider env={env}>
       <div className="flex h-full flex-col">
         {/* The title bar is the window's drag handle; tabs and buttons opt out.
             On Windows the caption buttons are drawn natively over its right end. */}
@@ -869,6 +886,11 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
             onSplitWith={(id) => (id === ws.active ? toggleSplit() : dispatch({ type: "split-with", id }))}
             onUnsplit={() => dispatch({ type: "unsplit" })}
             onPin={(id, pinned) => dispatch({ type: "pin", id, pinned })}
+            onDropObject={(o) => actionById("open-tab")?.run(o, env, { newTab: true }, {})}
+            recordMenu={(id) => {
+              const t = ws.tabs.find((x) => x.id === id);
+              return t?.record ? menuFor(objFromRecord(t.record, t.year), { ...env, here: { viewId: t.viewId, year: t.year, query: t.query, record: t.record } }) : null;
+            }}
           />
         </header>
 
@@ -893,6 +915,10 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
               workspaces={workspaces}
               onNewWorkspace={() => setNamePrompt("new")}
               onRenameWorkspace={() => setNamePrompt("rename")}
+              onDropFavorite={(o) => {
+                const place = placeOf(o, env);
+                if (place && !env.isFavorite(place)) env.toggleFavorite(place, objTitle(o));
+              }}
             />
           )}
 
@@ -944,6 +970,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
                 onClose={() => dispatch({ type: "unsplit" })}
               />
             )}
+            <BesideDropZone onDrop={(o) => actionById("open-side")?.run(o, env, { newTab: false, side: true }, {})} />
             <CompareDock
               hidden={current.viewId === "compare" && current.query === compareQuery(compare.items)}
               onOpen={(items, newTab) => openView("compare", { query: compareQuery(items), newTab })}
@@ -958,9 +985,11 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
             placeholder={search ? "Search teams, players, coaches and views, or ask a question" : "Search views, coaches and settings, or ask a question"}
             onClose={() => setPaletteOpen(false)}
             extra={typed}
+            actionsFor={(o) => paletteItemsFor(o, env, "drill")}
           />
         )}
         {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
+        {snapping && <SnapshotSheet obj={snapping} onClose={() => setSnapping(null)} />}
         {namePrompt && (
           <NamePrompt
             title={namePrompt === "new" ? "Name the new workspace" : "Rename this workspace"}
@@ -975,6 +1004,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
           />
         )}
       </div>
+      </ObjectActionsProvider>
     </ShellContext.Provider>
   );
 }

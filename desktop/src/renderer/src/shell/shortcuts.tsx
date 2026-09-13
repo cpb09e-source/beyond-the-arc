@@ -9,7 +9,8 @@ import { normalizeText } from "~/ui/text";
  * ONLY WHAT EXISTS. A shortcut listed here that does nothing teaches a reader
  * to stop trusting the list; one that works and is not listed might as well not
  * exist. Keep this in step with the handlers in app.tsx, data-table.tsx,
- * use-peek.ts and command-palette.tsx.
+ * use-peek.ts and command-palette.tsx, and with the row keys in
+ * objects/actions.tsx.
  *
  * Windows labels (Ctrl, Alt): the app is Windows first, and Linear's advice is
  * right that a shortcut should be written the way the reader's keyboard is.
@@ -26,6 +27,7 @@ const GROUPS: Array<{ title: string; items: Shortcut[] }> = [
       { label: "Keyboard shortcuts", keys: [["?"]] },
       { label: "Show or hide the sidebar", keys: [["Ctrl", "\\"]] },
       { label: "Add or remove a favorite", keys: [["Ctrl", "D"]] },
+      { label: "Copy a snapshot of this view", keys: [["Ctrl", "Shift", "S"]] },
     ],
   },
   {
@@ -41,7 +43,8 @@ const GROUPS: Array<{ title: string; items: Shortcut[] }> = [
       { label: "Back", keys: [["Alt", "←"]] },
       { label: "Forward", keys: [["Alt", "→"]] },
       { label: "Open in a new tab", keys: [["Ctrl", "Click"], ["Middle click"]] },
-      { label: "Tab menu: favorite, duplicate, split, close others", keys: [["Right click"]] },
+      { label: "Tab menu: the page's own actions, pin, favorite, split", keys: [["Right click"]] },
+      { label: "Open something in a new tab by dropping it on the tabs", keys: [["Drag"]] },
       { label: "Open to the side, in split view", keys: [["Shift", "Enter"], ["Shift", "Double-click"]] },
       { label: "Split view on or off", keys: [["Ctrl", "Shift", "\\"]] },
       { label: "Move between the two panes", keys: [["F6"]] },
@@ -73,7 +76,10 @@ const GROUPS: Array<{ title: string; items: Shortcut[] }> = [
       { label: "Peek at the row (hold to glance, tap to pin)", keys: [["Space"]] },
       { label: "Close Peek", keys: [["Esc"]] },
       { label: "Add the row to the compare tray", keys: [["C"]] },
-      { label: "Add a row by dragging it to the tray", keys: [["Drag"]] },
+      { label: "Add the row's page to favorites", keys: [["F"]] },
+      { label: "Everything the row can do", keys: [["."], ["Shift", "F10"], ["Right click"]] },
+      { label: "Drag a row to the tray, the tabs, beside, or favorites", keys: [["Drag"]] },
+      { label: "Sort, reset or hide a column", keys: [["Right click header"]] },
       { label: "Sort by a column", keys: [["Click header"]] },
     ],
   },
@@ -82,6 +88,8 @@ const GROUPS: Array<{ title: string; items: Shortcut[] }> = [
     items: [
       { label: "Open the highlighted result", keys: [["Enter"]] },
       { label: "Open it in a new tab", keys: [["Ctrl", "Enter"]] },
+      { label: "Open it to the side", keys: [["Shift", "Enter"]] },
+      { label: "Everything a result can do", keys: [["Tab"], ["Right click"]] },
       { label: "Clear, then close", keys: [["Esc"]] },
     ],
   },

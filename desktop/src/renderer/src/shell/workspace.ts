@@ -219,10 +219,11 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
     case "navigate": {
       const place: Snapshot = { viewId: a.viewId, year: seasonFor(a.viewId, a.year ?? current.year), record: a.record, query: a.query };
       if (place.viewId === current.viewId && place.year === current.year && sameRecord(place.record, current.record)) {
-        // Already here: only a new query changes anything, and it is not a new place in history.
-        return a.query === undefined || a.query === current.query
-          ? ws
-          : updateTab(ws, current.id, (t) => ({ ...t, query: a.query! }));
+        // Already here: only a new query changes anything. Typing in the filter is set-query and leaves
+        // history alone; a query arriving this way was asked for ("Michigan's opponents", a favorite),
+        // so Alt+Left comes back to the table as it was.
+        if (a.query === undefined || a.query === current.query) return ws;
+        return updateTab(ws, current.id, (t) => ({ ...t, query: a.query!, back: [...t.back, snapshotOf(t)].slice(-HISTORY_CAP), forward: [] }));
       }
       // A pinned tab keeps its place: somewhere else opens in a tab of its own.
       if (current.pinned && (place.viewId !== current.viewId || !sameRecord(place.record, current.record))) {

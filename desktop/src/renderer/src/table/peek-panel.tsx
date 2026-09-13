@@ -14,8 +14,11 @@ export function PeekPanel({
   total,
   canOpen = false,
   onHeight,
+  actions,
   children,
 }: {
+  /** The row's object's buttons (~/objects/object-surfaces.tsx), between what the Peek says and its keys. */
+  actions?: ReactNode;
   label: string;
   pinned: boolean;
   /** Where the row sits in the table as sorted and filtered now: "8 of 364". */
@@ -48,6 +51,7 @@ export function PeekPanel({
       style={{ transform: `translate3d(0, ${top}px, 0)` }}
     >
       {children}
+      {actions}
       <footer className="flex items-center gap-3 border-t border-hairline bg-paper-deep/40 px-4 py-2 text-[11px] text-ink-muted">
         <span className="flex items-center gap-1.5">
           <Kbd>Space</Kbd>
@@ -64,7 +68,7 @@ export function PeekPanel({
             open
           </span>
         )}
-        <span className="ml-auto tabular">
+        <span className="ml-auto whitespace-nowrap tabular">
           {position.toLocaleString()} of {total.toLocaleString()}
         </span>
         {pinned && (

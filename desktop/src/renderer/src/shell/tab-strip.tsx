@@ -3,6 +3,8 @@ import { Fragment, useRef, useState, type PointerEvent as ReactPointerEvent } fr
 import { createPortal } from "react-dom";
 import { seasonLabel } from "~/ui/format";
 import { Kbd } from "~/ui/kbd";
+import { carriesObject, droppedObject, type Obj } from "~/objects/object";
+import { useObjectDragging } from "~/objects/use-object-actions";
 import { Menu, type MenuEntry } from "~/ui/menu";
 import { PlaceMark } from "~/ui/place-mark";
 import { viewById } from "./views";
@@ -39,6 +41,8 @@ export function TabStrip({
   onSplitWith,
   onUnsplit,
   onPin,
+  onDropObject,
+  recordMenu,
 }: {
   tabs: Tab[];
   active: string;
@@ -55,11 +59,18 @@ export function TabStrip({
   onSplitWith: (id: string) => void;
   onUnsplit: () => void;
   onPin: (id: string, pinned: boolean) => void;
+  /** Something dragged from a table, a Peek or a page, dropped on the strip: it opens in a new tab. */
+  onDropObject?: (o: Obj) => void;
+  /** The menu of the object a tab is about, offered as the first entry of the tab's own menu. */
+  recordMenu?: (id: string) => MenuEntry[] | null;
 }) {
   const stripRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; x: number; moved: boolean } | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  // The title bar drags the window; while an object is carried, the strip takes drops instead.
+  const carrying = useObjectDragging();
+  const [dropping, setDropping] = useState(false);
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>, id: string) => {
     if (e.button !== 0) return;
@@ -97,7 +108,25 @@ export function TabStrip({
       ref={stripRef}
       role="tablist"
       aria-label="Open tabs"
-      className="flex h-full min-w-0 flex-1 items-center gap-1 overflow-hidden px-1.5"
+      onDragOver={(e) => {
+        if (!onDropObject || !carriesObject(e.dataTransfer)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+        setDropping(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false);
+      }}
+      onDrop={(e) => {
+        setDropping(false);
+        const o = onDropObject ? droppedObject(e.dataTransfer) : null;
+        if (!o) return;
+        e.preventDefault();
+        onDropObject?.(o);
+      }}
+      className={`flex h-full min-w-0 flex-1 items-center gap-1 overflow-hidden px-1.5 transition-colors ${carrying ? "no-drag" : ""} ${
+        dropping ? "bg-[color-mix(in_oklab,var(--accent)_10%,transparent)]" : ""
+      }`}
       style={{ paddingRight: "calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 8px)" }}
     >
       {tabs.map((tab, i) => {
@@ -190,8 +219,22 @@ export function TabStrip({
   // Rebuilt each time it opens, so it names the tab's current state.
   function tabMenu(id: string): MenuEntry[] {
     const starred = isFavorite(id);
-    const pinned = !!tabs.find((t) => t.id === id)?.pinned;
+    const tab = tabs.find((t) => t.id === id);
+    const pinned = !!tab?.pinned;
+    const about = tab ? recordMenu?.(id) : null;
     return [
+      ...(tab && about && about.length > 0
+        ? ([
+            {
+              kind: "item",
+              id: "record",
+              label: tab.title ?? tab.record?.name ?? viewById(tab.viewId).label,
+              icon: <PlaceMark viewId={tab.viewId} record={tab.record} size={14} />,
+              submenu: about,
+            },
+            { kind: "separator", id: "s0" },
+          ] satisfies MenuEntry[])
+        : []),
       {
         kind: "item",
         id: "pin",

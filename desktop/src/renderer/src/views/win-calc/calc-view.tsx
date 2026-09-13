@@ -11,9 +11,8 @@ import {
   runWinCalc,
   teamNamesIn,
 } from "@/lib/win-calc";
-import { useOpenGame } from "~/data/game-link";
-import { compareDrag, useCompare } from "~/shell/compare";
-import { useShell } from "~/shell/shell-context";
+import type { Obj } from "~/objects/object";
+import { useCompare } from "~/shell/compare";
 import { useSetStatus } from "~/shell/status";
 import { useTabTitle } from "~/shell/tab-title";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
@@ -67,6 +66,25 @@ function hayOf(g: GameLog): string {
     hay.set(g, h);
   }
   return h;
+}
+
+/**
+ * A matching game as the object it is: the game, found on its night's slate when
+ * it is opened, or the team when the log names no night or no opponent.
+ */
+function calcObject(g: GameLog): Obj {
+  if (!g.game_date || !g.opp_team_market) return { kind: "team", name: g.team_name, logoId: crestOf(g.team_name), year: g.year };
+  return {
+    kind: "log-game",
+    year: g.year,
+    date: g.game_date,
+    team: g.team_name,
+    teamLogoId: crestOf(g.team_name),
+    opp: g.opp_team_market,
+    oppLogoId: crestOf(g.opp_team_market),
+    site: g.is_neutral ? "neutral" : g.is_home ? "home" : "away",
+    summary: `${g.team_name} ${g.pts_scored ?? "–"}, ${g.opp_team_market} ${g.pts_against ?? "–"}`,
+  };
 }
 
 let coachItems: ListItem[] | null = null;
@@ -203,8 +221,6 @@ export function WinCalcView({ query, setQuery }: ViewProps) {
   }, [state]);
   useTabTitle(title);
 
-  const { openRecord } = useShell();
-  const openGame = useOpenGame();
   const { add } = useCompare();
 
   const meta = result
@@ -267,16 +283,10 @@ export function WinCalcView({ query, setQuery }: ViewProps) {
               rowHeight={ROW_H}
               defaultSort={{ key: "date", dir: -1 }}
               tieBreak={latestFirst}
-              drag={(g) => compareDrag({ kind: "team", name: g.team_name, logoId: crestOf(g.team_name), year: g.year })}
+              id="win-calc"
+              // C adds the team, not the game: a matching game is how a team worth comparing is found.
               keys={{ c: (g) => add({ kind: "team", name: g.team_name, logoId: crestOf(g.team_name), year: g.year }) }}
-              onOpen={(g, how) =>
-                // The game itself when that night's slate has it; the team, as before, when not.
-                g.game_date && g.opp_team_market
-                  ? openGame({ date: g.game_date, team: g.team_name, opp: g.opp_team_market }, how, () =>
-                      openRecord({ kind: "team", name: g.team_name, logoId: crestOf(g.team_name) }, { newTab: how.newTab, side: how.side, year: g.year }),
-                    )
-                  : openRecord({ kind: "team", name: g.team_name, logoId: crestOf(g.team_name) }, { newTab: how.newTab, side: how.side, year: g.year })
-              }
+              object={calcObject}
               ariaLabel="Matching games"
               empty={
                 text.trim() ? (

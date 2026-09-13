@@ -33,6 +33,8 @@
   /* The site's name for the accent, which shared site code still reaches for
      (the fallback side color). Resolves per theme, since --accent does. */
   --coral: var(--accent);
+  --court: #d4a574;
+  --court-ink: #8a6224;
   /* The lightness band a team color is held inside when it is text (teamInk). */
   --team-l-min: 0.36;
   --team-l-max: 0.54;
@@ -110,6 +112,8 @@
   --cls-so-bg: #272052; --cls-so-fg: #c6b8f2;
   --cls-jr-bg: #3f2f13; --cls-jr-fg: #f2cb80;
   --cls-sr-bg: #3b1f34; --cls-sr-fg: #eeb4dc;
+  --court: #b88a52;
+  --court-ink: #d9ae6e;
   --seal-ov1-ink: #ff5714;
   --seal-ov2-ink: #00b2ca;
   --seal-ov3-ink: #866eff;
@@ -479,4 +483,10 @@ html {
 }
 @media (prefers-reduced-motion: reduce) {
   .live-dot::after { animation: none; }
+}
+
+/* A view snapshot shows the view, not the toasts or the compare tray floating over it. */
+[data-snapshotting] [aria-live="polite"],
+[data-snapshotting] [aria-label="Compare tray"] {
+  visibility: hidden;
 }

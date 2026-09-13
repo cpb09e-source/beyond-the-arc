@@ -6,7 +6,6 @@ import { confDisplay } from "@/lib/conf-display";
 import { SEASON_CEIL } from "@/lib/seasons";
 import { useCoachBook, yearsSpan, type CoachBook } from "~/data/coach-model";
 import { SOURCE_LABEL } from "~/data/use-corpus";
-import { useShell } from "~/shell/shell-context";
 import { useSetStatus } from "~/shell/status";
 import { useTabTitle } from "~/shell/tab-title";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
@@ -148,7 +147,6 @@ function columns(book: CoachBook): Column<CoachIndexRow>[] {
 export function CoachesView({ query, setQuery }: ViewProps) {
   const [state, retry] = useCoachBook();
   const setStatus = useSetStatus();
-  const { openRecord } = useShell();
   const [activeOnly, setActiveOnly] = usePersisted("bta.coaches.active", true, isBool);
   useTabTitle(query.trim() ? `Coaches: ${query.trim()}` : null);
 
@@ -220,9 +218,8 @@ export function CoachesView({ query, setQuery }: ViewProps) {
             ariaLabel="Coaches"
             empty={<NoMatches query={query} noun="coach, school or conference" />}
             peek={{ label: (r) => r.name, body: (r) => <CoachPeekBody book={book} row={r} /> }}
-            onOpen={(r, how) =>
-              openRecord({ kind: "coach", slug: r.slug, name: r.name, team: r.current_team }, { newTab: how.newTab, side: how.side })
-            }
+            id="coaches"
+            object={(r) => ({ kind: "coach", slug: r.slug, name: r.name, team: r.current_team })}
           />
         ) : state.status === "error" ? (
           <LoadError year={SEASON_CEIL} reason={state.reason} message={state.message} what="Coaches" onRetry={retry} />

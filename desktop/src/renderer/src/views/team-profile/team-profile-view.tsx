@@ -1,12 +1,9 @@
-import { Calculator, GitCompareArrows, Swords, Table2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PercentileChip } from "@/components/percentile-chip";
 import { coachSlug } from "@/lib/coach-slug";
 import { ALL_SEASONS } from "@/lib/seasons";
 import type { RankedStat, StaticTeamSeasonRow } from "@/lib/static-data";
-import { teamSlug } from "@/lib/team-slug";
 import { T, TEAM_GAME_VIEWS } from "@/lib/team-game-index";
-import { overrideTeam } from "@/lib/win-calc";
 import { loadPlayerSeason, type Player } from "~/data/player-model";
 import { logDate, useOpenGame } from "~/data/game-link";
 import { loadTeamGameSeason, type TeamGame } from "~/data/team-game-model";
@@ -14,23 +11,23 @@ import { byCoach, ncaaLabel, runLabel, teamHistory } from "~/data/team-history";
 import { ranksFor, shapeSeason, type Season, type Team } from "~/data/team-model";
 import { useCorpus, useLoaded } from "~/data/use-corpus";
 import { SeasonSwitcher } from "~/shell/season-switcher";
-import { useCompare } from "~/shell/compare";
+import { coachObj, type Obj } from "~/objects/object";
+import { RailActions, RecordActions } from "~/objects/object-surfaces";
 import { useShell } from "~/shell/shell-context";
 import { LoadError, TableSkeleton } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
 import { DataTable, type Column } from "~/table/data-table";
 import { ConfLogo } from "~/ui/conf-logo";
-import { DetailAction, DetailLink, DetailRow, DetailSection, DetailsRail, DetailsToggle, howOf, SiteLinks, useDetailsRail, type OpenHow } from "~/ui/details";
+import { DetailLink, DetailRow, DetailSection, DetailsRail, DetailsToggle, howOf, useDetailsRail, type OpenHow } from "~/ui/details";
 import { fmtRanked, num1, pct1, seasonLabel, signed1 } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 import { ClassBadge, PlayerPhoto } from "~/ui/player-photo";
-import { HeaderButton, HighlightRow, ProfileHeader, ProfileNote, ProfileTabs, SectionTitle } from "~/ui/profile";
+import { HighlightRow, ProfileHeader, ProfileNote, ProfileTabs, SectionTitle } from "~/ui/profile";
 import { rosterColumns } from "~/views/players/player-columns";
 import { PlayerPeekBody } from "~/views/players/player-peek";
 import { statColumns as gameStatColumns } from "~/views/team-games/game-columns";
 import { GamePeekBody } from "~/views/team-games/game-peek";
-import { TEAM_GAME_IDENTITY } from "~/views/team-games/team-games-view";
-import { DEFAULT_CALC, serializeCalc } from "~/views/win-calc/calc-state";
+import { TEAM_GAME_IDENTITY, teamLogObject } from "~/views/team-games/team-games-view";
 
 /**
  * A team's page: who they were in a season, what they were best and worst at
@@ -80,8 +77,7 @@ const ROSTER_IDENTITY: Column<Player>[] = [
 ];
 
 export function TeamProfileView({ year, setYear, record }: ViewProps) {
-  const { openRecord, openView, showInExplorer } = useShell();
-  const { add } = useCompare();
+  const { openRecord } = useShell();
   const name = record?.kind === "team" ? record.name : "";
   const [tab, setTab] = useState<TabKey>("overview");
   const [detailsOpen, toggleDetails] = useDetailsRail();
@@ -102,6 +98,7 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
   const d1 = useMemo(() => new Set(season?.teams.map((t) => t.name) ?? []), [season]);
   const logoId = team?.logoId ?? (record?.kind === "team" ? record.logoId : null);
   const split = useMemo(() => splits(games), [games]);
+  const teamObj: Obj | null = name ? { kind: "team", name, logoId, year, conf: team?.conf } : null;
 
   const openTeam = (teamName: string, logo: number | null, newTab: boolean) =>
     openRecord({ kind: "team", name: teamName, logoId: logo }, { newTab, year });
@@ -139,14 +136,6 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
                       BTA #{team.btaRank}
                     </span>
                   )}
-                  {team.inZone && (
-                    <span
-                      title="Inside the contender trapezoid"
-                      className="shrink-0 rounded-[5px] bg-[color-mix(in_oklab,var(--good)_14%,var(--card))] px-1.5 py-[3px] text-[11px] font-medium text-good"
-                    >
-                      Contender zone
-                    </span>
-                  )}
                 </>
               )
             }
@@ -164,24 +153,7 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
             actions={
               <>
                 <SeasonSwitcher year={year} onChange={setYear} />
-                <HeaderButton
-                  title="Ctrl-click for a new tab"
-                  onClick={(e) => showInExplorer({ kind: "team", name, year }, e.ctrlKey || e.metaKey)}
-                >
-                  <Table2 size={14} strokeWidth={2} />
-                  Team Explorer
-                </HeaderButton>
-                <HeaderButton
-                  title="Predict a game against any team  ·  Ctrl-click for a new tab"
-                  onClick={(e) => openView("matchup", { newTab: e.ctrlKey || e.metaKey, query: `a=${teamSlug(name)}` })}
-                >
-                  <Swords size={14} strokeWidth={2} />
-                  Matchup
-                </HeaderButton>
-                <HeaderButton title="Add to the compare tray" onClick={() => add({ kind: "team", name, logoId, year })}>
-                  <GitCompareArrows size={14} strokeWidth={2} />
-                  Compare
-                </HeaderButton>
+                <RecordActions obj={teamObj} primary={["explorer", "matchup", "compare", "snapshot"]} />
                 <DetailsToggle open={detailsOpen} onToggle={toggleDetails} />
               </>
             }
@@ -243,7 +215,7 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
                   label: (g) => `${g.team} ${g.site === "away" ? "at" : "vs"} ${g.opp}`,
                   body: (g) => <GamePeekBody season={gameSeason} game={g} />,
                 }}
-                onOpen={openLogGame}
+                object={(g) => teamLogObject(g, gameSeason.pack.epochMs, year)}
               />
             ) : gamesState.status === "error" ? (
               <LoadError year={year} reason={gamesState.reason} message={gamesState.message} what="Team games" onRetry={() => {}} />
@@ -264,11 +236,11 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
                 ariaLabel={`${name} roster`}
                 empty={<ProfileNote>No players listed for {name} in {seasonLabel(year)}.</ProfileNote>}
                 peek={{ label: (p) => p.name, body: (p) => <PlayerPeekBody season={playerSeason} player={p} /> }}
-                onOpen={(p, how) => {
-                  if (p.bartId != null) {
-                    openRecord({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, side: how.side, year });
-                  }
-                }}
+                object={(p) =>
+                  p.bartId == null
+                    ? null
+                    : { kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto, year, team: p.team, teamLogoId: p.teamLogoId, conf: p.conf }
+                }
               />
             ) : playersState.status === "error" ? (
               <LoadError year={year} reason={playersState.reason} message={playersState.message} what="Players" onRetry={() => {}} />
@@ -436,14 +408,12 @@ function RankRows({ stats }: { stats: RankedStat[] }) {
  * under each coach, and the ways out.
  */
 function TeamDetails({ name, year, team, onSeason }: { name: string; year: number; team: Team | null; onSeason: (y: number) => void }) {
-  const { openView, openRecord } = useShell();
+  const { openRecord } = useShell();
   const history = useMemo(() => teamHistory(name), [name]);
   const shown = useMemo(() => history.filter((h) => ALL_SEASONS.includes(h.year)), [history]);
   const now = history.find((h) => h.year === year) ?? null;
   const bids = shown.filter((h) => h.seed != null).length;
 
-  const calc = (extra: { teams?: string[]; coaches?: string[]; years: number[] }, how: OpenHow) =>
-    openView("win-calc", { query: serializeCalc({ ...DEFAULT_CALC, ...extra }), newTab: how.newTab, side: how.side });
   const openCoach = (coach: string, how: OpenHow) =>
     openRecord({ kind: "coach", slug: coachSlug(coach), name: coach, team: name }, { newTab: how.newTab, side: how.side });
 
@@ -458,7 +428,7 @@ function TeamDetails({ name, year, team, onSeason }: { name: string; year: numbe
         )}
         <DetailRow label="Coach">
           {now ? (
-            <DetailLink title={`Open ${now.coach}'s page  ·  Ctrl-click for a new tab`} onOpen={(how) => openCoach(now.coach, how)}>
+            <DetailLink title={`Open ${now.coach}'s page  ·  Ctrl-click for a new tab`} object={coachObj(now.coach, name)} onOpen={(how) => openCoach(now.coach, how)}>
               <span className="truncate">{now.coach}</span>
             </DetailLink>
           ) : (
@@ -515,16 +485,11 @@ function TeamDetails({ name, year, team, onSeason }: { name: string; year: numbe
       )}
 
       <DetailSection title="Go to">
-        <DetailAction
-          icon={<Calculator size={14} strokeWidth={2} />}
-          label={`Every ${name} game`}
-          hint="Win Calculator"
-          onOpen={(how) => calc({ teams: [overrideTeam(name)], years: [year] }, how)}
-        />
+        <RailActions obj={{ kind: "team", name, logoId: team?.logoId ?? null, year, conf: team?.conf }} groups={["goto", "filter"]} />
       </DetailSection>
 
       <DetailSection title="Share">
-        <SiteLinks url={`https://btacbb.xyz/teams/${teamSlug(name)}/${year}/`} />
+        <RailActions obj={{ kind: "team", name, logoId: team?.logoId ?? null, year, conf: team?.conf }} groups={["share"]} />
       </DetailSection>
     </DetailsRail>
   );

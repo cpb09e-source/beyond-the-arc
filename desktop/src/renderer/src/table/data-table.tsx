@@ -6,15 +6,25 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type DragEvent as ReactDragEvent,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { ACTIONS, runAction } from "~/objects/actions";
+import { beginDrag } from "~/objects/drag";
+import { objectDrag, type DragSpec, type Obj } from "~/objects/object";
+import { PeekActions } from "~/objects/object-surfaces";
+import { useActionEnv, useObjectMenu } from "~/objects/use-object-actions";
 import { usePeek } from "~/peek/use-peek";
 import { useIsActive } from "~/shell/active";
 import { signalOnboarding } from "~/shell/onboarding";
 import { useShell } from "~/shell/shell-context";
+import { useContextMenu } from "~/ui/context-menu";
+import type { MenuEntry } from "~/ui/menu";
+import { usePersisted } from "~/ui/persisted";
 import { PeekPanel } from "./peek-panel";
+
+export type { DragSpec } from "~/objects/object";
 
 /**
  * The one table every object in the app is shown in: teams, players, games.
@@ -24,13 +34,19 @@ import { PeekPanel } from "./peek-panel";
  * ↓ moves, Space previews and a header click sorts better-first on teams never
  * meets a table that does it slightly differently on game logs.
  *
+ * A ROW IS AN OBJECT when the view says what object it is (`object`). Then the
+ * row's right-click menu, its keys (C, F, and . for the menu), its drag and its
+ * Peek's buttons all come from the object's actions (~/objects/actions.tsx),
+ * the same list Ctrl K and the record pages read, and a view writes none of it.
+ *
  * FIXED ROW HEIGHT, per table. Peek anchors to a row, the pointer maps to a row
  * by arithmetic, and the virtualizer never has to measure: all three depend on
  * every row being exactly `rowHeight` tall. A cell that wraps is a bug.
  *
  * THE HEADER SITS OUTSIDE THE SCROLL AREA and follows horizontal scroll by
  * transform, so the virtualizer's offsets start at the first row with no
- * sticky-header correction to get wrong.
+ * sticky-header correction to get wrong. A right-click on a header sorts either
+ * way, and on a table with an `id` hides the column, remembered.
  *
  * PINNED COLUMNS stay put when a wide table scrolls sideways: rank and name on
  * a game log with thirty stats, so a row never loses the thing it is about.
@@ -67,9 +83,6 @@ export type Column<R> = {
   bandAccent?: boolean;
 };
 
-/** What a dragged row carries: a type a drop target recognizes, its data, and a label to show. */
-export type DragSpec = { type: string; data: string; label: string };
-
 export type PeekSpec<R> = {
   label: (row: R) => string;
   body: (row: R) => ReactNode;
@@ -90,10 +103,14 @@ type Props<R> = {
    * runs inside each block. Stable and module-level.
    */
   group?: (row: R) => number;
-  /** What dragging a row carries to a drop target elsewhere (the compare tray). Null: not draggable. */
+  /** The object a row is: its menu, keys, drag, Peek buttons and, absent onOpen, how it opens. */
+  object?: (row: R) => Obj | null;
+  /** What dragging a row carries, when it is not the row's object. Null: not draggable. */
   drag?: (row: R) => DragSpec | null;
-  /** Single-key commands on the focused row while nothing is being typed: C adds it to compare. */
+  /** Single-key commands of the view's own, on the focused row. They win over the object's keys. */
   keys?: Record<string, (row: R) => void>;
+  /** Names the table for what it remembers about itself: hidden columns. */
+  id?: string;
   ariaLabel: string;
   empty: ReactNode;
   peek?: PeekSpec<R>;
@@ -107,7 +124,7 @@ type Props<R> = {
   /**
    * Opens the row's own page: Enter (from the table or its filter box), a
    * double-click, or Enter while Peeking. `newTab` is true with Ctrl held;
-   * `side` with Shift, for split view.
+   * `side` with Shift, for split view. Absent, the row's object opens.
    */
   onOpen?: (row: R, how: { newTab: boolean; side?: boolean }) => void;
 };
@@ -121,6 +138,8 @@ const ALIGN: Record<Align, string> = {
   center: "justify-center text-center",
 };
 
+const isKeyList = (v: unknown): v is string[] => Array.isArray(v) && v.every((k) => typeof k === "string");
+
 /** Missing values sort last in BOTH directions; a dash at the top of a sort reads as a winner. */
 function compare(a: number | string | null, b: number | string | null, dir: Dir): number {
   if (a == null && b == null) return 0;
@@ -130,47 +149,18 @@ function compare(a: number | string | null, b: number | string | null, dir: Dir)
   return dir * (a - b);
 }
 
-/**
- * A row picked up. The pointer carries a small label rather than a picture of
- * the whole row, which at thirty columns wide would cover the drop target.
- */
-function startDrag(e: ReactDragEvent<HTMLDivElement>, spec: DragSpec | null): void {
-  if (!spec) {
-    e.preventDefault();
-    return;
-  }
-  e.dataTransfer.setData(spec.type, spec.data);
-  e.dataTransfer.setData("text/plain", spec.label);
-  e.dataTransfer.effectAllowed = "copy";
-  const ghost = document.createElement("div");
-  ghost.textContent = spec.label;
-  Object.assign(ghost.style, {
-    position: "fixed",
-    top: "-200px",
-    left: "0",
-    padding: "5px 10px",
-    borderRadius: "7px",
-    font: "500 12.5px \"Schibsted Grotesk Variable\", system-ui, sans-serif",
-    background: "var(--card)",
-    color: "var(--ink)",
-    border: "1px solid var(--hairline)",
-    whiteSpace: "nowrap",
-  });
-  document.body.appendChild(ghost);
-  e.dataTransfer.setDragImage(ghost, 14, 14);
-  requestAnimationFrame(() => ghost.remove());
-}
-
 export function DataTable<R>({
   rows,
-  columns,
+  columns: allColumns,
   rowKey,
   rowHeight = 42,
   defaultSort,
   tieBreak,
   group,
+  object,
   drag,
   keys,
+  id,
   ariaLabel,
   empty,
   peek,
@@ -182,9 +172,19 @@ export function DataTable<R>({
   // A table in a tab that is not in front keeps its state but not the keyboard.
   const active = useIsActive();
   const { filterRef } = useShell();
+  const env = useActionEnv();
+  const objectMenu = useObjectMenu();
+  const openMenu = useContextMenu();
+
+  const [hidden, setHidden] = usePersisted<string[]>(`bta.table.hidden.${id ?? "_"}`, [], isKeyList);
+  const columns = useMemo(
+    () => (id && hidden.length > 0 ? allColumns.filter((c) => c.pin || !hidden.includes(c.key)) : allColumns),
+    [allColumns, hidden, id],
+  );
 
   const sorted = useMemo(() => {
-    const value = columns.find((c) => c.key === sort.key)?.sortValue;
+    // A sort outlives its column being hidden: the rows keep the order the reader chose.
+    const value = allColumns.find((c) => c.key === sort.key)?.sortValue;
     if (!value && !group) return tieBreak ? [...rows].sort(tieBreak) : rows;
     return [...rows].sort(
       (a, b) =>
@@ -192,7 +192,7 @@ export function DataTable<R>({
         (value ? compare(value(a), value(b), sort.dir) : 0) ||
         (tieBreak?.(a, b) ?? 0),
     );
-  }, [rows, columns, sort, tieBreak, group]);
+  }, [rows, allColumns, sort, tieBreak, group]);
 
   const layout = useMemo(() => {
     let x = 0;
@@ -214,6 +214,7 @@ export function DataTable<R>({
       template: `${columns.map((c) => `${c.width}px`).join(" ")} minmax(0, 1fr)`,
       totalWidth: columns.reduce((sum, c) => sum + c.width, 0),
       pinLeft,
+      pinnedWidth: x,
       lastPin: columns.reduce((last, c, i) => (c.pin ? i : last), -1),
       bands,
       bandStarts: new Set(bands.map((b) => b.start)),
@@ -251,6 +252,27 @@ export function DataTable<R>({
   const [scrolledX, setScrolledX] = useState(false);
   const scrolledXRef = useRef(false);
   const frame = useRef(0);
+
+  const peekState = usePeek(active);
+  const { pin } = peekState;
+  const local = useMemo(() => (peek ? { peek: pin } : {}), [peek, pin]);
+
+  // What a row does when it is only an object: open as the object opens, drag as the object.
+  const openRow = useMemo(
+    () =>
+      onOpen ??
+      (object
+        ? (row: R, how: { newTab: boolean; side?: boolean }) => {
+            const o = object(row);
+            if (o) runAction("open", o, env, how);
+          }
+        : undefined),
+    [onOpen, object, env],
+  );
+  const dragRow = drag ?? (object ? (row: R) => {
+    const o = object(row);
+    return o ? objectDrag(o) : null;
+  } : undefined);
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -292,7 +314,7 @@ export function DataTable<R>({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!active) return;
-      if (e.key === "Enter" && onOpen && !e.altKey) {
+      if (e.key === "Enter" && openRow && !e.altKey) {
         const t = e.target as HTMLElement | null;
         if (t && (t.tagName === "TEXTAREA" || t.tagName === "BUTTON" || t.isContentEditable)) return;
         // From a field, only the table's own filter box opens a row. Enter in any
@@ -301,19 +323,41 @@ export function DataTable<R>({
         const row = index >= 0 ? sorted[index] : undefined;
         if (!row) return;
         e.preventDefault();
-        onOpen(row, { newTab: e.ctrlKey || e.metaKey, side: e.shiftKey });
+        openRow(row, { newTab: e.ctrlKey || e.metaKey, side: e.shiftKey });
         return;
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
       const inField = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
-      // The view's own single-key commands, on the focused row.
-      if (!inField && keys && !e.shiftKey && e.key.length === 1) {
-        const run = keys[e.key.toLowerCase()];
-        const row = index >= 0 ? sorted[index] : undefined;
-        if (run && row) {
+      const row = index >= 0 ? sorted[index] : undefined;
+
+      // The row's menu from the keyboard: . as Superhuman and Linear offer, and Windows' own two.
+      if (!inField && row && object && (e.key === "." || e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) {
+        const o = object(row);
+        const el = scrollRef.current;
+        if (o && el) {
+          e.preventDefault();
+          const r = el.getBoundingClientRect();
+          const x = r.left + Math.min(layout.pinnedWidth || 240, 280);
+          const y = r.top + index * rowHeight - el.scrollTop + rowHeight;
+          objectMenu({ x, y: Math.min(Math.max(y, r.top), r.bottom) }, o, local);
+          return;
+        }
+      }
+
+      if (!inField && row && !e.shiftKey && e.key.length === 1) {
+        // The view's own single-key commands first, then the object's.
+        const run = keys?.[e.key.toLowerCase()];
+        if (run) {
           e.preventDefault();
           run(row);
+          return;
+        }
+        const o = object?.(row);
+        const action = o ? ACTIONS.find((a) => a.rowKey === e.key.toLowerCase() && a.when(o, env, local)) : undefined;
+        if (o && action) {
+          e.preventDefault();
+          action.run(o, env, { newTab: false }, local);
           return;
         }
       }
@@ -338,7 +382,7 @@ export function DataTable<R>({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, index, move, sorted, viewH, rowHeight, onOpen, keys, filterRef]);
+  }, [active, index, move, sorted, viewH, rowHeight, openRow, keys, filterRef, object, env, local, objectMenu, layout.pinnedWidth]);
 
   // THE POINTER MOVES FOCUS, but only when the pointer itself moves. Chromium
   // sends synthetic mouse moves when content scrolls under a still cursor, and
@@ -352,13 +396,11 @@ export function DataTable<R>({
     if (row && (focused === undefined || rowKey(row) !== rowKey(focused))) setFocusKey(rowKey(row));
   };
 
-  const peekState = usePeek(active);
   useEffect(() => {
     if (peekState.open) signalOnboarding("peek");
   }, [peekState.open]);
 
   // The parts of a landing that reach outside render: the scroll and the Peek.
-  const { pin } = peekState;
   useEffect(() => {
     if (landed == null) return;
     const i = focusKey == null ? undefined : indexByKey.get(focusKey);
@@ -382,6 +424,40 @@ export function DataTable<R>({
     col.sortValue &&
     setSort((s) => (s.key === col.key ? { key: col.key, dir: (s.dir * -1) as Dir } : { key: col.key, dir: col.first }));
 
+  /** A header's right-click: sort either way, reset, and hide or bring back columns. */
+  const headerMenu = (e: ReactMouseEvent, col: Column<R>) => {
+    e.preventDefault();
+    const entries: MenuEntry[] = [];
+    if (col.sortValue) {
+      const sample = sorted.find((r) => col.sortValue!(r) != null);
+      const text = sample != null && typeof col.sortValue(sample) === "string";
+      const on = sort.key === col.key;
+      entries.push(
+        { kind: "item", id: "asc", label: text ? "Sort A to Z" : "Sort low to high", checked: on && sort.dir === 1, onSelect: () => setSort({ key: col.key, dir: 1 }) },
+        { kind: "item", id: "desc", label: text ? "Sort Z to A" : "Sort high to low", checked: on && sort.dir === -1, onSelect: () => setSort({ key: col.key, dir: -1 }) },
+      );
+    }
+    if (sort.key !== defaultSort.key || sort.dir !== defaultSort.dir) {
+      entries.push({ kind: "item", id: "reset", label: "Reset sort", checked: false, onSelect: () => setSort(defaultSort) });
+    }
+    if (id) {
+      const tail: MenuEntry[] = [];
+      if (!col.pin) tail.push({ kind: "item", id: "hide", label: `Hide ${col.title ?? col.label}`, checked: false, onSelect: () => setHidden((h) => [...h, col.key]) });
+      if (hidden.length > 0) {
+        tail.push({
+          kind: "item",
+          id: "show",
+          label: `Show ${hidden.length} hidden ${hidden.length === 1 ? "column" : "columns"}`,
+          checked: false,
+          onSelect: () => setHidden([]),
+        });
+      }
+      if (tail.length > 0 && entries.length > 0) entries.push({ kind: "separator", id: "s1" });
+      entries.push(...tail);
+    }
+    openMenu({ x: e.clientX, y: e.clientY, label: `${col.label} column`, entries });
+  };
+
   const edge = (i: number) => (scrolledX && i === layout.lastPin ? "var(--pin-edge)" : undefined);
   const pinnedCell = (i: number, background: string): CSSProperties | undefined => {
     const left = layout.pinLeft[i];
@@ -390,6 +466,7 @@ export function DataTable<R>({
   };
   // With bands the header is two grid rows; the column labels take the second.
   const headRow = layout.bands.length > 0 ? 2 : undefined;
+  const focusedObj = focused && object ? object(focused) : null;
 
   return (
     <div className="absolute inset-0 flex flex-col">
@@ -451,7 +528,14 @@ export function DataTable<R>({
             // A column with nothing to sort by is a label, not a control.
             if (!c.sortValue) {
               return (
-                <div key={c.key} role="columnheader" title={c.title} className={`${className} text-ink-muted`} style={style}>
+                <div
+                  key={c.key}
+                  role="columnheader"
+                  title={c.title}
+                  onContextMenu={id ? (e) => headerMenu(e, c) : undefined}
+                  className={`${className} text-ink-muted`}
+                  style={style}
+                >
                   <span className="truncate">{c.label}</span>
                 </div>
               );
@@ -467,6 +551,7 @@ export function DataTable<R>({
                 // would press this button instead of opening Peek.
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => sortBy(c)}
+                onContextMenu={(e) => headerMenu(e, c)}
                 className={`${className} ${active ? "text-ink" : "text-ink-muted hover:text-ink"}`}
                 style={style}
               >
@@ -510,9 +595,19 @@ export function DataTable<R>({
                   onMouseDown={(e) => {
                     if (e.button === 0) setFocusKey(rowKey(row));
                   }}
-                  onDoubleClick={onOpen ? (e) => onOpen(row, { newTab: e.ctrlKey || e.metaKey, side: e.shiftKey }) : undefined}
-                  draggable={drag ? true : undefined}
-                  onDragStart={drag ? (e) => startDrag(e, drag(row)) : undefined}
+                  onDoubleClick={openRow ? (e) => openRow(row, { newTab: e.ctrlKey || e.metaKey, side: e.shiftKey }) : undefined}
+                  onContextMenu={
+                    object
+                      ? (e) => {
+                          setFocusKey(rowKey(row));
+                          const o = object(row);
+                          if (o) objectMenu(e, o, local);
+                          else e.preventDefault();
+                        }
+                      : undefined
+                  }
+                  draggable={dragRow ? true : undefined}
+                  onDragStart={dragRow ? (e) => beginDrag(e, dragRow(row)) : undefined}
                   className="absolute left-0 top-0 grid w-full items-center border-b border-hairline/50"
                   style={{
                     gridTemplateColumns: layout.template,
@@ -548,7 +643,8 @@ export function DataTable<R>({
           onHeight={setPeekH}
           position={index + 1}
           total={sorted.length}
-          canOpen={!!onOpen}
+          canOpen={!!openRow}
+          actions={focusedObj ? <PeekActions obj={focusedObj} local={{}} /> : undefined}
         >
           {peek.body(focused)}
         </PeekPanel>

@@ -21,6 +21,8 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 import type { ThemeMode } from "../../../preload";
 import { Kbd } from "~/ui/kbd";
 import { Menu, type MenuEntry, type MenuItem } from "~/ui/menu";
+import type { Obj } from "~/objects/object";
+import { FavoriteDropSlot } from "~/objects/object-surfaces";
 import { usePersisted } from "~/ui/persisted";
 import { accountInitials, useAccount } from "./account";
 import type { Favorite } from "./favorites";
@@ -64,6 +66,7 @@ export function Sidebar({
   workspaces,
   onNewWorkspace,
   onRenameWorkspace,
+  onDropFavorite,
 }: {
   width: number;
   onResize: (w: number) => void;
@@ -81,6 +84,8 @@ export function Sidebar({
   workspaces: Workspaces;
   onNewWorkspace: () => void;
   onRenameWorkspace: () => void;
+  /** Something with a page, dragged onto the sidebar: star it. */
+  onDropFavorite?: (o: Obj) => void;
 }) {
   const { update, version } = useAccount();
   const [folded, setFolded] = usePersisted<string[]>(
@@ -116,6 +121,7 @@ export function Sidebar({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-2">
+        {onDropFavorite && <FavoriteDropSlot onDrop={onDropFavorite} />}
         {favorites.length > 0 && (
           <FavoritesSection
             favorites={favorites}

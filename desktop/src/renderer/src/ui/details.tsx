@@ -1,5 +1,8 @@
 import { ExternalLink, Link2, PanelRight } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
+import { beginDrag } from "~/objects/drag";
+import { objectDrag, type Obj } from "~/objects/object";
+import { useObjectMenu } from "~/objects/use-object-actions";
 import { useIsActive } from "~/shell/active";
 import { usePersisted } from "~/ui/persisted";
 import { useToast } from "~/ui/toast";
@@ -95,12 +98,16 @@ export function DetailRow({ label, title, children }: { label: string; title?: s
   );
 }
 
-/** A value that goes somewhere: the row's own ink, a quiet fill on hover. */
-export function DetailLink({ onOpen, title, children }: { onOpen: (how: OpenHow) => void; title?: string; children: ReactNode }) {
+/** A value that goes somewhere: the row's own ink, a quiet fill on hover. With its object, it right-clicks and drags as that object. */
+export function DetailLink({ onOpen, title, object, children }: { onOpen: (how: OpenHow) => void; title?: string; object?: Obj; children: ReactNode }) {
+  const menu = useObjectMenu();
   return (
     <button
       type="button"
       title={title}
+      draggable={object ? true : undefined}
+      onDragStart={object ? (e) => beginDrag(e, objectDrag(object)) : undefined}
+      onContextMenu={object ? (e) => menu(e, object) : undefined}
       onMouseDown={(e) => e.preventDefault()}
       onClick={(e) => onOpen(howOf(e))}
       className="-mx-1.5 flex min-w-0 max-w-[calc(100%+12px)] items-center gap-1.5 rounded-md px-1.5 py-[3px] text-left text-ink transition-colors hover:bg-[var(--row-hover)]"

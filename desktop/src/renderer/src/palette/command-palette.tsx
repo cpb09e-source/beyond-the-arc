@@ -1,6 +1,7 @@
 import { Command } from "cmdk";
-import { Search } from "lucide-react";
+import { ChevronRight, Search } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import type { Obj } from "~/objects/object";
 import { Kbd } from "~/ui/kbd";
 import { normalizeText } from "~/ui/text";
 import { prepare, score, type Prepared } from "./rank";
@@ -13,6 +14,11 @@ import { prepare, score, type Prepared } from "./rank";
  * keystroke and knows nothing about where a word matched, so it is switched off
  * and rank.ts decides. Groups follow their best match while typing, so "duke"
  * leads with a team and "dark" leads with the theme.
+ *
+ * TAB OPENS A RESULT'S ACTIONS, as Raycast's action panel does: on Michigan,
+ * Tab lists everything the object can do (the same list its right-click menu
+ * reads), searchable, and Esc comes back to the results. A right-click on a
+ * result does the same.
  *
  * ITS KEYS STOP HERE. The table moves on ↑ ↓ from any input, Peek listens for
  * Space and Esc, and [ ] step seasons; none of that may happen underneath an
@@ -38,6 +44,8 @@ export type PaletteItem = {
   collapse?: string;
   /** Folded ahead of time by lists too long to fold on every open. */
   prepared?: Prepared;
+  /** The object the row is, when it is one: Tab lists its actions. */
+  object?: Obj;
   /** `newTab` is true for Ctrl+Enter: open the result beside this tab instead of in it; `side` for Shift+Enter. */
   run: (how: { newTab: boolean; side?: boolean }) => void;
 };
@@ -54,12 +62,23 @@ export type PaletteGroup = {
 /** Rows made from the words themselves rather than found in a list. */
 const TYPED_GROUP: PaletteGroup = { id: "typed", heading: "Suggestions", limit: 5, showWhenEmpty: false };
 
+/** One result's actions, in the registry's groups (see ~/objects/actions.tsx). */
+const ACTION_GROUPS: PaletteGroup[] = [
+  { id: "act:open", heading: "Open", limit: 20, showWhenEmpty: true },
+  { id: "act:collect", heading: "Keep", limit: 20, showWhenEmpty: true },
+  { id: "act:goto", heading: "Go to", limit: 20, showWhenEmpty: true },
+  { id: "act:related", heading: "Related", limit: 20, showWhenEmpty: true },
+  { id: "act:filter", heading: "Filter", limit: 20, showWhenEmpty: true },
+  { id: "act:share", heading: "Share", limit: 20, showWhenEmpty: true },
+];
+
 export function CommandPalette({
   groups,
   items,
   placeholder,
   onClose,
   extra,
+  actionsFor,
 }: {
   groups: PaletteGroup[];
   items: PaletteItem[];
@@ -71,9 +90,12 @@ export function CommandPalette({
    * each one only exists because the query asked for it.
    */
   extra?: (query: string) => PaletteItem[];
+  /** An object's actions as rows, for Tab. */
+  actionsFor?: (o: Obj) => PaletteItem[];
 }) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState("");
+  const [drill, setDrill] = useState<{ item: PaletteItem; actions: PaletteItem[]; from: string; query: string } | null>(null);
   // Whatever had focus before the palette opened, captured before its input takes it.
   const [previous] = useState(() => document.activeElement as HTMLElement | null);
 
@@ -89,16 +111,19 @@ export function CommandPalette({
     [previous],
   );
 
+  const listGroups = drill ? ACTION_GROUPS : groups;
+  const listItems = drill ? drill.actions : items;
+
   // Bucketed by group once per list, so a keystroke walks only rows it can show.
   const byGroup = useMemo(() => {
     const m = new Map<string, Array<{ item: PaletteItem; p: Prepared }>>();
-    for (const item of items) {
+    for (const item of listItems) {
       let bucket = m.get(item.group);
       if (!bucket) m.set(item.group, (bucket = []));
       bucket.push({ item, p: item.prepared ?? prepare(item) });
     }
     return m;
-  }, [items]);
+  }, [listItems]);
 
   const results = useMemo(() => {
     const q = normalizeText(query);
@@ -107,7 +132,7 @@ export function CommandPalette({
     // or player is listed instead of only its best one.
     const namesSeason = words.some((w) => /^\d{2,4}$/.test(w));
     const out: Array<{ group: PaletteGroup; rows: PaletteItem[]; best: number; order: number }> = [];
-    groups.forEach((group, order) => {
+    listGroups.forEach((group, order) => {
       if (words.length === 0 && !group.showWhenEmpty) return;
       const scored: Array<{ s: number; item: PaletteItem }> = [];
       for (const { item, p } of byGroup.get(group.id) ?? []) {
@@ -130,7 +155,7 @@ export function CommandPalette({
       out.push({ group, rows, best: scored[0]!.s, order });
     });
     if (words.length > 0) out.sort((a, b) => b.best - a.best || a.order - b.order);
-    const typed = extra ? extra(query) : [];
+    const typed = extra && !drill ? extra(query) : [];
     if (typed.length > 0) {
       const entry = { group: TYPED_GROUP, rows: typed, best: Number.POSITIVE_INFINITY, order: -1 };
       // Four words or more read as a sentence, and what the sentence asks for
@@ -139,16 +164,33 @@ export function CommandPalette({
       else out.push(entry);
     }
     return out;
-  }, [byGroup, groups, query, extra]);
+  }, [byGroup, listGroups, query, extra, drill]);
 
   // The highlight stays on the row it was on while that row is still listed,
   // and falls to the first row otherwise.
   const flat = results.flatMap((r) => r.rows);
   const current = flat.some((r) => r.id === active) ? active : (flat[0]?.id ?? "");
+  const highlighted = flat.find((r) => r.id === current);
 
   const pick = (item: PaletteItem, how: { newTab: boolean; side?: boolean } = { newTab: false }) => {
     onClose();
     item.run(how);
+  };
+
+  /** Into a result's actions, remembering where the results were. */
+  const enter = (item: PaletteItem | undefined) => {
+    if (!item?.object || !actionsFor) return false;
+    setDrill({ item, actions: actionsFor(item.object), from: item.id, query });
+    setQuery("");
+    setActive("");
+    return true;
+  };
+  /** Back to the results, as they were. */
+  const leave = () => {
+    if (!drill) return;
+    setQuery(drill.query);
+    setActive(drill.from);
+    setDrill(null);
   };
 
   return (
@@ -161,19 +203,27 @@ export function CommandPalette({
         if (e.key === "Enter" && (e.ctrlKey || e.metaKey || e.shiftKey)) {
           e.preventDefault();
           e.stopPropagation();
-          const item = flat.find((r) => r.id === current);
-          if (item) pick(item, e.shiftKey && !(e.ctrlKey || e.metaKey) ? { newTab: false, side: true } : { newTab: true });
+          if (highlighted) pick(highlighted, e.shiftKey && !(e.ctrlKey || e.metaKey) ? { newTab: false, side: true } : { newTab: true });
+        } else if (e.key === "Tab" && !e.ctrlKey && !e.altKey && !e.metaKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (drill) leave();
+          else enter(highlighted);
         }
       }}
       onKeyDown={(e) => {
         e.stopPropagation();
         if (e.key === "Escape") {
           e.preventDefault();
-          // Esc clears first, then closes, as the filter box does.
+          // Esc clears first, then steps out of a result's actions, then closes, as the filter box does.
           if (query) {
             setQuery("");
             setActive("");
-          } else onClose();
+          } else if (drill) leave();
+          else onClose();
+        } else if (e.key === "Backspace" && drill && !query) {
+          e.preventDefault();
+          leave();
         } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
           e.preventDefault();
           onClose();
@@ -191,6 +241,19 @@ export function CommandPalette({
         <Command label="Search" shouldFilter={false} loop value={current} onValueChange={setActive}>
           <div className="flex h-[54px] items-center gap-3 border-b border-hairline px-[18px]">
             <Search size={17} strokeWidth={2} className="shrink-0 text-ink-muted" />
+            {drill && (
+              <button
+                type="button"
+                title="Back to the results  ·  Esc"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={leave}
+                className="flex h-[28px] min-w-0 max-w-[260px] shrink-0 items-center gap-1.5 rounded-md bg-[var(--menu-active)] pl-1.5 pr-2 text-[13px] text-ink"
+              >
+                <span className="flex w-5 shrink-0 items-center justify-center">{drill.item.leading}</span>
+                <span className="truncate">{drill.item.title}</span>
+                <ChevronRight size={13} strokeWidth={2} className="shrink-0 text-ink-muted" />
+              </button>
+            )}
             <Command.Input
               autoFocus
               value={query}
@@ -199,7 +262,7 @@ export function CommandPalette({
                 // A new query highlights its best match, not the row the old one had.
                 setActive("");
               }}
-              placeholder={placeholder}
+              placeholder={drill ? "Search actions" : placeholder}
               spellCheck={false}
               className="h-full min-w-0 flex-1 bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-muted"
             />
@@ -209,7 +272,7 @@ export function CommandPalette({
           <Command.List className="max-h-[min(500px,calc(100vh-300px))] scroll-py-2 overflow-y-auto overscroll-contain p-1.5">
             {results.length === 0 ? (
               <p className="px-3 py-9 text-center text-[13px] text-ink-muted">
-                Nothing matches &ldquo;{query.trim()}&rdquo;.
+                {drill && !query.trim() ? "Nothing to do with this one yet." : <>Nothing matches &ldquo;{query.trim()}&rdquo;.</>}
               </p>
             ) : (
               results.map(({ group, rows }) => (
@@ -223,7 +286,10 @@ export function CommandPalette({
                       key={item.id}
                       value={item.id}
                       onSelect={() => pick(item)}
-                      className="flex h-[40px] cursor-default items-center gap-3 rounded-lg px-3 text-[13px] text-ink-soft data-[selected=true]:bg-[var(--menu-active)] data-[selected=true]:text-ink"
+                      onContextMenu={(e) => {
+                        if (!drill && enter(item)) e.preventDefault();
+                      }}
+                      className="group/row flex h-[40px] cursor-default items-center gap-3 rounded-lg px-3 text-[13px] text-ink-soft data-[selected=true]:bg-[var(--menu-active)] data-[selected=true]:text-ink"
                     >
                       <span className="flex w-5 shrink-0 items-center justify-center text-ink-muted">{item.leading}</span>
                       <span className="min-w-0 flex-1 truncate">
@@ -232,6 +298,12 @@ export function CommandPalette({
                       </span>
                       {item.trailing != null && (
                         <span className="flex shrink-0 items-center gap-1 text-[12px] text-ink-muted">{item.trailing}</span>
+                      )}
+                      {!drill && item.object && actionsFor && (
+                        <span className="hidden shrink-0 items-center gap-1.5 text-[11px] text-ink-muted group-data-[selected=true]/row:flex">
+                          <Kbd>Tab</Kbd>
+                          actions
+                        </span>
                       )}
                     </Command.Item>
                   ))}
@@ -248,16 +320,31 @@ export function CommandPalette({
             </span>
             <span className="flex items-center gap-1.5">
               <Kbd>Enter</Kbd>
-              open
+              {drill ? "run" : "open"}
             </span>
-            <span className="flex items-center gap-1.5">
-              <Kbd>Ctrl Enter</Kbd>
-              new tab
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Kbd>Shift Enter</Kbd>
-              to the side
-            </span>
+            {drill ? (
+              <span className="flex items-center gap-1.5">
+                <Kbd>Esc</Kbd>
+                back to results
+              </span>
+            ) : (
+              <>
+                <span className="flex items-center gap-1.5">
+                  <Kbd>Ctrl Enter</Kbd>
+                  new tab
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Kbd>Shift Enter</Kbd>
+                  to the side
+                </span>
+                {actionsFor && (
+                  <span className="flex items-center gap-1.5">
+                    <Kbd>Tab</Kbd>
+                    actions
+                  </span>
+                )}
+              </>
+            )}
             <span className="ml-auto flex items-center gap-1.5">
               <Kbd>Ctrl K</Kbd>
               close

@@ -1,4 +1,5 @@
 import { ArrowRight, GitCompareArrows, X } from "lucide-react";
+import { carriesObject, droppedObject, objectDrag, type DragSpec, type Obj } from "~/objects/object";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { TeamLogo } from "~/ui/logo";
 import { usePersisted } from "~/ui/persisted";
@@ -67,12 +68,16 @@ export function parseCompareQuery(query: string): { kind: CompareItem["kind"]; r
   return { kind, refs };
 }
 
-/** What a dragged row carries to the tray. */
-export const compareDrag = (item: CompareItem) => ({
-  type: COMPARE_DRAG_TYPE,
-  data: JSON.stringify(item),
-  label: `${item.name}  ${shortSeason(item.year)}`,
-});
+/** What a dragged row carries to the tray: the object itself, which the tray and every other drop target read. */
+export const compareDrag = (item: CompareItem): DragSpec => objectDrag(item);
+
+/** The tray's item for a dropped object: a team or player, or whose game a game log row was. */
+export function compareItemOf(o: Obj): CompareItem | null {
+  if (o.kind === "team") return { kind: "team", name: o.name, logoId: o.logoId, year: o.year };
+  if (o.kind === "player") return { kind: "player", bartId: o.bartId, name: o.name, hasPhoto: o.hasPhoto, year: o.year };
+  if (o.kind === "log-game") return o.player ? { kind: "player", ...o.player, year: o.year } : { kind: "team", name: o.team, logoId: o.teamLogoId, year: o.year };
+  return null;
+}
 
 type Compare = {
   items: CompareItem[];
@@ -146,7 +151,7 @@ export function CompareDock({
   const [over, setOver] = useState(false);
 
   useEffect(() => {
-    const carries = (e: DragEvent) => !!e.dataTransfer && Array.from(e.dataTransfer.types).includes(COMPARE_DRAG_TYPE);
+    const carries = (e: DragEvent) => carriesObject(e.dataTransfer);
     const onEnter = (e: DragEvent) => {
       if (carries(e)) setDragging(true);
     };
@@ -173,7 +178,7 @@ export function CompareDock({
         role="region"
         aria-label="Compare tray"
         onDragOver={(e) => {
-          if (!Array.from(e.dataTransfer.types).includes(COMPARE_DRAG_TYPE)) return;
+          if (!carriesObject(e.dataTransfer)) return;
           e.preventDefault();
           e.dataTransfer.dropEffect = "copy";
           setOver(true);
@@ -181,12 +186,9 @@ export function CompareDock({
         onDragLeave={() => setOver(false)}
         onDrop={(e) => {
           e.preventDefault();
-          try {
-            const v: unknown = JSON.parse(e.dataTransfer.getData(COMPARE_DRAG_TYPE));
-            if (isCompareItem(v)) add(v);
-          } catch {
-            /* not ours */
-          }
+          const o = droppedObject(e.dataTransfer);
+          const item = o ? compareItemOf(o) : null;
+          if (item) add(item);
           setOver(false);
           setDragging(false);
         }}

@@ -2,8 +2,7 @@ import { useEffect, useMemo } from "react";
 import { TopHundredPill } from "@/components/portal/top-hundred-pill";
 import { loadPlayerSeason, type Player, type PlayerSeason } from "~/data/player-model";
 import { SOURCE_LABEL, useLoaded } from "~/data/use-corpus";
-import { compareDrag, useCompare } from "~/shell/compare";
-import { useShell } from "~/shell/shell-context";
+import type { Obj } from "~/objects/object";
 import { useTabTitle } from "~/shell/tab-title";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
@@ -12,6 +11,7 @@ import { DataTable, type Column } from "~/table/data-table";
 import { seasonLabel } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 import { ClassBadge, PlayerPhoto } from "~/ui/player-photo";
+import { parseScoped, sameName } from "~/ui/scoped-query";
 import { matchesQuery } from "~/ui/text";
 import { statColumns } from "./player-columns";
 import { PlayerPeekBody } from "./player-peek";
@@ -22,6 +22,9 @@ import { PlayerPeekBody } from "./player-peek";
  *
  * WIDE ON PURPOSE. Seventeen stats do not fit beside a name at 1440px, so the
  * rank and the player stay pinned while the stats scroll under them.
+ *
+ * A ROW IS A PLAYER OBJECT; the filter also takes "team: Duke", "conf: SEC" and
+ * "player: Cooper Flagg", which is where "Duke players" and the like land.
  */
 
 const ROW_H = 42;
@@ -78,8 +81,6 @@ const COLUMNS_NO_EWINS: Column<Player>[] = COLUMNS.filter((c) => c.key !== "ewin
 export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }: ViewProps) {
   const [state, retry] = useLoaded(`player-season|${year}`, () => loadPlayerSeason(year));
   const setStatus = useSetStatus();
-  const { openRecord } = useShell();
-  const { add } = useCompare();
   useTabTitle(query.trim() ? `Players: ${query.trim()}` : null);
 
   const season: PlayerSeason | null = state.status === "ready" ? state.value : null;
@@ -87,15 +88,20 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }:
   // leaderboard floor leaves out, and then there is no row to land on.
   const target = focus?.kind === "player" && focus.year === year ? focus : null;
   const landing = target && season ? season.players.find((p) => p.bartId === target.bartId) : undefined;
-  const rows = useMemo(
-    () =>
-      season
-        ? season.players.filter((p) =>
-            matchesQuery(query, p.name, p.team, p.confLabel, p.conf, p.cls ?? "", p.position ?? "", p.hometown ?? ""),
-          )
-        : [],
-    [season, query],
-  );
+  const rows = useMemo(() => {
+    if (!season) return [];
+    const scoped = parseScoped(query);
+    if (!scoped) {
+      return season.players.filter((p) =>
+        matchesQuery(query, p.name, p.team, p.confLabel, p.conf, p.cls ?? "", p.position ?? "", p.hometown ?? ""),
+      );
+    }
+    const v = scoped.value;
+    if (scoped.scope === "team") return season.players.filter((p) => sameName(p.team, v));
+    if (scoped.scope === "conf") return season.players.filter((p) => sameName(p.confLabel, v) || sameName(p.conf, v));
+    if (scoped.scope === "player") return season.players.filter((p) => sameName(p.name, v));
+    return [];
+  }, [season, query]);
 
   useEffect(() => {
     if (state.status === "ready") setStatus(`${SOURCE_LABEL[state.source]} in ${state.ms} ms`);
@@ -109,6 +115,11 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }:
     : target && !landing
       ? `${target.name} is not on the ${seasonLabel(year)} leaderboard`
       : `${query.trim() && rows.length !== total ? `${rows.length.toLocaleString()} of ${total.toLocaleString()}` : total.toLocaleString()} players · ${season.minGames}+ games${season.estimated ? " · EPM estimated" : ""}`;
+
+  const object = (p: Player): Obj | null =>
+    p.bartId == null
+      ? null
+      : { kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto, year, team: p.team, teamLogoId: p.teamLogoId, conf: p.conf };
 
   return (
     <>
@@ -124,6 +135,7 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }:
         {state.status === "ready" ? (
           <DataTable
             key={year}
+            id="player-explorer"
             rows={rows}
             columns={state.value.hasEwins ? COLUMNS : COLUMNS_NO_EWINS}
             rowKey={playerKey}
@@ -135,19 +147,7 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }:
             peek={{ label: (p) => p.name, body: (p) => <PlayerPeekBody season={state.value} player={p} /> }}
             landOn={landing && target ? { key: landing.id, nonce: target.nonce } : undefined}
             onLanded={onLanded}
-            drag={(p) =>
-              p.bartId == null ? null : compareDrag({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto, year })
-            }
-            keys={{
-              c: (p) => {
-                if (p.bartId != null) add({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto, year });
-              },
-            }}
-            onOpen={(p, how) => {
-              if (p.bartId != null) {
-                openRecord({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, side: how.side, year });
-              }
-            }}
+            object={object}
           />
         ) : state.status === "loading" ? (
           <TableSkeleton rowHeight={ROW_H} label="Loading players" />

@@ -255,9 +255,12 @@ export function PortalView({ year, query, setQuery }: ViewProps) {
               ariaLabel="Transfers"
               empty={<NoMatches query={query} noun="transfer" />}
               peek={{ label: (e) => e.name, body: (e) => <PortalPeekBody entry={e} /> }}
-              onOpen={(e, how) => {
+              id="portal"
+              object={(e) => {
                 const record = playerRecord(e);
-                if (record) openRecord(record, { newTab: how.newTab, side: how.side, year: e.last_year ?? SEASON_CEIL });
+                return record?.kind === "player"
+                  ? { ...record, year: e.last_year ?? SEASON_CEIL, team: e.team_from ?? undefined, conf: e.conf_from ?? undefined }
+                  : null;
               }}
             />
           )}

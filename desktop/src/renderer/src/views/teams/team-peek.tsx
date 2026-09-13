@@ -40,21 +40,6 @@ export function TeamPeekBody({ season, team }: { season: Season; team: Team }) {
       ) : (
         <p className="border-t border-hairline px-4 py-2.5 text-[12px] text-ink-muted">No national ranks for this season.</p>
       )}
-
-      {season.zone ? (
-        <div className="flex items-center justify-between border-t border-hairline px-4 py-2.5 text-[12.5px]">
-          <span className="text-ink-soft">Contender zone</span>
-          {team.inZone ? (
-            <span className="font-medium text-good">Inside the trapezoid</span>
-          ) : (
-            <span className="text-ink-muted">Outside the trapezoid</span>
-          )}
-        </div>
-      ) : (
-        <div className="border-t border-hairline px-4 py-2.5 text-[12px] text-ink-muted">
-          No contender zone this season: its adjusted net rating is withheld.
-        </div>
-      )}
     </>
   );
 }

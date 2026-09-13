@@ -3,6 +3,7 @@ import { ALL_SEASONS } from "@/lib/seasons";
 import { teamSlug } from "@/lib/team-slug";
 import { coachSlug } from "@/lib/coach-slug";
 import type { SearchData } from "~/data/search-model";
+import { coachObj } from "~/objects/object";
 import type { RecordRef } from "~/shell/views";
 import { CoachAvatar } from "~/ui/coach-avatar";
 import { seasonLabel } from "~/ui/format";
@@ -184,6 +185,7 @@ export function coachItems(openRecord: OpenRecord): PaletteItem[] {
       title: name,
       subtitle: [c.latest.team, span].filter(Boolean).join(" · "),
       keywords: ["coach", ...c.schools],
+      object: coachObj(name, c.latest.team),
       // Under a school or a player who matches the same way; the most recent coaches first.
       weight: 18 + c.latest.year / 100,
       leading: <CoachAvatar name={name} team={c.latest.team} size={17} />,

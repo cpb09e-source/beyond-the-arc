@@ -1,4 +1,4 @@
-import { isRecordRef, sameRecord, type RecordRef } from "./views";
+import { isRecordRef, sameRecord, viewById, type RecordRef } from "./views";
 
 /**
  * A favorite: a place worth coming back to, starred from a tab.
@@ -20,8 +20,12 @@ export type Favorite = {
 
 type Place = { viewId: string; year: number; query: string; record?: RecordRef };
 
+/** A seasonless view (a coach, the Win Calculator) is the same place whatever season the tab last held. */
 export const samePlace = (a: Place, b: Place): boolean =>
-  a.viewId === b.viewId && a.year === b.year && a.query === b.query && sameRecord(a.record, b.record);
+  a.viewId === b.viewId &&
+  (a.year === b.year || !!viewById(a.viewId).seasonless) &&
+  a.query === b.query &&
+  sameRecord(a.record, b.record);
 
 let seq = 0;
 

@@ -39,6 +39,8 @@ import {
   type TeamNames,
 } from "./board-model";
 import { DayPicker } from "./day-picker";
+import { objectDrag } from "~/objects/object";
+import { useObjectMenu } from "~/objects/use-object-actions";
 import { GameCard } from "./game-card";
 
 /**
@@ -96,6 +98,7 @@ export function ScoreboardView({ query, setQuery }: ViewProps) {
   const visible = ranked.length + groups.reduce((n, [, list]) => n + list.length, 0);
 
   const { openRecord } = useShell();
+  const menu = useObjectMenu();
   const openGame = (g: ScoreGame, how: { newTab: boolean; side: boolean }) =>
     openRecord(gameRecord(season, g, names), { newTab: how.newTab, side: how.side, year: season });
 
@@ -224,14 +227,14 @@ export function ScoreboardView({ query, setQuery }: ViewProps) {
             {ranked.length > 0 && (
               <CardSection label="Top 25" accent count={ranked.length}>
                 {ranked.map((g) => (
-                  <GameCard key={`r-${g.id}`} g={g} names={names} focused={focusable(g.id)} onFocus={() => setFocusId(g.id)} onOpen={(how) => openGame(g, how)} />
+                  <GameCard key={`r-${g.id}`} g={g} names={names} focused={focusable(g.id)} onFocus={() => setFocusId(g.id)} onOpen={(how) => openGame(g, how)} onMenu={(e) => menu(e, gameRecord(season, g, names))} drag={objectDrag(gameRecord(season, g, names))} />
                 ))}
               </CardSection>
             )}
             {groups.map(([key, list]) => (
               <CardSection key={key} label={GROUP_LABEL[key] ?? key} count={list.length}>
                 {list.map((g) => (
-                  <GameCard key={g.id} g={g} names={names} focused={focusable(g.id)} onFocus={() => setFocusId(g.id)} onOpen={(how) => openGame(g, how)} />
+                  <GameCard key={g.id} g={g} names={names} focused={focusable(g.id)} onFocus={() => setFocusId(g.id)} onOpen={(how) => openGame(g, how)} onMenu={(e) => menu(e, gameRecord(season, g, names))} drag={objectDrag(gameRecord(season, g, names))} />
                 ))}
               </CardSection>
             ))}

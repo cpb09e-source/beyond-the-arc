@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { T, TEAM_GAME_PRESETS, TEAM_GAME_VIEWS, passesTeamFilters, teamGameViewByKey } from "@/lib/team-game-index";
-import { logDate, useOpenGame } from "~/data/game-link";
+import { logDate } from "~/data/game-link";
 import { loadTeamGameSeason, type TeamGame } from "~/data/team-game-model";
+import type { Obj } from "~/objects/object";
 import { SOURCE_LABEL, useLoaded } from "~/data/use-corpus";
 import { Picker } from "~/shell/picker";
 import { ShortcutBar } from "~/shell/shortcut-bar";
-import { useShell } from "~/shell/shell-context";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
 import { DataTable, type Column } from "~/table/data-table";
 import { TeamLogo } from "~/ui/logo";
+import { parseScoped, sameName } from "~/ui/scoped-query";
 import { normalizeText } from "~/ui/text";
 import { statColumns } from "./game-columns";
 import { GamePeekBody } from "./game-peek";
@@ -111,11 +112,22 @@ export const TEAM_GAME_IDENTITY: Column<TeamGame>[] = [
   },
 ];
 
+/** A row as the object it is: one team's game, found on its night's slate when it is opened. */
+export const teamLogObject = (g: TeamGame, epochMs: number, year: number): Obj => ({
+  kind: "log-game",
+  year,
+  date: logDate(epochMs, g.row[T.d]!),
+  team: g.team,
+  teamLogoId: g.teamLogoId,
+  opp: g.opp,
+  oppLogoId: g.oppLogoId,
+  site: g.site,
+  summary: `${g.team} ${g.pts}, ${g.opp} ${g.pa}${g.ot ? " (OT)" : ""}`,
+});
+
 export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
   const [state, retry] = useLoaded(`team-games|${year}`, () => loadTeamGameSeason(year));
   const setStatus = useSetStatus();
-  const { openRecord } = useShell();
-  const openGame = useOpenGame();
   const [viewKey, setViewKey] = useState(readView);
   const [on, setOn] = useState<string[]>([]);
 
@@ -129,10 +141,18 @@ export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
   const filters = useMemo(() => TEAM_GAME_PRESETS.filter((p) => on.includes(p.key)).flatMap((p) => p.filters), [on]);
   const rows = useMemo(() => {
     if (!season) return [];
-    const words = normalizeText(query).split(" ").filter(Boolean);
+    const scoped = parseScoped(query);
+    const words = scoped ? [] : normalizeText(query).split(" ").filter(Boolean);
+    const inScope = (g: TeamGame): boolean =>
+      !scoped ||
+      (scoped.scope === "team"
+        ? sameName(g.team, scoped.value)
+        : scoped.scope === "opponents"
+          ? sameName(g.opp, scoped.value)
+          : scoped.scope === "conf" && (sameName(g.confLabel, scoped.value) || sameName(g.conf, scoped.value)));
     return season.games.filter(
       (g) =>
-        (filters.length === 0 || passesTeamFilters(g.row, filters)) && words.every((w) => g.hay.includes(w)),
+        (filters.length === 0 || passesTeamFilters(g.row, filters)) && inScope(g) && words.every((w) => g.hay.includes(w)),
     );
   }, [season, filters, query]);
 
@@ -184,11 +204,8 @@ export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
             rowHeight={ROW_H}
             defaultSort={{ key: sortKey, dir: -1 }}
             tieBreak={latestFirst}
-            onOpen={(g, how) =>
-              openGame({ date: logDate(state.value.pack.epochMs, g.row[T.d]!), team: g.team, opp: g.opp }, how, () =>
-                openRecord({ kind: "team", name: g.team, logoId: g.teamLogoId }, { newTab: how.newTab, side: how.side, year }),
-              )
-            }
+            id="team-game-log"
+            object={(g) => teamLogObject(g, state.value.pack.epochMs, year)}
             ariaLabel="Team games"
             empty={
               query.trim() ? (

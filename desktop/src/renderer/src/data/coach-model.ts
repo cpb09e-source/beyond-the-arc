@@ -15,7 +15,7 @@ import { ALL_SEASONS, isUsableSeason, PREVIEW_SEASON } from "@/lib/seasons";
 import type { StaticTeamSeasonRow } from "@/lib/static-data";
 import type { DataSource } from "../../../preload";
 import { seasonLabel } from "~/ui/format";
-import { useLoaded, type CorpusState } from "./use-corpus";
+import { loadOnce, useLoaded, type CorpusState } from "./use-corpus";
 
 /**
  * Every coach, built the way the site builds /coaches.
@@ -84,6 +84,9 @@ async function readBook(): Promise<{ value: CoachBook; source: DataSource }> {
 export function useCoachBook(): [CorpusState<CoachBook>, () => void] {
   return useLoaded("coach-book", readBook);
 }
+
+/** The same book outside a component: an action copying a coach's line. */
+export const loadCoachBook = (): Promise<CoachBook> => loadOnce("coach-book", readBook);
 
 /** A 1-based rank among `total` as a percentile, 100 = first. */
 export const rankPct = (rank: number, total: number): number | null =>
