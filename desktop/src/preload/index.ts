@@ -25,6 +25,8 @@ export type Corpus =
   | "game-logs"
   | "game-box"
   | "team-ratings"
+  | "player-splits"
+  | "team-splits"
   | "teams-index"
   | "players-index"
   | "search-index";

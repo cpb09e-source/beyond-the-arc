@@ -6,15 +6,6 @@ export const howOf = (e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean
   side: e.shiftKey,
 });
 
-/**
- * A team color as text. Brand colors run from near-white to near-black, and
- * either end vanishes as type on one theme or the other: Gonzaga's navy on the
- * dark ground, a pale gold on paper. The hue and chroma stay the team's; the
- * lightness is held inside a band each theme sets (--team-l-min, --team-l-max
- * in styles.css), dark enough to read on paper and light enough on the dark.
- */
-export const teamInk = (hex: string): string => `oklch(from ${hex} clamp(var(--team-l-min), l, var(--team-l-max)) c h)`;
-
 /** A name that goes somewhere when it can, and is plain text when it cannot. */
 export function NameLink({
   text,

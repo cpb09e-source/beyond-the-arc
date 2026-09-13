@@ -1,25 +1,25 @@
 import { useMemo, useState } from "react";
-import { PercentileChip } from "@/components/percentile-chip";
 import { coachSlug } from "@/lib/coach-slug";
 import { ALL_SEASONS } from "@/lib/seasons";
-import type { RankedStat, StaticTeamSeasonRow } from "@/lib/static-data";
-import { T, TEAM_GAME_VIEWS } from "@/lib/team-game-index";
+import type { StaticTeamSeasonRow } from "@/lib/static-data";
+import { T, TEAM_GAME_VIEWS, teamGameViewByKey } from "@/lib/team-game-index";
 import { loadPlayerSeason, type Player } from "~/data/player-model";
 import { logDate, useOpenGame } from "~/data/game-link";
 import { loadTeamGameSeason, type TeamGame } from "~/data/team-game-model";
 import { byCoach, ncaaLabel, runLabel, teamHistory } from "~/data/team-history";
-import { ranksFor, shapeSeason, type Season, type Team } from "~/data/team-model";
+import { shapeSeason, type Season, type Team } from "~/data/team-model";
 import { useCorpus, useLoaded } from "~/data/use-corpus";
 import { SeasonSwitcher } from "~/shell/season-switcher";
 import { coachObj, type Obj } from "~/objects/object";
 import { RailActions, RecordActions } from "~/objects/object-surfaces";
+import { Picker } from "~/shell/picker";
 import { useShell } from "~/shell/shell-context";
 import { LoadError, TableSkeleton } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
 import { DataTable, type Column } from "~/table/data-table";
 import { ConfLogo } from "~/ui/conf-logo";
 import { DetailLink, DetailRow, DetailSection, DetailsRail, DetailsToggle, howOf, useDetailsRail, type OpenHow } from "~/ui/details";
-import { fmtRanked, num1, pct1, seasonLabel, signed1 } from "~/ui/format";
+import { num1, pct1, seasonLabel, signed1 } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 import { ClassBadge, PlayerPhoto } from "~/ui/player-photo";
 import { HighlightRow, ProfileHeader, ProfileNote, ProfileTabs, SectionTitle } from "~/ui/profile";
@@ -28,15 +28,16 @@ import { PlayerPeekBody } from "~/views/players/player-peek";
 import { statColumns as gameStatColumns } from "~/views/team-games/game-columns";
 import { GamePeekBody } from "~/views/team-games/game-peek";
 import { TEAM_GAME_IDENTITY, teamLogObject } from "~/views/team-games/team-games-view";
+import { TeamStats } from "./team-stats";
 
 /**
- * A team's page: who they were in a season, what they were best and worst at
- * nationally, how their record splits, every game, and the roster.
+ * A team's page: who they were in a season, how their record splits, their
+ * latest games, every number the site holds on them, every game, and the
+ * roster.
  *
- * NOTHING ON IT IS NEW MATH. The ranks are the site's nationalRanksForTeam, the
- * chips are the explorer's percentiles, the game rows and their chips are the
- * Team Game Log's, the roster is the Player Explorer's numbers. The page only
- * gathers one team out of each.
+ * NOTHING ON IT IS NEW MATH. The stat cards are the site's Team Stats panel
+ * (./team-stats.tsx), the game rows are the Team Game Log's, the roster is the
+ * Player Explorer's numbers. The page only gathers one team out of each.
  *
  * THE SEASON IS THE TAB'S, like every view: [ and ] walk this team through its
  * seasons without leaving the page.
@@ -55,7 +56,19 @@ const GAME_COLUMNS_IDENTITY: Column<TeamGame>[] = (() => {
   const pick = (key: string) => TEAM_GAME_IDENTITY.find((c) => c.key === key)!;
   return [{ ...pick("date"), pin: true }, pick("result"), pick("site"), pick("opp")];
 })();
-const OVERVIEW_GAME_KEYS = TEAM_GAME_VIEWS[0]!.keys;
+
+const GAME_VIEW_KEY = "bta.profile.teamGames.view";
+const GAME_VIEW_OPTIONS = TEAM_GAME_VIEWS.map((v) => ({ key: v.key, label: v.label, desc: v.desc }));
+
+/** Every column unless the reader picked a narrower view; the pick is remembered. */
+function readGameView(): string {
+  try {
+    const v = localStorage.getItem(GAME_VIEW_KEY);
+    return v ? teamGameViewByKey(v).key : "everything";
+  } catch {
+    return "everything";
+  }
+}
 
 const ROSTER_IDENTITY: Column<Player>[] = [
   {
@@ -81,6 +94,8 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
   const name = record?.kind === "team" ? record.name : "";
   const [tab, setTab] = useState<TabKey>("overview");
   const [detailsOpen, toggleDetails] = useDetailsRail();
+  const [gameViewKey, setGameViewKey] = useState(readGameView);
+  const gameView = teamGameViewByKey(gameViewKey);
 
   const [teamsState, retry] = useCorpus("teams", year, shapeTeams);
   const [gamesState] = useLoaded(`team-games|${year}`, () => loadTeamGameSeason(year));
@@ -113,13 +128,22 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
   };
 
   const gameColumns = useMemo(
-    () => (gameSeason ? [...GAME_COLUMNS_IDENTITY, ...gameStatColumns(gameSeason.pack, OVERVIEW_GAME_KEYS)] : []),
-    [gameSeason],
+    () => (gameSeason ? [...GAME_COLUMNS_IDENTITY, ...gameStatColumns(gameSeason.pack, gameView.keys, { chips: false })] : []),
+    [gameSeason, gameView],
   );
   const rosterCols = useMemo(
     () => (playerSeason ? [...ROSTER_IDENTITY, ...rosterColumns(playerSeason.hasEwins)] : []),
     [playerSeason],
   );
+
+  const pickGameView = (key: string) => {
+    setGameViewKey(key);
+    try {
+      localStorage.setItem(GAME_VIEW_KEY, key);
+    } catch {
+      /* remembered for this session only */
+    }
+  };
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -198,30 +222,37 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
             {name} has no season in {seasonLabel(year)}. Press [ or ] to step to another season.
           </ProfileNote>
         ) : tab === "overview" ? (
-          <TeamOverview season={season} team={team} split={split} games={games} onGame={openLogGame} />
+          <TeamOverview year={year} team={team} split={split} games={games} onGame={openLogGame} />
         ) : tab === "games" ? (
-          <div className="relative min-h-0 flex-1">
-            {gameSeason ? (
-              <DataTable
-                key={`games:${year}:${name}`}
-                rows={games}
-                columns={gameColumns}
-                rowKey={gameKey}
-                defaultSort={{ key: "date", dir: 1 }}
-                tieBreak={inOrder}
-                ariaLabel={`${name} games`}
-                empty={<ProfileNote>No games for {name} in {seasonLabel(year)}.</ProfileNote>}
-                peek={{
-                  label: (g) => `${g.team} ${g.site === "away" ? "at" : "vs"} ${g.opp}`,
-                  body: (g) => <GamePeekBody season={gameSeason} game={g} />,
-                }}
-                object={(g) => teamLogObject(g, gameSeason.pack.epochMs, year)}
-              />
-            ) : gamesState.status === "error" ? (
-              <LoadError year={year} reason={gamesState.reason} message={gamesState.message} what="Team games" onRetry={() => {}} />
-            ) : (
-              <TableSkeleton rowHeight={42} label="Loading games" />
-            )}
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex h-[46px] shrink-0 items-center gap-3 px-6">
+              <Picker label="View" value={gameView.key} options={GAME_VIEW_OPTIONS} onChange={pickGameView} />
+              <span className="min-w-0 truncate text-[12px] text-ink-muted">{gameView.desc}</span>
+            </div>
+            <div className="relative min-h-0 flex-1 border-t border-hairline">
+              {gameSeason ? (
+                <DataTable
+                  key={`games:${year}:${name}:${gameView.key}`}
+                  rows={games}
+                  columns={gameColumns}
+                  rowKey={gameKey}
+                  rowHeight={38}
+                  defaultSort={{ key: "date", dir: 1 }}
+                  tieBreak={inOrder}
+                  ariaLabel={`${name} games`}
+                  empty={<ProfileNote>No games for {name} in {seasonLabel(year)}.</ProfileNote>}
+                  peek={{
+                    label: (g) => `${g.team} ${g.site === "away" ? "at" : "vs"} ${g.opp}`,
+                    body: (g) => <GamePeekBody season={gameSeason} game={g} />,
+                  }}
+                  object={(g) => teamLogObject(g, gameSeason.pack.epochMs, year)}
+                />
+              ) : gamesState.status === "error" ? (
+                <LoadError year={year} reason={gamesState.reason} message={gamesState.message} what="Team games" onRetry={() => {}} />
+              ) : (
+                <TableSkeleton rowHeight={38} label="Loading games" />
+              )}
+            </div>
           </div>
         ) : (
           <div className="relative min-h-0 flex-1">
@@ -289,117 +320,84 @@ const SPLIT_ROWS: Array<[label: string, key: keyof Splits]> = [
 ];
 
 function TeamOverview({
-  season,
+  year,
   team,
   split,
   games,
   onGame,
 }: {
-  season: Season;
+  year: number;
   team: Team;
   split: Splits;
   games: TeamGame[];
   onGame: (g: TeamGame, how: { newTab: boolean; side?: boolean }) => void;
 }) {
-  const ranks = ranksFor(season, team);
-  const recent = [...games].sort((a, b) => b.row[T.d]! - a.row[T.d]!).slice(0, 8);
+  const recent = [...games].sort((a, b) => b.row[T.d]! - a.row[T.d]!).slice(0, 5);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 pt-5">
-      <div className="grid gap-x-10 gap-y-7 @5xl:grid-cols-2">
-        <div className="flex flex-col gap-7">
-          <section>
-            <SectionTitle aside={ranks?.top[0] ? `of ${ranks.top[0].total}` : undefined}>Best nationally</SectionTitle>
-            {ranks ? <RankRows stats={ranks.top} /> : <p className="text-[13px] text-ink-muted">No national ranks this season.</p>}
-          </section>
-          {ranks && (
-            <section>
-              <SectionTitle>Weakest nationally</SectionTitle>
-              <RankRows stats={ranks.bottom} />
-            </section>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-7">
-          <section>
-            <SectionTitle aside="From the game log">Record</SectionTitle>
-            <div className="grid grid-cols-4 gap-px overflow-hidden rounded-lg border border-hairline bg-hairline">
-              {SPLIT_ROWS.map(([label, key]) => {
-                const r = split[key];
-                const n = r.w + r.l;
-                return (
-                  <div key={key} className="bg-card px-3 py-2.5">
-                    <div className="truncate text-[11.5px] text-ink-muted">{label}</div>
-                    <div className="mt-1 flex items-baseline gap-1.5">
-                      <span className={`text-[16px] font-semibold tabular ${n ? "text-ink" : "text-ink-muted"}`}>
-                        {n ? `${r.w}–${r.l}` : "–"}
-                      </span>
-                      {n > 0 && <span className="text-[11px] text-ink-muted tabular">{Math.round((100 * r.w) / n)}%</span>}
-                    </div>
+      <div className="grid gap-x-6 gap-y-6 @4xl:grid-cols-2">
+        <section className="min-w-0">
+          <SectionTitle aside="From the game log">Record</SectionTitle>
+          {/* Two across beside the games, so the pair ends level; four across when stacked. */}
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-hairline bg-hairline @xl:grid-cols-4 @4xl:grid-cols-2">
+            {SPLIT_ROWS.map(([label, key]) => {
+              const r = split[key];
+              const n = r.w + r.l;
+              return (
+                <div key={key} className="bg-card px-3 py-2.5">
+                  <div className="truncate text-[11.5px] text-ink-muted">{label}</div>
+                  <div className="mt-1 flex items-baseline gap-1.5">
+                    <span className={`text-[16px] font-semibold tabular ${n ? "text-ink" : "text-ink-muted"}`}>
+                      {n ? `${r.w}–${r.l}` : "–"}
+                    </span>
+                    {n > 0 && <span className="text-[11px] text-ink-muted tabular">{Math.round((100 * r.w) / n)}%</span>}
                   </div>
-                );
-              })}
-            </div>
-          </section>
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
-          <section>
-            <SectionTitle aside={games.length ? `${games.length} games` : undefined}>Recent games</SectionTitle>
-            {recent.length === 0 ? (
-              <p className="text-[13px] text-ink-muted">No games in the log for this season.</p>
-            ) : (
-              <ul className="divide-y divide-hairline overflow-hidden rounded-lg border border-hairline bg-card">
-                {recent.map((g) => (
-                  <li key={g.idx}>
-                    <button
-                      type="button"
-                      title="Open the game  ·  Ctrl-click for a new tab, Shift-click for the side"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={(e) => onGame(g, { newTab: e.ctrlKey || e.metaKey, side: e.shiftKey })}
-                      className="grid h-[40px] w-full grid-cols-[52px_14px_minmax(0,1fr)_auto] items-center gap-3 px-3.5 text-left text-[13px] transition-colors hover:bg-[var(--row-hover)]"
-                    >
-                      <span className="whitespace-nowrap text-ink-muted">{g.dateShort}</span>
-                      <span className={`font-semibold ${g.won ? "text-good" : "text-bad"}`}>{g.won ? "W" : "L"}</span>
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="w-4 shrink-0 text-center text-[12px] text-ink-muted">
-                          {g.site === "home" ? "vs" : g.site === "away" ? "@" : "N"}
-                        </span>
-                        <TeamLogo id={g.oppLogoId} name={g.opp} size={16} />
-                        <span className="truncate text-ink-soft">{g.opp}</span>
+        <section className="min-w-0">
+          <SectionTitle aside={games.length ? `${games.length} games` : undefined}>Recent games</SectionTitle>
+          {recent.length === 0 ? (
+            <p className="text-[13px] text-ink-muted">No games in the log for this season.</p>
+          ) : (
+            <ul className="divide-y divide-hairline overflow-hidden rounded-lg border border-hairline bg-card">
+              {recent.map((g) => (
+                <li key={g.idx}>
+                  <button
+                    type="button"
+                    title="Open the game  ·  Ctrl-click for a new tab, Shift-click for the side"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={(e) => onGame(g, { newTab: e.ctrlKey || e.metaKey, side: e.shiftKey })}
+                    className="grid h-[46px] w-full grid-cols-[52px_14px_minmax(0,1fr)_auto] items-center gap-3 px-3.5 text-left text-[13px] transition-colors hover:bg-[var(--row-hover)]"
+                  >
+                    <span className="whitespace-nowrap text-ink-muted">{g.dateShort}</span>
+                    <span className={`font-semibold ${g.won ? "text-good" : "text-bad"}`}>{g.won ? "W" : "L"}</span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="w-4 shrink-0 text-center text-[12px] text-ink-muted">
+                        {g.site === "home" ? "vs" : g.site === "away" ? "@" : "N"}
                       </span>
-                      <span className="text-ink tabular">
-                        {g.pts}–{g.pa}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
+                      <TeamLogo id={g.oppLogoId} name={g.opp} size={16} />
+                      <span className="truncate text-ink-soft">{g.opp}</span>
+                    </span>
+                    <span className="text-ink tabular">
+                      {g.pts}–{g.pa}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      <div className="mt-8">
+        <TeamStats year={year} team={team.name} />
       </div>
     </div>
-  );
-}
-
-/** National ranks in the percentile ramp: the rank is the label, its place in the field the color. */
-function RankRows({ stats }: { stats: RankedStat[] }) {
-  return (
-    <ul className="divide-y divide-hairline rounded-lg border border-hairline bg-card">
-      {stats.map((s) => {
-        const pct = s.total > 1 ? Math.round((100 * (s.total - s.rank)) / (s.total - 1)) : 100;
-        return (
-          <li key={s.key} className="grid h-[38px] grid-cols-[minmax(0,1fr)_auto_52px] items-center gap-3 px-3.5 text-[13px]">
-            <span className="truncate text-ink-soft">{s.label}</span>
-            <span className="text-ink tabular">{fmtRanked(s)}</span>
-            <span className="flex justify-end">
-              <PercentileChip pct={pct} ariaLabel={`Ranked ${s.rank} of ${s.total}`} className="min-w-[42px] text-[11px]">
-                #{s.rank}
-              </PercentileChip>
-            </span>
-          </li>
-        );
-      })}
-    </ul>
   );
 }
 

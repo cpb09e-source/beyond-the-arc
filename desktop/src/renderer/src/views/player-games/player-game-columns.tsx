@@ -126,18 +126,22 @@ export function identityColumns(season: PlayerGameSeason): Column<PlayerGame>[] 
   ];
 }
 
-export function statColumns(season: PlayerGameSeason, keys: string[]): Column<PlayerGame>[] {
+/**
+ * `chips: false` is the plain log a profile shows: the numbers alone, in
+ * narrower columns, with no percentile ranked at all.
+ */
+export function statColumns(season: PlayerGameSeason, keys: string[], { chips = true }: { chips?: boolean } = {}): Column<PlayerGame>[] {
   const out: Column<PlayerGame>[] = [];
   for (const key of keys) {
     const st = gameStat(key);
     if (!st) continue;
     const vals = statValues(season.pack, st);
-    const pct = NO_CHIP.has(st.key) ? null : statPercentiles(season.pack, st);
+    const pct = !chips || NO_CHIP.has(st.key) ? null : statPercentiles(season.pack, st);
     out.push({
       key: st.key,
       label: st.label,
       title: st.title,
-      width: Math.max(60, Math.round(st.label.length * 7.7) + 40),
+      width: chips ? Math.max(60, Math.round(st.label.length * 7.7) + 40) : Math.max(52, Math.round(st.label.length * 7.7) + 30),
       align: "right",
       first: st.lowerBetter ? 1 : -1,
       sortValue: (g) => {
@@ -146,6 +150,13 @@ export function statColumns(season: PlayerGameSeason, keys: string[]): Column<Pl
       },
       cell: (g) => {
         const v = vals[g.idx]!;
+        if (!chips) {
+          return (
+            <span className={`whitespace-nowrap tabular ${st.key === "pts" ? "font-semibold text-ink" : "text-ink-soft"}`}>
+              {fmtGameStat(st, Number.isNaN(v) ? null : v)}
+            </span>
+          );
+        }
         const p = pct ? pct[g.idx]! : NO_PCT;
         return (
           <StatCell

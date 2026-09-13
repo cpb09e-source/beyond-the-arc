@@ -34,22 +34,29 @@ export function fmtStat(st: TeamGameStat, v: number | null): string {
   return `${n > 0 ? "+" : MINUS}${Math.abs(n)}`;
 }
 
-export function statColumns(pack: TeamGamePack, keys: string[]): Column<TeamGame>[] {
+/**
+ * `chips: false` is the plain log a team's page shows: the numbers alone, in
+ * narrower columns, with no percentile ranked at all.
+ */
+export function statColumns(pack: TeamGamePack, keys: string[], { chips = true }: { chips?: boolean } = {}): Column<TeamGame>[] {
   const out: Column<TeamGame>[] = [];
   for (const key of keys) {
     const st = teamGameStat(key);
     if (!st) continue;
     // Ranked once per pack and stat, then cached by the site's function.
-    const pct = st.pct === false ? null : seasonPercentiles(pack, st);
+    const pct = !chips || st.pct === false ? null : seasonPercentiles(pack, st);
     out.push({
       key: st.key,
       label: st.label,
       title: st.title,
-      width: Math.max(58, Math.round(st.label.length * 7.7) + 34),
+      width: chips ? Math.max(58, Math.round(st.label.length * 7.7) + 34) : Math.max(50, Math.round(st.label.length * 7.7) + 26),
       align: "right",
       first: st.lowerBetter ? 1 : -1,
       sortValue: (g) => st.get(g.row),
-      cell: (g) => (
+      cell: (g) =>
+        !chips ? (
+          <span className={`whitespace-nowrap tabular ${st.key === "net" ? "font-semibold text-ink" : "text-ink-soft"}`}>{fmtStat(st, st.get(g.row))}</span>
+        ) : (
         <StatCell
           value={fmtStat(st, st.get(g.row))}
           pct={pct ? (pct.get(g.idx) ?? null) : null}

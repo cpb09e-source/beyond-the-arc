@@ -16,14 +16,15 @@ import { NameLink } from "./game-parts";
  * and is a dash for a feed that never recorded who was on.
  *
  * Starters in ink, the bench a step back. A name opens its profile when the
- * season's index knows who it is.
+ * season's index knows who it is. Both teams' headers wear the same quiet wash,
+ * like everything else on the game page: no school's color.
  */
-export function GameBox({ b, hc, ac, names, links }: { b: GameBundle; hc: string; ac: string; names: TeamNames | null; links: Links }) {
+export function GameBox({ b, names, links }: { b: GameBundle; names: TeamNames | null; links: Links }) {
   const pm = useMemo(() => plusMinus(b.plays), [b.plays]);
   return (
     <div className="flex flex-col gap-6">
-      <TeamBox side={b.game.away} players={b.players.away} stats={b.teamStats.away} color={ac} pm={pm} sign={-1} names={names} links={links} />
-      <TeamBox side={b.game.home} players={b.players.home} stats={b.teamStats.home} color={hc} pm={pm} sign={1} names={names} links={links} />
+      <TeamBox side={b.game.away} players={b.players.away} stats={b.teamStats.away} pm={pm} sign={-1} names={names} links={links} />
+      <TeamBox side={b.game.home} players={b.players.home} stats={b.teamStats.home} pm={pm} sign={1} names={names} links={links} />
     </div>
   );
 }
@@ -54,7 +55,6 @@ function TeamBox({
   side,
   players,
   stats,
-  color,
   pm,
   sign,
   names,
@@ -63,7 +63,6 @@ function TeamBox({
   side: GameSide;
   players: BoxPlayer[];
   stats: TeamStats | null;
-  color: string;
   pm: Map<number, number>;
   sign: 1 | -1;
   names: TeamNames | null;
@@ -75,10 +74,7 @@ function TeamBox({
 
   return (
     <section className="overflow-hidden rounded-lg border border-hairline bg-card">
-      <header
-        className="flex h-[46px] items-center gap-2.5 border-b border-hairline px-3.5"
-        style={{ background: `color-mix(in oklab, ${color} 9%, var(--card))` }}
-      >
+      <header className="flex h-[46px] items-center gap-2.5 border-b border-hairline bg-[color-mix(in_oklab,var(--ink)_4%,var(--card))] px-3.5">
         <TeamLogo id={s.logoId} name={side.team} size={22} />
         <NameLink text={side.team} open={links.team(side.team)} className="truncate text-[14px] font-semibold text-ink" />
         <span className="shrink-0 text-[12px] text-ink-muted">{players.length} players</span>

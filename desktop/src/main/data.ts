@@ -53,6 +53,8 @@ export type Corpus =
   | "game-logs"
   | "game-box"
   | "team-ratings"
+  | "player-splits"
+  | "team-splits"
   | "teams-index"
   | "players-index"
   | "search-index";
@@ -133,6 +135,13 @@ const CORPORA: Record<Corpus, CorpusSpec> = {
   "game-logs": { path: (y) => `game-logs-by-year/${y}.json`, r2: false, memory: false },
   "game-box": { path: (y) => `game-box-by-year/${y}.json`, r2: false, optional: true, memory: false },
   "team-ratings": { path: (y) => `team-ratings-${y}.json`, r2: false, optional: true },
+  // The site's stat cards, sliced by split (src/lib/player-stat-cards.ts,
+  // team-stat-cards.ts). A player's file holds every season he has, keyed by
+  // his bart id, on R2 as the site reads it. A season's team file holds every
+  // team. TEAM SPLITS ARE BUILD-ONLY ON THE SITE, stripped from the deploy, so
+  // an installed app finds them only once team-splits/ is uploaded to R2.
+  "player-splits": { path: (_y, k) => `player-splits/${k}.json`, key: /^[0-9]{1,9}$/, r2: true, optional: true, crossSeason: true },
+  "team-splits": { path: (y) => `team-splits/${y}.json`, r2: true, optional: true },
 };
 
 const SITE_DATA = "https://btacbb.xyz/data";

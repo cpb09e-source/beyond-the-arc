@@ -1,16 +1,12 @@
 import { useMemo, useState } from "react";
-import { PercentileChip } from "@/components/percentile-chip";
 import { TopHundredPill } from "@/components/portal/top-hundred-pill";
 import { coachSlug } from "@/lib/coach-slug";
-import { F, GAME_VIEWS, gameStat } from "@/lib/game-index";
-import { playerViewByKey } from "@/lib/player-views";
+import { F, GAME_VIEWS, gameStat, gameViewByKey } from "@/lib/game-index";
 import { logDate, useOpenGame } from "~/data/game-link";
-import { NO_PCT } from "~/data/midrank-by-value";
 import {
   loadPlayerGameSeason,
   shortDate,
   siteOf,
-  statPercentiles,
   statValues,
   wonGame,
   type PlayerGame,
@@ -24,6 +20,7 @@ import { SeasonSwitcher } from "~/shell/season-switcher";
 import { coachObj, type Obj } from "~/objects/object";
 import { ObjectLink, RailActions, RecordActions } from "~/objects/object-surfaces";
 import { playerLogObject } from "~/views/player-games/player-games-view";
+import { Picker } from "~/shell/picker";
 import { useShell } from "~/shell/shell-context";
 import { LoadError, TableSkeleton } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
@@ -33,39 +30,42 @@ import { DetailLink, DetailRow, DetailSection, DetailsRail, DetailsToggle, useDe
 import { seasonLabel } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 import { ClassBadge, PlayerPhoto } from "~/ui/player-photo";
-import {
-  HighlightRow,
-  PercentileBar,
-  ProfileHeader,
-  ProfileNote,
-  ProfileTabs,
-  SectionTitle,
-  type Highlight,
-} from "~/ui/profile";
+import { HighlightRow, ProfileHeader, ProfileNote, ProfileTabs, SectionTitle, type Highlight } from "~/ui/profile";
 import { identityColumns, statColumns as gameStatColumns } from "~/views/player-games/player-game-columns";
 import { PlayerGamePeekBody } from "~/views/player-games/player-game-peek";
 import { playerStat } from "~/views/players/player-columns";
+import { PlayerStats } from "./player-stats";
 
 /**
- * A player's page: the season at a glance, where every number on the Player
- * Explorer's Overview sits in the field, the best nights, every game, and the
- * seasons before.
+ * A player's page: the season at a glance, his best and latest nights, every
+ * number the site holds on him, every game, and the seasons before.
  *
- * THE PERCENTILE PROFILE IS THE HEART OF IT. The site's own Overview columns,
- * banded the way the site bands them (EPM, Role, Scoring, Shooting,
- * Rebounding, Handle, Defense), each a bar in the ramp. A reader sees the shape
- * of a player before reading a single number.
+ * THE STAT CARDS ARE THE SITE'S Player Overview: the same cards, views, splits
+ * and per-40 basis (./player-stats.tsx), so the app and btacbb.xyz never
+ * describe a player two ways.
  *
- * NOTHING ON IT IS NEW MATH: the explorer's percentiles, the game log's rows
- * and chips, the site's search index for the career list.
+ * THE GAME LOG IS PLAIN NUMBERS, in the site's column views. A percentile under
+ * every cell of one player's games was noise; the season's context lives in the
+ * cards.
  */
 
 type TabKey = "overview" | "games" | "career";
 
 const gameKey = (g: PlayerGame) => g.idx;
 const inOrder = (a: PlayerGame, b: PlayerGame) => a.row[F.d]! - b.row[F.d]! || a.idx - b.idx;
-const OVERVIEW_BANDS = playerViewByKey("overview").bands;
-const OVERVIEW_GAME_KEYS = GAME_VIEWS[0]!.keys;
+
+const GAME_VIEW_KEY = "bta.profile.playerGames.view";
+const GAME_VIEW_OPTIONS = GAME_VIEWS.map((v) => ({ key: v.key, label: v.label, desc: v.desc }));
+
+/** Every column unless the reader picked a narrower view; the pick is remembered. */
+function readGameView(): string {
+  try {
+    const v = localStorage.getItem(GAME_VIEW_KEY);
+    return v ? gameViewByKey(v).key : "everything";
+  } catch {
+    return "everything";
+  }
+}
 
 export function PlayerProfileView({ year, setYear, record }: ViewProps) {
   const { openRecord } = useShell();
@@ -73,6 +73,8 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
   const bartId = ref?.bartId ?? -1;
   const [tab, setTab] = useState<TabKey>("overview");
   const [detailsOpen, toggleDetails] = useDetailsRail();
+  const [gameViewKey, setGameViewKey] = useState(readGameView);
+  const gameView = gameViewByKey(gameViewKey);
 
   const [seasonState, retry] = useLoaded(`player-season|${year}`, () => loadPlayerSeason(year));
   const [gamesState] = useLoaded(`player-games|${year}`, () => loadPlayerGameSeason(year));
@@ -114,8 +116,17 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
     if (!gameSeason) return [];
     const identity = identityColumns(gameSeason);
     const pick = (key: string) => identity.find((c) => c.key === key)!;
-    return [{ ...pick("date"), pin: true }, pick("result"), pick("site"), pick("opp"), ...gameStatColumns(gameSeason, OVERVIEW_GAME_KEYS)];
-  }, [gameSeason]);
+    return [{ ...pick("date"), pin: true }, pick("result"), pick("site"), pick("opp"), ...gameStatColumns(gameSeason, gameView.keys, { chips: false })];
+  }, [gameSeason, gameView]);
+
+  const pickGameView = (key: string) => {
+    setGameViewKey(key);
+    try {
+      localStorage.setItem(GAME_VIEW_KEY, key);
+    } catch {
+      /* remembered for this session only */
+    }
+  };
 
   const highlights = (p: Player, s: PlayerSeason): Highlight[] => {
     const read = (key: string): Highlight => {
@@ -218,33 +229,40 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
             {name} has no season in {seasonLabel(year)}. The Career tab lists the seasons there are.
           </ProfileNote>
         ) : tab === "overview" ? (
-          <PlayerOverview season={season} player={player} gameSeason={gameSeason} games={games} onGame={openLogGame} />
+          <PlayerOverview year={year} season={season} player={player} gameSeason={gameSeason} games={games} onGame={openLogGame} />
         ) : (
-          <div className="relative min-h-0 flex-1">
-            {gameSeason ? (
-              <DataTable
-                key={`games:${year}:${bartId}`}
-                rows={games}
-                columns={gameColumns}
-                rowKey={gameKey}
-                defaultSort={{ key: "date", dir: 1 }}
-                tieBreak={inOrder}
-                ariaLabel={`${name} games`}
-                empty={<ProfileNote>No games in the log for {name} in {seasonLabel(year)}.</ProfileNote>}
-                peek={{
-                  label: (g) => {
-                    const o = gameSeason.opps[g.row[F.o]!]!;
-                    return `${name} ${siteOf(g.row) === "away" ? "at" : "vs"} ${o.name}`;
-                  },
-                  body: (g) => <PlayerGamePeekBody season={gameSeason} game={g} />,
-                }}
-                object={(g) => playerLogObject(gameSeason, g)}
-              />
-            ) : gamesState.status === "error" ? (
-              <LoadError year={year} reason={gamesState.reason} message={gamesState.message} what="Player games" onRetry={() => {}} />
-            ) : (
-              <TableSkeleton rowHeight={42} label="Loading games" />
-            )}
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex h-[46px] shrink-0 items-center gap-3 px-6">
+              <Picker label="View" value={gameView.key} options={GAME_VIEW_OPTIONS} onChange={pickGameView} />
+              <span className="min-w-0 truncate text-[12px] text-ink-muted">{gameView.desc}</span>
+            </div>
+            <div className="relative min-h-0 flex-1 border-t border-hairline">
+              {gameSeason ? (
+                <DataTable
+                  key={`games:${year}:${bartId}:${gameView.key}`}
+                  rows={games}
+                  columns={gameColumns}
+                  rowKey={gameKey}
+                  rowHeight={38}
+                  defaultSort={{ key: "date", dir: 1 }}
+                  tieBreak={inOrder}
+                  ariaLabel={`${name} games`}
+                  empty={<ProfileNote>No games in the log for {name} in {seasonLabel(year)}.</ProfileNote>}
+                  peek={{
+                    label: (g) => {
+                      const o = gameSeason.opps[g.row[F.o]!]!;
+                      return `${name} ${siteOf(g.row) === "away" ? "at" : "vs"} ${o.name}`;
+                    },
+                    body: (g) => <PlayerGamePeekBody season={gameSeason} game={g} />,
+                  }}
+                  object={(g) => playerLogObject(gameSeason, g)}
+                />
+              ) : gamesState.status === "error" ? (
+                <LoadError year={year} reason={gamesState.reason} message={gamesState.message} what="Player games" onRetry={() => {}} />
+              ) : (
+                <TableSkeleton rowHeight={38} label="Loading games" />
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -264,139 +282,111 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
 }
 
 function PlayerOverview({
+  year,
   season,
   player,
   gameSeason,
   games,
   onGame,
 }: {
+  year: number;
   season: PlayerSeason;
   player: Player;
   gameSeason: PlayerGameSeason | null;
   games: PlayerGame[];
   onGame: (g: PlayerGame, how: { newTab: boolean; side?: boolean }) => void;
 }) {
-  const line: Array<[label: string, value: number | null, digits: number]> = [
-    ["GP", player.s.games, 0],
-    ["MPG", player.s.min_pg, 1],
-    ["PPG", player.s.pts_pg, 1],
-    ["RPG", player.s.reb_pg, 1],
-    ["APG", player.s.ast_pg, 1],
-    ["SPG", player.s.stl_pg, 1],
-    ["BPG", player.s.blk_pg, 1],
-    ["TOV", player.s.tov_pg, 1],
-  ];
-
-  const best = useMemo(() => {
-    if (!gameSeason || games.length === 0) return [];
-    const st = gameStat("gmsc")!;
-    const values = statValues(gameSeason.pack, st);
-    const pcts = statPercentiles(gameSeason.pack, st);
-    return [...games]
-      .sort((a, b) => values[b.idx]! - values[a.idx]!)
-      .slice(0, 5)
-      .map((g) => ({ g, gmsc: values[g.idx]!, pct: pcts[g.idx]! === NO_PCT ? null : pcts[g.idx]! }));
+  // Best by Game Score, which ranks a night better than any one number does,
+  // though the list itself shows the line, not the score.
+  const { best, recent } = useMemo((): { best: PlayerGame[]; recent: PlayerGame[] } => {
+    if (!gameSeason || games.length === 0) return { best: [], recent: [] };
+    const values = statValues(gameSeason.pack, gameStat("gmsc")!);
+    return {
+      best: [...games].sort((a, b) => values[b.idx]! - values[a.idx]!).slice(0, 5),
+      recent: [...games].sort((a, b) => inOrder(b, a)).slice(0, 5),
+    };
   }, [gameSeason, games]);
+  const recentWins = recent.filter((g) => wonGame(g.row)).length;
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 pt-5">
-      <div className="grid gap-x-10 gap-y-7 @5xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-        <section>
-          <SectionTitle aside="Percentile among the season's players">Percentile profile</SectionTitle>
-          <div className="rounded-lg border border-hairline bg-card px-4 py-2">
-            {OVERVIEW_BANDS.map((band, i) => (
-              <div key={band.label} className={i > 0 ? "mt-2 border-t border-hairline pt-2" : ""}>
-                <div className="flex items-baseline justify-between py-1">
-                  <h3 className="text-[11px] font-medium uppercase tracking-[0.08em] text-ink-muted">{band.label}</h3>
-                  {band.label === "EPM" && season.estimated && (
-                    <span className="text-[11px] text-ink-muted">Estimated from the box score</span>
-                  )}
-                </div>
-                {band.keys.map((key) => {
-                  const st = playerStat(key);
-                  if (!st) return null;
-                  if (key === "ewins" && !season.hasEwins) return null;
-                  return (
-                    <PercentileBar
-                      key={key}
-                      label={st.label}
-                      value={st.format(player.s[st.field] as number | null)}
-                      pct={st.pctKey ? (player.pct[st.pctKey] ?? null) : null}
-                      title={st.desc}
-                    />
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <div className="flex flex-col gap-7">
-          <section>
-            <SectionTitle>Season line</SectionTitle>
-            <div className="grid grid-cols-4 gap-px overflow-hidden rounded-lg border border-hairline bg-hairline">
-              {line.map(([label, value, digits]) => (
-                <div key={label} className="bg-card px-3 py-2.5">
-                  <div className="text-[11.5px] text-ink-muted">{label}</div>
-                  <div className="mt-1 text-[16px] font-semibold text-ink tabular">
-                    {value == null ? "–" : value.toFixed(digits)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <SectionTitle aside="By Game Score">Best games</SectionTitle>
-            {!gameSeason ? (
-              <p className="text-[13px] text-ink-muted">Loading the game log…</p>
-            ) : best.length === 0 ? (
-              <p className="text-[13px] text-ink-muted">No games in the log this season.</p>
-            ) : (
-              <ul className="divide-y divide-hairline overflow-hidden rounded-lg border border-hairline bg-card">
-                {best.map(({ g, gmsc, pct }) => {
-                  const o = gameSeason.opps[g.row[F.o]!]!;
-                  const won = wonGame(g.row);
-                  const site = siteOf(g.row);
-                  return (
-                    <li key={g.idx}>
-                      <button
-                        type="button"
-                        title="Open the game  ·  Ctrl-click for a new tab, Shift-click for the side"
-                        onMouseDown={(e) => e.preventDefault()}
-                        onClick={(e) => onGame(g, { newTab: e.ctrlKey || e.metaKey, side: e.shiftKey })}
-                        className="grid h-[50px] w-full grid-cols-[48px_minmax(0,1fr)_44px] items-center gap-3 px-3.5 text-left text-[13px] transition-colors hover:bg-[var(--row-hover)]"
-                      >
-                        <span className="whitespace-nowrap text-ink-muted">{shortDate(gameSeason.pack, g.row)}</span>
-                        <span className="flex min-w-0 flex-col gap-0.5">
-                          <span className="flex min-w-0 items-center gap-2">
-                            <span className="w-4 shrink-0 text-center text-[12px] text-ink-muted">
-                              {site === "home" ? "vs" : site === "away" ? "@" : "N"}
-                            </span>
-                            <TeamLogo id={o.logoId} name={o.name} size={16} />
-                            <span className="truncate text-ink-soft">{o.name}</span>
-                            <span className={`shrink-0 text-[12px] font-semibold ${won ? "text-good" : "text-bad"}`}>{won ? "W" : "L"}</span>
-                          </span>
-                          <span className="truncate pl-6 text-[12px] text-ink-muted tabular">
-                            <span className="text-ink">{g.row[F.pts]}</span> pts · <span className="text-ink">{g.row[F.reb]}</span> reb ·{" "}
-                            <span className="text-ink">{g.row[F.ast]}</span> ast
-                          </span>
-                        </span>
-                        <span className="flex justify-end">
-                          <PercentileChip pct={pct} ariaLabel={`Game Score ${gmsc.toFixed(1)}`} className="min-w-[40px] text-[11px]">
-                            {gmsc.toFixed(1)}
-                          </PercentileChip>
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-        </div>
+      <div className="grid gap-x-6 gap-y-6 @4xl:grid-cols-2">
+        <GameList title="Best games" games={best} season={gameSeason} onGame={onGame} />
+        <GameList
+          title="Last 5 games"
+          aside={recent.length ? `${recentWins}–${recent.length - recentWins}` : undefined}
+          games={recent}
+          season={gameSeason}
+          onGame={onGame}
+        />
+      </div>
+      <div className="mt-8">
+        <PlayerStats year={year} player={player} season={season} />
       </div>
     </div>
+  );
+}
+
+function GameList({
+  title,
+  aside,
+  games,
+  season,
+  onGame,
+}: {
+  title: string;
+  aside?: string;
+  games: PlayerGame[];
+  season: PlayerGameSeason | null;
+  onGame: (g: PlayerGame, how: { newTab: boolean; side?: boolean }) => void;
+}) {
+  return (
+    <section className="min-w-0">
+      <SectionTitle aside={aside}>{title}</SectionTitle>
+      {!season ? (
+        <p className="text-[13px] text-ink-muted">Loading the game log…</p>
+      ) : games.length === 0 ? (
+        <p className="text-[13px] text-ink-muted">No games in the log this season.</p>
+      ) : (
+        <ul className="divide-y divide-hairline overflow-hidden rounded-lg border border-hairline bg-card">
+          {games.map((g) => {
+            const o = season.opps[g.row[F.o]!]!;
+            const won = wonGame(g.row);
+            const site = siteOf(g.row);
+            return (
+              <li key={g.idx}>
+                <button
+                  type="button"
+                  title="Open the game  ·  Ctrl-click for a new tab, Shift-click for the side"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => onGame(g, { newTab: e.ctrlKey || e.metaKey, side: e.shiftKey })}
+                  className="grid h-[50px] w-full grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-3 px-3.5 text-left text-[13px] transition-colors hover:bg-[var(--row-hover)]"
+                >
+                  <span className="whitespace-nowrap text-ink-muted">{shortDate(season.pack, g.row)}</span>
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="w-4 shrink-0 text-center text-[12px] text-ink-muted">
+                        {site === "home" ? "vs" : site === "away" ? "@" : "N"}
+                      </span>
+                      <TeamLogo id={o.logoId} name={o.name} size={16} />
+                      <span className="truncate text-ink-soft">{o.name}</span>
+                      <span className={`shrink-0 text-[12px] font-semibold ${won ? "text-good" : "text-bad"}`}>{won ? "W" : "L"}</span>
+                    </span>
+                    <span className="truncate pl-6 text-[12px] text-ink-muted tabular">
+                      <span className="text-ink">{g.row[F.pts]}</span> pts · <span className="text-ink">{g.row[F.reb]}</span> reb ·{" "}
+                      <span className="text-ink">{g.row[F.ast]}</span> ast
+                    </span>
+                  </span>
+                  <span className="whitespace-nowrap text-[12px] text-ink-muted tabular">
+                    {g.row[F.fgm]}-{g.row[F.fga]} FG
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 

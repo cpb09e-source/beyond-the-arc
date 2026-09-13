@@ -1,9 +1,8 @@
 import { GitCompareArrows } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { isFinal, isLive, longDate, periodHeadings, periodLabel, tipLabel, type GameBundle, type GameSide } from "@/components/game/types";
-import { gameEyebrow, gameNotStarted, gameStarted, recordsFromStandings } from "@/lib/game-stats";
+import { gameEyebrow, gameInfoRows, gameNotStarted, gameStarted, recordsFromStandings } from "@/lib/game-stats";
 import { lookupId } from "@/lib/player-photo-index";
-import { sideColors } from "@/lib/side-colors";
 import { RecordActions } from "~/objects/object-surfaces";
 import { useCompare } from "~/shell/compare";
 import { useShell } from "~/shell/shell-context";
@@ -16,12 +15,13 @@ import { HeaderButton, ProfileNote, ProfileTabs } from "~/ui/profile";
 import { hasPhoto, sideOf, useTeamNames, type TeamNames } from "~/views/scoreboard/board-model";
 import { GameBox } from "./game-box";
 import { NO_PHOTOS, useGame, usePhotoIndex, type GameRecord, type Links } from "./game-model";
-import { GameOverview } from "./game-overview";
+import { GameInfo, GameOverview } from "./game-overview";
 import { NameLink, RankChip } from "./game-parts";
 import { GamePlays } from "./game-plays";
 
 /**
- * One game, in full: the scoreline, then Overview, Box score and Play by play.
+ * One game, in full: the scoreline, then Overview, Box score, Play by play and
+ * Game info.
  *
  * THE SITE'S GAME PAGE, AS A RECORD. Every figure comes from the same bundle
  * through src/lib/game-stats.ts. What the app adds is where things lead: each
@@ -33,7 +33,7 @@ import { GamePlays } from "./game-plays";
  * narrow pane, where that cannot fit, each team gets a row instead.
  */
 
-type TabKey = "overview" | "box" | "plays";
+type TabKey = "overview" | "box" | "plays" | "info";
 
 export function GameView({ record }: ViewProps) {
   const rec = record?.kind === "game" ? record : null;
@@ -49,7 +49,6 @@ export function GameView({ record }: ViewProps) {
   const { add } = useCompare();
 
   const b = state.status === "ready" ? state.value : null;
-  const colors = useMemo(() => (b ? sideColors(b.game.home.team, b.game.away.team) : null), [b]);
 
   const links = useMemo<Links>(
     () => ({
@@ -83,6 +82,7 @@ export function GameView({ record }: ViewProps) {
   if (!rec) return <ProfileNote>This tab holds no game.</ProfileNote>;
 
   const notStarted = b ? gameNotStarted(b.game) : false;
+  const hasInfo = b ? gameInfoRows(b).length > 0 : false;
   const awaySide = b ? sideOf(names, b.game.away.team) : null;
   const homeSide = b ? sideOf(names, b.game.home.team) : null;
   const bothOurs = !!awaySide?.ours && !!homeSide?.ours;
@@ -121,6 +121,7 @@ export function GameView({ record }: ViewProps) {
                 { key: "overview", label: "Overview" },
                 { key: "box", label: "Box score", count: b.players.away.length + b.players.home.length || null },
                 { key: "plays", label: "Play by play", count: b.plays.length || null },
+                ...(hasInfo ? [{ key: "info" as const, label: "Game info" }] : []),
               ]}
             />
           </div>
@@ -139,15 +140,19 @@ export function GameView({ record }: ViewProps) {
         <ProfileNote>
           This game has not been played yet: {longDate(b.game.startDate)}
           {b.game.venue ? `, ${b.game.venue}` : ""}
-          {b.game.tbd ? ", tip time to be announced" : ""}. The box score, four factors and play by play appear once it tips.
+          {b.game.tbd ? ", tip time to be announced" : ""}. The box score and play by play appear once it tips.
         </ProfileNote>
       ) : tab === "overview" ? (
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-12 pt-5">
-          <GameOverview b={b} hc={colors![0]} ac={colors![1]} names={names} links={links} onBox={() => setTab("box")} />
+          <GameOverview b={b} names={names} links={links} onBox={() => setTab("box")} />
         </div>
       ) : tab === "box" ? (
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-12 pt-5">
-          <GameBox b={b} hc={colors![0]} ac={colors![1]} names={names} links={links} />
+          <GameBox b={b} names={names} links={links} />
+        </div>
+      ) : tab === "info" ? (
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-12 pt-5">
+          <GameInfo b={b} />
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-12">
