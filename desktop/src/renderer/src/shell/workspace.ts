@@ -71,7 +71,9 @@ export type WorkspaceAction =
   | { type: "split-with"; id: string }
   | { type: "unsplit" }
   | { type: "split-ratio"; ratio: number }
-  | { type: "focus-other-pane" };
+  | { type: "focus-other-pane" }
+  /** Another workspace's tabs, in place of these (see ./workspaces.ts). */
+  | { type: "load"; ws: Workspace };
 
 const KEY = "bta.workspace";
 const HISTORY_CAP = 50;
@@ -110,33 +112,45 @@ const makeTab = (viewId: string, year: number, record?: RecordRef, query = ""): 
 
 const snapshotOf = (t: Tab): Snapshot => ({ viewId: t.viewId, year: t.year, record: t.record, query: t.query });
 
+/** Tabs as persistableWorkspace saved them, checked field by field; null when none is usable. */
+export function restoreWorkspace(saved: unknown): Workspace | null {
+  if (typeof saved !== "object" || saved === null) return null;
+  const parsed = saved as { tabs?: unknown; active?: unknown; split?: unknown };
+  const tabs = Array.isArray(parsed.tabs)
+    ? parsed.tabs.flatMap((t): Tab[] => {
+        const o = t as Partial<Tab>;
+        if (!isPlace(o.viewId, o.record) || !isSeason(o.year)) return [];
+        return [
+          {
+            id: newId(),
+            viewId: o.viewId,
+            year: seasonFor(o.viewId, o.year),
+            query: typeof o.query === "string" ? o.query : "",
+            title: typeof o.title === "string" ? o.title : undefined,
+            record: isRecordRef(o.record) ? o.record : undefined,
+            back: Array.isArray(o.back) ? o.back.filter(isSnapshot) : [],
+            forward: Array.isArray(o.forward) ? o.forward.filter(isSnapshot) : [],
+          },
+        ];
+      })
+    : [];
+  if (tabs.length === 0) return null;
+  const at = typeof parsed.active === "number" ? Math.min(Math.max(0, parsed.active), tabs.length - 1) : 0;
+  return { tabs, active: tabs[at]!.id, closed: [], split: restoreSplit(parsed.split, tabs) };
+}
+
+/** A new workspace: one tab, on a view that is not a profile, in a season that exists. */
+export function freshWorkspace(viewId: string, year: number): Workspace {
+  const tab = makeTab(isPlace(viewId, undefined) && !viewById(viewId).profile ? viewId : VIEWS[0]!.id, isSeason(year) ? year : SEASON_CEIL);
+  return { tabs: [tab], active: tab.id, closed: [], split: null };
+}
+
 function init(): Workspace {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as { tabs?: unknown; active?: unknown; split?: unknown };
-      const tabs = Array.isArray(parsed.tabs)
-        ? parsed.tabs.flatMap((t): Tab[] => {
-            const o = t as Partial<Tab>;
-            if (!isPlace(o.viewId, o.record) || !isSeason(o.year)) return [];
-            return [
-              {
-                id: newId(),
-                viewId: o.viewId,
-                year: seasonFor(o.viewId, o.year),
-                query: typeof o.query === "string" ? o.query : "",
-                title: typeof o.title === "string" ? o.title : undefined,
-                record: isRecordRef(o.record) ? o.record : undefined,
-                back: Array.isArray(o.back) ? o.back.filter(isSnapshot) : [],
-                forward: Array.isArray(o.forward) ? o.forward.filter(isSnapshot) : [],
-              },
-            ];
-          })
-        : [];
-      if (tabs.length > 0) {
-        const at = typeof parsed.active === "number" ? Math.min(Math.max(0, parsed.active), tabs.length - 1) : 0;
-        return { tabs, active: tabs[at]!.id, closed: [], split: restoreSplit(parsed.split, tabs) };
-      }
+      const restored = restoreWorkspace(JSON.parse(raw));
+      if (restored) return restored;
     }
     // The one view and season the app remembered before it had tabs.
     const view: unknown = JSON.parse(localStorage.getItem("bta.view") ?? "null");
@@ -324,38 +338,45 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
       if (!ws.split || !inSplit(ws, current.id)) return ws;
       return { ...ws, active: ws.split.a === current.id ? ws.split.b : ws.split.a };
     }
+    case "load":
+      return a.ws;
   }
+}
+
+/**
+ * The tabs as saved: places, titles and a short history each, and the active tab
+ * and split by position, since tab ids are made fresh on every launch.
+ */
+export function persistableWorkspace(ws: Workspace): unknown {
+  return {
+    tabs: ws.tabs.map((t) => ({
+      viewId: t.viewId,
+      year: t.year,
+      query: t.query,
+      record: t.record,
+      title: t.title,
+      back: t.back.slice(-20),
+      forward: t.forward.slice(0, 20),
+    })),
+    active: ws.tabs.findIndex((t) => t.id === ws.active),
+    split: ws.split
+      ? {
+          a: ws.tabs.findIndex((t) => t.id === ws.split!.a),
+          b: ws.tabs.findIndex((t) => t.id === ws.split!.b),
+          ratio: ws.split.ratio,
+        }
+      : null,
+  };
 }
 
 export function useWorkspace() {
   const [ws, dispatch] = useReducer(workspaceReducer, undefined, init);
   useEffect(() => {
     try {
-      localStorage.setItem(
-        KEY,
-        JSON.stringify({
-          tabs: ws.tabs.map((t) => ({
-            viewId: t.viewId,
-            year: t.year,
-            query: t.query,
-            record: t.record,
-            title: t.title,
-            back: t.back.slice(-20),
-            forward: t.forward.slice(0, 20),
-          })),
-          active: ws.tabs.findIndex((t) => t.id === ws.active),
-          split: ws.split
-            ? {
-                a: ws.tabs.findIndex((t) => t.id === ws.split!.a),
-                b: ws.tabs.findIndex((t) => t.id === ws.split!.b),
-                ratio: ws.split.ratio,
-              }
-            : null,
-        }),
-      );
+      localStorage.setItem(KEY, JSON.stringify(persistableWorkspace(ws)));
     } catch {
       /* not persisted; the tabs still work for this session */
     }
-  }, [ws.tabs, ws.active, ws.split]);
+  }, [ws]);
   return [ws, dispatch] as const;
 }

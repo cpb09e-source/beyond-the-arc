@@ -6,6 +6,7 @@ import {
   ChevronRight,
   GitCompareArrows,
   Keyboard,
+  Layers,
   Link2,
   ListFilter,
   LogIn,
@@ -14,6 +15,7 @@ import {
   Moon,
   PanelLeft,
   PanelRightClose,
+  Pencil,
   Plus,
   RotateCcw,
   Star,
@@ -48,8 +50,10 @@ import { TabTitleContext } from "~/shell/tab-title";
 import { NAV_VIEWS, profileViewFor, viewById, type FocusRequest, type FocusTarget, type RecordRef } from "~/shell/views";
 import { Welcome } from "~/shell/welcome";
 import { useWorkspace, type Tab } from "~/shell/workspace";
+import { useWorkspaces } from "~/shell/workspaces";
 import { seasonLabel } from "~/ui/format";
 import { Kbd } from "~/ui/kbd";
+import { NamePrompt } from "~/ui/name-prompt";
 import { usePersisted } from "~/ui/persisted";
 import { ToastProvider, useToast } from "~/ui/toast";
 
@@ -127,6 +131,13 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
   const nonce = useRef(0);
   const filterRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
+  // Named sets of tabs, switched from the sidebar's top menu or Ctrl K.
+  const onWorkspaceRemoved = useCallback(
+    (name: string, undo: () => void) => toast({ title: `Deleted ${name}`, action: { label: "Undo", run: undo } }),
+    [toast],
+  );
+  const workspaces = useWorkspaces(ws, dispatch, onWorkspaceRemoved);
+  const [namePrompt, setNamePrompt] = useState<"new" | "rename" | null>(null);
   const { auth, update } = useAccount();
   const compare = useCompare();
   const [favorites, setFavorites] = usePersisted<Favorite[]>("bta.favorites", [], isFavoriteList);
@@ -555,6 +566,33 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
         run: () => void copyLink(`https://btacbb.xyz/players/${rec.bartId}/`),
       });
     }
+    for (const w of workspaces.list) {
+      if (w.id === workspaces.current.id) continue;
+      action({
+        id: `action:workspace:${w.id}`,
+        title: `Switch to ${w.name}`,
+        subtitle: "Workspace",
+        keywords: ["workspace", "switch"],
+        leading: <Layers size={15} strokeWidth={2} />,
+        run: () => workspaces.switchTo(w.id),
+      });
+    }
+    action({
+      id: "action:workspace-new",
+      title: "New workspace",
+      subtitle: "A separate set of tabs",
+      keywords: ["workspace", "create", "add"],
+      leading: <Layers size={15} strokeWidth={2} />,
+      run: () => setNamePrompt("new"),
+    });
+    action({
+      id: "action:workspace-rename",
+      title: "Rename workspace",
+      subtitle: workspaces.current.name,
+      keywords: ["workspace", "rename", "name"],
+      leading: <Pencil size={15} strokeWidth={2} />,
+      run: () => setNamePrompt("rename"),
+    });
     action({
       id: "action:new-tab",
       title: "New tab",
@@ -687,7 +725,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     );
 
     return items;
-  }, [view, current, ws.closed, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite, splitShown, toggleSplit, go, copyLink, compare.add]);
+  }, [view, current, ws.closed, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite, splitShown, toggleSplit, go, copyLink, compare.add, workspaces]);
 
   const allItems = useMemo(() => [...paletteItems, ...objects, ...coaches], [paletteItems, objects, coaches]);
 
@@ -774,6 +812,9 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
               onRenameFavorite={(id, label) =>
                 setFavorites((list) => list.map((f) => (f.id === id && label.trim() ? { ...f, label: label.trim() } : f)))
               }
+              workspaces={workspaces}
+              onNewWorkspace={() => setNamePrompt("new")}
+              onRenameWorkspace={() => setNamePrompt("rename")}
             />
           )}
 
@@ -842,6 +883,19 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
           />
         )}
         {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
+        {namePrompt && (
+          <NamePrompt
+            title={namePrompt === "new" ? "Name the new workspace" : "Rename this workspace"}
+            initial={namePrompt === "new" ? "" : workspaces.current.name}
+            confirm={namePrompt === "new" ? "Create" : "Rename"}
+            onDone={(name) =>
+              namePrompt === "new"
+                ? workspaces.create(name, { viewId: current.viewId, year: current.year })
+                : workspaces.rename(workspaces.current.id, name)
+            }
+            onClose={() => setNamePrompt(null)}
+          />
+        )}
       </div>
     </ShellContext.Provider>
   );

@@ -6,9 +6,12 @@ import {
   LogOut,
   Monitor,
   Moon,
+  Pencil,
+  Plus,
   RefreshCw,
   Search,
   Sun,
+  Trash2,
 } from "lucide-react";
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { ThemeMode } from "../../../preload";
@@ -20,6 +23,7 @@ import type { Favorite } from "./favorites";
 import { FavoritesSection } from "./favorites-section";
 import { GetStarted } from "./onboarding";
 import { NAV_VIEWS, type ViewDef } from "./views";
+import type { Workspaces } from "./workspaces";
 
 /**
  * The sidebar: who you are, how to find anything, and where the views are.
@@ -53,6 +57,9 @@ export function Sidebar({
   onOpenFavorite,
   onRemoveFavorite,
   onRenameFavorite,
+  workspaces,
+  onNewWorkspace,
+  onRenameWorkspace,
 }: {
   width: number;
   onResize: (w: number) => void;
@@ -67,6 +74,9 @@ export function Sidebar({
   onOpenFavorite: (f: Favorite, newTab: boolean) => void;
   onRemoveFavorite: (id: string) => void;
   onRenameFavorite: (id: string, label: string) => void;
+  workspaces: Workspaces;
+  onNewWorkspace: () => void;
+  onRenameWorkspace: () => void;
 }) {
   const { update, version } = useAccount();
   const [folded, setFolded] = usePersisted<string[]>(
@@ -85,7 +95,14 @@ export function Sidebar({
   return (
     <nav aria-label="Workspace" className="relative flex min-h-0 shrink-0 flex-col border-r border-hairline bg-chrome" style={{ width }}>
       <div className="px-2 pt-2">
-        <AccountButton theme={theme} setTheme={setTheme} onOpenShortcuts={onOpenShortcuts} />
+        <AccountButton
+          theme={theme}
+          setTheme={setTheme}
+          onOpenShortcuts={onOpenShortcuts}
+          workspaces={workspaces}
+          onNewWorkspace={onNewWorkspace}
+          onRenameWorkspace={onRenameWorkspace}
+        />
       </div>
 
       <div className="px-2 pb-1 pt-1.5">
@@ -212,10 +229,16 @@ function AccountButton({
   theme,
   setTheme,
   onOpenShortcuts,
+  workspaces,
+  onNewWorkspace,
+  onRenameWorkspace,
 }: {
   theme: ThemeMode;
   setTheme: (m: ThemeMode) => void;
   onOpenShortcuts: () => void;
+  workspaces: Workspaces;
+  onNewWorkspace: () => void;
+  onRenameWorkspace: () => void;
 }) {
   const { auth, update } = useAccount();
   const [open, setOpen] = useState(false);
@@ -240,6 +263,30 @@ function AccountButton({
       ),
     },
     { kind: "separator", id: "s0" },
+    { kind: "heading", id: "workspaces", label: "Workspaces" },
+    ...workspaces.list.map((w) =>
+      item({
+        id: `ws-${w.id}`,
+        label: w.name,
+        icon: <WorkspaceMark name={w.name} size={16} />,
+        checked: w.id === workspaces.current.id,
+        onSelect: () => workspaces.switchTo(w.id),
+      }),
+    ),
+    item({ id: "ws-new", label: "New workspace…", icon: <Plus size={14} />, onSelect: onNewWorkspace }),
+    item({ id: "ws-rename", label: `Rename ${workspaces.current.name}…`, icon: <Pencil size={14} />, onSelect: onRenameWorkspace }),
+    ...(workspaces.list.length > 1
+      ? [
+          item({
+            id: "ws-delete",
+            label: `Delete ${workspaces.current.name}`,
+            icon: <Trash2 size={14} />,
+            danger: true,
+            onSelect: () => workspaces.remove(workspaces.current.id),
+          }),
+        ]
+      : []),
+    { kind: "separator", id: "s0b" },
     { kind: "heading", id: "theme", label: "Theme" },
     item({ id: "theme-system", label: "Match system", icon: <Monitor size={14} />, checked: theme === "system", onSelect: () => setTheme("system") }),
     item({ id: "theme-light", label: "Light", icon: <Sun size={14} />, checked: theme === "light", onSelect: () => setTheme("light") }),
@@ -277,9 +324,15 @@ function AccountButton({
         onClick={() => setOpen((o) => !o)}
         className={`flex h-[34px] w-full items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-[var(--row-hover)] ${open ? "bg-[var(--row-hover)]" : ""}`}
       >
-        <Avatar initials={accountInitials(auth)} size={22} />
+        {/* With more than one workspace, the button names the one open: the thing that
+            changes when you switch, the way Linear and Notion head their sidebars. */}
+        {workspaces.list.length > 1 ? (
+          <WorkspaceMark name={workspaces.current.name} size={22} />
+        ) : (
+          <Avatar initials={accountInitials(auth)} size={22} />
+        )}
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">
-          {email ? email.split("@")[0] : "Beyond the Arc"}
+          {workspaces.list.length > 1 ? workspaces.current.name : email ? email.split("@")[0] : "Beyond the Arc"}
         </span>
         {auth.status === "waiting" && <span className="text-[11px] text-ink-muted">Signing in…</span>}
         <ChevronDown size={13} strokeWidth={2.25} className="shrink-0 text-ink-muted" />
@@ -305,6 +358,20 @@ function Avatar({ initials, size }: { initials: string; size: number }) {
       style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
     >
       {initials}
+    </span>
+  );
+}
+
+/** A workspace's mark: its first letter on a square, the shape a workspace wears in Linear and Notion. */
+function WorkspaceMark({ name, size }: { name: string; size: number }) {
+  const letter = name.trim().charAt(0).toUpperCase() || "W";
+  return (
+    <span
+      aria-hidden
+      className="grid shrink-0 place-items-center rounded-[5px] bg-ink font-semibold text-paper"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.55) }}
+    >
+      {letter}
     </span>
   );
 }
