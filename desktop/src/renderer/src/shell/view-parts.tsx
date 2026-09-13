@@ -12,12 +12,15 @@ export function ViewHeader({
   year,
   setYear,
   meta,
+  controls,
 }: {
   kicker: string;
   title: string;
   year: number;
   setYear: (y: number) => void;
   meta?: ReactNode;
+  /** Beside the season: a view's own pickers, in the same row. */
+  controls?: ReactNode;
 }) {
   return (
     <div className="flex shrink-0 items-end justify-between gap-4 px-5 pb-3 pt-4">
@@ -26,9 +29,10 @@ export function ViewHeader({
         <div className="mt-1.5 flex items-center gap-3">
           <h1 className="truncate text-[21px] font-semibold leading-none tracking-[-0.015em] text-ink">{title}</h1>
           <SeasonSwitcher year={year} onChange={setYear} />
+          {controls}
         </div>
       </div>
-      {meta != null && <div className="shrink-0 pb-0.5 text-[12px] text-ink-muted tabular">{meta}</div>}
+      {meta != null && <div className="shrink-0 pb-0.5 text-[12px] text-ink-muted">{meta}</div>}
     </div>
   );
 }

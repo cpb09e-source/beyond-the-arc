@@ -62,11 +62,17 @@ export default defineConfig({
   preload: {},
   renderer: {
     resolve: {
-      alias: {
-        "@": SITE_SRC,
-        "@public": SITE_PUBLIC,
-        "~": resolve(APP, "src/renderer/src"),
-      },
+      // AN ARRAY, IN ORDER: the two exact module paths must match before "@" does.
+      alias: [
+        // Web-only site modules, swapped for desktop stand-ins. Modules the app
+        // does want (the game-log indexes) import them, and the originals reach
+        // for Supabase and a signing endpoint the app cannot use until P3.
+        { find: "@/lib/gated-corpus", replacement: resolve(APP, "src/renderer/src/stand-ins/gated-corpus.ts") },
+        { find: "@/lib/data-url", replacement: resolve(APP, "src/renderer/src/stand-ins/data-url.ts") },
+        { find: "@", replacement: SITE_SRC },
+        { find: "@public", replacement: SITE_PUBLIC },
+        { find: "~", replacement: resolve(APP, "src/renderer/src") },
+      ],
     },
     plugins: [react(), tailwindcss(), contentSecurityPolicy()],
     server: {

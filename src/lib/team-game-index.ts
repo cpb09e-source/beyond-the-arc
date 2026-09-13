@@ -11,6 +11,7 @@
  */
 import { dataUrl } from "@/lib/data-url";
 import { loadSignedCorpus } from "@/lib/gated-corpus";
+import { midrankPercentileMap } from "@/lib/percentile";
 
 // ── The packed file ────────────────────────────────────────────────────────
 
@@ -488,4 +489,63 @@ export function fmtTeamGameValue(v: number | null, fmt: TeamGameStat["fmt"]): st
 export function fmtTeamGameDate(pack: TeamGamePack, r: number[]): string {
   const d = new Date(pack.epochMs + r[T.d]! * 86400000);
   return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${String(d.getUTCFullYear()).slice(-2)}`;
+}
+
+// ── Percentiles ────────────────────────────────────────────────────────────
+//
+// HERE, NOT IN THE EXPLORER COMPONENT, so every table that shows a team game
+// (the site's explorer, a team page, the desktop app) ranks it with one
+// function over one cohort.
+
+/**
+ * Percentiles for one stat over one season's games, computed once and kept.
+ *
+ * THE COHORT IS EVERY GAME IN THE SEASON, not the rows on screen. A percentile
+ * that moved when you filtered would answer a different question each time —
+ * "best of the eleven 100-point games you asked for" rather than "where this
+ * sits among every game played" — and the column would go flat exactly when a
+ * filter made it interesting.
+ *
+ * Cached at module scope keyed by season and stat: switching views or sorting
+ * recomputes nothing, and a season already scanned costs a Map lookup. An
+ * 11,500-row midrank is a few milliseconds; twelve seasons of eight columns is
+ * not, if it runs on every render.
+ */
+/**
+ * KEYED BY THE PACK OBJECT, not by season and stat.
+ *
+ * There are two kinds of pack now and both are labeled with the same season —
+ * the full corpus the explorer loads, and the ~30-row per-team file a team
+ * page loads. A "2026|net" key cannot tell them apart, and the entry cached
+ * from one would be handed to the other with row indices that mean something
+ * else entirely. The pack itself is the only honest identity; packs are cached
+ * by their loaders, so the same object comes back and this still computes once.
+ */
+const PCT_CACHE = new WeakMap<TeamGamePack, Map<string, Map<number, number>>>();
+
+export function seasonPercentiles(
+  pack: TeamGamePack,
+  stat: { key: string; get: (r: number[]) => number | null; lowerBetter?: boolean },
+): Map<number, number> {
+  let byStat = PCT_CACHE.get(pack);
+  if (!byStat) { byStat = new Map(); PCT_CACHE.set(pack, byStat); }
+  const hit = byStat.get(stat.key);
+  if (hit) return hit;
+
+  /**
+   * A per-team file ships the ranking already done, over the whole season,
+   * which is a cohort this pack no longer contains — so this branch is not an
+   * optimization, it is the only correct source. Ranking thirty games against
+   * each other would answer "best of Duke's own nights" while the header still
+   * says the chip means "among every game played".
+   */
+  const shipped = pack.pct?.[stat.key];
+  const m = shipped
+    ? new Map(shipped.flatMap((v, i) => (v === null ? [] : [[i, v] as [number, number]])))
+    : midrankPercentileMap(
+        pack.rows.map((r, i) => [i, stat.get(r)] as const),
+        !stat.lowerBetter,
+      );
+  byStat.set(stat.key, m);
+  return m;
 }

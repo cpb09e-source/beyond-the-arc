@@ -51,7 +51,13 @@ forward.
    when their views exist, so a result never opens onto nothing; actions on the selection
    (compare, copy, open on the site) arrive with the record panes.
 4. Team Game Log, then Player Game Log (pinned identity columns; percentiles over the whole
-   season, never the filtered rows, as the site does).
+   season, never the filtered rows, as the site does). **Team Game Log built:** every game of
+   a season with crests and AP ranks, the seven column views of the site in a picker that is
+   remembered, the shortcuts composing through passesTeamFilters, and a game Peek (result,
+   efficiency, four factors offense against defense, shooting). The whole-season percentile
+   function moved from the explorer component into `src/lib/team-game-index.ts`, and the two
+   web-only modules it imports get desktop stand-ins through Vite aliases
+   (`desktop/src/renderer/src/stand-ins`). **Player Game Log next.**
 5. Win Calculator. Plain-English questions go through the site's /api/parse-query, because the
    Anthropic key must never ship inside a desktop app.
 6. Team Scatter with the trapezoid.
