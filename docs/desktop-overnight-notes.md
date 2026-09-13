@@ -57,6 +57,12 @@ change is the paywall fix, which is storage, not a deploy.
 - **Contender zone removed** from team pages, the team Peek and team cards, at your request. Team Scatter keeps its trapezoid chart, which is what that view is.
 - **Electron 44's clipboard** is the W3C shape now (`clipboard.write([ClipboardItem])`, and `writeText` returns a promise); `writeImage` is gone.
 - **Site deploy:** built and checked locally (overtime headings, the push line, TBD tip times, the conference logo halo in dark, the matchup wash). Every game page changed, so all 743,070 are uploading to R2 before `netlify deploy`.
+- **Lasso and linked views** (`desktop/src/renderer/src/selection/`). One selection of teams in a season, shared by every tab and both panes of split view:
+  - Team Scatter: drag across the empty chart to lasso (Shift adds, Alt takes away, a click on the chart lets go), Shift-click a crest to toggle it, Ctrl+A for every team shown, Esc to let go. Picked crests take an accent ring and the rest fade; "Selected teams" is a field.
+  - Team Explorer: picked rows are tinted; Ctrl-click, Shift-click, X, Shift with the arrows and Ctrl+A pick; "Selected only" narrows the table; `teams: Duke, Houston` filters exactly.
+  - Linked hover: the row under the pointer rings its crest in the other pane, and a crest outlines its row.
+  - A floating selection bar: the count, the picked teams' average net, offense, defense and tempo and their record together, with Compare (two to four), Team Explorer, Team Scatter, Game logs, Win Calculator, Copy as a table and Clear. The same actions lead Ctrl K and the right-click menu of a picked team.
+  - In a narrow pane the scatter's team list steps aside, so the chart keeps the room.
 
 ## Was open overnight (now handled above)
 
