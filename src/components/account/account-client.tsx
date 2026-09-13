@@ -205,6 +205,8 @@ export function AccountClient() {
         </ul>
       </section>
 
+      {m.paid && <DesktopDownload token={session?.access_token ?? null} />}
+
       {/* STAFF ONLY, AND THE ONLY WAY IN.
           /admin is not in the nav and never will be — the header's width
           budget is already argued over in account-nav.tsx, and an eighth
@@ -344,5 +346,55 @@ function Tick() {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+/**
+ * Beyond the Arc for Windows, for every account the app is open to.
+ *
+ * THE FUNCTION DECIDES, NOT THIS PAGE. /api/desktop/download follows the same
+ * rule as signing in to the app (DESKTOP_ACCESS), so a button shown here can
+ * never hand someone an installer the app would then refuse. The page only asks
+ * for the current release and starts the download.
+ */
+function DesktopDownload({ token }: { token: string | null }) {
+  const [state, setState] = useState<{ kind: "idle" } | { kind: "busy" } | { kind: "error"; message: string }>({ kind: "idle" });
+
+  async function download() {
+    if (!token) return;
+    setState({ kind: "busy" });
+    try {
+      const res = await fetch("/api/desktop/download", { headers: { authorization: `Bearer ${token}` } });
+      const body = (await res.json().catch(() => ({}))) as { url?: string; version?: string; error?: string };
+      if (!res.ok || !body.url) {
+        setState({ kind: "error", message: body.error ?? "The download is not available right now." });
+        return;
+      }
+      window.location.href = body.url;
+      setState({ kind: "idle" });
+    } catch {
+      setState({ kind: "error", message: "Could not reach Beyond the Arc. Check your connection and try again." });
+    }
+  }
+
+  return (
+    <section className="mt-6 rounded-xl border border-hairline bg-card p-6">
+      <span className="label text-ink-muted">Beyond the Arc for Windows</span>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+        <p className="text-sm text-ink-soft leading-snug max-w-[28rem]">
+          Tabs, split view, Ctrl K and the Win Calculator on your desktop, included with your Season Pass. After
+          installing, sign in with this account.
+        </p>
+        <button
+          type="button"
+          onClick={download}
+          disabled={state.kind === "busy" || !token}
+          className="h-10 shrink-0 inline-flex items-center rounded px-4 text-sm font-semibold bg-coral text-accent-foreground hover:bg-coral-soft transition-colors disabled:opacity-50"
+        >
+          {state.kind === "busy" ? "Preparing…" : "Download for Windows"}
+        </button>
+      </div>
+      {state.kind === "error" && <p className="mt-3 text-xs text-ink-muted">{state.message}</p>}
+    </section>
   );
 }

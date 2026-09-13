@@ -70,7 +70,7 @@ export default async (req: Request, _context: Context) => {
   }
   if (!desktopEntitled(profile)) {
     return Response.json(
-      { error: "The desktop app is not open to this account yet.", reason: "not-entitled" },
+      { error: "The desktop app comes with Season Pass. Your account keeps working on btacbb.xyz as it does today.", reason: "not-entitled" },
       { status: 403, headers: NO_STORE },
     );
   }

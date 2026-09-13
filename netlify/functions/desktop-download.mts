@@ -1,16 +1,19 @@
 import type { Context } from "@netlify/functions";
-import { requireAdmin } from "../shared/billing.mts";
+import { requireAdmin, requirePaid } from "../shared/billing.mts";
+import { DESKTOP_ACCESS } from "../shared/desktop-auth.mts";
 
 /**
  * Where the site's download button gets the Windows installer.
  *
  * GET /api/desktop/download   Authorization: Bearer <site session>
  *   -> 200 { url, version }   the current installer
- *   -> 401 / 404              signed out, or not an administrator
+ *   -> 401 / 403 / 404        signed out, or an account the app is not open to
  *
- * ADMIN ONLY, because the app is in early access and unsigned. The rule lives
- * here, on the server, so widening it is a deploy of this file and nothing in
- * the browser decides it.
+ * THE SAME RULE AS SIGNING IN. DESKTOP_ACCESS (netlify/shared/desktop-auth.mts)
+ * decides who may use the app, and this follows it: Season Pass holders and
+ * administrators when it says "paid", administrators alone when it says
+ * "admin". One word moves both, so a download button can never offer an
+ * installer to someone the app would then refuse.
  *
  * THE INSTALLER ITSELF IS AN ORDINARY PUBLIC OBJECT, next to the update feed
  * the app polls (desktop/latest.yml on the public bucket). That is deliberate
@@ -31,7 +34,7 @@ export default async (req: Request, _context: Context) => {
     return Response.json({ error: "GET only" }, { status: 405 });
   }
 
-  const gate = await requireAdmin(req, "desktop-download");
+  const gate = DESKTOP_ACCESS === "paid" ? await requirePaid(req, "desktop-download") : await requireAdmin(req, "desktop-download");
   if ("response" in gate) return gate.response;
 
   // latest.yml is the feed electron-updater reads; its `path` is the installer.

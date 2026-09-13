@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { AuthLink, AuthShell, FormError } from "@/components/account/auth-shell";
+import { AuthShell, FormError } from "@/components/account/auth-shell";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +51,7 @@ const buttonClass = cn(
 const noSubscribe = () => () => {};
 
 export function ConnectClient() {
-  const { status, session, profile } = useAuth();
+  const { status, session, profile, signOut } = useAuth();
   // The query, read without an effect: null while prerendering, where there is
   // no location, and the real string once in the browser.
   const search = useSyncExternalStore(noSubscribe, () => window.location.search, () => null);
@@ -115,11 +115,24 @@ export function ConnectClient() {
   if (phase.kind === "refused") {
     return (
       <AuthShell
-        title="The app is not open to this account yet"
-        intro="Beyond the Arc for Windows is in early access. Everything on btacbb.xyz keeps working for your account as it does today."
-        footer={<AuthLink href="/">Back to Beyond the Arc</AuthLink>}
+        title="The desktop app comes with Season Pass"
+        intro={`${email} is on the free plan. Season Pass opens every season since 2013-14 on btacbb.xyz, and Beyond the Arc for Windows with it. Everything your account does on the site keeps working as it does today.`}
+        footer={
+          <>
+            Not your account?{" "}
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="text-coral underline-offset-2 hover:underline"
+            >
+              Sign in with a different one
+            </button>
+          </>
+        }
       >
-        {null}
+        <a href="/pricing/" className={cn(buttonClass, "flex items-center justify-center")}>
+          See Season Pass
+        </a>
       </AuthShell>
     );
   }

@@ -51,7 +51,7 @@ async function entitledUser(userId: string, email: string | null): Promise<Deskt
   const profile = await readDesktopProfile(admin, userId);
   if (profile === "error") return json({ error: "Could not check your account." }, 503);
   if (!desktopEntitled(profile)) {
-    return json({ error: "The desktop app is not open to this account yet.", reason: "not-entitled" }, 403);
+    return json({ error: "The desktop app comes with Season Pass. Your account keeps working on btacbb.xyz as it does today.", reason: "not-entitled" }, 403);
   }
   return { id: userId, email, role: profile?.role ?? null };
 }
