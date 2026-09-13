@@ -23,6 +23,7 @@ export function ObjectLink({ obj, title, className, children }: { obj: Obj; titl
   return (
     <button
       type="button"
+      data-obj={JSON.stringify(obj)}
       title={title ?? "Ctrl-click for a new tab  ·  right-click for more"}
       draggable
       onDragStart={(e) => beginDrag(e, objectDrag(obj))}

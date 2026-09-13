@@ -12,6 +12,7 @@ import { SOURCE_LABEL, useCorpus } from "~/data/use-corpus";
 import { beginDrag } from "~/objects/drag";
 import { objectDrag, type Obj } from "~/objects/object";
 import { useObjectMenu } from "~/objects/use-object-actions";
+import { focusTeam, sameConf, useFocusSubject } from "~/focus/focus-mode";
 import { useEcho, useSelection } from "~/selection/selection";
 import { useIsActive } from "~/shell/active";
 import { Picker } from "~/shell/picker";
@@ -66,6 +67,7 @@ export function TeamScatterView({ year, setYear, query }: ViewProps) {
   const picked = namesIn(year);
   const { nameIn: echoIn, publish } = useEcho();
   const echoName = echoIn(year);
+  const subject = useFocusSubject();
 
   /** The team under the pointer or the cursor, told to every other view as well. */
   const hoverTo = useCallback(
@@ -109,6 +111,19 @@ export function TeamScatterView({ year, setYear, query }: ViewProps) {
     const names = new Set(topByNet(teams, field === "field:top25" ? 25 : 75));
     return teams.filter((t) => names.has(t.name));
   }, [teams, field, picked]);
+
+  // Focus isolates its teams: ringed, everything else stepped back, and on the chart even from outside the field.
+  const focusNames = useMemo(() => {
+    if (!subject || teams.length === 0) return null;
+    const team = focusTeam(subject);
+    const names =
+      subject.kind === "conference" ? teams.filter((t) => sameConf(subject, t.conf)).map((t) => t.name) : teams.filter((t) => t.name === team).map((t) => t.name);
+    return names.length > 0 ? new Set(names) : null;
+  }, [subject, teams]);
+  const plotted = useMemo(
+    () => (focusNames ? [...shown, ...teams.filter((t) => focusNames.has(t.name) && !shown.includes(t))] : shown),
+    [shown, teams, focusNames],
+  );
 
   const inZone = useMemo(
     () => new Set(zoneLive ? shown.filter((t) => zoneLive.contains(t.m[ZONE_X], t.m[ZONE_Y])).map((t) => t.name) : []),
@@ -306,7 +321,7 @@ export function TeamScatterView({ year, setYear, query }: ViewProps) {
           ) : (
             <ScatterPlot
               teams={teams}
-              shown={shown}
+              shown={plotted}
               xM={xM}
               yM={yM}
               zone={zoneLive}
@@ -316,8 +331,9 @@ export function TeamScatterView({ year, setYear, query }: ViewProps) {
               onOpen={open}
               onMenu={(e, t) => menu(e, teamObj(t))}
               pct={pct}
-              selected={picked}
-              echo={echoName}
+              selected={focusNames ?? picked}
+              echo={focusNames?.size === 1 ? [...focusNames][0]! : echoName}
+              objectOf={teamObj}
               onLasso={(names, mode) => select(year, names, mode)}
               onToggle={(name) => select(year, [name], "toggle")}
               onClearSelection={() => {
@@ -359,6 +375,7 @@ export function TeamScatterView({ year, setYear, query }: ViewProps) {
                     draggable
                     onDragStart={(e) => beginDrag(e, objectDrag(teamObj(t)))}
                     data-scatter-row={t.name}
+                    data-obj={JSON.stringify(teamObj(t))}
                     className={`grid h-[34px] w-full grid-cols-[26px_minmax(0,1fr)_44px_44px_8px] items-center gap-2 px-3 text-left text-[12.5px] ${
                       isPicked ? "" : lit ? "bg-[var(--row-focus)]" : "hover:bg-[var(--row-hover)]"
                     }`}

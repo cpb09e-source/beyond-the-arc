@@ -1,3 +1,4 @@
+import type { Obj } from "~/objects/object";
 import { useEffect, useId, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { PercentileChip } from "@/components/percentile-chip";
 import { confDisplay } from "@/lib/conf-display";
@@ -78,6 +79,7 @@ export function ScatterPlot({
   onLasso,
   onToggle,
   onClearSelection,
+  objectOf,
 }: {
   teams: ScatterTeam[];
   shown: ScatterTeam[];
@@ -99,6 +101,8 @@ export function ScatterPlot({
   /** Shift-click on a crest. */
   onToggle: (name: string) => void;
   onClearSelection: () => void;
+  /** The team a crest is, for Focus to read from under the pointer. */
+  objectOf?: (team: ScatterTeam) => Obj;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ W: 900, H: 640 });
@@ -346,6 +350,7 @@ export function ScatterPlot({
           <div
             key={p.name}
             data-crest
+            data-obj={objectOf ? JSON.stringify(objectOf(p)) : undefined}
             role="button"
             aria-pressed={anyPicked ? picked : undefined}
             aria-label={`${p.name}, ${fmtMetric(xM, p.m[xM.key] ?? null)} ${xM.short}, ${fmtMetric(yM, p.m[yM.key] ?? null)} ${yM.short}`}

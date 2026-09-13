@@ -8,6 +8,7 @@ import {
   ChartScatter,
   ClipboardCopy,
   Columns2,
+  Crosshair,
   ExternalLink,
   Eye,
   GitCompareArrows,
@@ -78,6 +79,8 @@ export type ActionEnv = {
   toast: (t: ToastInput) => void;
   /** Opens the snapshot sheet for a team, player, coach or game (~/snapshot/snapshot-sheet.tsx). */
   snapshot: (o: Obj) => void;
+  /** Holds every open pane on the object until Q or Esc (~/focus/focus-mode.tsx). */
+  focus: (o: Obj) => void;
   /** The tab in front: an action about the page already open says less. */
   here: { viewId: string; year: number; query: string; record?: RecordRef };
 };
@@ -451,6 +454,18 @@ export const ACTIONS: ActionDef[] = [
     },
   },
 
+  {
+    id: "focus",
+    group: "open",
+    icon: Crosshair,
+    label: () => "Focus every pane",
+    phrase: (o) =>
+      `Focus every pane on ${o.kind === "log-game" ? (o.player?.name ?? o.team) : o.kind === "coach" ? (o.team ?? o.name) : objTitle(o)}`,
+    hint: "Hold Q",
+    keywords: ["focus", "follow", "spotlight", "isolate", "highlight", "panes", "workspace"],
+    when: (o) => o.kind === "team" || o.kind === "player" || o.kind === "conference" || o.kind === "log-game" || (o.kind === "coach" && o.team != null),
+    run: (o, env) => env.focus(o),
+  },
   {
     id: "snapshot",
     group: "share",

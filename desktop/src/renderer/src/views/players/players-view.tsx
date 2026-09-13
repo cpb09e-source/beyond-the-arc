@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { TopHundredPill } from "@/components/portal/top-hundred-pill";
 import { loadPlayerSeason, type Player, type PlayerSeason } from "~/data/player-model";
 import { SOURCE_LABEL, useLoaded } from "~/data/use-corpus";
+import { useFocusSubject } from "~/focus/focus-mode";
 import type { Obj } from "~/objects/object";
 import { useTabTitle } from "~/shell/tab-title";
 import { useSetStatus } from "~/shell/status";
@@ -109,6 +110,11 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }:
     else setStatus("Not loaded");
   }, [state, setStatus]);
 
+  // Focus on a player lights his row among his team's (the team comes as the filter).
+  const focusSubject = useFocusSubject();
+  const spotKey =
+    focusSubject?.kind === "player" && season ? (season.players.find((p) => p.bartId === focusSubject.bartId)?.id ?? null) : null;
+
   const total = season?.players.length ?? 0;
   const meta = !season
     ? undefined
@@ -148,6 +154,7 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }:
             landOn={landing && target ? { key: landing.id, nonce: target.nonce } : undefined}
             onLanded={onLanded}
             object={object}
+            spotlight={spotKey}
           />
         ) : state.status === "loading" ? (
           <TableSkeleton rowHeight={ROW_H} label="Loading players" />

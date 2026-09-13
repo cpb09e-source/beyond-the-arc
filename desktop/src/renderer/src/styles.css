@@ -488,6 +488,7 @@ html {
 /* A view snapshot shows the view, not the toasts or the compare tray floating over it. */
 [data-snapshotting] [aria-live="polite"],
 [data-snapshotting] [aria-label="Compare tray"],
-[data-snapshotting] [aria-label="Selection"] {
+[data-snapshotting] [aria-label="Selection"],
+[data-snapshotting] [aria-label="Focus"] {
   visibility: hidden;
 }

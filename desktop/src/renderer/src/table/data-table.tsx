@@ -143,6 +143,11 @@ type Props<R> = {
   echo?: string | number | null;
   /** Told when the reader moves to a row (pointer or keys), and undefined when the pointer leaves. */
   onFocusRow?: (row: R | undefined) => void;
+  /**
+   * A row the rest step back from, for Focus (~/focus/focus-mode.tsx): lit, the
+   * others dimmed, scrolled into view while it lasts and the scroll put back after.
+   */
+  spotlight?: string | number | null;
 };
 
 const HEAD_H = 32;
@@ -186,6 +191,7 @@ export function DataTable<R>({
   selection,
   echo,
   onFocusRow,
+  spotlight,
 }: Props<R>) {
   const [sort, setSort] = useState(defaultSort);
   // A table in a tab that is not in front keeps its state but not the keyboard.
@@ -462,6 +468,25 @@ export function DataTable<R>({
     // Once per landing; everything else is read as it stands at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [landed]);
+  // FOCUS (~/focus/focus-mode.tsx): the lit row into view when it is out of sight,
+  // and the scroll put back where the reader had it once the focus lets go.
+  const spotIndex = spotlight == null ? undefined : indexByKey.get(spotlight);
+  const scrollBeforeSpot = useRef<number | null>(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (spotIndex != null) {
+      if (scrollBeforeSpot.current == null) scrollBeforeSpot.current = el.scrollTop;
+      const top = spotIndex * rowHeight;
+      if (top < el.scrollTop || top + rowHeight > el.scrollTop + el.clientHeight) virtual.scrollToIndex(spotIndex, { align: "center" });
+    } else if (scrollBeforeSpot.current != null) {
+      el.scrollTop = scrollBeforeSpot.current;
+      scrollBeforeSpot.current = null;
+    }
+    // Only when the lit row changes; the virtualizer and row height are read as they stand.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spotIndex]);
+
   // Beside its row, clamped inside the visible table so a row near the bottom
   // never pushes the panel off screen.
   const rowTop = headH + index * rowHeight - scrollTop;
@@ -636,17 +661,25 @@ export function DataTable<R>({
               const row = sorted[item.index]!;
               const isFocus = item.index === index;
               const picked = selection?.isSelected(row) ?? false;
+              // Focus lights one row and steps the rest back.
+              const lit = spotIndex != null && item.index === spotIndex;
+              const stepBack = spotIndex != null && !lit;
               // Picked rows carry the accent more strongly than focus alone, so a selection reads at a glance.
-              const background = picked
-                ? `color-mix(in oklab, var(--accent) ${isFocus ? 22 : 14}%, var(--paper))`
-                : isFocus
-                  ? "var(--row-focus)"
-                  : "var(--paper)";
+              const background =
+                picked || lit
+                  ? `color-mix(in oklab, var(--accent) ${isFocus || lit ? 22 : 14}%, var(--paper))`
+                  : isFocus
+                    ? "var(--row-focus)"
+                    : "var(--paper)";
               const echoed = echo != null && rowKey(row) === echo;
+              // What Focus reads from under the pointer: the row's object, and whether it is the focused row.
+              const obj = object?.(row) ?? null;
               return (
                 <div
                   key={rowKey(row)}
                   role="row"
+                  data-obj={obj ? JSON.stringify(obj) : undefined}
+                  data-row-focus={isFocus ? "" : undefined}
                   aria-selected={selection ? picked : isFocus}
                   onMouseDown={(e) => {
                     if (e.button !== 0) return;
@@ -686,8 +719,9 @@ export function DataTable<R>({
                     transform: `translateY(${item.start}px)`,
                     background,
                     // Drawn over the pinned cells, which paint their own opaque ground.
-                    outline: echoed ? "1.5px solid var(--accent)" : undefined,
-                    outlineOffset: echoed ? "-1.5px" : undefined,
+                    outline: lit ? "2px solid var(--accent)" : echoed ? "1.5px solid var(--accent)" : undefined,
+                    outlineOffset: lit ? "-2px" : echoed ? "-1.5px" : undefined,
+                    opacity: stepBack ? 0.4 : undefined,
                   }}
                 >
                   {columns.map((c, i) => (

@@ -105,6 +105,7 @@ export function DetailLink({ onOpen, title, object, children }: { onOpen: (how: 
     <button
       type="button"
       title={title}
+      data-obj={object ? JSON.stringify(object) : undefined}
       draggable={object ? true : undefined}
       onDragStart={object ? (e) => beginDrag(e, objectDrag(object)) : undefined}
       onContextMenu={object ? (e) => menu(e, object) : undefined}

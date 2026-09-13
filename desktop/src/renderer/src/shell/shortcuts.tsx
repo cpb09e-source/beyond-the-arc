@@ -95,6 +95,14 @@ const GROUPS: Array<{ title: string; items: Shortcut[] }> = [
     ],
   },
   {
+    title: "Focus",
+    items: [
+      { label: "Every pane follows what is under the pointer, while held", keys: [["Hold", "Q"]] },
+      { label: "Keep the focus on", keys: [["Tap", "Q"]] },
+      { label: "Let the focus go", keys: [["Q"], ["Esc"]] },
+    ],
+  },
+  {
     title: "Search",
     items: [
       { label: "Open the highlighted result", keys: [["Enter"]] },

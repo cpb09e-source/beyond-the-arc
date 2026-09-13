@@ -59,6 +59,7 @@ import { recordVisit, useRecents } from "~/shell/recents";
 import { isSnappable, type SnapObj } from "~/snapshot/snapshot-cards";
 import { SnapshotSheet, snapshotView } from "~/snapshot/snapshot-sheet";
 import { EchoProvider, SelectionProvider, useSelection } from "~/selection/selection";
+import { FocusModeProvider, FocusPill, focusQuery, focusedRowObject, follows, objectAt, subjectOf, useFocusMode } from "~/focus/focus-mode";
 import { selectionPaletteItems } from "~/selection/selection-actions";
 import { SelectionBar } from "~/selection/selection-bar";
 import { seasonLabel } from "~/ui/format";
@@ -99,7 +100,9 @@ export function App() {
           <CompareProvider>
             <SelectionProvider>
               <EchoProvider>
-                <Frame />
+                <FocusModeProvider>
+                  <Frame />
+                </FocusModeProvider>
               </EchoProvider>
             </SelectionProvider>
           </CompareProvider>
@@ -164,6 +167,8 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
   const { auth, update } = useAccount();
   const compare = useCompare();
   const selection = useSelection();
+  const focusMode = useFocusMode();
+  const subject = focusMode.mode?.subject ?? null;
   const [favorites, setFavorites] = usePersisted<Favorite[]>("bta.favorites", [], isFavoriteList);
 
   const current = ws.tabs.find((t) => t.id === ws.active) ?? ws.tabs[0]!;
@@ -178,7 +183,8 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
 
   // Home's "Jump back in": every place the tab in front settles on, Home itself aside.
   useEffect(() => {
-    if (current.viewId === "home") return;
+    // A focus is a glance, not a visit: the places it passes through are not where the reader went.
+    if (current.viewId === "home" || subject) return;
     recordVisit({
       viewId: current.viewId,
       year: current.year,
@@ -186,7 +192,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       record: current.record,
       title: current.title ?? current.record?.name ?? viewById(current.viewId).label,
     });
-  }, [current.viewId, current.year, current.query, current.record, current.title]);
+  }, [current.viewId, current.year, current.query, current.record, current.title, subject]);
 
   const trayRef = useRef(compare.items);
   useEffect(() => {
@@ -392,9 +398,14 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       snapshot: (o) => {
         if (isSnappable(o)) setSnapping(o);
       },
+      // From a menu or Ctrl K there is no key to hold, so the focus stays until Q or Esc.
+      focus: (o) => {
+        const s = subjectOf(o, currentRef.current.year);
+        if (s) focusMode.start(s, true);
+      },
       here: { viewId: current.viewId, year: current.year, query: current.query, record: current.record },
     }),
-    [openRecord, openView, go, openGame, compare.add, favorites, toggleFavoritePlace, copyText, toast, current.viewId, current.year, current.query, current.record],
+    [openRecord, openView, go, openGame, compare.add, favorites, toggleFavoritePlace, copyText, toast, current.viewId, current.year, current.query, current.record, focusMode.start],
   );
 
   // The site's search indexes, loaded in the background at launch so the first
@@ -464,6 +475,85 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       window.removeEventListener("mouseup", onMouse);
     };
   }, [dispatch, focusFilter, newTab, setCollapsed, toggleFavorite, toggleSplit, snapView]);
+
+  /**
+   * FOCUS (~/focus/focus-mode.tsx). Hold Q over something and every pane follows
+   * it; a tap keeps it on; Q again or Esc lets it go. With the pointer over
+   * nothing, Q takes the focused row of the tab in front, then the page itself.
+   * In the capture phase, so Esc lets a focus go before a table takes the key
+   * to clear a selection.
+   */
+  const pointer = useRef<{ x: number; y: number } | null>(null);
+  const heldAt = useRef<number | null>(null);
+  const modeRef = useRef(focusMode.mode);
+  useEffect(() => {
+    modeRef.current = focusMode.mode;
+  }, [focusMode.mode]);
+  const { start: startFocus, lock: lockFocus, release: releaseFocus } = focusMode;
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      pointer.current = { x: e.clientX, y: e.clientY };
+    };
+    const onLeave = () => {
+      pointer.current = null;
+    };
+    const resolve = () => {
+      const tab = currentRef.current;
+      const at = pointer.current;
+      const obj = (at ? objectAt(at.x, at.y) : null) ?? focusedRowObject(tab.id) ?? (tab.record ? objFromRecord(tab.record, tab.year) : null);
+      return obj ? subjectOf(obj, tab.year) : null;
+    };
+    const onDown = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.key === "Escape" && modeRef.current && !t?.closest?.("[role=dialog]")) {
+        e.preventDefault();
+        e.stopPropagation();
+        heldAt.current = null;
+        releaseFocus();
+        return;
+      }
+      if (e.code !== "KeyQ" || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      e.preventDefault();
+      if (e.repeat) return;
+      if (modeRef.current?.locked) {
+        releaseFocus();
+        return;
+      }
+      const s = resolve();
+      if (!s) {
+        toast({ title: "Nothing here to focus on", body: "Point at a team, a player or a conference, then hold Q." });
+        return;
+      }
+      startFocus(s, false);
+      heldAt.current = performance.now();
+    };
+    const onUp = (e: KeyboardEvent) => {
+      if (e.code !== "KeyQ" || heldAt.current == null) return;
+      const tapped = performance.now() - heldAt.current < 280;
+      heldAt.current = null;
+      if (tapped) lockFocus();
+      else releaseFocus();
+    };
+    // A held focus ends with the key, and a key let go in another window never arrives.
+    const onBlur = () => {
+      if (heldAt.current == null) return;
+      heldAt.current = null;
+      releaseFocus();
+    };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    document.documentElement.addEventListener("pointerleave", onLeave);
+    window.addEventListener("keydown", onDown, true);
+    window.addEventListener("keyup", onUp, true);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      document.documentElement.removeEventListener("pointerleave", onLeave);
+      window.removeEventListener("keydown", onDown, true);
+      window.removeEventListener("keyup", onUp, true);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [startFocus, lockFocus, releaseFocus, toast]);
 
   // Get started ticks itself off as the reader finds each thing, wherever they find it.
   useEffect(() => {
@@ -940,10 +1030,13 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
               const active = tab.id === ws.active;
               const pane = splitShown && split ? (tab.id === split.a ? "a" : tab.id === split.b ? "b" : null) : null;
               const shown = splitShown ? pane !== null : active;
+              // A pane on screen follows a focus through a stand-in query; its own query is untouched.
+              const followQuery = subject && shown ? focusQuery(tab.viewId, subject, tab.query) : undefined;
               return (
                 <ActiveContext.Provider key={`${tab.id}:${tab.viewId}`} value={active}>
                   <TabTitleContext.Provider value={titleSetter(tab.id)}>
                   <section
+                    data-tab={tab.id}
                     hidden={!shown}
                     // A press anywhere in the other pane hands it the keyboard, then goes on to what was pressed.
                     onPointerDownCapture={pane && !active ? () => dispatch({ type: "activate", id: tab.id }) : undefined}
@@ -961,11 +1054,21 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
                         className={`pointer-events-none absolute inset-x-0 top-0 z-40 h-[2px] transition-colors ${active ? "bg-accent" : "bg-transparent"}`}
                       />
                     )}
+                    {subject && shown && follows(tab.viewId, subject) && (
+                      <span aria-hidden className="pointer-events-none absolute inset-0 z-30 shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--accent)_50%,transparent)]" />
+                    )}
                     <View
                       year={tab.year}
                       setYear={(y) => dispatch({ type: "set-year", id: tab.id, year: y })}
-                      query={tab.query}
-                      setQuery={(q) => dispatch({ type: "set-query", id: tab.id, query: q })}
+                      query={followQuery ?? tab.query}
+                      setQuery={(q) => {
+                        // Typing into a pane that is following lets the focus go and keeps what was typed.
+                        if (followQuery !== undefined) {
+                          releaseFocus();
+                          if (q === followQuery) return;
+                        }
+                        dispatch({ type: "set-query", id: tab.id, query: q });
+                      }}
                       focus={active ? focus : null}
                       onLanded={landed}
                       record={tab.record}
@@ -984,6 +1087,19 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
             )}
             <BesideDropZone onDrop={(o) => actionById("open-side")?.run(o, env, { newTab: false, side: true }, {})} />
             <SelectionBar />
+            {focusMode.mode && (
+              <FocusPill
+                mode={focusMode.mode}
+                following={
+                  ws.tabs.filter(
+                    (t) => (splitShown && split ? t.id === split.a || t.id === split.b : t.id === ws.active) && follows(t.viewId, focusMode.mode!.subject),
+                  ).length
+                }
+                // Stacked over whatever already sits at the foot: the selection bar, then the compare tray.
+                bottom={16 + (selection.selection ? 48 : 0) + (compare.items.length > 0 ? 48 : 0)}
+                onRelease={releaseFocus}
+              />
+            )}
             <CompareDock
               lift={!!selection.selection}
               hidden={current.viewId === "compare" && current.query === compareQuery(compare.items)}

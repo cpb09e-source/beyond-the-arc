@@ -30,6 +30,7 @@ export function GameCard({
   onOpen,
   onMenu,
   drag,
+  focus,
 }: {
   g: ScoreGame;
   names: TeamNames | null;
@@ -40,6 +41,8 @@ export function GameCard({
   onMenu?: (e: ReactMouseEvent) => void;
   /** What the card carries when dragged: the game, to the tabs or the other pane. */
   drag?: DragSpec;
+  /** Focus: true lights the card, false steps it back, undefined leaves it be. */
+  focus?: boolean;
 }) {
   const live = isLive(g);
   const final = isFinal(g);
@@ -68,7 +71,7 @@ export function GameCard({
       }}
       className={`group flex cursor-default flex-col rounded-lg border bg-card px-3 pb-2.5 pt-2 outline-none transition-colors focus-visible:border-accent focus-visible:shadow-[0_0_0_3px_color-mix(in_oklab,var(--accent)_22%,transparent)] ${
         live ? "border-[color-mix(in_oklab,var(--accent)_55%,var(--hairline))]" : "border-hairline hover:border-[color-mix(in_oklab,var(--ink-muted)_60%,var(--hairline))]"
-      }`}
+      } ${focus === true ? "shadow-[0_0_0_2px_var(--accent)]" : focus === false ? "opacity-35" : ""}`}
     >
       <div className="flex h-[20px] items-center justify-between gap-3 text-[11.5px]">
         <span className={`flex shrink-0 items-center gap-1.5 font-medium ${live ? "text-accent" : final ? "text-ink-soft" : "text-ink-muted"}`}>

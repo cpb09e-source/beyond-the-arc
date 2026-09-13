@@ -5,6 +5,7 @@ import { confPercentiles, confReader, type ConfPack, type ConfRow, type ConfSpli
 import { CONF_SPLITS, confCol, confViewBands, confViewCols, confViewsFor, fmtConfValue } from "@/lib/conference-views";
 import { SEASON_CEIL } from "@/lib/seasons";
 import { SOURCE_LABEL, useCorpus, useLoaded } from "~/data/use-corpus";
+import { focusConf, useFocusSubject } from "~/focus/focus-mode";
 import { Picker } from "~/shell/picker";
 import { useShell } from "~/shell/shell-context";
 import { useTabTitle } from "~/shell/tab-title";
@@ -117,6 +118,15 @@ export function ConferencesView({ year, setYear, query, setQuery }: ViewProps) {
     () => cohort.filter((r) => matchesQuery(query, confName(r), r.conf, scope === "all" ? seasonLabel(r.year) : "")),
     [cohort, query, scope],
   );
+
+  // Focus lights a conference: the one focused, or a focused team's or player's.
+  const focusSubject = useFocusSubject();
+  const spotKey = useMemo(() => {
+    const c = focusConf(focusSubject);
+    if (!c || !focusSubject) return null;
+    const hit = cohort.find((r) => (scope !== "all" || r.year === focusSubject.year) && (r.conf === c.conf || confName(r) === c.label));
+    return hit ? rowKey(hit) : null;
+  }, [cohort, focusSubject, scope]);
 
   // The view's own sort, or the first column a split kept. Nothing sorts by a
   // column the table does not show.
@@ -284,6 +294,7 @@ export function ConferencesView({ year, setYear, query, setQuery }: ViewProps) {
               body: (r) => <ConferencePeekBody row={r} highlights={highlightsFor(r)} />,
             }}
             id="conferences"
+            spotlight={spotKey}
             object={(r) => ({ kind: "conference", conf: r.conf, label: confName(r), year: r.year })}
             onOpen={(r, how) => openView("team-explorer", { newTab: how.newTab, side: how.side, year: r.year, query: scopedQuery("conf", confName(r)) })}
           />

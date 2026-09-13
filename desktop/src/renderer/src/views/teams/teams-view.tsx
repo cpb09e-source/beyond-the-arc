@@ -5,6 +5,7 @@ import { loadTeamGameSeason } from "~/data/team-game-model";
 import { shapeSeason, type Season, type Team } from "~/data/team-model";
 import { loadOnce, SOURCE_LABEL, useCorpus } from "~/data/use-corpus";
 import type { Obj } from "~/objects/object";
+import { focusTeam, useFocusSubject } from "~/focus/focus-mode";
 import { useEcho, useSelection, type SelectMode } from "~/selection/selection";
 import { useTabTitle } from "~/shell/tab-title";
 import { useSetStatus } from "~/shell/status";
@@ -189,6 +190,9 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
   const onFocusRow = useCallback((t: Team | undefined) => publish(year, t?.name ?? null), [publish, year]);
   const echoName = echoIn(year);
   const echoKey = echoName && season ? (season.teams.find((t) => t.name === echoName)?.id ?? null) : null;
+  // Focus lights the focused team's row, or a focused player's team; a conference narrows the table instead.
+  const focusName = focusTeam(useFocusSubject());
+  const spotKey = focusName && season ? (season.teams.find((t) => t.name === focusName)?.id ?? null) : null;
 
   const total = season?.teams.length ?? 0;
   const meta = !season
@@ -258,6 +262,7 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
             object={object}
             selection={selection}
             echo={echoKey}
+            spotlight={spotKey}
             onFocusRow={onFocusRow}
           />
         ) : state.status === "loading" ? (

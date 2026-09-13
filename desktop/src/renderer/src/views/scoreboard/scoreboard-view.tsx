@@ -14,6 +14,11 @@ import {
   weekDays,
   type ScoreGame,
 } from "@/lib/scoreboard-core";
+import { T } from "@/lib/team-game-index";
+import { logDate } from "~/data/game-link";
+import { loadTeamGameSeason } from "~/data/team-game-model";
+import { loadOnce } from "~/data/use-corpus";
+import { focusConf, focusTeam, sameConf, useFocusSubject } from "~/focus/focus-mode";
 import { useIsActive } from "~/shell/active";
 import { useShell } from "~/shell/shell-context";
 import { useSetStatus } from "~/shell/status";
@@ -99,6 +104,17 @@ export function ScoreboardView({ query, setQuery }: ViewProps) {
 
   const { openRecord } = useShell();
   const menu = useObjectMenu();
+
+  // Focus: every other game steps back, and the week strip marks the nights the focused team played.
+  const focusSubject = useFocusSubject();
+  const fTeam = focusTeam(focusSubject);
+  const fConf = focusSubject?.kind === "conference" ? focusConf(focusSubject) : null;
+  const involved = (g: ScoreGame): boolean | undefined => {
+    if (fTeam) return sideOf(names, g.away.team).ours === fTeam || sideOf(names, g.home.team).ours === fTeam;
+    if (fConf) return sameConf(fConf, g.away.conference) || sameConf(fConf, g.home.conference);
+    return undefined;
+  };
+  const nights = useTeamNights(season, fTeam);
   const openGame = (g: ScoreGame, how: { newTab: boolean; side: boolean }) =>
     openRecord(gameRecord(season, g, names), { newTab: how.newTab, side: how.side, year: season });
 
@@ -197,7 +213,7 @@ export function ScoreboardView({ query, setQuery }: ViewProps) {
         filter={{ value: text, onChange: setText, placeholder: "Filter teams" }}
       />
 
-      <WeekStrip date={board.date} onPick={(d) => setBoard({ date: d })} />
+      <WeekStrip date={board.date} onPick={(d) => setBoard({ date: d })} marked={nights} />
 
       {ready && games.length > 0 && <FilterRow games={shown} filter={board.filter} onFilter={(f) => setBoard({ filter: f })} />}
 
@@ -227,14 +243,14 @@ export function ScoreboardView({ query, setQuery }: ViewProps) {
             {ranked.length > 0 && (
               <CardSection label="Top 25" accent count={ranked.length}>
                 {ranked.map((g) => (
-                  <GameCard key={`r-${g.id}`} g={g} names={names} focused={focusable(g.id)} onFocus={() => setFocusId(g.id)} onOpen={(how) => openGame(g, how)} onMenu={(e) => menu(e, gameRecord(season, g, names))} drag={objectDrag(gameRecord(season, g, names))} />
+                  <GameCard key={`r-${g.id}`} g={g} names={names} focused={focusable(g.id)} onFocus={() => setFocusId(g.id)} onOpen={(how) => openGame(g, how)} onMenu={(e) => menu(e, gameRecord(season, g, names))} drag={objectDrag(gameRecord(season, g, names))} focus={involved(g)} />
                 ))}
               </CardSection>
             )}
             {groups.map(([key, list]) => (
               <CardSection key={key} label={GROUP_LABEL[key] ?? key} count={list.length}>
                 {list.map((g) => (
-                  <GameCard key={g.id} g={g} names={names} focused={focusable(g.id)} onFocus={() => setFocusId(g.id)} onOpen={(how) => openGame(g, how)} onMenu={(e) => menu(e, gameRecord(season, g, names))} drag={objectDrag(gameRecord(season, g, names))} />
+                  <GameCard key={g.id} g={g} names={names} focused={focusable(g.id)} onFocus={() => setFocusId(g.id)} onOpen={(how) => openGame(g, how)} onMenu={(e) => menu(e, gameRecord(season, g, names))} drag={objectDrag(gameRecord(season, g, names))} focus={involved(g)} />
                 ))}
               </CardSection>
             ))}
@@ -363,7 +379,7 @@ function StepButton({ label, onClick, disabled, children }: { label: string; onC
 }
 
 /** Seven days around the night shown; the arrows page a week without leaving it. */
-function WeekStrip({ date, onPick }: { date: string; onPick: (d: string) => void }) {
+function WeekStrip({ date, onPick, marked }: { date: string; onPick: (d: string) => void; marked?: ReadonlySet<string> | null }) {
   const [anchor, setAnchor] = useState(date);
   const [last, setLast] = useState(date);
   if (date !== last) {
@@ -404,6 +420,7 @@ function WeekStrip({ date, onPick }: { date: string; onPick: (d: string) => void
                 {dayNum(d) === "1" || d === weekDays(anchor)[0] ? dayShort(d) : dayNum(d)}
               </span>
               {d === today && <span aria-label="today" className="absolute right-[6px] top-[6px] size-[4px] rounded-full bg-accent" />}
+              {marked?.has(d) && <span aria-label="The focused team played" className="absolute bottom-[3px] left-1/2 h-[3px] w-[14px] -translate-x-1/2 rounded-full bg-accent" />}
             </button>
           );
         })}
@@ -413,6 +430,28 @@ function WeekStrip({ date, onPick }: { date: string; onPick: (d: string) => void
       </StepButton>
     </div>
   );
+}
+
+/** The nights a team played in a season, from the Team Game Log's file, while Focus asks for them. */
+function useTeamNights(season: number, team: string | null): ReadonlySet<string> | null {
+  const [found, setFound] = useState<{ key: string; set: Set<string> } | null>(null);
+  const key = `${season}|${team ?? ""}`;
+  useEffect(() => {
+    if (!team) return;
+    let stale = false;
+    loadOnce(`team-games|${season}`, () => loadTeamGameSeason(season)).then(
+      (s) => {
+        if (!stale) setFound({ key, set: new Set(s.games.filter((g) => g.team === team).map((g) => logDate(s.pack.epochMs, g.row[T.d]!))) });
+      },
+      () => {
+        if (!stale) setFound({ key, set: new Set() });
+      },
+    );
+    return () => {
+      stale = true;
+    };
+  }, [season, team, key]);
+  return team && found?.key === key ? found.set : null;
 }
 
 /** What to show: everything, a tournament, the ranked games, a tier, or one conference. */

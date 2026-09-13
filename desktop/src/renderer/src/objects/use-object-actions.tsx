@@ -26,6 +26,7 @@ const NOOP_ENV: ActionEnv = {
   copyText: () => {},
   toast: () => {},
   snapshot: () => {},
+  focus: () => {},
   here: { viewId: "home", year: 0, query: "" },
 };
 
