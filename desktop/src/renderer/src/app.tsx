@@ -6,6 +6,7 @@ import {
   ChevronRight,
   GitCompareArrows,
   Keyboard,
+  Link2,
   ListFilter,
   LogIn,
   LogOut,
@@ -18,10 +19,13 @@ import {
   Star,
   StarOff,
   Sun,
+  Swords,
+  Table2,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ALL_SEASONS, isFlaggedSeason } from "@/lib/seasons";
+import { teamSlug } from "@/lib/team-slug";
 import logoOnLight from "@public/images/btalogo_final-01.svg";
 import logoOnDark from "@public/images/newbtalogo-white-01.svg";
 import type { ThemeMode } from "../../preload";
@@ -248,6 +252,19 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     [dispatch],
   );
 
+  /** A link to the same page on btacbb.xyz, for sharing with someone without the app. */
+  const copyLink = useCallback(
+    async (url: string) => {
+      try {
+        await navigator.clipboard.writeText(url);
+        toast({ title: "Link copied", body: url });
+      } catch {
+        toast({ title: "The link could not be copied", body: url });
+      }
+    },
+    [toast],
+  );
+
   const split = ws.split;
   const splitShown =
     !!split &&
@@ -451,6 +468,70 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
         run: (how) => openFavorite(f, how.newTab),
       });
     }
+    // What can be done with the page in front: the team or the player it is about.
+    const rec = current.record;
+    // Above views and objects that merely share a word, and verb first: on Michigan's page,
+    // "compare" means comparing Michigan, and "link" means its link, not a player named Link.
+    const contextAction = (entry: Omit<PaletteItem, "group" | "weight">) => items.push({ ...entry, group: "actions", weight: 350 });
+    if (rec?.kind === "team") {
+      contextAction({
+        id: "action:record-compare",
+        title: `Compare ${rec.name}`,
+        subtitle: `Add to the compare tray · ${seasonLabel(current.year)}`,
+        keywords: ["compare", "tray", "side by side"],
+        leading: <GitCompareArrows size={15} strokeWidth={2} />,
+        run: () => compare.add({ kind: "team", name: rec.name, logoId: rec.logoId, year: current.year }),
+      });
+      contextAction({
+        id: "action:record-matchup",
+        title: `Predict a ${rec.name} game`,
+        subtitle: "Matchup Predictor",
+        keywords: ["matchup", "predict", "game", "odds", "versus"],
+        leading: <Swords size={15} strokeWidth={2} />,
+        run: (how) => openView("matchup", { query: `a=${teamSlug(rec.name)}`, newTab: how.newTab, side: how.side }),
+      });
+      contextAction({
+        id: "action:record-explorer",
+        title: `Show ${rec.name} in the Team Explorer`,
+        subtitle: seasonLabel(current.year),
+        keywords: ["explorer", "table", "row"],
+        leading: <Table2 size={15} strokeWidth={2} />,
+        run: (how) => go({ kind: "team", name: rec.name, year: current.year }, how.newTab),
+      });
+      contextAction({
+        id: "action:record-link",
+        title: `Copy the link to ${rec.name}`,
+        subtitle: "btacbb.xyz",
+        keywords: ["link", "url", "share", "copy", "website"],
+        leading: <Link2 size={15} strokeWidth={2} />,
+        run: () => void copyLink(`https://btacbb.xyz/teams/${teamSlug(rec.name)}/${current.year}/`),
+      });
+    } else if (rec?.kind === "player") {
+      contextAction({
+        id: "action:record-compare",
+        title: `Compare ${rec.name}`,
+        subtitle: `Add to the compare tray · ${seasonLabel(current.year)}`,
+        keywords: ["compare", "tray", "side by side"],
+        leading: <GitCompareArrows size={15} strokeWidth={2} />,
+        run: () => compare.add({ kind: "player", bartId: rec.bartId, name: rec.name, hasPhoto: rec.hasPhoto, year: current.year }),
+      });
+      contextAction({
+        id: "action:record-explorer",
+        title: `Show ${rec.name} in the Player Explorer`,
+        subtitle: seasonLabel(current.year),
+        keywords: ["explorer", "table", "row"],
+        leading: <Table2 size={15} strokeWidth={2} />,
+        run: (how) => go({ kind: "player", bartId: rec.bartId, name: rec.name, year: current.year }, how.newTab),
+      });
+      contextAction({
+        id: "action:record-link",
+        title: `Copy the link to ${rec.name}`,
+        subtitle: "btacbb.xyz",
+        keywords: ["link", "url", "share", "copy", "website"],
+        leading: <Link2 size={15} strokeWidth={2} />,
+        run: () => void copyLink(`https://btacbb.xyz/players/${rec.bartId}/`),
+      });
+    }
     action({
       id: "action:new-tab",
       title: "New tab",
@@ -583,7 +664,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     );
 
     return items;
-  }, [view, current, ws.closed, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite, splitShown, toggleSplit]);
+  }, [view, current, ws.closed, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite, splitShown, toggleSplit, go, copyLink, compare.add]);
 
   const allItems = useMemo(
     () => (objects.length > 0 ? [...paletteItems, ...objects] : paletteItems),

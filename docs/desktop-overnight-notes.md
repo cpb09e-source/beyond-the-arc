@@ -42,12 +42,33 @@ proven unchanged by rendering the component to static HTML before and after.
 | Team Scatter | `d62a23e2ce` | `topByNet` into `lib/scatter-team.ts` |
 | Matchup Predictor | `532754707c` | `lib/matchup-inks.ts`, `lib/use-tween.ts`, counterfactuals, ledger, URL state and moves into `lib/matchup.ts` |
 | Conference Power Rankings | `2885efa4c7` | splits, formatting, split reader, per-season percentiles |
-| Transfer Portal | (this push) | `lib/portal.ts`: types, baseline, board order, rating text |
+| Transfer Portal | `1fb03a1952` | `lib/portal.ts`: types, baseline, board order, rating text |
+| Compare (tray + view) | `84f80d56be` | none needed |
+| Favorites, tab titles, tab menu | `14741bcba5` | none needed |
+| Split view | `c3a51ff177` | none needed |
+| Panes lay out by their own width | `f9f4655733` | none needed |
 
 Shell changes that came with them: history carries each tab's query (Alt+Left
 restores a filter or a matchup), views can be pinned to one season, `openView`
 opens any view with a starting query (a team page's Matchup button), table
 column bands and a pinned-first group, and conference marks through `bta://conf`.
+
+### How the new pieces work
+
+- **Compare.** Press C on a row in the Team or Player Explorer, drag a row onto
+  the tray at the bottom of the window, or press Compare on a team or player
+  page. Up to four, any seasons; ‹ › on a card walks that team through the
+  seasons. Every value carries its explorer percentile for its own season.
+- **Favorites.** Ctrl+D stars the tab in front: the view, season, filter and
+  record, under the tab's name. They sit at the top of the sidebar and lead
+  Ctrl K. Double-click renames; × removes with Undo.
+- **Tab titles.** A tab is named by what it shows: "Duke vs Michigan",
+  "Teams: big 12", a comparison's teams. Right-click a tab for favorite,
+  duplicate, split, close others.
+- **Split view.** Shift+Enter on any row (or in Ctrl K) opens it beside the
+  table, and the table keeps the keyboard, so arrowing and pressing
+  Shift+Enter again walks the right pane through the rows. F6 moves between
+  panes; Ctrl+Shift+\ turns it on and off; drag the divider.
 
 ## Site issues found while porting (not changed on the site)
 
