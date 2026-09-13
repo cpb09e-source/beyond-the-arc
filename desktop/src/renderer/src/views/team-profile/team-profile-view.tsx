@@ -5,6 +5,7 @@ import type { RankedStat, StaticTeamSeasonRow } from "@/lib/static-data";
 import { teamSlug } from "@/lib/team-slug";
 import { T, TEAM_GAME_VIEWS } from "@/lib/team-game-index";
 import { loadPlayerSeason, type Player } from "~/data/player-model";
+import { logDate, useOpenGame } from "~/data/game-link";
 import { loadTeamGameSeason, type TeamGame } from "~/data/team-game-model";
 import { ranksFor, shapeSeason, type Season, type Team } from "~/data/team-model";
 import { useCorpus, useLoaded } from "~/data/use-corpus";
@@ -96,6 +97,15 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
 
   const openTeam = (teamName: string, logo: number | null, newTab: boolean) =>
     openRecord({ kind: "team", name: teamName, logoId: logo }, { newTab, year });
+
+  // A game opens its own page; the opponent's, as before, when the slate lacks it.
+  const openGame = useOpenGame();
+  const openLogGame = (g: TeamGame, how: { newTab: boolean; side?: boolean }) => {
+    if (!gameSeason) return;
+    openGame({ date: logDate(gameSeason.pack.epochMs, g.row[T.d]!), team: g.team, opp: g.opp }, how, () => {
+      if (d1.has(g.opp)) openTeam(g.opp, g.oppLogoId, how.newTab);
+    });
+  };
 
   const gameColumns = useMemo(
     () => (gameSeason ? [...GAME_COLUMNS_IDENTITY, ...gameStatColumns(gameSeason.pack, OVERVIEW_GAME_KEYS)] : []),
@@ -206,7 +216,7 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
           {name} has no season in {seasonLabel(year)}. Press [ or ] to step to another season.
         </ProfileNote>
       ) : tab === "overview" ? (
-        <TeamOverview season={season} team={team} split={split} games={games} d1={d1} onTeam={openTeam} />
+        <TeamOverview season={season} team={team} split={split} games={games} onGame={openLogGame} />
       ) : tab === "games" ? (
         <div className="relative min-h-0 flex-1">
           {gameSeason ? (
@@ -223,9 +233,7 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
                 label: (g) => `${g.team} ${g.site === "away" ? "at" : "vs"} ${g.opp}`,
                 body: (g) => <GamePeekBody season={gameSeason} game={g} />,
               }}
-              onOpen={(g, how) => {
-                if (d1.has(g.opp)) openTeam(g.opp, g.oppLogoId, how.newTab);
-              }}
+              onOpen={openLogGame}
             />
           ) : gamesState.status === "error" ? (
             <LoadError year={year} reason={gamesState.reason} message={gamesState.message} what="Team games" onRetry={() => {}} />
@@ -301,15 +309,13 @@ function TeamOverview({
   team,
   split,
   games,
-  d1,
-  onTeam,
+  onGame,
 }: {
   season: Season;
   team: Team;
   split: Splits;
   games: TeamGame[];
-  d1: Set<string>;
-  onTeam: (name: string, logo: number | null, newTab: boolean) => void;
+  onGame: (g: TeamGame, how: { newTab: boolean; side?: boolean }) => void;
 }) {
   const ranks = ranksFor(season, team);
   const recent = [...games].sort((a, b) => b.row[T.d]! - a.row[T.d]!).slice(0, 8);
@@ -357,32 +363,29 @@ function TeamOverview({
             {recent.length === 0 ? (
               <p className="text-[13px] text-ink-muted">No games in the log for this season.</p>
             ) : (
-              <ul className="divide-y divide-hairline rounded-lg border border-hairline bg-card">
+              <ul className="divide-y divide-hairline overflow-hidden rounded-lg border border-hairline bg-card">
                 {recent.map((g) => (
-                  <li key={g.idx} className="grid h-[40px] grid-cols-[52px_14px_minmax(0,1fr)_auto] items-center gap-3 px-3.5 text-[13px]">
-                    <span className="text-ink-muted tabular">{g.dateShort}</span>
-                    <span className={`font-semibold ${g.won ? "text-good" : "text-bad"}`}>{g.won ? "W" : "L"}</span>
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span className="w-4 shrink-0 text-center text-[12px] text-ink-muted">
-                        {g.site === "home" ? "vs" : g.site === "away" ? "@" : "N"}
+                  <li key={g.idx}>
+                    <button
+                      type="button"
+                      title="Open the game  ·  Ctrl-click for a new tab, Shift-click for the side"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={(e) => onGame(g, { newTab: e.ctrlKey || e.metaKey, side: e.shiftKey })}
+                      className="grid h-[40px] w-full grid-cols-[52px_14px_minmax(0,1fr)_auto] items-center gap-3 px-3.5 text-left text-[13px] transition-colors hover:bg-[var(--row-hover)]"
+                    >
+                      <span className="whitespace-nowrap text-ink-muted">{g.dateShort}</span>
+                      <span className={`font-semibold ${g.won ? "text-good" : "text-bad"}`}>{g.won ? "W" : "L"}</span>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="w-4 shrink-0 text-center text-[12px] text-ink-muted">
+                          {g.site === "home" ? "vs" : g.site === "away" ? "@" : "N"}
+                        </span>
+                        <TeamLogo id={g.oppLogoId} name={g.opp} size={16} />
+                        <span className="truncate text-ink-soft">{g.opp}</span>
                       </span>
-                      <TeamLogo id={g.oppLogoId} name={g.opp} size={16} />
-                      {d1.has(g.opp) ? (
-                        <button
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={(e) => onTeam(g.opp, g.oppLogoId, e.ctrlKey || e.metaKey)}
-                          className="truncate text-ink-soft underline-offset-2 hover:text-ink hover:underline"
-                        >
-                          {g.opp}
-                        </button>
-                      ) : (
-                        <span className="truncate text-ink-muted">{g.opp}</span>
-                      )}
-                    </span>
-                    <span className="text-ink tabular">
-                      {g.pts}–{g.pa}
-                    </span>
+                      <span className="text-ink tabular">
+                        {g.pts}–{g.pa}
+                      </span>
+                    </button>
                   </li>
                 ))}
               </ul>

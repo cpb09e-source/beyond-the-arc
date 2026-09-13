@@ -4,6 +4,7 @@ import { PercentileChip } from "@/components/percentile-chip";
 import { TopHundredPill } from "@/components/portal/top-hundred-pill";
 import { F, GAME_VIEWS, gameStat } from "@/lib/game-index";
 import { playerViewByKey } from "@/lib/player-views";
+import { logDate, useOpenGame } from "~/data/game-link";
 import { NO_PCT } from "~/data/midrank-by-value";
 import {
   loadPlayerGameSeason,
@@ -92,6 +93,15 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
   const name = player?.name ?? ref?.name ?? "";
   const openTeam = (team: string, logoId: number | null, newTab: boolean) =>
     openRecord({ kind: "team", name: team, logoId }, { newTab, year });
+
+  // A game opens its own page; the opponent's, as before, when the slate lacks it.
+  const openGame = useOpenGame();
+  const openLogGame = (g: PlayerGame, how: { newTab: boolean; side?: boolean }) => {
+    if (!gameSeason) return;
+    const o = gameSeason.opps[g.row[F.o]!]!;
+    const team = gameSeason.players[g.row[F.p]!]?.team ?? "";
+    openGame({ date: logDate(gameSeason.pack.epochMs, g.row[F.d]!), team, opp: o.name }, how, () => openTeam(o.name, o.logoId, how.newTab));
+  };
 
   const gameColumns = useMemo((): Column<PlayerGame>[] => {
     if (!gameSeason) return [];
@@ -219,7 +229,7 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
           {name} has no season in {seasonLabel(year)}. The Career tab lists the seasons there are.
         </ProfileNote>
       ) : tab === "overview" ? (
-        <PlayerOverview season={season} player={player} gameSeason={gameSeason} games={games} />
+        <PlayerOverview season={season} player={player} gameSeason={gameSeason} games={games} onGame={openLogGame} />
       ) : (
         <div className="relative min-h-0 flex-1">
           {gameSeason ? (
@@ -239,10 +249,7 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
                 },
                 body: (g) => <PlayerGamePeekBody season={gameSeason} game={g} />,
               }}
-              onOpen={(g, how) => {
-                const o = gameSeason.opps[g.row[F.o]!]!;
-                openTeam(o.name, o.logoId, how.newTab);
-              }}
+              onOpen={openLogGame}
             />
           ) : gamesState.status === "error" ? (
             <LoadError year={year} reason={gamesState.reason} message={gamesState.message} what="Player games" onRetry={() => {}} />
@@ -260,11 +267,13 @@ function PlayerOverview({
   player,
   gameSeason,
   games,
+  onGame,
 }: {
   season: PlayerSeason;
   player: Player;
   gameSeason: PlayerGameSeason | null;
   games: PlayerGame[];
+  onGame: (g: PlayerGame, how: { newTab: boolean; side?: boolean }) => void;
 }) {
   const line: Array<[label: string, value: number | null, digits: number]> = [
     ["GP", player.s.games, 0],
@@ -343,31 +352,39 @@ function PlayerOverview({
             ) : best.length === 0 ? (
               <p className="text-[13px] text-ink-muted">No games in the log this season.</p>
             ) : (
-              <ul className="divide-y divide-hairline rounded-lg border border-hairline bg-card">
+              <ul className="divide-y divide-hairline overflow-hidden rounded-lg border border-hairline bg-card">
                 {best.map(({ g, gmsc, pct }) => {
                   const o = gameSeason.opps[g.row[F.o]!]!;
                   const won = wonGame(g.row);
                   const site = siteOf(g.row);
                   return (
-                    <li key={g.idx} className="grid h-[42px] grid-cols-[48px_minmax(0,1fr)_auto_44px] items-center gap-3 px-3.5 text-[13px]">
-                      <span className="text-ink-muted tabular">{shortDate(gameSeason.pack, g.row)}</span>
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="w-4 shrink-0 text-center text-[12px] text-ink-muted">
-                          {site === "home" ? "vs" : site === "away" ? "@" : "N"}
+                    <li key={g.idx}>
+                      <button
+                        type="button"
+                        title="Open the game  ·  Ctrl-click for a new tab, Shift-click for the side"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={(e) => onGame(g, { newTab: e.ctrlKey || e.metaKey, side: e.shiftKey })}
+                        className="grid h-[42px] w-full grid-cols-[48px_minmax(0,1fr)_auto_44px] items-center gap-3 px-3.5 text-left text-[13px] transition-colors hover:bg-[var(--row-hover)]"
+                      >
+                        <span className="whitespace-nowrap text-ink-muted">{shortDate(gameSeason.pack, g.row)}</span>
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="w-4 shrink-0 text-center text-[12px] text-ink-muted">
+                            {site === "home" ? "vs" : site === "away" ? "@" : "N"}
+                          </span>
+                          <TeamLogo id={o.logoId} name={o.name} size={16} />
+                          <span className="truncate text-ink-soft">{o.name}</span>
+                          <span className={`shrink-0 text-[12px] font-semibold ${won ? "text-good" : "text-bad"}`}>{won ? "W" : "L"}</span>
                         </span>
-                        <TeamLogo id={o.logoId} name={o.name} size={16} />
-                        <span className="truncate text-ink-soft">{o.name}</span>
-                        <span className={`shrink-0 text-[12px] font-semibold ${won ? "text-good" : "text-bad"}`}>{won ? "W" : "L"}</span>
-                      </span>
-                      <span className="text-[12px] text-ink-muted tabular">
-                        <span className="text-ink">{g.row[F.pts]}</span> pts · <span className="text-ink">{g.row[F.reb]}</span> reb ·{" "}
-                        <span className="text-ink">{g.row[F.ast]}</span> ast
-                      </span>
-                      <span className="flex justify-end">
-                        <PercentileChip pct={pct} ariaLabel={`Game Score ${gmsc.toFixed(1)}`} className="min-w-[40px] text-[11px]">
-                          {gmsc.toFixed(1)}
-                        </PercentileChip>
-                      </span>
+                        <span className="text-[12px] text-ink-muted tabular">
+                          <span className="text-ink">{g.row[F.pts]}</span> pts · <span className="text-ink">{g.row[F.reb]}</span> reb ·{" "}
+                          <span className="text-ink">{g.row[F.ast]}</span> ast
+                        </span>
+                        <span className="flex justify-end">
+                          <PercentileChip pct={pct} ariaLabel={`Game Score ${gmsc.toFixed(1)}`} className="min-w-[40px] text-[11px]">
+                            {gmsc.toFixed(1)}
+                          </PercentileChip>
+                        </span>
+                      </button>
                     </li>
                   );
                 })}

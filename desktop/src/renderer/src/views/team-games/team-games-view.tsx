@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { T, TEAM_GAME_PRESETS, TEAM_GAME_VIEWS, passesTeamFilters, teamGameViewByKey } from "@/lib/team-game-index";
+import { logDate, useOpenGame } from "~/data/game-link";
 import { loadTeamGameSeason, type TeamGame } from "~/data/team-game-model";
 import { SOURCE_LABEL, useLoaded } from "~/data/use-corpus";
 import { Picker } from "~/shell/picker";
@@ -114,6 +115,7 @@ export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
   const [state, retry] = useLoaded(`team-games|${year}`, () => loadTeamGameSeason(year));
   const setStatus = useSetStatus();
   const { openRecord } = useShell();
+  const openGame = useOpenGame();
   const [viewKey, setViewKey] = useState(readView);
   const [on, setOn] = useState<string[]>([]);
 
@@ -182,7 +184,11 @@ export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
             rowHeight={ROW_H}
             defaultSort={{ key: sortKey, dir: -1 }}
             tieBreak={latestFirst}
-            onOpen={(g, how) => openRecord({ kind: "team", name: g.team, logoId: g.teamLogoId }, { newTab: how.newTab, side: how.side, year })}
+            onOpen={(g, how) =>
+              openGame({ date: logDate(state.value.pack.epochMs, g.row[T.d]!), team: g.team, opp: g.opp }, how, () =>
+                openRecord({ kind: "team", name: g.team, logoId: g.teamLogoId }, { newTab: how.newTab, side: how.side, year }),
+              )
+            }
             ariaLabel="Team games"
             empty={
               query.trim() ? (

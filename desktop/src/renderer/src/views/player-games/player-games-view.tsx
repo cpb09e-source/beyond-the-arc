@@ -8,6 +8,7 @@ import {
   statValues,
   type PlayerGame,
 } from "~/data/player-game-model";
+import { logDate, useOpenGame } from "~/data/game-link";
 import { SOURCE_LABEL, useLoaded } from "~/data/use-corpus";
 import { Picker } from "~/shell/picker";
 import { ShortcutBar } from "~/shell/shortcut-bar";
@@ -49,6 +50,7 @@ export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
   const [state, retry] = useLoaded(`player-games|${year}`, () => loadPlayerGameSeason(year));
   const setStatus = useSetStatus();
   const { openRecord } = useShell();
+  const openGame = useOpenGame();
   const [viewKey, setViewKey] = useState(readView);
   const [on, setOn] = useState<string[]>([]);
 
@@ -138,7 +140,10 @@ export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
             tieBreak={latestFirst}
             onOpen={(g, how) => {
               const p = state.value.players[g.row[F.p]!]!;
-              openRecord({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, side: how.side, year });
+              const o = state.value.opps[g.row[F.o]!]!;
+              openGame({ date: logDate(state.value.pack.epochMs, g.row[F.d]!), team: p.team, opp: o.name }, how, () =>
+                openRecord({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, side: how.side, year }),
+              );
             }}
             ariaLabel="Player games"
             empty={

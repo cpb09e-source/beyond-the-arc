@@ -3,7 +3,7 @@ import { archivedDays, isKnownDay, knownSeasons, latestArchivedDay, seasonOfDate
 import type { Slate } from "@/lib/scoreboard-core";
 import { SEASON_CEIL } from "@/lib/seasons";
 import { buildCanonMap, canonicalTeamName } from "@/lib/team-name-match";
-import { useLoaded, type CorpusState } from "~/data/use-corpus";
+import { loadOnce, useLoaded, type CorpusState } from "~/data/use-corpus";
 import type { RecordRef } from "~/shell/views";
 import { logoIdOf } from "~/ui/logo-id";
 
@@ -81,23 +81,33 @@ export function serializeBoard(b: Board): string {
   return p.toString();
 }
 
+const readSlate = (date: string) => async () => {
+  const { json, source } = await window.bta.data("scoreboard-day", seasonOfDate(date), date);
+  return { value: JSON.parse(json) as Slate | null, source };
+};
+
 export function useSlate(date: string): [CorpusState<Slate | null>, () => void] {
-  return useLoaded(`slate|${date}`, async () => {
-    const { json, source } = await window.bta.data("scoreboard-day", seasonOfDate(date), date);
-    return { value: JSON.parse(json) as Slate | null, source };
-  });
+  return useLoaded(`slate|${date}`, readSlate(date));
 }
+
+/** The same slate outside a render, from the same cache: a game log row looking for its game. */
+export const loadSlate = (date: string): Promise<Slate | null> => loadOnce(`slate|${date}`, readSlate(date));
 
 export type TeamNames = { canon: Map<string, string> };
 
+async function readTeamNames() {
+  const { json, source } = await window.bta.data("team-names", SEASON_CEIL);
+  const file = JSON.parse(json) as { teams: Array<{ name: string }> };
+  const value: TeamNames = { canon: buildCanonMap(file.teams.map((t) => t.name)) };
+  return { value, source };
+}
+
 export function useTeamNames(): CorpusState<TeamNames> {
-  const [state] = useLoaded("team-names", async () => {
-    const { json, source } = await window.bta.data("team-names", SEASON_CEIL);
-    const file = JSON.parse(json) as { teams: Array<{ name: string }> };
-    return { value: { canon: buildCanonMap(file.teams.map((t) => t.name)) }, source };
-  });
+  const [state] = useLoaded("team-names", readTeamNames);
   return state;
 }
+
+export const loadTeamNames = (): Promise<TeamNames> => loadOnce("team-names", readTeamNames);
 
 /** A school as CBBD names it, with our name when it is one we cover, and its crest. */
 export type Side = { name: string; ours: string | null; logoId: number | null };
