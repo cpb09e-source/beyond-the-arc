@@ -281,6 +281,23 @@ Beyond the Arc.
   720 px palette with 46 px rows; ours are 30 px and 640 px with 36 px. Left as
   they are until you have seen them side by side.
 
+## Done on 2026-09-13, midday
+
+- **Profiles show the site's stat cards.** Player and team Overviews draw the
+  Player Overview and Team Stats cards from btacbb.xyz, with View, Split and
+  Basis, read from `player-splits/<bartId>.json` and `team-splits/<year>.json`.
+  The card definitions moved to `src/lib/player-stat-cards.ts` and
+  `src/lib/team-stat-cards.ts`; the site imports them from there.
+- **Best games and last 5 side by side** on a player's page, Game Score not shown.
+  A team's page pairs its record splits with its last five games.
+- **Profile game logs are plain numbers**, no chips, with the site's column
+  views (Everything by default, remembered).
+- **Game page:** team stats on the left and larger, one ink for both teams with
+  the row winner heavier; four factors removed; Game info is its own tab.
+- **Open:** team-splits is build-only on the site (stripped from the deploy) and
+  is not on R2, so an installed app shows no team cards until
+  `public/data/team-splits/` (13 files, 23 MB) is uploaded to R2.
+
 ## What still has to happen
 
 **To put the desktop app in people's hands (in order):**
