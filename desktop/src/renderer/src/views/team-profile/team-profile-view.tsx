@@ -1,12 +1,15 @@
-import { GitCompareArrows, Swords, Table2 } from "lucide-react";
+import { Calculator, GitCompareArrows, Swords, Table2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PercentileChip } from "@/components/percentile-chip";
+import { ALL_SEASONS } from "@/lib/seasons";
 import type { RankedStat, StaticTeamSeasonRow } from "@/lib/static-data";
 import { teamSlug } from "@/lib/team-slug";
 import { T, TEAM_GAME_VIEWS } from "@/lib/team-game-index";
+import { overrideTeam } from "@/lib/win-calc";
 import { loadPlayerSeason, type Player } from "~/data/player-model";
 import { logDate, useOpenGame } from "~/data/game-link";
 import { loadTeamGameSeason, type TeamGame } from "~/data/team-game-model";
+import { byCoach, coachSeasons, ncaaLabel, runLabel, teamHistory } from "~/data/team-history";
 import { ranksFor, shapeSeason, type Season, type Team } from "~/data/team-model";
 import { useCorpus, useLoaded } from "~/data/use-corpus";
 import { SeasonSwitcher } from "~/shell/season-switcher";
@@ -15,6 +18,8 @@ import { useShell } from "~/shell/shell-context";
 import { LoadError, TableSkeleton } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
 import { DataTable, type Column } from "~/table/data-table";
+import { ConfLogo } from "~/ui/conf-logo";
+import { DetailAction, DetailLink, DetailRow, DetailSection, DetailsRail, DetailsToggle, howOf, SiteLinks, useDetailsRail, type OpenHow } from "~/ui/details";
 import { fmtRanked, num1, pct1, seasonLabel, signed1 } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 import { ClassBadge, PlayerPhoto } from "~/ui/player-photo";
@@ -24,6 +29,7 @@ import { PlayerPeekBody } from "~/views/players/player-peek";
 import { statColumns as gameStatColumns } from "~/views/team-games/game-columns";
 import { GamePeekBody } from "~/views/team-games/game-peek";
 import { TEAM_GAME_IDENTITY } from "~/views/team-games/team-games-view";
+import { DEFAULT_CALC, serializeCalc } from "~/views/win-calc/calc-state";
 
 /**
  * A team's page: who they were in a season, what they were best and worst at
@@ -77,6 +83,7 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
   const { add } = useCompare();
   const name = record?.kind === "team" ? record.name : "";
   const [tab, setTab] = useState<TabKey>("overview");
+  const [detailsOpen, toggleDetails] = useDetailsRail();
 
   const [teamsState, retry] = useCorpus("teams", year, shapeTeams);
   const [gamesState] = useLoaded(`team-games|${year}`, () => loadTeamGameSeason(year));
@@ -117,156 +124,160 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 px-6 pt-5">
-        <ProfileHeader
-          avatar={<TeamLogo id={logoId} name={name} size={52} />}
-          name={name}
-          badges={
-            team && (
+    <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="shrink-0 px-6 pt-5">
+          <ProfileHeader
+            avatar={<TeamLogo id={logoId} name={name} size={52} />}
+            name={name}
+            badges={
+              team && (
+                <>
+                  {team.btaRank != null && (
+                    <span className="shrink-0 rounded-[5px] bg-[var(--accent-wash)] px-1.5 py-[3px] font-mono text-[11px] font-semibold text-accent tabular">
+                      BTA #{team.btaRank}
+                    </span>
+                  )}
+                  {team.inZone && (
+                    <span
+                      title="Inside the contender trapezoid"
+                      className="shrink-0 rounded-[5px] bg-[color-mix(in_oklab,var(--good)_14%,var(--card))] px-1.5 py-[3px] text-[11px] font-medium text-good"
+                    >
+                      Contender zone
+                    </span>
+                  )}
+                </>
+              )
+            }
+            facts={
+              team
+                ? [
+                    team.confLabel,
+                    <span key="rec" className="tabular">{`${team.wins}–${team.losses}`}</span>,
+                    split.conf.w + split.conf.l > 0 && (
+                      <span key="conf" className="tabular">{`${split.conf.w}–${split.conf.l} in conference`}</span>
+                    ),
+                  ]
+                : [seasonLabel(year)]
+            }
+            actions={
               <>
-                {team.btaRank != null && (
-                  <span className="shrink-0 rounded-[5px] bg-[var(--accent-wash)] px-1.5 py-[3px] font-mono text-[11px] font-semibold text-accent tabular">
-                    BTA #{team.btaRank}
-                  </span>
-                )}
-                {team.inZone && (
-                  <span
-                    title="Inside the contender trapezoid"
-                    className="shrink-0 rounded-[5px] bg-[color-mix(in_oklab,var(--good)_14%,var(--card))] px-1.5 py-[3px] text-[11px] font-medium text-good"
-                  >
-                    Contender zone
-                  </span>
-                )}
+                <SeasonSwitcher year={year} onChange={setYear} />
+                <HeaderButton
+                  title="Ctrl-click for a new tab"
+                  onClick={(e) => showInExplorer({ kind: "team", name, year }, e.ctrlKey || e.metaKey)}
+                >
+                  <Table2 size={14} strokeWidth={2} />
+                  Team Explorer
+                </HeaderButton>
+                <HeaderButton
+                  title="Predict a game against any team  ·  Ctrl-click for a new tab"
+                  onClick={(e) => openView("matchup", { newTab: e.ctrlKey || e.metaKey, query: `a=${teamSlug(name)}` })}
+                >
+                  <Swords size={14} strokeWidth={2} />
+                  Matchup
+                </HeaderButton>
+                <HeaderButton title="Add to the compare tray" onClick={() => add({ kind: "team", name, logoId, year })}>
+                  <GitCompareArrows size={14} strokeWidth={2} />
+                  Compare
+                </HeaderButton>
+                <DetailsToggle open={detailsOpen} onToggle={toggleDetails} />
               </>
-            )
-          }
-          facts={
-            team
-              ? [
-                  team.confLabel,
-                  <span key="rec" className="tabular">{`${team.wins}–${team.losses}`}</span>,
-                  split.conf.w + split.conf.l > 0 && (
-                    <span key="conf" className="tabular">{`${split.conf.w}–${split.conf.l} in conference`}</span>
-                  ),
-                ]
-              : [seasonLabel(year)]
-          }
-          actions={
-            <>
-              <SeasonSwitcher year={year} onChange={setYear} />
-              <HeaderButton
-                title="Ctrl-click for a new tab"
-                onClick={(e) => showInExplorer({ kind: "team", name, year }, e.ctrlKey || e.metaKey)}
-              >
-                <Table2 size={14} strokeWidth={2} />
-                Team Explorer
-              </HeaderButton>
-              <HeaderButton
-                title="Predict a game against any team  ·  Ctrl-click for a new tab"
-                onClick={(e) => openView("matchup", { newTab: e.ctrlKey || e.metaKey, query: `a=${teamSlug(name)}` })}
-              >
-                <Swords size={14} strokeWidth={2} />
-                Matchup
-              </HeaderButton>
-              <HeaderButton title="Add to the compare tray" onClick={() => add({ kind: "team", name, logoId, year })}>
-                <GitCompareArrows size={14} strokeWidth={2} />
-                Compare
-              </HeaderButton>
-            </>
-          }
-        />
+            }
+          />
 
-        {team && (
+          {team && (
+            <div className="mt-5">
+              <HighlightRow
+                items={[
+                  { label: "Adj O", value: num1(team.adjO), pct: team.pct.a_ortg ?? null, title: "Adjusted offensive rating" },
+                  { label: "Adj D", value: num1(team.adjD), pct: team.pct.a_drtg ?? null, title: "Adjusted defensive rating (lower is better)" },
+                  { label: "Net", value: signed1(team.adjNet), pct: team.pct.a_net ?? null, title: "Adjusted net rating" },
+                  { label: "Tempo", value: num1(team.tempo), pct: team.pct.adjt ?? null, neutral: true, title: "Adjusted tempo" },
+                  { label: "eFG%", value: pct1(team.efg), pct: team.pct.cbb_efg ?? null, title: "Effective field goal %" },
+                  { label: "SOS", value: num1(team.sos), pct: team.pct.adj_sos ?? null, title: "Strength of schedule" },
+                ]}
+              />
+            </div>
+          )}
+
           <div className="mt-5">
-            <HighlightRow
-              items={[
-                { label: "Adj O", value: num1(team.adjO), pct: team.pct.a_ortg ?? null, title: "Adjusted offensive rating" },
-                { label: "Adj D", value: num1(team.adjD), pct: team.pct.a_drtg ?? null, title: "Adjusted defensive rating (lower is better)" },
-                { label: "Net", value: signed1(team.adjNet), pct: team.pct.a_net ?? null, title: "Adjusted net rating" },
-                { label: "Tempo", value: num1(team.tempo), pct: team.pct.adjt ?? null, neutral: true, title: "Adjusted tempo" },
-                { label: "eFG%", value: pct1(team.efg), pct: team.pct.cbb_efg ?? null, title: "Effective field goal %" },
-                { label: "SOS", value: num1(team.sos), pct: team.pct.adj_sos ?? null, title: "Strength of schedule" },
+            <ProfileTabs
+              value={tab}
+              onChange={setTab}
+              tabs={[
+                { key: "overview", label: "Overview" },
+                { key: "games", label: "Games", count: gameSeason ? games.length : null },
+                { key: "roster", label: "Roster", count: playerSeason ? roster.length : null },
               ]}
             />
           </div>
+        </div>
+
+        {teamsState.status === "error" ? (
+          <LoadError year={year} reason={teamsState.reason} message={teamsState.message} what="Teams" onRetry={retry} />
+        ) : !season ? (
+          <div className="relative min-h-0 flex-1">
+            <TableSkeleton rowHeight={42} label="Loading team" />
+          </div>
+        ) : !team ? (
+          <ProfileNote>
+            {name} has no season in {seasonLabel(year)}. Press [ or ] to step to another season.
+          </ProfileNote>
+        ) : tab === "overview" ? (
+          <TeamOverview season={season} team={team} split={split} games={games} onGame={openLogGame} />
+        ) : tab === "games" ? (
+          <div className="relative min-h-0 flex-1">
+            {gameSeason ? (
+              <DataTable
+                key={`games:${year}:${name}`}
+                rows={games}
+                columns={gameColumns}
+                rowKey={gameKey}
+                defaultSort={{ key: "date", dir: 1 }}
+                tieBreak={inOrder}
+                ariaLabel={`${name} games`}
+                empty={<ProfileNote>No games for {name} in {seasonLabel(year)}.</ProfileNote>}
+                peek={{
+                  label: (g) => `${g.team} ${g.site === "away" ? "at" : "vs"} ${g.opp}`,
+                  body: (g) => <GamePeekBody season={gameSeason} game={g} />,
+                }}
+                onOpen={openLogGame}
+              />
+            ) : gamesState.status === "error" ? (
+              <LoadError year={year} reason={gamesState.reason} message={gamesState.message} what="Team games" onRetry={() => {}} />
+            ) : (
+              <TableSkeleton rowHeight={42} label="Loading games" />
+            )}
+          </div>
+        ) : (
+          <div className="relative min-h-0 flex-1">
+            {playerSeason ? (
+              <DataTable
+                key={`roster:${year}:${name}`}
+                rows={roster}
+                columns={rosterCols}
+                rowKey={playerKey}
+                defaultSort={{ key: "mpg", dir: -1 }}
+                tieBreak={byMinutes}
+                ariaLabel={`${name} roster`}
+                empty={<ProfileNote>No players listed for {name} in {seasonLabel(year)}.</ProfileNote>}
+                peek={{ label: (p) => p.name, body: (p) => <PlayerPeekBody season={playerSeason} player={p} /> }}
+                onOpen={(p, how) => {
+                  if (p.bartId != null) {
+                    openRecord({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, side: how.side, year });
+                  }
+                }}
+              />
+            ) : playersState.status === "error" ? (
+              <LoadError year={year} reason={playersState.reason} message={playersState.message} what="Players" onRetry={() => {}} />
+            ) : (
+              <TableSkeleton rowHeight={42} label="Loading roster" />
+            )}
+          </div>
         )}
-
-        <div className="mt-5">
-          <ProfileTabs
-            value={tab}
-            onChange={setTab}
-            tabs={[
-              { key: "overview", label: "Overview" },
-              { key: "games", label: "Games", count: gameSeason ? games.length : null },
-              { key: "roster", label: "Roster", count: playerSeason ? roster.length : null },
-            ]}
-          />
-        </div>
       </div>
-
-      {teamsState.status === "error" ? (
-        <LoadError year={year} reason={teamsState.reason} message={teamsState.message} what="Teams" onRetry={retry} />
-      ) : !season ? (
-        <div className="relative min-h-0 flex-1">
-          <TableSkeleton rowHeight={42} label="Loading team" />
-        </div>
-      ) : !team ? (
-        <ProfileNote>
-          {name} has no season in {seasonLabel(year)}. Press [ or ] to step to another season.
-        </ProfileNote>
-      ) : tab === "overview" ? (
-        <TeamOverview season={season} team={team} split={split} games={games} onGame={openLogGame} />
-      ) : tab === "games" ? (
-        <div className="relative min-h-0 flex-1">
-          {gameSeason ? (
-            <DataTable
-              key={`games:${year}:${name}`}
-              rows={games}
-              columns={gameColumns}
-              rowKey={gameKey}
-              defaultSort={{ key: "date", dir: 1 }}
-              tieBreak={inOrder}
-              ariaLabel={`${name} games`}
-              empty={<ProfileNote>No games for {name} in {seasonLabel(year)}.</ProfileNote>}
-              peek={{
-                label: (g) => `${g.team} ${g.site === "away" ? "at" : "vs"} ${g.opp}`,
-                body: (g) => <GamePeekBody season={gameSeason} game={g} />,
-              }}
-              onOpen={openLogGame}
-            />
-          ) : gamesState.status === "error" ? (
-            <LoadError year={year} reason={gamesState.reason} message={gamesState.message} what="Team games" onRetry={() => {}} />
-          ) : (
-            <TableSkeleton rowHeight={42} label="Loading games" />
-          )}
-        </div>
-      ) : (
-        <div className="relative min-h-0 flex-1">
-          {playerSeason ? (
-            <DataTable
-              key={`roster:${year}:${name}`}
-              rows={roster}
-              columns={rosterCols}
-              rowKey={playerKey}
-              defaultSort={{ key: "mpg", dir: -1 }}
-              tieBreak={byMinutes}
-              ariaLabel={`${name} roster`}
-              empty={<ProfileNote>No players listed for {name} in {seasonLabel(year)}.</ProfileNote>}
-              peek={{ label: (p) => p.name, body: (p) => <PlayerPeekBody season={playerSeason} player={p} /> }}
-              onOpen={(p, how) => {
-                if (p.bartId != null) {
-                  openRecord({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, side: how.side, year });
-                }
-              }}
-            />
-          ) : playersState.status === "error" ? (
-            <LoadError year={year} reason={playersState.reason} message={playersState.message} what="Players" onRetry={() => {}} />
-          ) : (
-            <TableSkeleton rowHeight={42} label="Loading roster" />
-          )}
-        </div>
-      )}
+      {detailsOpen && <TeamDetails name={name} year={year} team={team ?? null} onSeason={setYear} />}
     </div>
   );
 }
@@ -299,9 +310,9 @@ const SPLIT_ROWS: Array<[label: string, key: keyof Splits]> = [
   ["Away", "away"],
   ["Neutral", "neutral"],
   ["Conference", "conf"],
-  ["Non-conference", "nonconf"],
+  ["Non-conf.", "nonconf"],
   ["vs AP top 25", "ranked"],
-  ["Within 5 points", "close"],
+  ["Within 5 pts", "close"],
 ];
 
 function TeamOverview({
@@ -416,5 +427,103 @@ function RankRows({ stats }: { stats: RankedStat[] }) {
         );
       })}
     </ul>
+  );
+}
+
+/**
+ * The team's rail: who coached and how the season ended, every season on record
+ * under each coach, and the ways out.
+ */
+function TeamDetails({ name, year, team, onSeason }: { name: string; year: number; team: Team | null; onSeason: (y: number) => void }) {
+  const { openView } = useShell();
+  const history = useMemo(() => teamHistory(name), [name]);
+  const shown = useMemo(() => history.filter((h) => ALL_SEASONS.includes(h.year)), [history]);
+  const now = history.find((h) => h.year === year) ?? null;
+  const bids = shown.filter((h) => h.seed != null).length;
+
+  const calc = (extra: { teams?: string[]; coaches?: string[]; years: number[] }, how: OpenHow) =>
+    openView("win-calc", { query: serializeCalc({ ...DEFAULT_CALC, ...extra }), newTab: how.newTab, side: how.side });
+  const openCoach = (coach: string, how: OpenHow) => calc({ coaches: [coach], years: coachSeasons(coach) }, how);
+
+  return (
+    <DetailsRail label={`${name} details`}>
+      <DetailSection title="This season" aside={seasonLabel(year)}>
+        {team && (
+          <DetailRow label="Conference">
+            <ConfLogo conf={team.conf} size={16} />
+            <span className="truncate">{team.confLabel}</span>
+          </DetailRow>
+        )}
+        <DetailRow label="Coach">
+          {now ? (
+            <DetailLink title={`Every game ${now.coach}'s teams played, in the Win Calculator`} onOpen={(how) => openCoach(now.coach, how)}>
+              <span className="truncate">{now.coach}</span>
+            </DetailLink>
+          ) : (
+            <span className="text-ink-muted">Not on record</span>
+          )}
+        </DetailRow>
+        <DetailRow label="NCAA">
+          {now?.seed != null ? <span className="truncate">{ncaaLabel(now)}</span> : <span className="text-ink-muted">{now ? "No bid" : "Not on record"}</span>}
+        </DetailRow>
+      </DetailSection>
+
+      {shown.length > 0 && (
+        <DetailSection title="Seasons" aside={`${bids} NCAA ${bids === 1 ? "bid" : "bids"}`}>
+          <div className="flex flex-col gap-2.5">
+            {byCoach(shown).map((run) => (
+              <div key={`${run.coach}:${run.seasons[0]!.year}`}>
+                <button
+                  type="button"
+                  title={`Every game ${run.coach}'s teams played, in the Win Calculator  ·  Ctrl-click for a new tab`}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={(e) => openCoach(run.coach, howOf(e))}
+                  className="-mx-2 flex h-[24px] w-[calc(100%+16px)] items-center gap-2 rounded-md px-2 text-left text-[11.5px] text-ink-muted transition-colors hover:text-ink"
+                >
+                  <span className="truncate font-medium text-ink-soft">{run.coach}</span>
+                  <span className="ml-auto shrink-0">{runLabel(run, history)}</span>
+                </button>
+                <ul>
+                  {run.seasons.map((h) => {
+                    const current = h.year === year;
+                    return (
+                      <li key={h.year}>
+                        <button
+                          type="button"
+                          aria-current={current || undefined}
+                          title={`Open ${seasonLabel(h.year)}`}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => onSeason(h.year)}
+                          className={`-mx-2 grid h-[28px] w-[calc(100%+16px)] grid-cols-[42px_44px_minmax(0,1fr)] items-center gap-2 rounded-md px-2 text-left text-[12.5px] transition-colors ${
+                            current ? "bg-[var(--nav-active)] text-ink" : "text-ink-soft hover:bg-[var(--row-hover)] hover:text-ink"
+                          }`}
+                        >
+                          <span className="text-ink-muted tabular">{seasonLabel(h.year).slice(2)}</span>
+                          <span className="tabular">{h.wins != null && h.losses != null ? `${h.wins}–${h.losses}` : "–"}</span>
+                          <span className="truncate text-ink-muted">{ncaaLabel(h)}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </DetailSection>
+      )}
+
+      <DetailSection title="Go to">
+        <DetailAction
+          icon={<Calculator size={14} strokeWidth={2} />}
+          label={`Every ${name} game`}
+          hint="Win Calculator"
+          onOpen={(how) => calc({ teams: [overrideTeam(name)], years: [year] }, how)}
+        />
+      </DetailSection>
+
+      <DetailSection title="Share">
+        <SiteLinks url={`https://btacbb.xyz/teams/${teamSlug(name)}/${year}/`} />
+      </DetailSection>
+    </DetailsRail>
   );
 }

@@ -18,6 +18,7 @@ import {
 } from "~/data/player-game-model";
 import { loadPlayerSeason, type Player, type PlayerSeason } from "~/data/player-model";
 import { loadSearchData } from "~/data/search-model";
+import { coachSeasons, ncaaLabel, teamHistory } from "~/data/team-history";
 import { useLoaded } from "~/data/use-corpus";
 import { SeasonSwitcher } from "~/shell/season-switcher";
 import { useCompare } from "~/shell/compare";
@@ -25,6 +26,8 @@ import { useShell } from "~/shell/shell-context";
 import { LoadError, TableSkeleton } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
 import { DataTable, type Column } from "~/table/data-table";
+import { ConfLogo } from "~/ui/conf-logo";
+import { DetailLink, DetailRow, DetailSection, DetailsRail, DetailsToggle, SiteLinks, useDetailsRail, type OpenHow } from "~/ui/details";
 import { seasonLabel } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 import { ClassBadge, PlayerPhoto } from "~/ui/player-photo";
@@ -41,6 +44,7 @@ import {
 import { identityColumns, statColumns as gameStatColumns } from "~/views/player-games/player-game-columns";
 import { PlayerGamePeekBody } from "~/views/player-games/player-game-peek";
 import { playerStat } from "~/views/players/player-columns";
+import { DEFAULT_CALC, serializeCalc } from "~/views/win-calc/calc-state";
 
 /**
  * A player's page: the season at a glance, where every number on the Player
@@ -69,6 +73,7 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
   const ref = record?.kind === "player" ? record : null;
   const bartId = ref?.bartId ?? -1;
   const [tab, setTab] = useState<TabKey>("overview");
+  const [detailsOpen, toggleDetails] = useDetailsRail();
 
   const [seasonState, retry] = useLoaded(`player-season|${year}`, () => loadPlayerSeason(year));
   const [gamesState] = useLoaded(`player-games|${year}`, () => loadPlayerGameSeason(year));
@@ -124,139 +129,153 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 px-6 pt-5">
-        <ProfileHeader
-          avatar={
-            <PlayerPhoto bartId={ref?.bartId ?? null} hasPhoto={player?.hasPhoto ?? ref?.hasPhoto ?? false} name={name} size={60} />
-          }
-          name={name}
-          badges={
-            player && (
+    <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="shrink-0 px-6 pt-5">
+          <ProfileHeader
+            avatar={
+              <PlayerPhoto bartId={ref?.bartId ?? null} hasPhoto={player?.hasPhoto ?? ref?.hasPhoto ?? false} name={name} size={60} />
+            }
+            name={name}
+            badges={
+              player && (
+                <>
+                  <ClassBadge cls={player.cls} />
+                  {player.rank != null && player.rank <= 100 && (
+                    <TopHundredPill
+                      rank={player.rank}
+                      title={`Top 100: #${player.rank} in the country in ${seasonLabel(year)}`}
+                      className="h-[18px] px-1.5 text-[11px]"
+                    />
+                  )}
+                </>
+              )
+            }
+            facts={
+              player
+                ? [
+                    <button
+                      key="team"
+                      type="button"
+                      title="Ctrl-click for a new tab"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={(e) => openTeam(player.team, player.teamLogoId, e.ctrlKey || e.metaKey)}
+                      className="flex items-center gap-1.5 text-ink-soft underline-offset-2 hover:text-ink hover:underline"
+                    >
+                      <TeamLogo id={player.teamLogoId} name={player.team} size={15} />
+                      {player.team}
+                    </button>,
+                    player.position,
+                    player.height,
+                    player.hometown,
+                  ]
+                : [seasonLabel(year)]
+            }
+            actions={
               <>
-                <ClassBadge cls={player.cls} />
-                {player.rank != null && player.rank <= 100 && (
-                  <TopHundredPill
-                    rank={player.rank}
-                    title={`Top 100: #${player.rank} in the country in ${seasonLabel(year)}`}
-                    className="h-[18px] px-1.5 text-[11px]"
-                  />
-                )}
-              </>
-            )
-          }
-          facts={
-            player
-              ? [
-                  <button
-                    key="team"
-                    type="button"
+                <SeasonSwitcher year={year} onChange={setYear} />
+                {ref && (
+                  <HeaderButton
                     title="Ctrl-click for a new tab"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={(e) => openTeam(player.team, player.teamLogoId, e.ctrlKey || e.metaKey)}
-                    className="flex items-center gap-1.5 text-ink-soft underline-offset-2 hover:text-ink hover:underline"
+                    onClick={(e) => showInExplorer({ kind: "player", bartId: ref.bartId, name, year }, e.ctrlKey || e.metaKey)}
                   >
-                    <TeamLogo id={player.teamLogoId} name={player.team} size={15} />
-                    {player.team}
-                  </button>,
-                  player.position,
-                  player.height,
-                  player.hometown,
-                ]
-              : [seasonLabel(year)]
-          }
-          actions={
-            <>
-              <SeasonSwitcher year={year} onChange={setYear} />
-              {ref && (
-                <HeaderButton
-                  title="Ctrl-click for a new tab"
-                  onClick={(e) => showInExplorer({ kind: "player", bartId: ref.bartId, name, year }, e.ctrlKey || e.metaKey)}
-                >
-                  <UsersRound size={14} strokeWidth={2} />
-                  Player Explorer
-                </HeaderButton>
-              )}
-              {ref && (
-                <HeaderButton
-                  title="Add to the compare tray"
-                  onClick={() => add({ kind: "player", bartId: ref.bartId, name, hasPhoto: player?.hasPhoto ?? ref.hasPhoto, year })}
-                >
-                  <GitCompareArrows size={14} strokeWidth={2} />
-                  Compare
-                </HeaderButton>
-              )}
-            </>
-          }
-        />
+                    <UsersRound size={14} strokeWidth={2} />
+                    Player Explorer
+                  </HeaderButton>
+                )}
+                {ref && (
+                  <HeaderButton
+                    title="Add to the compare tray"
+                    onClick={() => add({ kind: "player", bartId: ref.bartId, name, hasPhoto: player?.hasPhoto ?? ref.hasPhoto, year })}
+                  >
+                    <GitCompareArrows size={14} strokeWidth={2} />
+                    Compare
+                  </HeaderButton>
+                )}
+                <DetailsToggle open={detailsOpen} onToggle={toggleDetails} />
+              </>
+            }
+          />
 
-        {player && season && (
+          {player && season && (
+            <div className="mt-5">
+              <HighlightRow items={highlights(player, season)} />
+            </div>
+          )}
+
           <div className="mt-5">
-            <HighlightRow items={highlights(player, season)} />
+            <ProfileTabs
+              value={tab}
+              onChange={setTab}
+              tabs={[
+                { key: "overview", label: "Overview" },
+                { key: "games", label: "Game log", count: gameSeason ? games.length : null },
+                { key: "career", label: "Career", count: career.length || null },
+              ]}
+            />
+          </div>
+        </div>
+
+        {tab === "career" ? (
+          <Career
+            rows={career}
+            year={year}
+            onSeason={(y) => {
+              setYear(y);
+              setTab("overview");
+            }}
+          />
+        ) : seasonState.status === "error" ? (
+          <LoadError year={year} reason={seasonState.reason} message={seasonState.message} what="Players" onRetry={retry} />
+        ) : !season ? (
+          <div className="relative min-h-0 flex-1">
+            <TableSkeleton rowHeight={42} label="Loading player" />
+          </div>
+        ) : !player ? (
+          <ProfileNote>
+            {name} has no season in {seasonLabel(year)}. The Career tab lists the seasons there are.
+          </ProfileNote>
+        ) : tab === "overview" ? (
+          <PlayerOverview season={season} player={player} gameSeason={gameSeason} games={games} onGame={openLogGame} />
+        ) : (
+          <div className="relative min-h-0 flex-1">
+            {gameSeason ? (
+              <DataTable
+                key={`games:${year}:${bartId}`}
+                rows={games}
+                columns={gameColumns}
+                rowKey={gameKey}
+                defaultSort={{ key: "date", dir: 1 }}
+                tieBreak={inOrder}
+                ariaLabel={`${name} games`}
+                empty={<ProfileNote>No games in the log for {name} in {seasonLabel(year)}.</ProfileNote>}
+                peek={{
+                  label: (g) => {
+                    const o = gameSeason.opps[g.row[F.o]!]!;
+                    return `${name} ${siteOf(g.row) === "away" ? "at" : "vs"} ${o.name}`;
+                  },
+                  body: (g) => <PlayerGamePeekBody season={gameSeason} game={g} />,
+                }}
+                onOpen={openLogGame}
+              />
+            ) : gamesState.status === "error" ? (
+              <LoadError year={year} reason={gamesState.reason} message={gamesState.message} what="Player games" onRetry={() => {}} />
+            ) : (
+              <TableSkeleton rowHeight={42} label="Loading games" />
+            )}
           </div>
         )}
-
-        <div className="mt-5">
-          <ProfileTabs
-            value={tab}
-            onChange={setTab}
-            tabs={[
-              { key: "overview", label: "Overview" },
-              { key: "games", label: "Game log", count: gameSeason ? games.length : null },
-              { key: "career", label: "Career", count: career.length || null },
-            ]}
-          />
-        </div>
       </div>
-
-      {tab === "career" ? (
-        <Career
-          rows={career}
+      {detailsOpen && (
+        <PlayerDetails
+          name={name}
           year={year}
-          onSeason={(y) => {
-            setYear(y);
-            setTab("overview");
-          }}
+          bartId={ref?.bartId ?? null}
+          player={player ?? null}
+          career={career}
+          onSeason={setYear}
+          onTeam={(team, logoId, how) => openRecord({ kind: "team", name: team, logoId }, { newTab: how.newTab, side: how.side, year })}
         />
-      ) : seasonState.status === "error" ? (
-        <LoadError year={year} reason={seasonState.reason} message={seasonState.message} what="Players" onRetry={retry} />
-      ) : !season ? (
-        <div className="relative min-h-0 flex-1">
-          <TableSkeleton rowHeight={42} label="Loading player" />
-        </div>
-      ) : !player ? (
-        <ProfileNote>
-          {name} has no season in {seasonLabel(year)}. The Career tab lists the seasons there are.
-        </ProfileNote>
-      ) : tab === "overview" ? (
-        <PlayerOverview season={season} player={player} gameSeason={gameSeason} games={games} onGame={openLogGame} />
-      ) : (
-        <div className="relative min-h-0 flex-1">
-          {gameSeason ? (
-            <DataTable
-              key={`games:${year}:${bartId}`}
-              rows={games}
-              columns={gameColumns}
-              rowKey={gameKey}
-              defaultSort={{ key: "date", dir: 1 }}
-              tieBreak={inOrder}
-              ariaLabel={`${name} games`}
-              empty={<ProfileNote>No games in the log for {name} in {seasonLabel(year)}.</ProfileNote>}
-              peek={{
-                label: (g) => {
-                  const o = gameSeason.opps[g.row[F.o]!]!;
-                  return `${name} ${siteOf(g.row) === "away" ? "at" : "vs"} ${o.name}`;
-                },
-                body: (g) => <PlayerGamePeekBody season={gameSeason} game={g} />,
-              }}
-              onOpen={openLogGame}
-            />
-          ) : gamesState.status === "error" ? (
-            <LoadError year={year} reason={gamesState.reason} message={gamesState.message} what="Player games" onRetry={() => {}} />
-          ) : (
-            <TableSkeleton rowHeight={42} label="Loading games" />
-          )}
-        </div>
       )}
     </div>
   );
@@ -364,20 +383,22 @@ function PlayerOverview({
                         title="Open the game  ·  Ctrl-click for a new tab, Shift-click for the side"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={(e) => onGame(g, { newTab: e.ctrlKey || e.metaKey, side: e.shiftKey })}
-                        className="grid h-[42px] w-full grid-cols-[48px_minmax(0,1fr)_auto_44px] items-center gap-3 px-3.5 text-left text-[13px] transition-colors hover:bg-[var(--row-hover)]"
+                        className="grid h-[50px] w-full grid-cols-[48px_minmax(0,1fr)_44px] items-center gap-3 px-3.5 text-left text-[13px] transition-colors hover:bg-[var(--row-hover)]"
                       >
                         <span className="whitespace-nowrap text-ink-muted">{shortDate(gameSeason.pack, g.row)}</span>
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span className="w-4 shrink-0 text-center text-[12px] text-ink-muted">
-                            {site === "home" ? "vs" : site === "away" ? "@" : "N"}
+                        <span className="flex min-w-0 flex-col gap-0.5">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <span className="w-4 shrink-0 text-center text-[12px] text-ink-muted">
+                              {site === "home" ? "vs" : site === "away" ? "@" : "N"}
+                            </span>
+                            <TeamLogo id={o.logoId} name={o.name} size={16} />
+                            <span className="truncate text-ink-soft">{o.name}</span>
+                            <span className={`shrink-0 text-[12px] font-semibold ${won ? "text-good" : "text-bad"}`}>{won ? "W" : "L"}</span>
                           </span>
-                          <TeamLogo id={o.logoId} name={o.name} size={16} />
-                          <span className="truncate text-ink-soft">{o.name}</span>
-                          <span className={`shrink-0 text-[12px] font-semibold ${won ? "text-good" : "text-bad"}`}>{won ? "W" : "L"}</span>
-                        </span>
-                        <span className="text-[12px] text-ink-muted tabular">
-                          <span className="text-ink">{g.row[F.pts]}</span> pts · <span className="text-ink">{g.row[F.reb]}</span> reb ·{" "}
-                          <span className="text-ink">{g.row[F.ast]}</span> ast
+                          <span className="truncate pl-6 text-[12px] text-ink-muted tabular">
+                            <span className="text-ink">{g.row[F.pts]}</span> pts · <span className="text-ink">{g.row[F.reb]}</span> reb ·{" "}
+                            <span className="text-ink">{g.row[F.ast]}</span> ast
+                          </span>
                         </span>
                         <span className="flex justify-end">
                           <PercentileChip pct={pct} ariaLabel={`Game Score ${gmsc.toFixed(1)}`} className="min-w-[40px] text-[11px]">
@@ -445,5 +466,111 @@ function Career({
       </div>
       <p className="mt-3 text-[12px] text-ink-muted">Choose a season to open it on the Overview.</p>
     </div>
+  );
+}
+
+/** The player's rail: the team around him that season, his seasons, and a link to share. */
+function PlayerDetails({
+  name,
+  year,
+  bartId,
+  player,
+  career,
+  onSeason,
+  onTeam,
+}: {
+  name: string;
+  year: number;
+  bartId: number | null;
+  player: Player | null;
+  career: Array<{ year: number; team: string; teamLogoId: number | null; cls: string | null }>;
+  onSeason: (y: number) => void;
+  onTeam: (team: string, logoId: number | null, how: OpenHow) => void;
+}) {
+  const { openView } = useShell();
+  const history = player ? teamHistory(player.team) : [];
+  const now = history.find((h) => h.year === year) ?? null;
+  const openCoach = (coach: string, how: OpenHow) =>
+    openView("win-calc", {
+      query: serializeCalc({ ...DEFAULT_CALC, coaches: [coach], years: coachSeasons(coach) }),
+      newTab: how.newTab,
+      side: how.side,
+    });
+
+  return (
+    <DetailsRail label={`${name} details`}>
+      <DetailSection title="This season" aside={seasonLabel(year)}>
+        {player ? (
+          <>
+            <DetailRow label="Team">
+              <DetailLink title="Open the team  ·  Ctrl-click for a new tab" onOpen={(how) => onTeam(player.team, player.teamLogoId, how)}>
+                <TeamLogo id={player.teamLogoId} name={player.team} size={16} />
+                <span className="truncate">{player.team}</span>
+              </DetailLink>
+            </DetailRow>
+            <DetailRow label="Conference">
+              <ConfLogo conf={player.conf} size={16} />
+              <span className="truncate">{player.confLabel}</span>
+            </DetailRow>
+            <DetailRow label="Coach">
+              {now ? (
+                <DetailLink title={`Every game ${now.coach}'s teams played, in the Win Calculator`} onOpen={(how) => openCoach(now.coach, how)}>
+                  <span className="truncate">{now.coach}</span>
+                </DetailLink>
+              ) : (
+                <span className="text-ink-muted">Not on record</span>
+              )}
+            </DetailRow>
+            <DetailRow label="Team NCAA">
+              {now?.seed != null ? <span className="truncate">{ncaaLabel(now)}</span> : <span className="text-ink-muted">{now ? "No bid" : "Not on record"}</span>}
+            </DetailRow>
+            {player.cls && (
+              <DetailRow label="Class">
+                <ClassBadge cls={player.cls} />
+              </DetailRow>
+            )}
+          </>
+        ) : (
+          <p className="py-1 text-[12.5px] text-ink-muted">No season in {seasonLabel(year)}.</p>
+        )}
+      </DetailSection>
+
+      {career.length > 0 && (
+        <DetailSection title="Seasons" aside={`${career.length} on record`}>
+          <ul>
+            {career.map((r) => {
+              const current = r.year === year;
+              return (
+                <li key={r.year}>
+                  <button
+                    type="button"
+                    aria-current={current || undefined}
+                    title={`Open ${seasonLabel(r.year)}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => onSeason(r.year)}
+                    className={`-mx-2 grid h-[30px] w-[calc(100%+16px)] grid-cols-[42px_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-2 text-left text-[12.5px] transition-colors ${
+                      current ? "bg-[var(--nav-active)] text-ink" : "text-ink-soft hover:bg-[var(--row-hover)] hover:text-ink"
+                    }`}
+                  >
+                    <span className="text-ink-muted tabular">{seasonLabel(r.year).slice(2)}</span>
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <TeamLogo id={r.teamLogoId} name={r.team} size={14} />
+                      <span className="truncate">{r.team}</span>
+                    </span>
+                    <ClassBadge cls={r.cls} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </DetailSection>
+      )}
+
+      {bartId != null && (
+        <DetailSection title="Share">
+          <SiteLinks url={`https://btacbb.xyz/players/${bartId}/`} />
+        </DetailSection>
+      )}
+    </DetailsRail>
   );
 }

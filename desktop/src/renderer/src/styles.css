@@ -322,6 +322,22 @@ html {
   }
 }
 
+/* The details rail comes in from its own edge, a few pixels, once. */
+.details-in {
+  animation: details-in 180ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes details-in {
+  from {
+    opacity: 0;
+    translate: 8px 0;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+
 .skeleton {
   background: linear-gradient(90deg, var(--paper-deep) 0%, var(--hairline) 50%, var(--paper-deep) 100%);
   background-size: 200% 100%;

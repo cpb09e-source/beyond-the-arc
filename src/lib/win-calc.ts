@@ -407,7 +407,7 @@ export function mergeParsedQuery(resolved: ResolvedQuery, current: CalcForm, nex
 const TEAM_NAME_OVERRIDES: Record<string, string> = {
   "Southern California": "USC",
 };
-function overrideTeam(n: string): string { return TEAM_NAME_OVERRIDES[n] ?? n; }
+export function overrideTeam(n: string): string { return TEAM_NAME_OVERRIDES[n] ?? n; }
 
 export type CoachHistoryRaw = Record<string, Record<string, { name: string }>>;
 
