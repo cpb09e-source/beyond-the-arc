@@ -22,6 +22,23 @@ change is the paywall fix, which is storage, not a deploy.
 - **Record panes (question 1):** the app keeps to data that is already public or already gated. Publishing `teams-all.json` and the other build-only files to the public bucket would reopen the paywall for the team explorer, so richer record panes wait on a gated endpoint for them.
 - **Coach data (question 4):** stays bundled. The data freeze runs to 2026-10-01, so nothing in it changes before then; move it to published data when the freeze lifts.
 
+## Done on 2026-09-13, afternoon
+
+- **Test accounts renamed, at your request:** `admin@btacbb.xyz` (admin + Season Pass) and `premium@btacbb.xyz` (Season Pass, not admin), both on the short password you chose. Both signed in and checked: admin sees paid seasons and /admin, premium sees paid seasons and is refused /admin. Change or delete both before promotion.
+- **Migration 012 applied** to the live Supabase project (the one-time sign-in codes table, row level security on, no client policies). Run alone with `supabase db query --linked -f`, not `db push`, so no older migration was replayed.
+- **The desktop app requires an account with Season Pass**, and says so:
+  - The sign-in screen: "Log in to Beyond the Arc", one button that finishes in the browser, a still of the workbench beside it on wide windows.
+  - Waiting shows the three steps, reopens the page, or copies the link.
+  - A free account is told the desktop app comes with Season Pass, with Get Season Pass, "I have subscribed, continue", and a different-account link. The site's connect page says the same before Allow.
+  - The login is kept, encrypted with Windows' own protection, and renewed in the background, so closing and reopening the app does not ask again. The first screen waits for the saved login, so a signed-in reader never sees the sign-in screen flash.
+- **Download for Windows** on the account page, for every account the app is open to. `/api/desktop/download` follows the same rule as signing in (Season Pass and admins).
+- **Installer 0.1.0 built and published** to R2 `desktop/` (installer, blockmap, update feed), with `desktop/scripts/publish-release.mjs`, which uploads the feed last and only after the installer checks out. Unsigned: Windows SmartScreen warns until code signing.
+- **Zone column removed** from the Team Explorer.
+- **Linear sizing:** menu rows 32 px, Ctrl K 720 px wide with 40 px rows.
+- **No clipped names or headers**, from an audit of every view: wider Win Calculator opponents, Coaches conference and titles, coach seasons headers, game log stat headers. The only ellipsis left is a long tab title when several tabs share the strip, as in a browser.
+- **Coach page fixes committed** (Altman's record, tied chips, sort order, stale comments).
+- **In progress, then the deploy:** the small site fixes from the notes, and the sources, terms and privacy pages.
+
 ## Was open overnight (now handled above)
 
 ### 1. Paywall hole on the live site (fixed 2026-09-13)
@@ -242,11 +259,11 @@ Beyond the Arc.
 ## What still has to happen
 
 **To put the desktop app in people's hands (in order):**
-1. Apply `supabase/migrations/012_desktop_auth.sql` to the live project.
-2. Deploy the site: desktop sign-in functions, `/desktop/connect`, the parse-query rate limit, Season Pass access, and the coach fixes.
-3. Sign in from the app with both test accounts; confirm the premium one sees everything but admin.
-4. Code signing (Azure Trusted Signing), so SmartScreen stops warning.
-5. `npm run dist`, upload the installer and `latest.yml` to R2 `desktop/`, and open the site's download button to Season Pass holders (it is behind the admin gate today).
+1. ~~Apply migration 012~~ done.
+2. ~~Build and publish the installer~~ done (0.1.0).
+3. Deploy the site: desktop sign-in functions, the connect page, the download button, Season Pass access, the rate limit, the coach fixes, the site fixes and the legal pages.
+4. Install from the account page and sign in with both test accounts.
+5. Code signing (Azure Trusted Signing), so SmartScreen stops warning.
 
 **Still to build:**
 - **Admin dashboard in the app** (you asked for it later): subscribers and trials, webhook heartbeat, data checks, the site banner, hand-confirmed transfers, and who is on which app version. The site's /admin has most of this; the app would read the same `admin-config` function.
