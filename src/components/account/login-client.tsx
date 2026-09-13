@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { getSupabaseBrowser } from "@/lib/auth/supabase-browser";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { destinationFor, takePlan, usePlanIntent } from "@/lib/auth/plan-intent";
+import { safeNext } from "@/lib/auth/safe-next";
 import {
   AuthShell,
   AuthLink,
@@ -36,7 +37,11 @@ export function LoginClient() {
   useEffect(() => {
     if (status !== "signedIn" || redirected.current) return;
     redirected.current = true;
-    router.replace(destinationFor(takePlan()));
+    // A page that sent someone here to sign in first (the desktop app's
+    // connect page) gets them back, query and all. Anything else goes where
+    // sign-in always went. safeNext only honors paths on its allow-list.
+    const next = safeNext(new URLSearchParams(window.location.search).get("next"));
+    router.replace(next ?? destinationFor(takePlan()));
   }, [status, router]);
 
   async function onSubmit(e: React.FormEvent) {

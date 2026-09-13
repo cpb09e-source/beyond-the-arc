@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 
 /**
  * The whole surface the renderer can reach. Kept deliberately small: every
@@ -21,10 +21,54 @@ export type DataSource = "memory" | "repo" | "cache" | "network";
 export type DataPayload = { json: string; source: DataSource };
 export type ThemeMode = "system" | "light" | "dark";
 
+export type AuthUser = { id: string; email: string | null; role: string | null };
+
+/**
+ * Where signing in stands.
+ *   waiting   the browser is open on the connect page
+ *   refused   a real account the app is not open to yet
+ *   error     a sign-in that did not go through, with what to do next
+ */
+export type AuthState =
+  | { status: "signedOut" }
+  | { status: "waiting" }
+  | { status: "signedIn"; user: AuthUser }
+  | { status: "refused"; message: string }
+  | { status: "error"; message: string };
+
+export type UpdateState =
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "available"; version: string; percent: number }
+  | { status: "ready"; version: string }
+  | { status: "current" }
+  | { status: "error"; message: string };
+
+/** Subscribe to a push channel; returns the unsubscribe. */
+function listen<T>(channel: string, fn: (value: T) => void): () => void {
+  const handler = (_event: IpcRendererEvent, value: T) => fn(value);
+  ipcRenderer.on(channel, handler);
+  return () => ipcRenderer.removeListener(channel, handler);
+}
+
 const api = {
   platform: process.platform,
+  version: (): Promise<string> => ipcRenderer.invoke("app:version"),
   data: (corpus: Corpus, year: number): Promise<DataPayload> => ipcRenderer.invoke("data:get", corpus, year),
   setTheme: (mode: ThemeMode): void => ipcRenderer.send("theme:set", mode),
+  auth: {
+    state: (): Promise<AuthState> => ipcRenderer.invoke("auth:state"),
+    signIn: (): Promise<void> => ipcRenderer.invoke("auth:sign-in"),
+    cancel: (): Promise<void> => ipcRenderer.invoke("auth:cancel"),
+    signOut: (): Promise<void> => ipcRenderer.invoke("auth:sign-out"),
+    onChange: (fn: (s: AuthState) => void): (() => void) => listen("auth:changed", fn),
+  },
+  update: {
+    state: (): Promise<UpdateState> => ipcRenderer.invoke("update:state"),
+    check: (): Promise<void> => ipcRenderer.invoke("update:check"),
+    install: (): Promise<void> => ipcRenderer.invoke("update:install"),
+    onChange: (fn: (s: UpdateState) => void): (() => void) => listen("update:changed", fn),
+  },
 };
 
 export type BtaApi = typeof api;

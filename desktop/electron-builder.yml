@@ -1,0 +1,63 @@
+# Beyond the Arc for Windows: how the installer is built.
+#
+#   npm run dist        builds the app, then release/Beyond-the-Arc-Setup-<version>.exe
+#
+# ONE-CLICK, PER USER, the way Linear, Notion and Slack install on Windows: no
+# wizard, no admin prompt, installed under the user's AppData, launched when it
+# finishes. Updates replace it in place the same way.
+#
+# NOT SIGNED YET. Windows SmartScreen warns on an unsigned installer ("Windows
+# protected your PC"). That is acceptable while downloads are admin-only;
+# signing (Azure Artifact Signing, docs/desktop-app-plan.md) comes before any
+# wider release.
+
+appId: xyz.btacbb.desktop
+productName: Beyond the Arc
+copyright: Copyright © 2026 Beyond the Arc
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**
+  - package.json
+
+# The site's team crests travel with the app (logosDir() in src/main/index.ts
+# reads resources/logos when packaged). Player headshots do not: 344 MB is not
+# an installer, and the app fetches the one it needs.
+extraResources:
+  - from: ../public/ttz-logos
+    to: logos
+    filter:
+      - "*.png"
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.png
+  artifactName: Beyond-the-Arc-Setup-${version}.${ext}
+
+nsis:
+  oneClick: true
+  perMachine: false
+  runAfterFinish: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Beyond the Arc
+  # Signing in and cached seasons survive an uninstall and reinstall.
+  deleteAppDataOnUninstall: false
+
+# btacbb:// is how the browser hands the sign-in code back to the app.
+protocols:
+  - name: Beyond the Arc
+    schemes:
+      - btacbb
+
+# The update feed electron-updater reads. Publishing (uploading release/ to this
+# prefix) is a separate, deliberate step: scripts/publish-release.mjs.
+publish:
+  - provider: generic
+    url: https://pub-86f242cc47a6490a8a66813d2650b86d.r2.dev/desktop

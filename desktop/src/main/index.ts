@@ -2,13 +2,28 @@ import { app, BrowserWindow, ipcMain, Menu, nativeTheme, net, protocol, shell } 
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { isCorpus, isValidYear, loadCorpus } from "./data";
+import type { AuthState } from "../preload";
+import {
+  accessToken,
+  authState,
+  cancelSignIn,
+  handleDeepLink,
+  onAuthChange,
+  restoreSession,
+  SCHEME,
+  signIn,
+  signOut,
+} from "./auth";
+import { isCorpus, isValidYear, loadCorpus, purgePaidCache, setTokenProvider } from "./data";
+import { checkForUpdates, installUpdate, onUpdateChange, startUpdater, updateState } from "./updater";
 
 /**
  * bta:// is the app's own asset protocol. Registered before the app is ready,
  * as a standard secure scheme, so the renderer can use it in <img> under a
- * strict Content-Security-Policy. Deep links for sign-in reuse a separate
- * scheme in P3; this one only ever serves files the app ships with.
+ * strict Content-Security-Policy. It only ever serves files the app ships with.
+ *
+ * btacbb:// is a different thing entirely: the operating system's route from
+ * the browser back into the app during sign-in (see ./auth.ts).
  */
 protocol.registerSchemesAsPrivileged([
   { scheme: "bta", privileges: { standard: true, secure: true, supportFetchAPI: true } },
@@ -38,9 +53,7 @@ const chrome = () => (nativeTheme.shouldUseDarkColors ? CHROME.dark : CHROME.lig
 
 /** Team crests: the site's own folder in development, bundled when packaged. */
 function logosDir(): string {
-  return app.isPackaged
-    ? join(process.resourcesPath, "logos")
-    : resolve(app.getAppPath(), "../public/ttz-logos");
+  return app.isPackaged ? join(process.resourcesPath, "logos") : resolve(app.getAppPath(), "../public/ttz-logos");
 }
 
 function createWindow(): void {
@@ -104,7 +117,16 @@ function createWindow(): void {
   });
 }
 
+function bringToFront(): void {
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
 function registerIpc(): void {
+  ipcMain.handle("app:version", () => app.getVersion());
+
   ipcMain.handle("data:get", (_event, corpus: unknown, year: unknown) => {
     // Validated here, not trusted from the renderer: both values become part
     // of a filesystem path and a URL.
@@ -124,6 +146,29 @@ function registerIpc(): void {
     win.setBackgroundColor(c.ground);
     if (process.platform !== "darwin") win.setTitleBarOverlay({ color: c.bar, symbolColor: c.symbol });
   });
+
+  ipcMain.handle("auth:state", () => authState());
+  ipcMain.handle("auth:sign-in", () => signIn());
+  ipcMain.handle("auth:cancel", () => cancelSignIn());
+  ipcMain.handle("auth:sign-out", () => signOut());
+
+  ipcMain.handle("update:state", () => updateState());
+  ipcMain.handle("update:check", () => checkForUpdates());
+  ipcMain.handle("update:install", () => installUpdate());
+
+  // Gated seasons ask for the reader's session, refreshed first if it is about to lapse.
+  setTokenProvider(accessToken);
+
+  let previous: AuthState["status"] = authState().status;
+  onAuthChange((s) => {
+    win?.webContents.send("auth:changed", s);
+    // The browser had focus for the Allow button; finishing sign-in brings the app back.
+    if (previous === "waiting" && s.status === "signedIn") bringToFront();
+    // Paid seasons leave the disk with the account that could open them.
+    if (s.status === "signedOut" || s.status === "refused") void purgePaidCache();
+    previous = s.status;
+  });
+  onUpdateChange((s) => win?.webContents.send("update:changed", s));
 }
 
 /** Player headshots: the site's own folder in development. */
@@ -159,15 +204,42 @@ function serveAssets(): void {
   });
 }
 
-// One running copy. A second launch focuses the first, which is also what makes
-// sign-in links arrive at the right window in P3.
+/**
+ * btacbb:// belongs to this app.
+ *
+ * An installed build is registered by its installer (electron-builder's
+ * `protocols`) and again here, which repairs a registration another program
+ * took over. Development registers only when asked, with
+ * BTA_REGISTER_PROTOCOL=1: it writes to the Windows registry, and would point
+ * the scheme at a development copy that is gone tomorrow.
+ */
+function registerScheme(): void {
+  if (app.isPackaged) {
+    app.setAsDefaultProtocolClient(SCHEME);
+  } else if (process.env.BTA_REGISTER_PROTOCOL === "1") {
+    app.setAsDefaultProtocolClient(SCHEME, process.execPath, [resolve(process.argv[1] ?? ".")]);
+  }
+}
+
+const linkIn = (argv: readonly string[]): string | undefined => argv.find((a) => a.startsWith(`${SCHEME}://`));
+
+// One running copy. A second launch focuses the first, and on Windows that
+// second launch is also how a btacbb:// link arrives: in its command line.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
-    if (!win) return;
-    if (win.isMinimized()) win.restore();
-    win.focus();
+  registerScheme();
+
+  app.on("second-instance", (_event, argv) => {
+    const link = linkIn(argv);
+    if (link) void handleDeepLink(link);
+    bringToFront();
+  });
+
+  // macOS delivers the link as an event instead.
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    void handleDeepLink(url);
   });
 
   void app.whenReady().then(() => {
@@ -180,6 +252,14 @@ if (!app.requestSingleInstanceLock()) {
     serveAssets();
     registerIpc();
     createWindow();
+    void restoreSession();
+    startUpdater();
+
+    // Launched by a link while not running: there is no sign-in waiting in
+    // this fresh process, and handleDeepLink says so instead of redeeming.
+    const first = linkIn(process.argv);
+    if (first) void handleDeepLink(first);
+
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
