@@ -110,7 +110,7 @@ export function TabStrip({
             data-tab-id={tab.id}
             role="tab"
             aria-selected={isActive}
-            title={`${label} · ${seasonLabel(tab.year)}`}
+            title={view.seasonless ? label : `${label} · ${seasonLabel(tab.year)}`}
             onPointerDown={(e) => onPointerDown(e, tab.id)}
             onPointerMove={onPointerMove}
             onPointerUp={endDrag}
@@ -144,7 +144,9 @@ export function TabStrip({
               // The two tabs on screen together share an underline, as a pair.
               <span aria-hidden className="pointer-events-none absolute inset-x-2 -bottom-[6px] h-[2px] rounded-full bg-[color-mix(in_oklab,var(--accent)_70%,transparent)]" />
             )}
-            <span className="shrink-0 text-[11px] text-ink-muted tabular">{seasonLabel(tab.year).slice(2)}</span>
+            {!view.seasonless && (
+              <span className="shrink-0 text-[11px] text-ink-muted tabular">{seasonLabel(tab.year).slice(2)}</span>
+            )}
             <button
               type="button"
               aria-label={`Close ${label}`}

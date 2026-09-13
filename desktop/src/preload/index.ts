@@ -18,6 +18,13 @@ export type Corpus =
   | "conference-rankings"
   | "conference-splits"
   | "portal"
+  | "scoreboard-day"
+  | "game"
+  | "player-photo-index"
+  | "team-names"
+  | "game-logs"
+  | "game-box"
+  | "team-ratings"
   | "teams-index"
   | "players-index"
   | "search-index";
@@ -59,8 +66,13 @@ const api = {
   platform: process.platform,
   version: (): Promise<string> => ipcRenderer.invoke("app:version"),
   requiresAccount: (): Promise<boolean> => ipcRenderer.invoke("app:requires-account"),
-  data: (corpus: Corpus, year: number): Promise<DataPayload> => ipcRenderer.invoke("data:get", corpus, year),
+  /** A corpus-season, and for a per-day or per-game corpus, which day or game. */
+  data: (corpus: Corpus, year: number, key?: string): Promise<DataPayload> => ipcRenderer.invoke("data:get", corpus, year, key),
   setTheme: (mode: ThemeMode): void => ipcRenderer.send("theme:set", mode),
+  /** Ask the Win Calculator: the site's parser turns a question into filters. */
+  calc: {
+    parse: (query: string): Promise<{ status: number; body: unknown }> => ipcRenderer.invoke("calc:parse", query),
+  },
   auth: {
     state: (): Promise<AuthState> => ipcRenderer.invoke("auth:state"),
     signIn: (): Promise<void> => ipcRenderer.invoke("auth:sign-in"),

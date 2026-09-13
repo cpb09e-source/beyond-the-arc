@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  Calculator,
   CalendarClock,
   CalendarDays,
   ChartScatter,
@@ -25,6 +26,7 @@ import { TeamGamesView } from "~/views/team-games/team-games-view";
 import { TeamProfileView } from "~/views/team-profile/team-profile-view";
 import { TeamScatterView } from "~/views/team-scatter/team-scatter-view";
 import { TeamsView } from "~/views/teams/teams-view";
+import { WinCalcView } from "~/views/win-calc/calc-view";
 
 /**
  * Every view the app has.
@@ -83,6 +85,12 @@ export type ViewDef = {
    * season, and the season switcher and [ ] leave it alone.
    */
   season?: number;
+  /**
+   * Set on a view about no one season (Compare, the Win Calculator), which picks
+   * its seasons itself: its tab and its favorites name no season, and Ctrl K
+   * does not offer to step one.
+   */
+  seasonless?: boolean;
 };
 
 export const VIEWS: ViewDef[] = [
@@ -156,7 +164,17 @@ export const VIEWS: ViewDef[] = [
     season: SEASON_CEIL,
   },
   {
+    id: "win-calc",
+    seasonless: true,
+    label: "Win Calculator",
+    section: "Tools",
+    icon: Calculator,
+    filterPlaceholder: "Filter games",
+    Component: WinCalcView,
+  },
+  {
     id: "compare",
+    seasonless: true,
     label: "Compare",
     section: "Tools",
     icon: GitCompareArrows,

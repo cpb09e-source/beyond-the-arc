@@ -13,6 +13,7 @@ import {
 import { usePeek } from "~/peek/use-peek";
 import { useIsActive } from "~/shell/active";
 import { signalOnboarding } from "~/shell/onboarding";
+import { useShell } from "~/shell/shell-context";
 import { PeekPanel } from "./peek-panel";
 
 /**
@@ -180,6 +181,7 @@ export function DataTable<R>({
   const [sort, setSort] = useState(defaultSort);
   // A table in a tab that is not in front keeps its state but not the keyboard.
   const active = useIsActive();
+  const { filterRef } = useShell();
 
   const sorted = useMemo(() => {
     const value = columns.find((c) => c.key === sort.key)?.sortValue;
@@ -293,6 +295,9 @@ export function DataTable<R>({
       if (e.key === "Enter" && onOpen && !e.altKey) {
         const t = e.target as HTMLElement | null;
         if (t && (t.tagName === "TEXTAREA" || t.tagName === "BUTTON" || t.isContentEditable)) return;
+        // From a field, only the table's own filter box opens a row. Enter in any
+        // other field (a question being asked, a value being typed) is that field's.
+        if (t?.tagName === "INPUT" && t !== filterRef.current) return;
         const row = index >= 0 ? sorted[index] : undefined;
         if (!row) return;
         e.preventDefault();
@@ -314,7 +319,9 @@ export function DataTable<R>({
       }
       const page = Math.max(1, Math.floor(viewH / rowHeight) - 1);
       let to: number | null = null;
-      // Arrows work from the filter box too, so filtering and moving is one motion.
+      // Arrows work from the filter box too, so filtering and moving is one motion,
+      // but not from other fields, where they belong to the field.
+      if (inField && target !== filterRef.current) return;
       if (e.key === "ArrowDown") to = index + 1;
       else if (e.key === "ArrowUp") to = index - 1;
       else if (!inField) {
@@ -331,7 +338,7 @@ export function DataTable<R>({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, index, move, sorted, viewH, rowHeight, onOpen, keys]);
+  }, [active, index, move, sorted, viewH, rowHeight, onOpen, keys, filterRef]);
 
   // THE POINTER MOVES FOCUS, but only when the pointer itself moves. Chromium
   // sends synthetic mouse moves when content scrolls under a still cursor, and

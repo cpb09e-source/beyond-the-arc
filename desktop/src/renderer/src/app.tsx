@@ -427,7 +427,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     const at = ALL_SEASONS.indexOf(current.year);
     const older = ALL_SEASONS[at + 1];
     const newer = ALL_SEASONS[at - 1];
-    if (older != null) {
+    if (older != null && !view.seasonless) {
       action({
         id: "action:older",
         title: "Older season",
@@ -438,7 +438,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
         run: () => dispatch({ type: "step-year", to: "older" }),
       });
     }
-    if (newer != null) {
+    if (newer != null && !view.seasonless) {
       action({
         id: "action:newer",
         title: "Newer season",
@@ -477,7 +477,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
         id: `favorite:${f.id}`,
         group: "favorites",
         title: f.label,
-        subtitle: fv.profile ? seasonLabel(f.year) : `${fv.label} · ${seasonLabel(f.year)}`,
+        subtitle: fv.profile ? seasonLabel(f.year) : fv.seasonless ? fv.label : `${fv.label} · ${seasonLabel(f.year)}`,
         keywords: ["favorite", fv.label],
         weight: 45,
         leading: <FavIcon size={15} strokeWidth={2} />,

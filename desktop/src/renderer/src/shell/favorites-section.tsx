@@ -86,7 +86,7 @@ export function FavoritesSection({
                   <button
                     type="button"
                     aria-current={active ? "page" : undefined}
-                    title={`${f.label}  ·  ${view.label}, ${seasonLabel(f.year)}  ·  double-click to rename`}
+                    title={`${f.label}  ·  ${view.seasonless ? view.label : `${view.label}, ${seasonLabel(f.year)}`}  ·  double-click to rename`}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={(e) => onOpen(f, e.ctrlKey || e.metaKey)}
                     onAuxClick={(e) => {
@@ -107,9 +107,11 @@ export function FavoritesSection({
                       )}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-left">{f.label}</span>
-                    <span className="shrink-0 text-[11px] text-ink-muted tabular transition-opacity group-hover:opacity-0">
-                      {seasonLabel(f.year).slice(2)}
-                    </span>
+                    {!view.seasonless && (
+                      <span className="shrink-0 text-[11px] text-ink-muted tabular transition-opacity group-hover:opacity-0">
+                        {seasonLabel(f.year).slice(2)}
+                      </span>
+                    )}
                   </button>
                 )}
                 {editing !== f.id && (

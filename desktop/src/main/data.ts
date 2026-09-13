@@ -2,7 +2,7 @@ import { app } from "electron";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { LIVE_SEASON } from "../../../src/lib/seasons";
+import { LIVE_SEASON, SEASON_CEIL } from "../../../src/lib/seasons";
 import { SITE } from "./auth";
 
 /**
@@ -46,13 +46,27 @@ export type Corpus =
   | "conference-rankings"
   | "conference-splits"
   | "portal"
+  | "scoreboard-day"
+  | "game"
+  | "player-photo-index"
+  | "team-names"
+  | "game-logs"
+  | "game-box"
+  | "team-ratings"
   | "teams-index"
   | "players-index"
   | "search-index";
 export type DataSource = "memory" | "repo" | "cache" | "network";
 
 type CorpusSpec = {
-  path: (year: number) => string;
+  path: (year: number, key: string) => string;
+  /**
+   * A corpus with one file per day or per game names it with a key, validated
+   * against this pattern before it goes anywhere near a path or a URL.
+   */
+  key?: RegExp;
+  /** A season still being filled in (fixtures for next season): revalidated like the live one. */
+  upcoming?: boolean;
   /** Served from the site's R2 bucket rather than btacbb.xyz (R2_DIRS in src/lib/data-url.ts). */
   r2: boolean | ((year: number) => boolean);
   /**
@@ -63,6 +77,12 @@ type CorpusSpec = {
   optional?: boolean;
   /** One file across every season; changes while a season is live. */
   crossSeason?: boolean;
+  /**
+   * False for a file too big to hold twice. The renderer keeps the parsed
+   * season for the life of the window, so the text kept here as well would be
+   * memory spent for nothing: thirteen seasons of game logs are 111 MB.
+   */
+  memory?: boolean;
   /** How a paid season of this corpus is reached, when the public copy is absent. */
   gated?: { via: "season"; kind: "teams" | "players" } | { via: "signed"; kind: "team-games" | "games" };
 };
@@ -100,6 +120,19 @@ const CORPORA: Record<Corpus, CorpusSpec> = {
   "conference-splits": { path: () => "conference-splits.json", r2: false, crossSeason: true },
   // The transfer portal: one file, rescored as the cycle moves.
   portal: { path: () => "portal.json", r2: false, crossSeason: true },
+  // The scoreboard: one slate per day and one bundle per game, on R2. A day
+  // or a game with no file resolves to null rather than an error.
+  "scoreboard-day": { path: (y, k) => `scoreboard/${y}/${k}.json`, key: /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/, r2: true, optional: true, upcoming: true },
+  game: { path: (y, k) => `games/${y}/${k}.json`, key: /^[0-9]{1,9}$/, r2: true, optional: true },
+  // A box score names players; this is how a name becomes a player page.
+  "player-photo-index": { path: (y) => `player-photo-index/${y}.json`, r2: false, optional: true },
+  "team-names": { path: () => "team-names.json", r2: false, crossSeason: true },
+  // The Win Calculator: each team's side of every game, the per-game box
+  // sidecar, and the ratings that rank an opponent into a quadrant
+  // (src/lib/win-calc.ts prepareSeason). Public on the site for every season.
+  "game-logs": { path: (y) => `game-logs-by-year/${y}.json`, r2: false, memory: false },
+  "game-box": { path: (y) => `game-box-by-year/${y}.json`, r2: false, optional: true, memory: false },
+  "team-ratings": { path: (y) => `team-ratings-${y}.json`, r2: false, optional: true },
 };
 
 const SITE_DATA = "https://btacbb.xyz/data";
@@ -126,6 +159,13 @@ export function isValidYear(y: unknown): y is number {
 
 export function isCorpus(k: unknown): k is Corpus {
   return typeof k === "string" && Object.hasOwn(CORPORA, k);
+}
+
+/** A key is required exactly where the corpus has one, and must match its pattern. */
+export function isValidKey(corpus: Corpus, key: unknown): key is string | undefined {
+  const pattern = CORPORA[corpus].key;
+  if (!pattern) return key === undefined || key === null;
+  return typeof key === "string" && pattern.test(key);
 }
 
 const cacheDir = () => join(app.getPath("userData"), "data");
@@ -183,14 +223,17 @@ async function fetchPaid(spec: CorpusSpec, year: number): Promise<string> {
   return res.text();
 }
 
-export async function loadCorpus(corpus: Corpus, year: number): Promise<{ json: string; source: DataSource }> {
+export async function loadCorpus(corpus: Corpus, year: number, key = ""): Promise<{ json: string; source: DataSource }> {
   const spec = CORPORA[corpus];
-  const rel = spec.path(year);
-  const live = LIVE_SEASON !== null && (spec.crossSeason === true || year === LIVE_SEASON);
+  const rel = spec.path(year, key);
+  const live =
+    (LIVE_SEASON !== null && (spec.crossSeason === true || year === LIVE_SEASON)) ||
+    (spec.upcoming === true && year > SEASON_CEIL);
 
   const hit = memory.get(rel);
   if (hit && (!live || Date.now() - hit.at < LIVE_FRESH_MS)) return { json: hit.json, source: "memory" };
   const remember = (json: string, paid = false) => {
+    if (spec.memory === false) return;
     memory.set(rel, { json, at: Date.now() });
     if (paid) paidKeys.add(rel);
   };

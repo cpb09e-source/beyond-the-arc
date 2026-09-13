@@ -14,7 +14,8 @@ import {
   signIn,
   signOut,
 } from "./auth";
-import { isCorpus, isValidYear, loadCorpus, purgePaidCache, setTokenProvider } from "./data";
+import { parseQuestion } from "./calc";
+import { isCorpus, isValidKey, isValidYear, loadCorpus, purgePaidCache, setTokenProvider } from "./data";
 import { checkForUpdates, installUpdate, onUpdateChange, startUpdater, updateState } from "./updater";
 
 /**
@@ -136,12 +137,15 @@ function registerIpc(): void {
   // the welcome screen.
   ipcMain.handle("app:requires-account", () => app.isPackaged || process.env.BTA_REQUIRE_ACCOUNT === "1");
 
-  ipcMain.handle("data:get", (_event, corpus: unknown, year: unknown) => {
-    // Validated here, not trusted from the renderer: both values become part
-    // of a filesystem path and a URL.
-    if (!isCorpus(corpus) || !isValidYear(year)) throw new Error("bad-request");
-    return loadCorpus(corpus, year);
+  ipcMain.handle("data:get", (_event, corpus: unknown, year: unknown, key: unknown) => {
+    // Validated here, not trusted from the renderer: all three become part of a
+    // filesystem path and a URL.
+    if (!isCorpus(corpus) || !isValidYear(year) || !isValidKey(corpus, key)) throw new Error("bad-request");
+    return loadCorpus(corpus, year, key ?? "");
   });
+
+  // Ask the Win Calculator. The site's parser holds the model key; see ./calc.ts.
+  ipcMain.handle("calc:parse", (_event, query: unknown) => parseQuestion(query));
 
   // The renderer owns the choice; the OS-level pieces (caption buttons, window
   // ground, prefers-color-scheme inside the page) follow nativeTheme.
