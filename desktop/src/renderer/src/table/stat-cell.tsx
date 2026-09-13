@@ -24,7 +24,7 @@ export function StatCell({
 }) {
   return (
     <span className="inline-flex flex-col items-end gap-[3px] leading-none">
-      <span className={strong ? "font-semibold text-ink tabular" : "text-ink-soft tabular"}>{value}</span>
+      <span className={`whitespace-nowrap ${strong ? "font-semibold text-ink tabular" : "text-ink-soft tabular"}`}>{value}</span>
       <PercentileChip pct={pct ?? null} neutral={neutral} className="min-w-[26px] px-1 py-[2px] text-[10.5px]" />
     </span>
   );

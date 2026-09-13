@@ -69,12 +69,12 @@ const SEASON_COLUMNS: Column<CoachSeason>[] = [
   {
     key: "record", label: "W-L", width: 64, align: "right", first: -1,
     sortValue: (s) => winShare(s.wins, s.losses),
-    cell: (s) => <span className="text-ink tabular">{`${s.wins ?? "–"}-${s.losses ?? "–"}`}</span>,
+    cell: (s) => <span className="whitespace-nowrap text-ink tabular">{`${s.wins ?? "–"}-${s.losses ?? "–"}`}</span>,
   },
   {
     key: "confRecord", label: "Conf W-L", title: "Conference record", width: 76, align: "right", first: -1,
     sortValue: (s) => winShare(s.conf_wins, s.conf_losses),
-    cell: (s) => <span className="text-ink-soft tabular">{s.conf_wins != null ? `${s.conf_wins}-${s.conf_losses ?? 0}` : "–"}</span>,
+    cell: (s) => <span className="whitespace-nowrap text-ink-soft tabular">{s.conf_wins != null ? `${s.conf_wins}-${s.conf_losses ?? 0}` : "–"}</span>,
   },
   {
     key: "bta", label: "BTA", title: "BTA rank that season", width: 60, align: "right", first: 1,
