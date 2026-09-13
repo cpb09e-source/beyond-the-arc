@@ -23,8 +23,27 @@ import { dirname, join, resolve } from "node:path";
  * the IPC boundary, and the biggest file here is a 7 MB game log.
  */
 
-export type Corpus = "teams" | "players" | "team-games" | "player-games";
+export type Corpus =
+  | "teams"
+  | "players"
+  | "player-impact"
+  | "player-box"
+  | "player-shooting"
+  | "team-games"
+  | "player-games";
 export type DataSource = "memory" | "repo" | "cache" | "network";
+
+type CorpusSpec = {
+  path: (year: number) => string;
+  /** Served from the site's R2 bucket rather than btacbb.xyz (R2_DIRS in src/lib/data-url.ts). */
+  r2: boolean;
+  /**
+   * The file legitimately does not exist for some seasons: the real impact fit
+   * starts in 2024, for instance. A miss resolves to JSON `null` instead of an
+   * error, so "no file" and "the season is gated" never look the same.
+   */
+  optional?: boolean;
+};
 
 /**
  * Every file the renderer may ask for, as a fixed map.
@@ -33,14 +52,15 @@ export type DataSource = "memory" | "repo" | "cache" | "network";
  * filesystem path and a URL, so the name is matched against this table and the
  * year is validated as four digits; nothing the renderer sends is interpolated.
  *
- * `r2` marks the corpora the site serves from its R2 bucket instead of from
- * btacbb.xyz, mirroring R2_DIRS in src/lib/data-url.ts. Paid seasons of those
- * live in a private bucket behind a signing function, which the app reaches
- * once it can sign in (P3).
+ * Paid seasons of the R2 corpora live in a private bucket behind a signing
+ * function, which the app reaches once it can sign in (P3).
  */
-const CORPORA: Record<Corpus, { path: (year: number) => string; r2: boolean }> = {
+const CORPORA: Record<Corpus, CorpusSpec> = {
   teams: { path: (y) => `teams-by-year/${y}.json`, r2: false },
   players: { path: (y) => `players-explorer/${y}.json`, r2: false },
+  "player-impact": { path: (y) => `epm-${y}.json`, r2: false, optional: true },
+  "player-box": { path: (y) => `box-epm-${y}.json`, r2: false, optional: true },
+  "player-shooting": { path: (y) => `shooting-${y}.json`, r2: false, optional: true },
   "team-games": { path: (y) => `team-game-index/${y}.json`, r2: true },
   "player-games": { path: (y) => `game-index/${y}.json`, r2: true },
 };
@@ -85,6 +105,12 @@ export async function loadCorpus(
       memory.set(rel, json);
       return { json, source: "repo" };
     }
+    // In development the repo is the whole truth: an optional file it lacks
+    // does not exist anywhere, so there is nothing to go looking for.
+    if (spec.optional) {
+      memory.set(rel, "null");
+      return { json: "null", source: "repo" };
+    }
   }
 
   const cached = join(app.getPath("userData"), "data", rel);
@@ -97,6 +123,10 @@ export async function loadCorpus(
   const url = spec.r2 ? `${R2_PUBLIC}/${rel}` : `${SITE_DATA}/${rel}`;
   const res = await fetch(url);
   if (!res.ok) {
+    if (spec.optional && res.status === 404) {
+      memory.set(rel, "null");
+      return { json: "null", source: "network" };
+    }
     // A 403 or 404 on a paid season is the archive gate, not a missing file:
     // those seasons are deliberately absent from the public copies. Signing in
     // to the app arrives in P3; until then the renderer says so plainly.

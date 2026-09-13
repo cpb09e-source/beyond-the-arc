@@ -5,7 +5,6 @@ import { StickyHeaderClone } from "@/components/table/sticky-header-clone";
 import { CLASS_BADGE } from "@/lib/class-badge";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { midrankPercentileMap } from "@/lib/percentile";
 import { formatHeight } from "@/lib/height";
 import Link from "next/link";
 import { TeamLogo } from "@/components/team-logo";
@@ -44,6 +43,10 @@ import {
 import {
   PACK_STAT_BY_KEY, groupsFor, loadStatPack, type IndexedPack, type PackGroup,
 } from "@/lib/player-stat-pack";
+import {
+  PCT_KEYS, hasImpactPlayers, impactFromFiles, passesLeaderboardFloor, positionBucket, processPlayerSeason,
+  type BoxEntry, type ExplorerPayload, type ImpactEntry, type ImpactSeason, type PctKey, type PctMaps, type ShootingEntry,
+} from "@/lib/player-cohort";
 import { useDragPan } from "@/lib/use-drag-pan";
 import { clampToFreeTier, effectivePlayerViewAccess, playerViewAccess, FREE_LIMITS } from "@/lib/access";
 import { useEntitlement } from "@/lib/use-entitlement";
@@ -283,83 +286,6 @@ function teamSlug(name: string): string {
   return name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
-/**
- * What /data/players-explorer/<year>.json ships: a field header and one array
- * per player, already transformed by scripts/build-players-explorer.mjs.
- *
- * The explorer used to fetch players-by-year, the Supabase row shipped whole —
- * 1.14 MB gzipped for 2025, of which Bart's 67-column `raw_row` was 73% and the
- * page read 22 of those columns. Doing the transform at build time and dropping
- * the JSON keys took the same season to 504 KB.
- *
- * `fields` is read from the file rather than assumed, so the builder owns the
- * column order and the two cannot drift apart silently.
- */
-type ExplorerPayload = {
-  fields: string[];
-  rows: Array<Array<string | number | null>>;
-};
-
-/**
- * Possessions a player needs before their raw on-off is worth printing.
- *
- * Matches MIN_POSS in export-epm-json.mjs, which already treats 300 as the
- * point below which "the RAPM is mostly shrinkage". Unregularized on-off is
- * noisier still, so the same floor is the least it should carry.
- */
-const MIN_ON_OFF_POSS = 300;
-
-/** Fields attached after load, from the EPM and shooting files. */
-const LATE_FIELDS = {
-  epm: null, off_epm: null, def_epm: null, epm_estimated: false, epm_covered: false,
-  box_epm: null, poss: null,
-  ewins: null, on_off: null,
-  rim_pct: null, mid_pct: null, assisted_pct: null, rim_rate: null, tp_rate: null,
-} as const;
-
-/**
- * Payload rows -> PlayerSummary objects.
- *
- * Called from the per-year memo rather than at fetch time, and deliberately:
- * the cohort pass below mutates what it is given (EPM, shooting and percentiles
- * are attached in place), so it needs a fresh object every run. Expanding here
- * keeps the state holding immutable payloads, exactly as the old transform did.
- */
-function expandRows(payload: ExplorerPayload): PlayerSummary[] {
-  const { fields, rows } = payload;
-  return rows.map((row) => {
-    const o: Record<string, unknown> = { ...LATE_FIELDS };
-    for (let i = 0; i < fields.length; i++) o[fields[i]!] = row[i] ?? null;
-    return o as unknown as PlayerSummary;
-  });
-}
-
-// Position bucket from Bart's position note. Mirrors the mapping in
-// scripts/compute-player-ranks.mts so the volume-shooter penalty's
-// "compared to their position" cohort matches the player-profile rank
-// section. Keep these in sync.
-const BUCKET_BY_NOTE: Record<string, "G" | "F" | "C"> = {
-  "Pure PG": "G", "Scoring PG": "G", "Combo G": "G", "Wing G": "G",
-  "Wing F": "F", "Stretch 4": "F",
-  // Height-derived dual-eligibility notes for 2008-09 (see derive-positions.mts).
-  "G/F": "G", "F/G": "F", "C/F": "C",
-  "PF/C": "C", "C": "C",
-};
-function positionBucket(note: string | null | undefined): "G" | "F" | "C" | null {
-  return note ? (BUCKET_BY_NOTE[note] ?? null) : null;
-}
-
-
-// Leaderboard visibility floor: hide players with <8 games OR <3.5 PPG.
-// Stricter than the previous AND-style filter — keeps deep-bench cameos
-// off the leaderboard entirely. Players above this floor but below the
-// strict 18g / 20mpg / 5.3ppg cohort still appear and are ranked against
-// the cohort's distribution via binary search.
-function isBelowBaseline(p: PlayerSummary): boolean {
-  const gp = p.games ?? 0;
-  const ppg = p.pts_pg ?? 0;
-  return gp < 8 || ppg < 3.5;
-}
 
 // Filter-only pass (no sort/slice). Single loop, zero intermediate arrays — so
 // the live filter-count in the drawer (which only needs `.length`) doesn't pay
@@ -375,12 +301,9 @@ function filterSpec(
   const posSet = spec.pos.length ? new Set(spec.pos) : null;
   const out: PlayerSummary[] = [];
   for (const p of players) {
-    if (isBelowBaseline(p)) continue;
-    // No EPM, no row — but only for seasons that HAVE EPM. Players under the
-    // 13 mpg floor are deliberately absent from the fit, and a leaderboard
-    // built around impact should not list players it cannot rate. They stay
-    // everywhere else: search, team pages, rosters, and their own profile.
-    if (p.epm_covered && p.epm === null) continue;
+    // The baseline floor, the games minimum and "no EPM, no row" in seasons
+    // that have EPM: see passesLeaderboardFloor in src/lib/player-cohort.ts.
+    if (!passesLeaderboardFloor(p, spec.minGames)) continue;
     if (confSet && (p.team_conference === null || !confSet.has(p.team_conference))) continue;
     if (teamSet && !teamSet.has(p.team_name)) continue;
     if (clsSet && (p.class === null || !clsSet.has(p.class))) continue;
@@ -388,7 +311,6 @@ function filterSpec(
       const bucket = positionBucket(p.position_note);
       if (bucket === null || !posSet.has(bucket)) continue;
     }
-    if ((p.games ?? 0) < spec.minGames) continue;
     // Stat filters, AND-combined.
     //
     // A stat lives on PlayerSummary or in a pack, and a filter must work on
@@ -498,40 +420,6 @@ function applySpec(
   return out.slice(0, spec.limit);
 }
 
-// Chip-bearing stats. TOV inverts (fewer turnovers = higher percentile).
-const PCT_KEYS = [
-  "pir", "fg_pct", "fg3_pct", "ts_pct",
-  "epm", "off_epm", "def_epm", "usage_pct", "pts_pg",
-  "orb_pg", "drb_pg", "reb_pg", "ast_pg", "tov_pg", "tov_pct", "stl_pg", "blk_pg", "hkm_pct",
-  // Filterable extras that can appear as dynamic columns:
-  "efg_pct", "fg2_pct", "ft_pct", "fta_rate", "ast_to_tov", "porpag", "bta_porpag", "min_pg", "ppp",
-  "ewins",
-] as const;
-type PctKey = (typeof PCT_KEYS)[number];
-type PctMaps = Record<PctKey, Map<number, number>>;
-const INVERTED_PCT = new Set<PctKey>(["tov_pg", "tov_pct"]);
-
-// Per-season percentile rank for each chip-bearing stat. Computed across the
-// eligible D-I pool (post-baseline, pre-filter) so chips remain meaningful
-// when filters narrow the visible list. Higher value = higher percentile.
-function attachPercentiles(players: PlayerSummary[]): PctMaps {
-  const out = Object.fromEntries(PCT_KEYS.map((k) => [k, new Map<number, number>()])) as PctMaps;
-  for (const key of PCT_KEYS) {
-    // Ties share a percentile — see src/lib/percentile.ts. Sorted position gave
-    // two players with the same number different chips, which on a leaderboard
-    // of thousands happens constantly.
-    //
-    // INVERSION IS PASSED IN rather than applied as 100 - pct afterwards. The
-    // two are not the same once ties exist: flipping a midrank after the fact
-    // is correct only when the block is symmetric about the middle, and the
-    // ranker already knows how to sort the other way.
-    out[key] = midrankPercentileMap(
-      players.map((p) => [p.id, p[key] as number | null | undefined] as const),
-      !INVERTED_PCT.has(key),
-    );
-  }
-  return out;
-}
 
 
 export function PlayersClient({ confsByYear }: { confsByYear: Record<string, string[]> }) {
@@ -716,11 +604,11 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
   // selected year; 404 (no fit for that season) caches as an empty map.
   // Per-season impact map. `estimated` marks a season served by the box-score
   // Box-EPM model (pre-2024, no play-by-play) rather than the real RAPM fit.
-  const [epmByYear, setEpmByYear] = useState<Record<number, { players: Record<string, { epm: number; off: number; def: number; poss?: number | null; ewins?: number | null; on_off?: number | null; /** ARC-scaled copies, present only on ESTIMATED (box-score) seasons. */ epm_s?: number | null; off_s?: number | null; def_s?: number | null }>; estimated: boolean }>>({});
+  const [epmByYear, setEpmByYear] = useState<Record<number, ImpactSeason>>({});
   // Box-EPM per season: bart_player_id -> {epm, off, def}. The box half of EPM.
-  const [boxByYear, setBoxByYear] = useState<Record<number, Record<string, { epm: number; off: number; def: number }>>>({});
+  const [boxByYear, setBoxByYear] = useState<Record<number, Record<string, BoxEntry>>>({});
   // Shooting profile per season: bart_player_id -> {rim_pct,mid_pct,asst,rim_rate,tp_rate}. Filter-only.
-  const [shootingByYear, setShootingByYear] = useState<Record<number, Record<string, { rim_pct: number | null; mid_pct: number | null; asst: number | null; rim_rate: number | null; tp_rate: number | null }>>>({});
+  const [shootingByYear, setShootingByYear] = useState<Record<number, Record<string, ShootingEntry>>>({});
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [compareOpen, setCompareOpen] = useState(false);
@@ -849,23 +737,21 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     const toFetch = spec.years.filter((y) => !epmByYear[y]);
     if (!toFetch.length) return;
     let canceled = false;
-    const loadYear = async (y: number): Promise<readonly [number, { players: Record<string, { epm: number; off: number; def: number }>; estimated: boolean }]> => {
+    const loadYear = async (y: number): Promise<readonly [number, ImpactSeason]> => {
+      let realFit: { players?: Record<string, ImpactEntry> } | null = null;
       try {
         const r = await fetch(`/data/epm-${y}.json`);
-        if (r.ok) {
-          const j = await r.json();
-          const players = j.players ?? {};
-          if (Object.keys(players).length) return [y, { players, estimated: false }] as const;
-        }
+        if (r.ok) realFit = await r.json();
       } catch { /* fall through to estimate */ }
-      try {
-        const rb = await fetch(`/data/box-epm-${y}.json`);
-        if (rb.ok) {
-          const j = await rb.json();
-          return [y, { players: j.players ?? {}, estimated: true }] as const;
-        }
-      } catch { /* no estimate either */ }
-      return [y, { players: {}, estimated: false }] as const;
+      // The estimate is fetched only when there is no real fit, as before.
+      let estimate: { players?: Record<string, ImpactEntry> } | null = null;
+      if (!hasImpactPlayers(realFit)) {
+        try {
+          const rb = await fetch(`/data/box-epm-${y}.json`);
+          if (rb.ok) estimate = await rb.json();
+        } catch { /* no estimate either */ }
+      }
+      return [y, impactFromFiles(realFit, estimate)] as const;
     };
     Promise.all(toFetch.map(loadYear)).then((entries) => {
       if (canceled) return;
@@ -935,64 +821,10 @@ export function PlayersClient({ confsByYear }: { confsByYear: Record<string, str
     for (const y of spec.years) {
       const raw = rawByYear[y];
       if (!raw) continue;
-      const arr = expandRows(raw);
-      // Attach BTA EPM by bart id. Real RAPM fit where available, else the
-      // estimated box-score model — `estimated` flags which for the UI marker.
-      const epmEntry = epmByYear[y];
-      // Does this season have EPM at all? Below the 13 mpg floor the fit is
-      // essentially the prior, so those players are omitted from the file
-      // rather than published as a shrunk-to-zero number — and the explorer
-      // hides them (see filterSpec). This flag is what keeps that from
-      // emptying the table for a season whose EPM was never built: no
-      // coverage, no hiding.
-      const seasonHasEpm = !!epmEntry && Object.keys(epmEntry.players).length > 0;
-      for (const p of arr) p.epm_covered = seasonHasEpm;
-      if (epmEntry) {
-        for (const p of arr) {
-          const e = p.bart_player_id != null ? epmEntry.players[String(p.bart_player_id)] : undefined;
-          if (e) {
-            // On estimated seasons prefer the EPM-SCALED copy. Box-EPM is a
-            // shrunk prediction of ARC and lives on roughly half its spread, so
-            // showing it raw in the ARC column put two different units on one
-            // axis — and no pre-play-by-play season could ever place on an
-            // all-seasons board. export-box-epm-json.mjs fits the mapping on
-            // the seasons where both exist. Real fits have no _s fields and
-            // fall through unchanged.
-            p.epm = e.epm_s ?? e.epm;
-            p.off_epm = e.off_s ?? e.off;
-            p.def_epm = e.def_s ?? e.def;
-            p.epm_estimated = epmEntry.estimated;
-            p.ewins = e.ewins ?? null;
-            p.poss = e.poss ?? null;
-            // On-off is raw and unregularized: Juan Reyna reads +89.5 on four
-            // possessions. Published only above a floor, because a number that
-            // wrong is worse than no number.
-            p.on_off = typeof e.poss === "number" && e.poss >= MIN_ON_OFF_POSS ? e.on_off ?? null : null;
-          }
-        }
-      }
-      // Box half of EPM, from its own file so it stays distinct from the blend.
-      const boxMap = boxByYear[y];
-      if (boxMap) {
-        for (const p of arr) {
-          const b = p.bart_player_id != null ? boxMap[String(p.bart_player_id)] : undefined;
-          if (b) p.box_epm = b.epm;
-        }
-      }
-      // Shooting profile (filter-only fields).
-      const shootMap = shootingByYear[y];
-      if (shootMap) {
-        for (const p of arr) {
-          const s = p.bart_player_id != null ? shootMap[String(p.bart_player_id)] : undefined;
-          if (s) { p.rim_pct = s.rim_pct; p.mid_pct = s.mid_pct; p.assisted_pct = s.asst; p.rim_rate = s.rim_rate; p.tp_rate = s.tp_rate; }
-        }
-      }
-      const eligible = arr.filter((p) => !isBelowBaseline(p));
-      const pctMaps = attachPercentiles(eligible);
-      out[y] = { players: arr, pctMaps };
+      out[y] = processPlayerSeason(raw, epmByYear[y], boxByYear[y], shootingByYear[y]);
     }
     return out;
-  }, [rawByYear, spec.years, epmByYear, shootingByYear]);
+  }, [rawByYear, spec.years, epmByYear, boxByYear, shootingByYear]);
 
   const transformed = useMemo(
     () => scopedSpec.years.flatMap((y) => processedByYear[y]?.players ?? []),

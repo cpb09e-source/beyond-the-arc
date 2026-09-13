@@ -48,8 +48,10 @@ export type Column<R> = {
   first: Dir;
   /** Stays in place on horizontal scroll. Pinned columns must come first. */
   pin?: boolean;
-  sortValue: (row: R) => number | string | null;
-  cell: (row: R) => ReactNode;
+  /** Omit for a column that is not an attribute of the row, such as its position. */
+  sortValue?: (row: R) => number | string | null;
+  /** `index` is the row's position in the current sort, from 0. */
+  cell: (row: R, index: number) => ReactNode;
 };
 
 export type PeekSpec<R> = {
@@ -102,9 +104,9 @@ export function DataTable<R>({
   const [sort, setSort] = useState(defaultSort);
 
   const sorted = useMemo(() => {
-    const col = columns.find((c) => c.key === sort.key) ?? columns[0];
-    if (!col) return rows;
-    return [...rows].sort((a, b) => compare(col.sortValue(a), col.sortValue(b), sort.dir) || (tieBreak?.(a, b) ?? 0));
+    const value = columns.find((c) => c.key === sort.key)?.sortValue;
+    if (!value) return tieBreak ? [...rows].sort(tieBreak) : rows;
+    return [...rows].sort((a, b) => compare(value(a), value(b), sort.dir) || (tieBreak?.(a, b) ?? 0));
   }, [rows, columns, sort, tieBreak]);
 
   const layout = useMemo(() => {
@@ -231,6 +233,7 @@ export function DataTable<R>({
   const peekTop = Math.min(Math.max(rowTop - 6, HEAD_H + 8), maxTop);
 
   const sortBy = (col: Column<R>) =>
+    col.sortValue &&
     setSort((s) => (s.key === col.key ? { key: col.key, dir: (s.dir * -1) as Dir } : { key: col.key, dir: col.first }));
 
   const edge = (i: number) => (scrolledX && i === layout.lastPin ? "var(--pin-edge)" : undefined);
@@ -257,6 +260,24 @@ export function DataTable<R>({
           {columns.map((c, i) => {
             const active = sort.key === c.key;
             const pinned = layout.pinLeft[i] != null;
+            const className = `flex min-w-0 items-center gap-1 px-2.5 text-[10.5px] font-semibold uppercase tracking-[0.07em] transition-colors ${ALIGN[c.align]}`;
+            const style: CSSProperties | undefined = pinned
+              ? {
+                  position: "relative",
+                  zIndex: 2,
+                  transform: "translateX(var(--sl, 0px))",
+                  background: "var(--paper)",
+                  boxShadow: edge(i),
+                }
+              : undefined;
+            // A column with nothing to sort by is a label, not a control.
+            if (!c.sortValue) {
+              return (
+                <div key={c.key} role="columnheader" title={c.title} className={`${className} text-ink-muted`} style={style}>
+                  <span className="truncate">{c.label}</span>
+                </div>
+              );
+            }
             return (
               <button
                 key={c.key}
@@ -268,20 +289,8 @@ export function DataTable<R>({
                 // would press this button instead of opening Peek.
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => sortBy(c)}
-                className={`flex min-w-0 items-center gap-1 px-2.5 text-[10.5px] font-semibold uppercase tracking-[0.07em] transition-colors ${ALIGN[c.align]} ${
-                  active ? "text-ink" : "text-ink-muted hover:text-ink"
-                }`}
-                style={
-                  pinned
-                    ? {
-                        position: "relative",
-                        zIndex: 2,
-                        transform: "translateX(var(--sl, 0px))",
-                        background: "var(--paper)",
-                        boxShadow: edge(i),
-                      }
-                    : undefined
-                }
+                className={`${className} ${active ? "text-ink" : "text-ink-muted hover:text-ink"}`}
+                style={style}
               >
                 <span className="truncate">{c.label}</span>
                 {active && (
@@ -338,7 +347,7 @@ export function DataTable<R>({
                       className={`flex h-full min-w-0 items-center px-2.5 text-[13px] ${ALIGN[c.align]}`}
                       style={pinnedCell(i, background)}
                     >
-                      {c.cell(row)}
+                      {c.cell(row, item.index)}
                     </div>
                   ))}
                 </div>

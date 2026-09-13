@@ -9,28 +9,26 @@ export type CorpusState<T> =
 type Loaded = { value: unknown; source: DataSource; ms: number };
 
 /**
- * Shaped corpora, kept for the life of the window, keyed by corpus and season.
+ * Loaded, shaped values, kept for the life of the window, by key.
  *
  * A frozen season never changes, so there is nothing to invalidate: returning
  * to one is a map lookup, not a reload. The value stored is the SHAPED result,
- * so the parse and the shaping pass are paid once per file, not once per visit.
+ * so the parse and the shaping pass are paid once per season, not once per visit.
  */
 const loaded = new Map<string, Loaded>();
 
 /**
- * Load one corpus-season and shape it for a view.
+ * Load something once per key and keep it.
  *
- * `shape` must be a module-level function. It is part of what a cached entry
- * means, and a closure recreated on every render would read as a new shape
- * without actually being one, so it is deliberately left out of the effect's
- * dependencies.
+ * `load` resolves to the shaped value and the source to report. It is read on
+ * the first render for a key and deliberately not tracked afterwards: the key
+ * is what a cached entry means, and a closure recreated every render would
+ * otherwise look like a new request without being one.
  */
-export function useCorpus<T>(
-  corpus: Corpus,
-  year: number,
-  shape: (json: string, year: number) => T,
+export function useLoaded<T>(
+  key: string,
+  load: () => Promise<{ value: T; source: DataSource }>,
 ): [CorpusState<T>, () => void] {
-  const key = `${corpus}|${year}`;
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{ key: string; state: CorpusState<T> }>({
     key,
@@ -41,12 +39,11 @@ export function useCorpus<T>(
     if (loaded.has(key)) return;
     let stale = false;
     const started = performance.now();
-    window.bta
-      .data(corpus, year)
-      .then(({ json, source }) => {
-        const entry: Loaded = { value: shape(json, year), source, ms: Math.round(performance.now() - started) };
+    load()
+      .then(({ value, source }) => {
+        const entry = { value, source, ms: Math.round(performance.now() - started) };
         loaded.set(key, entry);
-        if (!stale) setResult({ key, state: { status: "ready", ...(entry as { value: T; source: DataSource; ms: number }) } });
+        if (!stale) setResult({ key, state: { status: "ready", ...entry } });
       })
       .catch((err: unknown) => {
         if (stale) return;
@@ -70,6 +67,21 @@ export function useCorpus<T>(
   if (hit) return [{ status: "ready", ...hit }, retry];
   if (result.key === key) return [result.state, retry];
   return [{ status: "loading" }, retry];
+}
+
+/**
+ * One corpus-season, shaped for a view. `shape` must be a module-level function
+ * for the same reason `load` is not tracked above.
+ */
+export function useCorpus<T>(
+  corpus: Corpus,
+  year: number,
+  shape: (json: string, year: number) => T,
+): [CorpusState<T>, () => void] {
+  return useLoaded(`${corpus}|${year}`, async () => {
+    const { json, source } = await window.bta.data(corpus, year);
+    return { value: shape(json, year), source };
+  });
 }
 
 /** Where a file came from, in the words a person would use. */

@@ -6,7 +6,14 @@ import { contextBridge, ipcRenderer } from "electron";
  * everything that comes through it.
  */
 
-export type Corpus = "teams" | "players" | "team-games" | "player-games";
+export type Corpus =
+  | "teams"
+  | "players"
+  | "player-impact"
+  | "player-box"
+  | "player-shooting"
+  | "team-games"
+  | "player-games";
 export type DataSource = "memory" | "repo" | "cache" | "network";
 export type DataPayload = { json: string; source: DataSource };
 export type ThemeMode = "system" | "light" | "dark";

@@ -23,15 +23,18 @@ function tierOf(rank: number): "ov1" | "ov2" | "ov3" {
 export function TopHundredPill({
   rank,
   className,
+  title,
 }: {
   /** Overall board position, 1-100. */
   rank: number;
   className?: string;
+  /** Hover text. The default is the portal's, where the rank is last season's. */
+  title?: string;
 }) {
   const tier = tierOf(rank);
   return (
     <span
-      title={`Top 100 — #${rank} in the country last season`}
+      title={title ?? `Top 100 — #${rank} in the country last season`}
       className={cn(
         // SQUARED OFF, not a pill. A capsule reads as a status chip -
         // "transferred", "committed" - and this is a number. The small

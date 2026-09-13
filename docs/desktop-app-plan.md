@@ -30,7 +30,30 @@ Gotchas already paid for:
 - Scripted checks: `BTA_CDP_PORT=9223 npm run dev` opens Chromium's debugging port
   (development only) and shows the window without taking focus.
 
-Next: P1, the action registry and the Ctrl K palette.
+**Build order, revised 2026-09-12 at Colin's direction:** one view at a time, each designed,
+driven in the real window, screenshotted and fixed before the next. His goal: anyone who picks
+the app up should feel they can do anything and find anything, which moves universal search
+forward.
+
+1. Foundation: shared DataTable (sort, keyboard, virtualization, Peek, pinned columns), one
+   data layer, a frame with a view registry, workspace season switcher. **Done.**
+2. Player Explorer with a player Peek. The cohort, impact attachment, leaderboard floor and
+   percentile pass moved out of players-client.tsx into `src/lib/player-cohort.ts`, proven
+   identical to the old code on six seasons (every player, every percentile) before the site
+   switched to it. The # column is place-in-sort, as on the site; BTA's overall rank rides with
+   the name as the site's top-100 mark. **Done.**
+3. Ctrl K: universal search (teams, players, coaches, games, views, seasons, settings) plus
+   actions on the selection.
+4. Team Game Log, then Player Game Log (pinned identity columns; percentiles over the whole
+   season, never the filtered rows, as the site does).
+5. Win Calculator. Plain-English questions go through the site's /api/parse-query, because the
+   Anthropic key must never ship inside a desktop app.
+6. Team Scatter with the trapezoid.
+7. Matchup Predictor, Transfer Portal, Coaches, Conference Power Rankings, Scoreboard, then
+   team and player record panes.
+
+Site modules with web-only dependencies (`@/lib/gated-corpus`, `@/lib/data-url`) get small
+desktop stand-ins through Vite aliases, rather than copying the modules that import them.
 
 ## What it is
 

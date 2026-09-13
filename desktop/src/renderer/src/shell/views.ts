@@ -1,13 +1,14 @@
-import { Table2, type LucideIcon } from "lucide-react";
+import { Table2, UsersRound, type LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
+import { PlayersView } from "~/views/players/players-view";
 import { TeamsView } from "~/views/teams/teams-view";
 
 /**
  * Every view the app has, in sidebar order.
  *
  * THE SITE'S NAMES, grouped the way the site's own navigation groups them. A
- * reader who knows "Team Game Log Explorer" from btacbb.xyz should find it here
- * under the same words, in the same family.
+ * reader who knows "Player Explorer" from btacbb.xyz should find it here under
+ * the same words, in the same family.
  *
  * A view appears here when it is built, and not before. A sidebar full of
  * entries that open "coming soon" is a roadmap, not an app.
@@ -36,6 +37,14 @@ export const VIEWS: ViewDef[] = [
     icon: Table2,
     filterPlaceholder: "Filter teams or conferences",
     Component: TeamsView,
+  },
+  {
+    id: "player-explorer",
+    label: "Player Explorer",
+    section: "Players",
+    icon: UsersRound,
+    filterPlaceholder: "Filter players, teams, classes or hometowns",
+    Component: PlayersView,
   },
 ];
 

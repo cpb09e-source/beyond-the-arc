@@ -55,6 +55,17 @@
   --pct-bg-5: #dfecc8; --pct-fg-5: #486100;
   --pct-bg-6: #b4e3a9; --pct-fg-6: #2a661b;
   --pct-bg-7: #7dd591; --pct-fg-7: #00591e;
+  /* Class badges, from globals.css: four academic years told apart by HUE, off
+     the red-to-green axis the percentile ramp owns, so a freshman never reads
+     as bad at being a freshman. */
+  --cls-fr-bg: #D3EDF2; --cls-fr-fg: #0F5566;
+  --cls-so-bg: #E8E1FA; --cls-so-fg: #4C3391;
+  --cls-jr-bg: #FBEAC8; --cls-jr-fg: #7A4703;
+  --cls-sr-bg: #F2DCEC; --cls-sr-fg: #7A2860;
+  /* Top-100 tiers (1-10, 11-25, 26-100), the site's seal colors from globals.css. */
+  --seal-ov1-tick: #ff5714; --seal-ov1-ink: #c74410;
+  --seal-ov2-tick: #00b2ca; --seal-ov2-ink: #007989;
+  --seal-ov3-tick: #7b61ff; --seal-ov3-ink: #6f57e5;
   color-scheme: light;
 }
 
@@ -81,6 +92,13 @@
   --pct-bg-5: #434723; --pct-fg-5: #dee698;
   --pct-bg-6: #304c1b; --pct-fg-6: #c3eda9;
   --pct-bg-7: #085023; --pct-fg-7: #aef1bb;
+  --cls-fr-bg: #123c46; --cls-fr-fg: #a4dfeb;
+  --cls-so-bg: #272052; --cls-so-fg: #c6b8f2;
+  --cls-jr-bg: #3f2f13; --cls-jr-fg: #f2cb80;
+  --cls-sr-bg: #3b1f34; --cls-sr-fg: #eeb4dc;
+  --seal-ov1-ink: #ff5714;
+  --seal-ov2-ink: #00b2ca;
+  --seal-ov3-ink: #866eff;
   color-scheme: dark;
 }
 

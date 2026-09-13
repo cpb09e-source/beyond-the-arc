@@ -126,6 +126,11 @@ function registerIpc(): void {
   });
 }
 
+/** Player headshots: the site's own folder in development. */
+function playersDir(): string | null {
+  return app.isPackaged ? null : resolve(app.getAppPath(), "../public/images/players");
+}
+
 function serveAssets(): void {
   protocol.handle("bta", (request) => {
     const url = new URL(request.url);
@@ -134,6 +139,21 @@ function serveAssets(): void {
       const m = /^\/(\d{1,9})\.png$/.exec(url.pathname);
       const file = m ? join(logosDir(), `${m[1]}.png`) : null;
       if (file && existsSync(file)) return net.fetch(pathToFileURL(file).toString());
+    }
+    if (url.hostname === "player") {
+      // <bart id>.webp (600x436) or <bart id>-sm.webp (240x174, face-cropped),
+      // the two sizes the site's fetch script writes.
+      const m = /^\/(\d{1,9})(-sm)?\.webp$/.exec(url.pathname);
+      if (m) {
+        const name = `${m[1]}${m[2] ?? ""}.webp`;
+        const dir = playersDir();
+        const file = dir ? join(dir, name) : null;
+        if (file && existsSync(file)) return net.fetch(pathToFileURL(file).toString());
+        // 344 MB of headshots is not something to ship in an installer. A
+        // packaged app asks the site for the one it needs, and Chromium's
+        // cache keeps it after the first view.
+        return net.fetch(`https://btacbb.xyz/images/players/${name}`);
+      }
     }
     return new Response(null, { status: 404 });
   });
