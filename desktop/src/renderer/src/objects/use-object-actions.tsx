@@ -41,12 +41,12 @@ export const useActionEnv = (): ActionEnv => useContext(EnvContext);
 type At = { x: number; y: number } | ReactMouseEvent;
 
 /** Open an object's menu at the pointer, or at a point (a button's corner, a focused row). */
-export function useObjectMenu(): (at: At, o: Obj, local?: Local) => void {
+export function useObjectMenu(): (at: At, o: Obj, local?: Local, lead?: MenuEntry[]) => void {
   const env = useActionEnv();
   const openMenu = useContextMenu();
   const sel = useSelection();
   return useCallback(
-    (at, o, local = {}) => {
+    (at, o, local = {}, lead = []) => {
       let x: number;
       let y: number;
       if ("clientX" in at) {
@@ -73,6 +73,8 @@ export function useObjectMenu(): (at: At, o: Obj, local?: Local) => void {
           ...entries,
         ];
       }
+      // What the surface adds about the exact spot pressed comes first: "Break down Adj O" on a stat cell.
+      if (lead.length > 0) entries = [...lead, { kind: "separator", id: "sep:lead" }, ...entries];
       openMenu({ x, y, label: `${objTitle(o)} actions`, entries });
     },
     [env, openMenu, sel],

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { TEAM_VIEWS, fmtValue, type TeamSplitRow, type TeamSplitStat, type TeamStatsView } from "@/lib/team-stat-cards";
 import { useLoaded } from "~/data/use-corpus";
+import { teamLens } from "~/lens/stat-lens";
 import { Picker } from "~/shell/picker";
 import { seasonLabel } from "~/ui/format";
 import { StatCard, StatCardGrid, StatCardRow, StatCardsHeader, StatCardsNote } from "~/ui/stat-cards";
@@ -35,7 +36,7 @@ function readView(): TeamStatsView {
   }
 }
 
-export function TeamStats({ year, team }: { year: number; team: string }) {
+export function TeamStats({ year, team, logoId = null }: { year: number; team: string; logoId?: number | null }) {
   const [state] = useLoaded<TeamSplitsFile | null>(`team-splits|${year}`, async () => {
     const { json, source } = await window.bta.data("team-splits", year);
     return { value: JSON.parse(json) as TeamSplitsFile | null, source };
@@ -100,6 +101,11 @@ export function TeamStats({ year, team }: { year: number; team: string }) {
                 key={stat.key}
                 label={stat.label}
                 value={fmtValue(row.v[i] ?? null, stat.fmt)}
+                lens={teamLens(
+                  stat.key,
+                  { kind: "team", name: team, logoId, year },
+                  active === "full" ? { label: stat.label, value: fmtValue(row.v[i] ?? null, stat.fmt) } : undefined,
+                )}
                 pct={row.p[i] ?? null}
                 neutral={stat.neutral}
               />

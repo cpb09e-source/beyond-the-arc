@@ -103,6 +103,14 @@ const GROUPS: Array<{ title: string; items: Shortcut[] }> = [
     ],
   },
   {
+    title: "Stat Lens",
+    items: [
+      { label: "Break a number down game by game", keys: [["Alt", "Click"], ["Right click"]] },
+      { label: "Break down a stat card row or a profile tile", keys: [["Click"]] },
+      { label: "Close the lens", keys: [["Esc"]] },
+    ],
+  },
+  {
     title: "Search",
     items: [
       { label: "Open the highlighted result", keys: [["Enter"]] },

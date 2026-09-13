@@ -34,6 +34,7 @@ import { HighlightRow, ProfileHeader, ProfileNote, ProfileTabs, SectionTitle, ty
 import { identityColumns, statColumns as gameStatColumns } from "~/views/player-games/player-game-columns";
 import { PlayerGamePeekBody } from "~/views/player-games/player-game-peek";
 import { playerStat } from "~/views/players/player-columns";
+import { playerLens } from "~/lens/stat-lens";
 import { PlayerStats } from "./player-stats";
 
 /**
@@ -136,6 +137,10 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
         value: st.format(p.s[st.field] as number | null),
         pct: st.pctKey ? (p.pct[st.pctKey] ?? null) : null,
         title: st.desc,
+        lens:
+          p.bartId != null
+            ? playerLens(key, { kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto, year }, { label: st.label, value: st.format(p.s[st.field] as number | null) })
+            : null,
       };
     };
     return [read("epm"), s.hasEwins ? read("ewins") : read("usg_pct"), read("ppg"), read("rpg"), read("apg"), read("ts_pct")];

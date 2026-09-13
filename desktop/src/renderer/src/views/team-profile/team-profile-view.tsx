@@ -28,6 +28,7 @@ import { PlayerPeekBody } from "~/views/players/player-peek";
 import { statColumns as gameStatColumns } from "~/views/team-games/game-columns";
 import { GamePeekBody } from "~/views/team-games/game-peek";
 import { TEAM_GAME_IDENTITY, teamLogObject } from "~/views/team-games/team-games-view";
+import { teamLens } from "~/lens/stat-lens";
 import { TeamStats } from "./team-stats";
 
 /**
@@ -187,11 +188,11 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
             <div className="mt-5">
               <HighlightRow
                 items={[
-                  { label: "Adj O", value: num1(team.adjO), pct: team.pct.a_ortg ?? null, title: "Adjusted offensive rating" },
-                  { label: "Adj D", value: num1(team.adjD), pct: team.pct.a_drtg ?? null, title: "Adjusted defensive rating (lower is better)" },
-                  { label: "Net", value: signed1(team.adjNet), pct: team.pct.a_net ?? null, title: "Adjusted net rating" },
-                  { label: "Tempo", value: num1(team.tempo), pct: team.pct.adjt ?? null, neutral: true, title: "Adjusted tempo" },
-                  { label: "eFG%", value: pct1(team.efg), pct: team.pct.cbb_efg ?? null, title: "Effective field goal %" },
+                  { label: "Adj O", value: num1(team.adjO), pct: team.pct.a_ortg ?? null, title: "Adjusted offensive rating", lens: teamLens("adjO", { kind: "team", name, logoId, year }, { label: "Adj O", value: num1(team.adjO) }) },
+                  { label: "Adj D", value: num1(team.adjD), pct: team.pct.a_drtg ?? null, title: "Adjusted defensive rating (lower is better)", lens: teamLens("adjD", { kind: "team", name, logoId, year }, { label: "Adj D", value: num1(team.adjD) }) },
+                  { label: "Net", value: signed1(team.adjNet), pct: team.pct.a_net ?? null, title: "Adjusted net rating", lens: teamLens("adjNet", { kind: "team", name, logoId, year }, { label: "Net", value: signed1(team.adjNet) }) },
+                  { label: "Tempo", value: num1(team.tempo), pct: team.pct.adjt ?? null, neutral: true, title: "Adjusted tempo", lens: teamLens("tempo", { kind: "team", name, logoId, year }, { label: "Tempo", value: num1(team.tempo) }) },
+                  { label: "eFG%", value: pct1(team.efg), pct: team.pct.cbb_efg ?? null, title: "Effective field goal %", lens: teamLens("efg", { kind: "team", name, logoId, year }, { label: "eFG%", value: pct1(team.efg) }) },
                   { label: "SOS", value: num1(team.sos), pct: team.pct.adj_sos ?? null, title: "Strength of schedule" },
                 ]}
               />
@@ -395,7 +396,7 @@ function TeamOverview({
       </div>
 
       <div className="mt-8">
-        <TeamStats year={year} team={team.name} />
+        <TeamStats year={year} team={team.name} logoId={team.logoId} />
       </div>
     </div>
   );

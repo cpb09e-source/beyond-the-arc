@@ -5,6 +5,7 @@ import { CARDS, VIEW_OPTIONS, fmt, read, type Ctx, type View } from "@/lib/playe
 import { playerViewByKey } from "@/lib/player-views";
 import type { Player, PlayerSeason } from "~/data/player-model";
 import { useLoaded } from "~/data/use-corpus";
+import { playerLens } from "~/lens/stat-lens";
 import { Picker } from "~/shell/picker";
 import { seasonLabel } from "~/ui/format";
 import { StatCard, StatCardGrid, StatCardRow, StatCardsHeader, StatCardsNote } from "~/ui/stat-cards";
@@ -54,6 +55,7 @@ export function PlayerStats({ year, player, season }: { year: number; player: Pl
   const [basis, setBasis] = useState<Basis>("g");
 
   const shooting = bartId != null && shootingState.status === "ready" ? (shootingState.value[String(bartId)] ?? null) : null;
+  const lensSubject = bartId != null ? { kind: "player" as const, bartId, name: player.name, hasPhoto: player.hasPhoto, year } : null;
   const pickView = (key: string) => {
     setView(key as ViewKey);
     try {
@@ -89,13 +91,18 @@ export function PlayerStats({ year, player, season }: { year: number; player: Pl
           <StatCard key={card.title} title={card.title}>
             {card.stats.map((d) => {
               const cell = read(ctx, d);
+              const label = d.block === "g" ? `${d.label} ${suffix}` : d.label;
+              const value = fmt(cell?.[0] ?? null, d.fmt);
+              // The lens is the whole season per game, so it repeats the card's number only when the card shows that too.
+              const same = active === "full" && (d.block !== "g" || basis === "g");
               return (
                 <StatCardRow
                   key={d.key}
                   caps
-                  label={d.block === "g" ? `${d.label} ${suffix}` : d.label}
+                  label={label}
                   info={d.info}
-                  value={fmt(cell?.[0] ?? null, d.fmt)}
+                  value={value}
+                  lens={lensSubject ? playerLens(d.key, lensSubject, same ? { label, value } : undefined) : null}
                   pct={cell?.[1] ?? null}
                   sub={d.block === "impact" && active !== "full" ? "full season" : undefined}
                 />
@@ -144,6 +151,7 @@ function ShotDiet({ s }: { s: Shooting }) {
 
 /** A season with no split file: the explorer's bands, full season, in the same cards. */
 function BandCards({ player, season, shooting }: { player: Player; season: PlayerSeason; shooting: Shooting | null }) {
+  const bartId = player.bartId;
   return (
     <section>
       <StatCardsHeader title="Stats" meta={`${seasonLabel(season.year)}, full season`} />
@@ -160,6 +168,15 @@ function BandCards({ player, season, shooting }: { player: Player; season: Playe
                   label={st.label}
                   info={st.desc}
                   value={st.format(player.s[st.field] as number | null)}
+                  lens={
+                    bartId != null
+                      ? playerLens(
+                          key,
+                          { kind: "player", bartId, name: player.name, hasPhoto: player.hasPhoto, year: season.year },
+                          { label: st.label, value: st.format(player.s[st.field] as number | null) },
+                        )
+                      : null
+                  }
                   pct={st.pctKey ? (player.pct[st.pctKey] ?? null) : null}
                 />
               );

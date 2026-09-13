@@ -60,6 +60,7 @@ import { isSnappable, type SnapObj } from "~/snapshot/snapshot-cards";
 import { SnapshotSheet, snapshotView } from "~/snapshot/snapshot-sheet";
 import { EchoProvider, SelectionProvider, useSelection } from "~/selection/selection";
 import { FocusModeProvider, FocusPill, focusQuery, focusedRowObject, follows, objectAt, subjectOf, useFocusMode } from "~/focus/focus-mode";
+import { StatLensProvider } from "~/lens/stat-lens";
 import { selectionPaletteItems } from "~/selection/selection-actions";
 import { SelectionBar } from "~/selection/selection-bar";
 import { seasonLabel } from "~/ui/format";
@@ -944,6 +945,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
   return (
     <ShellContext.Provider value={shell}>
       <ObjectActionsProvider env={env}>
+      <StatLensProvider>
       <div className="flex h-full flex-col">
         {/* The title bar is the window's drag handle; tabs and buttons opt out.
             On Windows the caption buttons are drawn natively over its right end. */}
@@ -1134,6 +1136,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
           />
         )}
       </div>
+      </StatLensProvider>
       </ObjectActionsProvider>
     </ShellContext.Provider>
   );

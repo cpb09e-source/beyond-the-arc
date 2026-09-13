@@ -14,7 +14,8 @@ import { TeamLogo } from "~/ui/logo";
 import { ClassBadge, PlayerPhoto } from "~/ui/player-photo";
 import { parseScoped, sameName } from "~/ui/scoped-query";
 import { matchesQuery } from "~/ui/text";
-import { statColumns } from "./player-columns";
+import { playerLens } from "~/lens/stat-lens";
+import { playerStat, statColumns } from "./player-columns";
 import { PlayerPeekBody } from "./player-peek";
 
 /**
@@ -126,6 +127,12 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }:
     p.bartId == null
       ? null
       : { kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto, year, team: p.team, teamLogoId: p.teamLogoId, conf: p.conf };
+  // Alt-click or right-click a number: the games behind it.
+  const statLens = (p: Player, key: string) => {
+    const st = playerStat(key);
+    if (!st || p.bartId == null) return null;
+    return playerLens(key, { kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto, year }, { label: st.label, value: st.format(p.s[st.field] as number | null) });
+  };
 
   return (
     <>
@@ -155,6 +162,7 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }:
             onLanded={onLanded}
             object={object}
             spotlight={spotKey}
+            statLens={statLens}
           />
         ) : state.status === "loading" ? (
           <TableSkeleton rowHeight={ROW_H} label="Loading players" />

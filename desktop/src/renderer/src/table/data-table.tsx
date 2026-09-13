@@ -23,6 +23,7 @@ import { useContextMenu } from "~/ui/context-menu";
 import type { SelectMode } from "~/selection/selection";
 import type { MenuEntry } from "~/ui/menu";
 import { usePersisted } from "~/ui/persisted";
+import { lensMenuEntry, useStatLens, type LensTarget } from "~/lens/stat-lens";
 import { PeekPanel } from "./peek-panel";
 
 export type { DragSpec } from "~/objects/object";
@@ -148,6 +149,12 @@ type Props<R> = {
    * others dimmed, scrolled into view while it lasts and the scroll put back after.
    */
   spotlight?: string | number | null;
+  /**
+   * The number in a cell as something the Stat Lens can break down
+   * (~/lens/stat-lens.tsx): Alt-click the cell, or right-click it for
+   * "Break down …" at the top of the row's menu. Null for a cell with no lens.
+   */
+  statLens?: (row: R, columnKey: string) => LensTarget | null;
 };
 
 const HEAD_H = 32;
@@ -192,6 +199,7 @@ export function DataTable<R>({
   echo,
   onFocusRow,
   spotlight,
+  statLens,
 }: Props<R>) {
   const [sort, setSort] = useState(defaultSort);
   // A table in a tab that is not in front keeps its state but not the keyboard.
@@ -200,6 +208,7 @@ export function DataTable<R>({
   const env = useActionEnv();
   const objectMenu = useObjectMenu();
   const openMenu = useContextMenu();
+  const openLens = useStatLens();
 
   const [hidden, setHidden] = usePersisted<string[]>(`bta.table.hidden.${id ?? "_"}`, [], isKeyList);
   const columns = useMemo(
@@ -683,6 +692,16 @@ export function DataTable<R>({
                   aria-selected={selection ? picked : isFocus}
                   onMouseDown={(e) => {
                     if (e.button !== 0) return;
+                    // Alt-click a number: its Stat Lens.
+                    if (e.altKey && statLens && openLens) {
+                      const col = (e.target as HTMLElement).closest<HTMLElement>("[data-col]")?.dataset.col;
+                      const lens = col ? statLens(row, col) : null;
+                      if (lens) {
+                        e.preventDefault();
+                        openLens(lens, { x: e.clientX, y: e.clientY });
+                        return;
+                      }
+                    }
                     const key = rowKey(row);
                     if (selection && (e.ctrlKey || e.metaKey)) {
                       e.preventDefault();
@@ -705,7 +724,11 @@ export function DataTable<R>({
                       ? (e) => {
                           setFocusKey(rowKey(row));
                           const o = object(row);
-                          if (o) objectMenu(e, o, local);
+                          const col = (e.target as HTMLElement).closest<HTMLElement>("[data-col]")?.dataset.col;
+                          const lens = col && statLens ? statLens(row, col) : null;
+                          const at = { x: e.clientX, y: e.clientY };
+                          const lead = lens && openLens ? [lensMenuEntry(lens, () => openLens(lens, at))] : [];
+                          if (o) objectMenu(e, o, local, lead);
                           else e.preventDefault();
                         }
                       : undefined
@@ -728,6 +751,7 @@ export function DataTable<R>({
                     <div
                       key={c.key}
                       role="gridcell"
+                      data-col={c.key}
                       className={`flex h-full min-w-0 items-center px-2.5 text-[13px] ${ALIGN[c.align]} ${
                         layout.bandStarts.has(i) ? "border-l border-hairline/60" : ""
                       }`}

@@ -1,6 +1,7 @@
 import { Info } from "lucide-react";
 import type { ReactNode } from "react";
 import { PercentileChip } from "@/components/percentile-chip";
+import { useStatLens, type LensTarget } from "~/lens/stat-lens";
 
 /**
  * The site's stat cards as the app draws them: a titled card of rows, each a
@@ -46,6 +47,7 @@ export function StatCardRow({
   info,
   sub,
   caps = false,
+  lens,
 }: {
   label: string;
   value: string;
@@ -57,9 +59,16 @@ export function StatCardRow({
   sub?: string;
   /** Small capitals, the player cards' labels; team labels are already written out. */
   caps?: boolean;
+  /** What a click on the row breaks down, game by game (~/lens/stat-lens.tsx). */
+  lens?: LensTarget | null;
 }) {
+  const openLens = useStatLens();
   return (
-    <li title={info} className="-mx-1.5 flex min-h-[38px] items-center gap-3 rounded-[5px] px-1.5 py-1.5 transition-colors hover:bg-[var(--row-hover)]">
+    <li
+      title={lens ? `${info ? `${info}\n\n` : ""}Click to break it down game by game` : info}
+      onClick={lens && openLens ? (e) => openLens(lens, { x: e.clientX, y: e.clientY }) : undefined}
+      className={`-mx-1.5 flex min-h-[38px] items-center gap-3 rounded-[5px] px-1.5 py-1.5 transition-colors hover:bg-[var(--row-hover)] ${lens ? "cursor-pointer" : ""}`}
+    >
       <span className="min-w-0 flex-1">
         <span className={`block leading-snug text-ink-soft ${caps ? "text-[12px] uppercase tracking-[0.04em]" : "text-[13px]"}`}>
           {caps ? <CapsLabel text={label} /> : label}

@@ -1,5 +1,6 @@
 import { PercentileChip, pctBg, pctColor } from "@/components/percentile-chip";
 import type { ReactNode } from "react";
+import { useStatLens, type LensTarget } from "~/lens/stat-lens";
 
 /**
  * The anatomy every profile shares, after Attio's record pages: who it is, top
@@ -56,14 +57,22 @@ export type Highlight = {
   pct: number | null;
   neutral?: boolean;
   title?: string;
+  /** What a click on the tile breaks down, game by game (~/lens/stat-lens.tsx). */
+  lens?: LensTarget | null;
 };
 
 /** Six numbers, each with its place in the field. */
 export function HighlightRow({ items }: { items: Highlight[] }) {
+  const openLens = useStatLens();
   return (
     <div className="grid grid-cols-2 gap-2 @xl:grid-cols-3 @5xl:grid-cols-6">
       {items.map((h) => (
-        <div key={h.label} title={h.title} className="rounded-lg border border-hairline bg-card px-3 pb-2.5 pt-2">
+        <div
+          key={h.label}
+          title={h.lens ? `${h.title ? `${h.title}\n\n` : ""}Click to break it down game by game` : h.title}
+          onClick={h.lens && openLens ? (e) => openLens(h.lens!, { x: e.clientX, y: e.clientY }) : undefined}
+          className={`rounded-lg border border-hairline bg-card px-3 pb-2.5 pt-2 ${h.lens ? "cursor-pointer transition-colors hover:border-ink-muted" : ""}`}
+        >
           <div className="truncate text-[11.5px] text-ink-muted">{h.label}</div>
           <div className="mt-1.5 flex items-end justify-between gap-2">
             <span className="whitespace-nowrap text-[20px] font-semibold leading-none tracking-[-0.01em] text-ink tabular">{h.value}</span>

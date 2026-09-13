@@ -298,6 +298,29 @@ Beyond the Arc.
   is not on R2, so an installed app shows no team cards until
   `public/data/team-splits/` (13 files, 23 MB) is uploaded to R2.
 
+## Done on 2026-09-13, afternoon
+
+- **Focus.** Point at a team, player or conference and hold Q: every open pane
+  follows it. The Team Explorer lights the row, Team Scatter isolates the crest,
+  the game logs, the Player Explorer and the Win Calculator narrow to it, the
+  Scoreboard dims other games and marks the team's nights, and Conference Power
+  Rankings lights the league. Letting go restores every pane; a tap locks it
+  until Q or Esc; "Focus every pane" is in every object's menu. Code:
+  `desktop/src/renderer/src/focus/focus-mode.tsx`. Rows, crests and object links
+  declare their object with `data-obj`, which is how Q reads what is under the
+  pointer.
+- **Stat Lens.** Alt-click or right-click a number in the Team or Player
+  Explorer, or click a stat card row or a profile tile: every game as a bar
+  against the season line, the number rebuilt for home and away, wins and
+  losses, conference play, the last 5 and 10 and each month, and the best and
+  worst games, each opening its box score. An adjusted rating shows the raw game
+  figure and what the schedule adjustment is worth. Pooling rules are in
+  `desktop/src/renderer/src/lens/lens-stats.ts`: shooting from makes and
+  attempts, ratings from points and possessions; rebound rates and opponent eFG%
+  weighted by possessions, and usage and player ratings by minutes, because the
+  logs carry those per game. No lens for EPM, eWins or SOS.
+- Both verified in split view over CDP with no errors.
+
 ## What still has to happen
 
 **To put the desktop app in people's hands (in order):**

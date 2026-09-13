@@ -6,6 +6,7 @@ import { shapeSeason, type Season, type Team } from "~/data/team-model";
 import { loadOnce, SOURCE_LABEL, useCorpus } from "~/data/use-corpus";
 import type { Obj } from "~/objects/object";
 import { focusTeam, useFocusSubject } from "~/focus/focus-mode";
+import { teamLens } from "~/lens/stat-lens";
 import { useEcho, useSelection, type SelectMode } from "~/selection/selection";
 import { useTabTitle } from "~/shell/tab-title";
 import { useSetStatus } from "~/shell/status";
@@ -118,6 +119,20 @@ const COLUMNS: Column<Team>[] = [
   },
 ];
 
+/** A cell's number as it reads in the table, for the Stat Lens to repeat. */
+const SHOWN: Record<string, (t: Team) => string> = {
+  record: (t) => `${t.wins}-${t.losses}`,
+  adjO: (t) => num1(t.adjO),
+  adjD: (t) => num1(t.adjD),
+  adjNet: (t) => signed1(t.adjNet),
+  tempo: (t) => num1(t.tempo),
+  efg: (t) => pct1(t.efg),
+  efgDef: (t) => pct1(t.efgDef),
+  tov: (t) => pct1(t.tov),
+  orb: (t) => pct1(t.orb),
+  fg3: (t) => pct1(t.fg3),
+};
+
 /** Who a team played in a season, read off the Team Game Log's file when a filter asks. */
 function useOpponents(year: number, team: string | null): Set<string> | null {
   const [found, setFound] = useState<{ key: string; set: Set<string> } | null>(null);
@@ -206,6 +221,15 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
         : `${rows.length !== total ? `${rows.length} of ${total}` : total} teams${picked.size > 0 ? ` · ${picked.size} selected` : ""} · Final`;
 
   const object = (t: Team): Obj => ({ kind: "team", name: t.name, logoId: t.logoId, year, conf: t.conf });
+  // Alt-click or right-click a number: the games behind it.
+  const statLens = useCallback(
+    (t: Team, key: string) => {
+      const col = COLUMNS.find((c) => c.key === key);
+      const shown = SHOWN[key];
+      return teamLens(key, { kind: "team", name: t.name, logoId: t.logoId, year }, col && shown ? { label: col.label, value: shown(t) } : undefined);
+    },
+    [year],
+  );
 
   return (
     <>
@@ -263,6 +287,7 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
             selection={selection}
             echo={echoKey}
             spotlight={spotKey}
+            statLens={statLens}
             onFocusRow={onFocusRow}
           />
         ) : state.status === "loading" ? (
