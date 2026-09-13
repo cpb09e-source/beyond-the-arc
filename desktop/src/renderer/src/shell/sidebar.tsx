@@ -16,6 +16,8 @@ import { Kbd } from "~/ui/kbd";
 import { Menu, type MenuEntry, type MenuItem } from "~/ui/menu";
 import { usePersisted } from "~/ui/persisted";
 import { accountInitials, useAccount } from "./account";
+import type { Favorite } from "./favorites";
+import { FavoritesSection } from "./favorites-section";
 import { NAV_VIEWS, type ViewDef } from "./views";
 
 /**
@@ -45,6 +47,11 @@ export function Sidebar({
   onOpenShortcuts,
   theme,
   setTheme,
+  favorites,
+  currentFavoriteId,
+  onOpenFavorite,
+  onRemoveFavorite,
+  onRenameFavorite,
 }: {
   width: number;
   onResize: (w: number) => void;
@@ -54,6 +61,11 @@ export function Sidebar({
   onOpenShortcuts: () => void;
   theme: ThemeMode;
   setTheme: (m: ThemeMode) => void;
+  favorites: Favorite[];
+  currentFavoriteId: string | null;
+  onOpenFavorite: (f: Favorite, newTab: boolean) => void;
+  onRemoveFavorite: (id: string) => void;
+  onRenameFavorite: (id: string, label: string) => void;
 }) {
   const { update, version } = useAccount();
   const [folded, setFolded] = usePersisted<string[]>(
@@ -89,6 +101,17 @@ export function Sidebar({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3 pt-2">
+        {favorites.length > 0 && (
+          <FavoritesSection
+            favorites={favorites}
+            currentId={currentFavoriteId}
+            folded={folded.includes("Favorites")}
+            onToggleFold={() => setFolded((f) => (f.includes("Favorites") ? f.filter((s) => s !== "Favorites") : [...f, "Favorites"]))}
+            onOpen={onOpenFavorite}
+            onRemove={onRemoveFavorite}
+            onRename={onRenameFavorite}
+          />
+        )}
         {sections.map(([section, views]) => {
           const isFolded = folded.includes(section);
           return (

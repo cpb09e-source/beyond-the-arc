@@ -4,6 +4,7 @@ import { loadPlayerSeason, type Player, type PlayerSeason } from "~/data/player-
 import { SOURCE_LABEL, useLoaded } from "~/data/use-corpus";
 import { compareDrag, useCompare } from "~/shell/compare";
 import { useShell } from "~/shell/shell-context";
+import { useTabTitle } from "~/shell/tab-title";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
@@ -79,6 +80,7 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }:
   const setStatus = useSetStatus();
   const { openRecord } = useShell();
   const { add } = useCompare();
+  useTabTitle(query.trim() ? `Players: ${query.trim()}` : null);
 
   const season: PlayerSeason | null = state.status === "ready" ? state.value : null;
   // A Ctrl K result for a player in this season. The index can name a player the

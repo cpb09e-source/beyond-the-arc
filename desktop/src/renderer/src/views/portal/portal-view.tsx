@@ -17,6 +17,7 @@ import { SEASON_CEIL } from "@/lib/seasons";
 import { SOURCE_LABEL, useCorpus } from "~/data/use-corpus";
 import { Picker } from "~/shell/picker";
 import { useShell } from "~/shell/shell-context";
+import { useTabTitle } from "~/shell/tab-title";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
@@ -90,6 +91,8 @@ export function PortalView({ year, query, setQuery }: ViewProps) {
         matchesQuery(query, e.name, e.team_from ?? "", e.team_to ?? "", confDisplay(e.conf_to) || "", confDisplay(e.conf_from) || ""),
     );
   }, [pool, dest, tier, query]);
+
+  useTabTitle(query.trim() ? `Portal: ${query.trim()}` : null);
 
   const openSchoolClass = (school: string | null) => {
     const row = school ? bySchool?.[school] : undefined;

@@ -7,6 +7,7 @@ import { SEASON_CEIL } from "@/lib/seasons";
 import { SOURCE_LABEL, useCorpus, useLoaded } from "~/data/use-corpus";
 import { Picker } from "~/shell/picker";
 import { useShell } from "~/shell/shell-context";
+import { useTabTitle } from "~/shell/tab-title";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
@@ -218,6 +219,7 @@ export function ConferencesView({ year, setYear, query, setQuery }: ViewProps) {
   const seasons = pack?.seasons ?? [];
   const hasSeason = seasons.includes(year);
   const noun = scope === "all" ? "conference-seasons" : "conferences";
+  useTabTitle(query.trim() ? `Conferences: ${query.trim()}` : null);
   const meta = pack
     ? `${query.trim() && rows.length !== cohort.length ? `${rows.length} of ${cohort.length}` : cohort.length} ${noun}`
     : undefined;

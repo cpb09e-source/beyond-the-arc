@@ -25,6 +25,7 @@ const GROUPS: Array<{ title: string; items: Shortcut[] }> = [
       { label: "Filter this table", keys: [["Ctrl", "F"], ["/"]] },
       { label: "Keyboard shortcuts", keys: [["?"]] },
       { label: "Show or hide the sidebar", keys: [["Ctrl", "\\"]] },
+      { label: "Add or remove a favorite", keys: [["Ctrl", "D"]] },
     ],
   },
   {
@@ -40,6 +41,7 @@ const GROUPS: Array<{ title: string; items: Shortcut[] }> = [
       { label: "Back", keys: [["Alt", "←"]] },
       { label: "Forward", keys: [["Alt", "→"]] },
       { label: "Open in a new tab", keys: [["Ctrl", "Click"], ["Middle click"]] },
+      { label: "Tab menu: favorite, duplicate, close others", keys: [["Right click"]] },
     ],
   },
   {

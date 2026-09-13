@@ -4,6 +4,7 @@ import { shapeSeason, type Season, type Team } from "~/data/team-model";
 import { SOURCE_LABEL, useCorpus } from "~/data/use-corpus";
 import { compareDrag, useCompare } from "~/shell/compare";
 import { useShell } from "~/shell/shell-context";
+import { useTabTitle } from "~/shell/tab-title";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
@@ -119,6 +120,7 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
   const setStatus = useSetStatus();
   const { openRecord } = useShell();
   const { add } = useCompare();
+  useTabTitle(query.trim() ? `Teams: ${query.trim()}` : null);
 
   const season = state.status === "ready" ? state.value : null;
   // A Ctrl K result for a team in this season, and its row if the season has one.

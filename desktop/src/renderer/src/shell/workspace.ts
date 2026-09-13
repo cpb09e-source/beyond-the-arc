@@ -34,6 +34,8 @@ export type Tab = {
   year: number;
   query: string;
   record?: RecordRef;
+  /** What the view says it is showing ("Duke vs Michigan"); absent, the view's own name. */
+  title?: string;
   back: Snapshot[];
   forward: Snapshot[];
 };
@@ -51,6 +53,9 @@ export type WorkspaceAction =
   | { type: "set-year"; id: string; year: number }
   | { type: "step-year"; to: "older" | "newer" }
   | { type: "set-query"; id: string; query: string }
+  | { type: "set-title"; id: string; title: string | null }
+  | { type: "duplicate"; id: string }
+  | { type: "close-others"; id: string }
   | { type: "back" }
   | { type: "forward" }
   | { type: "move"; id: string; to: number };
@@ -107,6 +112,7 @@ function init(): Workspace {
                 viewId: o.viewId,
                 year: seasonFor(o.viewId, o.year),
                 query: typeof o.query === "string" ? o.query : "",
+                title: typeof o.title === "string" ? o.title : undefined,
                 record: isRecordRef(o.record) ? o.record : undefined,
                 back: Array.isArray(o.back) ? o.back.filter(isSnapshot) : [],
                 forward: Array.isArray(o.forward) ? o.forward.filter(isSnapshot) : [],
@@ -141,12 +147,15 @@ function updateTab(ws: Workspace, id: string, fn: (t: Tab) => Tab): Workspace {
  */
 function arrive(t: Tab, place: Snapshot): Tab {
   const same = place.viewId === t.viewId && sameRecord(place.record, t.record);
+  const query = place.query ?? (same ? t.query : "");
   return {
     ...t,
     viewId: place.viewId,
     year: seasonFor(place.viewId, place.year),
     record: place.record,
-    query: place.query ?? (same ? t.query : ""),
+    query,
+    // A title belongs to what the tab was showing; the view at the new place names it again.
+    title: same && query === t.query ? t.title : undefined,
   };
 }
 
@@ -213,6 +222,20 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
     }
     case "set-query":
       return updateTab(ws, a.id, (t) => (t.query === a.query ? t : { ...t, query: a.query }));
+    case "set-title":
+      return updateTab(ws, a.id, (t) => (t.title === (a.title ?? undefined) ? t : { ...t, title: a.title ?? undefined }));
+    case "duplicate": {
+      const at = ws.tabs.findIndex((t) => t.id === a.id);
+      if (at < 0) return ws;
+      const src = ws.tabs[at]!;
+      const tab: Tab = { ...src, id: newId(), back: [...src.back], forward: [...src.forward] };
+      return { ...ws, tabs: [...ws.tabs.slice(0, at + 1), tab, ...ws.tabs.slice(at + 1)], active: tab.id };
+    }
+    case "close-others": {
+      const keep = ws.tabs.find((t) => t.id === a.id);
+      if (!keep || ws.tabs.length === 1) return ws;
+      return { tabs: [keep], active: keep.id, closed: [...ws.closed, ...ws.tabs.filter((t) => t.id !== a.id)].slice(-CLOSED_CAP) };
+    }
     case "back": {
       const prev = current.back[current.back.length - 1];
       if (!prev) return ws;
@@ -255,6 +278,7 @@ export function useWorkspace() {
             year: t.year,
             query: t.query,
             record: t.record,
+            title: t.title,
             back: t.back.slice(-20),
             forward: t.forward.slice(0, 20),
           })),

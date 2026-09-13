@@ -1,7 +1,10 @@
-import { Plus, X } from "lucide-react";
+import { Copy, Plus, Star, StarOff, X } from "lucide-react";
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 import { seasonLabel } from "~/ui/format";
+import { Kbd } from "~/ui/kbd";
 import { TeamLogo } from "~/ui/logo";
+import { Menu, type MenuEntry } from "~/ui/menu";
 import { PlayerPhoto } from "~/ui/player-photo";
 import { viewById } from "./views";
 import type { Tab } from "./workspace";
@@ -29,6 +32,10 @@ export function TabStrip({
   onClose,
   onNew,
   onMove,
+  isFavorite,
+  onFavorite,
+  onDuplicate,
+  onCloseOthers,
 }: {
   tabs: Tab[];
   active: string;
@@ -36,10 +43,15 @@ export function TabStrip({
   onClose: (id: string) => void;
   onNew: () => void;
   onMove: (id: string, to: number) => void;
+  isFavorite: (id: string) => boolean;
+  onFavorite: (id: string) => void;
+  onDuplicate: (id: string) => void;
+  onCloseOthers: (id: string) => void;
 }) {
   const stripRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; x: number; moved: boolean } | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null);
 
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>, id: string) => {
     if (e.button !== 0) return;
@@ -83,7 +95,7 @@ export function TabStrip({
       {tabs.map((tab) => {
         const view = viewById(tab.viewId);
         const Icon = view.icon;
-        const label = tab.record?.name ?? view.label;
+        const label = tab.title ?? tab.record?.name ?? view.label;
         const isActive = tab.id === active;
         return (
           <div
@@ -102,6 +114,11 @@ export function TabStrip({
             }}
             onAuxClick={(e) => {
               if (e.button === 1) onClose(tab.id);
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              onActivate(tab.id);
+              setMenu({ id: tab.id, x: e.clientX, y: e.clientY });
             }}
             className={`no-drag group relative flex h-[28px] min-w-[112px] max-w-[220px] flex-1 cursor-default select-none items-center gap-2 rounded-[7px] pl-2.5 pr-1 text-[12.5px] transition-colors ${
               isActive
@@ -143,6 +160,42 @@ export function TabStrip({
       >
         <Plus size={15} strokeWidth={2} />
       </button>
+      {menu &&
+        createPortal(
+          <Menu
+            label="Tab"
+            entries={tabMenu(menu.id)}
+            onClose={() => setMenu(null)}
+            className="fixed"
+            style={{ left: Math.min(menu.x, window.innerWidth - 240), top: menu.y + 4 }}
+          />,
+          document.body,
+        )}
     </div>
   );
+
+  // Rebuilt each time it opens, so it names the tab's current state.
+  function tabMenu(id: string): MenuEntry[] {
+    const starred = isFavorite(id);
+    return [
+      {
+        kind: "item",
+        id: "favorite",
+        label: starred ? "Remove from favorites" : "Add to favorites",
+        icon: starred ? <StarOff size={14} /> : <Star size={14} />,
+        hint: <Kbd>Ctrl D</Kbd>,
+        onSelect: () => onFavorite(id),
+      },
+      { kind: "item", id: "duplicate", label: "Duplicate tab", icon: <Copy size={14} />, onSelect: () => onDuplicate(id) },
+      { kind: "separator", id: "s1" },
+      { kind: "item", id: "close", label: "Close tab", icon: <X size={14} />, hint: <Kbd>Ctrl W</Kbd>, onSelect: () => onClose(id) },
+      {
+        kind: "item",
+        id: "close-others",
+        label: "Close other tabs",
+        disabled: tabs.length < 2,
+        onSelect: () => onCloseOthers(id),
+      },
+    ];
+  }
 }

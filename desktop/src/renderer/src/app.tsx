@@ -13,6 +13,8 @@ import {
   PanelLeft,
   Plus,
   RotateCcw,
+  Star,
+  StarOff,
   Sun,
   X,
 } from "lucide-react";
@@ -27,11 +29,13 @@ import { CommandPalette, type PaletteGroup, type PaletteItem } from "~/palette/c
 import { objectItems } from "~/palette/object-items";
 import { AccountProvider, useAccount } from "~/shell/account";
 import { CompareDock, CompareProvider, compareQuery, useCompare } from "~/shell/compare";
+import { favoriteOf, isFavoriteList, samePlace, type Favorite } from "~/shell/favorites";
 import { ActiveContext } from "~/shell/active";
 import { ShellContext } from "~/shell/shell-context";
 import { ShortcutsOverlay } from "~/shell/shortcuts";
 import { SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN, Sidebar } from "~/shell/sidebar";
 import { TabStrip } from "~/shell/tab-strip";
+import { TabTitleContext } from "~/shell/tab-title";
 import { NAV_VIEWS, profileViewFor, viewById, type FocusRequest, type FocusTarget, type RecordRef } from "~/shell/views";
 import { Welcome } from "~/shell/welcome";
 import { useWorkspace, type Tab } from "~/shell/workspace";
@@ -48,6 +52,7 @@ const THEME_KEY = "bta.theme";
  * so the first look is short enough to read.
  */
 const PALETTE_GROUPS: PaletteGroup[] = [
+  { id: "favorites", heading: "Favorites", limit: 6, showWhenEmpty: true },
   { id: "views", heading: "Go to", limit: 8, showWhenEmpty: true },
   { id: "actions", heading: "Actions", limit: 8, showWhenEmpty: true },
   { id: "teams", heading: "Teams", limit: 5, showWhenEmpty: false },
@@ -114,6 +119,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
   const toast = useToast();
   const { auth, update } = useAccount();
   const compare = useCompare();
+  const [favorites, setFavorites] = usePersisted<Favorite[]>("bta.favorites", [], isFavoriteList);
 
   const current = ws.tabs.find((t) => t.id === ws.active) ?? ws.tabs[0]!;
   const view = viewById(current.viewId);
@@ -187,6 +193,50 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     [dispatch],
   );
 
+  /** Star or unstar a tab's place: Ctrl+D, as a browser bookmarks a page. */
+  const toggleFavorite = useCallback(
+    (tabId?: string) => {
+      const tab = ws.tabs.find((t) => t.id === (tabId ?? currentRef.current.id)) ?? currentRef.current;
+      const hit = favorites.find((f) => samePlace(f, tab));
+      if (hit) {
+        setFavorites((list) => list.filter((f) => f.id !== hit.id));
+        toast({
+          title: `Removed ${hit.label} from favorites`,
+          action: { label: "Undo", run: () => setFavorites((list) => [...list, hit]) },
+        });
+      } else {
+        const fav = favoriteOf(tab, tab.title ?? tab.record?.name ?? viewById(tab.viewId).label);
+        setFavorites((list) => [...list, fav]);
+        toast({ title: `Added ${fav.label} to favorites` });
+      }
+    },
+    [ws.tabs, favorites, setFavorites, toast],
+  );
+
+  /** Removed from the sidebar: the same Undo as unstarring a tab. */
+  const removeFavorite = useCallback(
+    (id: string) => {
+      const hit = favorites.find((f) => f.id === id);
+      if (!hit) return;
+      setFavorites((list) => list.filter((f) => f.id !== id));
+      toast({
+        title: `Removed ${hit.label} from favorites`,
+        action: { label: "Undo", run: () => setFavorites((list) => (list.some((f) => f.id === hit.id) ? list : [...list, hit])) },
+      });
+    },
+    [favorites, setFavorites, toast],
+  );
+
+  const openFavorite = useCallback(
+    (f: Favorite, newTab: boolean) =>
+      dispatch(
+        newTab
+          ? { type: "open", viewId: f.viewId, year: f.year, record: f.record, query: f.query }
+          : { type: "navigate", viewId: f.viewId, year: f.year, record: f.record, query: f.query },
+      ),
+    [dispatch],
+  );
+
   const shell = useMemo(() => ({ filterRef, openRecord, openView, showInExplorer: go }), [openRecord, openView, go]);
 
   // The site's search indexes, loaded in the background at launch so the first
@@ -219,6 +269,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
 
       if (mod && !e.shiftKey && e.code === "KeyK") return take(() => setPaletteOpen(true));
       if (mod && !e.shiftKey && e.code === "KeyF") return take(focusFilter);
+      if (mod && !e.shiftKey && e.code === "KeyD") return take(() => toggleFavorite());
       if (mod && e.code === "KeyT") return take(() => (e.shiftKey ? dispatch({ type: "reopen" }) : newTab()));
       if (mod && !e.shiftKey && e.code === "KeyW") return take(() => dispatch({ type: "close", id: tab.id }));
       if (mod && e.code === "Tab") return take(() => dispatch({ type: "cycle", by: e.shiftKey ? -1 : 1 }));
@@ -245,7 +296,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("mouseup", onMouse);
     };
-  }, [dispatch, focusFilter, newTab, setCollapsed]);
+  }, [dispatch, focusFilter, newTab, setCollapsed, toggleFavorite]);
 
   // Say once when a sign-in finishes, and once when an update is ready.
   const lastAuth = useRef(auth.status);
@@ -337,6 +388,30 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
         keywords: ["compare", "side by side", "versus", "vs", "tray"],
         leading: <GitCompareArrows size={15} strokeWidth={2} />,
         run: (how) => openView("compare", { query: compareQuery(compare.items), newTab: how.newTab }),
+      });
+    }
+    const starred = favorites.find((f) => samePlace(f, current));
+    action({
+      id: "action:favorite",
+      title: starred ? "Remove from favorites" : "Add to favorites",
+      subtitle: starred?.label ?? current.title ?? current.record?.name ?? view.label,
+      keywords: ["favorite", "star", "pin", "bookmark", "save"],
+      leading: starred ? <StarOff size={15} strokeWidth={2} /> : <Star size={15} strokeWidth={2} />,
+      trailing: <Kbd>Ctrl D</Kbd>,
+      run: () => toggleFavorite(),
+    });
+    for (const f of favorites) {
+      const fv = viewById(f.viewId);
+      const FavIcon = fv.icon;
+      items.push({
+        id: `favorite:${f.id}`,
+        group: "favorites",
+        title: f.label,
+        subtitle: fv.profile ? seasonLabel(f.year) : `${fv.label} · ${seasonLabel(f.year)}`,
+        keywords: ["favorite", fv.label],
+        weight: 45,
+        leading: <FavIcon size={15} strokeWidth={2} />,
+        run: (how) => openFavorite(f, how.newTab),
       });
     }
     action({
@@ -443,12 +518,23 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     );
 
     return items;
-  }, [view, current, ws.closed, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView]);
+  }, [view, current, ws.closed, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite]);
 
   const allItems = useMemo(
     () => (objects.length > 0 ? [...paletteItems, ...objects] : paletteItems),
     [paletteItems, objects],
   );
+
+  // One stable setter per tab, so a view's title effect does not rerun on every render.
+  const titleSetters = useRef(new Map<string, (title: string | null) => void>());
+  const titleSetter = (id: string) => {
+    let fn = titleSetters.current.get(id);
+    if (!fn) {
+      fn = (title) => dispatch({ type: "set-title", id, title });
+      titleSetters.current.set(id, fn);
+    }
+    return fn;
+  };
 
   return (
     <ShellContext.Provider value={shell}>
@@ -485,6 +571,13 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
             onClose={(id) => dispatch({ type: "close", id })}
             onNew={newTab}
             onMove={(id, to) => dispatch({ type: "move", id, to })}
+            isFavorite={(id) => {
+              const t = ws.tabs.find((x) => x.id === id);
+              return !!t && favorites.some((f) => samePlace(f, t));
+            }}
+            onFavorite={(id) => toggleFavorite(id)}
+            onDuplicate={(id) => dispatch({ type: "duplicate", id })}
+            onCloseOthers={(id) => dispatch({ type: "close-others", id })}
           />
         </header>
 
@@ -499,6 +592,13 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
               onOpenShortcuts={() => setShortcutsOpen(true)}
               theme={theme}
               setTheme={setTheme}
+              favorites={favorites}
+              currentFavoriteId={favorites.find((f) => samePlace(f, current))?.id ?? null}
+              onOpenFavorite={openFavorite}
+              onRemoveFavorite={removeFavorite}
+              onRenameFavorite={(id, label) =>
+                setFavorites((list) => list.map((f) => (f.id === id && label.trim() ? { ...f, label: label.trim() } : f)))
+              }
             />
           )}
 
@@ -508,6 +608,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
               const active = tab.id === ws.active;
               return (
                 <ActiveContext.Provider key={`${tab.id}:${tab.viewId}`} value={active}>
+                  <TabTitleContext.Provider value={titleSetter(tab.id)}>
                   <section hidden={!active} className="flex min-h-0 flex-1 flex-col">
                     <View
                       year={tab.year}
@@ -519,6 +620,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
                       record={tab.record}
                     />
                   </section>
+                  </TabTitleContext.Provider>
                 </ActiveContext.Provider>
               );
             })}

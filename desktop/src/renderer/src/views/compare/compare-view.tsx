@@ -9,6 +9,7 @@ import { shapeSeason, type Season, type Team } from "~/data/team-model";
 import { loadOnce } from "~/data/use-corpus";
 import { compareQuery, compareRefsQuery, parseCompareQuery, useCompare, type CompareRef } from "~/shell/compare";
 import { useShell } from "~/shell/shell-context";
+import { useTabTitle } from "~/shell/tab-title";
 import { ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
 import { num1, pct1, seasonLabel, signed1 } from "~/ui/format";
@@ -133,6 +134,7 @@ export function CompareView({ year, query, setQuery }: ViewProps) {
     if (y != null) write(refs.map((r, j) => (j === i ? { ...r, year: y } : r)));
   };
   const noun = kind === "team" ? (refs.length === 1 ? "team" : "teams") : refs.length === 1 ? "player" : "players";
+  useTabTitle(refs.length === 0 ? null : kind === "team" ? refs.map((r) => r.id).join(" · ") : `${refs.length} players`);
 
   return (
     <>
@@ -340,7 +342,7 @@ function Card({
         <span className="shrink-0">{avatar}</span>
         <span className="min-w-0">
           <span className="block truncate text-[15px] font-semibold leading-tight tracking-[-0.01em] text-ink hover:underline">{name}</span>
-          <span className="mt-0.5 block truncate text-[12px] text-ink-muted tabular">{facts}</span>
+          <span className="mt-0.5 block truncate text-[12px] text-ink-muted">{facts}</span>
         </span>
       </button>
       <div className="flex items-center justify-between gap-2">

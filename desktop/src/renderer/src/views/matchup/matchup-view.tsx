@@ -16,6 +16,7 @@ import { pairInks } from "@/lib/matchup-inks";
 import { SOURCE_LABEL, useCorpus } from "~/data/use-corpus";
 import { useIsActive } from "~/shell/active";
 import { useShell } from "~/shell/shell-context";
+import { useTabTitle } from "~/shell/tab-title";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
@@ -147,6 +148,16 @@ export function MatchupView({ year, query, setQuery }: ViewProps) {
   }, [matchup]);
 
   const outCount = matchup ? matchup.outA.length + matchup.outB.length : 0;
+  // Named the way the game would be billed: the visitor at the host, or "vs" on a neutral floor.
+  useTabTitle(
+    !matchup
+      ? null
+      : matchup.site === "home"
+        ? `${matchup.b.b} at ${matchup.a.b}`
+        : matchup.site === "away"
+          ? `${matchup.a.b} at ${matchup.b.b}`
+          : `${matchup.a.b} vs ${matchup.b.b}`,
+  );
 
   return (
     <>
