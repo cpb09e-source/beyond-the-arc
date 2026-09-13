@@ -1,4 +1,6 @@
-import { ChevronLeft, ChevronRight, GitCompareArrows, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, GitCompareArrows, Scale, X } from "lucide-react";
+import { differenceQuery } from "~/explain/explain-query";
+import { useContextMenu } from "~/ui/context-menu";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { PercentileChip, pctBg } from "@/components/percentile-chip";
 import { TopHundredPill } from "@/components/portal/top-hundred-pill";
@@ -145,17 +147,20 @@ export function CompareView({ year, query, setQuery }: ViewProps) {
         season={false}
         meta={refs.length > 0 ? `${refs.length} ${noun}` : undefined}
         controls={
-          tray.items.length > 1 && compareQuery(tray.items) !== query ? (
-            <button
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => setQuery(compareQuery(tray.items))}
-              className="inline-flex h-[26px] items-center gap-1.5 rounded-md border border-hairline bg-card px-2.5 text-[12.5px] text-ink-soft transition-colors hover:border-ink-muted hover:text-ink"
-            >
-              <GitCompareArrows size={14} strokeWidth={2} />
-              Compare the tray ({tray.items.length})
-            </button>
-          ) : null
+          <>
+            {tray.items.length > 1 && compareQuery(tray.items) !== query && (
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setQuery(compareQuery(tray.items))}
+                className="inline-flex h-[26px] items-center gap-1.5 rounded-md border border-hairline bg-card px-2.5 text-[12.5px] text-ink-soft transition-colors hover:border-ink-muted hover:text-ink"
+              >
+                <GitCompareArrows size={14} strokeWidth={2} />
+                Compare the tray ({tray.items.length})
+              </button>
+            )}
+            {kind === "team" && refs.length > 1 && <ExplainButton refs={refs} />}
+          </>
         }
       />
       <div className="relative min-h-0 flex-1 overflow-auto border-t border-hairline">
@@ -278,6 +283,41 @@ function PlayerCompare({ refs, onRemove, onStep }: { refs: CompareRef[]; onRemov
         ))}
       </Section>
     </Grid>
+  );
+}
+
+/** Why two of the compared teams differ: straight there for a pair, a choice of pairs for three or four. */
+function ExplainButton({ refs }: { refs: CompareRef[] }) {
+  const { openView } = useShell();
+  const openMenu = useContextMenu();
+  const pairs = refs.flatMap((r, i) => refs.slice(i + 1).map((s) => [r, s] as const));
+  const mixed = new Set(refs.map((r) => r.year)).size > 1;
+  const name = (r: CompareRef) => (mixed ? `${r.id} ${seasonLabel(r.year)}` : r.id);
+  const go = (p: readonly [CompareRef, CompareRef], newTab: boolean) =>
+    openView("difference", { newTab, query: differenceQuery({ year: p[0].year, name: p[0].id }, { year: p[1].year, name: p[1].id }) });
+  return (
+    <button
+      type="button"
+      title={pairs.length === 1 ? `Why ${name(pairs[0]![0])} and ${name(pairs[0]![1])} differ  ·  Ctrl-click for a new tab` : "Pick two of these teams"}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={(e) => {
+        if (pairs.length === 1) {
+          go(pairs[0]!, e.ctrlKey || e.metaKey);
+          return;
+        }
+        const r = e.currentTarget.getBoundingClientRect();
+        openMenu({
+          x: r.left,
+          y: r.bottom + 4,
+          label: "Explain a difference",
+          entries: pairs.map((p) => ({ kind: "item", id: `${p[0].year}:${p[0].id}|${p[1].year}:${p[1].id}`, label: `${name(p[0])} vs ${name(p[1])}`, onSelect: () => go(p, false) })),
+        });
+      }}
+      className="inline-flex h-[26px] items-center gap-1.5 rounded-md border border-hairline bg-card px-2.5 text-[12.5px] text-ink-soft transition-colors hover:border-ink-muted hover:text-ink"
+    >
+      <Scale size={14} strokeWidth={2} />
+      Explain the difference{pairs.length > 1 ? "…" : ""}
+    </button>
   );
 }
 

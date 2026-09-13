@@ -322,12 +322,79 @@ Beyond the Arc.
   logs carry those per game. No lens for EPM, eWins or SOS.
 - Both verified in split view over CDP with no errors.
 
+## Done on 2026-09-13, evening
+
+From the second feedback round, in the order agreed: the shared explain engine,
+the Difference Explainer, What Changed, research history capture, and export.
+
+- **The explain engine** (`desktop/src/renderer/src/explain/explain-model.ts`).
+  A rating gap taken apart into shooting, turnovers, offensive rebounds, free
+  throws and possession count at each end of the floor, plus the schedule, in
+  parts that add up to the gap exactly. Points per possession is an identity in
+  eFG% and turnovers, offensive rebounds and free throws per possession; the gap
+  is shared among those groups by Shapley value (each group's effect averaged
+  over every order), so no part depends on which went first. Defense is rebuilt
+  from the opponent's own box score: every game now carries its opponent's row
+  (`TeamGame.oppRow`), which exists for every game in all thirteen seasons.
+  `desktop/scripts/check-explain.mts` checks about 50 pairs a season in 2014,
+  2019 and 2026: the parts equal the gap to 1e-14, and raw ratings equal the
+  Stat Lens's.
+- **The possession count is its own part, not a rounding error.** The log counts
+  possessions its own way (closest to the rounded average of both teams'
+  box-score counts, still about 0.9 off per game). A team's own box-score count
+  runs from 0.994 to 1.019 of the log's across 2025-26, worth up to about 2.5
+  points between two teams, so it is shown and labeled rather than folded into
+  another part. It hides itself when it is worth under a tenth.
+- **Difference Explainer** (Tools; `views/difference/`). Two teams, from any
+  seasons. Full season against the published adjusted ratings, or conference,
+  non-conference or last 10 games raw; net, offense or defense. Each part opens
+  into both teams' numbers at each end; each number opens its Stat Lens. Ways
+  in: Explain on the selection bar with two teams picked, a team's right-click
+  Go to ›, a team game log row ("Explain Duke vs Auburn"), Compare's Explain the
+  difference, and typing "Duke vs Auburn" into Ctrl K.
+- **What Changed** (Teams; `views/what-changed/`). One team: last 10 or last 5
+  against the games before, since January 1, conference play against
+  non-conference, or against last season on adjusted ratings with the BTA rank
+  change. Who they played sits under the headline (record, average opponent,
+  home, away and neutral), because a stretch of games has no adjusted rating.
+  The games behind the change are arithmetic: each game's distance from the
+  earlier figure, weighted by possessions, and the shares add up to the change.
+  On every team page's header and in team menus.
+- **New Stat Lens stats** for the explainer's numbers, from opponent rows:
+  turnovers forced, offensive rebounds per 100 possessions and allowed, free
+  throw attempts per 100 and allowed, opponent free throw %. Opponent eFG% is
+  now pooled exactly from what opponents made and attempted, instead of the
+  per-game rate weighted by possessions.
+- **Research history** (`desktop/src/renderer/src/shell/research-history.ts`):
+  captured, not shown yet. A visit once a tab has settled on a place, every
+  registry and selection action, Focus, the Stat Lens and exports, each in plain
+  words ("Michigan St.: what changed 2024-25", "Stat Lens: Duke, eFG%"), the
+  newest 2,000 in localStorage under `bta.research-history`.
+- **Export.** Right-click a column header, or a row's Export ›: copy the rows for
+  a spreadsheet (tab-separated, pastes into cells) or save them as CSV (UTF-8
+  with a byte-order mark so Excel keeps accents; Documents by default). All rows,
+  or only the selected ones. Also Ctrl K "Copy this table for a spreadsheet" and
+  "Save this table as CSV", and CSV on the selection bar. What is exported is
+  what is on screen: the visible columns in order, the filter and sort, each
+  cell's own text without its percentile chip, dates in full. No XLSX. The
+  sources and terms review (docs/TODO-legal-sources.md) still applies before this
+  is promoted, since it hands out numbers built on other people's data.
+- Small: an exact name now comes first in pick lists, so typing "Michigan" into
+  a team chooser picks Michigan rather than Michigan St.
+- Verified over CDP with no errors: the Ctrl K typed row, a part opened and a
+  number into its lens, both pickers, What Changed by window and against last
+  season, the Go to › entries, both export menus, a 364-row copy read back off
+  the Windows clipboard, the history steps, Explain from the selection bar and
+  from Compare, and the dark theme.
+- **Needs installer 0.1.1** to reach an installed copy, like everything since
+  0.1.0.
+
 ## What still has to happen
 
 **To put the desktop app in people's hands (in order):**
 1. ~~Apply migration 012~~ done.
 2. ~~Build and publish the installer~~ done (0.1.0).
-3. Deploy the site: desktop sign-in functions, the connect page, the download button, Season Pass access, the rate limit, the coach fixes, the site fixes and the legal pages.
+3. ~~Deploy the site~~ done 2026-09-13: the connect page and the sign-in and download functions answer on btacbb.xyz. The legal pages stay on `legal-pages` until the entity name is filled in.
 4. Install from the account page and sign in with both test accounts.
 5. Code signing (Azure Trusted Signing), so SmartScreen stops warning.
 

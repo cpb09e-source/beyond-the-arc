@@ -7,6 +7,7 @@ import { logDate, useOpenGame } from "~/data/game-link";
 import { loadPlayerGameSeason, siteOf, wonGame, type PlayerGame } from "~/data/player-game-model";
 import { loadTeamGameSeason, type TeamGame } from "~/data/team-game-model";
 import { useLoaded } from "~/data/use-corpus";
+import { recordStep } from "~/shell/research-history";
 import { seasonLabel } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 import type { MenuItem } from "~/ui/menu";
@@ -85,7 +86,10 @@ export const useStatLens = (): OpenLens | null => useContext(LensContext);
 export function StatLensProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState<{ target: LensTarget; at: { x: number; y: number }; n: number } | null>(null);
   const count = useRef(0);
-  const show = useCallback<OpenLens>((target, at) => setOpen({ target, at, n: ++count.current }), []);
+  const show = useCallback<OpenLens>((target, at) => {
+    recordStep({ kind: "lens", title: `Stat Lens: ${target.subject.name}, ${target.shown?.label ?? statOf(target).label}`, obj: target.subject, stat: target.stat });
+    setOpen({ target, at, n: ++count.current });
+  }, []);
   const close = useCallback(() => setOpen(null), []);
   return (
     <LensContext.Provider value={show}>

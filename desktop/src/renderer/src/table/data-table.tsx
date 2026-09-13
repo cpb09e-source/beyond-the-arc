@@ -1,6 +1,8 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { ClipboardCopy, FileDown } from "lucide-react";
 import {
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -25,6 +27,7 @@ import type { MenuEntry } from "~/ui/menu";
 import { usePersisted } from "~/ui/persisted";
 import { lensMenuEntry, useStatLens, type LensTarget } from "~/lens/stat-lens";
 import { PeekPanel } from "./peek-panel";
+import { delimited, TableExportContext } from "./table-export";
 
 export type { DragSpec } from "~/objects/object";
 
@@ -83,6 +86,8 @@ export type Column<R> = {
   band?: string;
   /** Captions the band in the accent: the group a view is really about. */
   bandAccent?: boolean;
+  /** How the cell reads in a spreadsheet, when what it draws does not say (./table-export.ts): a full date for "Nov 3". */
+  text?: (row: R, index: number) => string | number | null;
 };
 
 export type PeekSpec<R> = {
@@ -209,6 +214,7 @@ export function DataTable<R>({
   const objectMenu = useObjectMenu();
   const openMenu = useContextMenu();
   const openLens = useStatLens();
+  const exportCtx = useContext(TableExportContext);
 
   const [hidden, setHidden] = usePersisted<string[]>(`bta.table.hidden.${id ?? "_"}`, [], isKeyList);
   const columns = useMemo(
@@ -502,6 +508,68 @@ export function DataTable<R>({
   const maxTop = Math.max(headH + 8, headH + viewH - peekH - 12);
   const peekTop = Math.min(Math.max(rowTop - 6, headH + 8), maxTop);
 
+  // EXPORT (./table-export.ts): what is on screen, as text a spreadsheet takes. Built when asked, from the
+  // table as it stands then, so offering it costs nothing while the reader scrolls and types.
+  const latest = useRef({ columns, sorted, selection, indexByKey });
+  useEffect(() => {
+    latest.current = { columns, sorted, selection, indexByKey };
+  });
+  const tableText = useCallback(
+    (kind: "csv" | "tsv", only?: "selected") => {
+      const { columns: cols, sorted: all, selection: sel, indexByKey: at } = latest.current;
+      const list = only === "selected" && sel ? all.filter((r) => sel.isSelected(r)) : all;
+      return delimited(cols, list, (r) => at.get(rowKey(r)) ?? 0, kind);
+    },
+    [rowKey],
+  );
+  const picked = selection && selection.size > 0 ? sorted.reduce((n, r) => n + (selection.isSelected(r) ? 1 : 0), 0) : 0;
+  const register = exportCtx?.register;
+  useEffect(() => {
+    if (!register) return;
+    register({ name: ariaLabel, rows: sorted.length, selected: picked, tsv: (only) => tableText("tsv", only), csv: (only) => tableText("csv", only) });
+    return () => register(null);
+  }, [register, ariaLabel, sorted.length, picked, tableText]);
+  const fileName = exportCtx?.fileName ?? ariaLabel;
+  const rowsWord = (n: number) => `${n.toLocaleString()} ${n === 1 ? "row" : "rows"}`;
+  const exportEntries = (): MenuEntry[] => {
+    const out: MenuEntry[] = [
+      {
+        kind: "item",
+        id: "copy-table",
+        label: `Copy ${rowsWord(sorted.length)} for a spreadsheet`,
+        icon: <ClipboardCopy size={14} strokeWidth={2} />,
+        onSelect: () => env.copyTable(tableText("tsv"), sorted.length),
+      },
+      {
+        kind: "item",
+        id: "save-table",
+        label: `Save ${rowsWord(sorted.length)} as CSV…`,
+        icon: <FileDown size={14} strokeWidth={2} />,
+        onSelect: () => env.saveCsv(tableText("csv"), fileName, sorted.length),
+      },
+    ];
+    if (picked > 1) {
+      out.push(
+        { kind: "separator", id: "sep:picked" },
+        {
+          kind: "item",
+          id: "copy-picked",
+          label: `Copy the ${rowsWord(picked)} selected`,
+          icon: <ClipboardCopy size={14} strokeWidth={2} />,
+          onSelect: () => env.copyTable(tableText("tsv", "selected"), picked),
+        },
+        {
+          kind: "item",
+          id: "save-picked",
+          label: `Save the ${rowsWord(picked)} selected as CSV…`,
+          icon: <FileDown size={14} strokeWidth={2} />,
+          onSelect: () => env.saveCsv(tableText("csv", "selected"), `${fileName} selected`, picked),
+        },
+      );
+    }
+    return out;
+  };
+
   const sortBy = (col: Column<R>) =>
     col.sortValue &&
     setSort((s) => (s.key === col.key ? { key: col.key, dir: (s.dir * -1) as Dir } : { key: col.key, dir: col.first }));
@@ -536,6 +604,10 @@ export function DataTable<R>({
       }
       if (tail.length > 0 && entries.length > 0) entries.push({ kind: "separator", id: "s1" });
       entries.push(...tail);
+    }
+    if (sorted.length > 0) {
+      if (entries.length > 0) entries.push({ kind: "separator", id: "s-export" });
+      entries.push(...exportEntries());
     }
     openMenu({ x: e.clientX, y: e.clientY, label: `${col.label} column`, entries });
   };
@@ -728,7 +800,8 @@ export function DataTable<R>({
                           const lens = col && statLens ? statLens(row, col) : null;
                           const at = { x: e.clientX, y: e.clientY };
                           const lead = lens && openLens ? [lensMenuEntry(lens, () => openLens(lens, at))] : [];
-                          if (o) objectMenu(e, o, local, lead);
+                          const tail: MenuEntry[] = [{ kind: "item", id: "sub:export", label: "Export", icon: <FileDown size={14} strokeWidth={2} />, submenu: exportEntries() }];
+                          if (o) objectMenu(e, o, local, lead, tail);
                           else e.preventDefault();
                         }
                       : undefined

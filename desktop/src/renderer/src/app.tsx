@@ -2,7 +2,9 @@ import {
   CalendarRange,
   Camera,
   Check,
+  ClipboardCopy,
   Columns2,
+  FileDown,
   ChevronLeft,
   ChevronRight,
   GitCompareArrows,
@@ -56,6 +58,8 @@ import { Welcome } from "~/shell/welcome";
 import { useWorkspace, type Tab } from "~/shell/workspace";
 import { useWorkspaces } from "~/shell/workspaces";
 import { recordVisit, useRecents } from "~/shell/recents";
+import { recordStep } from "~/shell/research-history";
+import { TableExportContext, type TableExport } from "~/table/table-export";
 import { isSnappable, type SnapObj } from "~/snapshot/snapshot-cards";
 import { SnapshotSheet, snapshotView } from "~/snapshot/snapshot-sheet";
 import { EchoProvider, SelectionProvider, useSelection } from "~/selection/selection";
@@ -193,6 +197,24 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       record: current.record,
       title: current.title ?? current.record?.name ?? viewById(current.viewId).label,
     });
+  }, [current.viewId, current.year, current.query, current.record, current.title, subject]);
+
+  // Research history (~/shell/research-history.ts): a place is a step once the tab has stayed on it a
+  // moment, so typing a filter or stepping through seasons is one step, not twenty.
+  const lastPlace = useRef("");
+  useEffect(() => {
+    if (subject) return;
+    const place = { viewId: current.viewId, year: current.year, query: current.query, record: current.record };
+    const key = JSON.stringify(place);
+    const title = current.viewId === "home" ? "Home" : tabName(current);
+    const t = window.setTimeout(() => {
+      if (key === lastPlace.current) return;
+      lastPlace.current = key;
+      recordStep({ kind: "visit", title, place });
+    }, 1200);
+    return () => window.clearTimeout(t);
+    // `current` is read through the fields listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current.viewId, current.year, current.query, current.record, current.title, subject]);
 
   const trayRef = useRef(compare.items);
@@ -404,6 +426,26 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
         const s = subjectOf(o, currentRef.current.year);
         if (s) focusMode.start(s, true);
       },
+      copyTable: (tsv, rows) => {
+        const n = `${rows.toLocaleString()} ${rows === 1 ? "row" : "rows"}`;
+        // The main process takes about 30 MB of text for the clipboard; a whole season of player games is more.
+        if (tsv.length > 30_000_000) {
+          toast({ title: "Too much for the clipboard", body: `${n} is more than a paste can hold. Save it as CSV instead.` });
+          return;
+        }
+        copyText(tsv, `Copied ${n}, ready to paste into a spreadsheet`);
+        recordStep({ kind: "export", title: `Copied ${n} of ${tabName(currentRef.current)}` });
+      },
+      saveCsv: (csv, name, rows) => {
+        void window.bta.files.saveCsv(csv, name).then(
+          (res) => {
+            if (!res.ok) return;
+            toast({ title: `Saved ${rows.toLocaleString()} ${rows === 1 ? "row" : "rows"}`, body: res.path });
+            recordStep({ kind: "export", title: `Saved ${name} as CSV` });
+          },
+          () => toast({ title: "The file could not be saved" }),
+        );
+      },
       here: { viewId: current.viewId, year: current.year, query: current.query, record: current.record },
     }),
     [openRecord, openView, go, openGame, compare.add, favorites, toggleFavoritePlace, copyText, toast, current.viewId, current.year, current.query, current.record, focusMode.start],
@@ -596,6 +638,27 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
    * Everything the palette can do right now. Rebuilt when the tab, view, season
    * or theme changes, because rows mark what is current and name what "here" is.
    */
+  // Each tab's table, for Ctrl K's "Copy this table" and "Save this table as CSV" (~/table/table-export.ts).
+  const tableExports = useRef(new Map<string, TableExport>());
+  const [exportsSeen, setExportsSeen] = useState(0);
+  const exportValues = useRef(new Map<string, { register: (exp: TableExport | null) => void; fileName: string }>());
+  const exportContext = (tab: Tab) => {
+    const fileName = tabName(tab);
+    let v = exportValues.current.get(tab.id);
+    if (!v || v.fileName !== fileName) {
+      const register =
+        v?.register ??
+        ((exp: TableExport | null) => {
+          if (exp) tableExports.current.set(tab.id, exp);
+          else tableExports.current.delete(tab.id);
+          setExportsSeen((n) => n + 1);
+        });
+      v = { register, fileName };
+      exportValues.current.set(tab.id, v);
+    }
+    return v;
+  };
+
   const recents = useRecents();
   const paletteItems = useMemo<PaletteItem[]>(() => {
     const currentMark = <Check size={14} strokeWidth={2.25} className="text-accent" />;
@@ -754,6 +817,37 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       leading: <Camera size={15} strokeWidth={2} />,
       run: () => window.setTimeout(() => snapView("save"), 180),
     });
+    const table = tableExports.current.get(current.id);
+    if (table && table.rows > 0) {
+      const rows = (n: number) => `${n.toLocaleString()} ${n === 1 ? "row" : "rows"}`;
+      const file = tabName(current);
+      action({
+        id: "action:copy-table",
+        title: "Copy this table for a spreadsheet",
+        subtitle: `${rows(table.rows)} · ${table.name}`,
+        keywords: ["copy", "export", "spreadsheet", "excel", "sheets", "table", "clipboard", "paste"],
+        leading: <ClipboardCopy size={15} strokeWidth={2} />,
+        run: () => env.copyTable(table.tsv(), table.rows),
+      });
+      action({
+        id: "action:save-csv",
+        title: "Save this table as CSV",
+        subtitle: `${rows(table.rows)} · ${file}`,
+        keywords: ["save", "export", "csv", "file", "download", "spreadsheet", "excel"],
+        leading: <FileDown size={15} strokeWidth={2} />,
+        run: () => env.saveCsv(table.csv(), file, table.rows),
+      });
+      if (table.selected > 1) {
+        action({
+          id: "action:save-csv-selected",
+          title: "Save the selected rows as CSV",
+          subtitle: `${rows(table.selected)} · ${file}`,
+          keywords: ["save", "export", "csv", "file", "selection", "selected", "spreadsheet"],
+          leading: <FileDown size={15} strokeWidth={2} />,
+          run: () => env.saveCsv(table.csv("selected"), `${file} selected`, table.selected),
+        });
+      }
+    }
     for (const w of workspaces.list) {
       if (w.id === workspaces.current.id) continue;
       action({
@@ -921,14 +1015,14 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     );
 
     return items;
-  }, [view, current, ws.tabs, ws.closed, recents, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite, splitShown, toggleSplit, go, compare.add, workspaces, env, snapView, selection.selection, selection.clear]);
+  }, [view, current, ws.tabs, ws.closed, recents, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite, splitShown, toggleSplit, go, compare.add, workspaces, env, snapView, selection.selection, selection.clear, exportsSeen]);
 
   const allItems = useMemo(() => [...paletteItems, ...objects, ...coaches], [paletteItems, objects, coaches]);
 
   // Rows from the words themselves: a question to ask, a night to see, two schools to predict.
   const typed = useCallback(
-    (q: string) => typedItems(q, { openView, search, current: { viewId: current.viewId, query: current.query } }),
-    [openView, search, current.viewId, current.query],
+    (q: string) => typedItems(q, { openView, search, current: { viewId: current.viewId, query: current.query }, year: current.year }),
+    [openView, search, current.viewId, current.query, current.year],
   );
 
   // One stable setter per tab, so a view's title effect does not rerun on every render.
@@ -1059,6 +1153,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
                     {subject && shown && follows(tab.viewId, subject) && (
                       <span aria-hidden className="pointer-events-none absolute inset-0 z-30 shadow-[inset_0_0_0_2px_color-mix(in_oklab,var(--accent)_50%,transparent)]" />
                     )}
+                    <TableExportContext.Provider value={exportContext(tab)}>
                     <View
                       year={tab.year}
                       setYear={(y) => dispatch({ type: "set-year", id: tab.id, year: y })}
@@ -1075,6 +1170,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
                       onLanded={landed}
                       record={tab.record}
                     />
+                    </TableExportContext.Provider>
                   </section>
                   </TabTitleContext.Provider>
                 </ActiveContext.Provider>
@@ -1140,6 +1236,12 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       </ObjectActionsProvider>
     </ShellContext.Provider>
   );
+}
+
+/** How a tab is named in a file or a history step: its title, and its season when it has one. */
+function tabName(tab: Tab): string {
+  const v = viewById(tab.viewId);
+  return `${tab.title ?? tab.record?.name ?? v.label}${v.seasonless ? "" : ` ${seasonLabel(tab.year)}`}`;
 }
 
 /**

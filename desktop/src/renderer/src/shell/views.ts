@@ -7,8 +7,10 @@ import {
   CalendarClock,
   CalendarDays,
   ChartScatter,
+  History,
   House,
   GitCompareArrows,
+  Scale,
   Shield,
   Swords,
   Table2,
@@ -23,6 +25,7 @@ import { CoachProfileView } from "~/views/coach-profile/coach-profile-view";
 import { CoachesView } from "~/views/coaches/coaches-view";
 import { CompareView } from "~/views/compare/compare-view";
 import { ConferencesView } from "~/views/conferences/conferences-view";
+import { DifferenceView } from "~/views/difference/difference-view";
 import { MatchupView } from "~/views/matchup/matchup-view";
 import { PlayerGamesView } from "~/views/player-games/player-games-view";
 import { PortalView } from "~/views/portal/portal-view";
@@ -36,6 +39,7 @@ import { HomeView } from "~/views/home/home-view";
 import { ScoreboardView } from "~/views/scoreboard/scoreboard-view";
 import { TeamsView } from "~/views/teams/teams-view";
 import { WinCalcView } from "~/views/win-calc/calc-view";
+import { WhatChangedView } from "~/views/what-changed/what-changed-view";
 
 /**
  * Every view the app has.
@@ -146,6 +150,14 @@ export const VIEWS: ViewDef[] = [
     Component: TeamGamesView,
   },
   {
+    id: "what-changed",
+    label: "What Changed",
+    section: "Teams",
+    icon: History,
+    filterPlaceholder: "",
+    Component: WhatChangedView,
+  },
+  {
     id: "team-scatter",
     label: "Team Scatter",
     section: "Teams",
@@ -233,6 +245,15 @@ export const VIEWS: ViewDef[] = [
     icon: GitCompareArrows,
     filterPlaceholder: "",
     Component: CompareView,
+  },
+  {
+    id: "difference",
+    seasonless: true,
+    label: "Difference Explainer",
+    section: "Tools",
+    icon: Scale,
+    filterPlaceholder: "",
+    Component: DifferenceView,
   },
   {
     id: "team-profile",

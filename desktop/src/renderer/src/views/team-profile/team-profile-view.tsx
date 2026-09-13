@@ -178,7 +178,7 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
             actions={
               <>
                 <SeasonSwitcher year={year} onChange={setYear} />
-                <RecordActions obj={teamObj} primary={["explorer", "matchup", "compare", "snapshot"]} />
+                <RecordActions obj={teamObj} primary={["explorer", "what-changed", "matchup", "compare", "snapshot"]} />
                 <DetailsToggle open={detailsOpen} onToggle={toggleDetails} />
               </>
             }

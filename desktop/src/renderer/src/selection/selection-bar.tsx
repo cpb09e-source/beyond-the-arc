@@ -67,7 +67,8 @@ export function SelectionBar() {
         {summary && (
           <span
             title="Averages across the selected teams, and their record together"
-            className="hidden shrink-0 items-center gap-3.5 border-l border-hairline px-3 text-[12px] text-ink-muted min-[1240px]:flex"
+            // Only in a wide window: with Explain and CSV on the bar, the averages crowded the actions off its end at 1440 px.
+            className="hidden shrink-0 items-center gap-3.5 border-l border-hairline px-3 text-[12px] text-ink-muted min-[1600px]:flex"
           >
             <Figure label="Net" value={signed1(summary.net)} />
             <Figure label="Adj O" value={num1(summary.o)} />
@@ -93,7 +94,8 @@ export function SelectionBar() {
               className="inline-flex h-[30px] shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-[12.5px] text-ink-soft transition-colors hover:bg-[var(--row-hover)] hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent"
             >
               <Icon size={14} strokeWidth={2} className="text-ink-muted" />
-              {a.short}
+              {/* A narrow window keeps the icons, and the tooltip still names each one. */}
+              <span className="max-[1200px]:sr-only">{a.short}</span>
             </button>
           );
         })}

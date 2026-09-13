@@ -12,8 +12,10 @@ import {
   ExternalLink,
   Eye,
   GitCompareArrows,
+  History,
   Link2,
   ListFilter,
+  Scale,
   Shield,
   Star,
   StarOff,
@@ -28,6 +30,7 @@ import { SEASON_CEIL } from "@/lib/seasons";
 import { teamSlug } from "@/lib/team-slug";
 import { overrideTeam } from "@/lib/win-calc";
 import { coachSeasons, teamHistory } from "~/data/team-history";
+import { changedQuery, differenceQuery } from "~/explain/explain-query";
 import type { PaletteItem } from "~/palette/command-palette";
 import type { CompareItem } from "~/shell/compare";
 import type { Shell } from "~/shell/shell-context";
@@ -39,6 +42,7 @@ import { scopedQuery } from "~/ui/scoped-query";
 import type { ToastInput } from "~/ui/toast";
 import { loadTeamNames, sideOf } from "~/views/scoreboard/board-model";
 import { DEFAULT_CALC, serializeCalc } from "~/views/win-calc/calc-state";
+import { recordStep } from "~/shell/research-history";
 import { copyStats } from "./copy-stats";
 import { coachObj, objTitle, objYear, recordOf, siteUrl, type Obj } from "./object";
 
@@ -81,6 +85,10 @@ export type ActionEnv = {
   snapshot: (o: Obj) => void;
   /** Holds every open pane on the object until Q or Esc (~/focus/focus-mode.tsx). */
   focus: (o: Obj) => void;
+  /** A table as tab-separated text on the clipboard, said with how many rows (~/table/table-export.ts). */
+  copyTable: (tsv: string, rows: number) => void;
+  /** A CSV file where the reader chooses to save it, named for what it holds. */
+  saveCsv: (csv: string, name: string, rows: number) => void;
   /** The tab in front: an action about the page already open says less. */
   here: { viewId: string; year: number; query: string; record?: RecordRef };
 };
@@ -315,6 +323,34 @@ export const ACTIONS: ActionDef[] = [
     },
   },
   {
+    id: "what-changed",
+    group: "goto",
+    icon: History,
+    label: () => "What changed",
+    phrase: (o) => `What changed for ${objTitle(o)}`,
+    short: "What changed",
+    keywords: ["what changed", "change", "trend", "recent", "last 10", "improved", "better", "worse", "since", "last season"],
+    when: (o) => o.kind === "team",
+    run: (o, env, how) => {
+      if (o.kind === "team") env.openView("what-changed", { ...how, year: o.year, query: changedQuery(o.name) });
+    },
+  },
+  {
+    id: "difference",
+    group: "goto",
+    icon: Scale,
+    label: (o) => (o.kind === "log-game" ? `Explain ${o.team} vs ${o.opp}` : "Explain a difference"),
+    phrase: (o) => (o.kind === "log-game" ? `Why ${o.team} and ${o.opp} differ` : `Explain how ${objTitle(o)} differs from another team`),
+    keywords: ["difference", "explain", "why", "versus", "vs", "gap", "compare", "better"],
+    when: (o) => o.kind === "team" || (o.kind === "log-game" && !o.player),
+    run: (o, env, how) => {
+      if (o.kind === "team") env.openView("difference", { ...how, query: differenceQuery({ year: o.year, name: o.name }, null) });
+      else if (o.kind === "log-game") {
+        env.openView("difference", { ...how, query: differenceQuery({ year: o.year, name: o.team }, { year: o.year, name: o.opp }) });
+      }
+    },
+  },
+  {
     id: "win-calc",
     group: "goto",
     icon: Calculator,
@@ -513,6 +549,20 @@ export const ACTIONS: ActionDef[] = [
     run: (o) => void window.open(siteUrl(o)!),
   },
 ];
+
+/**
+ * RESEARCH HISTORY (~/shell/research-history.ts). An action run from any surface is a step, phrased the way
+ * Ctrl K says it. Opening is left to the visit it leads to, Peek is a glance, and Focus records itself.
+ */
+const UNRECORDED = new Set(["open", "open-tab", "open-side", "peek", "focus"]);
+for (const a of ACTIONS) {
+  if (UNRECORDED.has(a.id)) continue;
+  const run = a.run;
+  a.run = (o, env, how, local) => {
+    recordStep({ kind: "action", title: a.phrase(o, env), obj: o, action: a.id });
+    run(o, env, how, local);
+  };
+}
 
 function isStarred(o: Obj, env: ActionEnv): boolean {
   const place = placeOf(o, env);

@@ -68,6 +68,40 @@ const tget = (key: string) => {
   return (g: TeamGame) => st.get(g.row);
 };
 const perPoss = (g: TeamGame) => tr(g, T.poss);
+/** What the opponent had that night, from its own row; null when the log has no row for it. */
+const opp = (g: TeamGame, i: number): number | null => g.oppRow?.[i] ?? null;
+/** One game's count over its possessions, times `scale`. */
+const perGame = (read: (g: TeamGame) => number | null, scale = 1) => (g: TeamGame): number | null => {
+  const v = read(g);
+  const p = tr(g, T.poss);
+  return v == null || p <= 0 ? null : (scale * v) / p;
+};
+/** A count over possessions across games, counting only games that carry it. */
+const pooledPer = (read: (g: TeamGame) => number | null, scale = 1) => (gs: TeamGame[]): number | null => {
+  let n = 0;
+  let p = 0;
+  for (const g of gs) {
+    const v = read(g);
+    if (v == null) continue;
+    n += v;
+    p += tr(g, T.poss);
+  }
+  return p > 0 ? (scale * n) / p : null;
+};
+/** A ratio of two opponent counts across games, counting only games that carry both. */
+const pooledOpp = (top: (g: TeamGame) => number | null, bottom: (g: TeamGame) => number | null) => (gs: TeamGame[]): number | null => {
+  let a = 0;
+  let b = 0;
+  for (const g of gs) {
+    const t = top(g);
+    const u = bottom(g);
+    if (t == null || u == null) continue;
+    a += t;
+    b += u;
+  }
+  return b > 0 ? a / b : null;
+};
+const oppMakes = (g: TeamGame) => (g.oppRow ? g.oppRow[T.fgm]! + 0.5 * g.oppRow[T.fg3m]! : null);
 
 export const TEAM_LENS: Record<string, LensStat<TeamGame>> = {
   ortg: {
@@ -147,8 +181,35 @@ export const TEAM_LENS: Record<string, LensStat<TeamGame>> = {
   },
   efgd: {
     key: "efgd", label: "Opponent effective FG%", fmt: "pct1", lowerBetter: true, game: tget("efgd"),
-    pool: (gs) => weightedOf(gs, tget("efgd"), perPoss),
-    note: "The log carries what opponents shot per game, so a set of games is weighted by possessions.",
+    // From the opponents' own makes and attempts; a game without an opponent row falls back to the log's rate.
+    pool: (gs) => (gs.every((g) => g.oppRow) ? pooledOpp(oppMakes, (g) => opp(g, T.fga))(gs) : weightedOf(gs, tget("efgd"), perPoss)),
+  },
+  tovd: {
+    key: "tovd", label: "Opponent turnover rate", fmt: "pct1", game: perGame((g) => opp(g, T.tov)),
+    pool: pooledPer((g) => opp(g, T.tov)),
+  },
+  orebp: {
+    key: "orebp", label: "Offensive rebounds per 100 possessions", fmt: "num1", game: perGame((g) => tr(g, T.oreb), 100),
+    pool: pooledPer((g) => tr(g, T.oreb), 100),
+  },
+  orebpd: {
+    key: "orebpd", label: "Opponent offensive rebounds per 100 possessions", fmt: "num1", lowerBetter: true,
+    game: perGame((g) => opp(g, T.oreb), 100),
+    pool: pooledPer((g) => opp(g, T.oreb), 100),
+  },
+  ftap: {
+    key: "ftap", label: "Free throw attempts per 100 possessions", fmt: "num1", game: perGame((g) => tr(g, T.fta), 100),
+    pool: pooledPer((g) => tr(g, T.fta), 100),
+  },
+  ftapd: {
+    key: "ftapd", label: "Opponent free throw attempts per 100 possessions", fmt: "num1", lowerBetter: true,
+    game: perGame((g) => opp(g, T.fta), 100),
+    pool: pooledPer((g) => opp(g, T.fta), 100),
+  },
+  ftpd: {
+    key: "ftpd", label: "Opponent free throw %", fmt: "pct1", lowerBetter: true,
+    game: (g) => (g.oppRow && g.oppRow[T.fta]! > 0 ? g.oppRow[T.ftm]! / g.oppRow[T.fta]! : null),
+    pool: pooledOpp((g) => opp(g, T.ftm), (g) => opp(g, T.fta)),
   },
 };
 

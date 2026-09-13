@@ -122,6 +122,7 @@ export function identityColumns(season: PlayerGameSeason): Column<PlayerGame>[] 
       key: "date", label: "Date", width: 76, align: "right", first: -1,
       sortValue: (g) => g.row[F.d]!,
       cell: (g) => <span className="text-ink-soft tabular">{shortDate(pack, g.row)}</span>,
+      text: (g) => new Date(pack.epochMs + g.row[F.d]! * 86_400_000).toISOString().slice(0, 10),
     },
   ];
 }

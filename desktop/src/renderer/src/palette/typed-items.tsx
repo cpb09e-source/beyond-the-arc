@@ -1,3 +1,5 @@
+import { Scale } from "lucide-react";
+import { differenceQuery } from "~/explain/explain-query";
 import { CalendarDays, Sparkles, Swords } from "lucide-react";
 import { ALL_SEASONS } from "@/lib/seasons";
 import { teamSlug } from "@/lib/team-slug";
@@ -102,7 +104,7 @@ function schoolPair(text: string, data: SearchData | null): [string, string] | n
 
 export function typedItems(
   query: string,
-  ctx: { openView: OpenView; search: SearchData | null; current: { viewId: string; query: string } },
+  ctx: { openView: OpenView; search: SearchData | null; current: { viewId: string; query: string }; year: number },
 ): PaletteItem[] {
   const text = query.trim();
   if (!text) return [];
@@ -129,6 +131,19 @@ export function typedItems(
       subtitle: "Matchup Predictor",
       leading: <Swords size={15} strokeWidth={2} />,
       run: (how) => ctx.openView("matchup", { query: `a=${teamSlug(pair[0])}&b=${teamSlug(pair[1])}`, newTab: how.newTab, side: how.side }),
+    });
+    out.push({
+      id: `typed:difference:${pair[0]}|${pair[1]}`,
+      group: "typed",
+      title: `Why ${pair[0]} and ${pair[1]} differ`,
+      subtitle: "Difference Explainer",
+      leading: <Scale size={15} strokeWidth={2} />,
+      run: (how) =>
+        ctx.openView("difference", {
+          query: differenceQuery({ year: ctx.year, name: pair[0] }, { year: ctx.year, name: pair[1] }),
+          newTab: how.newTab,
+          side: how.side,
+        }),
     });
   }
 

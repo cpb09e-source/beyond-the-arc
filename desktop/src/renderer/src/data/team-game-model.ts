@@ -29,6 +29,12 @@ export type TeamGame = {
   opp: string;
   oppLogoId: number | null;
   oppAp: number;
+  /**
+   * The opponent's own row for this game, when the log has one (every game
+   * between two Division I teams does): what the team allowed, in makes,
+   * misses and turnovers, rather than only as rates.
+   */
+  oppRow: number[] | null;
   won: boolean;
   site: "home" | "away" | "neutral";
   pts: number;
@@ -38,6 +44,8 @@ export type TeamGame = {
   tourney: boolean;
   post: boolean;
   dateShort: string;
+  /** YYYY-MM-DD, for a spreadsheet: "Nov 3" alone does not say which November. */
+  date: string;
   hay: string;
 };
 
@@ -68,6 +76,10 @@ export async function loadTeamGameSeason(year: number): Promise<{ value: TeamGam
   const teamLogos = pack.teams.names.map((n) => LOGOS[normTeamName(n)] ?? null);
   const oppLogos = pack.opps.map((n) => LOGOS[normTeamName(n)] ?? null);
   const confLabels = pack.teams.confs.map((c) => confDisplay(c));
+  // A game's other side is the opponent's row on the same day: both schools share the log's spelling.
+  const teamIndex = new Map(pack.teams.names.map((n, i) => [n, i]));
+  const rowOn = new Map<string, number[]>();
+  for (const r of pack.rows) rowOn.set(`${r[T.t]}|${r[T.d]}`, r);
 
   const games: TeamGame[] = pack.rows.map((r, idx) => {
     const t = r[T.t]!;
@@ -88,6 +100,7 @@ export async function loadTeamGameSeason(year: number): Promise<{ value: TeamGam
       opp,
       oppLogoId: oppLogos[o] ?? null,
       oppAp: r[T.oppAp]!,
+      oppRow: rowOn.get(`${teamIndex.get(opp) ?? -1}|${r[T.d]}`) ?? null,
       won: (f & WON) !== 0,
       site: f & NEUTRAL ? "neutral" : f & HOME ? "home" : "away",
       pts: r[T.pts]!,
@@ -97,6 +110,7 @@ export async function loadTeamGameSeason(year: number): Promise<{ value: TeamGam
       tourney: (f & TOURNEY) !== 0,
       post: (f & POST) !== 0,
       dateShort: `${MONTHS[day.getUTCMonth()]} ${day.getUTCDate()}`,
+      date: day.toISOString().slice(0, 10),
       hay: normalizeText(`${team} ${opp} ${confLabels[t] ?? ""} ${conf}`),
     };
   });

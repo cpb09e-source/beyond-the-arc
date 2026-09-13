@@ -1,6 +1,6 @@
 import { Check, Search } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { matchesQuery } from "~/ui/text";
+import { matchesQuery, normalizeText } from "~/ui/text";
 
 export type ListItem = {
   key: string;
@@ -56,10 +56,14 @@ export function SearchList({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
-  const filtered = useMemo(
-    () => (query.trim() ? items.filter((it) => matchesQuery(query, it.label, it.keywords ?? "", it.group ?? "")) : items),
-    [items, query],
-  );
+  const filtered = useMemo(() => {
+    if (!query.trim()) return items;
+    const hits = items.filter((it) => matchesQuery(query, it.label, it.keywords ?? "", it.group ?? ""));
+    // A name typed in full comes first: "Michigan" means Michigan, not Michigan St. ranked above it.
+    const typed = normalizeText(query);
+    const exact = hits.filter((it) => normalizeText(it.label) === typed);
+    return exact.length > 0 ? [...exact, ...hits.filter((it) => normalizeText(it.label) !== typed)] : hits;
+  }, [items, query]);
   const [active, setActive] = useState<string | null>(
     () => items.find((it) => selected?.has(it.key))?.key ?? items[0]?.key ?? null,
   );

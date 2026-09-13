@@ -164,11 +164,26 @@ function registerIpc(): void {
     if (process.platform !== "darwin") win.setTitleBarOverlay({ color: c.bar, symbolColor: c.symbol });
   });
 
-  // Copy link, Copy stats: text only, and nothing the size of a file.
+  // Copy link, Copy stats, a table for a spreadsheet: text only, up to what a paste can reasonably hold.
   ipcMain.handle("clipboard:write-text", async (_event, text: unknown) => {
-    if (typeof text !== "string" || text.length > 200_000) return false;
+    if (typeof text !== "string" || text.length > 30_000_000) return false;
     await clipboard.writeText(text);
     return true;
+  });
+
+  // Export: a table as a CSV file, only where the reader chose to save it. A byte-order mark goes first, so
+  // Excel opens the file as UTF-8 and "Hawai'i" and accented names survive.
+  ipcMain.handle("export:save-csv", async (_event, text: unknown, name: unknown) => {
+    if (!win || typeof text !== "string" || text.length > 80_000_000 || typeof name !== "string") return { ok: false };
+    const safe = name.replace(/[^\w .()-]+/g, "-").replace(/^[-. ]+/, "").trim().slice(0, 100) || "beyond-the-arc";
+    const { canceled, filePath } = await dialog.showSaveDialog(win, {
+      title: "Save as CSV",
+      defaultPath: join(app.getPath("documents"), `${safe}.csv`),
+      filters: [{ name: "CSV (comma separated)", extensions: ["csv"] }],
+    });
+    if (canceled || !filePath) return { ok: false };
+    await writeFile(filePath, `﻿${text}`, "utf8");
+    return { ok: true, path: filePath };
   });
 
   // Snapshot cards. The page names a rectangle of itself; the pixels leave only as

@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 import { confDisplay } from "@/lib/conf-display";
 import { overrideTeam } from "@/lib/win-calc";
 import { isObj, type Obj } from "~/objects/object";
+import { recordStep } from "~/shell/research-history";
 import { ConfLogo } from "~/ui/conf-logo";
 import { seasonLabel } from "~/ui/format";
 import { Kbd } from "~/ui/kbd";
@@ -56,7 +57,10 @@ const Ctx = createContext<FocusCtx>({ mode: null, start: () => {}, lock: () => {
 
 export function FocusModeProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<FocusMode | null>(null);
-  const start = useCallback((subject: FocusSubject, locked: boolean) => setMode({ subject, locked }), []);
+  const start = useCallback((subject: FocusSubject, locked: boolean) => {
+    recordStep({ kind: "focus", title: `Focused ${subject.kind === "conference" ? subject.label : subject.name}`, obj: subject });
+    setMode({ subject, locked });
+  }, []);
   const lock = useCallback(() => setMode((m) => (m ? { ...m, locked: true } : m)), []);
   const release = useCallback(() => setMode(null), []);
   const value = useMemo(() => ({ mode, start, lock, release }), [mode, start, lock, release]);

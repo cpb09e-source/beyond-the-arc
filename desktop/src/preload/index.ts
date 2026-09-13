@@ -75,6 +75,10 @@ const api = {
   clipboard: {
     writeText: (text: string): Promise<boolean> => ipcRenderer.invoke("clipboard:write-text", text),
   },
+  /** A table as a CSV file, saved where the reader chooses. */
+  files: {
+    saveCsv: (text: string, name: string): Promise<{ ok: boolean; path?: string }> => ipcRenderer.invoke("export:save-csv", text, name),
+  },
   /** Snapshot cards: the window's own pixels inside a rectangle of the page, then to the clipboard or a PNG. */
   snapshot: {
     grab: (rect: { x: number; y: number; width: number; height: number }): Promise<string | null> => ipcRenderer.invoke("snapshot:grab", rect),

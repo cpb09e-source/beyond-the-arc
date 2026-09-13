@@ -109,6 +109,7 @@ export const TEAM_GAME_IDENTITY: Column<TeamGame>[] = [
     key: "date", label: "Date", width: 76, align: "right", first: -1,
     sortValue: (g) => g.row[T.d]!,
     cell: (g) => <span className="text-ink-soft tabular">{g.dateShort}</span>,
+    text: (g) => g.date,
   },
 ];
 

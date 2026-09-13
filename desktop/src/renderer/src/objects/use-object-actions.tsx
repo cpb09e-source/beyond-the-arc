@@ -27,6 +27,8 @@ const NOOP_ENV: ActionEnv = {
   toast: () => {},
   snapshot: () => {},
   focus: () => {},
+  copyTable: () => {},
+  saveCsv: () => {},
   here: { viewId: "home", year: 0, query: "" },
 };
 
@@ -41,12 +43,12 @@ export const useActionEnv = (): ActionEnv => useContext(EnvContext);
 type At = { x: number; y: number } | ReactMouseEvent;
 
 /** Open an object's menu at the pointer, or at a point (a button's corner, a focused row). */
-export function useObjectMenu(): (at: At, o: Obj, local?: Local, lead?: MenuEntry[]) => void {
+export function useObjectMenu(): (at: At, o: Obj, local?: Local, lead?: MenuEntry[], tail?: MenuEntry[]) => void {
   const env = useActionEnv();
   const openMenu = useContextMenu();
   const sel = useSelection();
   return useCallback(
-    (at, o, local = {}, lead = []) => {
+    (at, o, local = {}, lead = [], tail = []) => {
       let x: number;
       let y: number;
       if ("clientX" in at) {
@@ -75,6 +77,8 @@ export function useObjectMenu(): (at: At, o: Obj, local?: Local, lead?: MenuEntr
       }
       // What the surface adds about the exact spot pressed comes first: "Break down Adj O" on a stat cell.
       if (lead.length > 0) entries = [...lead, { kind: "separator", id: "sep:lead" }, ...entries];
+      // What the surface can do with everything it shows (a table's Export) comes last.
+      if (tail.length > 0) entries = [...entries, { kind: "separator", id: "sep:tail" }, ...tail];
       openMenu({ x, y, label: `${objTitle(o)} actions`, entries });
     },
     [env, openMenu, sel],
