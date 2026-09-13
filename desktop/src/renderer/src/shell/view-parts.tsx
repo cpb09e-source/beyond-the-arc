@@ -43,15 +43,19 @@ export function ViewHeader({
   filter?: { value: string; onChange: (v: string) => void; placeholder: string };
 }) {
   return (
-    <header className="flex h-[52px] shrink-0 items-center gap-3 px-5">
-      <div className="flex min-w-0 items-center gap-1.5">
+    // WRAPS WHEN A PANE IS NARROW. In split view a pane is half the window, and a
+    // row that cannot wrap squeezed the breadcrumb to nothing and pushed the last
+    // control off the edge. The breadcrumb keeps its width; the controls, the count
+    // and the filter move to a second line instead.
+    <header className="flex min-h-[52px] shrink-0 flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3">
+      <div className="flex min-w-0 max-w-full shrink-0 items-center gap-1.5">
         <span className="shrink-0 text-[13px] text-ink-muted">{kicker}</span>
         <ChevronRight size={13} strokeWidth={2} className="shrink-0 text-ink-muted" />
         <h1 title={title} className="truncate text-[14px] font-semibold tracking-[-0.005em] text-ink">
           {title}
         </h1>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {!season ? null : setYear ? (
           <SeasonSwitcher year={year} onChange={setYear} />
         ) : (
@@ -65,7 +69,7 @@ export function ViewHeader({
         {controls}
       </div>
       <div className="min-w-0 flex-1" />
-      {meta != null && <span className="hidden shrink-0 truncate text-[12px] text-ink-muted xl:inline">{meta}</span>}
+      {meta != null && <span className="hidden shrink-0 truncate text-[12px] text-ink-muted @4xl:inline">{meta}</span>}
       {filter && <FilterBox {...filter} />}
     </header>
   );

@@ -210,7 +210,7 @@ export function MatchupView({ year, query, setQuery }: ViewProps) {
               onToggle={(side, i) => change(side === "a" ? matchupMoves.toggleA(matchup, i) : matchupMoves.toggleB(matchup, i))}
             />
 
-            <div className="mt-8 grid grid-cols-1 gap-x-10 gap-y-8 xl:grid-cols-2">
+            <div className="mt-8 grid grid-cols-1 gap-x-10 gap-y-8 @5xl:grid-cols-2">
               <section aria-label="How the number is made">
                 <SectionTitle
                   aside={
@@ -293,7 +293,7 @@ function MatchupSkeleton() {
   return (
     <div aria-busy="true" aria-label="Loading the matchup" className="mx-auto w-full max-w-[1180px] px-6 pt-5">
       <div className="skeleton h-[372px] rounded-xl" />
-      <div className="mt-8 grid grid-cols-1 gap-x-10 gap-y-8 xl:grid-cols-2">
+      <div className="mt-8 grid grid-cols-1 gap-x-10 gap-y-8 @5xl:grid-cols-2">
         {[0, 1].map((c) => (
           <div key={c} className="space-y-2.5">
             <span className="skeleton block h-[10px] w-[140px] rounded" />

@@ -290,7 +290,7 @@ function PlayerOverview({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 pt-5">
-      <div className="grid gap-x-10 gap-y-7 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+      <div className="grid gap-x-10 gap-y-7 @5xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <section>
           <SectionTitle aside="Percentile among the season's players">Percentile profile</SectionTitle>
           <div className="rounded-lg border border-hairline bg-card px-4 py-2">

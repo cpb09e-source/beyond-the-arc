@@ -25,16 +25,16 @@ export function ProfileHeader({
 }) {
   const shown = facts.filter((f) => f !== null && f !== undefined && f !== false && f !== "");
   return (
-    <div className="flex items-start gap-4">
+    <div className="flex flex-wrap items-start gap-x-4 gap-y-3">
       <div className="shrink-0">{avatar}</div>
-      <div className="min-w-0 flex-1 pt-0.5">
+      <div className="min-w-[200px] flex-1 pt-0.5">
         <div className="flex min-w-0 items-center gap-2">
           <h1 className="truncate text-[22px] font-semibold leading-tight tracking-[-0.02em] text-ink">{name}</h1>
           {badges}
         </div>
         <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-ink-muted">
           {shown.map((f, i) => (
-            <span key={i} className="flex min-w-0 items-center gap-2">
+            <span key={i} className="flex items-center gap-2 whitespace-nowrap">
               {i > 0 && (
                 <span aria-hidden className="text-hairline">
                   ·
@@ -45,7 +45,7 @@ export function ProfileHeader({
           ))}
         </div>
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
@@ -61,7 +61,7 @@ export type Highlight = {
 /** Six numbers, each with its place in the field. */
 export function HighlightRow({ items }: { items: Highlight[] }) {
   return (
-    <div className="grid grid-cols-3 gap-2 xl:grid-cols-6">
+    <div className="grid grid-cols-2 gap-2 @xl:grid-cols-3 @5xl:grid-cols-6">
       {items.map((h) => (
         <div key={h.label} title={h.title} className="rounded-lg border border-hairline bg-card px-3 pb-2.5 pt-2">
           <div className="truncate text-[11.5px] text-ink-muted">{h.label}</div>

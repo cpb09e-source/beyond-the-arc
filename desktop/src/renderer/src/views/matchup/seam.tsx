@@ -64,7 +64,7 @@ export function SeamCard({
   // In percent, not as fractions of one: flex factors that sum to less than 1
   // hand out only that fraction of the free space. The floor keeps an underdog's
   // name, record and numbers whole when the model is sure.
-  const cols = `minmax(max(280px, 26%), ${Math.max(2, winA * 100)}fr) minmax(max(280px, 26%), ${Math.max(2, (1 - winA) * 100)}fr)`;
+  const cols = `minmax(max(220px, 26%), ${Math.max(2, winA * 100)}fr) minmax(max(220px, 26%), ${Math.max(2, (1 - winA) * 100)}fr)`;
 
   return (
     <section aria-label="Projection" className="overflow-hidden rounded-xl border border-hairline bg-card">
@@ -104,7 +104,7 @@ export function SeamCard({
         />
       </div>
 
-      <div className="grid grid-cols-[228px_minmax(0,1fr)] items-center gap-x-8 border-t border-hairline px-7 py-4">
+      <div className="grid grid-cols-1 items-center gap-x-8 gap-y-3 border-t border-hairline px-7 py-4 @3xl:grid-cols-[228px_minmax(0,1fr)]">
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
           {/* The name in proportional figures: tabular ones give "St." a digit-wide period. */}
           <Stat
@@ -232,7 +232,7 @@ function Half({
 
       <div className={`flex items-end justify-between gap-4 ${right ? "flex-row-reverse" : ""}`}>
         <div>
-          <div className="text-[84px] font-semibold leading-[0.78] tracking-[-0.05em] text-ink tabular">{score}</div>
+          <div className="text-[60px] font-semibold leading-[0.78] tracking-[-0.05em] text-ink tabular @4xl:text-[84px]">{score}</div>
           <div className="mt-2.5 text-[12px] text-ink-muted">Projected</div>
         </div>
         <div>

@@ -683,7 +683,9 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
                     hidden={!shown}
                     // A press anywhere in the other pane hands it the keyboard, then goes on to what was pressed.
                     onPointerDownCapture={pane && !active ? () => dispatch({ type: "activate", id: tab.id }) : undefined}
-                    className="relative flex min-h-0 min-w-0 flex-col"
+                    // A container: a view lays out for the width of its pane, not of the window,
+                    // which in split view is half as wide.
+                    className="@container relative flex min-h-0 min-w-0 flex-col"
                     style={{
                       order: pane === "b" ? 3 : 1,
                       flex: pane && split ? `${pane === "a" ? split.ratio : 1 - split.ratio} 1 0%` : "1 1 0%",
