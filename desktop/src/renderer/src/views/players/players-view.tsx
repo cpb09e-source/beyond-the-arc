@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { TopHundredPill } from "@/components/portal/top-hundred-pill";
 import { loadPlayerSeason, type Player, type PlayerSeason } from "~/data/player-model";
 import { SOURCE_LABEL, useLoaded } from "~/data/use-corpus";
+import { useShell } from "~/shell/shell-context";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
@@ -75,6 +76,7 @@ const COLUMNS_NO_EWINS: Column<Player>[] = COLUMNS.filter((c) => c.key !== "ewin
 export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }: ViewProps) {
   const [state, retry] = useLoaded(`player-season|${year}`, () => loadPlayerSeason(year));
   const setStatus = useSetStatus();
+  const { openRecord } = useShell();
 
   const season: PlayerSeason | null = state.status === "ready" ? state.value : null;
   // A Ctrl K result for a player in this season. The index can name a player the
@@ -129,6 +131,11 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }:
             peek={{ label: (p) => p.name, body: (p) => <PlayerPeekBody season={state.value} player={p} /> }}
             landOn={landing && target ? { key: landing.id, nonce: target.nonce } : undefined}
             onLanded={onLanded}
+            onOpen={(p, how) => {
+              if (p.bartId != null) {
+                openRecord({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, year });
+              }
+            }}
           />
         ) : state.status === "loading" ? (
           <TableSkeleton rowHeight={ROW_H} label="Loading players" />

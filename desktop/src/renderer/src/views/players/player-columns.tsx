@@ -47,7 +47,17 @@ export function playerStat(key: string): PlayerStat | null {
 export const OVERVIEW_STATS: PlayerStat[] = OVERVIEW_KEYS.map(playerStat).filter((s): s is PlayerStat => s !== null);
 
 export function statColumns(): Column<Player>[] {
-  return OVERVIEW_STATS.map((st) => ({
+  return columnsFor(OVERVIEW_STATS);
+}
+
+/** A team's roster: the role, the scoring line, efficiency and impact. */
+export function rosterColumns(hasEwins: boolean): Column<Player>[] {
+  const keys = ["mpg", "ppg", "rpg", "apg", "ts_pct", "usg_pct", "epm", ...(hasEwins ? ["ewins"] : [])];
+  return columnsFor(keys.map(playerStat).filter((s): s is PlayerStat => s !== null));
+}
+
+function columnsFor(stats: PlayerStat[]): Column<Player>[] {
+  return stats.map((st) => ({
     key: st.key,
     label: st.label,
     title: st.desc,

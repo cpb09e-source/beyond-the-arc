@@ -79,6 +79,11 @@ type Props<R> = {
   landOn?: { key: string | number; nonce: number };
   /** Told when a landing has happened, so whoever asked can stop asking. */
   onLanded?: (nonce: number) => void;
+  /**
+   * Opens the row's own page: Enter (from the table or its filter box), a
+   * double-click, or Enter while Peeking. `newTab` is true with Ctrl held.
+   */
+  onOpen?: (row: R, how: { newTab: boolean }) => void;
 };
 
 const HEAD_H = 32;
@@ -110,6 +115,7 @@ export function DataTable<R>({
   peek,
   landOn,
   onLanded,
+  onOpen,
 }: Props<R>) {
   const [sort, setSort] = useState(defaultSort);
   // A table in a tab that is not in front keeps its state but not the keyboard.
@@ -208,7 +214,17 @@ export function DataTable<R>({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!active || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!active) return;
+      if (e.key === "Enter" && onOpen && !e.altKey && !e.shiftKey) {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === "TEXTAREA" || t.tagName === "BUTTON" || t.isContentEditable)) return;
+        const row = index >= 0 ? sorted[index] : undefined;
+        if (!row) return;
+        e.preventDefault();
+        onOpen(row, { newTab: e.ctrlKey || e.metaKey });
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
       const inField = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
       const page = Math.max(1, Math.floor(viewH / rowHeight) - 1);
@@ -230,7 +246,7 @@ export function DataTable<R>({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [active, index, move, sorted.length, viewH, rowHeight]);
+  }, [active, index, move, sorted, viewH, rowHeight, onOpen]);
 
   // THE POINTER MOVES FOCUS, but only when the pointer itself moves. Chromium
   // sends synthetic mouse moves when content scrolls under a still cursor, and
@@ -367,6 +383,7 @@ export function DataTable<R>({
                   onMouseDown={(e) => {
                     if (e.button === 0) setFocusKey(rowKey(row));
                   }}
+                  onDoubleClick={onOpen ? (e) => onOpen(row, { newTab: e.ctrlKey || e.metaKey }) : undefined}
                   className="absolute left-0 top-0 grid w-full items-center border-b border-hairline/50"
                   style={{
                     gridTemplateColumns: layout.template,
@@ -400,6 +417,7 @@ export function DataTable<R>({
           onHeight={setPeekH}
           position={index + 1}
           total={sorted.length}
+          canOpen={!!onOpen}
         >
           {peek.body(focused)}
         </PeekPanel>

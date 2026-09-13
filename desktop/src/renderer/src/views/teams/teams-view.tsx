@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import type { StaticTeamSeasonRow } from "@/lib/static-data";
 import { shapeSeason, type Season, type Team } from "~/data/team-model";
 import { SOURCE_LABEL, useCorpus } from "~/data/use-corpus";
+import { useShell } from "~/shell/shell-context";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
@@ -115,6 +116,7 @@ const COLUMNS: Column<Team>[] = [
 export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: ViewProps) {
   const [state, retry] = useCorpus("teams", year, shapeTeams);
   const setStatus = useSetStatus();
+  const { openRecord } = useShell();
 
   const season = state.status === "ready" ? state.value : null;
   // A Ctrl K result for a team in this season, and its row if the season has one.
@@ -163,6 +165,7 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
             peek={{ label: (t) => t.name, body: (t) => <TeamPeekBody season={state.value} team={t} /> }}
             landOn={landing && target ? { key: landing.id, nonce: target.nonce } : undefined}
             onLanded={onLanded}
+            onOpen={(t, how) => openRecord({ kind: "team", name: t.name, logoId: t.logoId }, { newTab: how.newTab, year })}
           />
         ) : state.status === "loading" ? (
           <TableSkeleton rowHeight={ROW_H} label="Loading teams" />

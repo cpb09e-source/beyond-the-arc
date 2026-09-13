@@ -16,7 +16,7 @@ import { Kbd } from "~/ui/kbd";
 import { Menu, type MenuEntry, type MenuItem } from "~/ui/menu";
 import { usePersisted } from "~/ui/persisted";
 import { accountInitials, useAccount } from "./account";
-import { VIEWS, type ViewDef } from "./views";
+import { NAV_VIEWS, type ViewDef } from "./views";
 
 /**
  * The sidebar: who you are, how to find anything, and where the views are.
@@ -63,7 +63,7 @@ export function Sidebar({
   );
 
   const sections: Array<[string, ViewDef[]]> = [];
-  for (const v of VIEWS) {
+  for (const v of NAV_VIEWS) {
     const group = sections.find(([s]) => s === v.section);
     if (group) group[1].push(v);
     else sections.push([v.section, [v]]);

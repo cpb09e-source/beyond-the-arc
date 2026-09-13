@@ -4,6 +4,7 @@ import { loadTeamGameSeason, type TeamGame } from "~/data/team-game-model";
 import { SOURCE_LABEL, useLoaded } from "~/data/use-corpus";
 import { Picker } from "~/shell/picker";
 import { ShortcutBar } from "~/shell/shortcut-bar";
+import { useShell } from "~/shell/shell-context";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
@@ -56,7 +57,7 @@ function Tag({ children }: { children: string }) {
   );
 }
 
-const IDENTITY: Column<TeamGame>[] = [
+export const TEAM_GAME_IDENTITY: Column<TeamGame>[] = [
   {
     key: "pos", label: "#", title: "Place in the current sort", width: 60, align: "right", first: 1, pin: true,
     cell: (_g, i) => <span className="text-ink-muted tabular">{(i + 1).toLocaleString()}</span>,
@@ -112,6 +113,7 @@ const IDENTITY: Column<TeamGame>[] = [
 export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
   const [state, retry] = useLoaded(`team-games|${year}`, () => loadTeamGameSeason(year));
   const setStatus = useSetStatus();
+  const { openRecord } = useShell();
   const [viewKey, setViewKey] = useState(readView);
   const [on, setOn] = useState<string[]>([]);
 
@@ -119,7 +121,7 @@ export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
   const view = teamGameViewByKey(viewKey);
 
   const columns = useMemo(
-    () => (season ? [...IDENTITY, ...statColumns(season.pack, view.keys)] : IDENTITY),
+    () => (season ? [...TEAM_GAME_IDENTITY, ...statColumns(season.pack, view.keys)] : TEAM_GAME_IDENTITY),
     [season, view],
   );
   const filters = useMemo(() => TEAM_GAME_PRESETS.filter((p) => on.includes(p.key)).flatMap((p) => p.filters), [on]);
@@ -180,6 +182,7 @@ export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
             rowHeight={ROW_H}
             defaultSort={{ key: sortKey, dir: -1 }}
             tieBreak={latestFirst}
+            onOpen={(g, how) => openRecord({ kind: "team", name: g.team, logoId: g.teamLogoId }, { newTab: how.newTab, year })}
             ariaLabel="Team games"
             empty={
               query.trim() ? (

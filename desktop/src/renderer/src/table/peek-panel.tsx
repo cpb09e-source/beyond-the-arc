@@ -12,6 +12,7 @@ export function PeekPanel({
   top,
   position,
   total,
+  canOpen = false,
   onHeight,
   children,
 }: {
@@ -20,6 +21,8 @@ export function PeekPanel({
   /** Where the row sits in the table as sorted and filtered now: "8 of 364". */
   position: number;
   total: number;
+  /** The table can open the row's own page, so Enter is worth teaching. */
+  canOpen?: boolean;
   top: number;
   onHeight: (px: number) => void;
   children: ReactNode;
@@ -55,6 +58,12 @@ export function PeekPanel({
           <Kbd>↓</Kbd>
           next
         </span>
+        {canOpen && (
+          <span className="flex items-center gap-1.5">
+            <Kbd>Enter</Kbd>
+            open
+          </span>
+        )}
         <span className="ml-auto tabular">
           {position.toLocaleString()} of {total.toLocaleString()}
         </span>

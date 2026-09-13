@@ -30,7 +30,7 @@ import { ShellContext } from "~/shell/shell-context";
 import { ShortcutsOverlay } from "~/shell/shortcuts";
 import { SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN, Sidebar } from "~/shell/sidebar";
 import { TabStrip } from "~/shell/tab-strip";
-import { VIEWS, viewById, type FocusRequest, type FocusTarget } from "~/shell/views";
+import { NAV_VIEWS, profileViewFor, viewById, type FocusRequest, type FocusTarget, type RecordRef } from "~/shell/views";
 import { Welcome } from "~/shell/welcome";
 import { useWorkspace, type Tab } from "~/shell/workspace";
 import { seasonLabel } from "~/ui/format";
@@ -107,7 +107,6 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
   const [focus, setFocus] = useState<FocusRequest | null>(null);
   const nonce = useRef(0);
   const filterRef = useRef<HTMLInputElement>(null);
-  const shell = useMemo(() => ({ filterRef }), []);
   const toast = useToast();
   const { auth, update } = useAccount();
 
@@ -134,7 +133,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
    * The filter is cleared on the way, or it could hide the row.
    */
   const go = useCallback(
-    (target: FocusTarget, newTab: boolean) => {
+    (target: FocusTarget, newTab = false) => {
       const viewId = target.kind === "team" ? "team-explorer" : "player-explorer";
       const tab = currentRef.current;
       nonce.current += 1;
@@ -150,11 +149,24 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
   );
   const landed = useCallback((n: number) => setFocus((f) => (f?.nonce === n ? null : f)), []);
 
+  /** Open a team or player profile, here (history remembers the way back) or in a new tab. */
+  const openRecord = useCallback(
+    (record: RecordRef, how: { newTab?: boolean; year?: number } = {}) => {
+      const tab = currentRef.current;
+      const viewId = profileViewFor(record.kind);
+      const year = how.year ?? tab.year;
+      dispatch(how.newTab ? { type: "open", viewId, year, record } : { type: "navigate", viewId, year, record });
+    },
+    [dispatch],
+  );
+
+  const shell = useMemo(() => ({ filterRef, openRecord, showInExplorer: go }), [openRecord, go]);
+
   // The site's search indexes, loaded in the background at launch so the first
   // Ctrl+K already reaches every team and player.
   const [searchState] = useLoaded("search", loadSearchData);
   const search = searchState.status === "ready" ? searchState.value : null;
-  const objects = useMemo(() => (search ? objectItems(search, go) : []), [search, go]);
+  const objects = useMemo(() => (search ? objectItems(search, openRecord) : []), [search, openRecord]);
 
   const focusFilter = useCallback(() => {
     filterRef.current?.focus();
@@ -237,7 +249,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     const currentMark = <Check size={14} strokeWidth={2.25} className="text-accent" />;
     const items: PaletteItem[] = [];
 
-    for (const v of VIEWS) {
+    for (const v of NAV_VIEWS) {
       const Icon = v.icon;
       items.push({
         id: `view:${v.id}`,
@@ -254,14 +266,16 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     }
 
     const action = (entry: Omit<PaletteItem, "group" | "weight">) => items.push({ ...entry, group: "actions", weight: 35 });
-    action({
-      id: "action:filter",
-      title: `Filter ${view.label}`,
-      keywords: ["find", "search", "table", "rows"],
-      leading: <ListFilter size={15} strokeWidth={2} />,
-      trailing: <Kbd>Ctrl F</Kbd>,
-      run: () => focusFilter(),
-    });
+    if (!view.profile) {
+      action({
+        id: "action:filter",
+        title: `Filter ${view.label}`,
+        keywords: ["find", "search", "table", "rows"],
+        leading: <ListFilter size={15} strokeWidth={2} />,
+        trailing: <Kbd>Ctrl F</Kbd>,
+        run: () => focusFilter(),
+      });
+    }
     const at = ALL_SEASONS.indexOf(current.year);
     const older = ALL_SEASONS[at + 1];
     const newer = ALL_SEASONS[at - 1];
@@ -307,7 +321,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       action({
         id: "action:reopen-tab",
         title: "Reopen closed tab",
-        subtitle: viewById(ws.closed[ws.closed.length - 1]!.viewId).label,
+        subtitle: ws.closed[ws.closed.length - 1]!.record?.name ?? viewById(ws.closed[ws.closed.length - 1]!.viewId).label,
         keywords: ["tab", "undo", "restore"],
         leading: <RotateCcw size={15} strokeWidth={2} />,
         trailing: <Kbd>Ctrl Shift T</Kbd>,
@@ -464,6 +478,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
                       setQuery={(q) => dispatch({ type: "set-query", id: tab.id, query: q })}
                       focus={active ? focus : null}
                       onLanded={landed}
+                      record={tab.record}
                     />
                   </section>
                 </ActiveContext.Provider>

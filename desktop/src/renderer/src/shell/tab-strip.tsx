@@ -1,6 +1,8 @@
 import { Plus, X } from "lucide-react";
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { seasonLabel } from "~/ui/format";
+import { TeamLogo } from "~/ui/logo";
+import { PlayerPhoto } from "~/ui/player-photo";
 import { viewById } from "./views";
 import type { Tab } from "./workspace";
 
@@ -81,6 +83,7 @@ export function TabStrip({
       {tabs.map((tab) => {
         const view = viewById(tab.viewId);
         const Icon = view.icon;
+        const label = tab.record?.name ?? view.label;
         const isActive = tab.id === active;
         return (
           <div
@@ -88,7 +91,7 @@ export function TabStrip({
             data-tab-id={tab.id}
             role="tab"
             aria-selected={isActive}
-            title={`${view.label} · ${seasonLabel(tab.year)}`}
+            title={`${label} · ${seasonLabel(tab.year)}`}
             onPointerDown={(e) => onPointerDown(e, tab.id)}
             onPointerMove={onPointerMove}
             onPointerUp={endDrag}
@@ -106,12 +109,18 @@ export function TabStrip({
                 : "text-ink-muted hover:bg-[var(--row-hover)] hover:text-ink-soft"
             } ${dragging === tab.id ? "z-10 opacity-90" : ""}`}
           >
-            <Icon size={14} strokeWidth={2} className={`shrink-0 ${isActive ? "text-ink-soft" : "text-ink-muted"}`} />
-            <span className="min-w-0 truncate">{view.label}</span>
+            {tab.record?.kind === "team" ? (
+              <TeamLogo id={tab.record.logoId} name={tab.record.name} size={15} />
+            ) : tab.record?.kind === "player" ? (
+              <PlayerPhoto bartId={tab.record.bartId} hasPhoto={tab.record.hasPhoto} name={tab.record.name} size={16} />
+            ) : (
+              <Icon size={14} strokeWidth={2} className={`shrink-0 ${isActive ? "text-ink-soft" : "text-ink-muted"}`} />
+            )}
+            <span className="min-w-0 truncate">{label}</span>
             <span className="shrink-0 text-[11px] text-ink-muted tabular">{seasonLabel(tab.year).slice(2)}</span>
             <button
               type="button"
-              aria-label={`Close ${view.label}`}
+              aria-label={`Close ${label}`}
               onPointerDown={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => onClose(tab.id)}

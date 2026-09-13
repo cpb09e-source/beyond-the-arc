@@ -11,6 +11,7 @@ import {
 import { SOURCE_LABEL, useLoaded } from "~/data/use-corpus";
 import { Picker } from "~/shell/picker";
 import { ShortcutBar } from "~/shell/shortcut-bar";
+import { useShell } from "~/shell/shell-context";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
@@ -47,6 +48,7 @@ function readView(): string {
 export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
   const [state, retry] = useLoaded(`player-games|${year}`, () => loadPlayerGameSeason(year));
   const setStatus = useSetStatus();
+  const { openRecord } = useShell();
   const [viewKey, setViewKey] = useState(readView);
   const [on, setOn] = useState<string[]>([]);
 
@@ -134,6 +136,10 @@ export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
             rowHeight={ROW_H}
             defaultSort={{ key: sortKey, dir: -1 }}
             tieBreak={latestFirst}
+            onOpen={(g, how) => {
+              const p = state.value.players[g.row[F.p]!]!;
+              openRecord({ kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto }, { newTab: how.newTab, year });
+            }}
             ariaLabel="Player games"
             empty={
               query.trim() ? (

@@ -49,6 +49,8 @@ export type PlayerSeason = {
   year: number;
   /** Players on the leaderboard: past the floor at the site's default minimum. */
   players: Player[];
+  /** Every player in the season, floor or not: what a team's roster lists. */
+  roster: Player[];
   /** EPM comes from the box-score estimate, not a play-by-play fit (before 2024). */
   estimated: boolean;
   /**
@@ -92,14 +94,14 @@ export async function loadPlayerSeason(year: number): Promise<{ value: PlayerSea
   );
 
   const listed: Player[] = [];
+  const roster: Player[] = [];
   for (const s of players) {
-    if (!passesLeaderboardFloor(s, MIN_GAMES)) continue;
     const pct: Partial<Record<PctKey, number>> = {};
     for (const k of PCT_KEYS) {
       const v = pctMaps[k].get(s.id);
       if (v != null) pct[k] = v;
     }
-    listed.push({
+    const player: Player = {
       id: s.id,
       bartId: s.bart_player_id,
       name: s.name,
@@ -115,13 +117,16 @@ export async function loadPlayerSeason(year: number): Promise<{ value: PlayerSea
       hasPhoto: s.bart_player_id != null && PHOTOS[String(s.bart_player_id)] != null,
       s,
       pct,
-    });
+    };
+    roster.push(player);
+    if (passesLeaderboardFloor(s, MIN_GAMES)) listed.push(player);
   }
 
   return {
     value: {
       year,
       players: listed,
+      roster,
       estimated: impact.estimated,
       hasEwins: listed.some((p) => p.s.ewins != null),
       defaultSort: year >= EWINS_FIRST_YEAR ? "ewins" : "epm",

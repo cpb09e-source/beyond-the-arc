@@ -1,28 +1,31 @@
 import { useEffect, useReducer } from "react";
 import { ALL_SEASONS, SEASON_CEIL } from "@/lib/seasons";
-import { VIEWS } from "./views";
+import { isRecordRef, sameRecord, viewById, VIEWS, type RecordRef } from "./views";
 
 /**
  * Tabs: what is open, in what order, and where each one has been.
  *
  * A TAB IS A PLACE WITH ITS OWN SEASON. Two tabs can hold the same view in two
  * seasons, which is the point of tabs in a tool about seasons: 2018-19 in one,
- * 2025-26 in the next, Ctrl+Tab between them.
+ * 2025-26 in the next, Ctrl+Tab between them. A place is a view, and for a
+ * profile the team or player it is about.
  *
  * HISTORY IS PER TAB, as in Linear's desktop app: Alt+Left walks back through
- * where this tab has been, never through another tab's past.
+ * where this tab has been, never through another tab's past. Opening a player
+ * from the explorer and pressing Alt+Left returns to the explorer.
  *
  * The tabs persist, so the app reopens with what it closed with. The stack of
  * closed tabs behind Ctrl+Shift+T lasts for the session.
  */
 
-export type Snapshot = { viewId: string; year: number };
+export type Snapshot = { viewId: string; year: number; record?: RecordRef };
 
 export type Tab = {
   id: string;
   viewId: string;
   year: number;
   query: string;
+  record?: RecordRef;
   back: Snapshot[];
   forward: Snapshot[];
 };
@@ -30,8 +33,8 @@ export type Tab = {
 export type Workspace = { tabs: Tab[]; active: string; closed: Tab[] };
 
 export type WorkspaceAction =
-  | { type: "navigate"; viewId: string; year?: number }
-  | { type: "open"; viewId: string; year: number }
+  | { type: "navigate"; viewId: string; year?: number; record?: RecordRef }
+  | { type: "open"; viewId: string; year: number; record?: RecordRef }
   | { type: "close"; id: string }
   | { type: "reopen" }
   | { type: "activate"; id: string }
@@ -48,15 +51,34 @@ const KEY = "bta.workspace";
 const HISTORY_CAP = 50;
 const CLOSED_CAP = 10;
 
-const isView = (id: unknown): id is string => typeof id === "string" && VIEWS.some((v) => v.id === id);
 const isSeason = (y: unknown): y is number => typeof y === "number" && ALL_SEASONS.includes(y);
+
+/** A view id that exists, with the record a profile needs and nothing a table does not. */
+function isPlace(viewId: unknown, record: unknown): viewId is string {
+  if (typeof viewId !== "string" || !VIEWS.some((v) => v.id === viewId)) return false;
+  return viewById(viewId).profile ? isRecordRef(record) : true;
+}
+
 const isSnapshot = (s: unknown): s is Snapshot =>
-  typeof s === "object" && s !== null && isView((s as Snapshot).viewId) && isSeason((s as Snapshot).year);
+  typeof s === "object" &&
+  s !== null &&
+  isPlace((s as Snapshot).viewId, (s as Snapshot).record) &&
+  isSeason((s as Snapshot).year);
 
 let seq = 0;
 const newId = (): string => `t${Date.now().toString(36)}${(seq++).toString(36)}`;
 
-const makeTab = (viewId: string, year: number): Tab => ({ id: newId(), viewId, year, query: "", back: [], forward: [] });
+const makeTab = (viewId: string, year: number, record?: RecordRef): Tab => ({
+  id: newId(),
+  viewId,
+  year,
+  query: "",
+  record,
+  back: [],
+  forward: [],
+});
+
+const snapshotOf = (t: Tab): Snapshot => ({ viewId: t.viewId, year: t.year, record: t.record });
 
 function init(): Workspace {
   try {
@@ -66,13 +88,14 @@ function init(): Workspace {
       const tabs = Array.isArray(parsed.tabs)
         ? parsed.tabs.flatMap((t): Tab[] => {
             const o = t as Partial<Tab>;
-            if (!isView(o.viewId) || !isSeason(o.year)) return [];
+            if (!isPlace(o.viewId, o.record) || !isSeason(o.year)) return [];
             return [
               {
                 id: newId(),
                 viewId: o.viewId,
                 year: o.year,
                 query: typeof o.query === "string" ? o.query : "",
+                record: isRecordRef(o.record) ? o.record : undefined,
                 back: Array.isArray(o.back) ? o.back.filter(isSnapshot) : [],
                 forward: Array.isArray(o.forward) ? o.forward.filter(isSnapshot) : [],
               },
@@ -87,7 +110,7 @@ function init(): Workspace {
     // The one view and season the app remembered before it had tabs.
     const view: unknown = JSON.parse(localStorage.getItem("bta.view") ?? "null");
     const season: unknown = JSON.parse(localStorage.getItem("bta.season") ?? "null");
-    const tab = makeTab(isView(view) ? view : VIEWS[0]!.id, isSeason(season) ? season : SEASON_CEIL);
+    const tab = makeTab(isPlace(view, undefined) && !viewById(view).profile ? view : VIEWS[0]!.id, isSeason(season) ? season : SEASON_CEIL);
     return { tabs: [tab], active: tab.id, closed: [] };
   } catch {
     const tab = makeTab(VIEWS[0]!.id, SEASON_CEIL);
@@ -99,24 +122,33 @@ function updateTab(ws: Workspace, id: string, fn: (t: Tab) => Tab): Workspace {
   return { ...ws, tabs: ws.tabs.map((t) => (t.id === id ? fn(t) : t)) };
 }
 
+/** Moves a tab to a place, keeping the filter only when the table stays the same. */
+function arrive(t: Tab, place: Snapshot): Tab {
+  return {
+    ...t,
+    viewId: place.viewId,
+    year: place.year,
+    record: place.record,
+    query: place.viewId === t.viewId && sameRecord(place.record, t.record) ? t.query : "",
+  };
+}
+
 export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
   const current = ws.tabs.find((t) => t.id === ws.active) ?? ws.tabs[0]!;
   switch (a.type) {
     case "navigate": {
-      const year = a.year ?? current.year;
-      if (a.viewId === current.viewId && year === current.year) return ws;
+      const place: Snapshot = { viewId: a.viewId, year: a.year ?? current.year, record: a.record };
+      if (place.viewId === current.viewId && place.year === current.year && sameRecord(place.record, current.record)) {
+        return ws;
+      }
       return updateTab(ws, current.id, (t) => ({
-        ...t,
-        viewId: a.viewId,
-        year,
-        // A different view is a different table, so its filter starts empty.
-        query: a.viewId === t.viewId ? t.query : "",
-        back: [...t.back, { viewId: t.viewId, year: t.year }].slice(-HISTORY_CAP),
+        ...arrive(t, place),
+        back: [...t.back, snapshotOf(t)].slice(-HISTORY_CAP),
         forward: [],
       }));
     }
     case "open": {
-      const tab = makeTab(a.viewId, a.year);
+      const tab = makeTab(a.viewId, a.year, a.record);
       const at = ws.tabs.findIndex((t) => t.id === current.id);
       // Beside the tab it came from, as a browser places it.
       return { ...ws, tabs: [...ws.tabs.slice(0, at + 1), tab, ...ws.tabs.slice(at + 1)], active: tab.id };
@@ -164,23 +196,17 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
       const prev = current.back[current.back.length - 1];
       if (!prev) return ws;
       return updateTab(ws, current.id, (t) => ({
-        ...t,
-        viewId: prev.viewId,
-        year: prev.year,
-        query: prev.viewId === t.viewId ? t.query : "",
+        ...arrive(t, prev),
         back: t.back.slice(0, -1),
-        forward: [{ viewId: t.viewId, year: t.year }, ...t.forward].slice(0, HISTORY_CAP),
+        forward: [snapshotOf(t), ...t.forward].slice(0, HISTORY_CAP),
       }));
     }
     case "forward": {
       const next = current.forward[0];
       if (!next) return ws;
       return updateTab(ws, current.id, (t) => ({
-        ...t,
-        viewId: next.viewId,
-        year: next.year,
-        query: next.viewId === t.viewId ? t.query : "",
-        back: [...t.back, { viewId: t.viewId, year: t.year }].slice(-HISTORY_CAP),
+        ...arrive(t, next),
+        back: [...t.back, snapshotOf(t)].slice(-HISTORY_CAP),
         forward: t.forward.slice(1),
       }));
     }
@@ -207,6 +233,7 @@ export function useWorkspace() {
             viewId: t.viewId,
             year: t.year,
             query: t.query,
+            record: t.record,
             back: t.back.slice(-20),
             forward: t.forward.slice(0, 20),
           })),
