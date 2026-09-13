@@ -43,6 +43,8 @@
      turned the highlight into a faint dark band. */
   --menu-active: color-mix(in oklab, var(--accent) 16%, var(--card));
   --overlay-shadow: 0 24px 60px -24px rgb(26 34 56 / 0.34), 0 2px 8px rgb(26 34 56 / 0.08);
+  /* Behind the Ctrl K palette: enough to set the page back, not enough to lose it. */
+  --scrim: rgb(26 34 56 / 0.16);
   /* The soft edge on the last pinned column once content scrolls beneath it. */
   --pin-edge: 8px 0 12px -8px rgb(26 34 56 / 0.2);
   /* The percentile ramp: seven bands, worst to best, exactly as globals.css
@@ -82,6 +84,7 @@
   --bad: #ff6b6b;
   --chrome: #171717;
   --overlay-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.75), 0 2px 8px rgb(0 0 0 / 0.45);
+  --scrim: rgb(0 0 0 / 0.46);
   --pin-edge: 8px 0 14px -8px rgb(0 0 0 / 0.7);
   /* The dark ramp: deep fills and light type, re-baked rather than inverted,
      because the light pastels read as headlights on a dark ground. */
@@ -148,6 +151,20 @@ textarea {
 }
 
 /*
+ * SCROLLBARS IN THE APP INK. Windows draws a wide gray bar with arrow buttons,
+ * the loudest thing on a dark table and a web-page tell in a desktop app. The
+ * standard properties (honored by this Chromium) give a thin bar with no
+ * buttons, its thumb mixed from the muted ink so it sits right in both themes.
+ */
+* {
+  scrollbar-width: thin;
+}
+
+html {
+  scrollbar-color: color-mix(in oklab, var(--ink-muted) 45%, transparent) transparent;
+}
+
+/*
  * The site's wordmark, two files swapped by theme: the same rule as
  * src/components/site-logo.tsx. Each file has its ink baked into the artwork,
  * so an <img> of one cannot be recolored for the other ground.
@@ -208,6 +225,42 @@ textarea {
   to {
     opacity: 1;
     scale: 1;
+  }
+}
+
+/*
+ * THE PALETTE. The panel settles in from just above with a hair of scale; the
+ * scrim only fades. Both use scale and translate, never top or height, so the
+ * list inside never re-lays out while it arrives.
+ */
+.palette-scrim {
+  background: var(--scrim);
+  animation: fade-in 140ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.palette-in {
+  animation: palette-in 160ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    scale: 0.985;
+    translate: 0 -6px;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+    translate: 0 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 

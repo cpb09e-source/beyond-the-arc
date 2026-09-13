@@ -13,7 +13,10 @@ export type Corpus =
   | "player-box"
   | "player-shooting"
   | "team-games"
-  | "player-games";
+  | "player-games"
+  | "teams-index"
+  | "players-index"
+  | "search-index";
 export type DataSource = "memory" | "repo" | "cache" | "network";
 export type DataPayload = { json: string; source: DataSource };
 export type ThemeMode = "system" | "light" | "dark";

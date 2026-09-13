@@ -7,7 +7,7 @@ import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-pa
 import type { ViewProps } from "~/shell/views";
 import { DataTable, type Column } from "~/table/data-table";
 import { StatCell } from "~/table/stat-cell";
-import { num1, pct1, signed1 } from "~/ui/format";
+import { num1, pct1, seasonLabel, signed1 } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 import { matchesQuery } from "~/ui/text";
 import { TeamPeekBody } from "./team-peek";
@@ -112,11 +112,14 @@ const COLUMNS: Column<Team>[] = [
   },
 ];
 
-export function TeamsView({ year, setYear, query }: ViewProps) {
+export function TeamsView({ year, setYear, query, focus, onLanded }: ViewProps) {
   const [state, retry] = useCorpus("teams", year, shapeTeams);
   const setStatus = useSetStatus();
 
   const season = state.status === "ready" ? state.value : null;
+  // A Ctrl K result for a team in this season, and its row if the season has one.
+  const target = focus?.kind === "team" && focus.year === year ? focus : null;
+  const landing = target && season ? season.teams.find((t) => t.name === target.name) : undefined;
   const rows = useMemo(
     () => (season ? season.teams.filter((t) => matchesQuery(query, t.name, t.confLabel, t.conf)) : []),
     [season, query],
@@ -129,9 +132,11 @@ export function TeamsView({ year, setYear, query }: ViewProps) {
   }, [state, setStatus]);
 
   const total = season?.teams.length ?? 0;
-  const meta = season
-    ? `${query.trim() && rows.length !== total ? `${rows.length} of ${total}` : total} teams · Final`
-    : undefined;
+  const meta = !season
+    ? undefined
+    : target && !landing
+      ? `${target.name} has no row in ${seasonLabel(year)}`
+      : `${query.trim() && rows.length !== total ? `${rows.length} of ${total}` : total} teams · Final`;
 
   return (
     <>
@@ -149,6 +154,8 @@ export function TeamsView({ year, setYear, query }: ViewProps) {
             ariaLabel="Teams"
             empty={<NoMatches query={query} noun="team or conference" />}
             peek={{ label: (t) => t.name, body: (t) => <TeamPeekBody season={state.value} team={t} /> }}
+            landOn={landing && target ? { key: landing.id, nonce: target.nonce } : undefined}
+            onLanded={onLanded}
           />
         ) : state.status === "loading" ? (
           <TableSkeleton rowHeight={ROW_H} label="Loading teams" />

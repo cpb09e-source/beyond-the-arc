@@ -30,7 +30,10 @@ export type Corpus =
   | "player-box"
   | "player-shooting"
   | "team-games"
-  | "player-games";
+  | "player-games"
+  | "teams-index"
+  | "players-index"
+  | "search-index";
 export type DataSource = "memory" | "repo" | "cache" | "network";
 
 type CorpusSpec = {
@@ -63,6 +66,12 @@ const CORPORA: Record<Corpus, CorpusSpec> = {
   "player-shooting": { path: (y) => `shooting-${y}.json`, r2: false, optional: true },
   "team-games": { path: (y) => `team-game-index/${y}.json`, r2: true },
   "player-games": { path: (y) => `game-index/${y}.json`, r2: true },
+  // CROSS-SEASON FILES, the site's search indexes. The path takes no year; the
+  // caller passes the newest season they cover. They change once the live
+  // season starts, so P3's version check has to cover them with its files.
+  "teams-index": { path: () => "teams-index.json", r2: false },
+  "players-index": { path: () => "players-index.json", r2: false },
+  "search-index": { path: () => "search-index.json", r2: false },
 };
 
 const SITE_DATA = "https://btacbb.xyz/data";

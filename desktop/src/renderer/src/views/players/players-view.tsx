@@ -72,11 +72,15 @@ const COLUMNS: Column<Player>[] = [...IDENTITY, ...statColumns()];
 /** For seasons without eWins. Module-level, so the table sees a stable list. */
 const COLUMNS_NO_EWINS: Column<Player>[] = COLUMNS.filter((c) => c.key !== "ewins");
 
-export function PlayersView({ year, setYear, query }: ViewProps) {
+export function PlayersView({ year, setYear, query, focus, onLanded }: ViewProps) {
   const [state, retry] = useLoaded(`player-season|${year}`, () => loadPlayerSeason(year));
   const setStatus = useSetStatus();
 
   const season: PlayerSeason | null = state.status === "ready" ? state.value : null;
+  // A Ctrl K result for a player in this season. The index can name a player the
+  // leaderboard floor leaves out, and then there is no row to land on.
+  const target = focus?.kind === "player" && focus.year === year ? focus : null;
+  const landing = target && season ? season.players.find((p) => p.bartId === target.bartId) : undefined;
   const rows = useMemo(
     () =>
       season
@@ -94,9 +98,11 @@ export function PlayersView({ year, setYear, query }: ViewProps) {
   }, [state, setStatus]);
 
   const total = season?.players.length ?? 0;
-  const meta = season
-    ? `${query.trim() && rows.length !== total ? `${rows.length.toLocaleString()} of ${total.toLocaleString()}` : total.toLocaleString()} players · ${season.minGames}+ games${season.estimated ? " · EPM estimated" : ""}`
-    : undefined;
+  const meta = !season
+    ? undefined
+    : target && !landing
+      ? `${target.name} is not on the ${seasonLabel(year)} leaderboard`
+      : `${query.trim() && rows.length !== total ? `${rows.length.toLocaleString()} of ${total.toLocaleString()}` : total.toLocaleString()} players · ${season.minGames}+ games${season.estimated ? " · EPM estimated" : ""}`;
 
   return (
     <>
@@ -114,6 +120,8 @@ export function PlayersView({ year, setYear, query }: ViewProps) {
             ariaLabel="Players"
             empty={<NoMatches query={query} noun="player, team or conference" />}
             peek={{ label: (p) => p.name, body: (p) => <PlayerPeekBody season={state.value} player={p} /> }}
+            landOn={landing && target ? { key: landing.id, nonce: target.nonce } : undefined}
+            onLanded={onLanded}
           />
         ) : state.status === "loading" ? (
           <TableSkeleton rowHeight={ROW_H} label="Loading players" />

@@ -32,7 +32,7 @@ function isTyping(target: EventTarget | null): boolean {
   );
 }
 
-export function usePeek(): View & { close: () => void } {
+export function usePeek(): View & { close: () => void; pin: () => void } {
   const [view, setView] = useState<View>(CLOSED);
   // The window listeners outlive any one render and need the CURRENT state, so
   // it lives in a ref as well; `apply` is the only writer and keeps both equal.
@@ -48,6 +48,12 @@ export function usePeek(): View & { close: () => void } {
   const close = useCallback(() => {
     downAt.current = null;
     apply(CLOSED);
+  }, [apply]);
+
+  /** Open and pinned, as a tap would leave it: how a Ctrl K landing shows its row. */
+  const pin = useCallback(() => {
+    downAt.current = null;
+    apply({ open: true, pinned: true });
   }, [apply]);
 
   useEffect(() => {
@@ -102,5 +108,5 @@ export function usePeek(): View & { close: () => void } {
     };
   }, [apply, close]);
 
-  return { ...view, close };
+  return { ...view, close, pin };
 }

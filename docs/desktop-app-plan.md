@@ -42,8 +42,14 @@ forward.
    identical to the old code on six seasons (every player, every percentile) before the site
    switched to it. The # column is place-in-sort, as on the site; BTA's overall rank rides with
    the name as the site's top-100 mark. **Done.**
-3. Ctrl K: universal search (teams, players, coaches, games, views, seasons, settings) plus
-   actions on the selection.
+3. Ctrl K: universal search plus actions. **Built:** the palette (cmdk for keys and
+   accessibility, ranking in `palette/rank.ts`), views, actions on the current view, every
+   season, theme, and every team-season and player-season from the search indexes the site
+   already builds, with its team aliases (UConn, Zags). A player or team collapses to its best
+   season unless the query names one. Enter lands on the row in its explorer, filter cleared,
+   Peek pinned. Ctrl F and / now filter the table. **Still to come:** coaches and games join
+   when their views exist, so a result never opens onto nothing; actions on the selection
+   (compare, copy, open on the site) arrive with the record panes.
 4. Team Game Log, then Player Game Log (pinned identity columns; percentiles over the whole
    season, never the filtered rows, as the site does).
 5. Win Calculator. Plain-English questions go through the site's /api/parse-query, because the

@@ -1,15 +1,35 @@
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { ALL_SEASONS, SEASON_CEIL } from "@/lib/seasons";
+import { CalendarRange, Check, ChevronLeft, ChevronRight, ListFilter, Monitor, Moon, Sun } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { ALL_SEASONS, SEASON_CEIL, isFlaggedSeason } from "@/lib/seasons";
 import logoOnLight from "@public/images/btalogo_final-01.svg";
 import logoOnDark from "@public/images/newbtalogo-white-01.svg";
 import type { ThemeMode } from "../../preload";
 import { StatusContext } from "~/shell/status";
-import { VIEWS, viewById, type ViewDef } from "~/shell/views";
+import { VIEWS, viewById, type FocusRequest, type FocusTarget, type ViewDef } from "~/shell/views";
+import { loadSearchData } from "~/data/search-model";
+import { useLoaded } from "~/data/use-corpus";
+import { CommandPalette, type PaletteGroup, type PaletteItem } from "~/palette/command-palette";
+import { objectItems } from "~/palette/object-items";
+import { seasonLabel } from "~/ui/format";
 import { Kbd } from "~/ui/kbd";
 
 const THEME_KEY = "bta.theme";
 const VIEW_KEY = "bta.view";
 const SEASON_KEY = "bta.season";
+
+/**
+ * The palette's sections, in their resting order. Before anything is typed it
+ * offers only where to go and what to do here; seasons and themes wait for a
+ * word, so the first look is short enough to read.
+ */
+const PALETTE_GROUPS: PaletteGroup[] = [
+  { id: "views", heading: "Go to", limit: 8, showWhenEmpty: true },
+  { id: "actions", heading: "Actions", limit: 6, showWhenEmpty: true },
+  { id: "teams", heading: "Teams", limit: 5, showWhenEmpty: false },
+  { id: "players", heading: "Players", limit: 6, showWhenEmpty: false },
+  { id: "seasons", heading: "Seasons", limit: 5, showWhenEmpty: false },
+  { id: "settings", heading: "Theme", limit: 3, showWhenEmpty: false },
+];
 
 /**
  * The frame: title bar, sidebar, the current view, status bar.
@@ -29,34 +49,185 @@ export function App() {
   const [status, setStatus] = useState("");
   const [theme, setTheme] = useThemeMode();
   const filterRef = useRef<HTMLInputElement>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [focus, setFocus] = useState<FocusRequest | null>(null);
+  const nonce = useRef(0);
+
+  /**
+   * Take the app to one object: its view, its season, its row, Peek pinned.
+   * The target view's filter is cleared on the way, or it could hide the row.
+   */
+  const go = useCallback(
+    (target: FocusTarget) => {
+      const viewId = target.kind === "team" ? "team-explorer" : "player-explorer";
+      nonce.current += 1;
+      setViewId(viewId);
+      setYear(target.year);
+      setQueries((q) => (q[viewId] ? { ...q, [viewId]: "" } : q));
+      setFocus({ ...target, nonce: nonce.current });
+    },
+    [setViewId, setYear],
+  );
+  const landed = useCallback((n: number) => setFocus((f) => (f?.nonce === n ? null : f)), []);
+
+  // The site's search indexes, loaded in the background at launch so the first
+  // Ctrl K already reaches every team and player.
+  const [searchState] = useLoaded("search", loadSearchData);
+  const search = searchState.status === "ready" ? searchState.value : null;
+  const objects = useMemo(() => (search ? objectItems(search, go) : []), [search, go]);
 
   const view = viewById(viewId);
   const query = queries[view.id] ?? "";
 
+  const focusFilter = useCallback(() => {
+    filterRef.current?.focus();
+    filterRef.current?.select();
+  }, []);
+
+  /** ALL_SEASONS runs newest first. */
+  const stepSeason = useCallback(
+    (to: "older" | "newer") =>
+      setYear((y) => {
+        const i = ALL_SEASONS.indexOf(y);
+        return (to === "older" ? ALL_SEASONS[i + 1] : ALL_SEASONS[i - 1]) ?? y;
+      }),
+    [setYear],
+  );
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Ctrl K focuses the filter for now; the action palette takes it over later.
+      // Ctrl K reaches everything; Ctrl F and / filter the table in front of you.
+      // While the palette is open, its keys end inside it and never arrive here.
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        filterRef.current?.focus();
-        filterRef.current?.select();
+        setPaletteOpen(true);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        focusFilter();
         return;
       }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      // [ older season, ] newer. ALL_SEASONS runs newest first.
-      if (e.key === "[" || e.key === "]") {
+      if (e.key === "/") {
         e.preventDefault();
-        setYear((y) => {
-          const i = ALL_SEASONS.indexOf(y);
-          return (e.key === "[" ? ALL_SEASONS[i + 1] : ALL_SEASONS[i - 1]) ?? y;
-        });
+        focusFilter();
+      } else if (e.key === "[" || e.key === "]") {
+        e.preventDefault();
+        stepSeason(e.key === "[" ? "older" : "newer");
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [setYear]);
+  }, [focusFilter, stepSeason]);
+
+  /**
+   * Everything the palette can do right now. Rebuilt when the view, season or
+   * theme changes, because rows mark which one is current and name what "here" is.
+   */
+  const paletteItems = useMemo<PaletteItem[]>(() => {
+    const current = <Check size={14} strokeWidth={2.25} className="text-accent" />;
+    const items: PaletteItem[] = [];
+
+    for (const v of VIEWS) {
+      const Icon = v.icon;
+      items.push({
+        id: `view:${v.id}`,
+        group: "views",
+        title: v.label,
+        subtitle: v.section,
+        keywords: ["open", "go"],
+        // Places in the app come before anything named like them.
+        weight: 40,
+        leading: <Icon size={15} strokeWidth={2} />,
+        trailing: v.id === view.id ? current : undefined,
+        run: () => setViewId(v.id),
+      });
+    }
+
+    items.push({
+      id: "action:filter",
+      group: "actions",
+      title: `Filter ${view.label}`,
+      keywords: ["find", "search", "table", "rows"],
+      weight: 35,
+      leading: <ListFilter size={15} strokeWidth={2} />,
+      trailing: <Kbd>Ctrl F</Kbd>,
+      run: focusFilter,
+    });
+    const at = ALL_SEASONS.indexOf(year);
+    const older = ALL_SEASONS[at + 1];
+    const newer = ALL_SEASONS[at - 1];
+    if (older != null) {
+      items.push({
+        id: "action:older",
+        group: "actions",
+        title: "Older season",
+        subtitle: seasonLabel(older),
+        keywords: ["previous", "back", "earlier", "season"],
+        weight: 35,
+        leading: <ChevronLeft size={15} strokeWidth={2} />,
+        trailing: <Kbd>[</Kbd>,
+        run: () => stepSeason("older"),
+      });
+    }
+    if (newer != null) {
+      items.push({
+        id: "action:newer",
+        group: "actions",
+        title: "Newer season",
+        subtitle: seasonLabel(newer),
+        keywords: ["next", "forward", "later", "season"],
+        weight: 35,
+        leading: <ChevronRight size={15} strokeWidth={2} />,
+        trailing: <Kbd>]</Kbd>,
+        run: () => stepSeason("newer"),
+      });
+    }
+
+    for (const y of ALL_SEASONS) {
+      items.push({
+        id: `season:${y}`,
+        group: "seasons",
+        title: seasonLabel(y),
+        subtitle: isFlaggedSeason(y) ? "Covid season" : undefined,
+        // 2019, 2018 and 18-19 all find 2018-19.
+        keywords: ["season", String(y), String(y - 1), `${String(y - 1).slice(2)}-${String(y).slice(2)}`],
+        // Newest first among equal matches, the order the season switcher uses.
+        weight: y / 100,
+        leading: <CalendarRange size={15} strokeWidth={2} />,
+        trailing: y === year ? current : undefined,
+        run: () => setYear(y),
+      });
+    }
+
+    const themes = [
+      ["system", "Match system theme", Monitor],
+      ["light", "Light theme", Sun],
+      ["dark", "Dark theme", Moon],
+    ] as const;
+    for (const [mode, title, Icon] of themes) {
+      items.push({
+        id: `theme:${mode}`,
+        group: "settings",
+        title,
+        keywords: ["theme", "appearance", "mode", "color", "colour"],
+        weight: 35,
+        leading: <Icon size={15} strokeWidth={2} />,
+        trailing: theme === mode ? current : undefined,
+        run: () => setTheme(mode),
+      });
+    }
+
+    return items;
+  }, [view, year, theme, setViewId, setYear, setTheme, focusFilter, stepSeason]);
+
+  const allItems = useMemo(
+    () => (objects.length > 0 ? [...paletteItems, ...objects] : paletteItems),
+    [paletteItems, objects],
+  );
 
   const Current = view.Component;
 
@@ -90,7 +261,7 @@ export function App() {
             spellCheck={false}
             className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-muted"
           />
-          <Kbd>Ctrl K</Kbd>
+          <Kbd>Ctrl F</Kbd>
         </label>
       </header>
 
@@ -98,7 +269,7 @@ export function App() {
 
       <main className="flex min-h-0 min-w-0 flex-col bg-paper">
         <StatusContext.Provider value={setStatus}>
-          <Current key={view.id} year={year} setYear={setYear} query={query} />
+          <Current key={view.id} year={year} setYear={setYear} query={query} focus={focus} onLanded={landed} />
         </StatusContext.Provider>
       </main>
 
@@ -108,8 +279,18 @@ export function App() {
         <Hint keys={["↑", "↓"]} label="move" />
         <Hint keys={["Space"]} label="peek" />
         <Hint keys={["[", "]"]} label="season" />
-        <Hint keys={["Ctrl K"]} label="filter" />
+        <Hint keys={["Ctrl F"]} label="filter" />
+        <Hint keys={["Ctrl K"]} label="search" />
       </footer>
+
+      {paletteOpen && (
+        <CommandPalette
+          groups={PALETTE_GROUPS}
+          items={allItems}
+          placeholder={search ? "Search teams, players, views and seasons" : "Search views, seasons and settings"}
+          onClose={() => setPaletteOpen(false)}
+        />
+      )}
     </div>
   );
 }

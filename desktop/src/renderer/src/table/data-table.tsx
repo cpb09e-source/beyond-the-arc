@@ -71,6 +71,13 @@ type Props<R> = {
   ariaLabel: string;
   empty: ReactNode;
   peek?: PeekSpec<R>;
+  /**
+   * A row to land on: focused, scrolled to the middle, its Peek pinned. Each
+   * nonce lands once, whether the table is mounting or already open.
+   */
+  landOn?: { key: string | number; nonce: number };
+  /** Told when a landing has happened, so whoever asked can stop asking. */
+  onLanded?: (nonce: number) => void;
 };
 
 const HEAD_H = 32;
@@ -100,6 +107,8 @@ export function DataTable<R>({
   ariaLabel,
   empty,
   peek,
+  landOn,
+  onLanded,
 }: Props<R>) {
   const [sort, setSort] = useState(defaultSort);
 
@@ -130,6 +139,13 @@ export function DataTable<R>({
   // a position would silently hand the focus to whatever now sits there.
   const indexByKey = useMemo(() => new Map(sorted.map((r, i) => [rowKey(r), i])), [sorted, rowKey]);
   const [focusKey, setFocusKey] = useState<string | number | null>(null);
+  // LANDING IS DECIDED DURING RENDER, not in an effect, so the first frame of a
+  // table opened from Ctrl K already shows the right row focused.
+  const [landed, setLanded] = useState<number | null>(null);
+  if (landOn && landOn.nonce !== landed && indexByKey.has(landOn.key)) {
+    setLanded(landOn.nonce);
+    setFocusKey(landOn.key);
+  }
   const found = focusKey == null ? undefined : indexByKey.get(focusKey);
   const index = found ?? (sorted.length > 0 ? 0 : -1);
   const focused = index >= 0 ? sorted[index] : undefined;
@@ -226,6 +242,22 @@ export function DataTable<R>({
   };
 
   const peekState = usePeek();
+
+  // The parts of a landing that reach outside render: the scroll and the Peek.
+  const { pin } = peekState;
+  useEffect(() => {
+    if (landed == null) return;
+    const i = focusKey == null ? undefined : indexByKey.get(focusKey);
+    // A frame later, so a table mounting on this landing has measured itself.
+    const raf = requestAnimationFrame(() => {
+      if (i != null) virtual.scrollToIndex(i, { align: "center" });
+    });
+    pin();
+    onLanded?.(landed);
+    return () => cancelAnimationFrame(raf);
+    // Once per landing; everything else is read as it stands at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [landed]);
   // Beside its row, clamped inside the visible table so a row near the bottom
   // never pushes the panel off screen.
   const rowTop = HEAD_H + index * rowHeight - scrollTop;

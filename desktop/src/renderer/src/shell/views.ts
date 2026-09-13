@@ -14,10 +14,21 @@ import { TeamsView } from "~/views/teams/teams-view";
  * entries that open "coming soon" is a roadmap, not an app.
  */
 
+/** Where a Ctrl K result goes: one team or one player, in one season. */
+export type FocusTarget =
+  | { kind: "team"; name: string; year: number }
+  | { kind: "player"; bartId: number; name: string; year: number };
+
+/** A target on its way. The nonce makes asking twice land twice. */
+export type FocusRequest = FocusTarget & { nonce: number };
+
 export type ViewProps = {
   year: number;
   setYear: (y: number) => void;
   query: string;
+  /** A pending landing. Each view acts on the kind it shows, in the season named. */
+  focus: FocusRequest | null;
+  onLanded: (nonce: number) => void;
 };
 
 export type ViewDef = {
