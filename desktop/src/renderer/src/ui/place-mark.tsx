@@ -1,4 +1,5 @@
 import { viewById, type RecordRef } from "~/shell/views";
+import { CoachAvatar } from "~/ui/coach-avatar";
 import { TeamLogo } from "~/ui/logo";
 import { PlayerPhoto } from "~/ui/player-photo";
 
@@ -9,6 +10,7 @@ import { PlayerPhoto } from "~/ui/player-photo";
 export function PlaceMark({ viewId, record, size = 15, muted = true }: { viewId: string; record?: RecordRef; size?: number; muted?: boolean }) {
   if (record?.kind === "team") return <TeamLogo id={record.logoId} name={record.name} size={size} />;
   if (record?.kind === "player") return <PlayerPhoto bartId={record.bartId} hasPhoto={record.hasPhoto} name={record.name} size={size + 1} />;
+  if (record?.kind === "coach") return <CoachAvatar name={record.name} team={record.team} size={size + 1} />;
   if (record?.kind === "game") {
     return (
       <span className="flex shrink-0 items-center">

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { seasonLabel } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 import { PlayerPhoto } from "~/ui/player-photo";
+import { CoachAvatar } from "~/ui/coach-avatar";
 import type { Favorite } from "./favorites";
 import { viewById } from "./views";
 
@@ -102,6 +103,8 @@ export function FavoritesSection({
                         <TeamLogo id={f.record.logoId} name={f.record.name} size={15} />
                       ) : f.record?.kind === "player" ? (
                         <PlayerPhoto bartId={f.record.bartId} hasPhoto={f.record.hasPhoto} name={f.record.name} size={16} />
+                      ) : f.record?.kind === "coach" ? (
+                        <CoachAvatar name={f.record.name} team={f.record.team} size={16} />
                       ) : f.record?.kind === "game" ? (
                         <span className="flex items-center">
                           <TeamLogo id={f.record.awayLogo} name={f.record.away} size={12} />

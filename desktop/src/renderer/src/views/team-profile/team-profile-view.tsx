@@ -1,6 +1,7 @@
 import { Calculator, GitCompareArrows, Swords, Table2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PercentileChip } from "@/components/percentile-chip";
+import { coachSlug } from "@/lib/coach-slug";
 import { ALL_SEASONS } from "@/lib/seasons";
 import type { RankedStat, StaticTeamSeasonRow } from "@/lib/static-data";
 import { teamSlug } from "@/lib/team-slug";
@@ -9,7 +10,7 @@ import { overrideTeam } from "@/lib/win-calc";
 import { loadPlayerSeason, type Player } from "~/data/player-model";
 import { logDate, useOpenGame } from "~/data/game-link";
 import { loadTeamGameSeason, type TeamGame } from "~/data/team-game-model";
-import { byCoach, coachSeasons, ncaaLabel, runLabel, teamHistory } from "~/data/team-history";
+import { byCoach, ncaaLabel, runLabel, teamHistory } from "~/data/team-history";
 import { ranksFor, shapeSeason, type Season, type Team } from "~/data/team-model";
 import { useCorpus, useLoaded } from "~/data/use-corpus";
 import { SeasonSwitcher } from "~/shell/season-switcher";
@@ -435,7 +436,7 @@ function RankRows({ stats }: { stats: RankedStat[] }) {
  * under each coach, and the ways out.
  */
 function TeamDetails({ name, year, team, onSeason }: { name: string; year: number; team: Team | null; onSeason: (y: number) => void }) {
-  const { openView } = useShell();
+  const { openView, openRecord } = useShell();
   const history = useMemo(() => teamHistory(name), [name]);
   const shown = useMemo(() => history.filter((h) => ALL_SEASONS.includes(h.year)), [history]);
   const now = history.find((h) => h.year === year) ?? null;
@@ -443,7 +444,8 @@ function TeamDetails({ name, year, team, onSeason }: { name: string; year: numbe
 
   const calc = (extra: { teams?: string[]; coaches?: string[]; years: number[] }, how: OpenHow) =>
     openView("win-calc", { query: serializeCalc({ ...DEFAULT_CALC, ...extra }), newTab: how.newTab, side: how.side });
-  const openCoach = (coach: string, how: OpenHow) => calc({ coaches: [coach], years: coachSeasons(coach) }, how);
+  const openCoach = (coach: string, how: OpenHow) =>
+    openRecord({ kind: "coach", slug: coachSlug(coach), name: coach, team: name }, { newTab: how.newTab, side: how.side });
 
   return (
     <DetailsRail label={`${name} details`}>
@@ -456,7 +458,7 @@ function TeamDetails({ name, year, team, onSeason }: { name: string; year: numbe
         )}
         <DetailRow label="Coach">
           {now ? (
-            <DetailLink title={`Every game ${now.coach}'s teams played, in the Win Calculator`} onOpen={(how) => openCoach(now.coach, how)}>
+            <DetailLink title={`Open ${now.coach}'s page  ·  Ctrl-click for a new tab`} onOpen={(how) => openCoach(now.coach, how)}>
               <span className="truncate">{now.coach}</span>
             </DetailLink>
           ) : (
@@ -475,7 +477,7 @@ function TeamDetails({ name, year, team, onSeason }: { name: string; year: numbe
               <div key={`${run.coach}:${run.seasons[0]!.year}`}>
                 <button
                   type="button"
-                  title={`Every game ${run.coach}'s teams played, in the Win Calculator  ·  Ctrl-click for a new tab`}
+                  title={`Open ${run.coach}'s page  ·  Ctrl-click for a new tab`}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={(e) => openCoach(run.coach, howOf(e))}
                   className="-mx-2 flex h-[24px] w-[calc(100%+16px)] items-center gap-2 rounded-md px-2 text-left text-[11.5px] text-ink-muted transition-colors hover:text-ink"

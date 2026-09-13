@@ -66,7 +66,7 @@ export function HighlightRow({ items }: { items: Highlight[] }) {
         <div key={h.label} title={h.title} className="rounded-lg border border-hairline bg-card px-3 pb-2.5 pt-2">
           <div className="truncate text-[11.5px] text-ink-muted">{h.label}</div>
           <div className="mt-1.5 flex items-end justify-between gap-2">
-            <span className="text-[20px] font-semibold leading-none tracking-[-0.01em] text-ink tabular">{h.value}</span>
+            <span className="whitespace-nowrap text-[20px] font-semibold leading-none tracking-[-0.01em] text-ink tabular">{h.value}</span>
             <PercentileChip pct={h.pct} neutral={h.neutral} className="min-w-[28px] px-1 py-[3px] text-[11px]" />
           </div>
         </div>

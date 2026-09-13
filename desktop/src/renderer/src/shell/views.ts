@@ -1,5 +1,6 @@
 import {
   ArrowLeftRight,
+  BookUser,
   Calculator,
   ClipboardList,
   LayoutGrid,
@@ -18,6 +19,8 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { SEASON_CEIL } from "@/lib/seasons";
+import { CoachProfileView } from "~/views/coach-profile/coach-profile-view";
+import { CoachesView } from "~/views/coaches/coaches-view";
 import { CompareView } from "~/views/compare/compare-view";
 import { ConferencesView } from "~/views/conferences/conferences-view";
 import { MatchupView } from "~/views/matchup/matchup-view";
@@ -78,7 +81,9 @@ export type RecordRef =
       home: string;
       awayLogo: number | null;
       homeLogo: number | null;
-    };
+    }
+  /** A coach, by the site's slug. `team` is the school coached, or last coached, for the mark. */
+  | { kind: "coach"; slug: string; name: string; team: string | null };
 
 export type ViewProps = {
   year: number;
@@ -155,6 +160,15 @@ export const VIEWS: ViewDef[] = [
     icon: Trophy,
     filterPlaceholder: "Filter conferences",
     Component: ConferencesView,
+  },
+  {
+    id: "coaches",
+    label: "Coaches",
+    section: "Teams",
+    icon: BookUser,
+    filterPlaceholder: "Filter coaches",
+    Component: CoachesView,
+    seasonless: true,
   },
   {
     id: "matchup",
@@ -239,6 +253,16 @@ export const VIEWS: ViewDef[] = [
     profile: "player",
   },
   {
+    id: "coach-profile",
+    label: "Coach",
+    section: "Teams",
+    icon: BookUser,
+    filterPlaceholder: "",
+    Component: CoachProfileView,
+    profile: "coach",
+    seasonless: true,
+  },
+  {
     id: "game",
     label: "Game",
     section: "Games",
@@ -255,7 +279,7 @@ export const NAV_VIEWS: ViewDef[] = VIEWS.filter((v) => !v.profile);
 export const viewById = (id: string | null | undefined): ViewDef => VIEWS.find((v) => v.id === id) ?? VIEWS[0]!;
 
 export const profileViewFor = (kind: RecordRef["kind"]): string =>
-  kind === "team" ? "team-profile" : kind === "player" ? "player-profile" : "game";
+  kind === "team" ? "team-profile" : kind === "player" ? "player-profile" : kind === "coach" ? "coach-profile" : "game";
 
 export function isRecordRef(r: unknown): r is RecordRef {
   if (typeof r !== "object" || r === null) return false;
@@ -275,6 +299,9 @@ export function isRecordRef(r: unknown): r is RecordRef {
       (o.homeLogo === null || typeof o.homeLogo === "number")
     );
   }
+  if (o.kind === "coach") {
+    return typeof o.slug === "string" && typeof o.name === "string" && (o.team === null || typeof o.team === "string");
+  }
   return false;
 }
 
@@ -283,5 +310,6 @@ export function sameRecord(a: RecordRef | undefined, b: RecordRef | undefined): 
   if (a.kind === "team" && b.kind === "team") return a.name === b.name;
   if (a.kind === "player" && b.kind === "player") return a.bartId === b.bartId;
   if (a.kind === "game" && b.kind === "game") return a.season === b.season && a.id === b.id;
+  if (a.kind === "coach" && b.kind === "coach") return a.slug === b.slug;
   return false;
 }

@@ -1,12 +1,14 @@
-import { CalendarDays, Sparkles, Swords, UserRound } from "lucide-react";
-import { ALL_SEASONS, SEASON_CEIL } from "@/lib/seasons";
+import { CalendarDays, Sparkles, Swords } from "lucide-react";
+import { ALL_SEASONS } from "@/lib/seasons";
 import { teamSlug } from "@/lib/team-slug";
+import { coachSlug } from "@/lib/coach-slug";
 import type { SearchData } from "~/data/search-model";
+import type { RecordRef } from "~/shell/views";
+import { CoachAvatar } from "~/ui/coach-avatar";
 import { seasonLabel } from "~/ui/format";
 import { normalizeText } from "~/ui/text";
 import { isKnownDay, latestDay } from "~/views/scoreboard/board-model";
 import { coachLookup } from "~/views/win-calc/calc-model";
-import { DEFAULT_CALC, serializeCalc } from "~/views/win-calc/calc-state";
 import type { PaletteItem } from "./command-palette";
 import { prepare } from "./rank";
 
@@ -154,7 +156,10 @@ export function typedItems(
  * coached, which answers "how did Bill Self's teams do" in one step. The subtitle
  * names the school a coach was last at, which is how most people place a name.
  */
-export function coachItems(openView: OpenView): PaletteItem[] {
+type OpenRecord = (record: RecordRef, how?: { newTab?: boolean; side?: boolean; year?: number }) => void;
+
+/** Every coach on record, each opening the coach's page. */
+export function coachItems(openRecord: OpenRecord): PaletteItem[] {
   const { coachByTeamYear } = coachLookup();
   const coaches = new Map<string, { years: Set<number>; schools: Set<string>; latest: { team: string; year: number } }>();
   for (const [team, byYear] of Object.entries(coachByTeamYear)) {
@@ -181,14 +186,8 @@ export function coachItems(openView: OpenView): PaletteItem[] {
       keywords: ["coach", ...c.schools],
       // Under a school or a player who matches the same way; the most recent coaches first.
       weight: 18 + c.latest.year / 100,
-      leading: <UserRound size={15} strokeWidth={2} />,
-      trailing: <span className="text-[11.5px]">Win Calculator</span>,
-      run: (how) =>
-        openView("win-calc", {
-          query: serializeCalc({ ...DEFAULT_CALC, years: years.length ? years : [SEASON_CEIL], coaches: [name] }),
-          newTab: how.newTab,
-          side: how.side,
-        }),
+      leading: <CoachAvatar name={name} team={c.latest.team} size={17} />,
+      run: (how) => openRecord({ kind: "coach", slug: coachSlug(name), name, team: c.latest.team }, { newTab: how.newTab, side: how.side }),
     };
     item.prepared = prepare(item);
     items.push(item);

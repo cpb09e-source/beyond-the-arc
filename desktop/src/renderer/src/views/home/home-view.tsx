@@ -16,6 +16,7 @@ import { seasonLabel, signed1 } from "~/ui/format";
 import { Kbd } from "~/ui/kbd";
 import { TeamLogo } from "~/ui/logo";
 import { PlayerPhoto } from "~/ui/player-photo";
+import { CoachAvatar } from "~/ui/coach-avatar";
 import { gameRecord, latestDay, nextSeasonOpener, seasonOfDate, stepGameDay, useTeamNames } from "~/views/scoreboard/board-model";
 import { GameCard } from "~/views/scoreboard/game-card";
 
@@ -341,6 +342,8 @@ function VisitCard({ v, onOpen }: { v: Visit; onOpen: (e: MouseEvent) => void })
       <TeamLogo id={r.logoId} name={r.name} size={28} />
     ) : r?.kind === "player" ? (
       <PlayerPhoto bartId={r.bartId} hasPhoto={r.hasPhoto} name={r.name} size={30} />
+    ) : r?.kind === "coach" ? (
+      <CoachAvatar name={r.name} team={r.team} size={30} />
     ) : r?.kind === "game" ? (
       <span className="flex items-center">
         <TeamLogo id={r.awayLogo} name={r.away} size={22} />
@@ -356,7 +359,11 @@ function VisitCard({ v, onOpen }: { v: Visit; onOpen: (e: MouseEvent) => void })
   const sub =
     r?.kind === "game"
       ? `Game · ${seasonLabel(r.season)}`
-      : r
+      : r?.kind === "coach"
+        ? r.team
+          ? `Coach · ${r.team}`
+          : "Coach"
+        : r
         ? `${view.label} · ${seasonLabel(v.year)}`
         : view.seasonless || view.season
           ? view.label === v.title

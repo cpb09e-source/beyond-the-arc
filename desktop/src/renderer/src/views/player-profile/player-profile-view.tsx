@@ -2,6 +2,7 @@ import { GitCompareArrows, UsersRound } from "lucide-react";
 import { useMemo, useState } from "react";
 import { PercentileChip } from "@/components/percentile-chip";
 import { TopHundredPill } from "@/components/portal/top-hundred-pill";
+import { coachSlug } from "@/lib/coach-slug";
 import { F, GAME_VIEWS, gameStat } from "@/lib/game-index";
 import { playerViewByKey } from "@/lib/player-views";
 import { logDate, useOpenGame } from "~/data/game-link";
@@ -18,7 +19,7 @@ import {
 } from "~/data/player-game-model";
 import { loadPlayerSeason, type Player, type PlayerSeason } from "~/data/player-model";
 import { loadSearchData } from "~/data/search-model";
-import { coachSeasons, ncaaLabel, teamHistory } from "~/data/team-history";
+import { ncaaLabel, teamHistory } from "~/data/team-history";
 import { useLoaded } from "~/data/use-corpus";
 import { SeasonSwitcher } from "~/shell/season-switcher";
 import { useCompare } from "~/shell/compare";
@@ -44,7 +45,6 @@ import {
 import { identityColumns, statColumns as gameStatColumns } from "~/views/player-games/player-game-columns";
 import { PlayerGamePeekBody } from "~/views/player-games/player-game-peek";
 import { playerStat } from "~/views/players/player-columns";
-import { DEFAULT_CALC, serializeCalc } from "~/views/win-calc/calc-state";
 
 /**
  * A player's page: the season at a glance, where every number on the Player
@@ -487,15 +487,11 @@ function PlayerDetails({
   onSeason: (y: number) => void;
   onTeam: (team: string, logoId: number | null, how: OpenHow) => void;
 }) {
-  const { openView } = useShell();
+  const { openRecord } = useShell();
   const history = player ? teamHistory(player.team) : [];
   const now = history.find((h) => h.year === year) ?? null;
   const openCoach = (coach: string, how: OpenHow) =>
-    openView("win-calc", {
-      query: serializeCalc({ ...DEFAULT_CALC, coaches: [coach], years: coachSeasons(coach) }),
-      newTab: how.newTab,
-      side: how.side,
-    });
+    openRecord({ kind: "coach", slug: coachSlug(coach), name: coach, team: player?.team ?? null }, { newTab: how.newTab, side: how.side });
 
   return (
     <DetailsRail label={`${name} details`}>
@@ -514,7 +510,7 @@ function PlayerDetails({
             </DetailRow>
             <DetailRow label="Coach">
               {now ? (
-                <DetailLink title={`Every game ${now.coach}'s teams played, in the Win Calculator`} onOpen={(how) => openCoach(now.coach, how)}>
+                <DetailLink title={`Open ${now.coach}'s page  ·  Ctrl-click for a new tab`} onOpen={(how) => openCoach(now.coach, how)}>
                   <span className="truncate">{now.coach}</span>
                 </DetailLink>
               ) : (

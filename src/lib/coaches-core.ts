@@ -790,7 +790,7 @@ function profilesFromSeasons(seasons: SeasonWithCoach[], _raw: RawSourceData): C
     let best_finish: TourneyRound | null = null;
     let best_depth = -1;
     for (const s of by_year) {
-      if (s.round != null && ROUND_DEPTH[s.round] > best_depth) {
+      if (s.round != null && (ROUND_DEPTH[s.round] ?? -1) > best_depth) {
         best_depth = ROUND_DEPTH[s.round]!;
         best_finish = s.round;
       }

@@ -328,7 +328,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
   const search = searchState.status === "ready" ? searchState.value : null;
   const objects = useMemo(() => (search ? objectItems(search, openRecord) : []), [search, openRecord]);
   // Every coach in the site's coach history, folded once like the objects above.
-  const coaches = useMemo(() => coachItems(openView), [openView]);
+  const coaches = useMemo(() => coachItems(openRecord), [openRecord]);
 
   const focusFilter = useCallback(() => {
     filterRef.current?.focus();
@@ -624,6 +624,15 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
         keywords: ["link", "url", "share", "copy", "website"],
         leading: <Link2 size={15} strokeWidth={2} />,
         run: () => void copyLink(`https://btacbb.xyz/players/${rec.bartId}/`),
+      });
+    } else if (rec?.kind === "coach") {
+      contextAction({
+        id: "action:record-link",
+        title: `Copy the link to ${rec.name}`,
+        subtitle: "btacbb.xyz",
+        keywords: ["link", "url", "share", "copy", "website"],
+        leading: <Link2 size={15} strokeWidth={2} />,
+        run: () => void copyLink(`https://btacbb.xyz/coaches/${rec.slug}/`),
       });
     }
     for (const w of workspaces.list) {

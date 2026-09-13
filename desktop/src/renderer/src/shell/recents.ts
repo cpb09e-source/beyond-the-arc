@@ -33,6 +33,7 @@ const placeKey = (v: { viewId: string; record?: RecordRef }): string => {
   if (!r) return `view:${v.viewId}`;
   if (r.kind === "team") return `team:${r.name}`;
   if (r.kind === "player") return `player:${r.bartId}`;
+  if (r.kind === "coach") return `coach:${r.slug}`;
   return `game:${r.season}:${r.id}`;
 };
 
