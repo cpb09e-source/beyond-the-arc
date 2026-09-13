@@ -294,9 +294,10 @@ Beyond the Arc.
   views (Everything by default, remembered).
 - **Game page:** team stats on the left and larger, one ink for both teams with
   the row winner heavier; four factors removed; Game info is its own tab.
-- **Open:** team-splits is build-only on the site (stripped from the deploy) and
-  is not on R2, so an installed app shows no team cards until
-  `public/data/team-splits/` (13 files, 23 MB) is uploaded to R2.
+- **Team splits on R2** (13 files, 23 MB, uploaded 2026-09-13 with Colin's OK):
+  the site reads them only while building, so they were never deployed; an
+  installed app reads `team-splits/<year>.json` from the public bucket.
+  `scripts/sync-data-to-r2.mjs` now includes the folder.
 
 ## Done on 2026-09-13, afternoon
 

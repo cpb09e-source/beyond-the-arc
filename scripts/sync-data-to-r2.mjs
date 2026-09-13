@@ -76,6 +76,10 @@ const ALL_DIRS = [
   "public/data/team-season-games",
   // The live season, rewritten nightly. Frequency, not count or size.
   "public/data/live",
+  // Thirteen season files the site reads only at build time (stripped from the
+  // deploy), mirrored for the desktop app's team stat cards, which have no
+  // build step to read them from.
+  "public/data/team-splits",
 ];
 
 /**
