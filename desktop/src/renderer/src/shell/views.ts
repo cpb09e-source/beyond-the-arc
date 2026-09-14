@@ -12,6 +12,7 @@ import {
   House,
   GitCompareArrows,
   Scale,
+  ScanSearch,
   Shield,
   Swords,
   Table2,
@@ -27,6 +28,7 @@ import { CoachesView } from "~/views/coaches/coaches-view";
 import { CompareView } from "~/views/compare/compare-view";
 import { ConferencesView } from "~/views/conferences/conferences-view";
 import { DifferenceView } from "~/views/difference/difference-view";
+import { FindSimilarView } from "~/views/similar/similar-view";
 import { MatchupView } from "~/views/matchup/matchup-view";
 import { PlayerGamesView } from "~/views/player-games/player-games-view";
 import { PortalView } from "~/views/portal/portal-view";
@@ -261,6 +263,15 @@ export const VIEWS: ViewDef[] = [
     icon: Scale,
     filterPlaceholder: "",
     Component: DifferenceView,
+  },
+  {
+    id: "find-similar",
+    seasonless: true,
+    label: "Find Similar",
+    section: "Tools",
+    icon: ScanSearch,
+    filterPlaceholder: "",
+    Component: FindSimilarView,
   },
   {
     id: "team-profile",

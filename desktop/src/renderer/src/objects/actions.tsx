@@ -16,6 +16,7 @@ import {
   Link2,
   ListFilter,
   Scale,
+  ScanSearch,
   Shield,
   Star,
   StarOff,
@@ -31,6 +32,7 @@ import { teamSlug } from "@/lib/team-slug";
 import { overrideTeam } from "@/lib/win-calc";
 import { coachSeasons, teamHistory } from "~/data/team-history";
 import { changedQuery, differenceQuery } from "~/explain/explain-query";
+import { similarQuery } from "~/similar/similar-query";
 import type { PaletteItem } from "~/palette/command-palette";
 import type { CompareItem } from "~/shell/compare";
 import type { Shell } from "~/shell/shell-context";
@@ -347,6 +349,22 @@ export const ACTIONS: ActionDef[] = [
       if (o.kind === "team") env.openView("difference", { ...how, query: differenceQuery({ year: o.year, name: o.name }, null) });
       else if (o.kind === "log-game") {
         env.openView("difference", { ...how, query: differenceQuery({ year: o.year, name: o.team }, { year: o.year, name: o.opp }) });
+      }
+    },
+  },
+  {
+    id: "find-similar",
+    group: "goto",
+    icon: ScanSearch,
+    label: () => "Find similar",
+    phrase: (o) => (o.kind === "player" ? `Players like ${objTitle(o)}` : `Teams like ${objTitle(o)}`),
+    short: "Similar",
+    keywords: ["similar", "like", "comps", "comparable", "lookalike", "historical", "profile", "resembles"],
+    when: (o) => o.kind === "team" || o.kind === "player",
+    run: (o, env, how) => {
+      if (o.kind === "team") env.openView("find-similar", { ...how, query: similarQuery({ kind: "team", year: o.year, team: o.name }) });
+      else if (o.kind === "player") {
+        env.openView("find-similar", { ...how, query: similarQuery({ kind: "player", year: objYear(o), player: o.bartId, name: o.name }) });
       }
     },
   },

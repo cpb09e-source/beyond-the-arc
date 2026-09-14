@@ -424,6 +424,58 @@ the Difference Explainer, What Changed, research history capture, and export.
   `team: Duke ts>60` (3), `pts>=40` (42 player games); Tab, ↓ and Enter, Esc,
   and the unknown-stat message.
 
+## Done on 2026-09-13, late night
+
+- **The tables work as the site's pages do.** Team Explorer, Player Explorer
+  and both game logs have:
+  - the site's column views with their band captions: fourteen for teams,
+    twelve for players, seven and five on the game logs;
+  - Team, Conference, Class, Position and Opponent pickers, several names at once;
+  - "Add a filter" rows (stat, comparison, value, with the season's typical
+    range as the placeholder) and an "Add columns" picker, grouped and
+    searchable. A stat filtered on or added leads the table under "Your
+    columns", as on the site;
+  - Save view: a favorite that keeps the filter, the view and the added columns;
+  - Download: Excel workbook (formatted, percentile colors, an About sheet),
+    Excel with one tab per chosen view, raw CSV, and Copy for a spreadsheet.
+    The same builders as the site, so the same files, through a Save dialog and
+    then Show in folder. Conference Power Rankings has Download too.
+- **Still words underneath.** Every picker and row writes the filter box
+  (`conf: SEC wab>=3`), and typing the words redraws them. A tab keeps its view
+  and added columns beside its query, through Alt+Left, favorites and restarts
+  (`desktop/src/renderer/src/shell/table-layout.ts`). New words: `class: Fr, So`,
+  `pos: G`, and several conferences in one `conf:`.
+- **The Player Explorer's extended stats** (the site's stat packs: a hundred more
+  numbers in ten group files) load through a new `player-stats` corpus when a
+  view or a filter needs them.
+- **Moved on the site, unchanged.** The Team Explorer's columns, the Player
+  Explorer's grid, and the game-log and conference export descriptors now live
+  in `src/lib` (`team-explorer-columns.ts`, `player-explorer-columns.ts`,
+  `game-log-export.ts`, `conference-export.ts`), and the site imports them, so
+  both apps build from one copy. The site typechecks. Nothing it shows changed,
+  so it can ride along with the next deploy.
+- **Find Similar** (Tools, or Go to › Find similar on any team or player): the
+  team-seasons (4,620) or player-seasons (31,959) since 2013-14 whose numbers look
+  most like one, each number measured as it stood in its own season.
+  - Match on Overall, Style, Offense or Defense for teams; Overall, Role,
+    Scoring or Impact for players. Every season, other seasons, or the same one.
+  - The chosen row leads the table, "Most alike in" and "Differs most" say why,
+    and Peek sets the two side by side, stat by stat.
+  - Withheld ratings are left out rather than guessed, and 2020-21 is tagged.
+  - Houston 2025-26's closest is Houston 2024-25 (78). Cameron Boozer's is Riley
+    Minix 2023-24, then Dylan Windler and Cooper Flagg.
+  - `desktop/src/renderer/src/similar/` holds the model; the rarity detector
+    should build on it.
+- Development only: `BTA_EXPORT_DIR` writes a download there with no dialog, for
+  scripted checks, as `BTA_CDP_PORT` opens the debugging port. A change to the
+  main process needs the dev app restarted; electron-vite does not reload it.
+- Verified over CDP with no errors: views and bands, `wab>=3` (35 teams) and
+  `conf: SEC` (6), Add columns, Save view, three real files (a CSV of 6 rows with
+  its Pctl columns, a workbook, a 13-tab workbook), the stat packs
+  (`class: Fr pts>=500`, 30 players), the Opponent picker (38 games against
+  Duke), Find Similar for a team and a player with both pickers, Peek, and the
+  row menu.
+
 ## What still has to happen
 
 **To put the desktop app in people's hands (in order):**
