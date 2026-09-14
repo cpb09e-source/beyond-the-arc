@@ -35,9 +35,11 @@ signed is the one that is published.
    **Done 2026-09-14** (318a692046, fc79bf5816): verify passes, smoke suite 75 of 75.
 2. A local installer build, installed the way a subscriber installs it. **Built 2026-09-14**:
    `desktop/release/Beyond-the-Arc-Setup-0.1.1.exe`, rebuilt from f5712416c8 (several seasons in the explorers,
-   named Save view, folding rail), unsigned, SHA256 74CF4951…1521F2. Installing it is Colin's.
+   named Save view, folding rail), unsigned, SHA256 74CF4951…1521F2. **Installed and tested by Colin
+   2026-09-14.**
 3. Sign-in end to end: admin@btacbb.xyz, premium@btacbb.xyz, and a free account, which must get
-   the Season Pass screen.
+   the Season Pass screen. **Passed 2026-09-14** (free test account: free@btacbb.xyz), along with
+   several seasons, Save view and the folding rail.
 4. Sources and terms review (`docs/TODO-legal-sources.md`), sharper now that exports hand out
    derived datasets.
 5. Research history as a versioned event log (ids, season, action, filters, table layout), so
@@ -46,7 +48,8 @@ signed is the one that is published.
 7. Find Similar's score explains itself: where the points went, stat by stat.
    **5 to 7 done 2026-09-14** (fc79bf5816, 81e6135772). Step 4's findings are in §8 of the legal doc,
    waiting on Colin's decisions.
-8. Build and test the 0.1.1 release candidate.
+8. Build and test the 0.1.1 release candidate. **Done 2026-09-14**: smoke 93 of 93, installed and
+   tested by Colin.
 9. Code-sign that exact candidate; verify the signed installer and the 0.1.0 to 0.1.1 update.
 10. Publish 0.1.1 (Colin's go; it writes to R2).
 
