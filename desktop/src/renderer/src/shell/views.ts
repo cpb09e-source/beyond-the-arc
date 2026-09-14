@@ -29,6 +29,7 @@ import { CompareView } from "~/views/compare/compare-view";
 import { ConferencesView } from "~/views/conferences/conferences-view";
 import { DifferenceView } from "~/views/difference/difference-view";
 import { FindSimilarView } from "~/views/similar/similar-view";
+import { parseSimilarQuery, similarQuery } from "~/similar/similar-query";
 import { MatchupView } from "~/views/matchup/matchup-view";
 import { PlayerGamesView } from "~/views/player-games/player-games-view";
 import { PortalView } from "~/views/portal/portal-view";
@@ -131,6 +132,24 @@ export type ViewDef = {
    * does not offer to step one.
    */
   seasonless?: boolean;
+  /**
+   * Set on a view the sidebar lists more than once, each entry opening it a
+   * particular way: Find Similar under Teams opens on teams, under Players on
+   * players. `isCurrent` says which entry a tab on the view is.
+   */
+  nav?: { section: ViewDef["section"]; query: string; isCurrent: (query: string) => boolean }[];
+};
+
+/** One row in the sidebar and in the palette's Go to: a view, sometimes opened a particular way. */
+export type NavEntry = {
+  key: string;
+  viewId: string;
+  label: string;
+  section: ViewDef["section"];
+  icon: LucideIcon;
+  /** The query this entry opens its view with. Undefined for a view listed once. */
+  query?: string;
+  isCurrent: (viewId: string, query: string) => boolean;
 };
 
 export const VIEWS: ViewDef[] = [
@@ -269,10 +288,15 @@ export const VIEWS: ViewDef[] = [
     id: "find-similar",
     seasonless: true,
     label: "Find Similar",
-    section: "Tools",
+    section: "Teams",
     icon: ScanSearch,
     filterPlaceholder: "",
     Component: FindSimilarView,
+    // Listed under Teams and under Players, each opening on its own kind.
+    nav: [
+      { section: "Teams", query: similarQuery({ kind: "team" }), isCurrent: (q) => parseSimilarQuery(q).kind === "team" },
+      { section: "Players", query: similarQuery({ kind: "player" }), isCurrent: (q) => parseSimilarQuery(q).kind === "player" },
+    ],
   },
   {
     id: "team-profile",
@@ -315,6 +339,21 @@ export const VIEWS: ViewDef[] = [
 
 /** What the sidebar and the palette's "Go to" list: every view but the profiles. */
 export const NAV_VIEWS: ViewDef[] = VIEWS.filter((v) => !v.profile);
+
+/** The rows of the sidebar and the palette's Go to, in order: a view listed twice appears in each of its sections. */
+export const NAV_ENTRIES: NavEntry[] = NAV_VIEWS.flatMap((v): NavEntry[] =>
+  v.nav
+    ? v.nav.map((n) => ({
+        key: `${v.id}:${n.section}`,
+        viewId: v.id,
+        label: v.label,
+        section: n.section,
+        icon: v.icon,
+        query: n.query,
+        isCurrent: (viewId, query) => viewId === v.id && n.isCurrent(query),
+      }))
+    : [{ key: v.id, viewId: v.id, label: v.label, section: v.section, icon: v.icon, isCurrent: (viewId) => viewId === v.id }],
+);
 
 export const viewById = (id: string | null | undefined): ViewDef => VIEWS.find((v) => v.id === id) ?? VIEWS[0]!;
 

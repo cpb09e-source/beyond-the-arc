@@ -54,7 +54,7 @@ import { signalOnboarding } from "~/shell/onboarding";
 import { SplitDivider } from "~/shell/split-divider";
 import { TabStrip } from "~/shell/tab-strip";
 import { TabTitleContext } from "~/shell/tab-title";
-import { NAV_VIEWS, profileViewFor, sameRecord, viewById, type FocusRequest, type FocusTarget, type RecordRef } from "~/shell/views";
+import { NAV_ENTRIES, profileViewFor, sameRecord, viewById, type FocusRequest, type FocusTarget, type RecordRef } from "~/shell/views";
 import { Welcome } from "~/shell/welcome";
 import { useWorkspace, type Tab } from "~/shell/workspace";
 import { useWorkspaces } from "~/shell/workspaces";
@@ -228,12 +228,12 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
   }, [compare.items]);
 
   const navigate = useCallback(
-    (viewId: string, newTab: boolean) => {
+    (viewId: string, newTab: boolean, entryQuery?: string) => {
       const tab = currentRef.current;
       // Going to Compare with a full tray means comparing the tray; an empty
       // Compare tab would only tell the reader how to fill it.
       const tray = trayRef.current;
-      const query = viewId === "compare" && tray.length > 1 && tab.viewId !== "compare" ? compareQuery(tray) : undefined;
+      const query = entryQuery ?? (viewId === "compare" && tray.length > 1 && tab.viewId !== "compare" ? compareQuery(tray) : undefined);
       dispatch(newTab ? { type: "open", viewId, year: tab.year, query } : { type: "navigate", viewId, query });
     },
     [dispatch],
@@ -686,19 +686,21 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     const currentMark = <Check size={14} strokeWidth={2.25} className="text-accent" />;
     const items: PaletteItem[] = [];
 
-    for (const v of NAV_VIEWS) {
-      const Icon = v.icon;
+    for (const e of NAV_ENTRIES) {
+      const Icon = e.icon;
+      const here = e.isCurrent(view.id, current.query);
       items.push({
-        id: `view:${v.id}`,
+        id: `view:${e.key}`,
         group: "views",
-        title: v.label,
-        subtitle: v.section,
+        title: e.label,
+        subtitle: e.section,
         keywords: ["open", "go"],
         // Places in the app come before anything named like them.
         weight: 40,
         leading: <Icon size={15} strokeWidth={2} />,
-        trailing: v.id === view.id ? currentMark : undefined,
-        run: (how) => navigate(v.id, how.newTab),
+        trailing: here ? currentMark : undefined,
+        // Already on this entry: leave the tab as it is rather than starting it over.
+        run: (how) => navigate(e.viewId, how.newTab, how.newTab || !here ? e.query : undefined),
       });
     }
 
@@ -1120,6 +1122,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
               width={sidebarWidth}
               onResize={setSidebarWidth}
               currentViewId={current.viewId}
+              currentQuery={current.query}
               onNavigate={navigate}
               onOpenSearch={() => setPaletteOpen(true)}
               onOpenShortcuts={() => setShortcutsOpen(true)}

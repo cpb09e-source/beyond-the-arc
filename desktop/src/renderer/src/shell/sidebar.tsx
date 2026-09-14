@@ -28,7 +28,7 @@ import { accountInitials, useAccount } from "./account";
 import type { Favorite } from "./favorites";
 import { FavoritesSection } from "./favorites-section";
 import { GetStarted } from "./onboarding";
-import { NAV_VIEWS, type ViewDef } from "./views";
+import { NAV_ENTRIES, type NavEntry } from "./views";
 import type { Workspaces } from "./workspaces";
 
 /**
@@ -53,6 +53,7 @@ export function Sidebar({
   width,
   onResize,
   currentViewId,
+  currentQuery,
   onNavigate,
   onOpenSearch,
   onOpenShortcuts,
@@ -71,7 +72,10 @@ export function Sidebar({
   width: number;
   onResize: (w: number) => void;
   currentViewId: string;
-  onNavigate: (viewId: string, newTab: boolean) => void;
+  /** The tab's query, which says which entry a view listed twice (Find Similar) is. */
+  currentQuery: string;
+  /** `query` is set when an entry opens its view a particular way. */
+  onNavigate: (viewId: string, newTab: boolean, query?: string) => void;
   onOpenSearch: () => void;
   onOpenShortcuts: () => void;
   theme: ThemeMode;
@@ -94,11 +98,11 @@ export function Sidebar({
     (v): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string"),
   );
 
-  const sections: Array<[string, ViewDef[]]> = [];
-  for (const v of NAV_VIEWS) {
-    const group = sections.find(([s]) => s === v.section);
-    if (group) group[1].push(v);
-    else sections.push([v.section, [v]]);
+  const sections: Array<[string, NavEntry[]]> = [];
+  for (const e of NAV_ENTRIES) {
+    const group = sections.find(([s]) => s === e.section);
+    if (group) group[1].push(e);
+    else sections.push([e.section, [e]]);
   }
 
   return (
@@ -158,10 +162,12 @@ export function Sidebar({
               {!isFolded && (
                 <ul className="grid gap-px">
                   {views.map((v) => {
-                    const active = v.id === currentViewId;
+                    const active = v.isCurrent(currentViewId, currentQuery);
                     const Icon = v.icon;
+                    // Already on this entry: a click leaves the tab as it is rather than starting it over.
+                    const open = (newTab: boolean) => onNavigate(v.viewId, newTab, newTab || !active ? v.query : undefined);
                     return (
-                      <li key={v.id}>
+                      <li key={v.key}>
                         <button
                           type="button"
                           aria-current={active ? "page" : undefined}
@@ -169,9 +175,9 @@ export function Sidebar({
                           onMouseDown={(e) => {
                             e.preventDefault();
                           }}
-                          onClick={(e) => onNavigate(v.id, e.ctrlKey || e.metaKey)}
+                          onClick={(e) => open(e.ctrlKey || e.metaKey)}
                           onAuxClick={(e) => {
-                            if (e.button === 1) onNavigate(v.id, true);
+                            if (e.button === 1) open(true);
                           }}
                           className={`flex h-[28px] w-full items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors ${
                             active

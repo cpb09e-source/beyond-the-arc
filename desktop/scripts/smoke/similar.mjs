@@ -3,7 +3,9 @@
  * into where its points went, Peek's side by side, the profile and season
  * pickers, and (with --full) Cameron Boozer against every player-season.
  */
-import { SECTION, sleep } from "./cdp.mjs";
+import { readFileSync, readdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { POPOVER, SECTION, sleep } from "./cdp.mjs";
 
 const summary = (app) => app.js(`[...${SECTION}.querySelectorAll('section p')].map((p) => p.innerText).find((x) => /Closest:|Reading every season|Nothing in these seasons/.test(x)) ?? null`);
 const ready = (app, ms) => app.waitFor(`!!${SECTION}.querySelector('[role=grid] [role=row]') && !/Reading every season/.test(${SECTION}.innerText)`, ms, 700);
@@ -11,7 +13,7 @@ const ready = (app, ms) => app.waitFor(`!!${SECTION}.querySelector('[role=grid] 
 /** Opens the chooser (it opens by itself only on an empty Find Similar) and picks by typing. */
 async function choose(app, text) {
   if (!(await app.js(`!!document.querySelector('body > div[role=dialog]')`))) {
-    await app.js(`[...${SECTION}.querySelectorAll('section')].find((s) => /Teams like|Players like/.test(s.innerText))?.querySelector('button')?.click(); true`);
+    await app.js(`[...${SECTION}.querySelectorAll('section')].find((s) => /teams like|players like/i.test(s.innerText))?.querySelector('button')?.click(); true`);
     await sleep(500);
   }
   await app.type(text, 900);
@@ -65,6 +67,55 @@ export default async function similar(app, t) {
   t.check("Other seasons leaves 2025-26 out", others.slice(1).every((r) => !/2025-26/.test(r)), others);
   await app.pick("Seasons", "Every season", 800);
 
+  // Download writes the chosen team and its matches.
+  if (t.exportsDir) {
+    for (const f of readdirSync(t.exportsDir)) rmSync(join(t.exportsDir, f));
+    await app.press("Download");
+    await app.press("CSV", POPOVER);
+    const until = Date.now() + 30_000;
+    let files = readdirSync(t.exportsDir);
+    while (!files.length && Date.now() < until) {
+      await sleep(400);
+      files = readdirSync(t.exportsDir);
+    }
+    const csv = files.find((f) => f.endsWith(".csv"));
+    const lines = csv ? readFileSync(join(t.exportsDir, csv), "utf8").split(/\r?\n/).filter(Boolean) : [];
+    t.check("Download writes Houston and its 50 matches", lines.length - 1 === 51, lines.length - 1);
+    t.check("the file is named for similar teams", /^bta-similar-teams-/.test(csv ?? ""), csv);
+  }
+
+  // Save keeps Houston; the saved list runs it again from another team, and takes it back out.
+  const saveButton = `[...${SECTION}.querySelectorAll('header button[aria-haspopup=dialog]')].find((b) => /^Saved?/.test(b.textContent.trim()))`;
+  const savedCount = () => app.js(`JSON.parse(localStorage.getItem('bta.similar.saved') ?? '[]').length`);
+  const before = await savedCount();
+  await app.js(`${saveButton}?.click(); true`);
+  await sleep(500);
+  t.check("Save offers to keep Houston 2025-26", await app.press("Save Houston 2025-26", POPOVER));
+  const label = await app.js(`${saveButton}?.textContent.trim() ?? ''`);
+  t.check("the button reads Saved", /^Saved/.test(label ?? ""), label);
+  await app.shot("similar-saved");
+  // Its own button closes it; the header's middle can hold a picker once Save and Download wrap it.
+  await app.js(`${saveButton}?.click(); true`);
+  await sleep(400);
+  t.check("the saved list closes", !(await app.js(`!!${POPOVER}`)));
+  await choose(app, "Duke");
+  await sleep(800);
+  t.check("another team draws its matches", (await ready(app, 60_000)) && (await app.rowsText(2)).some((r) => /Duke/.test(r)));
+  await app.js(`${saveButton}?.click(); true`);
+  await sleep(500);
+  await app.type("Houston", 600);
+  await app.key("Enter");
+  await sleep(800);
+  await ready(app, 60_000);
+  const again = await summary(app);
+  t.check("picking the saved Houston runs it again", /Closest: Houston 2024-25, a 78/.test(again ?? ""), again);
+  await app.js(`${saveButton}?.click(); true`);
+  await sleep(500);
+  t.check("Remove is offered for Houston", await app.press("Remove Houston 2025-26", POPOVER));
+  await app.js(`${saveButton}?.click(); true`);
+  await sleep(400);
+  t.check("Remove takes it back out of saved", (await savedCount()) === before, await savedCount());
+
   if (t.full) {
     await app.pick("Find", "Players", 800);
     await choose(app, "Cameron Boozer");
@@ -73,5 +124,20 @@ export default async function similar(app, t) {
     t.check("Minix is among Boozer's closest", players.some((r) => /Minix/.test(r)), players);
     await app.pick("Find", "Teams", 800);
   }
+
+  // The sidebar lists Find Similar under Teams and under Players, each opening on its own kind.
+  const entry = (section) =>
+    `[...document.querySelectorAll('nav[aria-label=Workspace] ul')].find((u) => u.previousElementSibling?.textContent.trim() === ${JSON.stringify(section)})?.querySelector('li button[title^="Find Similar"]')`;
+  const findLabel = () => app.js(`${SECTION}.querySelector('header button[aria-label^="Find,"]')?.getAttribute('aria-label') ?? ''`);
+  t.check("Find Similar is listed under Teams and Players", await app.js(`!!${entry("Teams")} && !!${entry("Players")}`));
+  await app.js(`${entry("Players")}?.click(); true`);
+  await sleep(900);
+  const asPlayers = await findLabel();
+  t.check("under Players it opens on players", /Players/.test(asPlayers), asPlayers);
+  t.check("the Players entry is the one lit", await app.js(`${entry("Players")}?.getAttribute('aria-current') === 'page' && ${entry("Teams")}?.getAttribute('aria-current') !== 'page'`));
+  await app.js(`${entry("Teams")}?.click(); true`);
+  await sleep(900);
+  const asTeams = await findLabel();
+  t.check("under Teams it opens on teams", /Teams/.test(asTeams), asTeams);
   await app.nav("Team Explorer");
 }

@@ -189,7 +189,7 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
             actions={
               <>
                 <SeasonSwitcher year={year} onChange={setYear} />
-                <RecordActions obj={playerObj} primary={["explorer", "compare", "snapshot"]} />
+                <RecordActions obj={playerObj} primary={["explorer", "find-similar", "compare", "snapshot"]} />
               </>
             }
           />

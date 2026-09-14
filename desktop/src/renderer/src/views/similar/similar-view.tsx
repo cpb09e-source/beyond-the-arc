@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { ALL_SEASONS, FLAGGED_SEASONS } from "@/lib/seasons";
+import { exportFields, type ExportEntity, type ExportInput } from "@/lib/table-export";
 import { loadPlayerSeason, type Player } from "~/data/player-model";
 import type { Team } from "~/data/team-model";
 import { useLoaded } from "~/data/use-corpus";
@@ -13,15 +14,18 @@ import { TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
 import { alikeAndApart, findSimilar, printFeature, scoreBreakdown, seasonScales, wholePoints, type Candidate, type Feature, type Match, type Profile } from "~/similar/similar-model";
 import { PLAYER_FEATURES, PLAYER_PROFILES, TEAM_FEATURES, TEAM_PROFILES, playerPct, teamPct } from "~/similar/similar-profiles";
+import type { SavedSubject, SubjectRef } from "~/similar/saved-similar";
 import { parseSimilarQuery, similarQuery, type SimilarQuery, type SimilarScope } from "~/similar/similar-query";
 import { usePlayerPool, useTeamPool, type Pool } from "~/similar/use-similar-pool";
 import { DataTable, type Column } from "~/table/data-table";
+import { DownloadMenu } from "~/table/download-menu";
 import { StatCell } from "~/table/stat-cell";
 import { seasonLabel } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 import { ClassBadge, PlayerPhoto } from "~/ui/player-photo";
 import { Popover } from "~/ui/popover";
 import { SearchList, type ListItem } from "~/ui/search-list";
+import { SavedSubjectsButton } from "./saved-subjects";
 import { ScoreButton } from "./score-breakdown";
 
 /**
@@ -147,6 +151,99 @@ function resultColumns<R>(
 }
 
 /** The two side by side, stat by stat, with how far apart each one stood in its season. */
+/** A saved team or player, run again: the profile and seasons stay when it is the same kind. */
+const runSaved = (q: SimilarQuery, write: (next: Partial<SimilarQuery>) => void) => (s: SavedSubject) =>
+  write(
+    s.kind === "team"
+      ? { kind: "team", year: s.year, team: s.name, on: q.kind === "team" ? q.on : "overall" }
+      : { kind: "player", year: s.year, player: s.bartId, name: s.name, on: q.kind === "player" ? q.on : "overall" },
+  );
+
+type ExportWho<R> = { title: string; header: string; stem: string; identity: ExportEntity<SRow<R>>["identity"] };
+
+/**
+ * Download: the chosen row and its matches, through the site's own builders. The
+ * profile's stats are the columns, each with its percentile in its own season,
+ * led by the season, the match score, and what each match is most alike and
+ * furthest apart in.
+ */
+function similarExport<R>(
+  rows: SRow<R>[],
+  profile: Profile<R>,
+  pctOf: (r: R, key: string) => number | null,
+  who: ExportWho<R>,
+  scope: SimilarScope,
+): ExportInput<SRow<R>> {
+  const byKey = new Map(profile.features.map((f) => [f.key, f]));
+  return {
+    rows,
+    cols: profile.features.map(
+      (f): ExportInput<SRow<R>>["cols"][number] => ({
+        label: f.label,
+        total: f.key,
+        pct: f.key,
+        fmt: f.digits === 0 ? "int" : f.pct ? "pct1" : "num1",
+        band: `${profile.label} profile`,
+      }),
+    ),
+    entity: {
+      title: who.title,
+      sheetName: "Find Similar",
+      identity: [
+        ...who.identity,
+        { header: "Season", get: (r) => seasonLabel(r.c.year) },
+        { header: "Match", get: (r) => (r.m ? Math.round(r.m.score) : "Chosen") },
+        { header: "Most alike in", width: 28, get: (r) => (r.m ? alikeAndApart(r.m).alike.join(", ") : null) },
+        {
+          header: "Differs most",
+          width: 30,
+          get: (r) => {
+            const a = r.m ? alikeAndApart(r.m).apart : null;
+            return a ? `${a.label}: ${a.word}` : null;
+          },
+        },
+      ],
+      num: (r, key) => byKey.get(key)?.get(r.c.row) ?? null,
+      pctOf: (r, key) => pctOf(r.c.row, key),
+      wideHeader: who.header,
+      fileStem: who.stem,
+    },
+    meta: {
+      viewLabel: `${profile.label} match`,
+      seasons: SCOPES.find((s) => s.key === scope)?.label ?? "Every season",
+      conference: "All",
+      teams: who.title,
+      filters: [],
+      sort: "Match, closest first",
+      search: "",
+      url: "Beyond the Arc for Windows, Find Similar",
+    },
+  };
+}
+
+/** Save and Download, top right: the saved teams and players, and this table as a file. */
+function Actions<R>({
+  q,
+  write,
+  current,
+  ready,
+  build,
+}: {
+  q: SimilarQuery;
+  write: (next: Partial<SimilarQuery>) => void;
+  current: SubjectRef | null;
+  ready: boolean;
+  build: () => ExportInput<SRow<R>>;
+}) {
+  const input = build();
+  return (
+    <>
+      <SavedSubjectsButton current={current} onPick={runSaved(q, write)} />
+      <DownloadMenu rows={ready ? input.rows.length : 0} columns={exportFields(input.cols, input.entity).length} buildExport={build} />
+    </>
+  );
+}
+
 function ComparePeek<R>({ m, profile, chosen, other }: { m: Match<R> | null; profile: Profile<R>; chosen: string; other: string }) {
   if (!m) return <p className="px-4 py-3 text-[12.5px] leading-relaxed text-ink-muted">The one every row below is compared with.</p>;
   const parts = new Map(m.parts.map((p) => [p.f.key, p]));
@@ -285,6 +382,7 @@ function Layout<R>({
   subject,
   note,
   table,
+  actions,
 }: {
   q: SimilarQuery;
   write: (next: Partial<SimilarQuery>) => void;
@@ -297,6 +395,7 @@ function Layout<R>({
   subject: Candidate<R> | null;
   note: string | null;
   table: ReactNode;
+  actions: ReactNode;
 }) {
   const loading = pool.done < pool.total;
   const top = matches[0];
@@ -311,7 +410,7 @@ function Layout<R>({
   return (
     <>
       <ViewHeader
-        kicker="Tools"
+        kicker={q.kind === "team" ? "Teams" : "Players"}
         title="Find Similar"
         year={q.year ?? ALL_SEASONS[0]!}
         season={false}
@@ -323,6 +422,7 @@ function Layout<R>({
             <Picker label="Seasons" value={q.scope} options={SCOPES} onChange={(k) => write({ scope: k as SimilarScope })} />
           </>
         }
+        actions={actions}
       />
       <section className="flex shrink-0 flex-wrap items-end gap-x-8 gap-y-2 border-t border-hairline px-5 pb-3.5 pt-3">
         <div className="min-w-0">
@@ -390,6 +490,23 @@ function TeamSimilar({ q, write, fallbackYear }: { q: SimilarQuery; write: (next
   const rows = useMemo<SRow<Team>[]>(() => (subject ? [{ key: subject.id, c: subject, m: null }, ...matches.map((m) => ({ key: m.c.id, c: m.c, m }))] : []), [subject, matches]);
   const columns = useMemo(() => resultColumns(TEAM_IDENTITY, profile, teamPct, teamShort, subject), [profile, subject]);
   useTabTitle(q.team ? `Teams like ${q.team} ${seasonLabel(year)}` : "Find Similar");
+  const current: SubjectRef | null = subject ? { kind: "team", year: subject.year, name: subject.row.name, logoId: subject.row.logoId } : null;
+  const buildExport = () =>
+    similarExport(
+      rows,
+      profile,
+      teamPct,
+      {
+        title: subject ? `Teams like ${subject.row.name} ${seasonLabel(subject.year)}` : "Find Similar",
+        header: "Team",
+        stem: "similar-teams",
+        identity: [
+          { header: "Team", width: 24, get: (r) => r.c.row.name },
+          { header: "W-L", get: (r) => `${r.c.row.wins}-${r.c.row.losses}` },
+        ],
+      },
+      q.scope,
+    );
 
   const withheld = subject && subject.row.explorer?.a_ortg == null;
   const note = !subject
@@ -407,6 +524,7 @@ function TeamSimilar({ q, write, fallbackYear }: { q: SimilarQuery; write: (next
       profiles={TEAM_PROFILES}
       pool={pool}
       noun="team-seasons"
+      actions={<Actions q={q} write={write} current={current} ready={complete && subject != null} build={buildExport} />}
       subject={subject}
       matches={matches}
       note={note}
@@ -487,6 +605,26 @@ function PlayerSimilar({ q, write, fallbackYear }: { q: SimilarQuery; write: (ne
   const columns = useMemo(() => resultColumns(PLAYER_IDENTITY, profile, playerPct, playerShort, subject), [profile, subject]);
   const name = subject?.row.name ?? q.name;
   useTabTitle(name ? `Players like ${name} ${seasonLabel(year)}` : "Find Similar");
+  const current: SubjectRef | null =
+    subject && subject.row.bartId != null
+      ? { kind: "player", year: subject.year, bartId: subject.row.bartId, name: subject.row.name, team: subject.row.team, hasPhoto: subject.row.hasPhoto }
+      : null;
+  const buildExport = () =>
+    similarExport(
+      rows,
+      profile,
+      playerPct,
+      {
+        title: subject ? `Players like ${subject.row.name} ${seasonLabel(subject.year)}` : "Find Similar",
+        header: "Player",
+        stem: "similar-players",
+        identity: [
+          { header: "Player", width: 24, get: (r) => r.c.row.name },
+          { header: "Team", width: 22, get: (r) => r.c.row.team },
+        ],
+      },
+      q.scope,
+    );
 
   const note =
     subject && complete && q.player != null && !pool.rows.some((c) => c.year === year && c.row.bartId === q.player)
@@ -504,6 +642,7 @@ function PlayerSimilar({ q, write, fallbackYear }: { q: SimilarQuery; write: (ne
       profiles={PLAYER_PROFILES}
       pool={pool}
       noun="player-seasons"
+      actions={<Actions q={q} write={write} current={current} ready={complete && subject != null} build={buildExport} />}
       subject={subject}
       matches={matches}
       note={note}
