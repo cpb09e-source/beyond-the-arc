@@ -1,3 +1,4 @@
+import type { TableLayout } from "./table-layout";
 import {
   ArrowLeftRight,
   BookUser,
@@ -99,6 +100,12 @@ export type ViewProps = {
   onLanded: (nonce: number) => void;
   /** The object a profile is about. Undefined for every table view. */
   record?: RecordRef;
+  /** This tab's table layout: its column view and the stats added as columns (./table-layout.ts). */
+  table: TableLayout;
+  setTable: (table: TableLayout) => void;
+  /** Whether this tab, as it stands, is a favorite; and starring it under a name. */
+  saved: boolean;
+  toggleSaved: (label: string) => void;
 };
 
 export type ViewDef = {

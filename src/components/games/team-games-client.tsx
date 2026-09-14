@@ -34,8 +34,8 @@ import { effectiveGameLogAccess, FREE_LIMITS } from "@/lib/access";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { teamSlug } from "@/lib/team-slug";
-import type { ExportCol, ExportEntity, ExportInput, MultiExportInput } from "@/lib/table-export";
-import { EXPORT_ORIGIN } from "@/lib/table-export";
+import type { ExportCol, ExportInput, MultiExportInput } from "@/lib/table-export";
+import { teamGameExportCols, teamGameExportEntity } from "@/lib/game-log-export";
 import {
   HOME, NEUTRAL, T, TEAM_GAME_GROUP_LABEL, TEAM_GAME_PICK_OPTIONS,
   TEAM_GAME_PRESETS, TEAM_GAME_SEASONS, TEAM_GAME_STATS, TEAM_GAME_STAT_BY_KEY,
@@ -460,41 +460,10 @@ export function TeamGamesClient({ scope }: { scope?: TeamGamesScope } = {}) {
   }, [router, base, stripScopeKeys]);
 
   // ── Export ───────────────────────────────────────────────────────────────
-  const exportEntity = useMemo((): ExportEntity<Hit> => ({
-    title: "Team Game Log Explorer",
-    sheetName: "Team games",
-    wideHeader: "Team",
-    // The scoped download is one team's season, so it says so in the filename
-    // rather than landing in the reader's downloads folder as the fourth
-    // "team-game-log.xlsx". The Team and Season columns stay in the sheet even
-    // though every row repeats them — a spreadsheet that has left this site
-    // cannot rely on the page it came from to say what it is.
-    fileStem: scope ? `${scope.slug}-${scope.season}-game-log` : "team-game-log",
-    identity: [
-      {
-        header: "Team", width: 20, get: (h) => h.pack.teams.names[h.row[T.t]!] ?? "—",
-        href: (h) => {
-          const t = h.pack.teams.names[h.row[T.t]!];
-          return t ? `${EXPORT_ORIGIN}/teams/${teamSlug(t)}/${h.pack.season}/` : null;
-        },
-      },
-      { header: "Conf", get: (h) => h.pack.teams.confs[h.row[T.t]!] ?? "" },
-      { header: "Season", get: (h) => seasonLabel(h.pack.season) },
-      { header: "Date", get: (h) => fmtTeamGameDate(h.pack, h.row) },
-      {
-        header: "Opponent", width: 20, get: (h) => h.pack.opps[h.row[T.o]!] ?? "—",
-        href: (h) => {
-          const o = h.pack.opps[h.row[T.o]!];
-          return o ? `${EXPORT_ORIGIN}/teams/${teamSlug(o)}/${h.pack.season}/` : null;
-        },
-      },
-      { header: "Site", get: (h) => (h.row[T.f]! & NEUTRAL ? "N" : h.row[T.f]! & HOME ? "H" : "A") },
-      { header: "Result", get: (h) => (h.row[T.f]! & WON ? "W" : "L") },
-      { header: "Score", get: (h) => `${h.row[T.pts]}-${h.row[T.pa]}` },
-    ],
-    num: (h, key) => teamGameStat(key)?.get(h.row) ?? null,
-    pctOf: () => null,
-  }), [scope]);
+  const exportEntity = useMemo(
+    () => teamGameExportEntity<Hit>(scope ? `${scope.slug}-${scope.season}-game-log` : "team-game-log"),
+    [scope],
+  );
 
   /**
    * Export columns for ANY view, with the reader's pins leading.
@@ -503,22 +472,7 @@ export function TeamGamesClient({ scope }: { scope?: TeamGamesScope } = {}) {
    * does it, so a download of every view shows a pinned stat once per sheet
    * rather than twice on the sheets that already carry it.
    */
-  const exportColsFor = useCallback((v: TeamGameView): ExportCol[] => {
-    const toCol = (s: NonNullable<ReturnType<typeof teamGameStat>>, band: string): ExportCol => ({
-      label: s.label, total: s.key, pct: "",
-      fmt: s.fmt === "pct1" ? "pct1" : s.fmt === "int" ? "int" : "num1",
-      band,
-    });
-    const pinned = scoped.cols
-      .filter((k) => !v.keys.includes(k))
-      .map((k) => teamGameStat(k))
-      .filter((x): x is NonNullable<typeof x> => !!x)
-      .map((x) => toCol(x, "Your columns"));
-    const own = v.keys.map((k) => teamGameStat(k))
-      .filter((x): x is NonNullable<typeof x> => !!x)
-      .map((x) => toCol(x, v.label));
-    return [...pinned, ...own];
-  }, [scoped.cols]);
+  const exportColsFor = useCallback((v: TeamGameView): ExportCol[] => teamGameExportCols(v, scoped.cols), [scoped.cols]);
 
   const exportMeta = useCallback((label: string) => ({
     viewLabel: label,

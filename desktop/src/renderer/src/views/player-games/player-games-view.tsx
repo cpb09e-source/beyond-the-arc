@@ -1,5 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
-import { F, GAME_PRESETS, GAME_STATS, GAME_VIEWS, gameStat, gameViewByKey, passesFilters, type GameStat } from "@/lib/game-index";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { playerGameExportCols, playerGameExportEntity, type GameLogHit } from "@/lib/game-log-export";
+import { exportFields, type ExportInput, type MultiExportInput } from "@/lib/table-export";
+import {
+  F,
+  GAME_GROUPS,
+  GAME_PRESETS,
+  GAME_STATS,
+  GAME_VIEWS,
+  gameStat,
+  gameViewByKey,
+  passesFilters,
+  type GamePack,
+  type GameStat,
+} from "@/lib/game-index";
 import {
   gameMatcher,
   loadPlayerGameSeason,
@@ -18,9 +31,14 @@ import { ShortcutBar } from "~/shell/shortcut-bar";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
-import { DataTable } from "~/table/data-table";
-import { catalogStats, conditionTest, filterHelp, filterProblem, parseFilter, sortedNames, statIndex } from "~/ui/filter-query";
-import { sameName, scopedNames, type Scope, type Scoped } from "~/ui/scoped-query";
+import { useActionEnv } from "~/objects/use-object-actions";
+import { DataTable, type Column, type TableHandle } from "~/table/data-table";
+import { DownloadMenu, SaveViewButton } from "~/table/download-menu";
+import { exportMeta, sortText } from "~/table/export-meta";
+import { FilterRows, TableBar } from "~/table/filter-rows";
+import { conferenceOptions, nameOptions, ScopeSelect, type ScopeOption } from "~/table/scope-select";
+import { catalogStats, conditionTest, filterHelp, filterProblem, parseFilter, pinnedStatKeys, sortedNames, statIndex } from "~/ui/filter-query";
+import { nameIn, sameName, scopedNames, scopedQuery, type Scope, type Scoped } from "~/ui/scoped-query";
 import { normalizeText } from "~/ui/text";
 import { identityColumns, NO_CHIP, statColumns } from "./player-game-columns";
 import { PEEK_KEYS, PlayerGamePeekBody } from "./player-game-peek";
@@ -54,7 +72,7 @@ function readView(): string {
 /** "player: Cooper Flagg", "team: Duke", "teams: Duke, Houston", "conf: SEC", "opponents: Duke" as a test per row. */
 function scopedMatcher(season: PlayerGameSeason, s: Scoped): (g: PlayerGame) => boolean {
   if (s.scope === "opponents") {
-    const opps = Uint8Array.from(season.opps, (o) => (sameName(o.name, s.value) ? 1 : 0));
+    const opps = Uint8Array.from(season.opps, (o) => (nameIn(s.value, o.name) ? 1 : 0));
     return (g) => opps[g.row[F.o]!] === 1;
   }
   const named = new Set(s.scope === "teams" ? scopedNames(s.value).map(normalizeText) : []);
@@ -65,16 +83,36 @@ function scopedMatcher(season: PlayerGameSeason, s: Scoped): (g: PlayerGame) => 
         ? sameName(p.team, s.value)
         : s.scope === "teams"
           ? named.has(normalizeText(p.team))
-          : sameName(p.confLabel, s.value) || sameName(p.conf, s.value);
+          : s.scope === "class"
+            ? nameIn(s.value, p.cls)
+            : s.scope === "conf" && nameIn(s.value, p.confLabel, p.conf);
   const players = Uint8Array.from(season.players, (p) => (has(p) ? 1 : 0));
   return (g) => players[g.row[F.p]!] === 1;
 }
 
 /** What "pts>30" can name: every stat in the site's catalog, whichever view is showing. */
+const GROUP_OF = new Map(GAME_GROUPS.flatMap((g) => g.keys.map((k) => [k, g.label] as const)));
 const PLAYER_GAME_FILTER = statIndex<PlayerGame>(
-  catalogStats(GAME_STATS, { get: (s) => (g: PlayerGame) => s.get(g.row), fmt: (s) => s.fmt, desc: (s) => s.title, aliases: { gmsc: ["gamescore"] } }),
+  catalogStats(GAME_STATS, {
+    get: (s) => (g: PlayerGame) => s.get(g.row),
+    fmt: (s) => s.fmt,
+    desc: (s) => s.title,
+    group: (s) => GROUP_OF.get(s.key) ?? "Other",
+    aliases: { gmsc: ["gamescore"] },
+  }),
 );
-const PLAYER_GAME_SCOPES: Scope[] = ["player", "team", "teams", "opponents", "conf"];
+const PLAYER_GAME_SCOPES: Scope[] = ["player", "team", "teams", "opponents", "conf", "class"];
+const PICKS = PLAYER_GAME_FILTER.all.flatMap((s) => (s.key ? [{ key: s.key, label: s.label, desc: s.desc, group: s.group }] : []));
+type Hit = GameLogHit<GamePack>;
+const CLASS_OPTIONS: ScopeOption[] = [
+  { name: "Fr", meta: "Freshman" },
+  { name: "So", meta: "Sophomore" },
+  { name: "Jr", meta: "Junior" },
+  { name: "Sr", meta: "Senior" },
+  { name: "Gr", meta: "Graduate" },
+];
+/** Only when the reader has added columns does the table caption its groups. */
+const banded = (list: Column<PlayerGame>[], band: string, accent: boolean): Column<PlayerGame>[] => list.map((c) => ({ ...c, band, bandAccent: accent }));
 
 /** A row as the object it is: one player's game, found on its night's slate when it is opened. */
 export function playerLogObject(season: PlayerGameSeason, g: PlayerGame): Obj {
@@ -95,19 +133,30 @@ export function playerLogObject(season: PlayerGameSeason, g: PlayerGame): Obj {
   };
 }
 
-export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
+export function PlayerGamesView({ year, setYear, query, setQuery, table, setTable, saved, toggleSaved }: ViewProps) {
   const [state, retry] = useLoaded(`player-games|${year}`, () => loadPlayerGameSeason(year));
   const setStatus = useSetStatus();
-  const [viewKey, setViewKey] = useState(readView);
+  const env = useActionEnv();
+  const handle = useRef<TableHandle<PlayerGame> | null>(null);
+  // A new tab opens on the view last picked anywhere; a tab keeps its own.
+  const [lastView] = useState(readView);
   const [on, setOn] = useState<string[]>([]);
 
   const season = state.status === "ready" ? state.value : null;
-  const view = gameViewByKey(viewKey);
+  const view = gameViewByKey(table.view ?? lastView);
+  const pinned = useMemo(() => pinnedStatKeys(query, table.cols ?? [], PLAYER_GAME_FILTER), [query, table.cols]);
 
-  const columns = useMemo(
-    () => (season ? [...identityColumns(season), ...statColumns(season, view.keys)] : []),
-    [season, view],
-  );
+  const columns = useMemo(() => {
+    if (!season) return [];
+    // A stat the view already shows keeps its place in the view.
+    const yours = pinned.filter((k) => !view.keys.includes(k));
+    if (yours.length === 0) return [...identityColumns(season), ...statColumns(season, view.keys)];
+    return [
+      ...identityColumns(season),
+      ...banded(statColumns(season, yours), "Your columns", true),
+      ...banded(statColumns(season, view.keys), view.label, false),
+    ];
+  }, [season, view, pinned]);
   const filters = useMemo(() => GAME_PRESETS.filter((p) => on.includes(p.key)).flatMap((p) => p.filters), [on]);
   const parsed = useMemo(() => parseFilter(query), [query]);
   const rows = useMemo(() => {
@@ -140,6 +189,7 @@ export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
         teams,
         opponents: () => sortedNames(season.opps.map((o) => o.name)),
         conf: () => sortedNames(season.players.map((p) => p.confLabel)),
+        class: () => CLASS_OPTIONS.map((o) => o.name),
       },
     });
   }, [season]);
@@ -170,7 +220,7 @@ export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
   }, [state, setStatus]);
 
   const pickView = (key: string) => {
-    setViewKey(key);
+    setTable({ ...table, view: key });
     try {
       localStorage.setItem(VIEW_KEY, key);
     } catch {
@@ -187,6 +237,40 @@ export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
   // Game Score where the view has it, the site's own default; otherwise points.
   const sortKey = view.keys.includes("gmsc") ? "gmsc" : "pts";
 
+  const confOptions = useMemo(() => conferenceOptions(season?.players ?? []), [season]);
+  const teamOptions = useMemo(() => nameOptions((season?.players ?? []).map((p) => p.team)), [season]);
+  const oppOptions = useMemo(() => nameOptions((season?.opps ?? []).map((o) => o.name)), [season]);
+
+  // ── Download: the site's files, built on click from the table as it stands ──
+  const exportEntity = useMemo(() => playerGameExportEntity<Hit>(), []);
+  const exportRows = (): Hit[] => (season ? (handle.current?.rows ?? rows).map((g) => ({ pack: season.pack, row: g.row })) : []);
+  const metaFor = (viewLabel: string) => {
+    const sort = handle.current?.sort;
+    const col = sort ? columns.find((c) => c.key === sort.key) : undefined;
+    const m = exportMeta({
+      viewLabel,
+      year,
+      query,
+      index: PLAYER_GAME_FILTER,
+      sort: sortText(col?.label, sort?.dir ?? -1),
+      path: `/players/games?ys=${year}${view.key !== "overview" ? `&view=${view.key}` : ""}`,
+    });
+    // The shortcuts narrow the rows too, so the file names them.
+    return { ...m, filters: [...GAME_PRESETS.filter((p) => on.includes(p.key)).map((p) => p.label), ...m.filters] };
+  };
+  const buildExport = (): ExportInput<Hit> => ({ cols: playerGameExportCols(view, pinned), rows: exportRows(), entity: exportEntity, meta: metaFor(view.label) });
+  const buildExportAll = (keys: string[]): MultiExportInput<Hit> => {
+    const chosen = GAME_VIEWS.filter((v) => keys.includes(v.key));
+    return {
+      sheets: chosen.map((v) => ({ name: v.label, cols: playerGameExportCols(v, pinned) })),
+      rows: exportRows(),
+      entity: exportEntity,
+      meta: metaFor("Multiple views"),
+      slug: chosen.length === GAME_VIEWS.length ? "all-views" : "views",
+    };
+  };
+  const exportColumns = exportFields(playerGameExportCols(view, pinned), exportEntity).length;
+
   return (
     <>
       <ViewHeader
@@ -197,7 +281,47 @@ export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
         meta={meta}
         controls={<Picker label="View" value={view.key} options={VIEW_OPTIONS} onChange={pickView} />}
         filter={{ value: query, onChange: setQuery, placeholder: "Filter games", help }}
+        actions={
+          <>
+            <SaveViewButton saved={saved} onToggle={() => toggleSaved(`Player games, ${view.label}${query.trim() ? ` · ${query.trim()}` : ""}`)} />
+            <DownloadMenu
+              rows={rows.length}
+              columns={exportColumns}
+              views={VIEW_OPTIONS}
+              buildExport={buildExport}
+              buildExportAll={buildExportAll}
+              copyTable={() => {
+                const h = handle.current;
+                if (h) env.copyTable(h.tsv(), h.rows.length);
+              }}
+            />
+          </>
+        }
       />
+      {help && (
+        <TableBar>
+          <ScopeSelect label="Conference" scopes={["conf"]} options={confOptions} query={query} setQuery={setQuery} write={(names) => scopedQuery("conf", names.join(", "))} />
+          <ScopeSelect
+            label="Team"
+            scopes={["team", "teams"]}
+            options={teamOptions}
+            query={query}
+            setQuery={setQuery}
+            write={(names) => (names.length === 1 ? scopedQuery("team", names[0]!) : scopedQuery("teams", names.join(", ")))}
+          />
+          <ScopeSelect label="Class" scopes={["class"]} options={CLASS_OPTIONS} query={query} setQuery={setQuery} write={(names) => scopedQuery("class", names.join(", "))} width={220} />
+          <ScopeSelect label="Opponent" scopes={["opponents"]} options={oppOptions} query={query} setQuery={setQuery} write={(names) => scopedQuery("opponents", names.join(", "))} />
+          <span aria-hidden className="mx-1 h-4 w-px bg-hairline" />
+          <FilterRows
+            help={help}
+            stats={PICKS}
+            query={query}
+            setQuery={setQuery}
+            cols={table.cols ?? []}
+            setCols={(next) => setTable({ ...table, cols: next.length > 0 ? next : undefined })}
+          />
+        </TableBar>
+      )}
       <ShortcutBar presets={GAME_PRESETS} on={on} onChange={setOn} />
 
       <div className="relative min-h-0 flex-1 border-t border-hairline">
@@ -212,6 +336,7 @@ export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
             tieBreak={latestFirst}
             id="player-game-log"
             object={(g) => playerLogObject(state.value, g)}
+            handle={handle}
             ariaLabel="Player games"
             empty={
               query.trim() ? (

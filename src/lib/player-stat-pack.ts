@@ -61,7 +61,7 @@ export type IndexedPack = {
 
 const CACHE = new Map<string, Promise<IndexedPack | null>>();
 
-function indexPack(p: StatPack): IndexedPack {
+export function indexPack(p: StatPack): IndexedPack {
   const value = new Map<string, Map<number, number | null>>();
   const pct = new Map<string, Map<number, number | null>>();
   p.cols.forEach((col, ci) => {

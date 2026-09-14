@@ -14,6 +14,7 @@ export type Corpus =
   | "player-shooting"
   | "team-games"
   | "player-games"
+  | "player-stats"
   | "matchup"
   | "conference-rankings"
   | "conference-splits"
@@ -78,6 +79,9 @@ const api = {
   /** A table as a CSV file, saved where the reader chooses. */
   files: {
     saveCsv: (text: string, name: string): Promise<{ ok: boolean; path?: string }> => ipcRenderer.invoke("export:save-csv", text, name),
+    /** A Download menu's workbook (bytes) or CSV (text), under the name given. */
+    saveFile: (data: Uint8Array | string, name: string): Promise<{ ok: boolean; path?: string }> => ipcRenderer.invoke("export:save-file", data, name),
+    reveal: (path: string): void => ipcRenderer.send("export:reveal", path),
   },
   /** Snapshot cards: the window's own pixels inside a rectangle of the page, then to the clipboard or a PNG. */
   snapshot: {

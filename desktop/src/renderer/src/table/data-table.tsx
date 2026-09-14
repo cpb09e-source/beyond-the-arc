@@ -95,6 +95,9 @@ export type PeekSpec<R> = {
   body: (row: R) => ReactNode;
 };
 
+/** What a view's own Download menu reads off the table: the rows as sorted now, the sort, and the table as text. */
+export type TableHandle<R> = { rows: R[]; sort: { key: string; dir: Dir }; tsv: () => string };
+
 type Props<R> = {
   rows: R[];
   columns: Column<R>[];
@@ -116,6 +119,8 @@ type Props<R> = {
   drag?: (row: R) => DragSpec | null;
   /** Single-key commands of the view's own, on the focused row. They win over the object's keys. */
   keys?: Record<string, (row: R) => void>;
+  /** Kept current with the sorted rows, for a Download menu that builds its file on click (./download-menu.tsx). */
+  handle?: { current: TableHandle<R> | null };
   /** Names the table for what it remembers about itself: hidden columns. */
   id?: string;
   ariaLabel: string;
@@ -205,6 +210,7 @@ export function DataTable<R>({
   onFocusRow,
   spotlight,
   statLens,
+  handle,
 }: Props<R>) {
   const [sort, setSort] = useState(defaultSort);
   // A table in a tab that is not in front keeps its state but not the keyboard.
@@ -532,6 +538,9 @@ export function DataTable<R>({
     },
     [rowKey],
   );
+  useEffect(() => {
+    if (handle) handle.current = { rows: sorted, sort, tsv: () => tableText("tsv") };
+  });
   const picked = selection && selection.size > 0 ? sorted.reduce((n, r) => n + (selection.isSelected(r) ? 1 : 0), 0) : 0;
   const register = exportCtx?.register;
   useEffect(() => {

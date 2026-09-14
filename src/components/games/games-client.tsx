@@ -40,9 +40,8 @@ import { GameStatRows, MAX_GAME_COLS } from "@/components/games/game-stat-rows";
 import { effectiveGameLogAccess, FREE_LIMITS } from "@/lib/access";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
-import type { ExportCol, ExportEntity, ExportInput, MultiExportInput } from "@/lib/table-export";
-import { EXPORT_ORIGIN } from "@/lib/table-export";
-import { teamSlug } from "@/lib/team-slug";
+import type { ExportCol, ExportInput, MultiExportInput } from "@/lib/table-export";
+import { playerGameExportCols, playerGameExportEntity } from "@/lib/game-log-export";
 import {
   F, GAME_GROUP_LABEL, GAME_PICK_OPTIONS, GAME_PRESETS, GAME_SEASONS, GAME_STATS,
   GAME_STAT_BY_KEY, GAME_VIEWS, HOME, NEUTRAL, WON,
@@ -421,69 +420,10 @@ export function GamesClient() {
   }, [router]);
 
   // ── Export ───────────────────────────────────────────────────────────────
-  const exportEntity = useMemo((): ExportEntity<Hit> => ({
-    title: "Game Log Explorer",
-    sheetName: "Games",
-    wideHeader: "Player",
-    fileStem: "game-log",
-    identity: [
-      {
-        header: "Player", width: 22, get: (h) => h.pack.players.names[h.row[F.p]!] ?? "—",
-        // Same `page` flag the on-screen row checks before it renders a link.
-        // Not every player in this corpus has a page built, and a link to one
-        // that does not exist is worse than a plain name.
-        href: (h) => (h.pack.players.page[h.row[F.p]!] === 1
-          ? `${EXPORT_ORIGIN}/players/${h.pack.players.ids[h.row[F.p]!]}/`
-          : null),
-      },
-      {
-        header: "Team", width: 18, get: (h) => h.pack.players.teams[h.row[F.p]!] ?? "—",
-        href: (h) => {
-          const t = h.pack.players.teams[h.row[F.p]!];
-          return t ? `${EXPORT_ORIGIN}/teams/${teamSlug(t)}/${h.pack.season}/` : null;
-        },
-      },
-      { header: "Conf", get: (h) => h.pack.players.confs[h.row[F.p]!] ?? "" },
-      { header: "Class", get: (h) => h.pack.classes[h.pack.players.cls[h.row[F.p]!]!] ?? "" },
-      { header: "Season", get: (h) => seasonLabel(h.pack.season) },
-      { header: "Date", get: (h) => fmtGameDate(h.pack, h.row) },
-      {
-        header: "Opponent", width: 18, get: (h) => h.pack.opps[h.row[F.o]!] ?? "—",
-        href: (h) => {
-          const o = h.pack.opps[h.row[F.o]!];
-          return o ? `${EXPORT_ORIGIN}/teams/${teamSlug(o)}/${h.pack.season}/` : null;
-        },
-      },
-      { header: "Site", get: (h) => (h.row[F.f]! & NEUTRAL ? "N" : h.row[F.f]! & HOME ? "H" : "A") },
-      { header: "Result", get: (h) => (h.row[F.f]! & WON ? "W" : "L") },
-    ],
-    num: (h, key) => gameStat(key)?.get(h.row) ?? null,
-    // No percentiles on this page: a single game's rank among a hundred
-    // thousand others is not a number anyone reads, and an empty column would
-    // read as data we failed to compute.
-    pctOf: () => null,
-  }), []);
+  const exportEntity = useMemo(() => playerGameExportEntity<Hit>(), []);
 
   /** Export columns for ANY view, with the reader's pins leading each sheet. */
-  const exportColsFor = useCallback((v: GameView): ExportCol[] => {
-    const toCol = (s: NonNullable<ReturnType<typeof gameStat>>, band: string): ExportCol => ({
-      label: s.label,
-      total: s.key,
-      pct: "",
-      fmt: s.fmt === "pct1" ? "pct1" : s.fmt === "int" ? "int" : "num1",
-      band,
-    });
-    const pinned = scoped.cols
-      .filter((k) => !v.keys.includes(k))
-      .map((k) => gameStat(k))
-      .filter((x): x is NonNullable<typeof x> => !!x)
-      .map((x) => toCol(x, "Your columns"));
-    const own = v.keys
-      .map((k) => gameStat(k))
-      .filter((x): x is NonNullable<typeof x> => !!x)
-      .map((x) => toCol(x, v.label));
-    return [...pinned, ...own];
-  }, [scoped.cols]);
+  const exportColsFor = useCallback((v: GameView): ExportCol[] => playerGameExportCols(v, scoped.cols), [scoped.cols]);
 
   const exportMeta = useCallback((label: string) => ({
     viewLabel: label,

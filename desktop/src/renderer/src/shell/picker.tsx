@@ -1,7 +1,8 @@
 import { Check, ChevronDown } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
-export type PickerOption = { key: string; label: string; desc?: string };
+/** `group` heads a run of options with the same group, as the site's View menus are sectioned. */
+export type PickerOption = { key: string; label: string; desc?: string; group?: string };
 
 /**
  * A view's own mode, in a compact menu beside the season: which set of columns
@@ -93,7 +94,12 @@ export function Picker({
           className="menu-in absolute left-0 top-[calc(100%+6px)] z-30 max-h-[min(460px,65vh)] w-[288px] overflow-y-auto overscroll-contain rounded-lg border border-hairline bg-card p-1 outline-none"
           style={{ boxShadow: "var(--overlay-shadow)" }}
         >
-          {options.map((o) => (
+          {options.map((o, i) => [
+            o.group && o.group !== options[i - 1]?.group ? (
+              <li key={`group:${o.group}`} role="presentation" className="px-2 pb-1 pt-2.5 text-[11px] font-medium text-ink-muted first:pt-1">
+                {o.group}
+              </li>
+            ) : null,
             <li
               key={o.key}
               id={`${id}-${o.key}`}
@@ -111,8 +117,8 @@ export function Picker({
                 <span className={`block text-[12.5px] ${o.key === active ? "text-ink" : "text-ink-soft"}`}>{o.label}</span>
                 {o.desc && <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-muted">{o.desc}</span>}
               </span>
-            </li>
-          ))}
+            </li>,
+          ])}
         </ul>
       )}
     </div>

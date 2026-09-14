@@ -2,7 +2,7 @@ import { confDisplay } from "@/lib/conf-display";
 import { nationalRanksForTeam } from "@/lib/national-ranks";
 import { logoIdMap, toScatterTeams, type ScatterSourceRow } from "@/lib/scatter-team";
 import type { RankedStat, StaticTeamSeasonRow } from "@/lib/static-data";
-import { DEFAULT_SPEC, processTeams, type RawTeamSeason } from "@/lib/team-filters";
+import { DEFAULT_SPEC, processTeams, type RawTeamSeason, type TeamRow } from "@/lib/team-filters";
 import { buildZone, type Zone } from "@/lib/trapezoid";
 import cbbTeams from "@/data/cbb-team-ids.json";
 
@@ -45,6 +45,12 @@ export type Team = {
    * not a judgment".
    */
   pct: Record<string, number | null>;
+  /**
+   * The site explorer's own row for this team-season (src/lib/team-filters.ts
+   * processTeams): every stat its fourteen views name, with the same
+   * percentiles, so the app's views are the site's views.
+   */
+  explorer: TeamRow | null;
   row: StaticTeamSeasonRow;
 };
 
@@ -97,6 +103,7 @@ export function shapeSeason(year: number, rows: StaticTeamSeasonRow[]): Season {
       fg3: num(ss.fg3_pct),
       sos: num(ss.sos),
       inZone: zone && s ? zone.contains(s.m.adjt, s.m.net_rtg_adj) : null,
+      explorer: live.rows.get(Number(r.id)) ?? null,
       row,
     });
   }
@@ -118,7 +125,7 @@ export function shapeSeason(year: number, rows: StaticTeamSeasonRow[]): Season {
 function liveScores(
   year: number,
   rows: StaticTeamSeasonRow[],
-): { rank: Map<number, number>; pct: Map<number, Record<string, number | null>> } {
+): { rank: Map<number, number>; pct: Map<number, Record<string, number | null>>; rows: Map<number, TeamRow> } {
   const { rows: scored } = processTeams(rows as unknown as RawTeamSeason[], {
     ...DEFAULT_SPEC,
     years: [year],
@@ -132,6 +139,7 @@ function liveScores(
     // The same pass that ranks also carries the explorer's percentiles, so the
     // colors in the table can never disagree with the colors on the site.
     pct: new Map(scored.map((r) => [Number(r.team_id), r.pct as Record<string, number | null>])),
+    rows: new Map(scored.map((r) => [Number(r.team_id), r])),
   };
 }
 

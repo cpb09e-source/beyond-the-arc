@@ -27,6 +27,7 @@ export function ViewHeader({
   meta,
   controls,
   filter,
+  actions,
 }: {
   /** The family the view belongs to, shown as a breadcrumb: Teams, Players. */
   kicker: string;
@@ -42,6 +43,8 @@ export function ViewHeader({
   /** Beside the season: a view's own pickers, in the same row. */
   controls?: ReactNode;
   filter?: { value: string; onChange: (v: string) => void; placeholder: string; help?: FilterHelp };
+  /** After the filter: a table's Download and Save view. */
+  actions?: ReactNode;
 }) {
   return (
     // WRAPS WHEN A PANE IS NARROW. In split view a pane is half the window, and a
@@ -72,6 +75,7 @@ export function ViewHeader({
       <div className="min-w-0 flex-1" />
       {meta != null && <span className="hidden shrink-0 truncate text-[12px] text-ink-muted @4xl:inline">{meta}</span>}
       {filter && <FilterBox {...filter} />}
+      {actions}
     </header>
   );
 }

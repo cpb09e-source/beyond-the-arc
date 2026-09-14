@@ -32,19 +32,20 @@ import { confDisplay } from "@/lib/conf-display";
 import { useDragPan } from "@/lib/use-drag-pan";
 import { DownloadMenu } from "@/components/explorer/download-menu";
 import {
-  numField, type ExportCol, type ExportEntity, type ExportInput, type MultiExportInput,
+  type ExportCol, type ExportInput, type MultiExportInput,
 } from "@/lib/table-export";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { ConferenceLogo } from "@/components/conferences/conference-logo";
 import { TeamLogo } from "@/components/team-logo";
 import Link from "next/link";
 import {
-  CONF_SPLITS, CONF_VIEWS, confCol, confViewByKey, confViewCols, confViewBands, confViewsFor, fmtConfValue, type ConfCol,
+  CONF_SPLITS, CONF_VIEWS, confCol, confViewByKey, confViewCols, confViewBands, confViewsFor, fmtConfValue,
 } from "@/lib/conference-views";
 import {
   confPercentiles, confReader, loadConferenceRankings, loadConferenceSplits,
   type ConfPack, type ConfRow, type ConfSplitPack,
 } from "@/lib/conference-rankings";
+import { conferenceExportCols, conferenceExportEntity } from "@/lib/conference-export";
 
 const ROW_HOVER = "group-hover:bg-[color-mix(in_oklab,var(--coral)_8%,var(--card))]";
 
@@ -258,36 +259,9 @@ export function ConferencesClient() {
    * full-season numbers because that is what the row object holds would be
    * the worst kind of wrong — right-looking and different.
    */
-  const exportEntity = useMemo((): ExportEntity<ConfRow> => ({
-    title: "Conference Power Rankings",
-    sheetName: "Conferences",
-    wideHeader: "Conference",
-    fileStem: "conferences",
-    identity: [
-      { header: "Conference", width: 22, get: (r) => confDisplay(r.conf) || r.conf },
-      { header: "Season", get: (r) => seasonLabel(r.year) },
-      { header: "Teams", get: (r) => r.kept },
-      { header: "Of", get: (r) => r.teams },
-      { header: "Dropped", width: 28, get: (r) => r.dropped.join(", ") },
-    ],
-    num: (r, key) => (key ? readValue(r, key) : numField(r, key)),
-    pctOf: (r, key) => pcts.get(key)?.get(`${r.year}|${r.conf}`) ?? null,
-  }), [readValue, pcts]);
+  const exportEntity = useMemo(() => conferenceExportEntity(readValue, pcts), [readValue, pcts]);
 
-  const exportCols = useCallback((v: typeof view): ExportCol[] =>
-    confViewBands(v, spec.split).flatMap((b) =>
-      b.keys
-        .map((k) => confViewCols(v, spec.split).find((c) => c.key === k))
-        .filter((c): c is ConfCol => !!c)
-        .map((c) => ({
-          label: c.label,
-          total: c.key,
-          pct: c.key,
-          // The workbook has no num2; a second decimal is display polish.
-          fmt: c.fmt === "num2" ? "num1" : c.fmt,
-          band: b.label,
-        })),
-    ), [spec.split]);
+  const exportCols = useCallback((v: typeof view): ExportCol[] => conferenceExportCols(v, spec.split), [spec.split]);
 
   const exportMeta = useCallback((label: string) => ({
     viewLabel: label,

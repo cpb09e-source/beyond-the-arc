@@ -186,6 +186,37 @@ function registerIpc(): void {
     return { ok: true, path: filePath };
   });
 
+  // Export: a Download menu's file, a workbook or a CSV, written where the reader chooses. The CSV
+  // arrives with its byte-order mark already on it (src/lib/table-export.ts buildCsv).
+  ipcMain.handle("export:save-file", async (_event, data: unknown, name: unknown) => {
+    const body = data instanceof Uint8Array || typeof data === "string" ? data : null;
+    if (!win || body === null || typeof name !== "string") return { ok: false };
+    if ((typeof body === "string" ? body.length : body.byteLength) > 150_000_000) return { ok: false };
+    const ext = /\.xlsx$/i.test(name) ? "xlsx" : /\.csv$/i.test(name) ? "csv" : null;
+    if (!ext) return { ok: false };
+    const safe = name.replace(/[^\w .()-]+/g, "-").replace(/^[-. ]+/, "").trim().slice(0, 120) || `beyond-the-arc.${ext}`;
+    // Scripted verification, development only, as BTA_CDP_PORT is: BTA_EXPORT_DIR takes the file with no
+    // dialog, which a test script cannot answer. A packaged build ignores it.
+    const testDir = app.isPackaged ? undefined : process.env.BTA_EXPORT_DIR;
+    if (testDir) {
+      const testPath = join(testDir, safe);
+      await writeFile(testPath, body);
+      return { ok: true, path: testPath };
+    }
+    const { canceled, filePath } = await dialog.showSaveDialog(win, {
+      title: ext === "xlsx" ? "Save workbook" : "Save as CSV",
+      defaultPath: join(app.getPath("documents"), safe),
+      filters: [ext === "xlsx" ? { name: "Excel workbook", extensions: ["xlsx"] } : { name: "CSV (comma separated)", extensions: ["csv"] }],
+    });
+    if (canceled || !filePath) return { ok: false };
+    await writeFile(filePath, body);
+    return { ok: true, path: filePath };
+  });
+  // A saved file, shown in its folder: only a path this app just wrote is ever asked for.
+  ipcMain.on("export:reveal", (_event, path: unknown) => {
+    if (typeof path === "string" && /\.(xlsx|csv)$/i.test(path)) shell.showItemInFolder(path);
+  });
+
   // Snapshot cards. The page names a rectangle of itself; the pixels leave only as
   // the clipboard image or the file the reader asked for.
   const inRange = (v: unknown, max: number): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max;

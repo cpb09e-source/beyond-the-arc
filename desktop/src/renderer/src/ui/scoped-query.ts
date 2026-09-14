@@ -15,7 +15,7 @@ import { normalizeText } from "./text";
  * Read, beside conditions and plain words, by ./filter-query.ts.
  */
 
-export type Scope = "team" | "teams" | "player" | "conf" | "opponents";
+export type Scope = "team" | "teams" | "player" | "conf" | "opponents" | "class" | "pos";
 export type Scoped = { scope: Scope; value: string };
 
 
@@ -26,3 +26,7 @@ export const scopedNames = (value: string): string[] => value.split(",").map((s)
 
 /** The same name, however it was capitalized or accented. */
 export const sameName = (a: string | null | undefined, b: string): boolean => a != null && normalizeText(a) === normalizeText(b);
+
+/** Whether any of a scope's comma-separated names ("SEC, Big 12") is one of these. */
+export const nameIn = (value: string, ...names: Array<string | null | undefined>): boolean =>
+  scopedNames(value).some((v) => names.some((n) => sameName(n, v)));

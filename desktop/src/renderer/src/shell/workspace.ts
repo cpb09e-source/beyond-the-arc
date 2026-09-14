@@ -1,5 +1,6 @@
 import { useEffect, useReducer } from "react";
 import { ALL_SEASONS, SEASON_CEIL } from "@/lib/seasons";
+import { isLayout, sameLayout, type TableLayout } from "./table-layout";
 import { isRecordRef, sameRecord, viewById, VIEWS, type RecordRef } from "./views";
 
 /**
@@ -31,13 +32,15 @@ import { isRecordRef, sameRecord, viewById, VIEWS, type RecordRef } from "./view
  * closed tabs behind Ctrl+Shift+T lasts for the session.
  */
 
-export type Snapshot = { viewId: string; year: number; record?: RecordRef; query?: string };
+export type Snapshot = { viewId: string; year: number; record?: RecordRef; query?: string; table?: TableLayout };
 
 export type Tab = {
   id: string;
   viewId: string;
   year: number;
   query: string;
+  /** The table's column view and added columns (./table-layout.ts). */
+  table?: TableLayout;
   record?: RecordRef;
   /** What the view says it is showing ("Duke vs Michigan"); absent, the view's own name. */
   title?: string;
@@ -53,8 +56,8 @@ export type Split = { a: string; b: string; ratio: number };
 export type Workspace = { tabs: Tab[]; active: string; closed: Tab[]; split: Split | null };
 
 export type WorkspaceAction =
-  | { type: "navigate"; viewId: string; year?: number; record?: RecordRef; query?: string }
-  | { type: "open"; viewId: string; year: number; record?: RecordRef; query?: string }
+  | { type: "navigate"; viewId: string; year?: number; record?: RecordRef; query?: string; table?: TableLayout }
+  | { type: "open"; viewId: string; year: number; record?: RecordRef; query?: string; table?: TableLayout }
   | { type: "close"; id: string }
   | { type: "reopen" }
   | { type: "activate"; id: string }
@@ -64,12 +67,13 @@ export type WorkspaceAction =
   | { type: "step-year"; to: "older" | "newer" }
   | { type: "set-query"; id: string; query: string }
   | { type: "set-title"; id: string; title: string | null }
+  | { type: "set-table"; id: string; table: TableLayout }
   | { type: "duplicate"; id: string }
   | { type: "close-others"; id: string }
   | { type: "back" }
   | { type: "forward" }
   | { type: "move"; id: string; to: number }
-  | { type: "open-side"; viewId: string; year: number; record?: RecordRef; query?: string }
+  | { type: "open-side"; viewId: string; year: number; record?: RecordRef; query?: string; table?: TableLayout }
   | { type: "split-with"; id: string }
   | { type: "unsplit" }
   | { type: "split-ratio"; ratio: number }
@@ -98,22 +102,25 @@ const isSnapshot = (s: unknown): s is Snapshot =>
   s !== null &&
   isPlace((s as Snapshot).viewId, (s as Snapshot).record) &&
   isSeason((s as Snapshot).year) &&
-  ((s as Snapshot).query === undefined || typeof (s as Snapshot).query === "string");
+  ((s as Snapshot).query === undefined || typeof (s as Snapshot).query === "string") &&
+  ((s as Snapshot).table === undefined || isLayout((s as Snapshot).table));
 
 let seq = 0;
 const newId = (): string => `t${Date.now().toString(36)}${(seq++).toString(36)}`;
 
-const makeTab = (viewId: string, year: number, record?: RecordRef, query = ""): Tab => ({
+const makeTab = (viewId: string, year: number, record?: RecordRef, query = "", table?: TableLayout): Tab => ({
   id: newId(),
   viewId,
   year: seasonFor(viewId, year),
   query,
+  table,
   record,
   back: [],
   forward: [],
 });
 
-const snapshotOf = (t: Tab): Snapshot => ({ viewId: t.viewId, year: t.year, record: t.record, query: t.query });
+// `{}` rather than nothing: going back restores the table as it was, even when that was the layout it opens with.
+const snapshotOf = (t: Tab): Snapshot => ({ viewId: t.viewId, year: t.year, record: t.record, query: t.query, table: t.table ?? {} });
 
 /** Pinned tabs are always the first ones; this is where they end. */
 const pinnedCount = (tabs: Tab[]): number => tabs.filter((t) => t.pinned).length;
@@ -138,6 +145,7 @@ export function restoreWorkspace(saved: unknown): Workspace | null {
             viewId: o.viewId,
             year: seasonFor(o.viewId, o.year),
             query: typeof o.query === "string" ? o.query : "",
+            table: isLayout(o.table) ? o.table : undefined,
             title: typeof o.title === "string" ? o.title : undefined,
             record: isRecordRef(o.record) ? o.record : undefined,
             pinned: o.pinned === true ? true : undefined,
@@ -208,6 +216,7 @@ function arrive(t: Tab, place: Snapshot): Tab {
     year: seasonFor(place.viewId, place.year),
     record: place.record,
     query,
+    table: place.table ?? (same ? t.table : undefined),
     // A title belongs to what the tab was showing; the view at the new place names it again.
     title: same && query === t.query ? t.title : undefined,
   };
@@ -217,13 +226,15 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
   const current = ws.tabs.find((t) => t.id === ws.active) ?? ws.tabs[0]!;
   switch (a.type) {
     case "navigate": {
-      const place: Snapshot = { viewId: a.viewId, year: seasonFor(a.viewId, a.year ?? current.year), record: a.record, query: a.query };
+      const place: Snapshot = { viewId: a.viewId, year: seasonFor(a.viewId, a.year ?? current.year), record: a.record, query: a.query, table: a.table };
       if (place.viewId === current.viewId && place.year === current.year && sameRecord(place.record, current.record)) {
         // Already here: only a new query changes anything. Typing in the filter is set-query and leaves
         // history alone; a query arriving this way was asked for ("Michigan's opponents", a favorite),
         // so Alt+Left comes back to the table as it was.
-        if (a.query === undefined || a.query === current.query) return ws;
-        return updateTab(ws, current.id, (t) => ({ ...t, query: a.query!, back: [...t.back, snapshotOf(t)].slice(-HISTORY_CAP), forward: [] }));
+        const query = a.query ?? current.query;
+        const table = a.table ?? current.table;
+        if (query === current.query && sameLayout(table, current.table)) return ws;
+        return updateTab(ws, current.id, (t) => ({ ...t, query, table, back: [...t.back, snapshotOf(t)].slice(-HISTORY_CAP), forward: [] }));
       }
       // A pinned tab keeps its place: somewhere else opens in a tab of its own.
       if (current.pinned && (place.viewId !== current.viewId || !sameRecord(place.record, current.record))) {
@@ -236,7 +247,7 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
       }));
     }
     case "open":
-      return insertTab(ws, makeTab(a.viewId, a.year, a.record, a.query));
+      return insertTab(ws, makeTab(a.viewId, a.year, a.record, a.query, a.table));
     case "close": {
       const at = ws.tabs.findIndex((t) => t.id === a.id);
       if (at < 0) return ws;
@@ -283,6 +294,9 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
       return updateTab(ws, a.id, (t) => (t.query === a.query ? t : { ...t, query: a.query }));
     case "set-title":
       return updateTab(ws, a.id, (t) => (t.title === (a.title ?? undefined) ? t : { ...t, title: a.title ?? undefined }));
+    case "set-table":
+      // Like typing in the filter, a change of layout is not a step in history.
+      return updateTab(ws, a.id, (t) => (sameLayout(t.table, a.table) ? t : { ...t, table: a.table }));
     case "duplicate": {
       const at = ws.tabs.findIndex((t) => t.id === a.id);
       if (at < 0) return ws;
@@ -329,7 +343,7 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
       return { ...ws, tabs };
     }
     case "open-side": {
-      const place: Snapshot = { viewId: a.viewId, year: seasonFor(a.viewId, a.year), record: a.record, query: a.query };
+      const place: Snapshot = { viewId: a.viewId, year: seasonFor(a.viewId, a.year), record: a.record, query: a.query, table: a.table };
       // Already split with this tab: the other pane goes there, and the keyboard stays here.
       if (ws.split && inSplit(ws, current.id)) {
         const otherId = ws.split.a === current.id ? ws.split.b : ws.split.a;
@@ -339,7 +353,7 @@ export function workspaceReducer(ws: Workspace, a: WorkspaceAction): Workspace {
             : { ...arrive(t, place), back: [...t.back, snapshotOf(t)].slice(-HISTORY_CAP), forward: [] },
         );
       }
-      const tab = makeTab(a.viewId, a.year, a.record, a.query);
+      const tab = makeTab(a.viewId, a.year, a.record, a.query, a.table);
       const at = Math.max(ws.tabs.findIndex((t) => t.id === current.id) + 1, pinnedCount(ws.tabs));
       return {
         ...ws,
@@ -383,6 +397,7 @@ export function persistableWorkspace(ws: Workspace): unknown {
       viewId: t.viewId,
       year: t.year,
       query: t.query,
+      table: t.table,
       record: t.record,
       title: t.title,
       pinned: t.pinned,

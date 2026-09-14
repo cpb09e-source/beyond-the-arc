@@ -1,3 +1,4 @@
+import { isLayout, sameLayout, type TableLayout } from "./table-layout";
 import { isRecordRef, sameRecord, viewById, type RecordRef } from "./views";
 
 /**
@@ -15,16 +16,19 @@ export type Favorite = {
   viewId: string;
   year: number;
   query: string;
+  /** The table's layout when it was starred (./table-layout.ts). */
+  table?: TableLayout;
   record?: RecordRef;
 };
 
-type Place = { viewId: string; year: number; query: string; record?: RecordRef };
+type Place = { viewId: string; year: number; query: string; record?: RecordRef; table?: TableLayout };
 
 /** A seasonless view (a coach, the Win Calculator) is the same place whatever season the tab last held. */
 export const samePlace = (a: Place, b: Place): boolean =>
   a.viewId === b.viewId &&
   (a.year === b.year || !!viewById(a.viewId).seasonless) &&
   a.query === b.query &&
+  sameLayout(a.table, b.table) &&
   sameRecord(a.record, b.record);
 
 let seq = 0;
@@ -35,6 +39,8 @@ export const favoriteOf = (p: Place, label: string): Favorite => ({
   viewId: p.viewId,
   year: p.year,
   query: p.query,
+  // `{}` when there is none, so opening the favorite puts the table back as it opens.
+  table: p.table ?? {},
   record: p.record,
 });
 
@@ -50,6 +56,7 @@ export function isFavoriteList(v: unknown): v is Favorite[] {
         typeof o.viewId === "string" &&
         typeof o.year === "number" &&
         typeof o.query === "string" &&
+        (o.table === undefined || isLayout(o.table)) &&
         (o.record === undefined || isRecordRef(o.record))
       );
     })

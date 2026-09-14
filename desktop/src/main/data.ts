@@ -42,6 +42,7 @@ export type Corpus =
   | "player-shooting"
   | "team-games"
   | "player-games"
+  | "player-stats"
   | "matchup"
   | "conference-rankings"
   | "conference-splits"
@@ -104,6 +105,9 @@ const CORPORA: Record<Corpus, CorpusSpec> = {
   "player-shooting": { path: (y) => `shooting-${y}.json`, r2: false, optional: true },
   "team-games": { path: (y) => `team-game-index/${y}.json`, r2: true, gated: { via: "signed", kind: "team-games" } },
   "player-games": { path: (y) => `game-index/${y}.json`, r2: true, gated: { via: "signed", kind: "games" } },
+  // The Player Explorer's extended stats: one file per season and group, public on the site
+  // (src/lib/player-stat-pack.ts). A season without a group resolves to null.
+  "player-stats": { path: (y, k) => `player-stats/${y}/${k}.json`, key: /^[a-z]{3,12}$/, r2: false, optional: true },
   // The Matchup Predictor's ratings, one season. While a season is live the
   // nightly job writes it to R2 as live/matchup.json, which is where the site
   // reads it from too (src/components/matchup/matchup-client.tsx).

@@ -1,5 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
-import { T, TEAM_GAME_PRESETS, TEAM_GAME_STATS, TEAM_GAME_VIEWS, passesTeamFilters, teamGameViewByKey } from "@/lib/team-game-index";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { teamGameExportCols, teamGameExportEntity, type GameLogHit } from "@/lib/game-log-export";
+import { exportFields, type ExportInput, type MultiExportInput } from "@/lib/table-export";
+import {
+  T,
+  TEAM_GAME_GROUPS,
+  TEAM_GAME_PRESETS,
+  TEAM_GAME_STATS,
+  TEAM_GAME_VIEWS,
+  passesTeamFilters,
+  teamGameViewByKey,
+  type TeamGamePack,
+} from "@/lib/team-game-index";
 import { logDate } from "~/data/game-link";
 import { loadTeamGameSeason, type TeamGame } from "~/data/team-game-model";
 import type { Obj } from "~/objects/object";
@@ -9,10 +20,15 @@ import { ShortcutBar } from "~/shell/shortcut-bar";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
-import { DataTable, type Column } from "~/table/data-table";
+import { useActionEnv } from "~/objects/use-object-actions";
+import { DataTable, type Column, type TableHandle } from "~/table/data-table";
+import { DownloadMenu, SaveViewButton } from "~/table/download-menu";
+import { exportMeta, sortText } from "~/table/export-meta";
+import { FilterRows, TableBar } from "~/table/filter-rows";
+import { conferenceOptions, nameOptions, ScopeSelect } from "~/table/scope-select";
 import { TeamLogo } from "~/ui/logo";
-import { catalogStats, conditionTest, filterHelp, filterProblem, parseFilter, sortedNames, statIndex } from "~/ui/filter-query";
-import { sameName, scopedNames, type Scope } from "~/ui/scoped-query";
+import { catalogStats, conditionTest, filterHelp, filterProblem, parseFilter, pinnedStatKeys, sortedNames, statIndex } from "~/ui/filter-query";
+import { nameIn, sameName, scopedNames, scopedQuery, type Scope } from "~/ui/scoped-query";
 import { normalizeText } from "~/ui/text";
 import { statColumns } from "./game-columns";
 import { GamePeekBody } from "./game-peek";
@@ -129,24 +145,47 @@ export const teamLogObject = (g: TeamGame, epochMs: number, year: number): Obj =
 });
 
 /** What "margin>20" can name: every stat in the site's catalog, whichever view is showing. */
+const GROUP_OF = new Map(TEAM_GAME_GROUPS.flatMap((g) => g.keys.map((k) => [k, g.label] as const)));
 const TEAM_GAME_FILTER = statIndex<TeamGame>(
-  catalogStats(TEAM_GAME_STATS, { get: (s) => (g: TeamGame) => s.get(g.row), fmt: (s) => s.fmt, desc: (s) => s.title, aliases: { won: ["win"] } }),
+  catalogStats(TEAM_GAME_STATS, {
+    get: (s) => (g: TeamGame) => s.get(g.row),
+    fmt: (s) => s.fmt,
+    desc: (s) => s.title,
+    group: (s) => GROUP_OF.get(s.key) ?? "Other",
+    aliases: { won: ["win"] },
+  }),
 );
 const TEAM_GAME_SCOPES: Scope[] = ["team", "teams", "opponents", "conf"];
+/** The pickers' list, in the site's Add Columns sections. */
+const PICKS = TEAM_GAME_FILTER.all.flatMap((s) => (s.key ? [{ key: s.key, label: s.label, desc: s.desc, group: s.group }] : []));
+type Hit = GameLogHit<TeamGamePack>;
+/** Only when the reader has added columns does the table caption its groups. */
+const banded = (list: Column<TeamGame>[], band: string, accent: boolean): Column<TeamGame>[] => list.map((c) => ({ ...c, band, bandAccent: accent }));
 
-export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
+export function TeamGamesView({ year, setYear, query, setQuery, table, setTable, saved, toggleSaved }: ViewProps) {
   const [state, retry] = useLoaded(`team-games|${year}`, () => loadTeamGameSeason(year));
   const setStatus = useSetStatus();
-  const [viewKey, setViewKey] = useState(readView);
+  const env = useActionEnv();
+  const handle = useRef<TableHandle<TeamGame> | null>(null);
+  // A new tab opens on the view last picked anywhere; a tab keeps its own.
+  const [lastView] = useState(readView);
   const [on, setOn] = useState<string[]>([]);
 
   const season = state.status === "ready" ? state.value : null;
-  const view = teamGameViewByKey(viewKey);
+  const view = teamGameViewByKey(table.view ?? lastView);
+  const pinned = useMemo(() => pinnedStatKeys(query, table.cols ?? [], TEAM_GAME_FILTER), [query, table.cols]);
 
-  const columns = useMemo(
-    () => (season ? [...TEAM_GAME_IDENTITY, ...statColumns(season.pack, view.keys)] : TEAM_GAME_IDENTITY),
-    [season, view],
-  );
+  const columns = useMemo(() => {
+    if (!season) return TEAM_GAME_IDENTITY;
+    // A stat the view already shows keeps its place in the view.
+    const yours = pinned.filter((k) => !view.keys.includes(k));
+    if (yours.length === 0) return [...TEAM_GAME_IDENTITY, ...statColumns(season.pack, view.keys)];
+    return [
+      ...TEAM_GAME_IDENTITY,
+      ...banded(statColumns(season.pack, yours), "Your columns", true),
+      ...banded(statColumns(season.pack, view.keys), view.label, false),
+    ];
+  }, [season, view, pinned]);
   const filters = useMemo(() => TEAM_GAME_PRESETS.filter((p) => on.includes(p.key)).flatMap((p) => p.filters), [on]);
   const parsed = useMemo(() => parseFilter(query), [query]);
   const rows = useMemo(() => {
@@ -159,8 +198,8 @@ export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
         const named = new Set(scopedNames(v).map(normalizeText));
         return (g) => named.has(normalizeText(g.team));
       }
-      if (s.scope === "opponents") return (g) => sameName(g.opp, v);
-      if (s.scope === "conf") return (g) => sameName(g.confLabel, v) || sameName(g.conf, v);
+      if (s.scope === "opponents") return (g) => nameIn(v, g.opp);
+      if (s.scope === "conf") return (g) => nameIn(v, g.confLabel, g.conf);
       return () => false;
     });
     const stats = conditionTest(TEAM_GAME_FILTER, parsed.conditions);
@@ -197,7 +236,7 @@ export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
   }, [state, setStatus]);
 
   const pickView = (key: string) => {
-    setViewKey(key);
+    setTable({ ...table, view: key });
     try {
       localStorage.setItem(VIEW_KEY, key);
     } catch {
@@ -214,6 +253,40 @@ export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
   // Net rating where the view has it, the site's own default; otherwise the view's lead stat.
   const sortKey = view.keys.includes("net") ? "net" : view.keys[0]!;
 
+  const confOptions = useMemo(() => conferenceOptions(season?.games ?? []), [season]);
+  const teamOptions = useMemo(() => nameOptions((season?.games ?? []).map((g) => g.team)), [season]);
+  const oppOptions = useMemo(() => nameOptions((season?.games ?? []).map((g) => g.opp)), [season]);
+
+  // ── Download: the site's files, built on click from the table as it stands ──
+  const exportEntity = useMemo(() => teamGameExportEntity<Hit>("team-game-log"), []);
+  const exportRows = (): Hit[] => (season ? (handle.current?.rows ?? rows).map((g) => ({ pack: season.pack, row: g.row })) : []);
+  const metaFor = (viewLabel: string) => {
+    const sort = handle.current?.sort;
+    const col = sort ? columns.find((c) => c.key === sort.key) : undefined;
+    const m = exportMeta({
+      viewLabel,
+      year,
+      query,
+      index: TEAM_GAME_FILTER,
+      sort: sortText(col?.label, sort?.dir ?? -1),
+      path: `/teams/games?ys=${year}${view.key !== "overview" ? `&view=${view.key}` : ""}`,
+    });
+    // The shortcuts narrow the rows too, so the file names them.
+    return { ...m, filters: [...TEAM_GAME_PRESETS.filter((p) => on.includes(p.key)).map((p) => p.label), ...m.filters] };
+  };
+  const buildExport = (): ExportInput<Hit> => ({ cols: teamGameExportCols(view, pinned), rows: exportRows(), entity: exportEntity, meta: metaFor(view.label) });
+  const buildExportAll = (keys: string[]): MultiExportInput<Hit> => {
+    const chosen = TEAM_GAME_VIEWS.filter((v) => keys.includes(v.key));
+    return {
+      sheets: chosen.map((v) => ({ name: v.label, cols: teamGameExportCols(v, pinned) })),
+      rows: exportRows(),
+      entity: exportEntity,
+      meta: metaFor("Multiple views"),
+      slug: chosen.length === TEAM_GAME_VIEWS.length ? "all-views" : "views",
+    };
+  };
+  const exportColumns = exportFields(teamGameExportCols(view, pinned), exportEntity).length;
+
   return (
     <>
       <ViewHeader
@@ -224,8 +297,47 @@ export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
         meta={meta}
         controls={<Picker label="View" value={view.key} options={VIEW_OPTIONS} onChange={pickView} />}
         filter={{ value: query, onChange: setQuery, placeholder: "Filter games", help }}
+        actions={
+          <>
+            <SaveViewButton saved={saved} onToggle={() => toggleSaved(`Team games, ${view.label}${query.trim() ? ` · ${query.trim()}` : ""}`)} />
+            <DownloadMenu
+              rows={rows.length}
+              columns={exportColumns}
+              views={VIEW_OPTIONS}
+              buildExport={buildExport}
+              buildExportAll={buildExportAll}
+              copyTable={() => {
+                const h = handle.current;
+                if (h) env.copyTable(h.tsv(), h.rows.length);
+              }}
+            />
+          </>
+        }
       />
 
+      {help && (
+        <TableBar>
+          <ScopeSelect label="Conference" scopes={["conf"]} options={confOptions} query={query} setQuery={setQuery} write={(names) => scopedQuery("conf", names.join(", "))} />
+          <ScopeSelect
+            label="Team"
+            scopes={["team", "teams"]}
+            options={teamOptions}
+            query={query}
+            setQuery={setQuery}
+            write={(names) => (names.length === 1 ? scopedQuery("team", names[0]!) : scopedQuery("teams", names.join(", ")))}
+          />
+          <ScopeSelect label="Opponent" scopes={["opponents"]} options={oppOptions} query={query} setQuery={setQuery} write={(names) => scopedQuery("opponents", names.join(", "))} />
+          <span aria-hidden className="mx-1 h-4 w-px bg-hairline" />
+          <FilterRows
+            help={help}
+            stats={PICKS}
+            query={query}
+            setQuery={setQuery}
+            cols={table.cols ?? []}
+            setCols={(next) => setTable({ ...table, cols: next.length > 0 ? next : undefined })}
+          />
+        </TableBar>
+      )}
       <ShortcutBar presets={TEAM_GAME_PRESETS} on={on} onChange={setOn} />
 
       <div className="relative min-h-0 flex-1 border-t border-hairline">
@@ -240,6 +352,7 @@ export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
             tieBreak={latestFirst}
             id="team-game-log"
             object={(g) => teamLogObject(g, state.value.pack.epochMs, year)}
+            handle={handle}
             ariaLabel="Team games"
             empty={
               query.trim() ? (

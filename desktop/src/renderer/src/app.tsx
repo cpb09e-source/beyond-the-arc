@@ -45,6 +45,7 @@ import { coachItems, typedItems } from "~/palette/typed-items";
 import { AccountProvider, useAccount } from "~/shell/account";
 import { CompareDock, CompareProvider, compareQuery, useCompare } from "~/shell/compare";
 import { favoriteOf, isFavoriteList, samePlace, type Favorite } from "~/shell/favorites";
+import { NO_LAYOUT } from "~/shell/table-layout";
 import { ActiveContext } from "~/shell/active";
 import { ShellContext } from "~/shell/shell-context";
 import { ShortcutsOverlay } from "~/shell/shortcuts";
@@ -331,8 +332,8 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     (f: Favorite, newTab: boolean) =>
       dispatch(
         newTab
-          ? { type: "open", viewId: f.viewId, year: f.year, record: f.record, query: f.query }
-          : { type: "navigate", viewId: f.viewId, year: f.year, record: f.record, query: f.query },
+          ? { type: "open", viewId: f.viewId, year: f.year, record: f.record, query: f.query, table: f.table }
+          : { type: "navigate", viewId: f.viewId, year: f.year, record: f.record, query: f.query, table: f.table },
       ),
     [dispatch],
   );
@@ -1169,6 +1170,10 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
                       focus={active ? focus : null}
                       onLanded={landed}
                       record={tab.record}
+                      table={tab.table ?? NO_LAYOUT}
+                      setTable={(t) => dispatch({ type: "set-table", id: tab.id, table: t })}
+                      saved={favorites.some((f) => samePlace(f, tab))}
+                      toggleSaved={(label) => toggleFavoritePlace(tab, label)}
                     />
                     </TableExportContext.Provider>
                   </section>

@@ -1,4 +1,6 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { conferenceExportCols, conferenceExportEntity } from "@/lib/conference-export";
+import { EXPORT_ORIGIN, exportFields, exportSeasonLabel, type ExportInput, type ExportMeta, type MultiExportInput } from "@/lib/table-export";
 import { confDisplay } from "@/lib/conf-display";
 import { POWER_CONFS } from "@/lib/conf-tiers";
 import { confPercentiles, confReader, type ConfPack, type ConfRow, type ConfSplitPack } from "@/lib/conference-rankings";
@@ -12,7 +14,10 @@ import { useTabTitle } from "~/shell/tab-title";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
-import { DataTable, type Column } from "~/table/data-table";
+import { useActionEnv } from "~/objects/use-object-actions";
+import { DataTable, type Column, type TableHandle } from "~/table/data-table";
+import { DownloadMenu } from "~/table/download-menu";
+import { sortText } from "~/table/export-meta";
 import { StatCell } from "~/table/stat-cell";
 import { ConfLogo } from "~/ui/conf-logo";
 import { seasonLabel } from "~/ui/format";
@@ -231,6 +236,37 @@ export function ConferencesView({ year, setYear, query, setQuery }: ViewProps) {
   const hasSeason = seasons.includes(year);
   const noun = scope === "all" ? "conference-seasons" : "conferences";
   useTabTitle(query.trim() ? `Conferences: ${query.trim()}` : null);
+
+  // ── Download: the site's file, read off the table, split and percentiles included ──
+  const env = useActionEnv();
+  const handle = useRef<TableHandle<ConfRow> | null>(null);
+  const exportEntity = useMemo(() => conferenceExportEntity(read, pcts), [read, pcts]);
+  const exportRows = () => handle.current?.rows ?? rows;
+  const metaFor = (viewLabel: string): ExportMeta => {
+    const sort = handle.current?.sort;
+    const col = sort ? columns.find((c) => c.key === sort.key) : undefined;
+    return {
+      viewLabel,
+      seasons: scope === "all" ? `${seasons.length} seasons` : exportSeasonLabel(year),
+      conference: "All conferences",
+      teams: "Each conference minus its bottom 2 by NET",
+      filters: [CONF_SPLITS.find((s) => s.key === splitKey)?.label ?? "Full Season"],
+      sort: sortText(col?.label, sort?.dir ?? -1),
+      search: query.trim(),
+      url: `${EXPORT_ORIGIN}/conferences`,
+    };
+  };
+  const buildExport = (): ExportInput<ConfRow> => ({ cols: conferenceExportCols(view, splitKey), rows: exportRows(), entity: exportEntity, meta: metaFor(view.label) });
+  const buildExportAll = (keys: string[]): MultiExportInput<ConfRow> => {
+    const chosen = offered.filter((v) => keys.includes(v.key));
+    return {
+      sheets: chosen.map((v) => ({ name: v.label, cols: conferenceExportCols(v, splitKey) })),
+      rows: exportRows(),
+      entity: exportEntity,
+      meta: metaFor("Multiple views"),
+      slug: chosen.length === offered.length ? "all-views" : "views",
+    };
+  };
   const meta = pack
     ? `${query.trim() && rows.length !== cohort.length ? `${rows.length} of ${cohort.length}` : cohort.length} ${noun}`
     : undefined;
@@ -256,6 +292,19 @@ export function ConferencesView({ year, setYear, query, setQuery }: ViewProps) {
           </>
         }
         filter={{ value: query, onChange: setQuery, placeholder: "Filter conferences" }}
+        actions={
+          <DownloadMenu
+            rows={rows.length}
+            columns={exportFields(conferenceExportCols(view, splitKey), exportEntity).length}
+            views={offered.map((v) => ({ key: v.key, label: v.label, desc: v.desc }))}
+            buildExport={buildExport}
+            buildExportAll={buildExportAll}
+            copyTable={() => {
+              const h = handle.current;
+              if (h) env.copyTable(h.tsv(), h.rows.length);
+            }}
+          />
+        }
       />
       <p className="flex h-[30px] shrink-0 items-center border-t border-hairline px-5 text-[12px] text-ink-muted">
         <span className="truncate" title={NOTE[splitKey]}>
@@ -294,6 +343,7 @@ export function ConferencesView({ year, setYear, query, setQuery }: ViewProps) {
               body: (r) => <ConferencePeekBody row={r} highlights={highlightsFor(r)} />,
             }}
             id="conferences"
+            handle={handle}
             spotlight={spotKey}
             object={(r) => ({ kind: "conference", conf: r.conf, label: confName(r), year: r.year })}
             onOpen={(r, how) => openView("team-explorer", { newTab: how.newTab, side: how.side, year: r.year, query: scopedQuery("conf", confName(r)) })}

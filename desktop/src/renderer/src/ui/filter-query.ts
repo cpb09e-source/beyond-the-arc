@@ -28,7 +28,7 @@ export type Op = ">" | ">=" | "<" | "<=" | "=";
 export type Condition = { name: string; op: Op; value: number };
 
 type ScopeClause = { kind: "scope"; scope: Scope; value: string; start: number; valueStart: number; end: number };
-type StatClause = { kind: "stat"; name: string; op: Op; value: number | null; start: number; end: number };
+export type StatClause = { kind: "stat"; name: string; op: Op; value: number | null; start: number; end: number };
 type WordsClause = { kind: "words"; start: number; end: number };
 export type Clause = ScopeClause | StatClause | WordsClause;
 
@@ -47,7 +47,7 @@ const OPS: Record<string, Op> = { ">": ">", ">=": ">=", "≥": ">=", "<": "<", "
 // A clause starts a word: at the start, or after a space or a comma. A stat's
 // name needs a letter, so "7>6" stays words.
 const CLAUSE =
-  /(?<![^\s,])(?:(teams|team|player|conf|opponents)\s*:|([a-z0-9_]*[a-z][a-z0-9_]*%?)\s*(>=|<=|≥|≤|>|<|=)\s*(?:([-−+]?(?:\d+(?:\.\d*)?|\.\d+))%?)?)/gi;
+  /(?<![^\s,])(?:(teams|team|player|conf|opponents|class|pos)\s*:|([a-z0-9_]*[a-z][a-z0-9_]*%?)\s*(>=|<=|≥|≤|>|<|=)\s*(?:([-−+]?(?:\d+(?:\.\d*)?|\.\d+))%?)?)/gi;
 
 export function parseFilter(query: string): ParsedFilter {
   const clauses: Clause[] = [];
@@ -95,6 +95,10 @@ export function parseFilter(query: string): ParsedFilter {
 export type FilterStat<R> = {
   /** What the box offers, and what most people type: "net", "tempo", "3p". */
   name: string;
+  /** The site's key for it, which a tab's added columns are kept by. */
+  key?: string;
+  /** The section it browses under in a stat picker. */
+  group?: string;
   /** Other spellings that find it: the site's key, "pace" for tempo. */
   aliases?: string[];
   label: string;
@@ -106,7 +110,12 @@ export type FilterStat<R> = {
   get: (r: R) => number | null;
 };
 
-export type StatIndex<R> = { all: FilterStat<R>[]; find: (typed: string) => FilterStat<R> | null };
+export type StatIndex<R> = {
+  all: FilterStat<R>[];
+  find: (typed: string) => FilterStat<R> | null;
+  /** By the site's key, as a tab's added columns name them. */
+  byKey: (key: string) => FilterStat<R> | null;
+};
 
 /** "TS%", "ts_pct" and "ts%" fold alike; "tov" and "tov%" do not, because a game log has both. */
 const fold = (s: string): string => s.toLowerCase().replace(/[\s_]+/g, "").replace(/pct$/, "%");
@@ -116,8 +125,10 @@ export function statIndex<R>(stats: FilterStat<R>[]): StatIndex<R> {
   // Names first, so no stat's alias can take another stat's name.
   for (const s of stats) by.set(fold(s.name), s);
   for (const s of stats) for (const a of s.aliases ?? []) if (!by.has(fold(a))) by.set(fold(a), s);
+  const keyed = new Map(stats.flatMap((s) => (s.key ? [[s.key, s] as const] : [])));
   return {
     all: stats,
+    byKey: (key) => keyed.get(key) ?? null,
     find: (typed) => {
       const k = fold(typed);
       // "3p" finds 3P% and "efg%" finds efg, wherever that is the only reading.
@@ -126,8 +137,8 @@ export function statIndex<R>(stats: FilterStat<R>[]): StatIndex<R> {
   };
 }
 
-type Fmt = "int" | "num1" | "num2" | "pct1";
-const DIGITS: Record<Fmt, number> = { int: 0, num1: 1, num2: 2, pct1: 1 };
+type Fmt = "int" | "num1" | "num2" | "num3" | "pct1";
+const DIGITS: Record<Fmt, number> = { int: 0, num1: 1, num2: 2, num3: 3, pct1: 1 };
 
 /**
  * A site catalog's stats (TEAM_GAME_STATS, GAME_STATS, PLAYER_STAT_COLUMNS) as
@@ -136,7 +147,13 @@ const DIGITS: Record<Fmt, number> = { int: 0, num1: 1, num2: 2, pct1: 1 };
  */
 export function catalogStats<S extends { key: string; label: string }, R>(
   list: readonly S[],
-  how: { get: (s: S) => (r: R) => number | null; fmt: (s: S) => Fmt; desc?: (s: S) => string; aliases?: Record<string, string[]> },
+  how: {
+    get: (s: S) => (r: R) => number | null;
+    fmt: (s: S) => Fmt;
+    desc?: (s: S) => string;
+    group?: (s: S) => string;
+    aliases?: Record<string, string[]>;
+  },
 ): FilterStat<R>[] {
   const typed = list.map((s) => {
     const l = s.label.toLowerCase().replace(/\s+/g, "");
@@ -153,6 +170,8 @@ export function catalogStats<S extends { key: string; label: string }, R>(
     const fmt = how.fmt(s);
     return {
       name,
+      key: s.key,
+      group: how.group?.(s),
       aliases: [s.key, typed[i]!, ...(how.aliases?.[s.key] ?? [])],
       label: s.label,
       desc: how.desc?.(s),
@@ -216,6 +235,16 @@ export function filterProblem<R>(parsed: ParsedFilter, index: StatIndex<R>, scop
   return null;
 }
 
+const OP_SIGN: Record<Op, string> = { ">": ">", ">=": "≥", "<": "<", "<=": "≤", "=": "=" };
+
+/** The conditions as a line each, the way a file's About sheet lists filters: "eFG% ≥ 55%". */
+export function describeConditions<R>(conditions: Condition[], index: StatIndex<R>): string[] {
+  return conditions.map((c) => {
+    const s = index.find(c.name);
+    return `${s?.label ?? c.name} ${OP_SIGN[c.op]} ${c.value}${s?.pct ? "%" : ""}`;
+  });
+}
+
 // ── Completion ────────────────────────────────────────────────────────────
 
 /** What the box can offer while typing, for one table and season. Built once per season. */
@@ -224,6 +253,7 @@ export type FilterHelp = {
   noun: string;
   stats: ReadonlyArray<FilterStat<never>>;
   find: (typed: string) => FilterStat<never> | null;
+  byKey: (key: string) => FilterStat<never> | null;
   scopes: readonly Scope[];
   names: (scope: Scope) => ReadonlyArray<readonly [name: string, folded: string]>;
   /** A stat's printed values across the season, ascending, blanks left out. */
@@ -249,6 +279,7 @@ export function filterHelp<R>({
     noun,
     stats: index.all as FilterStat<never>[],
     find: (typed) => index.find(typed) as FilterStat<never> | null,
+    byKey: (key) => index.byKey(key) as FilterStat<never> | null,
     scopes,
     names: (scope) => {
       let list = nameCache.get(scope);
@@ -280,6 +311,71 @@ export function filterHelp<R>({
 /** A season's names in alphabetical order, each once. */
 export const sortedNames = (names: Iterable<string>): string[] => [...new Set(names)].filter(Boolean).sort((a, b) => a.localeCompare(b));
 
+// ── Writing the box ───────────────────────────────────────────────────────
+//
+// The filter rows, the Add Columns picker and the scope pickers are all ways of
+// editing these words. Each writes the query and reads it back, so what they
+// show and what the box says can never disagree.
+
+/** The query with [start, end) replaced, one space either side and none doubled. */
+export function spliceQuery(query: string, start: number, end: number, text: string): string {
+  const before = query.slice(0, start).replace(/\s+$/, "");
+  const after = query.slice(end).replace(/^\s+/, "");
+  return [before, text, after].filter(Boolean).join(" ");
+}
+
+export const appendToQuery = (query: string, text: string): string => [query.trim(), text].filter(Boolean).join(" ");
+
+/** A condition as the box writes it: "efg>=55". */
+export const conditionText = (name: string, op: Op, value: string): string => `${name}${op}${value.trim()}`;
+
+/**
+ * The query with every clause of these scopes taken out and, when `text` is
+ * given, one written in their place: after any plain words and before the first
+ * other clause, because a name runs to the next clause and would otherwise
+ * swallow the words that followed it.
+ */
+export function withScope(query: string, scopes: readonly Scope[], text: string | null): string {
+  let out = query;
+  const { clauses } = parseFilter(query);
+  for (let i = clauses.length - 1; i >= 0; i--) {
+    const c = clauses[i]!;
+    if (c.kind === "scope" && scopes.includes(c.scope)) out = spliceQuery(out, c.start, c.end, "");
+  }
+  if (!text) return out.trim();
+  const anchor = parseFilter(out).clauses.find((c) => c.kind !== "words");
+  return anchor ? spliceQuery(out, anchor.start, anchor.start, text) : appendToQuery(out, text);
+}
+
+/** The names a query gives one of these scopes, in order, each once. */
+export function scopeValues(query: string, scopes: readonly Scope[]): string[] {
+  const out: string[] = [];
+  for (const s of parseFilter(query).scopes) {
+    if (!scopes.includes(s.scope)) continue;
+    for (const n of s.value.split(",").map((x) => x.trim()).filter(Boolean)) if (!out.includes(n)) out.push(n);
+  }
+  return out;
+}
+
+/**
+ * The stats a table shows as the reader's own columns: the ones added, in the
+ * order they were added, then any a condition names, as the site pins a stat
+ * the moment it is filtered on.
+ */
+export function pinnedStatKeys(
+  query: string,
+  cols: readonly string[],
+  index: { find: (typed: string) => { key?: string } | null; byKey: (key: string) => unknown },
+): string[] {
+  const out = cols.filter((k, i) => index.byKey(k) != null && cols.indexOf(k) === i);
+  for (const c of parseFilter(query).clauses) {
+    if (c.kind !== "stat") continue;
+    const key = index.find(c.name)?.key;
+    if (key && !out.includes(key)) out.push(key);
+  }
+  return out;
+}
+
 export type Suggestion = {
   key: string;
   /** How it will read in the box. */
@@ -301,7 +397,12 @@ const SCOPE_TEXT: Record<Scope, string> = {
   conf: "A conference",
   opponents: "Played against a team",
   player: "One player, by exact name",
+  class: "A class: Fr, So, Jr, Sr, Gr",
+  pos: "A position: G, F or C",
 };
+
+/** Scopes that take several names, with commas between. */
+const MULTI: ReadonlySet<Scope> = new Set<Scope>(["teams", "conf", "class", "pos"]);
 
 const MINUS = "−";
 const shownNumber = (x: number, digits: number): string => `${x < 0 ? MINUS : ""}${Math.abs(x).toFixed(digits)}`;
@@ -386,9 +487,9 @@ export function completeFilter(query: string, caret: number, help: FilterHelp): 
 function completeName(query: string, caret: number, c: ScopeClause, help: FilterHelp): Completion | null {
   if (caret < c.valueStart) return null;
   if (!help.scopes.includes(c.scope)) return { items: [], note: `This table has no “${c.scope}:” filter.` };
-  // Several teams: only the one after the last comma is being typed.
+  // Several names: only the one after the last comma is being typed.
   const typedPart = query.slice(c.valueStart, caret);
-  const comma = c.scope === "teams" ? typedPart.lastIndexOf(",") : -1;
+  const comma = MULTI.has(c.scope) ? typedPart.lastIndexOf(",") : -1;
   const lead = typedPart.slice(comma + 1).search(/\S|$/);
   const start = c.valueStart + comma + 1 + lead;
   const partial = query.slice(start, caret);
@@ -407,7 +508,7 @@ function completeName(query: string, caret: number, c: ScopeClause, help: Filter
   const names = [...exact, ...prefix, ...within].slice(0, 40);
   // Typed in full, and nothing longer begins with it: nothing left to offer.
   if (names.length === 0 || (exact.length === 1 && names.length === 1)) return null;
-  const end = c.scope === "teams" ? caret + query.slice(caret, c.end).search(/,|$/) : c.end;
+  const end = MULTI.has(c.scope) ? caret + query.slice(caret, c.end).search(/,|$/) : c.end;
   return {
     items: names.map((name) => ({ key: `name:${name}`, text: name, mono: false, ...splice(query, start, end, name, true) })),
   };
