@@ -18,7 +18,7 @@ import { LoadError, TableSkeleton } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
 import { DataTable, type Column } from "~/table/data-table";
 import { ConfLogo } from "~/ui/conf-logo";
-import { DetailLink, DetailRow, DetailSection, DetailsRail, DetailsToggle, howOf, useDetailsRail, type OpenHow } from "~/ui/details";
+import { DetailLink, DetailRow, DetailSection, DetailsCollapsed, DetailsRail, howOf, useDetailsRail, type OpenHow } from "~/ui/details";
 import { num1, pct1, seasonLabel, signed1 } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 import { ClassBadge, PlayerPhoto } from "~/ui/player-photo";
@@ -179,7 +179,6 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
               <>
                 <SeasonSwitcher year={year} onChange={setYear} />
                 <RecordActions obj={teamObj} primary={["explorer", "what-changed", "matchup", "compare", "snapshot"]} />
-                <DetailsToggle open={detailsOpen} onToggle={toggleDetails} />
               </>
             }
           />
@@ -282,7 +281,11 @@ export function TeamProfileView({ year, setYear, record }: ViewProps) {
           </div>
         )}
       </div>
-      {detailsOpen && <TeamDetails name={name} year={year} team={team ?? null} onSeason={setYear} />}
+      {detailsOpen ? (
+        <TeamDetails name={name} year={year} team={team ?? null} onSeason={setYear} onCollapse={toggleDetails} />
+      ) : (
+        <DetailsCollapsed onExpand={toggleDetails} />
+      )}
     </div>
   );
 }
@@ -406,7 +409,19 @@ function TeamOverview({
  * The team's rail: who coached and how the season ended, every season on record
  * under each coach, and the ways out.
  */
-function TeamDetails({ name, year, team, onSeason }: { name: string; year: number; team: Team | null; onSeason: (y: number) => void }) {
+function TeamDetails({
+  name,
+  year,
+  team,
+  onSeason,
+  onCollapse,
+}: {
+  name: string;
+  year: number;
+  team: Team | null;
+  onSeason: (y: number) => void;
+  onCollapse: () => void;
+}) {
   const { openRecord } = useShell();
   const history = useMemo(() => teamHistory(name), [name]);
   const shown = useMemo(() => history.filter((h) => ALL_SEASONS.includes(h.year)), [history]);
@@ -417,7 +432,7 @@ function TeamDetails({ name, year, team, onSeason }: { name: string; year: numbe
     openRecord({ kind: "coach", slug: coachSlug(coach), name: coach, team: name }, { newTab: how.newTab, side: how.side });
 
   return (
-    <DetailsRail label={`${name} details`}>
+    <DetailsRail label={`${name} details`} onCollapse={onCollapse}>
       <DetailSection title="This season" aside={seasonLabel(year)}>
         {team && (
           <DetailRow label="Conference">

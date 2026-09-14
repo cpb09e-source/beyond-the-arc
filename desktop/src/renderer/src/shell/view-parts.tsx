@@ -5,7 +5,7 @@ import { seasonLabel } from "~/ui/format";
 import { Kbd } from "~/ui/kbd";
 import { useAccount } from "./account";
 import { useIsActive } from "./active";
-import { SeasonSwitcher } from "./season-switcher";
+import { SeasonsPicker, SeasonSwitcher } from "./season-switcher";
 import { useShell } from "./shell-context";
 
 /**
@@ -22,6 +22,7 @@ export function ViewHeader({
   title,
   year,
   setYear,
+  seasons,
   seasonNote,
   season = true,
   meta,
@@ -35,6 +36,8 @@ export function ViewHeader({
   year: number;
   /** Absent for a view pinned to one season: the season shows, and does not switch. */
   setYear?: (y: number) => void;
+  /** A table that can span seasons (the explorers): the seasons picked, and picking them. Takes the single switcher's place. */
+  seasons?: { years: readonly number[]; onChange: (years: number[]) => void };
   /** Why the season is fixed, on hover, when it is. */
   seasonNote?: string;
   /** False for a view about no one season (Compare), which shows none. */
@@ -60,7 +63,9 @@ export function ViewHeader({
         </h1>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {!season ? null : setYear ? (
+        {!season ? null : seasons ? (
+          <SeasonsPicker years={seasons.years} onChange={seasons.onChange} />
+        ) : setYear ? (
           <SeasonSwitcher year={year} onChange={setYear} />
         ) : (
           <span

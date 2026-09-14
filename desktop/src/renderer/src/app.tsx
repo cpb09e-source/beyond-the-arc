@@ -310,6 +310,23 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     },
     [favorites, setFavorites, toast],
   );
+  /** Save view's form: star the place under the name given, or rename the favorite it already is. */
+  const saveFavoritePlace = useCallback(
+    (place: Place, label: string) => {
+      const name = label.trim();
+      if (!name) return;
+      const hit = favorites.find((f) => samePlace(f, place));
+      if (hit) {
+        if (hit.label === name) return;
+        setFavorites((list) => list.map((f) => (f.id === hit.id ? { ...f, label: name } : f)));
+        toast({ title: `Renamed to ${name}` });
+      } else {
+        setFavorites((list) => [...list, favoriteOf(place, name)]);
+        toast({ title: `Saved ${name}`, body: "It is in Favorites in the sidebar." });
+      }
+    },
+    [favorites, setFavorites, toast],
+  );
   const toggleFavorite = useCallback(
     (tabId?: string) => {
       const tab = ws.tabs.find((t) => t.id === (tabId ?? currentRef.current.id)) ?? currentRef.current;
@@ -1176,8 +1193,12 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
                       record={tab.record}
                       table={tab.table ?? NO_LAYOUT}
                       setTable={(t) => dispatch({ type: "set-table", id: tab.id, table: t })}
-                      saved={favorites.some((f) => samePlace(f, tab))}
-                      toggleSaved={(label) => toggleFavoritePlace(tab, label)}
+                      savedAs={favorites.find((f) => samePlace(f, tab))?.label ?? null}
+                      saveView={(label) => saveFavoritePlace(tab, label)}
+                      unsaveView={() => {
+                        const hit = favorites.find((f) => samePlace(f, tab));
+                        if (hit) removeFavorite(hit.id);
+                      }}
                     />
                     </TableExportContext.Provider>
                   </section>

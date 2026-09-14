@@ -158,11 +158,36 @@ export async function connect(port, shotsDir = null) {
     return ok;
   };
 
-  /** Puts the pane in front on a season, through the header's season switcher. */
+  /**
+   * Puts the pane in front on one season, through the header's season control: the
+   * single switcher's option, or "Only" on the explorers' several-season picker.
+   */
   const setSeason = async (label) => {
     const now = await js(`${SECTION}.querySelector('header button[aria-label^="Season,"]')?.getAttribute('aria-label') ?? null`);
     if (now == null || now === `Season, ${label}`) return now != null;
-    return pick("Season", label, 2500);
+    await js(`${SECTION}.querySelector('header button[aria-label^="Season,"]')?.click(); true`);
+    await sleep(400);
+    const year = Number(label.slice(0, 4)) + 1;
+    const ok = await js(`(() => {
+      const o = [...document.querySelectorAll('[role=listbox] [role=option]')].find((x) => x.dataset.season === ${JSON.stringify(String(year))} || x.innerText.split('\\n')[0].trim() === ${JSON.stringify(label)});
+      if (!o) return false;
+      (o.querySelector('[data-only]') ?? o).click();
+      return true;
+    })()`);
+    await sleep(2500);
+    return ok;
+  };
+
+  /** Adds a season to the explorers' picker, keeping the ones already picked. */
+  const addSeason = async (label) => {
+    await js(`${SECTION}.querySelector('header button[aria-label^="Season,"]')?.click(); true`);
+    await sleep(400);
+    const year = Number(label.slice(0, 4)) + 1;
+    const ok = await js(`(() => { const o = document.querySelector('[role=listbox][aria-label=Seasons] [role=option][data-season="${year}"]'); if (!o || o.getAttribute('aria-selected') === 'true') return false; o.click(); return true; })()`);
+    await sleep(300);
+    await key("Escape");
+    await sleep(2500);
+    return ok;
   };
 
   /** A click on the pane's empty header, which counts as outside any popover. */
@@ -188,7 +213,7 @@ export async function connect(port, shotsDir = null) {
   await cmd("Emulation.setFocusEmulationEnabled", { enabled: true });
 
   return {
-    cmd, js, errors, key, type, mouse, hover, click, waitFor, nav, setQuery, query, meta, shown, press, pick, setSeason,
+    cmd, js, errors, key, type, mouse, hover, click, waitFor, nav, setQuery, query, meta, shown, press, pick, setSeason, addSeason,
     closePopover, popoverText, rowsText, rowPoint, shot,
     reload: async () => {
       await cmd("Page.reload", { ignoreCache: true });

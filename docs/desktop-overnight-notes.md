@@ -528,6 +528,14 @@ the roadmap after it and the grammar every new feature has to fit.
   smoke suite uses it). Your open dev app has been hot-reloading the renderer
   changes; restart it to pick up this one main-process change.
 
+### Later on 2026-09-14, from your notes
+
+- **Free accounts never reach the app.** Confirmed in the code, nothing to change: an installed copy shows nothing until the account check passes. Signed out, it shows the sign-in screen; signed in on a free plan, "The desktop app comes with Season Pass" with Get Season Pass. No season, free or paid, is visible behind either. Entitlement is asked again at every token refresh, so a lapsed Season Pass locks the app at its next refresh. "Free seasons only" appears only in the development app, which runs without an account.
+- **Several seasons in the Team and Player Explorers**, as on the site. The season control lists every season with a checkbox: a row adds or removes its season, Only keeps just that one, and All and One season sit at the foot. With more than one, the rows are team-seasons or player-seasons, a Season column appears, and every percentile and BTA rank stays the one from its own season, never pooled. Filters, views, added columns, Peek, Stat Lens, Focus and downloads all work across them, and the seasons ride with the tab and its favorites. The lasso selection belongs to one season, so it steps aside until one season is back. Every other view keeps one season at a time.
+- **Save view asks for a name.** A small form opens with a name suggested; Save stars the table under it. On a saved table the same form renames it or removes it. Ctrl+D still stars a tab in one keystroke.
+- **The details rail on team, player and coach pages folds away.** The button at its top folds it to a slim "Details" edge at the right, and the edge brings it back; Ctrl+I still does both, and the choice is remembered. The duplicate switch in the page header is gone.
+- Sources decisions recorded in §8 of `docs/TODO-legal-sources.md`: headshots and the ESPN NBA marks stay; the export source line is deferred.
+
 ## What still has to happen
 
 **To put 0.1.1 in people's hands** (the full order is in `docs/desktop-app-plan.md`):

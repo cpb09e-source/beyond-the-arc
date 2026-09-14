@@ -105,9 +105,10 @@ export type ViewProps = {
   /** This tab's table layout: its column view and the stats added as columns (./table-layout.ts). */
   table: TableLayout;
   setTable: (table: TableLayout) => void;
-  /** Whether this tab, as it stands, is a favorite; and starring it under a name. */
-  saved: boolean;
-  toggleSaved: (label: string) => void;
+  /** The name this tab, as it stands, is saved under as a favorite, or null. Save view's form names, renames or removes it. */
+  savedAs: string | null;
+  saveView: (label: string) => void;
+  unsaveView: () => void;
 };
 
 export type ViewDef = {

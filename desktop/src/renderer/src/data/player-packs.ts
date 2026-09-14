@@ -42,27 +42,31 @@ export function loadPlayerPack(year: number, group: PackGroup): Promise<boolean>
 }
 
 /**
- * The groups a table needs, loaded; the number that comes back changes as each
- * one lands, which is what re-renders the table with its values.
+ * The groups a table needs, loaded for each of its seasons; the number that
+ * comes back changes as each one lands, which is what re-renders the table with
+ * its values.
  */
-export function usePlayerPacks(year: number, groups: readonly PackGroup[]): number {
+export function usePlayerPacks(years: number | readonly number[], groups: readonly PackGroup[]): number {
   const [landed, setLanded] = useState(0);
-  const key = `${year}|${[...groups].sort().join(",")}`;
+  const list = typeof years === "number" ? [years] : years;
+  const key = `${list.join(",")}|${[...groups].sort().join(",")}`;
   useEffect(() => {
     if (groups.length === 0) return;
     let stale = false;
-    for (const g of groups) {
-      loadPlayerPack(year, g).then(
-        () => {
-          if (!stale) setLanded((n) => n + 1);
-        },
-        () => {},
-      );
+    for (const y of list) {
+      for (const g of groups) {
+        loadPlayerPack(y, g).then(
+          () => {
+            if (!stale) setLanded((n) => n + 1);
+          },
+          () => {},
+        );
+      }
     }
     return () => {
       stale = true;
     };
-    // `groups` is read through `key`.
+    // `list` and `groups` are read through `key`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   return landed;

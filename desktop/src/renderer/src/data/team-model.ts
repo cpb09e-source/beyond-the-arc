@@ -18,6 +18,8 @@ import cbbTeams from "@/data/cbb-team-ids.json";
 
 export type Team = {
   id: number;
+  /** The season this row is, so rows from several seasons can share a table. */
+  year: number;
   name: string;
   conf: string;
   confLabel: string;
@@ -84,6 +86,7 @@ export function shapeSeason(year: number, rows: StaticTeamSeasonRow[]): Season {
 
     teams.push({
       id: Number(r.id),
+      year,
       name: String(r.name),
       conf,
       confLabel: confDisplay(conf),

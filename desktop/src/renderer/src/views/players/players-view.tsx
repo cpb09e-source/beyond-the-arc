@@ -5,14 +5,16 @@ import { exportColsFor, pinnedGridCol, SORT_FIELD, viewGrid, type GridCol } from
 import { PACK_STAT_COLUMNS, groupsFor, type PackGroup } from "@/lib/player-stat-pack";
 import { PLAYER_VIEWS, playerViewByKey, playerViewPackGroups } from "@/lib/player-views";
 import { PLAYER_STAT_COLUMNS, PLAYER_STAT_GROUP_LABEL, type PlayerSummary } from "@/lib/players";
-import { exportFields, playerEntity, type ExportCol, type ExportInput, type MultiExportInput } from "@/lib/table-export";
+import { exportFields, exportSeasonLabel, playerEntity, type ExportCol, type ExportInput, type MultiExportInput } from "@/lib/table-export";
 import { loadPlayerPack, packPct, packValue, usePlayerPacks } from "~/data/player-packs";
 import { loadPlayerSeason, type Player, type PlayerSeason } from "~/data/player-model";
-import { SOURCE_LABEL, useLoaded } from "~/data/use-corpus";
+import { SOURCE_LABEL, useLoadedMany } from "~/data/use-corpus";
 import { useFocusSubject } from "~/focus/focus-mode";
 import type { Obj } from "~/objects/object";
 import { useActionEnv } from "~/objects/use-object-actions";
 import { Picker } from "~/shell/picker";
+import { seasonsLabel } from "~/shell/season-switcher";
+import { tableSeasons } from "~/shell/table-layout";
 import { useTabTitle } from "~/shell/tab-title";
 import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
@@ -22,6 +24,7 @@ import { DownloadMenu, SaveViewButton } from "~/table/download-menu";
 import { exportMeta, sortText } from "~/table/export-meta";
 import { FilterRows, TableBar } from "~/table/filter-rows";
 import { conferenceOptions, ScopeSelect, type ScopeOption } from "~/table/scope-select";
+import { SEASON_COLUMN_TITLE, SeasonCell } from "~/table/season-cell";
 import { StatCell } from "~/table/stat-cell";
 import { catalogStats, conditionTest, filterHelp, filterProblem, parseFilter, pinnedStatKeys, sortedNames, statIndex } from "~/ui/filter-query";
 import { seasonLabel, signed1 } from "~/ui/format";
@@ -34,25 +37,31 @@ import { playerStat } from "./player-columns";
 import { PlayerPeekBody } from "./player-peek";
 
 /**
- * Player Explorer: every player on the season's leaderboard, as the site's
- * explorer shows them.
+ * Player Explorer: every player on a season's leaderboard, or on several
+ * seasons', as the site's explorer shows them.
  *
  * THE SITE'S TWELVE VIEWS, from src/lib/player-views.ts, each column from
  * src/lib/player-explorer-columns.ts. A view's stats come from two places, as
  * on the site: the player's summary, and the stat pack, a hundred more numbers
  * in group files loaded when a view or a filter needs them (~/data/player-packs.ts).
  *
+ * ONE SEASON, SEVERAL, OR ALL, as the site's explorer picks them. With more than
+ * one, the rows are player-seasons: a Season column appears, and every
+ * percentile stays the one from the player's own season, never pooled.
+ *
  * THE FILTERS ARE WORDS, as on every table here: Team, Conference, Class and
  * Position pickers, the filter rows and Add columns all write the filter box
- * ("team: Duke ppg>15 3p>38"); the view and added columns ride with the tab.
+ * ("team: Duke ppg>15 3p>38"); the view, added columns and seasons ride with the tab.
  *
  * WIDE ON PURPOSE. The rank and the player stay pinned while the stats scroll.
  */
 
 const ROW_H = 42;
 
-const playerKey = (p: Player) => p.id;
-const byRank = (a: Player, b: Player) => (a.rank ?? 1e9) - (b.rank ?? 1e9);
+const loadPlayers = (key: string) => loadPlayerSeason(Number(key.slice(key.indexOf("|") + 1)));
+const yearOfKey = (key: string) => Number(key.slice(key.indexOf("|") + 1));
+const playerKey = (p: Player) => `${p.s.year}|${p.id}`;
+const byRank = (a: Player, b: Player) => (a.rank ?? 1e9) - (b.rank ?? 1e9) || b.s.year - a.s.year;
 
 const PACK_GROUP_LABEL: Record<PackGroup, string> = {
   info: "Player Info",
@@ -185,6 +194,13 @@ const IDENTITY: Column<Player>[] = [
   },
 ];
 
+const SEASON_COLUMN: Column<Player> = {
+  key: "season", label: "Season", title: SEASON_COLUMN_TITLE, width: 84, align: "left", first: -1,
+  sortValue: (p) => p.s.year,
+  cell: (p) => <SeasonCell year={p.s.year} />,
+  text: (p) => seasonLabel(p.s.year),
+};
+
 /** A column the reader added, as the workbook lists it: under "Your columns", ahead of the view's own. */
 function pinnedExportCol(key: string): ExportCol | null {
   const c = pinnedGridCol(key);
@@ -199,28 +215,47 @@ function pinnedExportCol(key: string): ExportCol | null {
   };
 }
 
-export function PlayersView({ year, setYear, query, setQuery, focus, onLanded, table, setTable, saved, toggleSaved }: ViewProps) {
-  const [state, retry] = useLoaded(`player-season|${year}`, () => loadPlayerSeason(year));
+export function PlayersView({ year, setYear, query, setQuery, focus, onLanded, table, setTable, savedAs, saveView, unsaveView }: ViewProps) {
+  const years = useMemo(() => tableSeasons(table, year), [table, year]);
+  const multi = years.length > 1;
+  const keys = useMemo(() => years.map((y) => `player-season|${y}`), [years]);
+  const [many, retry] = useLoadedMany(keys, loadPlayers);
   const setStatus = useSetStatus();
   const env = useActionEnv();
-  useTabTitle(query.trim() ? `Players: ${query.trim()}` : null);
+  useTabTitle(query.trim() ? `Players: ${query.trim()}` : multi ? `Players, ${seasonsLabel(years)}` : null);
   const handle = useRef<TableHandle<Player> | null>(null);
 
-  const season: PlayerSeason | null = state.status === "ready" ? state.value : null;
+  const seasons = useMemo<PlayerSeason[]>(() => many.values.map((v) => v.value), [many]);
+  const seasonByYear = useMemo(() => new Map(seasons.map((s) => [s.year, s])), [seasons]);
+  const allPlayers = useMemo(() => seasons.flatMap((s) => s.players), [seasons]);
+  const loadedAll = many.loading.length === 0;
+
+  // A season stepped to with [ or ] that is not among the picked ones leaves several seasons for that one.
+  useEffect(() => {
+    if (table.seasons && table.seasons.length > 1 && !table.seasons.includes(year)) setTable({ ...table, seasons: undefined });
+  }, [table, year, setTable]);
+
+  const pickSeasons = (next: number[]) => {
+    const sorted = [...new Set(next)].sort((a, b) => b - a);
+    if (sorted.length === 0) return;
+    const anchor = sorted.includes(year) ? year : sorted[0]!;
+    if (anchor !== year) setYear(anchor);
+    setTable({ ...table, seasons: sorted.length > 1 ? sorted : undefined });
+  };
+
   const view = playerViewByKey(table.view);
   const cols = useMemo(() => table.cols ?? [], [table.cols]);
   const parsed = useMemo(() => parseFilter(query), [query]);
   const pinned = useMemo(() => pinnedStatKeys(query, cols, PLAYER_STATS), [query, cols]);
   const groups = useMemo(() => [...new Set([...playerViewPackGroups(view), ...groupsFor(pinned)])], [view, pinned]);
-  const landed = usePlayerPacks(year, groups);
+  const landed = usePlayerPacks(years, groups);
 
-  // A Ctrl K result for a player in this season. The index can name a player the
+  // A Ctrl K result for a player in one of these seasons. The index can name a player the
   // leaderboard floor leaves out, and then there is no row to land on.
-  const target = focus?.kind === "player" && focus.year === year ? focus : null;
-  const landing = target && season ? season.players.find((p) => p.bartId === target.bartId) : undefined;
+  const target = focus?.kind === "player" && years.includes(focus.year) ? focus : null;
+  const landing = target ? seasonByYear.get(target.year)?.players.find((p) => p.bartId === target.bartId) : undefined;
 
   const rows = useMemo(() => {
-    if (!season) return [];
     const scopes = parsed.scopes.map((s): ((p: Player) => boolean) => {
       const v = s.value;
       if (s.scope === "team") return (p) => sameName(p.team, v);
@@ -235,7 +270,7 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded, t
       return () => false;
     });
     const stats = conditionTest(PLAYER_STATS, parsed.conditions);
-    return season.players.filter(
+    return allPlayers.filter(
       (p) =>
         matchesQuery(parsed.words, p.name, p.team, p.confLabel, p.conf, p.cls ?? "", p.position ?? "", p.hometown ?? "") &&
         scopes.every((f) => f(p)) &&
@@ -243,12 +278,12 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded, t
     );
     // `landed` re-runs the filter once a condition's stat pack arrives.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [season, parsed, landed]);
+  }, [allPlayers, parsed, landed]);
 
   const columns = useMemo(() => {
     const grid = viewGrid(view);
     const inView = new Set(grid.cols.map(keyOf));
-    const out = [...IDENTITY];
+    const out = multi ? [...IDENTITY.slice(0, 3), SEASON_COLUMN, ...IDENTITY.slice(3)] : [...IDENTITY];
     for (const k of pinned) {
       const c = inView.has(k) ? null : pinnedGridCol(k);
       if (c && c.field !== "games") out.push(gridColumn(c, "Your columns", true));
@@ -261,75 +296,86 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded, t
     return out;
     // `landed` gives the table new columns, and so a new sort, once a pack's values arrive.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, pinned, landed]);
+  }, [view, pinned, landed, multi]);
 
-  // The view's own sort, by whichever key the table's column carries for it.
+  // The view's own sort, by whichever key the table's column carries for it. eWins leads only when every season has it.
   const sortKey = useMemo(() => {
-    const want = view.key === "overview" && season ? season.defaultSort : view.sortBy;
+    const want = view.key === "overview" && seasons.length > 0 ? (seasons.every((s) => s.defaultSort === "ewins") ? "ewins" : "epm") : view.sortBy;
     if (columns.some((c) => c.key === want)) return want;
     const field = SORT_FIELD[want] as string | undefined;
     const viaField = field ? FIELD_KEY.get(field) : undefined;
     return viaField && columns.some((c) => c.key === viaField) ? viaField : "name";
-  }, [view, season, columns]);
+  }, [view, seasons, columns]);
 
   const help = useMemo(() => {
-    if (!season) return undefined;
-    const teams = () => sortedNames(season.players.map((p) => p.team));
+    if (allPlayers.length === 0) return undefined;
+    const teams = () => sortedNames(allPlayers.map((p) => p.team));
     return filterHelp({
-      noun: "players",
+      noun: multi ? "player-seasons" : "players",
       index: PLAYER_STATS,
-      rows: season.players,
+      rows: allPlayers,
       scopes: PLAYER_SCOPES,
       names: {
-        player: () => [...season.players].sort(byRank).map((p) => p.name),
+        player: () => [...new Set([...allPlayers].sort(byRank).map((p) => p.name))],
         team: teams,
         teams,
-        conf: () => sortedNames(season.players.map((p) => p.confLabel)),
+        conf: () => sortedNames(allPlayers.map((p) => p.confLabel)),
         class: () => CLASS_OPTIONS.map((o) => o.name),
         pos: () => POSITION_OPTIONS.map((o) => o.name),
       },
     });
-  }, [season]);
+  }, [allPlayers, multi]);
 
   const teamOptions = useMemo<ScopeOption[]>(() => {
-    if (!season) return [];
     const seen = new Map<string, ScopeOption>();
-    for (const p of season.players) if (!seen.has(p.team)) seen.set(p.team, { name: p.team, meta: p.confLabel });
+    for (const p of allPlayers) if (!seen.has(p.team)) seen.set(p.team, { name: p.team, meta: p.confLabel });
     return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [season]);
-  const confOptions = useMemo(() => conferenceOptions(season?.players ?? []), [season]);
+  }, [allPlayers]);
+  const confOptions = useMemo(() => conferenceOptions(allPlayers), [allPlayers]);
 
   useEffect(() => {
-    if (state.status === "ready") setStatus(`${SOURCE_LABEL[state.source]} in ${state.ms} ms`);
-    else if (state.status === "loading") setStatus("Loading…");
-    else setStatus("Not loaded");
-  }, [state, setStatus]);
+    if (many.loading.length > 0) setStatus(multi ? `Loading ${many.loading.length} of ${years.length} seasons…` : "Loading…");
+    else if (many.values.length === 0) setStatus("Not loaded");
+    else if (!multi) setStatus(`${SOURCE_LABEL[many.values[0]!.source]} in ${many.values[0]!.ms} ms`);
+    else setStatus(`${many.values.length} seasons in ${many.values.reduce((s, v) => s + v.ms, 0)} ms`);
+  }, [many, multi, years.length, setStatus]);
 
-  // Focus on a player lights his row among his team's (the team comes as the filter).
+  // Focus on a player lights his row among his team's (the team comes as the filter), in his season.
   const focusSubject = useFocusSubject();
-  const spotKey =
-    focusSubject?.kind === "player" && season ? (season.players.find((p) => p.bartId === focusSubject.bartId)?.id ?? null) : null;
+  const spotKey = useMemo(() => {
+    if (focusSubject?.kind !== "player") return null;
+    const y = years.includes(focusSubject.year) ? focusSubject.year : year;
+    const hit = seasonByYear.get(y)?.players.find((p) => p.bartId === focusSubject.bartId);
+    return hit ? playerKey(hit) : null;
+  }, [focusSubject, years, year, seasonByYear]);
 
-  const total = season?.players.length ?? 0;
-  const meta = !season
-    ? undefined
-    : target && !landing
-      ? `${target.name} is not on the ${seasonLabel(year)} leaderboard`
-      : `${query.trim() && rows.length !== total ? `${rows.length.toLocaleString()} of ${total.toLocaleString()}` : total.toLocaleString()} players · ${season.minGames}+ games${season.estimated ? " · EPM estimated" : ""}`;
+  const total = allPlayers.length;
+  const one = seasons[0];
+  const failedNote =
+    many.failed.length > 0 && many.values.length > 0 ? ` · ${many.failed.map((f) => seasonLabel(yearOfKey(f.key))).join(", ")} could not load` : "";
+  const count = `${query.trim() && rows.length !== total ? `${rows.length.toLocaleString()} of ${total.toLocaleString()}` : total.toLocaleString()}`;
+  const meta =
+    !one || !loadedAll
+      ? undefined
+      : target && !landing
+        ? `${target.name} is not on the ${seasonLabel(target.year)} leaderboard`
+        : multi
+          ? `${count} player-seasons · ${seasonsLabel(years)}${failedNote}`
+          : `${count} players · ${one.minGames}+ games${one.estimated ? " · EPM estimated" : ""}`;
 
   const object = (p: Player): Obj | null =>
     p.bartId == null
       ? null
-      : { kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto, year, team: p.team, teamLogoId: p.teamLogoId, conf: p.conf };
-  // Alt-click or right-click a number: the games behind it.
+      : { kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto, year: p.s.year, team: p.team, teamLogoId: p.teamLogoId, conf: p.conf };
+  // Alt-click or right-click a number: the games behind it, in that row's season.
   const statLens = (p: Player, key: string) => {
     const st = playerStat(key);
     if (!st || p.bartId == null) return null;
-    return playerLens(key, { kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto, year }, { label: st.label, value: st.format(p.s[st.field] as number | null) });
+    return playerLens(key, { kind: "player", bartId: p.bartId, name: p.name, hasPhoto: p.hasPhoto, year: p.s.year }, { label: st.label, value: st.format(p.s[st.field] as number | null) });
   };
 
   // ── Download: the site's files, built on click from the table as it stands ──
-  const byId = useMemo(() => new Map((season?.players ?? []).map((p) => [p.id, p])), [season]);
+  const byId = useMemo(() => new Map(allPlayers.map((p) => [`${p.s.year}|${p.id}`, p])), [allPlayers]);
   const entity = useMemo(
     () =>
       playerEntity<PlayerSummary>(
@@ -339,7 +385,7 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded, t
         },
         (r, key) => {
           if (!key) return null;
-          if ((PCT_KEYS as readonly string[]).includes(key)) return byId.get(r.id)?.pct[key as PctKey] ?? null;
+          if ((PCT_KEYS as readonly string[]).includes(key)) return byId.get(`${r.year}|${r.id}`)?.pct[key as PctKey] ?? null;
           return packPct(r.year, key, r.bart_player_id);
         },
       ),
@@ -354,15 +400,23 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded, t
   const metaFor = (viewLabel: string) => {
     const sort = handle.current?.sort;
     const col = sort ? columns.find((c) => c.key === sort.key) : undefined;
-    return exportMeta({ viewLabel, year, query, index: PLAYER_STATS, sort: sortText(col?.label, sort?.dir ?? -1), path: `/players?ys=${year}${view.key !== "overview" ? `&view=${view.key}` : ""}` });
+    const m = exportMeta({
+      viewLabel,
+      year,
+      query,
+      index: PLAYER_STATS,
+      sort: sortText(col?.label, sort?.dir ?? -1),
+      path: `/players?ys=${years.join(",")}${view.key !== "overview" ? `&view=${view.key}` : ""}`,
+    });
+    return multi ? { ...m, seasons: years.map(exportSeasonLabel).join(", ") } : m;
   };
   const buildExport = (): ExportInput<PlayerSummary> => ({ cols: colsForView(view), rows: exportRows(), entity, meta: metaFor(view.label) });
-  // The other tabs' numbers live in packs this view may never have asked for, so they are fetched first.
+  // The other tabs' numbers live in packs this view may never have asked for, so they are fetched first, for every season.
   const buildExportAll = async (keys: string[]): Promise<MultiExportInput<PlayerSummary>> => {
     const chosen = PLAYER_VIEWS.filter((v) => keys.includes(v.key) && !v.custom);
     const need = new Set<PackGroup>(groupsFor(pinned));
     for (const v of chosen) for (const g of playerViewPackGroups(v)) need.add(g);
-    await Promise.all([...need].map((g) => loadPlayerPack(year, g)));
+    await Promise.all(years.flatMap((y) => [...need].map((g) => loadPlayerPack(y, g))));
     return {
       sheets: chosen.map((v) => ({ name: v.label, cols: colsForView(v) })),
       rows: exportRows(),
@@ -372,7 +426,9 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded, t
     };
   };
   const exportColumns = exportFields(colsForView(view), entity).length;
-  const saveLabel = `Players, ${view.label}${query.trim() ? ` · ${query.trim()}` : ""}`;
+  const saveLabel = `Players, ${view.label}${multi ? ` · ${seasonsLabel(years)}` : ""}${query.trim() ? ` · ${query.trim()}` : ""}`;
+  const firstFailure = many.failed[0];
+  const anyEwins = seasons.some((s) => s.hasEwins);
 
   return (
     <>
@@ -381,12 +437,13 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded, t
         title="Player Explorer"
         year={year}
         setYear={setYear}
+        seasons={{ years, onChange: pickSeasons }}
         meta={meta}
         controls={<Picker label="View" value={view.key} options={VIEW_OPTIONS} onChange={(key) => setTable({ ...table, view: key === "overview" ? undefined : key })} />}
-        filter={{ value: query, onChange: setQuery, placeholder: "Filter players", help }}
+        filter={{ value: query, onChange: setQuery, placeholder: multi ? "Filter player-seasons" : "Filter players", help }}
         actions={
           <>
-            <SaveViewButton saved={saved} onToggle={() => toggleSaved(saveLabel)} />
+            <SaveViewButton savedAs={savedAs} suggest={saveLabel} onSave={saveView} onRemove={unsaveView} />
             <DownloadMenu
               rows={rows.length}
               columns={exportColumns}
@@ -426,31 +483,34 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded, t
         </TableBar>
       )}
       <div className="relative min-h-0 flex-1 border-t border-hairline">
-        {state.status === "ready" ? (
+        {loadedAll && many.values.length > 0 ? (
           <DataTable
-            key={`${year}:${view.key}`}
+            key={`${years.join(",")}:${view.key}`}
             id="player-explorer"
             rows={rows}
-            columns={state.value.hasEwins ? columns : columns.filter((c) => c.key !== "ewins")}
+            columns={anyEwins ? columns : columns.filter((c) => c.key !== "ewins")}
             rowKey={playerKey}
             rowHeight={ROW_H}
             defaultSort={{ key: sortKey, dir: view.sortDir === "asc" ? 1 : -1 }}
             tieBreak={byRank}
-            ariaLabel="Players"
+            ariaLabel={multi ? "Player-seasons" : "Players"}
             empty={<NoMatches query={query} noun="player, team or conference" problem={filterProblem(parsed, PLAYER_STATS, PLAYER_SCOPES)} />}
-            peek={{ label: (p) => p.name, body: (p) => <PlayerPeekBody season={state.value} player={p} /> }}
-            landOn={landing && target ? { key: landing.id, nonce: target.nonce } : undefined}
+            peek={{
+              label: (p) => (multi ? `${p.name} ${seasonLabel(p.s.year)}` : p.name),
+              body: (p) => <PlayerPeekBody season={seasonByYear.get(p.s.year)!} player={p} />,
+            }}
+            landOn={landing && target ? { key: playerKey(landing), nonce: target.nonce } : undefined}
             onLanded={onLanded}
             object={object}
             spotlight={spotKey}
             statLens={statLens}
             handle={handle}
           />
-        ) : state.status === "loading" ? (
-          <TableSkeleton rowHeight={ROW_H} label="Loading players" />
-        ) : (
-          <LoadError year={year} reason={state.reason} message={state.message} what="Players" onRetry={retry} />
-        )}
+        ) : !loadedAll ? (
+          <TableSkeleton rowHeight={ROW_H} label={multi ? `Loading ${years.length} seasons of players` : "Loading players"} />
+        ) : firstFailure ? (
+          <LoadError year={yearOfKey(firstFailure.key)} reason={firstFailure.reason} message={firstFailure.message} what="Players" onRetry={retry} />
+        ) : null}
       </div>
     </>
   );

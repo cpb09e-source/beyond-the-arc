@@ -26,7 +26,7 @@ import { LoadError, TableSkeleton } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
 import { DataTable, type Column } from "~/table/data-table";
 import { ConfLogo } from "~/ui/conf-logo";
-import { DetailLink, DetailRow, DetailSection, DetailsRail, DetailsToggle, useDetailsRail, type OpenHow } from "~/ui/details";
+import { DetailLink, DetailRow, DetailSection, DetailsCollapsed, DetailsRail, useDetailsRail, type OpenHow } from "~/ui/details";
 import { seasonLabel } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 import { ClassBadge, PlayerPhoto } from "~/ui/player-photo";
@@ -190,7 +190,6 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
               <>
                 <SeasonSwitcher year={year} onChange={setYear} />
                 <RecordActions obj={playerObj} primary={["explorer", "compare", "snapshot"]} />
-                <DetailsToggle open={detailsOpen} onToggle={toggleDetails} />
               </>
             }
           />
@@ -271,7 +270,7 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
           </div>
         )}
       </div>
-      {detailsOpen && (
+      {detailsOpen ? (
         <PlayerDetails
           name={name}
           year={year}
@@ -280,7 +279,10 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
           career={career}
           onSeason={setYear}
           onTeam={(team, logoId, how) => openRecord({ kind: "team", name: team, logoId }, { newTab: how.newTab, side: how.side, year })}
+          onCollapse={toggleDetails}
         />
+      ) : (
+        <DetailsCollapsed onExpand={toggleDetails} />
       )}
     </div>
   );
@@ -455,6 +457,7 @@ function PlayerDetails({
   career,
   onSeason,
   onTeam,
+  onCollapse,
 }: {
   name: string;
   year: number;
@@ -463,6 +466,7 @@ function PlayerDetails({
   career: Array<{ year: number; team: string; teamLogoId: number | null; cls: string | null }>;
   onSeason: (y: number) => void;
   onTeam: (team: string, logoId: number | null, how: OpenHow) => void;
+  onCollapse: () => void;
 }) {
   const { openRecord } = useShell();
   const history = player ? teamHistory(player.team) : [];
@@ -471,7 +475,7 @@ function PlayerDetails({
     openRecord({ kind: "coach", slug: coachSlug(coach), name: coach, team: player?.team ?? null }, { newTab: how.newTab, side: how.side });
 
   return (
-    <DetailsRail label={`${name} details`}>
+    <DetailsRail label={`${name} details`} onCollapse={onCollapse}>
       <DetailSection title="This season" aside={seasonLabel(year)}>
         {player ? (
           <>

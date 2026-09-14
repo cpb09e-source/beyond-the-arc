@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Corpus, DataSource } from "../../../preload";
 
 export type CorpusState<T> =
@@ -82,6 +82,82 @@ export function useCorpus<T>(
     const { json, source } = await window.bta.data(corpus, year);
     return { value: shape(json, year), source };
   });
+}
+
+export type ManyState<T> = {
+  /** Every key loaded so far, in the order asked for. */
+  values: Array<{ key: string; value: T; source: DataSource; ms: number }>;
+  /** Keys still on their way. */
+  loading: string[];
+  /** Keys that could not load, each with why. */
+  failed: Array<{ key: string; reason: "gated" | "failed"; message: string }>;
+};
+
+/** How many keys load at once: a season of players is four files and a shaping pass. */
+const MANY_AT_ONCE = 3;
+
+/**
+ * Several keys at once, for a table that spans seasons (the explorers with more
+ * than one season picked).
+ *
+ * THE SAME CACHE AS useLoaded, so a season already open reads on the same frame
+ * and one opened here opens at once anywhere else. The rest load three at a time.
+ *
+ * ONE FAILURE IS ONE KEY. A season this account cannot read, or one that failed,
+ * is reported by itself, and the seasons that did load still show.
+ *
+ * The state object only changes when a key lands or fails, so a table can memo
+ * on it without refiltering every render.
+ */
+export function useLoadedMany<T>(keys: readonly string[], load: (key: string) => Promise<{ value: T; source: DataSource }>): [ManyState<T>, () => void] {
+  const [attempt, setAttempt] = useState(0);
+  const [landed, setLanded] = useState(0);
+  const [failed, setFailed] = useState<ManyState<T>["failed"]>([]);
+  const sig = keys.join(",");
+
+  useEffect(() => {
+    let stale = false;
+    setFailed([]);
+    const queue = keys.filter((k) => !loaded.has(k));
+    const next = async (): Promise<void> => {
+      const key = queue.shift();
+      if (key == null || stale) return;
+      const started = performance.now();
+      try {
+        const { value, source } = await load(key);
+        loaded.set(key, { value, source, ms: Math.round(performance.now() - started) });
+        if (!stale) setLanded((n) => n + 1);
+      } catch (err) {
+        if (!stale) {
+          const message = err instanceof Error ? err.message : String(err);
+          setFailed((f) => [...f, { key, reason: message.includes("season-gated") ? "gated" : "failed", message }]);
+        }
+      }
+      return next();
+    };
+    void Promise.all(Array.from({ length: Math.min(MANY_AT_ONCE, queue.length) }, next));
+    return () => {
+      stale = true;
+    };
+    // `keys` is read through `sig`; `load` is a module-level function.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig, attempt]);
+
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  const have = keys.filter((k) => loaded.has(k)).length;
+  const state = useMemo<ManyState<T>>(() => {
+    const values: ManyState<T>["values"] = [];
+    const loading: string[] = [];
+    for (const key of keys) {
+      const hit = loaded.get(key);
+      if (hit) values.push({ key, value: hit.value as T, source: hit.source, ms: hit.ms });
+      else if (!failed.some((f) => f.key === key)) loading.push(key);
+    }
+    return { values, loading, failed: failed.filter((f) => keys.includes(f.key)) };
+    // Recomputed when a key lands (`have`, `landed`) or fails, or the keys change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig, have, landed, failed]);
+  return [state, retry];
 }
 
 /**

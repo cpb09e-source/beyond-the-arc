@@ -133,7 +133,7 @@ export function playerLogObject(season: PlayerGameSeason, g: PlayerGame): Obj {
   };
 }
 
-export function PlayerGamesView({ year, setYear, query, setQuery, table, setTable, saved, toggleSaved }: ViewProps) {
+export function PlayerGamesView({ year, setYear, query, setQuery, table, setTable, savedAs, saveView, unsaveView }: ViewProps) {
   const [state, retry] = useLoaded(`player-games|${year}`, () => loadPlayerGameSeason(year));
   const setStatus = useSetStatus();
   const env = useActionEnv();
@@ -283,7 +283,7 @@ export function PlayerGamesView({ year, setYear, query, setQuery, table, setTabl
         filter={{ value: query, onChange: setQuery, placeholder: "Filter games", help }}
         actions={
           <>
-            <SaveViewButton saved={saved} onToggle={() => toggleSaved(`Player games, ${view.label}${query.trim() ? ` · ${query.trim()}` : ""}`)} />
+            <SaveViewButton savedAs={savedAs} suggest={`Player games, ${view.label}${query.trim() ? ` · ${query.trim()}` : ""}`} onSave={saveView} onRemove={unsaveView} />
             <DownloadMenu
               rows={rows.length}
               columns={exportColumns}

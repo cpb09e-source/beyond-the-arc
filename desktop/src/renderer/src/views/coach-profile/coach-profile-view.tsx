@@ -13,7 +13,7 @@ import type { ViewProps } from "~/shell/views";
 import { DataTable, type Column } from "~/table/data-table";
 import { StatCell } from "~/table/stat-cell";
 import { CoachAvatar } from "~/ui/coach-avatar";
-import { DetailAction, DetailLink, DetailRow, DetailSection, DetailsRail, DetailsToggle, howOf, SiteLinks, useDetailsRail, type OpenHow } from "~/ui/details";
+import { DetailAction, DetailLink, DetailRow, DetailSection, DetailsCollapsed, DetailsRail, howOf, SiteLinks, useDetailsRail, type OpenHow } from "~/ui/details";
 import { num1, seasonLabel, signed1 } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 import { logoIdOf } from "~/ui/logo-id";
@@ -187,7 +187,6 @@ export function CoachProfileView({ record }: ViewProps) {
             actions={
               <>
                 <RecordActions obj={ref ? { kind: "coach", slug: ref.slug, name, team: profile?.current_team ?? ref.team } : null} primary={["win-calc", "snapshot"]} />
-                <DetailsToggle open={detailsOpen} onToggle={toggleDetails} />
               </>
             }
           />
@@ -237,7 +236,14 @@ export function CoachProfileView({ record }: ViewProps) {
           </div>
         )}
       </div>
-      {detailsOpen && profile && book && ranks && <CoachDetails profile={profile} book={book} ranks={ranks} onTeam={openTeam} onCalc={openCalc} />}
+      {profile &&
+        book &&
+        ranks &&
+        (detailsOpen ? (
+          <CoachDetails profile={profile} book={book} ranks={ranks} onTeam={openTeam} onCalc={openCalc} onCollapse={toggleDetails} />
+        ) : (
+          <DetailsCollapsed onExpand={toggleDetails} />
+        ))}
     </div>
   );
 }
@@ -393,12 +399,14 @@ function CoachDetails({
   ranks,
   onTeam,
   onCalc,
+  onCollapse,
 }: {
   profile: CoachProfile;
   book: CoachBook;
   ranks: CoachProfileRanks;
   onTeam: (team: string, year: number, how: OpenHow) => void;
   onCalc: (how: OpenHow) => void;
+  onCollapse: () => void;
 }) {
   const total = book.profiles.length;
   const composite = book.compositeRank.get(profile.slug);
@@ -421,7 +429,7 @@ function CoachDetails({
   ];
 
   return (
-    <DetailsRail label={`${profile.name} details`}>
+    <DetailsRail label={`${profile.name} details`} onCollapse={onCollapse}>
       <DetailSection title="Now" aside={profile.current_year != null ? seasonLabel(profile.current_year) : undefined}>
         <DetailRow label="Status">
           <span className={profile.is_active ? "text-good" : "text-ink-muted"}>{profile.is_active ? "Active" : "Former"}</span>

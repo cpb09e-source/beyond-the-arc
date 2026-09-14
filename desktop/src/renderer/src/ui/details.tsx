@@ -1,4 +1,4 @@
-import { ExternalLink, Link2, PanelRight } from "lucide-react";
+import { ExternalLink, Link2, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { beginDrag } from "~/objects/drag";
 import { objectDrag, type Obj } from "~/objects/object";
@@ -16,9 +16,10 @@ import { useToast } from "~/ui/toast";
  * coached, what seed, what came before) and the ways out to the rest of the
  * app, so the page reads as one object with edges rather than a stack of cards.
  *
- * ONE SWITCH FOR EVERY PROFILE. Ctrl+I shows or hides it, remembered, the way
- * Linear's issue sidebar is. It only appears in a pane wide enough to give the
- * page its full width beside it; narrower, the page keeps the room.
+ * ONE SWITCH FOR EVERY PROFILE. The button at the rail's top folds it to a slim
+ * edge, the edge unfolds it, and Ctrl+I does both, remembered, the way Linear's
+ * issue sidebar is. It only appears in a pane wide enough to give the page its
+ * full width beside it; narrower, the page keeps the room.
  */
 
 const isBool = (v: unknown): v is boolean => typeof v === "boolean";
@@ -44,35 +45,50 @@ export function useDetailsRail(): [boolean, () => void] {
   return [open, () => setOpen((o) => !o)];
 }
 
-/** The header's switch for the rail; only where the rail can appear. */
-export function DetailsToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={open}
-      aria-label={open ? "Hide details" : "Show details"}
-      title={`${open ? "Hide" : "Show"} details  Ctrl I`}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onToggle}
-      className={`hidden size-[26px] place-items-center rounded-md border transition-colors @5xl:grid ${
-        open
-          ? "border-[color-mix(in_oklab,var(--ink-muted)_40%,var(--hairline))] bg-[var(--nav-active)] text-ink"
-          : "border-hairline bg-card text-ink-muted hover:border-ink-muted hover:text-ink"
-      }`}
-    >
-      <PanelRight size={14} strokeWidth={2} />
-    </button>
-  );
-}
-
-export function DetailsRail({ label, children }: { label: string; children: ReactNode }) {
+export function DetailsRail({ label, onCollapse, children }: { label: string; onCollapse: () => void; children: ReactNode }) {
   return (
     <aside
       aria-label={label}
       className="details-in hidden w-[300px] shrink-0 overflow-y-auto border-l border-hairline bg-[color-mix(in_oklab,var(--chrome)_55%,var(--paper))] @5xl:block"
     >
-      <div className="flex flex-col gap-7 px-5 pb-10 pt-6">{children}</div>
+      <div className="flex justify-end px-2.5 pt-2.5">
+        <button
+          type="button"
+          aria-label="Hide details"
+          title="Hide details  ·  Ctrl I"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onCollapse}
+          className="grid size-[26px] place-items-center rounded-md text-ink-muted transition-colors hover:bg-[var(--row-hover)] hover:text-ink"
+        >
+          <PanelRightClose size={14} strokeWidth={2} />
+        </button>
+      </div>
+      <div className="flex flex-col gap-7 px-5 pb-10 pt-1">{children}</div>
     </aside>
+  );
+}
+
+/**
+ * The rail folded away: a slim edge where it was, so the way back sits where the
+ * rail went rather than in the page's header. Ctrl+I works either way.
+ */
+export function DetailsCollapsed({ onExpand }: { onExpand: () => void }) {
+  return (
+    <div className="hidden w-[36px] shrink-0 border-l border-hairline bg-[color-mix(in_oklab,var(--chrome)_55%,var(--paper))] @5xl:block">
+      <button
+        type="button"
+        aria-label="Show details"
+        title="Show details  ·  Ctrl I"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onExpand}
+        className="group flex h-full w-full flex-col items-center gap-3 pt-2.5 text-ink-muted transition-colors hover:bg-[var(--row-hover)] hover:text-ink"
+      >
+        <span className="grid size-[26px] place-items-center">
+          <PanelRightOpen size={14} strokeWidth={2} />
+        </span>
+        <span className="text-[11.5px] font-medium tracking-[0.02em] [writing-mode:vertical-rl]">Details</span>
+      </button>
+    </div>
   );
 }
 

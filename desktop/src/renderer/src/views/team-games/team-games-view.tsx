@@ -162,7 +162,7 @@ type Hit = GameLogHit<TeamGamePack>;
 /** Only when the reader has added columns does the table caption its groups. */
 const banded = (list: Column<TeamGame>[], band: string, accent: boolean): Column<TeamGame>[] => list.map((c) => ({ ...c, band, bandAccent: accent }));
 
-export function TeamGamesView({ year, setYear, query, setQuery, table, setTable, saved, toggleSaved }: ViewProps) {
+export function TeamGamesView({ year, setYear, query, setQuery, table, setTable, savedAs, saveView, unsaveView }: ViewProps) {
   const [state, retry] = useLoaded(`team-games|${year}`, () => loadTeamGameSeason(year));
   const setStatus = useSetStatus();
   const env = useActionEnv();
@@ -299,7 +299,7 @@ export function TeamGamesView({ year, setYear, query, setQuery, table, setTable,
         filter={{ value: query, onChange: setQuery, placeholder: "Filter games", help }}
         actions={
           <>
-            <SaveViewButton saved={saved} onToggle={() => toggleSaved(`Team games, ${view.label}${query.trim() ? ` · ${query.trim()}` : ""}`)} />
+            <SaveViewButton savedAs={savedAs} suggest={`Team games, ${view.label}${query.trim() ? ` · ${query.trim()}` : ""}`} onSave={saveView} onRemove={unsaveView} />
             <DownloadMenu
               rows={rows.length}
               columns={exportColumns}

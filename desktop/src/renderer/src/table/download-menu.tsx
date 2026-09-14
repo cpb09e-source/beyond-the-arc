@@ -1,5 +1,5 @@
 import { ArrowLeft, ChevronRight, ClipboardCopy, Download, FileSpreadsheet, FileText, Layers, Star } from "lucide-react";
-import { useMemo, useRef, useState, type ComponentType } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ComponentType } from "react";
 import {
   buildAllViewsWorkbook,
   buildCsv,
@@ -282,23 +282,137 @@ function Item({
   );
 }
 
-/** Star this table, its filter and its columns, as a favorite: the site's Save Filter View. */
-export function SaveViewButton({ saved, onToggle }: { saved: boolean; onToggle: () => void }) {
+/**
+ * Save view: the site's Save Filter View, as a favorite with a name.
+ *
+ * A NAME FIRST. A click opens a small form with a name already suggested (the
+ * view and its filter), and Save stars the table under it. On a table already
+ * saved, the same form renames it or removes it. Ctrl+D still stars a tab in one
+ * keystroke, under the tab's own name.
+ */
+export function SaveViewButton({
+  savedAs,
+  suggest,
+  onSave,
+  onRemove,
+}: {
+  /** The favorite's name when this table is saved; null when it is not. */
+  savedAs: string | null;
+  suggest: string;
+  onSave: (label: string) => void;
+  onRemove: () => void;
+}) {
+  const anchor = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const saved = savedAs != null;
   return (
-    <button
-      type="button"
-      aria-pressed={saved}
-      title={saved ? "In your favorites. Click to remove it." : "Save this table, with its filter and columns, to your favorites (Ctrl D)"}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={onToggle}
-      className={`inline-flex h-[28px] shrink-0 items-center gap-1.5 rounded-md border px-2 text-[12.5px] transition-colors ${
-        saved
-          ? "border-[color-mix(in_oklab,var(--accent)_45%,var(--hairline))] bg-[var(--accent-wash)] text-ink"
-          : "border-hairline bg-card text-ink-soft hover:border-ink-muted hover:text-ink"
-      }`}
+    <>
+      <button
+        ref={anchor}
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-pressed={saved}
+        title={saved ? `Saved as “${savedAs}”. Click to rename or remove it.` : "Save this table, with its filter and columns, under a name"}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => setOpen((o) => !o)}
+        className={`inline-flex h-[28px] shrink-0 items-center gap-1.5 rounded-md border px-2 text-[12.5px] transition-colors ${
+          saved
+            ? "border-[color-mix(in_oklab,var(--accent)_45%,var(--hairline))] bg-[var(--accent-wash)] text-ink"
+            : "border-hairline bg-card text-ink-soft hover:border-ink-muted hover:text-ink"
+        }`}
+      >
+        <Star size={13} strokeWidth={2} className={saved ? "fill-current text-accent" : ""} />
+        {saved ? "Saved" : "Save view"}
+      </button>
+      {open && (
+        <Popover anchor={anchor} onClose={() => setOpen(false)} width={320} align="right" label={saved ? "Saved view" : "Save view"}>
+          <SaveViewForm
+            initial={savedAs ?? suggest}
+            saved={saved}
+            onCancel={() => setOpen(false)}
+            onSave={(label) => {
+              onSave(label);
+              setOpen(false);
+            }}
+            onRemove={() => {
+              onRemove();
+              setOpen(false);
+            }}
+          />
+        </Popover>
+      )}
+    </>
+  );
+}
+
+function SaveViewForm({
+  initial,
+  saved,
+  onSave,
+  onRemove,
+  onCancel,
+}: {
+  initial: string;
+  saved: boolean;
+  onSave: (label: string) => void;
+  onRemove: () => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(initial);
+  const input = useRef<HTMLInputElement>(null);
+  const id = useId();
+  useEffect(() => {
+    input.current?.focus();
+    input.current?.select();
+  }, []);
+  const trimmed = name.trim();
+  return (
+    <form
+      className="px-3.5 pb-3.5 pt-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (trimmed) onSave(trimmed);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          onCancel();
+        }
+      }}
     >
-      <Star size={13} strokeWidth={2} className={saved ? "fill-current text-accent" : ""} />
-      {saved ? "Saved" : "Save view"}
-    </button>
+      <label htmlFor={id} className="block text-[12.5px] font-medium text-ink">
+        {saved ? "Rename this view" : "Name this view"}
+      </label>
+      <input
+        ref={input}
+        id={id}
+        value={name}
+        maxLength={80}
+        spellCheck={false}
+        onChange={(e) => setName(e.target.value)}
+        className="mt-2 h-[30px] w-full rounded-md border border-hairline bg-paper px-2 text-[13px] text-ink outline-none transition-colors focus:border-accent"
+      />
+      <p className="mt-1.5 text-[11.5px] leading-snug text-ink-muted">Kept in Favorites in the sidebar, with its season, filter, view and columns.</p>
+      <div className="mt-3 flex items-center gap-2">
+        {saved && (
+          <button type="button" onClick={onRemove} className="h-[26px] rounded-md px-2 text-[12px] text-ink-muted transition-colors hover:bg-[var(--row-hover)] hover:text-ink">
+            Remove
+          </button>
+        )}
+        <span className="flex-1" />
+        <button type="button" onClick={onCancel} className="h-[26px] rounded-md border border-hairline px-2.5 text-[12px] text-ink-soft transition-colors hover:border-ink-muted hover:text-ink">
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={!trimmed}
+          className="h-[26px] rounded-md bg-accent px-2.5 text-[12px] font-medium text-white transition-[filter] hover:brightness-110 disabled:opacity-50"
+        >
+          {saved ? "Save name" : "Save"}
+        </button>
+      </div>
+    </form>
   );
 }

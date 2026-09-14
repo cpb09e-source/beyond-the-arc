@@ -232,10 +232,12 @@ changes the picture. Decisions are Colin's; nothing below has been changed.
 | 6 | **Snapshot cards** copy a rendered card (crests, headshots, numbers) to the clipboard for sharing | `desktop/src/renderer/src/snapshot/` | Puts headshots into images subscribers post publicly: the §2.1c right-of-publicity thread, carried off the site |
 | 7 | **Season data is cached on disk** for offline use; paid seasons are purged on sign-out or lapse | `desktop/src/main/data.ts` | Fine as designed. Worth one sentence in `/terms` that the app keeps a local copy while the subscription is active |
 
-**Suggested decisions, smallest first:**
-- [ ] #2: replace ESPN NBA marks with text badges (small code change, no downside).
-- [ ] #5: add a source line to every export path, naming CBBD, Bart Torvik and Sports Reference where their numbers are in the table.
-- [ ] #1: add "cached headshots on installed copies cannot be recalled" to the §2.4 runbook, and decide whether the app should show initials only.
+**Decided 2026-09-14 (Colin):**
+- [x] #1 and #2: **keep** the player headshots and the ESPN NBA marks in the app. Showing players' faces matters to the product; same keep-and-mitigate position as §2.4.
+- [ ] #5: the source line in exports is **deferred**, not dropped.
+
+**Still open, smallest first:**
+- [ ] #1: add "cached headshots on installed copies cannot be recalled" to the §2.4 runbook.
 - [ ] #6: decide whether snapshot cards use initials instead of headshots.
 - [ ] #7: one line in `/terms` about the app's local copy.
 - [ ] #4: include in the solicitor pass with §4.

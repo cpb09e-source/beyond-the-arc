@@ -74,15 +74,38 @@ export default async function tables(app, t) {
     t.check("the all-views workbook is the bigger one", sizes.length === 2 && sizes[1] > sizes[0] * 2, sizes);
   }
 
+  // Save view asks for a name first, then stars the place under it.
   await app.press("Save view");
+  const suggested = await app.js(`document.querySelector('body > div[role=dialog] input')?.value ?? null`);
+  t.check("Save view opens with a name suggested", typeof suggested === "string" && /Teams, Four Factors/.test(suggested), suggested);
+  await app.js(`(() => { const el = document.querySelector('body > div[role=dialog] input'); el.focus(); el.select(); return true; })()`);
+  await app.type("Smoke SEC view", 300);
+  await app.press("Save", POPOVER);
   const saved = await app.js(`[...${SECTION}.querySelectorAll('header button[aria-pressed]')].some((b) => /saved/i.test(b.textContent) && b.getAttribute('aria-pressed') === 'true')`);
-  t.check("Save view stars the place", saved);
+  t.check("Save stars the place", saved);
+  const inSidebar = await app.js(`[...document.querySelectorAll('nav[aria-label=Workspace] *')].some((x) => x.childElementCount === 0 && x.textContent.trim() === 'Smoke SEC view')`);
+  t.check("the favorite carries the name given", inSidebar);
   await app.press("Saved");
+  await app.press("Remove", POPOVER);
+  const gone = await app.js(`![...${SECTION}.querySelectorAll('header button[aria-pressed]')].some((b) => b.getAttribute('aria-pressed') === 'true' && /saved/i.test(b.textContent))`);
+  t.check("Remove takes it out of favorites", gone);
 
   await app.press("Clear");
   await app.setQuery("");
   await app.pick("View", "Overview");
   t.check("the Team Explorer is back as it was", (await app.query()) === "" && !(await bands(app)).some((b) => /your columns/i.test(b)), await app.query());
+
+  // ── Several seasons at once ──
+  t.check("the season picker adds 2024-25", await app.addSeason("2024-25"));
+  const twoMeta = await app.meta();
+  t.check("two seasons read as team-seasons", /team-seasons/.test(twoMeta) && /2024-25 → 2025-26/.test(twoMeta), twoMeta);
+  t.check("two seasons hold both seasons' teams", ((await app.shown()) ?? 0) > 700, await app.shown());
+  t.check("a Season column appears", await app.js(`[...${SECTION}.querySelectorAll('[role=columnheader]')].some((h) => h.textContent.trim().startsWith('Season'))`));
+  await app.setQuery("team: Houston");
+  t.check("team: Houston keeps one row a season", (await app.shown()) === 2, await app.meta());
+  await app.setQuery("");
+  t.check("Only takes it back to one season", await app.setSeason("2025-26"));
+  t.check("one season again reads as teams", /\b365 teams\b/.test(await app.meta()), await app.meta());
 
   // ── Player Explorer, with the stat packs ──
   await app.nav("Player Explorer");
@@ -92,6 +115,13 @@ export default async function tables(app, t) {
   await app.setQuery("class: Fr pts>=500");
   t.check("freshmen with 500+ points: 30", (await app.shown()) === 30, await app.meta());
   await app.setQuery("");
+  t.check("the player season picker adds 2024-25", await app.addSeason("2024-25"));
+  const playerMeta = await app.meta();
+  t.check("two seasons read as player-seasons", /player-seasons/.test(playerMeta) && /2024-25 → 2025-26/.test(playerMeta), playerMeta);
+  await app.setQuery("player: Cooper Flagg");
+  t.check("a player from the older season is there", ((await app.shown()) ?? 0) >= 1, await app.meta());
+  await app.setQuery("");
+  t.check("Only takes the players back to one season", await app.setSeason("2025-26"));
   await app.pick("View", "Overview");
 
   // ── Team Game Log ──
