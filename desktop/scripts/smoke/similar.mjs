@@ -138,7 +138,8 @@ export default async function similar(app, t) {
     await choose(app, "Cameron Boozer");
     t.check("the player pool loads", await ready(app, 300_000));
     const players = await app.rowsText(7);
-    t.check("Minix is among Boozer's closest", players.some((r) => /Minix/.test(r)), players);
+    t.check("Tres Tinkle 2018-19 is Boozer's closest", /Tres Tinkle/.test(players[1] ?? "") && /2018-19/.test(players[1] ?? ""), players[1]);
+    t.check("Cooper Flagg is among Boozer's closest", players.some((r) => /Cooper Flagg/.test(r)), players);
     await app.pick("Find", "Teams", 800);
   }
 
