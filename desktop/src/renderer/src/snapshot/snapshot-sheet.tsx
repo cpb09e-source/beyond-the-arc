@@ -1,7 +1,8 @@
 import logoOnDark from "@public/images/newbtalogo-white-01.svg";
 import logoOnLight from "@public/images/btalogo_final-01.svg";
 import { Camera, Copy, Download, X } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { objTitle, objYear } from "~/objects/object";
 import { Kbd } from "~/ui/kbd";
 import { usePersisted } from "~/ui/persisted";
@@ -17,7 +18,29 @@ import { CARD_SIZE, SnapshotCard, type CardFormat, type SnapObj } from "./snapsh
  * so there is no second renderer to disagree with the first. When the window is
  * too small to show the card at full size, the preview is zoomed to fit and the
  * capture is scaled back up to the card's size.
+ *
+ * ANY CARD: a team, player, coach or game (objectCard), or a view's own, such as
+ * Find Similar's closest matches, which brings a choice of its own (Top 10 or 15).
+ * In a portal, so a view can open it from inside its pane.
  */
+
+/** What a sheet shows: the card, what to call it, and any choices of its own beside Wide and Square. */
+export type SheetCard = {
+  title: string;
+  /** Named into the file before its shape: "Duke 2025 26" saves as duke-2025-26-wide.png. */
+  file: string;
+  render: (format: CardFormat, onReady: (ready: boolean) => void) => ReactNode;
+  options?: ReactNode;
+};
+
+export function objectCard(o: SnapObj): SheetCard {
+  const year = objYear(o);
+  return {
+    title: objTitle(o),
+    file: `${objTitle(o)}${year != null ? ` ${year - 1} ${String(year).slice(2)}` : ""}`,
+    render: (format, onReady) => <SnapshotCard obj={o} format={format} onReady={onReady} />,
+  };
+}
 
 const isFormat = (v: unknown): v is CardFormat => v === "wide" || v === "square";
 
@@ -29,18 +52,13 @@ const slug = (s: string) =>
     .replace(/\s+/g, "-")
     .toLowerCase();
 
-function fileName(o: SnapObj, format: CardFormat): string {
-  const year = objYear(o);
-  return `${slug(objTitle(o))}${year != null ? `-${year - 1}-${String(year).slice(2)}` : ""}-${format}.png`;
-}
-
 async function settle(el: HTMLElement): Promise<void> {
   await Promise.all([...el.querySelectorAll("img")].map((img) => img.decode().catch(() => undefined)));
   await document.fonts.ready;
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 }
 
-export function SnapshotSheet({ obj, onClose }: { obj: SnapObj; onClose: () => void }) {
+export function SnapshotSheet({ card, onClose }: { card: SheetCard; onClose: () => void }) {
   const [format, setFormat] = usePersisted<CardFormat>("bta.snapshot.format", "wide", isFormat);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState<"copy" | "save" | null>(null);
@@ -71,14 +89,14 @@ export function SnapshotSheet({ obj, onClose }: { obj: SnapObj; onClose: () => v
         const r = el.getBoundingClientRect();
         const shot = await window.bta.snapshot.grab({ x: r.left, y: r.top, width: r.width, height: r.height });
         if (!shot) throw new Error("capture");
-        const res = await window.bta.snapshot.deliver(shot, { action, name: fileName(obj, format), width, height });
+        const res = await window.bta.snapshot.deliver(shot, { action, name: `${slug(card.file)}-${format}.png`, width, height });
         if (!res.ok) {
           setBusy(null);
           return;
         }
         toast(
           action === "copy"
-            ? { title: "Image copied", body: `${objTitle(obj)} · ${width} × ${height}. Paste it into a post or a message.` }
+            ? { title: "Image copied", body: `${card.title} · ${width} × ${height}. Paste it into a post or a message.` }
             : { title: "Image saved", body: res.path },
         );
         onClose();
@@ -87,10 +105,10 @@ export function SnapshotSheet({ obj, onClose }: { obj: SnapObj; onClose: () => v
         toast({ title: "The snapshot could not be made", body: "Try again with the window in front." });
       }
     },
-    [ready, busy, obj, format, width, height, toast, onClose],
+    [ready, busy, card, format, width, height, toast, onClose],
   );
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50"
       onKeyDown={(e) => {
@@ -112,7 +130,7 @@ export function SnapshotSheet({ obj, onClose }: { obj: SnapObj; onClose: () => v
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Snapshot of ${objTitle(obj)}`}
+        aria-label={`Snapshot of ${card.title}`}
         tabIndex={-1}
         ref={(el) => el?.focus({ preventScroll: true })}
         className="palette-in absolute inset-x-8 bottom-8 top-12 flex flex-col overflow-hidden rounded-xl border border-hairline bg-card outline-none"
@@ -121,33 +139,36 @@ export function SnapshotSheet({ obj, onClose }: { obj: SnapObj; onClose: () => v
         <header className="flex h-[52px] shrink-0 items-center gap-3 border-b border-hairline px-4">
           <Camera size={16} strokeWidth={2} className="text-ink-muted" />
           <h2 className="text-[14px] font-semibold text-ink">Snapshot</h2>
-          <span className="min-w-0 truncate text-[13px] text-ink-muted">{objTitle(obj)}</span>
-          <div role="radiogroup" aria-label="Card shape" className="ml-auto flex h-[28px] items-center rounded-md border border-hairline bg-paper p-0.5 text-[12.5px]">
-            {(
-              [
-                ["wide", "Wide"],
-                ["square", "Square"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={format === value}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  // The card remounts, and reports ready again, only when the shape really changes.
-                  if (value === format) return;
-                  setReady(false);
-                  setFormat(value);
-                }}
-                className={`h-full rounded-[4px] px-2.5 transition-colors ${
-                  format === value ? "bg-[var(--nav-active)] font-medium text-ink" : "text-ink-muted hover:text-ink"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <span className="min-w-0 truncate text-[13px] text-ink-muted">{card.title}</span>
+          <div className="ml-auto flex items-center gap-2">
+            {card.options}
+            <div role="radiogroup" aria-label="Card shape" className="flex h-[28px] items-center rounded-md border border-hairline bg-paper p-0.5 text-[12.5px]">
+              {(
+                [
+                  ["wide", "Wide"],
+                  ["square", "Square"],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={format === value}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    // The card remounts, and reports ready again, only when the shape really changes.
+                    if (value === format) return;
+                    setReady(false);
+                    setFormat(value);
+                  }}
+                  className={`h-full rounded-[4px] px-2.5 transition-colors ${
+                    format === value ? "bg-[var(--nav-active)] font-medium text-ink" : "text-ink-muted hover:text-ink"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
           <button
             type="button"
@@ -162,8 +183,8 @@ export function SnapshotSheet({ obj, onClose }: { obj: SnapObj; onClose: () => v
 
         <div ref={stageRef} className="grid min-h-0 flex-1 place-items-center overflow-hidden bg-[color-mix(in_oklab,var(--ink)_5%,var(--paper))]">
           <div style={{ zoom }} className="shadow-[0_1px_3px_rgb(0_0_0/0.08),0_12px_40px_rgb(0_0_0/0.10)]">
-            <div ref={cardRef}>
-              <SnapshotCard key={format} obj={obj} format={format} onReady={onReady} />
+            <div key={format} ref={cardRef}>
+              {card.render(format, onReady)}
             </div>
           </div>
         </div>
@@ -196,7 +217,8 @@ export function SnapshotSheet({ obj, onClose }: { obj: SnapObj; onClose: () => v
           </button>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -51,8 +51,9 @@ signed is the one that is published.
 8. Build and test the 0.1.1 release candidate. **Done 2026-09-14**: smoke 93 of 93, installed and
    tested by Colin.
 9. Code-sign that exact candidate; verify the signed installer and the 0.1.0 to 0.1.1 update.
-   Colin asked for one change after testing (no bar in Find Similar's Match column), so the signed
-   build comes from that later commit and gets a short retest, not f5712416c8.
+   Colin asked for more after testing (no bar in Find Similar's Match column; Find Similar under Teams
+   and under Players, with Save, Download and Snapshot; a Similar button on team and player pages), so
+   the signed build comes from the latest commit and gets a short retest, not f5712416c8.
 10. Publish 0.1.1 (Colin's go; it writes to R2).
 
 ### After 0.1.1
@@ -69,6 +70,14 @@ signed is the one that is published.
 6. **Lens Stack**, once history has made research state legible.
 7. **Season Time Machine.** Keep saving the live season nightly from November; the screens wait.
 8. **Admin dashboard** when running the business needs it, not before.
+
+**Measure interaction adoption, from launch** (asked for 2026-09-14). Not which pages open most, but
+which verbs of the grammar people discover and keep using, as a share of active installs: Peek 71%,
+Ctrl K 58%, Stat Lens 34%, Compare 27%, Find Similar 22%, Focus 19%, Saved View 11%, say. Coarse,
+disclosed and easy to switch off, never surveillance: per install, a weekly used-or-not for each verb,
+with no names, filters, queries or teams. Research history v1 already records these steps on the
+computer, so the counts come from it. The work is the weekly send, the disclosure (terms, privacy and
+a line in the app, with the switch), and a panel in the admin dashboard.
 
 Idea bank: **Delta Preview**, hold over a filter to see what it changed (net rating, the four
 factors, rank), reconciled by the explain engine. Needs a date clause in the filter grammar

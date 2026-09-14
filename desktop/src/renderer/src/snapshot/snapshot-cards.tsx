@@ -50,28 +50,35 @@ export const isSnappable = (o: Obj): o is SnapObj => o.kind === "team" || o.kind
 
 type BodyProps<K extends SnapObj["kind"]> = { o: Extract<SnapObj, { kind: K }>; format: CardFormat; onReady: (ready: boolean) => void };
 
-export function SnapshotCard({ obj, format, onReady }: { obj: SnapObj; format: CardFormat; onReady: (ready: boolean) => void }) {
+/** A card at its posted size: the body, then the wordmark and where the card leads. Other cards (Find Similar's) use it too. */
+export function CardFrame({ format, foot, children }: { format: CardFormat; foot: string; children: ReactNode }) {
   const { width, height } = CARD_SIZE[format];
   const square = format === "square";
   return (
     <div className="flex flex-col bg-paper text-ink" style={{ width, height, padding: square ? "68px 68px 44px" : "48px 60px 30px" }}>
-      <div className="flex min-h-0 flex-1 flex-col">
-        {obj.kind === "team" ? (
-          <TeamBody o={obj} format={format} onReady={onReady} />
-        ) : obj.kind === "player" ? (
-          <PlayerBody o={obj} format={format} onReady={onReady} />
-        ) : obj.kind === "coach" ? (
-          <CoachBody o={obj} format={format} onReady={onReady} />
-        ) : (
-          <GameBody o={obj} format={format} onReady={onReady} />
-        )}
-      </div>
+      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       <footer className="flex shrink-0 items-center gap-4 border-t border-hairline pt-6">
         <img src={logoOnLight} alt="Beyond the Arc" draggable={false} className="bta-logo-light h-[26px] w-auto" />
         <img src={logoOnDark} alt="Beyond the Arc" draggable={false} className="bta-logo-dark h-[26px] w-auto" />
-        <span className="ml-auto truncate text-[18px] text-ink-muted">{(siteUrl(obj) ?? "https://btacbb.xyz/").replace(/^https:\/\//, "").replace(/\/$/, "")}</span>
+        <span className="ml-auto truncate text-[18px] text-ink-muted">{foot}</span>
       </footer>
     </div>
+  );
+}
+
+export function SnapshotCard({ obj, format, onReady }: { obj: SnapObj; format: CardFormat; onReady: (ready: boolean) => void }) {
+  return (
+    <CardFrame format={format} foot={(siteUrl(obj) ?? "https://btacbb.xyz/").replace(/^https:\/\//, "").replace(/\/$/, "")}>
+      {obj.kind === "team" ? (
+        <TeamBody o={obj} format={format} onReady={onReady} />
+      ) : obj.kind === "player" ? (
+        <PlayerBody o={obj} format={format} onReady={onReady} />
+      ) : obj.kind === "coach" ? (
+        <CoachBody o={obj} format={format} onReady={onReady} />
+      ) : (
+        <GameBody o={obj} format={format} onReady={onReady} />
+      )}
+    </CardFrame>
   );
 }
 

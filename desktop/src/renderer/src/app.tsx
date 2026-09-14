@@ -62,7 +62,7 @@ import { recordVisit, useRecents } from "~/shell/recents";
 import { recordStep, setHistoryContext } from "~/shell/research-history";
 import { TableExportContext, type TableExport } from "~/table/table-export";
 import { isSnappable, type SnapObj } from "~/snapshot/snapshot-cards";
-import { SnapshotSheet, snapshotView } from "~/snapshot/snapshot-sheet";
+import { SnapshotSheet, objectCard, snapshotView } from "~/snapshot/snapshot-sheet";
 import { EchoProvider, SelectionProvider, useSelection } from "~/selection/selection";
 import { FocusModeProvider, FocusPill, focusQuery, focusedRowObject, follows, objectAt, subjectOf, useFocusMode } from "~/focus/focus-mode";
 import { StatLensProvider } from "~/lens/stat-lens";
@@ -1251,7 +1251,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
           />
         )}
         {shortcutsOpen && <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />}
-        {snapping && <SnapshotSheet obj={snapping} onClose={() => setSnapping(null)} />}
+        {snapping && <SnapshotSheet card={objectCard(snapping)} onClose={() => setSnapping(null)} />}
         {namePrompt && (
           <NamePrompt
             title={namePrompt === "new" ? "Name the new workspace" : "Rename this workspace"}

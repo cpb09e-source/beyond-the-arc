@@ -84,6 +84,23 @@ export default async function similar(app, t) {
     t.check("the file is named for similar teams", /^bta-similar-teams-/.test(csv ?? ""), csv);
   }
 
+  // Snapshot sets the closest ten, or fifteen, on a card.
+  t.check("Snapshot opens its sheet", await app.press("Snapshot"));
+  await sleep(700);
+  const cardRows = () => app.js(`document.querySelectorAll('[role=dialog][aria-label^="Snapshot of Teams like Houston"] [data-card-row]').length`);
+  const topN = (n) => app.js(`[...document.querySelectorAll('[role=radiogroup][aria-label="How many matches"] button')].find((b) => b.textContent.trim() === "Top ${n}")?.click(); true`);
+  t.check("the card holds the closest 10", (await cardRows()) === 10, await cardRows());
+  await topN(15);
+  await sleep(400);
+  t.check("Top 15 holds 15", (await cardRows()) === 15, await cardRows());
+  await app.shot("similar-snapshot-15");
+  await topN(10);
+  await sleep(300);
+  await app.shot("similar-snapshot-10");
+  await app.key("Escape");
+  await sleep(400);
+  t.check("Esc closes the sheet", !(await app.js(`!!document.querySelector('[aria-label^="Snapshot of"]')`)));
+
   // Save keeps Houston; the saved list runs it again from another team, and takes it back out.
   const saveButton = `[...${SECTION}.querySelectorAll('header button[aria-haspopup=dialog]')].find((b) => /^Saved?/.test(b.textContent.trim()))`;
   const savedCount = () => app.js(`JSON.parse(localStorage.getItem('bta.similar.saved') ?? '[]').length`);
