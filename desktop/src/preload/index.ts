@@ -28,6 +28,7 @@ export type Corpus =
   | "team-ratings"
   | "player-splits"
   | "team-splits"
+  | "player-career"
   | "teams-index"
   | "players-index"
   | "search-index";

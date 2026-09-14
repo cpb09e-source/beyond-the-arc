@@ -70,6 +70,37 @@ export default async function views(app, t) {
   await app.key("Escape");
   await sleep(400);
   t.check("Esc closes the sheet", !(await app.js(`!!document.querySelector('[aria-label^="Snapshot of"]')`)));
+
+  // ── A player's Career tab: the site's ledger, per game and in totals ──
+  await app.nav("Player Explorer");
+  await app.setSeason("2015-16");
+  await app.setQuery("player: Denzel Valentine");
+  await sleep(800);
+  const prow = await app.rowPoint(0);
+  if (prow) {
+    await app.mouse("mouseMoved", prow);
+    await app.mouse("mousePressed", prow, { button: "left", clickCount: 2 });
+    await app.mouse("mouseReleased", prow, { button: "left", clickCount: 2 });
+  }
+  await sleep(2500);
+  await app.press("Career");
+  const ledger = `${SECTION}.querySelector('section[aria-label="Career"]')`;
+  t.check("Valentine's Career tab draws the ledger", await app.waitFor(`!!${ledger}?.querySelector('[data-career-total]')`, 20_000, 400));
+  const careerCells = () => app.js(`[...(${ledger}?.querySelectorAll('[data-career-total] td') ?? [])].map((td) => td.textContent.trim())`);
+  t.check("three seasons and a career line", (await app.js(`${ledger}?.querySelectorAll('[data-career-season]').length ?? 0`)) === 3);
+  const perGame = await careerCells();
+  t.check("the career line reads 13.6 points a game", perGame[perGame.length - 1] === "13.6", perGame);
+  t.check("its 3P% is made over attempted, 42%", perGame.includes("42%"), perGame);
+  await app.shot("player-career");
+  const viewBefore = await app.js(`localStorage.getItem('bta.profile.career.view')`);
+  await app.pick("Show", "Totals", 600);
+  const totals = await careerCells();
+  t.check("Totals turns MPG into MIN", await app.js(`[...(${ledger}?.querySelectorAll('th') ?? [])].some((th) => th.textContent.trim() === "MIN")`));
+  t.check("Totals counts the career's points", /^\d{1,2},\d{3}$/.test(totals[totals.length - 1] ?? ""), totals);
+  await app.js(viewBefore == null ? `localStorage.removeItem('bta.profile.career.view'); true` : `localStorage.setItem('bta.profile.career.view', ${JSON.stringify(viewBefore)}); true`);
+  await app.nav("Player Explorer");
+  await app.setQuery("");
+  await app.setSeason("2025-26");
   await app.nav("Team Explorer");
   await app.setQuery("");
 }

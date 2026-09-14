@@ -56,6 +56,7 @@ export type Corpus =
   | "team-ratings"
   | "player-splits"
   | "team-splits"
+  | "player-career"
   | "teams-index"
   | "players-index"
   | "search-index";
@@ -145,6 +146,9 @@ const CORPORA: Record<Corpus, CorpusSpec> = {
   // team. TEAM SPLITS ARE BUILD-ONLY ON THE SITE, stripped from the deploy, so
   // an installed app finds them only once team-splits/ is uploaded to R2.
   "player-splits": { path: (_y, k) => `player-splits/${k}.json`, key: /^[0-9]{1,9}$/, r2: true, optional: true, crossSeason: true },
+  // A player's seasons as the site's career table reads them (src/lib/career-line.ts):
+  // Bart's season rows and the CBBD aggregates, one file per player by bart id, on R2.
+  "player-career": { path: (_y, k) => `player/${k}.json`, key: /^[0-9]{1,9}$/, r2: true, optional: true, crossSeason: true },
   "team-splits": { path: (y) => `team-splits/${y}.json`, r2: true, optional: true },
 };
 

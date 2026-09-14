@@ -35,6 +35,7 @@ import { identityColumns, statColumns as gameStatColumns } from "~/views/player-
 import { PlayerGamePeekBody } from "~/views/player-games/player-game-peek";
 import { playerStat } from "~/views/players/player-columns";
 import { playerLens } from "~/lens/stat-lens";
+import { PlayerCareer } from "./player-career";
 import { PlayerStats } from "./player-stats";
 
 /**
@@ -214,13 +215,25 @@ export function PlayerProfileView({ year, setYear, record }: ViewProps) {
         </div>
 
         {tab === "career" ? (
-          <Career
-            rows={career}
+          <PlayerCareer
+            bartId={ref?.bartId ?? null}
             year={year}
+            logoOf={(y) => career.find((r) => r.year === y)?.teamLogoId ?? null}
             onSeason={(y) => {
               setYear(y);
               setTab("overview");
             }}
+            onTeam={(team, logoId, y, newTab) => openRecord({ kind: "team", name: team, logoId }, { newTab, year: y })}
+            fallback={
+              <CareerIndex
+                rows={career}
+                year={year}
+                onSeason={(y) => {
+                  setYear(y);
+                  setTab("overview");
+                }}
+              />
+            }
           />
         ) : seasonState.status === "error" ? (
           <LoadError year={year} reason={seasonState.reason} message={seasonState.message} what="Players" onRetry={retry} />
@@ -397,7 +410,8 @@ function GameList({
   );
 }
 
-function Career({
+/** The seasons the search index knows, for a player without a career file. */
+function CareerIndex({
   rows,
   year,
   onSeason,
