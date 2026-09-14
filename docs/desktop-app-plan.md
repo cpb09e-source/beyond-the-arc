@@ -34,7 +34,8 @@ signed is the one that is published.
 1. Guardrail hooks and the verify agent (`.claude/hooks/`, `.claude/agents/bta-verify.md`, `npm run verify`).
    **Done 2026-09-14** (318a692046, fc79bf5816): verify passes, smoke suite 75 of 75.
 2. A local installer build, installed the way a subscriber installs it. **Built 2026-09-14**:
-   `desktop/release/Beyond-the-Arc-Setup-0.1.1.exe` from 81e6135772, unsigned. Installing it is Colin's.
+   `desktop/release/Beyond-the-Arc-Setup-0.1.1.exe`, rebuilt from f5712416c8 (several seasons in the explorers,
+   named Save view, folding rail), unsigned, SHA256 74CF4951…1521F2. Installing it is Colin's.
 3. Sign-in end to end: admin@btacbb.xyz, premium@btacbb.xyz, and a free account, which must get
    the Season Pass screen.
 4. Sources and terms review (`docs/TODO-legal-sources.md`), sharper now that exports hand out

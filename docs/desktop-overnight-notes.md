@@ -541,7 +541,7 @@ the roadmap after it and the grammar every new feature has to fit.
 **To put 0.1.1 in people's hands** (the full order is in `docs/desktop-app-plan.md`):
 1. ~~Apply migration 012, publish 0.1.0, deploy the site~~ done 2026-09-13. The legal pages stay on `legal-pages` until the entity name is filled in.
 2. ~~Hooks and verify, history format, hints, score breakdown~~ done 2026-09-14.
-3. Install the 0.1.1 release candidate the way a subscriber would, and sign in with admin@, premium@ and a free account (which must get the Season Pass screen). **Yours.** The candidate is `desktop/release/Beyond-the-Arc-Setup-0.1.1.exe`, built from `81e6135772`, unsigned (SmartScreen will warn: More info, then Run anyway). Nothing was published.
+3. Install the 0.1.1 release candidate the way a subscriber would, and sign in with admin@, premium@ and a free account (which must get the Season Pass screen). **Yours.** The candidate is `desktop/release/Beyond-the-Arc-Setup-0.1.1.exe`, rebuilt from `f5712416c8` with the several-season explorers, the named Save view and the folding rail; unsigned (SmartScreen will warn: More info, then Run anyway), SHA256 `74CF4951BB2D65ABF13D1123B582B8D1814D58F5AF478FB41169C7838F1521F2`. Nothing was published.
 4. The sources and terms decisions in §8 of `docs/TODO-legal-sources.md`. **Yours.**
 5. The Azure Artifact Signing account. **Yours.** Then the same commit is built signed, and the signed installer and the 0.1.0 to 0.1.1 update are tested.
 6. Publish 0.1.1, on your go.
