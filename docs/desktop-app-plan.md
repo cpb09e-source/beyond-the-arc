@@ -26,6 +26,12 @@ Gotchas already paid for:
   (development only) and shows the window without taking focus. `npm run verify` runs every
   check; `npm run verify -- --smoke` also drives the real window.
 
+### Feature freeze, from 2026-09-14
+
+No new development and no new features until Colin has tested everything and given feedback. What
+goes in meanwhile: fixes for what that testing finds, the rebuilt candidate, signing and publishing.
+A new idea goes into "After 0.1.1" below, not into the build. The freeze lifts when Colin says so.
+
 ### Release: 0.1.1, the first build for Season Pass holders
 
 In this order. The candidate that is tested is the one that is signed, and the one that is
@@ -53,8 +59,9 @@ signed is the one that is published.
 9. Code-sign that exact candidate; verify the signed installer and the 0.1.0 to 0.1.1 update.
    Colin asked for more after testing (no bar in Find Similar's Match column; Find Similar under Teams
    and under Players, with Save, Download and Snapshot; a Similar button on team and player pages; a
-   measured model, below), so the signed build comes from the latest commit and gets a short retest,
-   not f5712416c8.
+   measured model, below; the site's career ledger on the Career tab; a sidebar that hides, with a
+   peek from the left edge), so the signed build comes from the latest commit and gets a short retest,
+   not f5712416c8. The full smoke suite passes 135 of 135 on that code.
 
    **Find Similar, measured (2026-09-14).** `desktop/scripts/tune-similar.mts` splits every season's
    games into halves and asks whether a half finds its own other half. Rates on few attempts are eased
