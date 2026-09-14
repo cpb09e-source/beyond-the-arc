@@ -7,69 +7,75 @@ land, and delete sections once they are built and self-documenting in code.
 
 ## Status
 
-**P0 shipped 2026-09-12** (416931d9ab, 9c3b937f98, 1fbc2fe01c). Windows, development mode only.
+**As of 2026-09-14:** P0 through P4 are built, P5 and P6 in part, all pushed. Installer 0.1.0 is on
+R2; everything built since reaches an installed copy only with 0.1.1. What each pass built and how:
+`docs/desktop-overnight-notes.md`. Features, stack and architecture, readable: the "BTA Desktop
+Blueprint" artifact.
 
 Run it: `cd desktop && npm install && npm run dev`. If it reports a missing Electron
 binary, run `node node_modules/electron/install.js` once; Electron 44 no longer fetches
 it reliably during install.
 
-What is in it: a frameless window with the site wordmark in both inks; thirteen seasons
-in the sidebar, 2025-26 opening; a virtualized team table with the site's percentile chip
-on every stat (the explorer's percentiles, tempo in the neutral band); BTA rank computed
-live through `processTeams`, never the baked `bta_rank`; Peek (hold, tap to pin,
-arrows, Esc) with national ranks as ramp chips and the contender zone; Ctrl K focusing
-the filter, where number words fold to digits so "big ten" finds Big 10; system, light
-and dark themes.
-
 Gotchas already paid for:
 - VS Code exports `ELECTRON_RUN_AS_NODE=1` into its terminal. `npm run dev` goes through
   `desktop/scripts/electron-vite.mjs`, which strips it. `npx electron-vite dev` run
   directly from a VS Code terminal dies on the first line of main.
-- A running dev server keeps the `electron.vite.config.ts` it started with. After a
-  config change, restart it; a reload reports "Failed to resolve import".
+- A running dev server keeps the `electron.vite.config.ts` it started with, and never rebuilds
+  main. After a config or main-process change, restart it.
 - Scripted checks: `BTA_CDP_PORT=9223 npm run dev` opens Chromium's debugging port
-  (development only) and shows the window without taking focus.
+  (development only) and shows the window without taking focus. `npm run verify` runs every
+  check; `npm run verify -- --smoke` also drives the real window.
 
-**Build order, revised 2026-09-12 at Colin's direction:** one view at a time, each designed,
-driven in the real window, screenshotted and fixed before the next. His goal: anyone who picks
-the app up should feel they can do anything and find anything, which moves universal search
-forward.
+### Release: 0.1.1, the first build for Season Pass holders
 
-1. Foundation: shared DataTable (sort, keyboard, virtualization, Peek, pinned columns), one
-   data layer, a frame with a view registry, workspace season switcher. **Done.**
-2. Player Explorer with a player Peek. The cohort, impact attachment, leaderboard floor and
-   percentile pass moved out of players-client.tsx into `src/lib/player-cohort.ts`, proven
-   identical to the old code on six seasons (every player, every percentile) before the site
-   switched to it. The # column is place-in-sort, as on the site; BTA's overall rank rides with
-   the name as the site's top-100 mark. **Done.**
-3. Ctrl K: universal search plus actions. **Built:** the palette (cmdk for keys and
-   accessibility, ranking in `palette/rank.ts`), views, actions on the current view, every
-   season, theme, and every team-season and player-season from the search indexes the site
-   already builds, with its team aliases (UConn, Zags). A player or team collapses to its best
-   season unless the query names one. Enter lands on the row in its explorer, filter cleared,
-   Peek pinned. Ctrl F and / now filter the table. **Still to come:** coaches and games join
-   when their views exist, so a result never opens onto nothing; actions on the selection
-   (compare, copy, open on the site) arrive with the record panes.
-4. Team Game Log, then Player Game Log (pinned identity columns; percentiles over the whole
-   season, never the filtered rows, as the site does). **Team Game Log built:** every game of
-   a season with crests and AP ranks, the seven column views of the site in a picker that is
-   remembered, the shortcuts composing through passesTeamFilters, and a game Peek (result,
-   efficiency, four factors offense against defense, shooting). The whole-season percentile
-   function moved from the explorer component into `src/lib/team-game-index.ts`, and the two
-   web-only modules it imports get desktop stand-ins through Vite aliases
-   (`desktop/src/renderer/src/stand-ins`). **Player Game Log built:** every player-game of a
-   season on the table (118,533 in 2025-26, where the site shows its top 500), the five column
-   views, eight shortcuts, a Peek with the line, shooting as makes and attempts, and the rates.
-   The site page has no chips; the app ranks each stat against every player-game of the
-   season, with no chip on the five stats that are zero in most games (blocks 77%, made threes
-   58%, steals 57%, offensive rebounds 51%, made free throws 51%) and neutral chips on minutes,
-   attempts and usage. The midrank is counted rather than sorted (`data/midrank-by-value.ts`),
-   checked equal to the site function on 18.1 million values across three seasons.
-5. Win Calculator. Plain-English questions go through the site's /api/parse-query, because the
-   Anthropic key must never ship inside a desktop app.
-6. Team Scatter with the trapezoid.
-7. Matchup Predictor, Transfer Portal, Coaches, Conference Power Rankings, Scoreboard, then
-   team and player record panes.
+In this order. The candidate that is tested is the one that is signed, and the one that is
+signed is the one that is published.
+
+1. Guardrail hooks and the verify agent (`.claude/hooks/`, `.claude/agents/bta-verify.md`, `npm run verify`).
+2. A local installer build, installed the way a subscriber installs it.
+3. Sign-in end to end: admin@btacbb.xyz, premium@btacbb.xyz, and a free account, which must get
+   the Season Pass screen.
+4. Sources and terms review (`docs/TODO-legal-sources.md`), sharper now that exports hand out
+   derived datasets.
+5. Research history as a versioned event log (ids, season, action, filters, table layout), so
+   installed copies record the shape Save Trail needs from their first day.
+6. Discovery hints for Q (Focus) and Alt-click (Stat Lens): a few times each, then never.
+7. Find Similar's score explains itself: where the points went, stat by stat.
+8. Build and test the 0.1.1 release candidate.
+9. Code-sign that exact candidate; verify the signed installer and the 0.1.0 to 0.1.1 update.
+10. Publish 0.1.1 (Colin's go; it writes to R2).
+
+### After 0.1.1
+
+2. **Insight Radar, two detectors:** a trend break, and an elite team's weakness. Clicking an
+   insight opens the analysis that proves it (What Changed, Explain, a Lens). No generic paragraph.
+3. **History panel, then Save Trail.** Reads like a notebook ("Michigan: What Changed, last 10");
+   a step restores its state. A trail keeps when each step was taken, so a live-season step can
+   say its numbers have moved since.
+4. **Rarity detector** on the Find Similar model: "Only 14 of 4,620 team-seasons have looked this
+   similar", with Show the 14 opening Find Similar's own list. Cheap, because the model exists.
+5. **Several seasons in one table.** Explorers first; the player game log across seasons (about
+   1.5M rows) waits for a worker.
+6. **Lens Stack**, once history has made research state legible.
+7. **Season Time Machine.** Keep saving the live season nightly from November; the screens wait.
+8. **Admin dashboard** when running the business needs it, not before.
+
+Idea bank: **Delta Preview**, hold over a filter to see what it changed (net rating, the four
+factors, rank), reconciled by the explain engine. Needs a date clause in the filter grammar
+first, and a trigger other than Alt, which is Stat Lens.
+
+### The grammar to protect
+
+See something: Peek. Want it: select or drag it. Need an action: right-click or Ctrl K. Want
+everything to follow it: Focus. Understand a number: Lens. Understand a gap: Explain. Understand
+movement: What Changed. Want precedent: Find Similar.
+
+A new feature ships only if:
+- it is an action in `objects/actions.tsx` on an object, so every surface offers it;
+- it answers a question the verbs above do not, and otherwise becomes an option of the one it extends;
+- every number it derives can be opened and explained;
+- Home stays restrained (jump back in, recent research, ask, start somewhere): nothing is added
+  without something removed.
 
 Site modules with web-only dependencies (`@/lib/gated-corpus`, `@/lib/data-url`) get small
 desktop stand-ins through Vite aliases, rather than copying the modules that import them.
@@ -157,20 +163,24 @@ $99/yr Apple Developer + a Mac or macOS CI to notarize.
 
 ## Phases
 
-- **P0 — shell, real data, Peek.** Window + frame, 2025-26 teams in a virtualized
-  table, Peek working.
-- **P1 — everything is an action.** Registry, Ctrl K palette over every object,
-  right-click, keyboard map, record pane, persistent split view.
-- **P2 — selection you can carry.** Dock, drag-to-compare, saved views, workspaces.
-- **P3 — installable and live, by tip-off.** Sign-in handoff, paid seasons, admin
-  download, auto-update, signing (on approval), nightly live-season sync.
-- **P4 — connected analysis.** Linked scatter/table + lasso, Find Similar, What Changed.
-- **P5 — ask and share.** NL filter proposals, snapshot cards, styled xlsx + viewer.
-- **P6 — time.** One-time replay of frozen seasons, scrubber, Stat Lens.
+- **P0 — shell, real data, Peek.** Built.
+- **P1 — everything is an action.** Built: registry, Ctrl K, right-click, keyboard map, split
+  view, details rail. Richer record panes wait on a gated endpoint.
+- **P2 — selection you can carry.** Built: dock, drag to compare, favorites, workspaces, saved
+  table views.
+- **P3 — installable and live, by tip-off.** Built: sign-in handoff, paid seasons, download,
+  auto-update, live-season revalidation. Open: sign-in end to end, signing, 0.1.1.
+- **P4 — connected analysis.** Built: linked scatter and table with lasso, Find Similar, What
+  Changed, the Difference Explainer.
+- **P5 — ask and share.** Built: snapshot cards, the site's xlsx and CSV downloads, plain-English
+  Win Calculator questions. Not built: NL filter proposals.
+- **P6 — time.** Built: Stat Lens. Not built: replay of frozen seasons, the scrubber.
 
 ## Open decisions for Colin
 
-- Azure signing ($9.99/mo) — before any non-admin download.
+- Azure Artifact Signing ($9.99/mo): release step 9; needs Colin's Azure account and identity validation.
 - CBBD tier for the Nov–Apr nightly refresh (month to month if possible).
-- Go-ahead on the P3 site changes (page, functions, table).
+- The legal entity name, which holds the legal pages back.
+- Sources and terms review before promotion.
+- Test account passwords: change them or delete the accounts before promotion.
 - Mac: when subscribers ask.

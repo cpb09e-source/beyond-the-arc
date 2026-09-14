@@ -57,7 +57,10 @@ next-env.d.ts
 /.playwright-mcp
 
 # Claude Code project-local settings
-/.claude/
+/.claude/*
+!/.claude/settings.json
+!/.claude/hooks/
+!/.claude/agents/
 
 # Root-level screenshots (ad-hoc Playwright captures).
 # Public image assets live under public/ and are unaffected.
