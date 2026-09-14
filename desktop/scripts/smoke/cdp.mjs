@@ -59,9 +59,18 @@ export async function connect(port, shotsDir = null) {
       errors.push(`console.error: ${msg.params.args.map((a) => a.value ?? a.description).join(" ")}`.slice(0, 400));
     }
   };
+  // Without this, a window that dies mid-command leaves its promise hanging, and Node
+  // exits on an unsettled await without saying which check was running.
+  let closed = false;
+  ws.onclose = () => {
+    closed = true;
+    for (const { rej } of pending.values()) rej(new Error("the app window closed"));
+    pending.clear();
+  };
 
   const cmd = (method, params = {}) =>
     new Promise((res, rej) => {
+      if (closed) return rej(new Error("the app window closed"));
       pending.set(++nextId, { res, rej });
       ws.send(JSON.stringify({ id: nextId, method, params }));
     });

@@ -30,11 +30,8 @@ export function ScoreButton<R>({ m, profile, chosen, other }: { m: Match<R>; pro
           setOpen((o) => !o);
         }}
         onDoubleClick={(e) => e.stopPropagation()}
-        className="-mx-1 flex items-center justify-end gap-2 rounded-[5px] px-1 py-0.5 transition-colors hover:bg-[var(--row-hover)]"
+        className="-mx-1 flex items-center justify-end rounded-[5px] px-1 py-0.5 transition-colors hover:bg-[var(--row-hover)]"
       >
-        <span aria-hidden className="h-[4px] w-[30px] overflow-hidden rounded-full bg-paper-deep">
-          <span className="block h-full rounded-full bg-accent" style={{ width: `${score}%` }} />
-        </span>
         <span className="w-[22px] text-right font-semibold text-ink tabular underline decoration-dotted underline-offset-[3px]">{score}</span>
       </button>
       {open && (

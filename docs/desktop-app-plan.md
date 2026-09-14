@@ -51,6 +51,8 @@ signed is the one that is published.
 8. Build and test the 0.1.1 release candidate. **Done 2026-09-14**: smoke 93 of 93, installed and
    tested by Colin.
 9. Code-sign that exact candidate; verify the signed installer and the 0.1.0 to 0.1.1 update.
+   Colin asked for one change after testing (no bar in Find Similar's Match column), so the signed
+   build comes from that later commit and gets a short retest, not f5712416c8.
 10. Publish 0.1.1 (Colin's go; it writes to R2).
 
 ### After 0.1.1
