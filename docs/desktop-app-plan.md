@@ -32,7 +32,9 @@ In this order. The candidate that is tested is the one that is signed, and the o
 signed is the one that is published.
 
 1. Guardrail hooks and the verify agent (`.claude/hooks/`, `.claude/agents/bta-verify.md`, `npm run verify`).
-2. A local installer build, installed the way a subscriber installs it.
+   **Done 2026-09-14** (318a692046, fc79bf5816): verify passes, smoke suite 75 of 75.
+2. A local installer build, installed the way a subscriber installs it. **Built 2026-09-14**:
+   `desktop/release/Beyond-the-Arc-Setup-0.1.1.exe` from 81e6135772, unsigned. Installing it is Colin's.
 3. Sign-in end to end: admin@btacbb.xyz, premium@btacbb.xyz, and a free account, which must get
    the Season Pass screen.
 4. Sources and terms review (`docs/TODO-legal-sources.md`), sharper now that exports hand out
@@ -41,6 +43,8 @@ signed is the one that is published.
    installed copies record the shape Save Trail needs from their first day.
 6. Discovery hints for Q (Focus) and Alt-click (Stat Lens): a few times each, then never.
 7. Find Similar's score explains itself: where the points went, stat by stat.
+   **5 to 7 done 2026-09-14** (fc79bf5816, 81e6135772). Step 4's findings are in §8 of the legal doc,
+   waiting on Colin's decisions.
 8. Build and test the 0.1.1 release candidate.
 9. Code-sign that exact candidate; verify the signed installer and the 0.1.0 to 0.1.1 update.
 10. Publish 0.1.1 (Colin's go; it writes to R2).
