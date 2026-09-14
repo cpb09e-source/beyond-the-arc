@@ -17,7 +17,7 @@ import {
   Sun,
   Trash2,
 } from "lucide-react";
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useRef, useState } from "react";
 import type { ThemeMode } from "../../../preload";
 import { Kbd } from "~/ui/kbd";
 import { Menu, type MenuEntry, type MenuItem } from "~/ui/menu";
@@ -39,19 +39,21 @@ import type { Workspaces } from "./workspaces";
  * the view in front gets full ink and a quiet fill. The table is what the
  * reader came for.
  *
- * RESIZABLE AND COLLAPSIBLE. Drag the right edge (double-click resets it) or
- * press Ctrl+\ to hide it entirely. Sections fold, and all of it is remembered.
+ * PINNED OR HIDDEN, at one width (Linear's model, with Arc's edge). The button
+ * at the top left or Ctrl+\ hides it and the page takes the room; resting on the
+ * window's left edge slides it back over the page for a moment (app.tsx). Which
+ * of the two it was is remembered.
+ *
+ * THE SECTIONS NEVER FOLD. Every destination stays one click away; folding them
+ * made two clicks of one. Favorites, which is the reader's own and can grow,
+ * still does.
  */
 
-export const SIDEBAR_DEFAULT = 232;
-export const SIDEBAR_MIN = 200;
-export const SIDEBAR_MAX = 340;
+export const SIDEBAR_WIDTH = 232;
 
 const item = (e: Omit<MenuItem, "kind">): MenuEntry => ({ kind: "item", ...e });
 
 export function Sidebar({
-  width,
-  onResize,
   currentViewId,
   currentQuery,
   onNavigate,
@@ -69,8 +71,6 @@ export function Sidebar({
   onRenameWorkspace,
   onDropFavorite,
 }: {
-  width: number;
-  onResize: (w: number) => void;
   currentViewId: string;
   /** The tab's query, which says which entry a view listed twice (Find Similar) is. */
   currentQuery: string;
@@ -106,7 +106,7 @@ export function Sidebar({
   }
 
   return (
-    <nav aria-label="Workspace" className="relative flex min-h-0 shrink-0 flex-col border-r border-hairline bg-chrome" style={{ width }}>
+    <nav aria-label="Workspace" className="relative flex h-full min-h-0 w-full flex-col border-r border-hairline bg-chrome">
       <div className="px-2 pt-2">
         <WorkspaceButton workspaces={workspaces} onNewWorkspace={onNewWorkspace} onRenameWorkspace={onRenameWorkspace} />
       </div>
@@ -138,29 +138,12 @@ export function Sidebar({
           />
         )}
         {sections.map(([section, views]) => {
-          // Home stands alone at the top, with no heading to fold it under.
+          // Home stands alone at the top, with no heading over it.
           const headless = section === "Home";
-          const isFolded = !headless && folded.includes(section);
           return (
             <div key={section} className="mb-2">
-              {!headless && (
-              <button
-                type="button"
-                aria-expanded={!isFolded}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => setFolded((f) => (isFolded ? f.filter((s) => s !== section) : [...f, section]))}
-                className="group flex h-[26px] w-full items-center gap-1 rounded-md px-2 text-[12px] font-medium text-ink-muted transition-colors hover:text-ink-soft"
-              >
-                {section}
-                <ChevronDown
-                  size={12}
-                  strokeWidth={2.25}
-                  className={`opacity-0 transition-[opacity,rotate] group-hover:opacity-100 ${isFolded ? "-rotate-90" : ""}`}
-                />
-              </button>
-              )}
-              {!isFolded && (
-                <ul className="grid gap-px">
+              {!headless && <h2 className="flex h-[26px] items-center px-2 text-[12px] font-medium text-ink-muted">{section}</h2>}
+              <ul className="grid gap-px" aria-label={headless ? undefined : section}>
                   {views.map((v) => {
                     const active = v.isCurrent(currentViewId, currentQuery);
                     const Icon = v.icon;
@@ -192,7 +175,6 @@ export function Sidebar({
                     );
                   })}
                 </ul>
-              )}
             </div>
           );
         })}
@@ -233,7 +215,6 @@ export function Sidebar({
         </div>
       </div>
 
-      <ResizeHandle width={width} onResize={onResize} />
     </nav>
   );
 }
@@ -457,43 +438,3 @@ function WorkspaceMark({ name, size }: { name: string; size: number }) {
   );
 }
 
-function ResizeHandle({ width, onResize }: { width: number; onResize: (w: number) => void }) {
-  const start = useRef<{ x: number; width: number } | null>(null);
-  const [dragging, setDragging] = useState(false);
-
-  const down = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    start.current = { x: e.clientX, width };
-    setDragging(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-  const move = (e: ReactPointerEvent<HTMLDivElement>) => {
-    const s = start.current;
-    if (!s) return;
-    onResize(Math.round(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, s.width + e.clientX - s.x))));
-  };
-  const up = () => {
-    start.current = null;
-    setDragging(false);
-  };
-
-  return (
-    <div
-      role="separator"
-      aria-orientation="vertical"
-      aria-label="Resize sidebar"
-      onPointerDown={down}
-      onPointerMove={move}
-      onPointerUp={up}
-      onPointerCancel={up}
-      onDoubleClick={() => onResize(SIDEBAR_DEFAULT)}
-      className="group absolute -right-[3px] top-0 z-20 h-full w-[6px] cursor-col-resize"
-    >
-      <span
-        className={`absolute left-[2px] top-0 h-full w-[2px] transition-colors ${
-          dragging ? "bg-accent" : "bg-transparent group-hover:bg-[color-mix(in_oklab,var(--accent)_55%,transparent)]"
-        }`}
-      />
-    </div>
-  );
-}

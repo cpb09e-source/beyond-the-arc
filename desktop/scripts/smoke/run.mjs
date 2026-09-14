@@ -47,7 +47,7 @@ const opt = (name, fallback) => {
 const PORT = Number(opt("--port", "9223"));
 const FULL = argv.includes("--full");
 const KEEP = argv.includes("--keep");
-const SCENARIOS = ["views", "filters", "tables", "similar", "hints", "history"];
+const SCENARIOS = ["views", "filters", "tables", "similar", "hints", "history", "sidebar"];
 const only = opt("--only", null)?.split(",");
 const chosen = only ? SCENARIOS.filter((s) => only.includes(s)) : SCENARIOS;
 

@@ -49,7 +49,7 @@ import { NO_LAYOUT } from "~/shell/table-layout";
 import { ActiveContext } from "~/shell/active";
 import { ShellContext } from "~/shell/shell-context";
 import { ShortcutsOverlay } from "~/shell/shortcuts";
-import { SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN, Sidebar } from "~/shell/sidebar";
+import { SIDEBAR_WIDTH, Sidebar } from "~/shell/sidebar";
 import { signalOnboarding } from "~/shell/onboarding";
 import { SplitDivider } from "~/shell/split-divider";
 import { TabStrip } from "~/shell/tab-strip";
@@ -147,16 +147,63 @@ function Frame() {
  */
 function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeMode) => void }) {
   const [ws, dispatch] = useWorkspace();
-  const [sidebarWidth, setSidebarWidth] = usePersisted<number>(
-    "bta.sidebar.width",
-    SIDEBAR_DEFAULT,
-    (v): v is number => typeof v === "number" && v >= SIDEBAR_MIN && v <= SIDEBAR_MAX,
-  );
   const [collapsed, setCollapsed] = usePersisted<boolean>(
     "bta.sidebar.collapsed",
     false,
     (v): v is boolean => typeof v === "boolean",
   );
+  /**
+   * A hidden sidebar, shown for a moment over the page (Arc's edge on Linear's
+   * sidebar). Resting on the window's left edge brings it in, leaving it sends it
+   * away, and picking a destination closes it; nothing underneath moves. Pinning
+   * it, with the button or Ctrl+\, gives it back its room.
+   *
+   * THE DELAYS ARE THE FEEL: a pointer that only brushes the edge on its way to a
+   * table's first column should not throw a panel over it, and one that slips two
+   * pixels off the panel should not lose it.
+   */
+  const [peek, setPeek] = useState(false);
+  const peekRef = useRef(false);
+  const peekTimer = useRef<number | null>(null);
+  useEffect(() => {
+    peekRef.current = peek;
+  }, [peek]);
+  const cancelPeekTimer = useCallback(() => {
+    if (peekTimer.current != null) window.clearTimeout(peekTimer.current);
+    peekTimer.current = null;
+  }, []);
+  const peekAfter = useCallback(
+    (open: boolean, ms: number) => {
+      cancelPeekTimer();
+      peekTimer.current = window.setTimeout(() => {
+        peekTimer.current = null;
+        setPeek(open);
+      }, ms);
+    },
+    [cancelPeekTimer],
+  );
+  const endPeek = useCallback(() => {
+    cancelPeekTimer();
+    setPeek(false);
+  }, [cancelPeekTimer]);
+  /** The button, Ctrl+\ and Ctrl K: hide a pinned sidebar, show a hidden one, and pin a peeking one where it is. */
+  const toggleSidebar = useCallback(() => {
+    cancelPeekTimer();
+    if (peekRef.current) {
+      setPeek(false);
+      setCollapsed(false);
+      return;
+    }
+    setCollapsed((c) => !c);
+  }, [cancelPeekTimer, setCollapsed]);
+  useEffect(() => {
+    if (!peek) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPeek(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [peek]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [focus, setFocus] = useState<FocusRequest | null>(null);
@@ -514,7 +561,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
         return take(() => dispatch({ type: "activate-index", index: Number(e.code.slice(5)) - 1 }));
       }
       if (mod && e.shiftKey && e.code === "Backslash") return take(toggleSplit);
-      if (mod && e.code === "Backslash") return take(() => setCollapsed((c) => !c));
+      if (mod && e.code === "Backslash") return take(toggleSidebar);
       // F6 moves between panes, as it does in most Windows apps with more than one.
       if (e.key === "F6" && !mod && !e.altKey) return take(() => dispatch({ type: "focus-other-pane" }));
       if (e.altKey && !mod && (e.code === "ArrowLeft" || e.code === "ArrowRight")) {
@@ -539,7 +586,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("mouseup", onMouse);
     };
-  }, [dispatch, focusFilter, newTab, setCollapsed, toggleFavorite, toggleSplit, snapView]);
+  }, [dispatch, focusFilter, newTab, toggleSidebar, toggleFavorite, toggleSplit, snapView]);
 
   /**
    * FOCUS (~/focus/focus-mode.tsx). Hold Q over something and every pane follows
@@ -968,7 +1015,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
       keywords: ["sidebar", "navigation", "panel", "toggle"],
       leading: <PanelLeft size={15} strokeWidth={2} />,
       trailing: <Kbd>Ctrl \</Kbd>,
-      run: () => setCollapsed((c) => !c),
+      run: () => toggleSidebar(),
     });
     action({
       id: "action:shortcuts",
@@ -1039,7 +1086,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     );
 
     return items;
-  }, [view, current, ws.tabs, ws.closed, recents, collapsed, theme, auth, navigate, focusFilter, dispatch, setCollapsed, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite, splitShown, toggleSplit, go, compare.add, workspaces, env, snapView, selection.selection, selection.clear, exportsSeen]);
+  }, [view, current, ws.tabs, ws.closed, recents, collapsed, theme, auth, navigate, focusFilter, dispatch, toggleSidebar, setTheme, compare.items, openView, favorites, toggleFavorite, openFavorite, splitShown, toggleSplit, go, compare.add, workspaces, env, snapView, selection.selection, selection.clear, exportsSeen]);
 
   const allItems = useMemo(() => [...paletteItems, ...objects, ...coaches], [paletteItems, objects, coaches]);
 
@@ -1068,27 +1115,26 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
         {/* The title bar is the window's drag handle; tabs and buttons opt out.
             On Windows the caption buttons are drawn natively over its right end. */}
         <header className="drag flex h-[40px] shrink-0 items-center border-b border-hairline bg-chrome">
+          {/* Eases with the sidebar below it, so the tab strip moves once, with the page. */}
           <div
-            className="flex h-full shrink-0 items-center gap-1.5 pl-2"
-            style={{ width: collapsed ? undefined : sidebarWidth }}
+            className="flex h-full shrink-0 items-center gap-1.5 overflow-hidden pl-2 transition-[width] duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+            style={{ width: collapsed ? 40 : SIDEBAR_WIDTH }}
           >
             <button
               type="button"
-              aria-label={collapsed ? "Show sidebar" : "Hide sidebar"}
-              title={`${collapsed ? "Show" : "Hide"} sidebar  Ctrl \\`}
+              aria-label={peek ? "Keep the sidebar open" : collapsed ? "Show sidebar" : "Hide sidebar"}
+              title={`${peek ? "Keep the sidebar open" : collapsed ? "Show sidebar" : "Hide sidebar"}  Ctrl \\`}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => setCollapsed((c) => !c)}
-              className="no-drag grid size-[28px] place-items-center rounded-md text-ink-muted transition-colors hover:bg-[var(--row-hover)] hover:text-ink"
+              onClick={toggleSidebar}
+              className="no-drag grid size-[28px] shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-[var(--row-hover)] hover:text-ink"
             >
               <PanelLeft size={15} strokeWidth={2} />
             </button>
-            {!collapsed && (
-              <span className="flex items-center pl-0.5">
-                {/* The site's wordmark in both inks; CSS shows the one this ground needs. */}
-                <img src={logoOnLight} alt="Beyond the Arc" draggable={false} className="bta-logo-light h-[17px] w-auto" />
-                <img src={logoOnDark} alt="Beyond the Arc" draggable={false} className="bta-logo-dark h-[17px] w-auto" />
-              </span>
-            )}
+            <span aria-hidden={collapsed || undefined} className="flex shrink-0 items-center pl-0.5">
+              {/* The site's wordmark in both inks; CSS shows the one this ground needs. */}
+              <img src={logoOnLight} alt="Beyond the Arc" draggable={false} className="bta-logo-light h-[17px] w-auto" />
+              <img src={logoOnDark} alt="Beyond the Arc" draggable={false} className="bta-logo-dark h-[17px] w-auto" />
+            </span>
           </div>
           <TabStrip
             tabs={ws.tabs}
@@ -1116,32 +1162,79 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
           />
         </header>
 
-        <div className="flex min-h-0 flex-1">
-          {!collapsed && (
-            <Sidebar
-              width={sidebarWidth}
-              onResize={setSidebarWidth}
-              currentViewId={current.viewId}
-              currentQuery={current.query}
-              onNavigate={navigate}
-              onOpenSearch={() => setPaletteOpen(true)}
-              onOpenShortcuts={() => setShortcutsOpen(true)}
-              theme={theme}
-              setTheme={setTheme}
-              favorites={favorites}
-              currentFavoriteId={favorites.find((f) => samePlace(f, current))?.id ?? null}
-              onOpenFavorite={openFavorite}
-              onRemoveFavorite={removeFavorite}
-              onRenameFavorite={(id, label) =>
-                setFavorites((list) => list.map((f) => (f.id === id && label.trim() ? { ...f, label: label.trim() } : f)))
-              }
-              workspaces={workspaces}
-              onNewWorkspace={() => setNamePrompt("new")}
-              onRenameWorkspace={() => setNamePrompt("rename")}
-              onDropFavorite={(o) => {
-                const place = placeOf(o, env);
-                if (place && !env.isFavorite(place)) env.toggleFavorite(place, objTitle(o));
+        <div className="relative flex min-h-0 flex-1">
+          {/* THE SLOT is the sidebar's room in the layout: all of it when pinned, none when hidden. Its width
+              eases, so the page takes the room back in one motion rather than a jump. The panel inside keeps
+              its own width the whole time, so its rows never rewrap while it moves; while peeking it sits over
+              the page from a slot of no width, and nothing underneath shifts. */}
+          <div
+            className="relative z-30 shrink-0 transition-[width] duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+            style={{ width: collapsed ? 0 : SIDEBAR_WIDTH }}
+          >
+            <div
+              data-sidebar={collapsed ? (peek ? "peek" : "hidden") : "pinned"}
+              aria-hidden={collapsed && !peek ? true : undefined}
+              inert={collapsed && !peek ? true : undefined}
+              onMouseEnter={() => {
+                if (peekRef.current) cancelPeekTimer();
               }}
+              onMouseLeave={() => {
+                if (peekRef.current) peekAfter(false, 160);
+              }}
+              className={`absolute inset-y-0 left-0 flex transition-[translate,box-shadow] duration-[200ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+                collapsed && !peek ? "-translate-x-full" : "translate-x-0"
+              }`}
+              // Floating, it takes a firmer edge than its hairline: the overlay shadow alone is faint on the dark ground.
+              style={{
+                width: SIDEBAR_WIDTH,
+                boxShadow: collapsed && peek ? "1px 0 0 color-mix(in oklab, var(--ink) 16%, transparent), var(--overlay-shadow)" : "none",
+              }}
+            >
+              <Sidebar
+                currentViewId={current.viewId}
+                currentQuery={current.query}
+                onNavigate={(viewId, newTab, query) => {
+                  navigate(viewId, newTab, query);
+                  endPeek();
+                }}
+                onOpenSearch={() => {
+                  endPeek();
+                  setPaletteOpen(true);
+                }}
+                onOpenShortcuts={() => {
+                  endPeek();
+                  setShortcutsOpen(true);
+                }}
+                theme={theme}
+                setTheme={setTheme}
+                favorites={favorites}
+                currentFavoriteId={favorites.find((f) => samePlace(f, current))?.id ?? null}
+                onOpenFavorite={(f, newTab) => {
+                  openFavorite(f, newTab);
+                  endPeek();
+                }}
+                onRemoveFavorite={removeFavorite}
+                onRenameFavorite={(id, label) =>
+                  setFavorites((list) => list.map((f) => (f.id === id && label.trim() ? { ...f, label: label.trim() } : f)))
+                }
+                workspaces={workspaces}
+                onNewWorkspace={() => setNamePrompt("new")}
+                onRenameWorkspace={() => setNamePrompt("rename")}
+                onDropFavorite={(o) => {
+                  const place = placeOf(o, env);
+                  if (place && !env.isFavorite(place)) env.toggleFavorite(place, objTitle(o));
+                }}
+              />
+            </div>
+          </div>
+          {/* A hidden sidebar's edge: rest the pointer on it a moment and the sidebar slides in over the page. */}
+          {collapsed && !peek && (
+            <div
+              aria-hidden
+              data-sidebar-edge=""
+              className="absolute inset-y-0 left-0 z-30 w-[5px]"
+              onMouseEnter={() => peekAfter(true, 150)}
+              onMouseLeave={cancelPeekTimer}
             />
           )}
 
