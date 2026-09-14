@@ -215,3 +215,27 @@ bulk-download 165k files" are not the same offer.
   within 30 days, which is honest and manual; a button would be better.
 - A cookie/consent banner is **not** needed today and should stay unnecessary —
   it only becomes required if an analytics or ad script is ever added.
+
+## 8. The desktop app — what it adds, reviewed 2026-09-14
+
+Release step 4 for installer 0.1.1 (docs/desktop-app-plan.md). Read from the
+code, not assumed. Everything in §1–§7 still applies; these are the ways the app
+changes the picture. Decisions are Colin's; nothing below has been changed.
+
+| # | What the app does | Where | Why it matters |
+|---|---|---|---|
+| 1 | **Player headshots** load from `https://btacbb.xyz/images/players/…` and Chromium's cache keeps each one after its first view | `desktop/src/main/index.ts`, the `bta://player` handler | Same ESPN-origin exposure as §2. The site's kill switches still cut new loads for the app, but **a headshot already cached on a subscriber's machine cannot be recalled**. The runbook in §2.4 should say so |
+| 2 | **NBA team marks are fetched straight from ESPN's CDN** (`a.espncdn.com/i/teamlogos/nba/500/<slug>.png`) for draft badges | same file, the `bta://nba` handler | New: the site does not do this. ESPN's terms (§2.1a) forbid automated access and commercial use, and every installed copy is now a client of their CDN. Cheapest fix: a text badge (DAL, GS) instead of the mark |
+| 3 | **The installer ships every team crest and conference mark** (`extraResources` in `desktop/electron-builder.yml`) | the installer | Nominative use, same position as the site (§2.4, "Logos are a separate… question"), but now distributed as files inside a download rather than served |
+| 4 | **Downloads hand out whole tables**: xlsx with every view as tabs, CSV, and "Copy for a spreadsheet" up to 30 MB (a season of 118,533 player games) | `desktop/src/renderer/src/table/download-menu.tsx`, `app.tsx` | The site offers the same xlsx builders, so this is not new in kind, but the app makes bulk extraction one click per season. Worth reading against CBBD's "substantially equivalent data service" clause (§4) |
+| 5 | **Attribution in exports is partial.** The xlsx About sheet names Beyond the Arc's own ratings and "Box-score rates come from CBBD", and links the page. The right-click CSV and the clipboard copy carry **no source line at all**, and the About note does not mention Bart Torvik or Sports Reference for tables built on their numbers | `src/lib/table-export.ts` (About sheet), `desktop/src/renderer/src/table/table-export.ts` | Sports Reference asks for explicit credit (§3). An export is exactly where a derived dataset leaves with no credit attached |
+| 6 | **Snapshot cards** copy a rendered card (crests, headshots, numbers) to the clipboard for sharing | `desktop/src/renderer/src/snapshot/` | Puts headshots into images subscribers post publicly: the §2.1c right-of-publicity thread, carried off the site |
+| 7 | **Season data is cached on disk** for offline use; paid seasons are purged on sign-out or lapse | `desktop/src/main/data.ts` | Fine as designed. Worth one sentence in `/terms` that the app keeps a local copy while the subscription is active |
+
+**Suggested decisions, smallest first:**
+- [ ] #2: replace ESPN NBA marks with text badges (small code change, no downside).
+- [ ] #5: add a source line to every export path, naming CBBD, Bart Torvik and Sports Reference where their numbers are in the table.
+- [ ] #1: add "cached headshots on installed copies cannot be recalled" to the §2.4 runbook, and decide whether the app should show initials only.
+- [ ] #6: decide whether snapshot cards use initials instead of headshots.
+- [ ] #7: one line in `/terms` about the app's local copy.
+- [ ] #4: include in the solicitor pass with §4.

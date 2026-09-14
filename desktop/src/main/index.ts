@@ -43,6 +43,16 @@ protocol.registerSchemesAsPrivileged([
 const CDP_PORT = app.isPackaged ? undefined : process.env.BTA_CDP_PORT;
 if (CDP_PORT) app.commandLine.appendSwitch("remote-debugging-port", CDP_PORT);
 
+/**
+ * A separate profile, development only. BTA_PROFILE_DIR moves userData (settings,
+ * cached seasons, the session, localStorage) to another folder, which also gives
+ * this copy its own single-instance lock: the smoke suite (scripts/smoke/run.mjs)
+ * runs beside a dev copy someone already has open, without touching its history,
+ * hints or sign-in. Set before the app is ready, as userData must be.
+ */
+const PROFILE_DIR = app.isPackaged ? undefined : process.env.BTA_PROFILE_DIR;
+if (PROFILE_DIR) app.setPath("userData", PROFILE_DIR);
+
 /** Window ground and title-bar colors, matched to the renderer's tokens. */
 const CHROME = {
   light: { ground: "#faf7f2", bar: "#f3efe7", symbol: "#3a425c" },

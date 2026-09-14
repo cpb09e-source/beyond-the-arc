@@ -44,6 +44,23 @@ win:
         - x64
   icon: build/icon.png
   artifactName: Beyond-the-Arc-Setup-${version}.${ext}
+  # SIGNING (release step 9, docs/desktop-app-plan.md), off until the Azure
+  # Artifact Signing account exists. To turn it on, uncomment the block, fill the
+  # four names from the Azure portal, and build with AZURE_TENANT_ID,
+  # AZURE_CLIENT_ID and AZURE_CLIENT_SECRET in the environment (an Entra app
+  # registration with the "Artifact Signing Certificate Profile Signer" role).
+  # electron-builder 26 signs the app, the installer and the uninstaller with it.
+  #
+  # ONCE SIGNED, ALWAYS SIGNED. The build writes publisherName into the update
+  # config, and every later update must carry the same publisher or installed
+  # copies refuse it. 0.1.0 has no publisherName, so it accepts the first signed
+  # update without checking.
+  #
+  # azureSignOptions:
+  #   publisherName: "<exactly as on the certificate>"
+  #   endpoint: "https://<region>.codesigning.azure.net"
+  #   codeSigningAccountName: "<signing account>"
+  #   certificateProfileName: "<certificate profile>"
 
 nsis:
   oneClick: true

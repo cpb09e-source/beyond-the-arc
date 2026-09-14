@@ -7,6 +7,7 @@ import { recordStep } from "~/shell/research-history";
 import { ConfLogo } from "~/ui/conf-logo";
 import { seasonLabel } from "~/ui/format";
 import { Kbd } from "~/ui/kbd";
+import { markHintUsed } from "~/ui/key-hints";
 import { TeamLogo } from "~/ui/logo";
 import { PlayerPhoto } from "~/ui/player-photo";
 import { scopedQuery } from "~/ui/scoped-query";
@@ -59,6 +60,7 @@ export function FocusModeProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<FocusMode | null>(null);
   const start = useCallback((subject: FocusSubject, locked: boolean) => {
     recordStep({ kind: "focus", title: `Focused ${subject.kind === "conference" ? subject.label : subject.name}`, obj: subject });
+    markHintUsed("focus");
     setMode({ subject, locked });
   }, []);
   const lock = useCallback(() => setMode((m) => (m ? { ...m, locked: true } : m)), []);

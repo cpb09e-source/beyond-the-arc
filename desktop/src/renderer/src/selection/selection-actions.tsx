@@ -162,7 +162,7 @@ for (const a of SELECTION_ACTIONS) {
   if (a.id === "clear") continue;
   const run = a.run;
   a.run = (s, env, how, clear) => {
-    recordStep({ kind: "selection", title: a.phrase(s), names: s.names, action: a.id });
+    recordStep({ kind: "selection", title: a.phrase(s), selection: { year: s.year, names: [...s.names] }, action: a.id });
     run(s, env, how, clear);
   };
 }

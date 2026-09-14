@@ -112,6 +112,53 @@ export function findSimilar<R>(
   return found.slice(0, limit);
 }
 
+/** One stat's cost to a score: how far apart the two stood, and the points that took off. */
+export type Loss<R> = { part: Part<R>; gap: number; lost: number };
+
+export type Breakdown<R> = {
+  /** Largest first; they add up to exactly 100 − score. */
+  losses: Loss<R>[];
+  /** Stats in the profile that one side has no number for, so they were left out. */
+  missing: Feature<R>[];
+  coverage: number;
+};
+
+/**
+ * Where a score's points went. A score starts at 100 and only loses points, so a
+ * stat never adds to it. d² is a weighted mean of each stat's squared gap, and
+ * each stat takes its share of d² as its share of the points lost: the losses
+ * add up to exactly 100 − score, and a stat that stood twice as far apart (at the
+ * same weight) costs four times the points.
+ */
+export function scoreBreakdown<R>(m: Match<R>, profile: Profile<R>): Breakdown<R> {
+  const cost = (p: Part<R>) => p.f.weight * (p.zs - p.zm) ** 2;
+  const sum = m.parts.reduce((s, p) => s + cost(p), 0);
+  const loss = 100 - m.score;
+  const losses = m.parts
+    .map((part) => ({ part, gap: Math.abs(part.zs - part.zm), lost: sum > 0 ? (loss * cost(part)) / sum : 0 }))
+    .sort((a, b) => b.lost - a.lost);
+  const have = new Set(m.parts.map((p) => p.f.key));
+  return { losses, missing: profile.features.filter((f) => !have.has(f.key)), coverage: m.coverage };
+}
+
+/**
+ * The losses as whole points that add up to what the table prints: 100 minus the
+ * rounded score. Largest remainder, so no stat is rounded into a total that
+ * disagrees with the score beside it.
+ */
+export function wholePoints(losses: readonly { lost: number }[], score: number): number[] {
+  const total = 100 - Math.round(score);
+  const floors = losses.map((l) => Math.floor(l.lost));
+  let left = total - floors.reduce((s, v) => s + v, 0);
+  const order = losses.map((l, i) => ({ i, r: l.lost - Math.floor(l.lost) })).sort((a, b) => b.r - a.r || a.i - b.i);
+  for (const { i } of order) {
+    if (left <= 0) break;
+    floors[i]! += 1;
+    left -= 1;
+  }
+  return floors;
+}
+
 /** The stats a match is most alike on, and the one it is furthest apart on, in words. */
 export function alikeAndApart<R>(m: Match<R>): { alike: string[]; apart: { label: string; word: string } | null } {
   const byGap = [...m.parts].sort((a, b) => Math.abs(a.zs - a.zm) - Math.abs(b.zs - b.zm));

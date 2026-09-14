@@ -9,6 +9,7 @@ import { loadTeamGameSeason, type TeamGame } from "~/data/team-game-model";
 import { useLoaded } from "~/data/use-corpus";
 import { recordStep } from "~/shell/research-history";
 import { seasonLabel } from "~/ui/format";
+import { markHintUsed } from "~/ui/key-hints";
 import { TeamLogo } from "~/ui/logo";
 import type { MenuItem } from "~/ui/menu";
 import { PlayerPhoto } from "~/ui/player-photo";
@@ -88,6 +89,7 @@ export function StatLensProvider({ children }: { children: ReactNode }) {
   const count = useRef(0);
   const show = useCallback<OpenLens>((target, at) => {
     recordStep({ kind: "lens", title: `Stat Lens: ${target.subject.name}, ${target.shown?.label ?? statOf(target).label}`, obj: target.subject, stat: target.stat });
+    markHintUsed("lens");
     setOpen({ target, at, n: ++count.current });
   }, []);
   const close = useCallback(() => setOpen(null), []);

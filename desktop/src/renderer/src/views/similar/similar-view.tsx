@@ -11,7 +11,7 @@ import { Picker, type PickerOption } from "~/shell/picker";
 import { useTabTitle } from "~/shell/tab-title";
 import { TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
-import { alikeAndApart, findSimilar, printFeature, seasonScales, type Candidate, type Feature, type Match, type Profile } from "~/similar/similar-model";
+import { alikeAndApart, findSimilar, printFeature, scoreBreakdown, seasonScales, wholePoints, type Candidate, type Feature, type Match, type Profile } from "~/similar/similar-model";
 import { PLAYER_FEATURES, PLAYER_PROFILES, TEAM_FEATURES, TEAM_PROFILES, playerPct, teamPct } from "~/similar/similar-profiles";
 import { parseSimilarQuery, similarQuery, type SimilarQuery, type SimilarScope } from "~/similar/similar-query";
 import { usePlayerPool, useTeamPool, type Pool } from "~/similar/use-similar-pool";
@@ -22,6 +22,7 @@ import { TeamLogo } from "~/ui/logo";
 import { ClassBadge, PlayerPhoto } from "~/ui/player-photo";
 import { Popover } from "~/ui/popover";
 import { SearchList, type ListItem } from "~/ui/search-list";
+import { ScoreButton } from "./score-breakdown";
 
 /**
  * Find Similar: the team-seasons or player-seasons, from 2013-14 on, whose
@@ -68,7 +69,18 @@ function Tag({ children, title }: { children: ReactNode; title: string }) {
 
 const COVID_NOTE = "The 2020-21 COVID season: shortened, and short on non-conference games, so its numbers compare less cleanly";
 
-function resultColumns<R>(identity: Column<SRow<R>>[], profile: Profile<R>, pctOf: (r: R, key: string) => number | null): Column<SRow<R>>[] {
+const yy = (y: number) => `’${String(y).slice(-2)}`;
+const teamShort = (c: Candidate<Team>) => `${c.row.name} ${yy(c.year)}`;
+const playerShort = (c: Candidate<Player>) => `${c.row.name.split(" ").slice(-1)[0]} ${yy(c.year)}`;
+
+function resultColumns<R>(
+  identity: Column<SRow<R>>[],
+  profile: Profile<R>,
+  pctOf: (r: R, key: string) => number | null,
+  short: (c: Candidate<R>) => string,
+  subject: Candidate<R> | null,
+): Column<SRow<R>>[] {
+  const chosen = subject ? short(subject) : "";
   return [
     {
       key: "pos", label: "#", title: "Place among the matches", width: 44, align: "right", first: 1, pin: true,
@@ -86,16 +98,11 @@ function resultColumns<R>(identity: Column<SRow<R>>[], profile: Profile<R>, pctO
       ),
     },
     {
-      key: "match", label: "Match", title: "100 is an identical profile; a random pair scores about 13", width: 76, align: "right", first: -1,
+      key: "match", label: "Match", title: "100 is an identical profile; two unrelated ones score about 13. Click a score for where its points went.", width: 76, align: "right", first: -1,
       sortValue: (r) => r.m?.score ?? 101,
       cell: (r) =>
         r.m ? (
-          <span className="flex items-center justify-end gap-2">
-            <span aria-hidden className="h-[4px] w-[30px] overflow-hidden rounded-full bg-paper-deep">
-              <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.round(r.m.score)}%` }} />
-            </span>
-            <span className="w-[22px] text-right font-semibold text-ink tabular">{r.m.score.toFixed(0)}</span>
-          </span>
+          <ScoreButton m={r.m} profile={profile} chosen={chosen} other={short(r.c)} />
         ) : (
           <span className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-accent">Chosen</span>
         ),
@@ -144,17 +151,23 @@ function ComparePeek<R>({ m, profile, chosen, other }: { m: Match<R> | null; pro
   if (!m) return <p className="px-4 py-3 text-[12.5px] leading-relaxed text-ink-muted">The one every row below is compared with.</p>;
   const parts = new Map(m.parts.map((p) => [p.f.key, p]));
   const { apart } = alikeAndApart(m);
+  const b = scoreBreakdown(m, profile);
+  const whole = wholePoints(b.losses, m.score);
+  const points = new Map(b.losses.map((l, i) => [l.part.f.key, whole[i]!]));
   return (
     <div className="px-4 pb-3 pt-1">
       <div className="flex items-baseline justify-between border-b border-hairline pb-2">
         <span className="text-[12px] text-ink-muted">{profile.label} match</span>
         <span className="text-[22px] font-semibold tracking-[-0.02em] text-ink tabular">{m.score.toFixed(0)}</span>
       </div>
-      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto_auto_44px] items-center gap-x-3 gap-y-[5px] text-[12px]">
+      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto_auto_44px_28px] items-center gap-x-3 gap-y-[5px] text-[12px]">
         <span />
         <span className="truncate text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-muted">{chosen}</span>
         <span className="truncate text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-muted">{other}</span>
         <span />
+        <span className="text-right text-[10.5px] font-semibold uppercase tracking-[0.06em] text-ink-muted" title="Points this stat took off 100">
+          Pts
+        </span>
         {profile.features.map((f: Feature<R>) => {
           const p = parts.get(f.key);
           const gap = p ? Math.abs(p.zs - p.zm) : null;
@@ -171,11 +184,14 @@ function ComparePeek<R>({ m, profile, chosen, other }: { m: Match<R> | null; pro
             <span key={`${f.key}:g`} title={gap == null ? "Not compared: one side has no number" : `${gap.toFixed(1)} standard deviations apart in their seasons`} className="h-[5px] rounded-full bg-paper-deep">
               {gap != null && <span className="block h-full rounded-full bg-ink-muted" style={{ width: `${Math.max(6, Math.min(100, (gap / 2) * 100))}%` }} />}
             </span>,
+            <span key={`${f.key}:p`} data-points={p ? (points.get(f.key) ?? 0) : undefined} className="text-right text-ink-soft tabular">
+              {p ? `−${points.get(f.key) ?? 0}` : "–"}
+            </span>,
           ];
         })}
       </div>
       <p className="mt-2.5 text-[11.5px] leading-snug text-ink-muted">
-        Bars show how far apart each number stood in its own season.{apart ? ` Furthest apart: ${apart.label}, ${other} ${apart.word}.` : ""}
+        Bars show how far apart each number stood in its own season; points are what that distance took off 100.{apart ? ` Furthest apart: ${apart.label}, ${other} ${apart.word}.` : ""}
       </p>
     </div>
   );
@@ -372,7 +388,7 @@ function TeamSimilar({ q, write, fallbackYear }: { q: SimilarQuery; write: (next
     [subject, scales, pool.rows, profile, q.scope],
   );
   const rows = useMemo<SRow<Team>[]>(() => (subject ? [{ key: subject.id, c: subject, m: null }, ...matches.map((m) => ({ key: m.c.id, c: m.c, m }))] : []), [subject, matches]);
-  const columns = useMemo(() => resultColumns(TEAM_IDENTITY, profile, teamPct), [profile]);
+  const columns = useMemo(() => resultColumns(TEAM_IDENTITY, profile, teamPct, teamShort, subject), [profile, subject]);
   useTabTitle(q.team ? `Teams like ${q.team} ${seasonLabel(year)}` : "Find Similar");
 
   const withheld = subject && subject.row.explorer?.a_ortg == null;
@@ -468,7 +484,7 @@ function PlayerSimilar({ q, write, fallbackYear }: { q: SimilarQuery; write: (ne
     [subject, scales, pool.rows, profile, q.scope],
   );
   const rows = useMemo<SRow<Player>[]>(() => (subject ? [{ key: subject.id, c: subject, m: null }, ...matches.map((m) => ({ key: m.c.id, c: m.c, m }))] : []), [subject, matches]);
-  const columns = useMemo(() => resultColumns(PLAYER_IDENTITY, profile, playerPct), [profile]);
+  const columns = useMemo(() => resultColumns(PLAYER_IDENTITY, profile, playerPct, playerShort, subject), [profile, subject]);
   const name = subject?.row.name ?? q.name;
   useTabTitle(name ? `Players like ${name} ${seasonLabel(year)}` : "Find Similar");
 

@@ -476,14 +476,67 @@ the Difference Explainer, What Changed, research history capture, and export.
   Duke), Find Similar for a team and a player with both pickers, Peek, and the
   row menu.
 
+## Done on 2026-09-14
+
+The release list for 0.1.1 now leads `docs/desktop-app-plan.md` (Status), with
+the roadmap after it and the grammar every new feature has to fit.
+
+- **Guardrails for every Claude session** (`.claude/settings.json`,
+  `.claude/hooks/`). Before any shell command, file read, write or edit:
+  - never, with no override: `supabase db push`, printing a secret, writing a
+    live key into a file or the Anthropic key into desktop code, piping the dev
+    server, a blanket `git add`, committing the stray files;
+  - ask first: deploys, site builds, R2 writes, live database changes,
+    publishing the installer, force pushes, merging `legal-pages`, porpag churn,
+    and upstream pulls until the freeze lifts on 2026-10-01. Blocked until you
+    say go, then the command carries `BTA_GO=<scope>` where you can see it.
+  - A mention is not a run: a grep or a commit message that names
+    `netlify deploy` passes. 70 checks in `.claude/hooks/guard.test.mjs`.
+- **`npm run verify`** runs every check the repo has in one go: the guard
+  rules, both typechecks, the filter grammar, the explain engine and the new
+  Find Similar score check. `npm run verify -- --smoke` also drives the real
+  window: every view, the filters and their counts, the table controls and
+  downloads, Find Similar, the hints and the history. It starts its own copy of
+  the app with a fresh profile, so it runs beside a dev app you have open and
+  never touches your history, favorites or sign-in. The `bta-verify` agent
+  (`.claude/agents/`) runs it and reports what failed.
+- **Research history keeps state, not just words.** Each step now records the
+  version, the sitting, the tab, where you were (view, season, filter, table
+  layout), a selection's season and teams, and what an export carried; a step
+  on the live season is marked, so a replayed trail can say its numbers moved.
+  Older steps still load. This is the shape Save Trail needs, recorded from the
+  first day 0.1.1 is installed.
+- **Hints for Q and Alt-click.** Rest the pointer on a team, player or
+  conference and a small tip says "Hold Q and every pane follows Duke"; rest on
+  a number in a table and it says "Alt-click for the games behind this number".
+  Once per run, three runs at most, and never again once you have used the
+  gesture.
+- **Find Similar's score explains itself.** Click a Match score: it starts at
+  100 and each stat takes points off for how far apart the two stood, in whole
+  points that add up to the score in the table. Peek shows the same points
+  beside each stat, and lists what was left out for want of a number. The
+  arithmetic is checked on 2,400 made-up matches (`scripts/check-similar.mts`).
+- **Sources review for the app**: §8 of `docs/TODO-legal-sources.md`. Six
+  things the app adds (ESPN NBA marks fetched straight from ESPN, headshots
+  cached on subscribers' machines, logos in the installer, bulk downloads,
+  exports without a source line, headshots in snapshot cards). Decisions are
+  yours; nothing was changed.
+- **Signing is ready to switch on** in `desktop/electron-builder.yml`, waiting
+  on the Azure account. Once a build is signed, every later update must be too.
+- **Version 0.1.1** in `desktop/package.json`.
+- Development only: `BTA_PROFILE_DIR` runs the dev app on another profile (the
+  smoke suite uses it). Your open dev app has been hot-reloading the renderer
+  changes; restart it to pick up this one main-process change.
+
 ## What still has to happen
 
-**To put the desktop app in people's hands (in order):**
-1. ~~Apply migration 012~~ done.
-2. ~~Build and publish the installer~~ done (0.1.0).
-3. ~~Deploy the site~~ done 2026-09-13: the connect page and the sign-in and download functions answer on btacbb.xyz. The legal pages stay on `legal-pages` until the entity name is filled in.
-4. Install from the account page and sign in with both test accounts.
-5. Code signing (Azure Trusted Signing), so SmartScreen stops warning.
+**To put 0.1.1 in people's hands** (the full order is in `docs/desktop-app-plan.md`):
+1. ~~Apply migration 012, publish 0.1.0, deploy the site~~ done 2026-09-13. The legal pages stay on `legal-pages` until the entity name is filled in.
+2. ~~Hooks and verify, history format, hints, score breakdown~~ done 2026-09-14.
+3. Install the 0.1.1 release candidate the way a subscriber would, and sign in with admin@, premium@ and a free account (which must get the Season Pass screen). **Yours.**
+4. The sources and terms decisions in §8 of `docs/TODO-legal-sources.md`. **Yours.**
+5. The Azure Artifact Signing account. **Yours.** Then the same commit is built signed, and the signed installer and the 0.1.0 to 0.1.1 update are tested.
+6. Publish 0.1.1, on your go.
 
 **Still to build:**
 - **Admin dashboard in the app** (you asked for it later): subscribers and trials, webhook heartbeat, data checks, the site banner, hand-confirmed transfers, and who is on which app version. The site's /admin has most of this; the app would read the same `admin-config` function.

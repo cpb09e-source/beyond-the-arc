@@ -59,7 +59,7 @@ import { Welcome } from "~/shell/welcome";
 import { useWorkspace, type Tab } from "~/shell/workspace";
 import { useWorkspaces } from "~/shell/workspaces";
 import { recordVisit, useRecents } from "~/shell/recents";
-import { recordStep } from "~/shell/research-history";
+import { recordStep, setHistoryContext } from "~/shell/research-history";
 import { TableExportContext, type TableExport } from "~/table/table-export";
 import { isSnappable, type SnapObj } from "~/snapshot/snapshot-cards";
 import { SnapshotSheet, snapshotView } from "~/snapshot/snapshot-sheet";
@@ -70,6 +70,7 @@ import { selectionPaletteItems } from "~/selection/selection-actions";
 import { SelectionBar } from "~/selection/selection-bar";
 import { seasonLabel } from "~/ui/format";
 import { Kbd } from "~/ui/kbd";
+import { KeyHints } from "~/ui/key-hints";
 import { NamePrompt } from "~/ui/name-prompt";
 import { PlaceMark } from "~/ui/place-mark";
 import { usePersisted } from "~/ui/persisted";
@@ -201,11 +202,14 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
   }, [current.viewId, current.year, current.query, current.record, current.title, subject]);
 
   // Research history (~/shell/research-history.ts): a place is a step once the tab has stayed on it a
-  // moment, so typing a filter or stepping through seasons is one step, not twenty.
+  // moment, so typing a filter or stepping through seasons is one step, not twenty. Every other step
+  // (an action, a lens, an export) takes the place and tab it happened in from the context set here.
   const lastPlace = useRef("");
   useEffect(() => {
+    const layout = current.table && (current.table.view || current.table.cols?.length) ? { table: current.table } : {};
+    const place = { viewId: current.viewId, year: current.year, query: current.query, record: current.record, ...layout };
+    setHistoryContext({ tab: current.id, place });
     if (subject) return;
-    const place = { viewId: current.viewId, year: current.year, query: current.query, record: current.record };
     const key = JSON.stringify(place);
     const title = current.viewId === "home" ? "Home" : tabName(current);
     const t = window.setTimeout(() => {
@@ -216,7 +220,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
     return () => window.clearTimeout(t);
     // `current` is read through the fields listed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current.viewId, current.year, current.query, current.record, current.title, subject]);
+  }, [current.id, current.viewId, current.year, current.query, current.record, current.table, current.title, subject]);
 
   const trayRef = useRef(compare.items);
   useEffect(() => {
@@ -435,14 +439,14 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
           return;
         }
         copyText(tsv, `Copied ${n}, ready to paste into a spreadsheet`);
-        recordStep({ kind: "export", title: `Copied ${n} of ${tabName(currentRef.current)}` });
+        recordStep({ kind: "export", title: `Copied ${n} of ${tabName(currentRef.current)}`, export: { format: "tsv", rows } });
       },
       saveCsv: (csv, name, rows) => {
         void window.bta.files.saveCsv(csv, name).then(
           (res) => {
             if (!res.ok) return;
             toast({ title: `Saved ${rows.toLocaleString()} ${rows === 1 ? "row" : "rows"}`, body: res.path });
-            recordStep({ kind: "export", title: `Saved ${name} as CSV` });
+            recordStep({ kind: "export", title: `Saved ${name} as CSV`, export: { format: "csv", rows, name } });
           },
           () => toast({ title: "The file could not be saved" }),
         );
@@ -1203,6 +1207,7 @@ function Workbench({ theme, setTheme }: { theme: ThemeMode; setTheme: (m: ThemeM
                 onRelease={releaseFocus}
               />
             )}
+            <KeyHints paused={!!focusMode.mode || paletteOpen} />
             <CompareDock
               lift={!!selection.selection}
               hidden={current.viewId === "compare" && current.query === compareQuery(compare.items)}

@@ -746,6 +746,8 @@ export function DataTable<R>({
         role="grid"
         aria-label={ariaLabel}
         aria-rowcount={sorted.length}
+        // Where Alt-click opens a Stat Lens, for the discovery hint (~/ui/key-hints.tsx).
+        data-lens-cells={statLens ? "" : undefined}
         className="relative min-h-0 flex-1 overflow-auto"
       >
         {sorted.length === 0 ? (

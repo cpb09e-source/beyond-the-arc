@@ -75,7 +75,7 @@ export function DownloadMenu<R>({
       if (saved.ok && saved.path) {
         const path = saved.path;
         toast({ title: `Saved ${path.split(/[\\/]/).pop()}`, action: { label: "Show in folder", run: () => window.bta.files.reveal(path) } });
-        recordStep({ kind: "export", title: `Downloaded ${name}` });
+        recordStep({ kind: "export", title: `Downloaded ${name}`, export: { format: what === "views" ? "xlsx-views" : what === "csv" ? "csv" : "xlsx", rows, name } });
       }
     } catch {
       setFailed(true);
