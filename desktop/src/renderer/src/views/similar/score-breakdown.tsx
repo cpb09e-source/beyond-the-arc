@@ -94,7 +94,7 @@ export function ScoreBreakdown<R>({ m, profile, chosen, other }: { m: Match<R>; 
           Left out, with no number on one side: {b.missing.map((f) => f.label).join(", ")}. Compared on {Math.round(b.coverage * 100)}% of the profile.
         </p>
       )}
-      <p className="mt-1.5 text-[11.5px] leading-snug text-ink-muted">Two unrelated profiles score about 13.</p>
+      <p className="mt-1.5 text-[11.5px] leading-snug text-ink-muted">Two unrelated profiles score about 24.</p>
     </div>
   );
 }

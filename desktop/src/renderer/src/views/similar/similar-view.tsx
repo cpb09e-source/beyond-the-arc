@@ -12,7 +12,7 @@ import { Picker, type PickerOption } from "~/shell/picker";
 import { useTabTitle } from "~/shell/tab-title";
 import { TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
-import { alikeAndApart, findSimilar, printFeature, scoreBreakdown, seasonScales, wholePoints, type Candidate, type Feature, type Match, type Profile } from "~/similar/similar-model";
+import { alikeAndApart, findSimilar, printFeature, scoreBreakdown, seasonScales, sharedWeights, wholePoints, type Candidate, type Feature, type Match, type Profile } from "~/similar/similar-model";
 import { PLAYER_FEATURES, PLAYER_PROFILES, TEAM_FEATURES, TEAM_PROFILES, playerPct, teamPct } from "~/similar/similar-profiles";
 import type { SavedSubject, SubjectRef } from "~/similar/saved-similar";
 import { parseSimilarQuery, similarQuery, type SimilarQuery, type SimilarScope } from "~/similar/similar-query";
@@ -75,6 +75,8 @@ function Tag({ children, title }: { children: ReactNode; title: string }) {
 const COVID_NOTE = "The 2020-21 COVID season: shortened, and short on non-conference games, so its numbers compare less cleanly";
 
 const yy = (y: number) => `’${String(y).slice(-2)}`;
+/** "an 84", "a 78": the article a score takes when read aloud. */
+const an = (n: number) => (String(n).startsWith("8") || n === 11 || n === 18 ? "an" : "a");
 const teamShort = (c: Candidate<Team>) => `${c.row.name} ${yy(c.year)}`;
 const playerShort = (c: Candidate<Player>) => `${c.row.name.split(" ").slice(-1)[0]} ${yy(c.year)}`;
 
@@ -103,7 +105,7 @@ function resultColumns<R>(
       ),
     },
     {
-      key: "match", label: "Match", title: "100 is an identical profile; two unrelated ones score about 13. Click a score for where its points went.", width: 76, align: "right", first: -1,
+      key: "match", label: "Match", title: "100 is an identical profile; two unrelated ones score about 24. Click a score for where its points went.", width: 76, align: "right", first: -1,
       sortValue: (r) => r.m?.score ?? 101,
       cell: (r) =>
         r.m ? (
@@ -409,7 +411,7 @@ function Layout<R>({
     : loading
       ? `Reading every season: ${pool.done} of ${pool.total}.`
       : top
-        ? `Closest: ${chosenLabel(top.c)} ${seasonLabel(top.c.year)}, a ${top.score.toFixed(0)}, most alike in ${alikeAndApart(top).alike.join(", ")}. These ${matches.length} come from ${seasons} ${seasons === 1 ? "season" : "seasons"}.`
+        ? `Closest: ${chosenLabel(top.c)} ${seasonLabel(top.c.year)}, ${an(Math.round(top.score))} ${top.score.toFixed(0)}, most alike in ${alikeAndApart(top).alike.join(", ")}. These ${matches.length} come from ${seasons} ${seasons === 1 ? "season" : "seasons"}.`
         : "Nothing in these seasons shares enough of this profile to compare.";
   return (
     <>
@@ -483,9 +485,11 @@ function TeamSimilar({ q, write, fallbackYear }: { q: SimilarQuery; write: (next
   const active = useIsActive();
   const pool = useTeamPool(true);
   const year = q.year ?? fallbackYear;
-  const profile = TEAM_PROFILES.find((p) => p.key === q.on) ?? TEAM_PROFILES[0]!;
+  const base = TEAM_PROFILES.find((p) => p.key === q.on) ?? TEAM_PROFILES[0]!;
   const complete = pool.done === pool.total;
   const scales = useMemo(() => (complete ? seasonScales(pool.rows, TEAM_FEATURES) : null), [complete, pool.rows]);
+  // Stats that say the same thing share their weight, measured over every season.
+  const profile = useMemo(() => (scales ? sharedWeights(base, pool.rows, scales) : base), [base, scales, pool.rows]);
   const subject = useMemo(() => (q.team ? (pool.rows.find((c) => c.year === year && c.row.name === q.team) ?? null) : null), [pool.rows, year, q.team]);
   const matches = useMemo(
     () => (subject && scales ? findSimilar(subject, pool.rows, profile, scales, { limit: 50, keep: keepFor(q.scope, subject.year) }) : []),
@@ -615,6 +619,8 @@ function PlayerSimilar({ q, write, fallbackYear }: { q: SimilarQuery; write: (ne
   const active = useIsActive();
   const pool = usePlayerPool(true);
   const year = q.year ?? fallbackYear;
+  // No shared weights for players: measured on split halves, a player's volume stats echo one another and
+  // are also what tells him apart, so sharing their weight made his matches less repeatable (tune-similar.mts).
   const profile = PLAYER_PROFILES.find((p) => p.key === q.on) ?? PLAYER_PROFILES[0]!;
   const complete = pool.done === pool.total;
   const scales = useMemo(() => (complete ? seasonScales(pool.rows, PLAYER_FEATURES) : null), [complete, pool.rows]);

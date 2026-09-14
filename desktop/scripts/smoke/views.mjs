@@ -62,6 +62,14 @@ export default async function views(app, t) {
   await sleep(500);
   t.check("the folded edge brings it back", await rail());
   await app.js(railBefore == null ? `localStorage.removeItem('bta.profile.details'); true` : `localStorage.setItem('bta.profile.details', ${JSON.stringify(railBefore)}); true`);
+
+  // The page's Snapshot opens the sheet on Duke's card, ready to copy.
+  t.check("Snapshot opens on Duke's page", await app.press("Snapshot"));
+  const sheet = `document.querySelector('[role=dialog][aria-label^="Snapshot of Duke"]')`;
+  t.check("the card is ready to copy", await app.waitFor(`!!${sheet} && /Duke/.test(${sheet}.innerText) && ![...${sheet}.querySelectorAll('footer button')].some((b) => b.disabled)`, 20_000, 400));
+  await app.key("Escape");
+  await sleep(400);
+  t.check("Esc closes the sheet", !(await app.js(`!!document.querySelector('[aria-label^="Snapshot of"]')`)));
   await app.nav("Team Explorer");
   await app.setQuery("");
 }

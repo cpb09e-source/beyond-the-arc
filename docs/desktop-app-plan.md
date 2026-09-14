@@ -52,8 +52,16 @@ signed is the one that is published.
    tested by Colin.
 9. Code-sign that exact candidate; verify the signed installer and the 0.1.0 to 0.1.1 update.
    Colin asked for more after testing (no bar in Find Similar's Match column; Find Similar under Teams
-   and under Players, with Save, Download and Snapshot; a Similar button on team and player pages), so
-   the signed build comes from the latest commit and gets a short retest, not f5712416c8.
+   and under Players, with Save, Download and Snapshot; a Similar button on team and player pages; a
+   measured model, below), so the signed build comes from the latest commit and gets a short retest,
+   not f5712416c8.
+
+   **Find Similar, measured (2026-09-14).** `desktop/scripts/tune-similar.mts` splits every season's
+   games into halves and asks whether a half finds its own other half. Rates on few attempts are eased
+   (predicts a player's other games 30-35% better on TS%, 3P%, FT%), numbers are soft-capped at 3 SD,
+   team stats that echo each other share weight, and weights were tuned on even seasons. On the odd
+   seasons: team Overall MRR 0.350 to 0.388, Offense 0.236 to 0.270; player Overall 0.248 to 0.306,
+   Role 0.220 to 0.248, Scoring 0.079 to 0.096. Unrelated pairs score about 24.
 10. Publish 0.1.1 (Colin's go; it writes to R2).
 
 ### After 0.1.1

@@ -31,9 +31,9 @@ export default async function similar(app, t) {
   const meta = await app.meta();
   t.check("matches come from 4,620 team-seasons", /of 4,620 team-seasons/.test(meta), meta);
   const top = await summary(app);
-  t.check("Houston 2024-25 is the closest, a 78", /Closest: Houston 2024-25, a 78/.test(top ?? ""), top);
+  t.check("Cincinnati 2016-17 is the closest, an 84", /Closest: Cincinnati 2016-17, an 84/.test(top ?? ""), top);
   const rows = await app.rowsText(3);
-  t.check("Cincinnati 2016-17 is second, a 73", /Cincinnati/.test(rows[2] ?? "") && /2016-17/.test(rows[2] ?? "") && /\b73\b/.test(rows[2] ?? ""), rows[2]);
+  t.check("Houston 2022-23 is second, an 82", /Houston/.test(rows[2] ?? "") && /2022-23/.test(rows[2] ?? "") && /\b82\b/.test(rows[2] ?? ""), rows[2]);
   await app.shot("similar-houston");
 
   // The score opens into its points, and they add up to it.
@@ -45,7 +45,7 @@ export default async function similar(app, t) {
     return { text: d.innerText.replace(/\\s+/g, ' ').slice(0, 300), points: [...d.querySelectorAll('[data-points]')].map((p) => Number(p.dataset.points)) };
   })()`);
   t.check("the score opens where its points went", box != null, box);
-  if (box) t.check("the points add up to 100 − 78", box.points.reduce((s, v) => s + v, 0) === 22, box.points);
+  if (box) t.check("the points add up to 100 − 84", box.points.reduce((s, v) => s + v, 0) === 16, box.points);
   await app.shot("similar-breakdown");
   await app.closePopover();
 
@@ -56,7 +56,7 @@ export default async function similar(app, t) {
   await sleep(600);
   const peek = await app.js(`(() => { const p = document.querySelector('.peek-panel'); return p ? { text: p.innerText.replace(/\\s+/g, ' ').slice(0, 200), points: [...p.querySelectorAll('[data-points]')].map((x) => Number(x.dataset.points)) } : null; })()`);
   t.check("Peek shows the match side by side", peek != null && /match/i.test(peek.text), peek?.text);
-  if (peek) t.check("Peek's points add up to 100 − 78", peek.points.reduce((s, v) => s + v, 0) === 22, peek.points);
+  if (peek) t.check("Peek's points add up to 100 − 84", peek.points.reduce((s, v) => s + v, 0) === 16, peek.points);
   await app.key(" ");
 
   t.check("Match on Style", await app.pick("Match on", "Style"));
@@ -125,7 +125,7 @@ export default async function similar(app, t) {
   await sleep(800);
   await ready(app, 60_000);
   const again = await summary(app);
-  t.check("picking the saved Houston runs it again", /Closest: Houston 2024-25, a 78/.test(again ?? ""), again);
+  t.check("picking the saved Houston runs it again", /Closest: Cincinnati 2016-17, an 84/.test(again ?? ""), again);
   await app.js(`${saveButton}?.click(); true`);
   await sleep(500);
   t.check("Remove is offered for Houston", await app.press("Remove Houston 2025-26", POPOVER));
