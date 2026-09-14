@@ -33,6 +33,15 @@ export default async function hints(app, t) {
     await sleep(1700);
     const focusTip = await tip(app);
     t.check("resting on a team shows Hold Q", /Hold\s*Q/.test(focusTip ?? ""), focusTip);
+    // The tip names a team, so it has to sit on that team's row, not the one below.
+    const onRow = await app.js(`(() => {
+      const tipBox = document.querySelector('[role=status][aria-label=Tip]')?.getBoundingClientRect();
+      const row = ${SECTION}.querySelectorAll('[role=grid] [role=row]')[3]?.getBoundingClientRect();
+      if (!tipBox || !row) return null;
+      const mid = tipBox.top + tipBox.height / 2;
+      return { mid: Math.round(mid), top: Math.round(row.top), bottom: Math.round(row.bottom), inside: mid >= row.top && mid <= row.bottom };
+    })()`);
+    t.check("the Q hint sits on the row it names", onRow?.inside === true, onRow);
     await app.shot("hint-focus");
 
     // Another row: Focus has had its hint this run, so the number's Lens hint is next.

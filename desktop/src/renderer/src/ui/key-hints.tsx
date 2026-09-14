@@ -158,8 +158,11 @@ export function KeyHints({ paused }: { paused: boolean }) {
   }, []);
 
   if (!hint) return null;
-  const left = Math.max(8, Math.min(hint.x + 14, window.innerWidth - 320));
-  const top = hint.y + 54 > window.innerHeight ? hint.y - 42 : hint.y + 20;
+  // Beside the pointer and level with it, inside the row it names: below the pointer it sat on the
+  // next row down, and "every pane follows Illinois" read as a label for Florida.
+  const box = hint.el.getBoundingClientRect();
+  const left = Math.max(8, Math.min(hint.x + 18, window.innerWidth - 328));
+  const top = Math.max(8, Math.min(box.top + box.height / 2 - 15, window.innerHeight - 38));
   return (
     <div
       role="status"
