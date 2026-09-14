@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { F, GAME_PRESETS, GAME_VIEWS, gameStat, gameViewByKey, passesFilters, type GameStat } from "@/lib/game-index";
+import { F, GAME_PRESETS, GAME_STATS, GAME_VIEWS, gameStat, gameViewByKey, passesFilters, type GameStat } from "@/lib/game-index";
 import {
   gameMatcher,
   loadPlayerGameSeason,
   siteOf,
   statPercentiles,
   statValues,
+  type GamePlayer,
   type PlayerGame,
   type PlayerGameSeason,
 } from "~/data/player-game-model";
@@ -18,7 +19,9 @@ import { useSetStatus } from "~/shell/status";
 import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-parts";
 import type { ViewProps } from "~/shell/views";
 import { DataTable } from "~/table/data-table";
-import { parseScoped, sameName, type Scoped } from "~/ui/scoped-query";
+import { catalogStats, conditionTest, filterHelp, filterProblem, parseFilter, sortedNames, statIndex } from "~/ui/filter-query";
+import { sameName, scopedNames, type Scope, type Scoped } from "~/ui/scoped-query";
+import { normalizeText } from "~/ui/text";
 import { identityColumns, NO_CHIP, statColumns } from "./player-game-columns";
 import { PEEK_KEYS, PlayerGamePeekBody } from "./player-game-peek";
 
@@ -48,19 +51,30 @@ function readView(): string {
   }
 }
 
-/** "player: Cooper Flagg", "team: Duke", "conf: SEC", "opponents: Duke" as a test per row. */
+/** "player: Cooper Flagg", "team: Duke", "teams: Duke, Houston", "conf: SEC", "opponents: Duke" as a test per row. */
 function scopedMatcher(season: PlayerGameSeason, s: Scoped): (g: PlayerGame) => boolean {
   if (s.scope === "opponents") {
     const opps = Uint8Array.from(season.opps, (o) => (sameName(o.name, s.value) ? 1 : 0));
     return (g) => opps[g.row[F.o]!] === 1;
   }
-  const players = Uint8Array.from(season.players, (p) =>
-    (s.scope === "player" ? sameName(p.name, s.value) : s.scope === "team" ? sameName(p.team, s.value) : sameName(p.confLabel, s.value) || sameName(p.conf, s.value))
-      ? 1
-      : 0,
-  );
+  const named = new Set(s.scope === "teams" ? scopedNames(s.value).map(normalizeText) : []);
+  const has = (p: GamePlayer): boolean =>
+    s.scope === "player"
+      ? sameName(p.name, s.value)
+      : s.scope === "team"
+        ? sameName(p.team, s.value)
+        : s.scope === "teams"
+          ? named.has(normalizeText(p.team))
+          : sameName(p.confLabel, s.value) || sameName(p.conf, s.value);
+  const players = Uint8Array.from(season.players, (p) => (has(p) ? 1 : 0));
   return (g) => players[g.row[F.p]!] === 1;
 }
+
+/** What "pts>30" can name: every stat in the site's catalog, whichever view is showing. */
+const PLAYER_GAME_FILTER = statIndex<PlayerGame>(
+  catalogStats(GAME_STATS, { get: (s) => (g: PlayerGame) => s.get(g.row), fmt: (s) => s.fmt, desc: (s) => s.title, aliases: { gmsc: ["gamescore"] } }),
+);
+const PLAYER_GAME_SCOPES: Scope[] = ["player", "team", "teams", "opponents", "conf"];
 
 /** A row as the object it is: one player's game, found on its night's slate when it is opened. */
 export function playerLogObject(season: PlayerGameSeason, g: PlayerGame): Obj {
@@ -95,16 +109,40 @@ export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
     [season, view],
   );
   const filters = useMemo(() => GAME_PRESETS.filter((p) => on.includes(p.key)).flatMap((p) => p.filters), [on]);
+  const parsed = useMemo(() => parseFilter(query), [query]);
   const rows = useMemo(() => {
     if (!season) return [];
-    const scoped = parseScoped(query);
-    const match = scoped ? scopedMatcher(season, scoped) : gameMatcher(season, query);
+    const tests = parsed.scopes.map((s) => scopedMatcher(season, s));
+    const words = gameMatcher(season, parsed.words);
+    if (words) tests.push(words);
+    const stats = conditionTest(PLAYER_GAME_FILTER, parsed.conditions);
+    if (stats) tests.push(stats);
     // Nothing to narrow: the season's own array, so the table's sort memo holds.
-    if (!match && filters.length === 0) return season.games;
-    return season.games.filter(
-      (g) => (filters.length === 0 || passesFilters(g.row, filters)) && (!match || match(g)),
-    );
-  }, [season, filters, query]);
+    if (tests.length === 0 && filters.length === 0) return season.games;
+    return season.games.filter((g) => {
+      if (filters.length > 0 && !passesFilters(g.row, filters)) return false;
+      for (const test of tests) if (!test(g)) return false;
+      return true;
+    });
+  }, [season, filters, parsed]);
+
+  const help = useMemo(() => {
+    if (!season) return undefined;
+    const teams = () => sortedNames(season.players.map((p) => p.team));
+    return filterHelp({
+      noun: "player games",
+      index: PLAYER_GAME_FILTER,
+      rows: season.games,
+      scopes: PLAYER_GAME_SCOPES,
+      names: {
+        player: () => [...season.players].sort((a, b) => (a.rank || 1e9) - (b.rank || 1e9)).map((p) => p.name),
+        team: teams,
+        teams,
+        opponents: () => sortedNames(season.opps.map((o) => o.name)),
+        conf: () => sortedNames(season.players.map((p) => p.confLabel)),
+      },
+    });
+  }, [season]);
 
   // Rank what a Peek shows while nothing else is happening, one stat per idle
   // slot, so the first Space opens at once instead of paying for ten
@@ -158,7 +196,7 @@ export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
         setYear={setYear}
         meta={meta}
         controls={<Picker label="View" value={view.key} options={VIEW_OPTIONS} onChange={pickView} />}
-        filter={{ value: query, onChange: setQuery, placeholder: "Filter games" }}
+        filter={{ value: query, onChange: setQuery, placeholder: "Filter games", help }}
       />
       <ShortcutBar presets={GAME_PRESETS} on={on} onChange={setOn} />
 
@@ -177,7 +215,7 @@ export function PlayerGamesView({ year, setYear, query, setQuery }: ViewProps) {
             ariaLabel="Player games"
             empty={
               query.trim() ? (
-                <NoMatches query={query} noun="player, team, opponent or conference" />
+                <NoMatches query={query} noun="player, team, opponent or conference" problem={filterProblem(parsed, PLAYER_GAME_FILTER, PLAYER_GAME_SCOPES)} />
               ) : (
                 <p className="px-5 py-10 text-[13px] text-ink-muted">No game this season matches every shortcut that is on.</p>
               )

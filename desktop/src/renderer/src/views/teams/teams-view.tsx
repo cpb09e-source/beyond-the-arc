@@ -16,7 +16,8 @@ import { DataTable, type Column } from "~/table/data-table";
 import { StatCell } from "~/table/stat-cell";
 import { num1, pct1, seasonLabel, signed1 } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
-import { parseScoped, sameName, scopedNames } from "~/ui/scoped-query";
+import { conditionTest, filterHelp, filterProblem, parseFilter, sortedNames, statIndex } from "~/ui/filter-query";
+import { sameName, scopedNames, type Scope } from "~/ui/scoped-query";
 import { matchesQuery, normalizeText } from "~/ui/text";
 import { TeamPeekBody } from "./team-peek";
 
@@ -26,7 +27,8 @@ import { TeamPeekBody } from "./team-peek";
  *
  * A ROW IS A TEAM OBJECT, so its menu, C, F, drag and Enter are the registry's
  * (~/objects/actions.tsx). The filter also takes the registry's exact forms:
- * "conf: Big Ten", "opponents: Michigan", "team: Duke", "teams: Duke, Houston".
+ * "conf: Big Ten", "opponents: Michigan", "team: Duke", "teams: Duke, Houston",
+ * and conditions on its numbers beside them: "conf: SEC net>20 tempo<68".
  *
  * LINKED TO EVERY OTHER TEAM VIEW. Its picked rows are the shared selection
  * (~/selection/selection.tsx), so a lasso on Team Scatter tints them here and
@@ -133,26 +135,48 @@ const SHOWN: Record<string, (t: Team) => string> = {
   fg3: (t) => pct1(t.fg3),
 };
 
-/** Who a team played in a season, read off the Team Game Log's file when a filter asks. */
-function useOpponents(year: number, team: string | null): Set<string> | null {
-  const [found, setFound] = useState<{ key: string; set: Set<string> } | null>(null);
-  const key = `${year}|${team ?? ""}`;
+/** What "net>20" can name here: every number the table prints, by its header. */
+const TEAM_STATS = statIndex<Team>([
+  { name: "rank", aliases: ["bta", "btarank"], label: "BTA rank", digits: 0, get: (t) => t.btaRank },
+  { name: "wins", aliases: ["w"], label: "Wins", digits: 0, get: (t) => t.wins },
+  { name: "losses", aliases: ["l"], label: "Losses", digits: 0, get: (t) => t.losses },
+  { name: "adjo", aliases: ["ortg"], label: "Adj O", desc: "Adjusted offensive rating", digits: 1, get: (t) => t.adjO },
+  { name: "adjd", aliases: ["drtg"], label: "Adj D", desc: "Adjusted defensive rating", digits: 1, get: (t) => t.adjD },
+  { name: "net", aliases: ["adjnet"], label: "Net", desc: "Adjusted net rating", digits: 1, get: (t) => t.adjNet },
+  { name: "tempo", aliases: ["pace", "adjt"], label: "Tempo", desc: "Adjusted tempo", digits: 1, get: (t) => t.tempo },
+  { name: "efg", label: "eFG%", desc: "Effective field goal %", pct: true, digits: 1, get: (t) => t.efg },
+  { name: "oppefg", aliases: ["efgd", "defefg"], label: "Opp eFG%", desc: "Opponent effective field goal %", pct: true, digits: 1, get: (t) => t.efgDef },
+  { name: "tov", aliases: ["tovr"], label: "TOV%", desc: "Turnover rate", pct: true, digits: 1, get: (t) => t.tov },
+  { name: "oreb", aliases: ["orb", "orbr"], label: "OREB%", desc: "Offensive rebound rate", pct: true, digits: 1, get: (t) => t.orb },
+  { name: "3p", aliases: ["fg3", "3pt"], label: "3P%", desc: "Three-point %", pct: true, digits: 1, get: (t) => t.fg3 },
+  { name: "sos", label: "SOS", desc: "Strength of schedule", digits: 1, get: (t) => t.sos },
+]);
+const TEAM_SCOPES: Scope[] = ["team", "teams", "conf", "opponents"];
+const NO_OPPONENTS: Set<string>[] = [];
+
+/** Who each named team played in a season, read off the Team Game Log's file when a filter asks; null while it loads. */
+function useOpponents(year: number, teams: string[]): Set<string>[] | null {
+  const [found, setFound] = useState<{ key: string; sets: Set<string>[] } | null>(null);
+  const key = `${year}|${teams.join("|")}`;
   useEffect(() => {
-    if (!team) return;
+    if (teams.length === 0) return;
     let stale = false;
     loadOnce(`team-games|${year}`, () => loadTeamGameSeason(year)).then(
       (s) => {
-        if (!stale) setFound({ key, set: new Set(s.games.filter((g) => sameName(g.team, team)).map((g) => g.opp)) });
+        if (!stale) setFound({ key, sets: teams.map((team) => new Set(s.games.filter((g) => sameName(g.team, team)).map((g) => g.opp))) });
       },
       () => {
-        if (!stale) setFound({ key, set: new Set() });
+        if (!stale) setFound({ key, sets: teams.map(() => new Set()) });
       },
     );
     return () => {
       stale = true;
     };
-  }, [year, team, key]);
-  return team && found?.key === key ? found.set : null;
+    // `teams` is read through `key`, which changes exactly when it does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year, key]);
+  if (teams.length === 0) return NO_OPPONENTS;
+  return found?.key === key ? found.sets : null;
 }
 
 export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: ViewProps) {
@@ -165,27 +189,48 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
   const { nameIn: echoIn, publish } = useEcho();
 
   const season = state.status === "ready" ? state.value : null;
-  const scoped = parseScoped(query);
-  const opponents = useOpponents(year, scoped?.scope === "opponents" ? scoped.value : null);
+  const parsed = useMemo(() => parseFilter(query), [query]);
+  const opponentsOf = parsed.scopes.filter((s) => s.scope === "opponents").map((s) => s.value);
+  const opponents = useOpponents(year, opponentsOf);
   // A Ctrl K result for a team in this season, and its row if the season has one.
   const target = focus?.kind === "team" && focus.year === year ? focus : null;
   const landing = target && season ? season.teams.find((t) => t.name === target.name) : undefined;
   const rows = useMemo(() => {
     if (!season) return [];
     const base = onlyPicked && picked.size > 0 ? season.teams.filter((t) => picked.has(t.name)) : season.teams;
-    if (!scoped) return base.filter((t) => matchesQuery(query, t.name, t.confLabel, t.conf));
-    const v = scoped.value;
-    if (scoped.scope === "conf") return base.filter((t) => sameName(t.confLabel, v) || sameName(t.conf, v));
-    if (scoped.scope === "team") return base.filter((t) => sameName(t.name, v));
-    if (scoped.scope === "teams") {
-      const names = new Set(scopedNames(v).map(normalizeText));
-      return base.filter((t) => names.has(normalizeText(t.name)));
-    }
-    if (scoped.scope === "opponents") return opponents ? base.filter((t) => opponents.has(t.name)) : [];
-    return [];
-    // `scoped` is read from `query`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [season, query, opponents, onlyPicked, picked]);
+    if (!opponents) return [];
+    let nth = 0;
+    const scopes = parsed.scopes.map((s): ((t: Team) => boolean) => {
+      const v = s.value;
+      if (s.scope === "conf") return (t) => sameName(t.confLabel, v) || sameName(t.conf, v);
+      if (s.scope === "team") return (t) => sameName(t.name, v);
+      if (s.scope === "teams") {
+        const names = new Set(scopedNames(v).map(normalizeText));
+        return (t) => names.has(normalizeText(t.name));
+      }
+      if (s.scope === "opponents") {
+        const played = opponents[nth++];
+        return (t) => !!played?.has(t.name);
+      }
+      return () => false;
+    });
+    const stats = conditionTest(TEAM_STATS, parsed.conditions);
+    return base.filter(
+      (t) => matchesQuery(parsed.words, t.name, t.confLabel, t.conf) && scopes.every((f) => f(t)) && (!stats || stats(t)),
+    );
+  }, [season, parsed, opponents, onlyPicked, picked]);
+
+  const help = useMemo(() => {
+    if (!season) return undefined;
+    const byRank = () => [...season.teams].sort(byBtaRank).map((t) => t.name);
+    return filterHelp({
+      noun: "teams",
+      index: TEAM_STATS,
+      rows: season.teams,
+      scopes: TEAM_SCOPES,
+      names: { team: byRank, teams: byRank, opponents: byRank, conf: () => sortedNames(season.teams.map((t) => t.confLabel)) },
+    });
+  }, [season]);
 
   useEffect(() => {
     if (state.status === "ready") setStatus(`${SOURCE_LABEL[state.source]} in ${state.ms} ms`);
@@ -214,10 +259,10 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
     ? undefined
     : target && !landing
       ? `${target.name} has no row in ${seasonLabel(year)}`
-      : scoped?.scope === "opponents"
-        ? opponents
-          ? `${rows.length} opponents of ${scoped.value}`
-          : "Finding opponents…"
+      : !opponents
+        ? "Finding opponents…"
+        : opponentsOf.length === 1 && parsed.clauses.length === 1
+          ? `${rows.length} opponents of ${opponentsOf[0]}`
         : `${rows.length !== total ? `${rows.length} of ${total}` : total} teams${picked.size > 0 ? ` · ${picked.size} selected` : ""} · Final`;
 
   const object = (t: Team): Obj => ({ kind: "team", name: t.name, logoId: t.logoId, year, conf: t.conf });
@@ -259,7 +304,7 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
             </button>
           ) : undefined
         }
-        filter={{ value: query, onChange: setQuery, placeholder: "Filter teams" }}
+        filter={{ value: query, onChange: setQuery, placeholder: "Filter teams", help }}
       />
       <div className="relative min-h-0 flex-1 border-t border-hairline">
         {state.status === "ready" ? (
@@ -277,7 +322,7 @@ export function TeamsView({ year, setYear, query, setQuery, focus, onLanded }: V
               onlyPicked && picked.size > 0 ? (
                 <p className="px-5 py-10 text-[13px] text-ink-muted">None of the selected teams match the filter.</p>
               ) : (
-                <NoMatches query={query} noun="team or conference" />
+                <NoMatches query={query} noun="team or conference" problem={filterProblem(parsed, TEAM_STATS, TEAM_SCOPES)} />
               )
             }
             peek={{ label: (t) => t.name, body: (t) => <TeamPeekBody season={state.value} team={t} /> }}

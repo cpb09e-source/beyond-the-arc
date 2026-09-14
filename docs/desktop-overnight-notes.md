@@ -389,6 +389,41 @@ the Difference Explainer, What Changed, research history capture, and export.
 - **Needs installer 0.1.1** to reach an installed copy, like everything since
   0.1.0.
 
+## Done on 2026-09-13, night
+
+- **Peek opens beside the name.** It sits just past the pinned rank and name
+  columns, on the row's own line, instead of against the window's right edge.
+  In a table too narrow for that it stays inside the right edge.
+- **Filters with conditions** (`desktop/src/renderer/src/ui/filter-query.ts`).
+  The filter box takes plain words, exact names and conditions together, in any
+  order, every clause required: `conf: SEC net>20 tempo<68`,
+  `team: Duke ts>60`, `margin>30 home=0`, `pts>=40`. Still words in the box, so
+  favorites, history and Esc keep working on them.
+  - Operators `>`, `>=`, `<`, `<=`, `=` (also ≥ and ≤). Numbers are typed as the
+    table prints them (`efg>55`, not .55), and a row is compared as printed, so
+    `net>20` never keeps a row that reads +20.0. A blank fails every condition.
+  - Stat names come from the column headers (`3p`, `adjo`, `oppefg`, `oreb`) with
+    the site's keys and a few common spellings as aliases (`pace` for tempo,
+    `pts` for PPG). The game logs and Player Explorer take every stat in the
+    site's catalogs, whichever column view is showing.
+  - Half-typed clauses (`net>`, `conf:`) narrow nothing yet, so the table does
+    not blink empty while typing. An unknown stat keeps nothing and says so:
+    "No stat here is called “temp”."
+  - `teams: A, B` now works on both player tables too.
+- **Autocomplete** under the filter box: stats and `team:`/`conf:` forms for a
+  word being typed; conferences, teams and players for a name; and once a stat
+  has its operator, the values that cut the season at its highest or lowest
+  10%, 25% and half, with how many rows each keeps and the season's range.
+  Tab takes the first offer, ↑ ↓ and Enter take another, Esc closes the list.
+  Enter with nothing picked still opens the focused row, as before.
+- `desktop/scripts/check-filter.mts` checks the parser, the comparisons, the
+  catalog names and the offers.
+- Verified over CDP with no errors: Peek 8 px past the Team column;
+  `conf:SEC net>20 tempo<68` (1 team), `efg>55 3p>=36` (26), the team game log
+  `margin>30 home=0` (49 games), `ppg>20 3p>38` (13 players),
+  `team: Duke ts>60` (3), `pts>=40` (42 player games); Tab, ↓ and Enter, Esc,
+  and the unknown-stat message.
+
 ## What still has to happen
 
 **To put the desktop app in people's hands (in order):**

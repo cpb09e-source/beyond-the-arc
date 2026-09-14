@@ -1,6 +1,8 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { Kbd } from "~/ui/kbd";
 
+export const PEEK_W = 372;
+
 /**
  * The Peek shell: position, entrance, and the key hints. What a Peek SAYS is the
  * view's business; how a Peek BEHAVES is the same everywhere, which is the
@@ -10,6 +12,7 @@ export function PeekPanel({
   label,
   pinned,
   top,
+  left,
   position,
   total,
   canOpen = false,
@@ -27,6 +30,8 @@ export function PeekPanel({
   /** The table can open the row's own page, so Enter is worth teaching. */
   canOpen?: boolean;
   top: number;
+  /** Beside the row's name, as the table works it out. */
+  left: number;
   onHeight: (px: number) => void;
   children: ReactNode;
 }) {
@@ -47,8 +52,8 @@ export function PeekPanel({
     <aside
       ref={ref}
       aria-label={`${label} preview`}
-      className="peek-panel absolute right-4 top-0 z-20 w-[372px] overflow-hidden rounded-[10px] border border-hairline bg-card"
-      style={{ transform: `translate3d(0, ${top}px, 0)` }}
+      className="peek-panel absolute left-0 top-0 z-20 overflow-hidden rounded-[10px] border border-hairline bg-card"
+      style={{ width: PEEK_W, transform: `translate3d(${left}px, ${top}px, 0)` }}
     >
       {children}
       {actions}

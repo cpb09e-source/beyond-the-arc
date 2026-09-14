@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { TopHundredPill } from "@/components/portal/top-hundred-pill";
+import { PLAYER_STAT_COLUMNS } from "@/lib/players";
 import { loadPlayerSeason, type Player, type PlayerSeason } from "~/data/player-model";
 import { SOURCE_LABEL, useLoaded } from "~/data/use-corpus";
 import { useFocusSubject } from "~/focus/focus-mode";
@@ -12,8 +13,9 @@ import { DataTable, type Column } from "~/table/data-table";
 import { seasonLabel } from "~/ui/format";
 import { TeamLogo } from "~/ui/logo";
 import { ClassBadge, PlayerPhoto } from "~/ui/player-photo";
-import { parseScoped, sameName } from "~/ui/scoped-query";
-import { matchesQuery } from "~/ui/text";
+import { catalogStats, conditionTest, filterHelp, filterProblem, parseFilter, sortedNames, statIndex } from "~/ui/filter-query";
+import { sameName, scopedNames, type Scope } from "~/ui/scoped-query";
+import { matchesQuery, normalizeText } from "~/ui/text";
 import { playerLens } from "~/lens/stat-lens";
 import { playerStat, statColumns } from "./player-columns";
 import { PlayerPeekBody } from "./player-peek";
@@ -26,7 +28,8 @@ import { PlayerPeekBody } from "./player-peek";
  * rank and the player stay pinned while the stats scroll under them.
  *
  * A ROW IS A PLAYER OBJECT; the filter also takes "team: Duke", "conf: SEC" and
- * "player: Cooper Flagg", which is where "Duke players" and the like land.
+ * "player: Cooper Flagg", which is where "Duke players" and the like land, and
+ * conditions on any stat the site's player filters take: "ppg>15 3p>38".
  */
 
 const ROW_H = 42;
@@ -80,6 +83,18 @@ const COLUMNS: Column<Player>[] = [...IDENTITY, ...statColumns()];
 /** For seasons without eWins. Module-level, so the table sees a stable list. */
 const COLUMNS_NO_EWINS: Column<Player>[] = COLUMNS.filter((c) => c.key !== "ewins");
 
+/** What "ppg>15" can name: the rank, and every stat the site's player filters take, by its header. */
+const PLAYER_STATS = statIndex<Player>([
+  { name: "rank", aliases: ["btarank"], label: "BTA rank", desc: "BTA's overall player rank", digits: 0, get: (p) => p.rank },
+  ...catalogStats(PLAYER_STAT_COLUMNS, {
+    get: (c) => (p: Player) => p.s[c.field] as number | null,
+    fmt: (c) => c.format,
+    desc: (c) => c.desc,
+    aliases: { ppg: ["pts"], rpg: ["reb"], apg: ["ast"], spg: ["stl"], bpg: ["blk"], mpg: ["min"], epm: ["arc"] },
+  }),
+]);
+const PLAYER_SCOPES: Scope[] = ["player", "team", "teams", "conf"];
+
 export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }: ViewProps) {
   const [state, retry] = useLoaded(`player-season|${year}`, () => loadPlayerSeason(year));
   const setStatus = useSetStatus();
@@ -90,20 +105,45 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }:
   // leaderboard floor leaves out, and then there is no row to land on.
   const target = focus?.kind === "player" && focus.year === year ? focus : null;
   const landing = target && season ? season.players.find((p) => p.bartId === target.bartId) : undefined;
+  const parsed = useMemo(() => parseFilter(query), [query]);
   const rows = useMemo(() => {
     if (!season) return [];
-    const scoped = parseScoped(query);
-    if (!scoped) {
-      return season.players.filter((p) =>
-        matchesQuery(query, p.name, p.team, p.confLabel, p.conf, p.cls ?? "", p.position ?? "", p.hometown ?? ""),
-      );
-    }
-    const v = scoped.value;
-    if (scoped.scope === "team") return season.players.filter((p) => sameName(p.team, v));
-    if (scoped.scope === "conf") return season.players.filter((p) => sameName(p.confLabel, v) || sameName(p.conf, v));
-    if (scoped.scope === "player") return season.players.filter((p) => sameName(p.name, v));
-    return [];
-  }, [season, query]);
+    const scopes = parsed.scopes.map((s): ((p: Player) => boolean) => {
+      const v = s.value;
+      if (s.scope === "team") return (p) => sameName(p.team, v);
+      if (s.scope === "teams") {
+        const names = new Set(scopedNames(v).map(normalizeText));
+        return (p) => names.has(normalizeText(p.team));
+      }
+      if (s.scope === "conf") return (p) => sameName(p.confLabel, v) || sameName(p.conf, v);
+      if (s.scope === "player") return (p) => sameName(p.name, v);
+      return () => false;
+    });
+    const stats = conditionTest(PLAYER_STATS, parsed.conditions);
+    return season.players.filter(
+      (p) =>
+        matchesQuery(parsed.words, p.name, p.team, p.confLabel, p.conf, p.cls ?? "", p.position ?? "", p.hometown ?? "") &&
+        scopes.every((f) => f(p)) &&
+        (!stats || stats(p)),
+    );
+  }, [season, parsed]);
+
+  const help = useMemo(() => {
+    if (!season) return undefined;
+    const teams = () => sortedNames(season.players.map((p) => p.team));
+    return filterHelp({
+      noun: "players",
+      index: PLAYER_STATS,
+      rows: season.players,
+      scopes: PLAYER_SCOPES,
+      names: {
+        player: () => [...season.players].sort(byRank).map((p) => p.name),
+        team: teams,
+        teams,
+        conf: () => sortedNames(season.players.map((p) => p.confLabel)),
+      },
+    });
+  }, [season]);
 
   useEffect(() => {
     if (state.status === "ready") setStatus(`${SOURCE_LABEL[state.source]} in ${state.ms} ms`);
@@ -142,7 +182,7 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }:
         year={year}
         setYear={setYear}
         meta={meta}
-        filter={{ value: query, onChange: setQuery, placeholder: "Filter players" }}
+        filter={{ value: query, onChange: setQuery, placeholder: "Filter players", help }}
       />
       <div className="relative min-h-0 flex-1 border-t border-hairline">
         {state.status === "ready" ? (
@@ -156,7 +196,7 @@ export function PlayersView({ year, setYear, query, setQuery, focus, onLanded }:
             defaultSort={{ key: state.value.defaultSort, dir: -1 }}
             tieBreak={byRank}
             ariaLabel="Players"
-            empty={<NoMatches query={query} noun="player, team or conference" />}
+            empty={<NoMatches query={query} noun="player, team or conference" problem={filterProblem(parsed, PLAYER_STATS, PLAYER_SCOPES)} />}
             peek={{ label: (p) => p.name, body: (p) => <PlayerPeekBody season={state.value} player={p} /> }}
             landOn={landing && target ? { key: landing.id, nonce: target.nonce } : undefined}
             onLanded={onLanded}

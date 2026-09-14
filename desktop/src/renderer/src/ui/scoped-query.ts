@@ -11,17 +11,13 @@ import { normalizeText } from "./text";
  *
  * EXACT, because plain words are not: "michigan" also finds Michigan St. and
  * every team that played Michigan.
+ *
+ * Read, beside conditions and plain words, by ./filter-query.ts.
  */
 
 export type Scope = "team" | "teams" | "player" | "conf" | "opponents";
 export type Scoped = { scope: Scope; value: string };
 
-const SCOPED = /^\s*(teams|team|player|conf|opponents)\s*:\s*(.+?)\s*$/i;
-
-export function parseScoped(query: string): Scoped | null {
-  const m = SCOPED.exec(query);
-  return m ? { scope: m[1]!.toLowerCase() as Scope, value: m[2]! } : null;
-}
 
 export const scopedQuery = (scope: Scope, value: string): string => `${scope}: ${value}`;
 

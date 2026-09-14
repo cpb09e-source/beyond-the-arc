@@ -26,7 +26,7 @@ import type { SelectMode } from "~/selection/selection";
 import type { MenuEntry } from "~/ui/menu";
 import { usePersisted } from "~/ui/persisted";
 import { lensMenuEntry, useStatLens, type LensTarget } from "~/lens/stat-lens";
-import { PeekPanel } from "./peek-panel";
+import { PEEK_W, PeekPanel } from "./peek-panel";
 import { delimited, TableExportContext } from "./table-export";
 
 export type { DragSpec } from "~/objects/object";
@@ -290,6 +290,7 @@ export function DataTable<R>({
 
   const [scrollTop, setScrollTop] = useState(0);
   const [viewH, setViewH] = useState(0);
+  const [viewW, setViewW] = useState(0);
   const [peekH, setPeekH] = useState(0);
   const [scrolledX, setScrolledX] = useState(false);
   const scrolledXRef = useRef(false);
@@ -334,9 +335,13 @@ export function DataTable<R>({
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setViewH(el.clientHeight));
+    const measure = () => {
+      setViewH(el.clientHeight);
+      setViewW(el.clientWidth);
+    };
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setViewH(el.clientHeight);
+    measure();
     return () => {
       ro.disconnect();
       cancelAnimationFrame(frame.current);
@@ -507,6 +512,11 @@ export function DataTable<R>({
   const rowTop = headH + index * rowHeight - scrollTop;
   const maxTop = Math.max(headH + 8, headH + viewH - peekH - 12);
   const peekTop = Math.min(Math.max(rowTop - 6, headH + 8), maxTop);
+  // Beside the name the row is known by: just past the pinned columns, which
+  // hold the name in place however far the stats scroll. Inside the right edge
+  // when the table is too narrow for that, and at the edge when nothing is pinned.
+  const edgeLeft = Math.max(8, viewW - PEEK_W - 16);
+  const peekLeft = layout.pinnedWidth > 0 ? Math.min(layout.pinnedWidth + 8, edgeLeft) : edgeLeft;
 
   // EXPORT (./table-export.ts): what is on screen, as text a spreadsheet takes. Built when asked, from the
   // table as it stands then, so offering it costs nothing while the reader scrolls and types.
@@ -845,6 +855,7 @@ export function DataTable<R>({
           label={peek.label(focused)}
           pinned={peekState.pinned}
           top={peekTop}
+          left={peekLeft}
           onHeight={setPeekH}
           position={index + 1}
           total={sorted.length}

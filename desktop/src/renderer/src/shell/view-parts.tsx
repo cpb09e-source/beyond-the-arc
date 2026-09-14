@@ -1,5 +1,6 @@
 import { ArrowUpRight, ChevronRight, Search, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { completeFilter, type FilterHelp, type Suggestion } from "~/ui/filter-query";
 import { seasonLabel } from "~/ui/format";
 import { Kbd } from "~/ui/kbd";
 import { useAccount } from "./account";
@@ -40,7 +41,7 @@ export function ViewHeader({
   meta?: ReactNode;
   /** Beside the season: a view's own pickers, in the same row. */
   controls?: ReactNode;
-  filter?: { value: string; onChange: (v: string) => void; placeholder: string };
+  filter?: { value: string; onChange: (v: string) => void; placeholder: string; help?: FilterHelp };
 }) {
   return (
     // WRAPS WHEN A PANE IS NARROW. In split view a pane is half the window, and a
@@ -75,42 +76,166 @@ export function ViewHeader({
   );
 }
 
-/** The table's filter, where Ctrl+F and / land when this tab is in front. */
-function FilterBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+/**
+ * The table's filter, where Ctrl+F and / land when this tab is in front.
+ *
+ * WITH `help` IT COMPLETES (~/ui/filter-query.ts): the stats and names a word
+ * could be, the names a "conf:" takes, and the numbers that cut the season once
+ * a stat has its operator.
+ *
+ * NOTHING IS CHOSEN UNTIL ASKED. Tab takes the first offer; ↑ ↓ pick one and
+ * Enter takes that. Enter with nothing picked still opens the focused row, so
+ * typing a team and pressing Enter works as it always did.
+ */
+function FilterBox({
+  value,
+  onChange,
+  placeholder,
+  help,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  help?: FilterHelp;
+}) {
   const { filterRef } = useShell();
   const active = useIsActive();
+  const boxRef = useRef<HTMLDivElement>(null);
+  const listId = useId();
+  // The caret while the box has focus and nothing is selected; null otherwise.
+  const [caret, setCaret] = useState<number | null>(null);
+  // The text Esc closed the offers on. They stay closed until it changes.
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const [picked, setPicked] = useState({ at: "", i: -1 });
+
+  const completion = useMemo(
+    () => (help && caret != null && dismissed !== value ? completeFilter(value, caret, help) : null),
+    [help, caret, dismissed, value],
+  );
+  const items = completion?.items ?? [];
+  const open = completion != null && (items.length > 0 || completion.note != null || completion.title != null);
+  // A pick belongs to the text and caret it was made at; typing lets it go.
+  const at = `${caret}|${value}`;
+  const hi = picked.at === at && picked.i < items.length ? picked.i : -1;
+
+  const readCaret = (el: HTMLInputElement) => setCaret(el.selectionStart === el.selectionEnd ? el.selectionStart : null);
+  const choose = (s: Suggestion) => {
+    onChange(s.value);
+    setCaret(s.caret);
+    const input = boxRef.current?.querySelector("input");
+    // Once the new text is written, which leaves the caret at the end.
+    requestAnimationFrame(() => input?.setSelectionRange(s.caret, s.caret));
+  };
+
   return (
-    <label className="flex h-[28px] w-[240px] min-w-[150px] shrink items-center gap-1.5 rounded-md border border-hairline bg-card px-2 transition-colors focus-within:border-accent">
-      <Search size={13} strokeWidth={2} className="shrink-0 text-ink-muted" />
-      <input
-        ref={active ? filterRef : undefined}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key !== "Escape") return;
-          e.preventDefault();
-          if (value) onChange("");
-          else e.currentTarget.blur();
-        }}
-        placeholder={placeholder}
-        aria-label={placeholder}
-        spellCheck={false}
-        className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-muted"
-      />
-      {value ? (
-        <button
-          type="button"
-          aria-label="Clear filter"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => onChange("")}
-          className="grid size-[16px] shrink-0 place-items-center rounded text-ink-muted hover:text-ink"
+    <div ref={boxRef} className="relative w-[240px] min-w-[150px] shrink">
+      <label className="flex h-[28px] w-full items-center gap-1.5 rounded-md border border-hairline bg-card px-2 transition-colors focus-within:border-accent">
+        <Search size={13} strokeWidth={2} className="shrink-0 text-ink-muted" />
+        <input
+          ref={active ? filterRef : undefined}
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            readCaret(e.target);
+          }}
+          onSelect={(e) => readCaret(e.currentTarget)}
+          onFocus={(e) => readCaret(e.currentTarget)}
+          onBlur={() => setCaret(null)}
+          onKeyDown={(e) => {
+            if (items.length > 0) {
+              const go = (i: number) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setPicked({ at, i });
+              };
+              if (e.key === "ArrowDown") return go(hi + 1 >= items.length ? 0 : hi + 1);
+              if (e.key === "ArrowUp") return go(hi <= 0 ? items.length - 1 : hi - 1);
+              if ((e.key === "Tab" && !e.shiftKey) || (e.key === "Enter" && hi >= 0)) {
+                e.preventDefault();
+                e.stopPropagation();
+                choose(items[Math.max(0, hi)]!);
+                return;
+              }
+            }
+            if (e.key !== "Escape") return;
+            e.preventDefault();
+            if (open) {
+              e.stopPropagation();
+              setDismissed(value);
+            } else if (value) onChange("");
+            else e.currentTarget.blur();
+          }}
+          placeholder={placeholder}
+          aria-label={placeholder}
+          role={help ? "combobox" : undefined}
+          aria-autocomplete={help ? "list" : undefined}
+          aria-expanded={help ? open : undefined}
+          aria-controls={open ? listId : undefined}
+          aria-activedescendant={open && hi >= 0 ? `${listId}-${hi}` : undefined}
+          spellCheck={false}
+          className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ink outline-none placeholder:text-ink-muted"
+        />
+        {value ? (
+          <button
+            type="button"
+            aria-label="Clear filter"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onChange("")}
+            className="grid size-[16px] shrink-0 place-items-center rounded text-ink-muted hover:text-ink"
+          >
+            <X size={12} strokeWidth={2.25} />
+          </button>
+        ) : (
+          <Kbd>Ctrl F</Kbd>
+        )}
+      </label>
+      {open && completion && (
+        <div
+          id={listId}
+          role="listbox"
+          aria-label="Filter suggestions"
+          className="menu-in absolute right-0 top-[calc(100%+6px)] z-50 w-[340px] max-w-[calc(100vw-24px)] overflow-hidden rounded-lg border border-hairline bg-card"
+          style={{ boxShadow: "var(--overlay-shadow)" }}
         >
-          <X size={12} strokeWidth={2.25} />
-        </button>
-      ) : (
-        <Kbd>Ctrl F</Kbd>
+          {completion.title && (
+            <div className="border-b border-hairline px-3 py-2">
+              <p className="text-[12.5px] font-medium text-ink">{completion.title}</p>
+              {completion.detail && <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-ink-muted">{completion.detail}</p>}
+            </div>
+          )}
+          {items.length > 0 && (
+            <div className="max-h-[272px] overflow-y-auto overscroll-contain p-1">
+              {items.map((s, i) => (
+                <div
+                  key={s.key}
+                  id={`${listId}-${i}`}
+                  role="option"
+                  aria-selected={i === hi}
+                  title={s.title}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onMouseMove={() => i !== hi && setPicked({ at, i })}
+                  onClick={() => choose(s)}
+                  className={`flex h-[30px] cursor-default items-center gap-2.5 rounded-md px-2 text-[13px] ${
+                    i === hi ? "bg-[var(--menu-active)] text-ink" : "text-ink-soft"
+                  }`}
+                >
+                  <span className={`text-ink ${s.mono ? "shrink-0 font-mono text-[12px]" : "min-w-0 flex-1 truncate"}`}>{s.text}</span>
+                  {s.label && <span className="min-w-0 flex-1 truncate text-[12px] text-ink-muted">{s.label}</span>}
+                  {!s.label && s.mono && <span className="flex-1" />}
+                  {s.meta && <span className="shrink-0 text-[11.5px] text-ink-muted tabular">{s.meta}</span>}
+                  {i === 0 && hi < 0 && <Kbd>Tab</Kbd>}
+                </div>
+              ))}
+            </div>
+          )}
+          {completion.note && (
+            <p className={`px-3 py-2 text-[11.5px] text-ink-muted ${items.length > 0 || completion.title ? "border-t border-hairline" : ""}`}>
+              {completion.note}
+            </p>
+          )}
+        </div>
       )}
-    </label>
+    </div>
   );
 }
 
@@ -200,10 +325,15 @@ export function LoadError({
 }
 
 /** What an empty filter result says, and how to get out of it. */
-export function NoMatches({ query, noun }: { query: string; noun: string }) {
+export function NoMatches({ query, noun, problem }: { query: string; noun: string; problem?: string | null }) {
   return (
     <p className="px-5 py-10 text-[13px] text-ink-muted">
-      No {noun} matches &ldquo;{query.trim()}&rdquo;. <span className="text-ink-soft">Esc</span> clears the filter.
+      {problem ?? (
+        <>
+          No {noun} matches &ldquo;{query.trim()}&rdquo;.
+        </>
+      )}{" "}
+      <span className="text-ink-soft">Esc</span> clears the filter.
     </p>
   );
 }

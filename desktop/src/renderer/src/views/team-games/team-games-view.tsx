@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { T, TEAM_GAME_PRESETS, TEAM_GAME_VIEWS, passesTeamFilters, teamGameViewByKey } from "@/lib/team-game-index";
+import { T, TEAM_GAME_PRESETS, TEAM_GAME_STATS, TEAM_GAME_VIEWS, passesTeamFilters, teamGameViewByKey } from "@/lib/team-game-index";
 import { logDate } from "~/data/game-link";
 import { loadTeamGameSeason, type TeamGame } from "~/data/team-game-model";
 import type { Obj } from "~/objects/object";
@@ -11,7 +11,8 @@ import { LoadError, NoMatches, TableSkeleton, ViewHeader } from "~/shell/view-pa
 import type { ViewProps } from "~/shell/views";
 import { DataTable, type Column } from "~/table/data-table";
 import { TeamLogo } from "~/ui/logo";
-import { parseScoped, sameName, scopedNames } from "~/ui/scoped-query";
+import { catalogStats, conditionTest, filterHelp, filterProblem, parseFilter, sortedNames, statIndex } from "~/ui/filter-query";
+import { sameName, scopedNames, type Scope } from "~/ui/scoped-query";
 import { normalizeText } from "~/ui/text";
 import { statColumns } from "./game-columns";
 import { GamePeekBody } from "./game-peek";
@@ -22,7 +23,8 @@ import { GamePeekBody } from "./game-peek";
  *
  * SHORTCUTS COMPOSE, as they do on the site: "30-point wins" and "Beat a ranked
  * team" together mean both. Each is a named filter from TEAM_GAME_PRESETS and
- * runs through the site's passesTeamFilters.
+ * runs through the site's passesTeamFilters. Conditions typed in the filter box
+ * ("margin>20 home=0") compose with them the same way.
  *
  * THE VIEW IS REMEMBERED, the season is not: the season belongs to the
  * workspace, and which columns a reader likes to see belongs to this table.
@@ -126,6 +128,12 @@ export const teamLogObject = (g: TeamGame, epochMs: number, year: number): Obj =
   summary: `${g.team} ${g.pts}, ${g.opp} ${g.pa}${g.ot ? " (OT)" : ""}`,
 });
 
+/** What "margin>20" can name: every stat in the site's catalog, whichever view is showing. */
+const TEAM_GAME_FILTER = statIndex<TeamGame>(
+  catalogStats(TEAM_GAME_STATS, { get: (s) => (g: TeamGame) => s.get(g.row), fmt: (s) => s.fmt, desc: (s) => s.title, aliases: { won: ["win"] } }),
+);
+const TEAM_GAME_SCOPES: Scope[] = ["team", "teams", "opponents", "conf"];
+
 export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
   const [state, retry] = useLoaded(`team-games|${year}`, () => loadTeamGameSeason(year));
   const setStatus = useSetStatus();
@@ -140,25 +148,47 @@ export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
     [season, view],
   );
   const filters = useMemo(() => TEAM_GAME_PRESETS.filter((p) => on.includes(p.key)).flatMap((p) => p.filters), [on]);
+  const parsed = useMemo(() => parseFilter(query), [query]);
   const rows = useMemo(() => {
     if (!season) return [];
-    const scoped = parseScoped(query);
-    const words = scoped ? [] : normalizeText(query).split(" ").filter(Boolean);
-    const named = new Set(scoped?.scope === "teams" ? scopedNames(scoped.value).map(normalizeText) : []);
-    const inScope = (g: TeamGame): boolean =>
-      !scoped ||
-      (scoped.scope === "team"
-        ? sameName(g.team, scoped.value)
-        : scoped.scope === "teams"
-          ? named.has(normalizeText(g.team))
-          : scoped.scope === "opponents"
-          ? sameName(g.opp, scoped.value)
-          : scoped.scope === "conf" && (sameName(g.confLabel, scoped.value) || sameName(g.conf, scoped.value)));
+    const words = normalizeText(parsed.words).split(" ").filter(Boolean);
+    const scopes = parsed.scopes.map((s): ((g: TeamGame) => boolean) => {
+      const v = s.value;
+      if (s.scope === "team") return (g) => sameName(g.team, v);
+      if (s.scope === "teams") {
+        const named = new Set(scopedNames(v).map(normalizeText));
+        return (g) => named.has(normalizeText(g.team));
+      }
+      if (s.scope === "opponents") return (g) => sameName(g.opp, v);
+      if (s.scope === "conf") return (g) => sameName(g.confLabel, v) || sameName(g.conf, v);
+      return () => false;
+    });
+    const stats = conditionTest(TEAM_GAME_FILTER, parsed.conditions);
     return season.games.filter(
       (g) =>
-        (filters.length === 0 || passesTeamFilters(g.row, filters)) && inScope(g) && words.every((w) => g.hay.includes(w)),
+        (filters.length === 0 || passesTeamFilters(g.row, filters)) &&
+        scopes.every((f) => f(g)) &&
+        (!stats || stats(g)) &&
+        words.every((w) => g.hay.includes(w)),
     );
-  }, [season, filters, query]);
+  }, [season, filters, parsed]);
+
+  const help = useMemo(() => {
+    if (!season) return undefined;
+    const teams = () => sortedNames(season.games.map((g) => g.team));
+    return filterHelp({
+      noun: "games",
+      index: TEAM_GAME_FILTER,
+      rows: season.games,
+      scopes: TEAM_GAME_SCOPES,
+      names: {
+        team: teams,
+        teams,
+        opponents: () => sortedNames(season.games.map((g) => g.opp)),
+        conf: () => sortedNames(season.games.map((g) => g.confLabel)),
+      },
+    });
+  }, [season]);
 
   useEffect(() => {
     if (state.status === "ready") setStatus(`${SOURCE_LABEL[state.source]} in ${state.ms} ms`);
@@ -193,7 +223,7 @@ export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
         setYear={setYear}
         meta={meta}
         controls={<Picker label="View" value={view.key} options={VIEW_OPTIONS} onChange={pickView} />}
-        filter={{ value: query, onChange: setQuery, placeholder: "Filter games" }}
+        filter={{ value: query, onChange: setQuery, placeholder: "Filter games", help }}
       />
 
       <ShortcutBar presets={TEAM_GAME_PRESETS} on={on} onChange={setOn} />
@@ -213,7 +243,7 @@ export function TeamGamesView({ year, setYear, query, setQuery }: ViewProps) {
             ariaLabel="Team games"
             empty={
               query.trim() ? (
-                <NoMatches query={query} noun="team, opponent or conference" />
+                <NoMatches query={query} noun="team, opponent or conference" problem={filterProblem(parsed, TEAM_GAME_FILTER, TEAM_GAME_SCOPES)} />
               ) : (
                 <p className="px-5 py-10 text-[13px] text-ink-muted">No game this season matches every shortcut that is on.</p>
               )
